@@ -1,0 +1,55 @@
+import { z } from "zod";
+import { attachFiles, fileState } from "./files.ts";
+import { actionName, fail, findTap, inboxAction, itemId, type ItemRow, LIMITS, mine, openItem, type Scope, settleTaps, tap as tapShape } from "./store.ts";
+
+type Input = { item: string; action: string; version: string; text?: string; files?: string[] };
+
+/** One tap per item per gap, as a reply link allows one send per page: a flood of taps never reaches the chat. */
+const TAP_GAP_MS = 5000;
+
+/** Whether the item took a tap within the gap. */
+async function tooSoon(at: Scope, item: string) {
+  const last = await mine(at, `SELECT MAX(created_at) AS at FROM inbox_taps WHERE installation_id = ?1 AND email = ?2 AND item_id = ?3`,
+    item).first<{ at: number | null }>();
+  return last?.at != null && at.now - last.at < TAP_GAP_MS;
+}
+
+/** The refusal, or null: a link or an agent's status, an action the item lacks, empty notes, a file taken or gone, an
+ *  old version, or an action waiting or sent for it. `send` may go more than once. */
+async function refused(at: Scope, row: ItemRow, { action, version, text = "" }: Input, files: string[]) {
+  const held = files.length ? await fileState(at, row.id, files) : "loose";
+  if (row.kind === "link" || row.kind === "agent" || (action === "send" ? !text.trim() : !JSON.parse(row.actions).includes(action)) ||
+    held === "taken") return fail("bad_action", 400);
+  if (held === "gone") return fail("files_gone", 409);
+  if (version !== row.version) return fail("changed", 409);
+  if (action === "send") return null;
+  const before = await mine(at, `SELECT 1 FROM inbox_taps WHERE installation_id = ?1 AND email = ?2 AND item_id = ?3 AND action = ?4
+    AND version = ?5 AND state IN ('waiting', 'sent')`, row.id, action, version).first();
+  return before ? fail("done", 409) : null;
+}
+
+/** POST tap → queues the person's tap for their computer, carrying the version of the page they saw. */
+export const tap = inboxAction<Input>({
+  operationId: "inbox.tap", summary: "Answer an item", description: "Queue a tap on one of the person's items for their computer to deliver.",
+  input: z.strictObject({
+    item: itemId.describe("The item's id."), action: z.union([z.literal("send"), actionName]).describe("`send` for notes or an answer, else one of the item's actions."),
+    version: z.string().max(100).describe("The item's version the person saw."), text: z.string().max(LIMITS.text).optional().describe("Notes or a typed answer."),
+    files: z.array(itemId).max(60).optional().describe("The files sent from the page with this tap."),
+  }),
+  output: z.strictObject({ tap: tapShape }), encoding: "json", effect: "write",
+  async run(at, input) {
+    await settleTaps(at);
+    const row = await openItem(at, input.item);
+    if (row instanceof Response) return row;
+    const files = [...new Set(input.files ?? [])];
+    const refusal = await refused(at, row, input, files);
+    if (refusal) return refusal;
+    if (await tooSoon(at, row.id)) return fail("too_soon", 429);
+    const id = crypto.randomUUID().replaceAll("-", "");
+    await mine(at, `INSERT INTO inbox_taps (installation_id, email, id, item_id, action, text, version, created_at, state)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'waiting')`, id, row.id, input.action, input.text?.trim() ?? "", input.version, at.now).run();
+    if (files.length) await attachFiles(at, id, files);
+    await at.wake();
+    return Response.json({ tap: await findTap(at, id) });
+  },
+});

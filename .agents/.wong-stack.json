@@ -1,0 +1,105 @@
+{
+  "version": "48.2.0",
+  "commit": "113599351893bc6ba7fc77c22fab5babb1df9c42",
+  "upstream": {
+    "repo": "https://github.com/matthewwong525/WongStack",
+    "clone": "/root/.cache/wong-stack/WongStack"
+  },
+  "components": {
+    "skills": [
+      "explore",
+      "plan",
+      "apply",
+      "save",
+      "continue",
+      "ship",
+      "close",
+      "dream-memory",
+      "verify",
+      "hand-over",
+      "browser",
+      "shop",
+      "improve-code",
+      "schedule",
+      "daily",
+      "lesson",
+      "memory",
+      "wong-sync",
+      "agent-browser"
+    ],
+    "access": {
+      "teamDomain": "startuptemplate.cloudflareaccess.com",
+      "identityProviderId": "702068bd-5d11-47e9-8c52-bf0238edd315",
+      "ownerEmail": "matthewwong525@gmail.com",
+      "humanLogin": "unverified",
+      "accountId": "040f88e2bf4f25fb0b91b7cb24f3d442",
+      "appId": "c148207d-66b5-4373-a690-8942de361acb",
+      "audience": "8c34a3dc4b254dd4d3f4e10d7c5c8648cb2c4abd82a3704054adc3c385ce0dc2",
+      "workers": [
+        {
+          "name": "relay-ring",
+          "id": "98c4755718a34f4da4aab47e13986695"
+        },
+        {
+          "name": "relay-ring-staging",
+          "id": "0a28ad88e5e047d6a1b23eb4c29a2cbe"
+        }
+      ],
+      "staging": {
+        "appId": "a21b4d6b-e12f-45ec-9976-ca3ef4771431",
+        "audience": "290a7c4a0ebaae36505385d17a43566e37cc1c2472c55de0f25d4c0c40c51545",
+        "serviceTokenId": "2117a57a-eba6-465d-a59f-b797731dd132",
+        "humanPolicyId": "f11dda3d-be09-472c-91b8-902917f38bc2",
+        "machinePolicyId": "4a318de7-c745-4967-b595-4cdee782d5cc"
+      },
+      "coverage": "configured",
+      "serviceTokenId": "13276997-c637-48f1-9896-74292dee10af",
+      "humanPolicyId": "238740da-71ce-49d5-83ce-1348b6feb3a6",
+      "machinePolicyId": "392c54c2-d136-4727-a502-3bc85fb4da79",
+      "sessionDuration": "720h"
+    },
+    "memory": {
+      "accountId": "040f88e2bf4f25fb0b91b7cb24f3d442",
+      "databaseId": "5441a6ff-fcef-4870-b651-87a479726aef",
+      "database": "relay-ring-memory",
+      "bucket": "relay-ring-memory",
+      "worker": "https://relay-ring.matthewwong525.workers.dev/_memory"
+    },
+    "companyApi": {
+      "origin": "https://relay-ring.matthewwong525.workers.dev"
+    },
+    "liveLine": {
+      "workers": [
+        "relay-ring-line"
+      ]
+    },
+    "delivery": {
+      "route": "artifacts",
+      "accountId": "040f88e2bf4f25fb0b91b7cb24f3d442",
+      "namespace": "wongstack",
+      "repo": "relay-ring",
+      "remote": "https://040f88e2bf4f25fb0b91b7cb24f3d442.artifacts.cloudflare.net/git/wongstack/relay-ring.git",
+      "runner": "relay-ring-checks",
+      "workflow": "relay-ring-checks",
+      "bucket": "relay-ring-checks"
+    },
+    "knowledge": {
+      "namespace": "wongstack",
+      "repo": "relay-ring-knowledge"
+    },
+    "accessKey": {
+      "status": "ready",
+      "id": "52a29eec95b1956819919cea537d571a",
+      "policyId": "238740da-71ce-49d5-83ce-1348b6feb3a6",
+      "staging": {
+        "appId": "a21b4d6b-e12f-45ec-9976-ca3ef4771431",
+        "policyId": "f11dda3d-be09-472c-91b8-902917f38bc2"
+      }
+    },
+    "cloudflareReadKey": {
+      "status": "ready",
+      "id": "a519247ae9e2035742a73ec3e21ddd1b"
+    }
+  },
+  "installedAt": "2026-11-04"
+}

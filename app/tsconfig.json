@@ -1,0 +1,21 @@
+{
+	"files": [],
+	"references": [
+		{
+			"path": "./tsconfig.app.json"
+		},
+		{
+			"path": "./tsconfig.node.json"
+		},
+		{
+			"path": "./tsconfig.worker.json"
+		},
+		{
+			"path": "./tsconfig.tests.json"
+		}
+	],
+	"compilerOptions": {
+		// The shadcn command reads `@/` here to know where a part goes; tsconfig.app.json holds the same line for the build.
+		"paths": { "@/*": ["./src/*"] }
+	}
+}

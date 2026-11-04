@@ -1,0 +1,30 @@
+# Contributing a WongStack improvement upstream
+
+Improved a WongStack skill, a convention page in [this wiki](README.md), or the `WONG-STACK` block here? Send it to WongStack upstream as an ordinary pull request. It's a manual, deliberate act — [`/wong-sync`](../.agents/skills/wong-sync/SKILL.md) brings improvements *down* into this repo and never sends anything up.
+
+## The bar: does this belong in *every* WongStack repo?
+
+That's the whole test, and it's worth applying before you write anything. WongStack is process everyone shares, so a contribution has to be generic:
+
+- **Yes** — a skill that handles a case it used to fumble, a sharper convention in [wiki style](wiki-style.md) or [voice](voice.md), a `WONG-STACK` block rule that any repo would want.
+- **No** — anything that encodes *this* repo: your stack, your deploy target, your team's naming, your one-off workaround. Useful here, noise everywhere else.
+
+If it doesn't clear the bar, keep it local. A repo that diverges from upstream on purpose is fine — [`/wong-sync`](../.agents/skills/wong-sync/SKILL.md) keeps your version as local context and does not push you toward WongStack's.
+
+## What's in scope
+
+Only what ships: the [payload manifest](../.agents/skills/wong-sync/references/payload-manifest.md) lists it. Your app code, app skills, and business docs aren't WongStack's to carry.
+
+## The route
+
+[WongStack's contributing guide](https://github.com/matthewwong525/WongStack/blob/main/.github/CONTRIBUTING.md#fork-branch-and-open-a-pull-request) owns the steps: fork, branch, change, check, and open a pull request. From an install, three things matter more:
+
+- **Work in your fork, not the cache.** Don't work in the cached clone under `~/.cache/wong-stack/`. `/wong-sync` fast-forwards it on every run and moves to a fresh checkout when it finds local work there ([latest source](../.agents/skills/wong-sync/references/latest-source.md)), so work left there is never used.
+- **Generalize it.** Strip anything repo-specific that came along for the ride: your paths, your stack, your examples. What reads naturally here usually needs rewording to read naturally everywhere.
+- **Argue generality in the pull request body**: why this belongs in every repo, not just yours. That's the case a reviewer is actually weighing.
+
+Editing the payload is a release, so the pull request carries a changelog entry: [WongStack's release rule](https://github.com/matthewwong525/WongStack/blob/main/.agents/rules/payload.md) owns the steps.
+
+## Why this isn't automated
+
+It used to be, as `/wong-sync contribute`. Contributing turns out to be rare and deliberate, and the automation cost more in machinery and prose than it saved in typing — while forcing the sync to keep a tight read boundary so that nothing local could leak into a PR. Removing it let the sync read this repo properly, which is what lets [`/wong-sync`](../.agents/skills/wong-sync/SKILL.md) adapt an update to it.

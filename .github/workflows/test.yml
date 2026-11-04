@@ -1,0 +1,140 @@
+# The repo's own test suite, on every commit — in every repo, on any stack.
+#
+# This is a CORE payload workflow. It used to be a job inside the Cloudflare
+# pack's deploy workflow, which meant a repo that never took the pack had no
+# test pipeline at all — the opposite of the intent. Parallelism was never the
+# reason it lived there (separate workflows run in parallel too); the reason was
+# the double-fire collapse below, which is one copied condition.
+#
+# `npm test` is the entire contract. Any runner behind that script satisfies
+# this job — vitest is what the payload configures by default, not a
+# requirement. A repo with no `test` script gets a real check that explains
+# itself and passes, never a permanently red one.
+#
+# A change that leaves the main app untouched runs no suite. The first step,
+# `.github/actions/change-scope` (it runs `.github/scripts/app-untouched.sh`),
+# compares the whole branch (or, on the default branch, the whole push) with
+# its base: when every changed path is docs, the main app's steps skip. A mini
+# app is main-app code, so a change to one runs the suite. The skip is inside
+# the job, never a `paths-ignore`, so the required
+# `test` check still reports. When the comparison can not be made, the suite
+# runs. The last step writes one summary line either way.
+#
+# Code that already passed is not tested again when it goes live. On a push to
+# the default branch, `.github/scripts/already-passed.sh` finds the merged pull
+# request: when the pushed files are identical to its head and that head's
+# `test` check passed, the shared checks skip and the summary names the pull
+# request. Any doubt (a direct push, the default branch moved first, a failed
+# or missing check, an API error) runs them.
+#
+# A docs-only save is not tested again either. On a push to another branch,
+# `already-passed.sh --branch` finds the branch's newest earlier commit whose
+# `test` check passed. When only docs changed since it, `checks.mjs
+# --suite-base` skips the suite, still runs the docs, loosened and skill checks
+# on the whole change, and the summary names that commit. Any doubt runs it.
+#
+# ---------------------------------------------------------------------------
+# Why one commit does not test twice
+#
+# `push` and `pull_request` both fire for a commit on a branch with an open PR.
+# The job-level `if` means only `push` — plus pull requests from FORKS, whose
+# pushes fire no event in this repo — actually runs; a same-repo PR is already
+# covered by its own push event. The concurrency group keys on the EVENT as well
+# as the branch for the same reason the deploy workflow does: `github.ref`
+# differs between the two triggers, so groups keyed on the branch alone never
+# match, and a key that DID match would let one run cancel the other — which
+# `gh pr checks` reports as `fail`, blocking /ship.
+#
+# ---------------------------------------------------------------------------
+# Why loosened checks need a reason
+#
+# Every limit below has an escape hatch: a skip comment, a skipped or deleted
+# test, a lowered number in a config. Agents write most of the code, and a
+# person who does not read code can not see one being used. The shared check entry point
+# fails the job when the change uses one and
+# its Decision log gives no reason, so a reason is always written where the
+# person reads it. wiki/development/the-change-loop.md#the-gate owns the rule.
+
+name: Test
+
+on:
+  # Branches only: a tag names a commit its branch push already ran, and a
+  # tag run would test it again or deploy it to staging under the tag's name.
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: test-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: ${{ github.ref_name != github.event.repository.default_branch }}
+
+jobs:
+  test:
+    if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # already-passed.sh reads the merged pull request and each commit's test check.
+      checks: read
+      pull-requests: read
+    steps:
+      # Full history: the untouched check compares the whole branch with its base.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Check what the change touches
+        id: scope
+        uses: ./.github/actions/change-scope
+
+      # The shared entry point owns scope, discovery, install/test, quality
+      # checks after a red suite, and the summary on both delivery routes.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Check whether this code already passed
+        id: passed
+        if: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/already-passed.sh >> "$GITHUB_OUTPUT"
+
+      - name: Check whether an earlier commit of this branch already passed
+        id: reused
+        if: ${{ github.event_name == 'push' && github.ref_name != github.event.repository.default_branch }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: bash .github/scripts/already-passed.sh --branch >> "$GITHUB_OUTPUT"
+
+      - name: Say the code already passed
+        if: ${{ steps.passed.outputs.passed == 'true' }}
+        env:
+          PR: ${{ steps.passed.outputs.pr }}
+        run: |
+          echo "Skipped the checks: this exact code already passed on pull request #$PR." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run shared checks
+        if: ${{ !cancelled() && steps.passed.outputs.passed != 'true' }}
+        env:
+          CHECK_REPO: ${{ github.workspace }}
+          CHECK_BASE: ${{ steps.scope.outputs.base }}
+          CHECK_HEAD: ${{ github.sha }}
+          CHECK_DEFAULT: ${{ github.event.repository.default_branch }}
+          SUITE_BASE: ${{ steps.reused.outputs.passed == 'true' && steps.reused.outputs.sha || '' }}
+        run: |
+          node .github/scripts/checks.mjs \
+            --repo "$CHECK_REPO" --base "$CHECK_BASE" --head "$CHECK_HEAD" \
+            --default-branch "$CHECK_DEFAULT" --summary "$GITHUB_STEP_SUMMARY" \
+            ${SUITE_BASE:+--suite-base "$SUITE_BASE"}
+
+      - name: Keep test coverage diagnostics
+        if: ${{ always() && hashFiles('app/coverage/coverage-final.json') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: app-coverage-diagnostics
+          path: app/coverage/coverage-final.json
+          if-no-files-found: error
+          retention-days: 3

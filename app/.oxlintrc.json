@@ -1,0 +1,73 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc"],
+  "jsPlugins": ["@shadcn/lint", "../scripts/lint-comment-length.mjs"],
+  "rules": {
+    "complexity": ["error", 21],
+    "max-lines": ["error", 500],
+    "react/rules-of-hooks": "error",
+    "react/only-export-components": ["warn", { "allowConstantExport": true }],
+    "typescript/no-explicit-any": "error",
+    "comment-length/max-comment-lines": ["error", 2],
+    "comment-length/max-comment-width": ["error", 120]
+  },
+  "overrides": [
+    {
+      // A command writes these parts, and its next run would put long comments back.
+      "files": ["src/components/ui/**"],
+      "rules": { "comment-length/max-comment-lines": "off", "comment-length/max-comment-width": "off" }
+    },
+    {
+      // A ready-made part exports its style variants beside the component, as its makers wrote it.
+      // Every other rule still holds in this folder.
+      "files": ["src/components/ui/**"],
+      "rules": { "react/only-export-components": "off" }
+    },
+    {
+      // A mini app's page keeps to its own folder, the shared parts and the shared helpers.
+      "files": ["src/apps/*/**"],
+      "rules": {
+        "no-restricted-imports": ["error", { "patterns": [{
+          "group": ["../**", "!../../lib/**", "!../../components/**", "@/apps/**", "@/pages/**"],
+          "message": "A mini app imports only its own folder, src/lib/ and src/components/."
+        }] }]
+      }
+    },
+    {
+      // Its server side keeps to its own folder and the shared action contract.
+      "files": ["worker/apps/*/**"],
+      "rules": {
+        "no-restricted-imports": ["error", { "patterns": [{
+          "group": ["../**", "!../../api/contract.ts", "!../../api/body.ts"],
+          "message": "A mini app's server side imports only its own folder and worker/api/contract.ts."
+        }] }]
+      }
+    },
+    {
+      // A folder inside a mini app's page keeps the same bounds, one level down.
+      "files": ["src/apps/*/*/**"],
+      "rules": {
+        "no-restricted-imports": ["error", { "patterns": [{
+          "group": ["../../**", "@/apps/**", "@/pages/**"],
+          "message": "A mini app imports only its own folder, src/lib/ and src/components/."
+        }] }]
+      }
+    },
+    {
+      // A folder inside a mini app's server side keeps the same bounds, one level down. The week board's Worker also
+      // reads the board's rules, which its screen shares.
+      "files": ["worker/apps/*/*/**"],
+      "rules": {
+        "no-restricted-imports": ["error", { "patterns": [{
+          "group": ["../../**", "!../../../api/contract.ts", "!../../../api/body.ts", "!../../../../src/lib/board.ts"],
+          "message": "A mini app's server side imports only its own folder, worker/api/contract.ts and src/lib/board.ts."
+        }] }]
+      }
+    },
+    {
+      // A test opens its app inside the main app's router and Home, so the folder rule skips test files.
+      "files": ["**/*.test.ts", "**/*.test.tsx"],
+      "rules": { "no-restricted-imports": "off" }
+    }
+  ]
+}

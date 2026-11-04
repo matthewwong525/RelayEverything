@@ -1,0 +1,169 @@
+import { expect, it } from "vitest";
+import { z } from "zod";
+import { discovery } from "./discovery";
+import { defineAction, registrations } from "./contract";
+import { apiActions } from "./router";
+import { appActions } from "../apps/index";
+import { body } from "../../tests/body";
+import { fakeDatabase, fakeEnv } from "../../tests/env";
+const env = {} as Env;
+// The supplied actions alone: a build may hold other folders.
+const supplied = [...apiActions, ...appActions].filter(({ app }) => app === "main" || app === "hello");
+const identity = { id: "employee@example.com", kind: "user" as const, claims: { aud: "a", iss: "i", exp: 9999999999 } };
+const get = (path = "/api/actions", registry: Parameters<typeof discovery>[3] = supplied, headers = {}, method = "GET") => discovery(new Request(`https://example.com${path}`, { headers, method }), env, identity, registry);
+const synthetic = (id = "sample.create", extra = {}) => defineAction({ operationId: id, summary: "Create sample", description: "Synthetic sample",
+  encoding: "json", effect: "write", agentAvailable: true, input: z.strictObject({ title: z.string().describe("The sample's title") }), output: z.strictObject({ id: z.number() }),
+  errors: { denied: "Creation denied" }, examples: [{ input: { title: "Sample" }, output: { id: 1 } }], handler: () => Response.json({ id: 1 }, { status: 201 }), ...extra });
+it("requires a verified identity even if the starter is open and refuses unknown methods", async () => {
+  expect((await discovery(new Request("https://example.com/api/actions"), env, null)).status).toBe(401);
+  expect((await get("/api/actions", undefined, {}, "POST")).status).toBe(404);
+});
+it("summarizes actual registrations with filters, bounds and pagination, omitting schema bodies", async () => {
+  const response = await get(); const data = await body(response);
+  expect(data.actions.map(a => a.operationId)).toEqual(["hello.greeting", "main.health"]);
+  expect(data.actions[0]).not.toHaveProperty("inputSchema"); expect(data.actions[0].readiness).toBe("available");
+  expect((await body(await get("/api/actions?limit=1"))).next).toBe(1);
+  expect((await body(await get("/api/actions?limit=1&offset=1"))).next).toBeNull();
+  expect((await body(await get("/api/actions?app=hello&q=person"))).total).toBe(1);
+  expect((await body(await get("/api/actions?app=missing"))).total).toBe(0);
+  // Every word must appear, in any order and case; one word that appears nowhere matches nothing.
+  for (const [words, total] of [["person greet", 1], ["  WORLD   Greet ", 1], ["greet nowhere", 0], ["", 2]] as [string, number][]) {
+    expect((await body(await get(`/api/actions?q=${encodeURIComponent(words)}`))).total).toBe(total);
+  }
+  for (const suffix of ["limit=0", "limit=51", "limit=1.1", "offset=-1", "offset=abc", `q=${"a".repeat(201)}`]) expect((await get(`/api/actions?${suffix}`)).status).toBe(400);
+});
+it("returns only the selected action schema and revision, and supports cache validation", async () => {
+  const response = await get("/api/actions?id=hello.greeting"); const selected = await body(response);
+  expect(selected.path).toBe("/apps/hello/api/greeting"); expect(selected.method).toBe("GET");
+  expect(selected.inputSchema.properties.name.type).toBe("string"); expect(selected.examples[0].input.name).toBe("Ada");
+  expect(selected.inputSchema.properties.name.description).toMatch(/greet/); expect(selected).not.toHaveProperty("confirmWith");
+  expect(selected.errorSchema.properties.error.properties.issues.items.required).toEqual(["path", "message"]);
+  expect(selected.outputSchema.properties.message.type).toBe("string"); expect(selected.errorSchema.properties.error.required).toContain("requestId");
+  expect(JSON.stringify(selected)).not.toContain("main.health");
+  const cached = await get("/api/actions?id=hello.greeting", undefined, { "if-none-match": response.headers.get("etag") });
+  expect(cached.status).toBe(304); expect(await cached.text()).toBe("");
+  expect((await get("/api/actions?id=missing.action")).status).toBe(404);
+});
+it("generates truthful HTTP-only OpenAPI with query scalars, JSON bodies and success/error schemas", async () => {
+  const initial = await body(await get("/api/openapi.json"));
+  expect(initial.openapi).toBe("3.1.1"); expect(Object.keys(initial.paths)).toEqual(["/apps/hello/api/greeting", "/api/health"]);
+  const greeting = initial.paths["/apps/hello/api/greeting"].get;
+  expect(greeting.parameters).toEqual([expect.objectContaining({ name: "name", required: false, in: "query", style: "form", explode: true })]);
+  expect(greeting.responses["2XX"].content["application/json"].schema.properties.message.type).toBe("string");
+  expect(greeting.responses.default.content["application/json"].schema.properties.error.required).toEqual(["code", "message", "requestId"]);
+  const rows = registrations(new Map([["POST /api/create", synthetic()]]));
+  const document = await body(await get("/api/openapi.json", rows));
+  expect(document.paths["/api/create"].post.requestBody.content["application/json"].schema.properties.title.type).toBe("string");
+  const scalar = synthetic("sample.query", { encoding: "query", input: z.strictObject({ n: z.number().describe("A number") }), examples: [] });
+  const query = await body(await get("/api/openapi.json", registrations(new Map([["GET /api/query", scalar]]))));
+  expect(query.paths["/api/query"].get.parameters[0].required).toBe(true);
+});
+it("names a write's confirming read only to a caller who may see that read", async () => {
+  const rows = (read = {}) => registrations(new Map([["POST /api/create", synthetic("sample.create", { confirmWith: "sample.read" })],
+    ["GET /api/read", synthetic("sample.read", { effect: "read", encoding: "none", input: z.strictObject({}), examples: [], ...read })]]));
+  expect((await body(await get("/api/actions?id=sample.create", rows()))).confirmWith).toBe("sample.read");
+  expect((await body(await get("/api/openapi.json", rows()))).paths["/api/create"].post["x-confirm-with"]).toBe("sample.read");
+  // The summary row keeps its fields; the name lives on the selected description.
+  expect((await body(await get("/api/actions", rows()))).actions[0]).not.toHaveProperty("confirmWith");
+  for (const hidden of [{ allowed: () => false }, { agentAvailable: false }]) {
+    const described = await body(await get("/api/actions?id=sample.create", rows(hidden)));
+    expect(described.operationId).toBe("sample.create"); expect(described).not.toHaveProperty("confirmWith");
+    const document = await body(await get("/api/openapi.json", rows(hidden)));
+    expect(document.paths["/api/create"].post).not.toHaveProperty("x-confirm-with");
+    expect(JSON.stringify(document)).not.toContain("sample.read");
+  }
+});
+it("shows a person who holds an app its look-ups and its changes, whatever their key levels, and nothing of an app they lack", async () => {
+  // Key levels have started and the person holds none. Hello is theirs, and one of its changes uses a saved key.
+  const row = { policy_enabled: 1, keys_enabled: 1, revision: 1, status: "active", held: null, apps: '["hello"]', keys: "{}" };
+  const bindings = fakeEnv({ DB: fakeDatabase({ withSession: () => ({ prepare: () => ({ bind: () => ({ first: async () => row }) }) }) }),
+    WONG_OWNER_EMAIL: "owner@example.com", WONG_CLOUDFLARE_READ: "saved" });
+  const person = { ...identity, claims: { ...identity.claims, sub: "employee", email: identity.id } };
+  const registry = registrations(new Map([["GET list", synthetic("hello.list", { effect: "read", encoding: "none", input: z.strictObject({}), examples: [] })],
+    ["POST mark", synthetic("hello.mark", { keys: ["cloudflare"] })]]), "hello");
+  const seen = (path: string) => discovery(new Request(`https://example.com${path}`), bindings, person, registry);
+  const ids = async () => (await body(await seen("/api/actions"))).actions.map(a => a.operationId);
+  expect(await ids()).toEqual(["hello.list", "hello.mark"]);
+  expect(await body(await seen("/api/actions?id=hello.mark"))).toMatchObject({ effect: "write", readiness: "available", keys: [{ id: "cloudflare", level: "write" }] });
+  expect(Object.keys((await body(await seen("/api/openapi.json"))).paths)).toEqual(["/apps/hello/api/list", "/apps/hello/api/mark"]);
+  // Without the app, none of it shows: not the list, not one action, not the document.
+  row.apps = "[]";
+  expect(await ids()).toEqual([]);
+  for (const id of ["hello.list", "hello.mark"]) expect((await seen(`/api/actions?id=${id}`)).status, id).toBe(404);
+  expect((await body(await seen("/api/openapi.json"))).paths).toEqual({});
+  // A key level stands in for no app.
+  row.keys = '{"cloudflare":"read"}';
+  expect(await ids()).toEqual([]);
+});
+it("tracks additions/removals, excludes undeclared and denied operations, and marks missing connections", async () => {
+  const a = synthetic();
+  const routes = new Map([["POST /api/create", a]]);
+  const before = await body(await get("/api/actions", registrations(routes)));
+  routes.set("POST /api/other", synthetic("sample.other", { ready: () => false, allowed: () => true }));
+  const after = await body(await get("/api/actions", registrations(routes)));
+  expect(after.revision).not.toBe(before.revision); expect(after.actions[1].readiness).toBe("unavailable");
+  const ready = await body(await get("/api/actions", registrations(new Map([["POST /api/ready", synthetic("sample.ready", { ready: () => true })]]))));
+  expect(ready.actions[0].readiness).toBe("available");
+  routes.delete("POST /api/other"); expect((await body(await get("/api/actions", registrations(routes)))).revision).toBe(before.revision);
+  for (const extra of [{ agentAvailable: false }, { allowed: () => false }]) expect((await body(await get("/api/actions", registrations(new Map([["POST /api/create", synthetic("sample.hidden", extra)]]))))).total).toBe(0);
+  expect((await body(await get("/api/actions", []))).actions).toEqual([]);
+});
+it("never publishes fixture credentials embedded in descriptions or examples", async () => {
+  const secret = "saved-business-secret";
+  const action = synthetic("sample.private", { description: secret });
+  const response = await discovery(new Request("https://example.com/api/actions"), fakeEnv({ SECRET: secret }), identity,
+    registrations(new Map([["POST /api/create", action]])));
+  expect(response.status).toBe(500); expect(await response.text()).not.toContain(secret);
+});
+it("bounds selected details and full documents even for a very large registry schema", async () => {
+  const action = synthetic("sample.large", { description: "x".repeat(1048576) });
+  const rows = registrations(new Map([["POST /api/large", action]]));
+  for (const path of ["/api/actions?id=sample.large", "/api/openapi.json"]) expect((await get(path, rows)).status).toBe(500);
+});
+it("names each key an action uses with its purpose and guide, and groups the document by key", async () => {
+  // Rows a person may see before permissions start: each is an app's, whatever app it is filed under.
+  const row = (app: string, id: string, keys: string[]) => ({ method: "POST", path: `/api/${id.replace(".", "/")}`, app, action: synthetic(id), access: { apps: ["hello"], keys } });
+  const rows = [row("main", "cloudflare.read", ["cloudflare"]), row("hello", "hello.mark", ["cloudflare"]), row("hello", "hello.save", ["code"]),
+    row("main", "main.both", ["cloudflare", "code"]), row("main", "code.read", ["code"]), row("main", "main.other", ["cloudflare"]), row("hello", "hello.old", ["retired"])];
+  const cloudflare = { id: "cloudflare", name: "Cloudflare", purpose: expect.stringMatching(/Workers/), docs: "https://developers.cloudflare.com/api/", level: "write" };
+  expect((await body(await get("/api/actions?id=hello.mark", rows))).keys).toEqual([cloudflare]);
+  // A key with no guide shows none, and a key the registry no longer holds keeps its id alone.
+  expect((await body(await get("/api/actions?id=main.both", rows))).keys).toEqual([cloudflare, { id: "code", name: "Project code", purpose: expect.any(String), level: "write" }]);
+  expect((await body(await get("/api/actions?id=hello.old", rows))).keys).toEqual([{ id: "retired", level: "write" }]);
+  // A summary keeps each key short.
+  expect((await body(await get("/api/actions?q=mark", rows))).actions[0].keys).toEqual([{ id: "cloudflare", level: "write" }]);
+  const document = await body(await get("/api/openapi.json", rows));
+  expect(document.info.description).toMatch(/\?q=.*\?id=.*requestId.*timeout/s); expect(document.info.description.length).toBeLessThan(600);
+  expect(document.tags).toEqual([
+    { name: "Cloudflare", description: cloudflare.purpose, externalDocs: { url: cloudflare.docs, description: "Cloudflare's API guide" } },
+    { name: "Project code", description: expect.any(String) }]);
+  const operation = (id: string) => document.paths[`/api/${id.replace(".", "/")}`].post;
+  // Only a key's own look-up or change carries the guide: a built action's handler is its contract.
+  expect(operation("cloudflare.read")).toMatchObject({ tags: ["Cloudflare"], externalDocs: { url: cloudflare.docs } });
+  for (const [id, tags] of [["hello.mark", ["Cloudflare"]], ["hello.save", ["Project code"]], ["main.both", ["Cloudflare", "Project code"]],
+    ["code.read", ["Project code"]], ["main.other", ["Cloudflare"]]] as const) {
+    expect(operation(id).tags, id).toEqual(tags); expect(operation(id), id).not.toHaveProperty("externalDocs");
+  }
+  expect(operation("hello.old")).not.toHaveProperty("tags");
+  // An action with no key names no group.
+  const plain = await body(await get("/api/openapi.json"));
+  expect(plain.tags).toEqual([]); expect(plain.paths["/api/health"].get).not.toHaveProperty("tags");
+});
+it("shows a key's group, guide and own look-up only to a person who holds that key", async () => {
+  const row = { policy_enabled: 1, keys_enabled: 1, revision: 1, status: "active", held: null, apps: "[]", keys: '{"cloudflare":"read"}' };
+  const bindings = fakeEnv({ DB: fakeDatabase({ withSession: () => ({ prepare: () => ({ bind: () => ({ first: async () => row }) }) }) }),
+    WONG_OWNER_EMAIL: "owner@example.com", WONG_CLOUDFLARE_READ: "saved-cloudflare-token" });
+  const person = { ...identity, claims: { ...identity.claims, sub: "employee", email: identity.id } };
+  const seen = async (path: string) => body(await discovery(new Request(`https://example.com${path}`), bindings, person, supplied));
+  const described = await seen("/api/actions?id=cloudflare.read");
+  expect(described.keys).toEqual([{ id: "cloudflare", name: "Cloudflare", purpose: expect.any(String), docs: "https://developers.cloudflare.com/api/", level: "read" }]);
+  const document = await seen("/api/openapi.json");
+  expect(document.tags.map(tag => tag.name)).toEqual(["Cloudflare"]);
+  expect(document.paths["/api/cloudflare/read"].get).toMatchObject({ tags: ["Cloudflare"], externalDocs: { url: "https://developers.cloudflare.com/api/" } });
+  expect(JSON.stringify([described, document])).not.toContain("saved-cloudflare-token");
+  // With no level for the key, no group, operation or guide of it shows.
+  row.keys = "{}";
+  const without = await seen("/api/openapi.json");
+  expect(without.tags).toEqual([]);
+  expect(JSON.stringify(without)).not.toMatch(/Cloudflare|cloudflare\.read|developers\.cloudflare\.com/);
+});

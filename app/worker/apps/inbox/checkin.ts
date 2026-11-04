@@ -1,0 +1,40 @@
+import { z } from "zod";
+import { filesOf } from "./files.ts";
+import { inboxAction, itemId, mine, prune, seen, settleTaps } from "./store.ts";
+
+const file = z.strictObject({ id: itemId, name: z.string(), question: z.string(), size: z.number() });
+const waiting = z.strictObject({ id: itemId, item: itemId, action: z.string(), text: z.string(), version: z.string(), files: z.array(file) });
+type Waiting = Omit<z.infer<typeof waiting>, "files">;
+/** The most tap JSON one check-in hands out; the rest waits for the next. One tap at its longest is under a fifth. */
+const BATCH_BYTES = 512 * 1024;
+
+/** The oldest taps whose JSON fits in the batch together. */
+function fitting(taps: Waiting[]) {
+  let size = 0;
+  return taps.filter(tap => (size += new TextEncoder().encode(JSON.stringify(tap)).byteLength + 1) <= BATCH_BYTES);
+}
+
+/** POST checkin → the computer says it is here and collects the taps waiting on its own items, oldest first, with their
+ *  files. Each it collects is `delivering` from then on: it can't be cancelled, and no other check-in gets it again. */
+export const checkin = inboxAction<{ items: string[] }>({
+  operationId: "inbox.checkin", summary: "Collect waiting taps", description: "The person's computer checks in and collects their waiting taps.",
+  input: z.strictObject({ items: z.array(itemId).max(500).describe("The items this computer delivers for.") }),
+  output: z.strictObject({ taps: z.array(waiting) }), encoding: "json", effect: "write",
+  limits: { inputBytes: 65536, outputBytes: 1048576, timeoutMs: 15000 },
+  async run(at, { items }) {
+    await seen(at);
+    await settleTaps(at);
+    await prune(at);
+    const { results } = await mine(at, `SELECT id, item_id AS item, action, text, version FROM inbox_taps
+      WHERE installation_id = ?1 AND email = ?2 AND state = 'waiting' AND item_id IN (SELECT value FROM json_each(?3))
+      ORDER BY created_at, rowid LIMIT 50`, JSON.stringify(items)).all<Waiting>();
+    const batch = fitting(results);
+    // Only what this call moved from waiting is handed out: a tap cancelled meanwhile stays cancelled.
+    const { results: claimed } = await mine(at, `UPDATE inbox_taps SET state = 'delivering', claimed_at = ?3
+      WHERE installation_id = ?1 AND email = ?2 AND state = 'waiting' AND id IN (SELECT value FROM json_each(?4)) RETURNING id`,
+    at.now, JSON.stringify(batch.map(tap => tap.id))).all<{ id: string }>();
+    const ids = new Set(claimed.map(row => row.id));
+    const files = await filesOf(at, [...ids]);
+    return Response.json({ taps: batch.filter(tap => ids.has(tap.id)).map(tap => ({ ...tap, files: files.get(tap.id) ?? [] })) });
+  },
+});

@@ -1,0 +1,393 @@
+# Cloudflare stack pack — build and deploy when the repo is provisioned.
+#
+#   build   install, build and pack the branch's app. Holds no Cloudflare
+#           secret, so the branch's own code runs here and nowhere else.
+#           Green when the repo is unprovisioned.
+#   deploy  pushes only. Checks out the DEFAULT branch's files, installs its
+#           tools with install scripts off, copies in only the built files,
+#           then migrates and deploys with the key. The mini apps are part of
+#           the main app's build.
+#
+# Where the key is, and why: a branch's package scripts, tests, local actions
+# and scripts may be anyone's who can push a branch, so the key never shares a
+# machine with them. Steps on one runner share it: a branch step could leave a
+# process that reads a later step's environment, or write $GITHUB_ENV. So the
+# split is two jobs, not two steps, and `deploy` runs only the default branch's
+# copy of the scripts. A change to the deploy scripts or the wrangler config's
+# Worker name takes effect once published, never in its own preview.
+# `cf-deploy.sh --take-build` refuses a build that names any Worker but main's
+# staging one, claims a route, carries a build command, binds production's
+# database or names a file outside the project. Anyone who can edit a workflow
+# on GitHub can still reach the key: see wiki/stack/github-actions.md.
+#
+# The test suite is NOT here. It runs in the core `test.yml` workflow, which
+# every repo receives whether or not it took this pack — so a commit is tested
+# once, in parallel with this deploy, and a repo with no Cloudflare account
+# still gets a test pipeline. This workflow never waits on that result: a
+# staging deploy of red code is harmless (staging is a fixture and /verify
+# observes it), and red code cannot reach production because merges require
+# green CI. `deploy` waits on `build`, its own build, and on nothing else.
+#
+# This workflow is a thin driver. The branch logic lives in the pack's scripts,
+# exactly as it does under Cloudflare Workers Builds:
+#
+#   scripts/cf-build.sh   --build-only: build; --migrate: migrate the right database
+#   scripts/cf-deploy.sh  default branch → the production Worker
+#                         any other      → the staging Worker + a preview alias
+#
+# The main app deploys only when the change touches it. The first step,
+# `.github/actions/change-scope` (the same check test.yml runs), compares
+# the whole branch — or, on the default branch, the whole push — with its base.
+# When every changed path is docs, every main-app step skips and the job says
+# so: a docs branch never redeploys the main app. A mini app is main-app code,
+# so a change to one deploys it.
+#
+# So both CI backends run identical code, and a repo can switch between them by
+# changing where the scripts are invoked from. See wiki/stack/d1-pipeline.md.
+#
+# An unprovisioned repo gets a real PR check instead of a permanently red one,
+# and it does so at two levels:
+#
+#   - No wrangler config at all — the state the pack SHIPS in, before
+#     setup's Cloudflare provisioning writes one. "Locate the app" detects it (cf-build.sh
+#     --app-dir exits 3 for exactly this) and the job reports why and stops,
+#     green. Every later step is gated on that detection.
+#   - Config but no secrets — builds without deploying, as before.
+#
+# ---------------------------------------------------------------------------
+# Why one commit does not deploy twice
+#
+# `push` and `pull_request` both fire for a commit on a branch with an open PR.
+# Collapsing them takes THREE parts, and two are non-obvious:
+#
+#   1. The concurrency group keys on the EVENT as well as the branch. Keying on
+#      the branch alone does not merge the two triggers — `github.ref` is
+#      `refs/heads/x` on push and `refs/pull/N/merge` on pull_request, so the
+#      groups never matched in the first place. Worse, a key that DID match
+#      would make one run cancel the other, and `gh pr checks` reports a
+#      cancelled run as `fail`, which blocks /ship. Separate groups, no
+#      cancellation between triggers.
+#   2. The job-level `if` means only `push` — plus pull requests from FORKS,
+#      whose pushes fire no event in this repo — actually runs. A same-repo PR
+#      is already covered by its own push event. A fork's pull request only
+#      builds: `deploy` runs for `push` alone, so a fork's branch name, even
+#      `main`, never picks a Worker.
+#   3. Both are required, because GITHUB EVALUATES CONCURRENCY BEFORE A JOB'S
+#      `if`. A run destined to be skipped still enters its concurrency group
+#      and can still cancel the run doing the real work. The `if` alone looks
+#      correct in testing and races in practice; the group alone leaves the
+#      double deploy in place.
+#
+# `push` stays the deploying event, so the preview URL attaches to the branch
+# head SHA — which is the SHA /save and /verify look the preview up by.
+
+name: Deploy
+
+on:
+  # Branches only: a tag names a commit its branch push already ran, and a
+  # tag run would test it again or deploy it to staging under the tag's name.
+  push:
+    branches: ['**']
+  pull_request:
+
+# One release per branch PER EVENT — see the header. Let an in-flight production
+# deploy finish rather than cancelling it half-applied; previews are cheap, so
+# cancel those.
+concurrency:
+  group: deploy-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: ${{ github.ref_name != github.event.repository.default_branch }}
+
+jobs:
+  # Install, build and pack the branch's app, with no secret. The branch's own
+  # code runs only here.
+  build:
+    # Same-repo pull requests are already covered by their push event; only a
+    # fork PR, which fires no push here, needs the pull_request trigger.
+    if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      configured: ${{ steps.app.outputs.configured }}
+    env:
+      # The branch on a push; a fork's pull request builds as `pull-<n>`, so
+      # its branch name, even `main`, never selects production. The scripts
+      # treat this as "we are in CI"; `cf-build.sh --build-only` picks the
+      # staging or production build from it.
+      CF_BRANCH: ${{ github.event_name == 'push' && github.ref_name || format('pull-{0}', github.event.pull_request.number) }}
+      CF_PRODUCTION_BRANCH: ${{ github.event.repository.default_branch }}
+
+    steps:
+      # Full history: the untouched check compares the whole branch with its base.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Check what the change touches
+        id: scope
+        uses: ./.github/actions/change-scope
+        with:
+          skip-when: |
+            untouched=true
+          skipped-note: The main app is untouched (only docs changed), so no main-app migration, build, or deploy ran.
+
+      # Skipped when the main app is untouched. Every main-app step below is
+      # gated on this step's `configured`, so they skip with it, and so does
+      # the deploy job.
+      #
+      # Exit 3 means "no wrangler config yet" — not a failure, just a repo that
+      # has taken the pack and not yet been provisioned. Report it and let every
+      # later step skip, so the check is green and says what to do next. Any
+      # other non-zero exit is a real error and still fails the job.
+      - name: Locate the app
+        id: app
+        if: ${{ steps.scope.outputs.untouched != 'true' }}
+        run: |
+          set +e
+          DIR=$(bash scripts/cf-build.sh --app-dir)
+          STATUS=$?
+          set -e
+          if [ "$STATUS" -eq 3 ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Not configured yet"
+              echo ""
+              echo "This repo has the Cloudflare stack pack but no wrangler config,"
+              echo "so there is nothing to build or deploy yet."
+              echo ""
+              echo "Run \`/wong-sync\` to plan Cloudflare provisioning."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "No wrangler config yet — run /wong-sync to plan Cloudflare provisioning."
+            exit 0
+          fi
+          if [ "$STATUS" -ne 0 ]; then
+            echo "cf-build.sh --app-dir failed with exit $STATUS" >&2
+            exit "$STATUS"
+          fi
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ steps.app.outputs.configured == 'true' }}
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: ${{ steps.app.outputs.dir }}/package-lock.json
+
+      - name: Install
+        if: ${{ steps.app.outputs.configured == 'true' }}
+        working-directory: ${{ steps.app.outputs.dir }}
+        run: npm ci --no-audit --no-fund
+
+      # A wired pack repo has build:app, and `cf-build.sh --build-only` builds
+      # it for the branch's Worker without touching a database. An unwired repo
+      # just has build.
+      - name: Build
+        if: ${{ steps.app.outputs.configured == 'true' }}
+        env:
+          DIR: ${{ steps.app.outputs.dir }}
+        run: |
+          if (cd "$DIR" && node -e "process.exit(require('./package.json').scripts?.['build:app']?0:1)"); then
+            bash scripts/cf-build.sh --build-only
+          else
+            (cd "$DIR" && npm run build)
+          fi
+
+      # Only what wrangler sends: the built files, the build's redirect, the
+      # config and its migrations, never a script, package file or `.npmrc`.
+      # The deploy job copies it in again with its own copy of this command.
+      - name: Pack the build
+        if: ${{ steps.app.outputs.configured == 'true' && github.event_name == 'push' }}
+        run: node scripts/lib-wrangler-config.mjs copy-build "$GITHUB_WORKSPACE" "$RUNNER_TEMP/app-build"
+
+      # Hidden files included: the build's redirect is `.wrangler/deploy/config.json`.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ steps.app.outputs.configured == 'true' && github.event_name == 'push' }}
+        with:
+          name: app-build
+          path: ${{ runner.temp }}/app-build
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  # Migrate and deploy the build with the default branch's own scripts and
+  # tools. No branch file runs here: see the header.
+  deploy:
+    needs: build
+    if: ${{ github.event_name == 'push' && needs.build.outputs.configured == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # A push to the default branch deploys production, so only that run enters
+    # the `production` environment, whose branch policy admits only that
+    # branch. Every other run gets no environment. The secrets stay repo-level,
+    # so both paths read the same ones.
+    environment: ${{ github.ref_name == github.event.repository.default_branch && 'production' || '' }}
+    permissions:
+      contents: read
+      # Needed by "Publish the preview URL" and "Record the production
+      # release" — creating a Deployment and its status is the only write this
+      # workflow makes to GitHub.
+      deployments: write
+    env:
+      CF_BRANCH: ${{ github.ref_name }}
+      CF_PRODUCTION_BRANCH: ${{ github.event.repository.default_branch }}
+      # Whether a token is set, never the token: each step that needs it names
+      # it in its own `env:`. It is the <repo>-deploy token that provisioning
+      # minted: Workers Scripts, D1, and Account Settings only. Never the user
+      # token, which can mint tokens and stays in the host's .env. Its secret
+      # name, CLOUDFLARE_DEPLOY_TOKEN, is read only by this job: an older
+      # commit's workflow reads CLOUDFLARE_API_TOKEN at job level, and that
+      # secret is gone, so a branch started from one gets no key. See
+      # wiki/stack/cloudflare-credentials.md.
+      HAS_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN != '' }}
+
+    steps:
+      # The default branch's files: this commit on a default-branch push,
+      # else the default branch itself. No git credential stays behind.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref_name == github.event.repository.default_branch && github.sha || github.event.repository.default_branch }}
+          path: trusted
+          persist-credentials: false
+
+      # The default branch decides where the app is. A default branch whose
+      # scripts predate taking a build, or that has no config yet, previews
+      # this change only once it is published.
+      - name: Locate the app
+        id: app
+        run: |
+          set +e
+          DIR=$(bash trusted/scripts/cf-build.sh --app-dir)
+          STATUS=$?
+          set -e
+          if [ "$STATUS" -ne 0 ] && [ "$STATUS" -ne 3 ]; then
+            echo "cf-build.sh --app-dir failed with exit $STATUS" >&2
+            exit "$STATUS"
+          fi
+          if [ "$STATUS" -eq 3 ] || ! grep -q -- '--take-build' trusted/scripts/cf-deploy.sh; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "The default branch's deploy scripts can not take a build yet, so this change previews after it is published." >> "$GITHUB_STEP_SUMMARY"
+            echo "preview after publish: the default branch's deploy scripts can not take a build yet"
+            exit 0
+          fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+          echo "WONG_WRANGLER=$DIR/node_modules/.bin/wrangler" >> "$GITHUB_ENV"
+
+      # No cache: a branch job can save cache entries this job would restore.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ steps.app.outputs.ready == 'true' }}
+        with:
+          node-version-file: trusted/.nvmrc
+
+      # The default branch's tools, with no package's install script run.
+      - name: Install the deploy tools
+        if: ${{ steps.app.outputs.ready == 'true' }}
+        working-directory: ${{ steps.app.outputs.dir }}
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: ${{ steps.app.outputs.ready == 'true' }}
+        with:
+          name: app-build
+          path: ${{ runner.temp }}/app-build
+
+      # Copies in only the allowed files, then refuses a build that would land
+      # anywhere but this branch's own Worker.
+      - name: Take the build
+        if: ${{ steps.app.outputs.ready == 'true' }}
+        run: bash trusted/scripts/cf-deploy.sh --take-build "$RUNNER_TEMP/app-build"
+
+      # Gated only on there being a build to read: the binding half of the
+      # check needs no credential, so a repo with a config and no token still
+      # gets that much signal. The script skips — never fails — on no token,
+      # no config, and no `env.staging`.
+      - name: Check staging/production parity
+        if: ${{ steps.app.outputs.ready == 'true' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node trusted/scripts/cf-secrets.mjs check
+
+      - name: Say nothing deployed
+        if: ${{ steps.app.outputs.ready == 'true' && env.HAS_DEPLOY_TOKEN != 'true' }}
+        run: |
+          echo "No CLOUDFLARE_DEPLOY_TOKEN secret — built without deploying."
+          echo "Run /wong-sync to plan provisioning, then this job deploys."
+
+      - name: Migrate
+        if: ${{ steps.app.outputs.ready == 'true' && env.HAS_DEPLOY_TOKEN == 'true' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash trusted/scripts/cf-build.sh --migrate
+
+      - name: Deploy
+        id: deploy
+        if: ${{ steps.app.outputs.ready == 'true' && env.HAS_DEPLOY_TOKEN == 'true' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash trusted/scripts/cf-deploy.sh
+
+      # Publish the preview URL where the tooling can find it.
+      #
+      # Under Cloudflare Workers Builds this step is unnecessary — Cloudflare's
+      # own GitHub integration attaches the URL to the commit. Actions has no
+      # such integration, so without this the URL exists only in a job log:
+      # `/save` reports no preview, and `/verify` — including the evidence step
+      # `/ship` runs — reports UNKNOWN because there is nothing to walk against.
+      # A GitHub Deployment is what
+      # `.claude/skills/save/scripts/preview-url.sh` looks for first.
+      #
+      # Non-production branches only: the alias URL is per-commit, and the
+      # production deploy has a permanent address that needs no announcing.
+      - name: Publish the preview URL
+        if: ${{ steps.deploy.outputs.preview-url != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW_URL: ${{ steps.deploy.outputs.preview-url }}
+        run: |
+          DEPLOYMENT_ID=$(gh api "repos/$GITHUB_REPOSITORY/deployments" \
+            -f ref="$GITHUB_SHA" \
+            -f environment=staging \
+            -f description="Preview for $CF_BRANCH" \
+            -F auto_merge=false \
+            -f 'required_contexts[]' \
+            --jq .id)
+          gh api "repos/$GITHUB_REPOSITORY/deployments/$DEPLOYMENT_ID/statuses" \
+            -f state=success \
+            -f environment_url="$PREVIEW_URL" \
+            --jq .id > /dev/null
+          echo "published $PREVIEW_URL as deployment $DEPLOYMENT_ID"
+
+      # Record the release on the merged commit, with its outcome and the live
+      # address `cf-deploy.sh` read from wrangler's own output. `/ship` waits
+      # for this record, then opens the live app once
+      # (`.claude/skills/ship/scripts/live-look.sh`).
+      #
+      # `always()` so a failed migrate or deploy is recorded as a failure; a
+      # failed build fails the run, which `/ship` reads too. A docs merge
+      # deploys nothing and records nothing. `continue-on-error`: a record that
+      # can not be written costs the look, never the release.
+      - name: Record the production release
+        if: ${{ always() && steps.app.outputs.ready == 'true' && env.HAS_DEPLOY_TOKEN == 'true' && github.ref_name == github.event.repository.default_branch }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LIVE_URL: ${{ steps.deploy.outputs.production-url }}
+          STATE: ${{ steps.deploy.outcome == 'success' && 'success' || 'failure' }}
+        run: |
+          DEPLOYMENT_ID=$(gh api "repos/$GITHUB_REPOSITORY/deployments" \
+            -f ref="$GITHUB_SHA" \
+            -f environment=production \
+            -f description="Live release" \
+            -F auto_merge=false \
+            -f 'required_contexts[]' \
+            --jq .id)
+          gh api "repos/$GITHUB_REPOSITORY/deployments/$DEPLOYMENT_ID/statuses" \
+            -f state="$STATE" \
+            ${LIVE_URL:+-f environment_url="$LIVE_URL"} \
+            --jq .id > /dev/null
+          echo "recorded $STATE ${LIVE_URL:-with no address} as deployment $DEPLOYMENT_ID"

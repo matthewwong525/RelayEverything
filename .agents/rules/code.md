@@ -1,0 +1,32 @@
+---
+paths: ["app/**", "schema/**", "scripts/**", ".github/workflows/**"]
+---
+
+# Write less code
+
+Write the least code that does the job, and write no code that does not. Decompose branchy logic into named helpers as you write it. Prefer a surgical edit to a file rewrite. Do not use `any`; use `unknown` only when you narrow it before use.
+
+**Comment only what the code can not say:** why, not what, in two lines at most. A longer reason is a test, a clearer name, or a wiki line: a comment goes stale, and no check reads it. [The lint rule](../../scripts/lint-comment-length.mjs) fails on a comment over two lines, or a comment line over 120 characters.
+
+## Where things go
+
+Follow the files that already do it. Split by job, not by size: each file does one thing and is named for it.
+
+- **A page:** a folder in [`app/src/pages/`](../../app/src/pages/home/Home.tsx), and one entry in [`app/src/router.tsx`](../../app/src/router.tsx).
+- **A part used by one page:** in that page's folder. It moves to `app/src/components/` when a second page uses it.
+- **Data and helpers with no UI:** [`app/src/lib/`](../../app/src/lib/apps.ts).
+- **Styles:** Tailwind classes on the element. The shared look is [`app/src/index.css`](../../app/src/index.css), the only stylesheet: no CSS file sits beside a part, and [a check](../../app/src/style.test.ts) fails on one. Build a screen from the ready-made parts in [`app/src/components/ui/`](../../app/src/components/ui/button.tsx); when it needs one the app lacks, run `npx shadcn@latest add <part>` from `app/` and leave the part as written. That folder holds only what the command wrote: a part you write goes in `app/src/components/`, under every check.
+- **An API route:** a handler file in [`app/worker/api/`](../../app/worker/api/health.ts), and one entry in [its router](../../app/worker/api/router.ts). For an approved shared action, use [the health contract](../../app/worker/api/health.ts); [company actions](../../wiki/stack/company-api.md) owns the pattern.
+- **A skill that touches business data:** [build it on actions](../../wiki/stack/company-api.md#build-a-skill-on-actions): the work goes in the app, and the skill calls it.
+- **A mini app:** copy the example's two folders, [`app/src/apps/hello/`](../../app/src/apps/hello/App.tsx) and, for a server side, [`app/worker/apps/hello/`](../../app/worker/apps/hello/api.ts). The page is `App.tsx`, with `app.json` beside it, built from the parts as Hello is; an API route is a handler file and one entry in `api.ts`'s route list. No other file needs an edit. An app imports only its own folder, the shared parts and helpers, and, on the server, [the shared contract](../../app/worker/api/contract.ts): [a check](../../wiki/stack/mini-apps.md#the-rules) fails on any other.
+
+The [`npm test` chain](../../app/package.json) owns all numeric limits and enforces them in CI, which is [the gate](../../wiki/development/the-change-loop.md#the-gate); a local run is a pre-check, never the gate.
+
+## Sample data and timed jobs
+
+- **A change that adds or alters a feature adds the made-up rows its scenarios need** to [`schema/seed.sql`](../../schema/seed.sql), in the same change: realistic in shape, no real person's details. The check before publishing starts from [the seed](../../wiki/stack/d1-pipeline.md#seeded-staging-production-untouched), so a scenario with no sample data goes unchecked.
+- **A new scheduled job gets a manual trigger**, reachable on staging only, that calls the same function as `scheduled()`: the check runs the job by hand, and [only the timetable goes untested](../../wiki/stack/staging-bindings.md#cron-triggers-inherit-omitting-them-does-not-disable-them).
+
+Never loosen a check silently: a skip comment, a skipped or deleted test, or a changed check setting needs a `Check:` bullet in the change's Decision log, as [a loosened check needs a reason](../../wiki/development/the-change-loop.md#a-loosened-check-needs-a-reason) says.
+
+If your target uses other code paths, adjust the `paths:` list to match its layout.

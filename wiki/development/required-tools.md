@@ -1,0 +1,184 @@
+# Required tools
+
+WongStack runs on a deliberately small toolchain. A repo that has installed the payload needs exactly five commands on PATH, plus a resolving `origin` remote:
+
+| Tool | Why |
+|---|---|
+| `git` | Everything lives in the repo; [the change loop](the-change-loop.md) says which verbs run git. |
+| `gh` | PRs, checks, and the GitHub API — the delivery gate. Must be authenticated. (`/wong-sync` doesn't need it: its clone refresh is plain `git`, and it opens no PRs. [Contributing](../contributing.md) upstream is a manual PR, where you'd use `gh` yourself.) An install on [the Artifacts route](../stack/artifacts-route.md) doesn't need it at all. |
+| `node` | [Node.js](https://nodejs.org/) runs OpenSpec, the session hooks, and the payload's dependency-free scripts (memory, the review builder). They use only Node's built-in modules. |
+| `openspec` | The planning layer the workflow verbs front. It is distributed only as an npm package, so it runs on Node. |
+| `curl` | [Setup's provisioning](#the-cloudflare-stack-pack) drives the Cloudflare API with it, and `/verify`'s request and state probes use it. |
+
+Core reads remain dependency-free: **no `jq`, no `python` (only [Camoufox](#installing-camoufox) needs it), and no project-language toolchain**. [Optional document retrieval](document-retrieval.md#optional-meaning-based-search) uses npm only in its explicit host setup to install pinned QMD/models outside the repo. Keyword fallback needs no setup; ordinary reads never install or download. No app package or lockfile changes.
+
+**One core verb adds one tool: [`/verify`](staging-walkthrough.md) needs `agent-browser` — and only for browser journeys. A private link adds one more, `cloudflared`, browsing as you adds Camoufox, a robot check adds a live view's three small tools, and shopping adds Shop's command.**
+
+| Tool | Why |
+|---|---|
+| `agent-browser` | The browser [`/verify`](../../.agents/skills/verify/SKILL.md) drives for UI journeys, carrying its own Chrome. Setup offers it up front, in its one install question. On any other machine, `/verify` installs it the first time a browser journey needs it, and says so. Its request and state probes ride on `curl` and existing commands, so a walk with no UI journeys needs no browser at all. |
+| `cloudflared` | Cloudflare's free tunnel tool, which gives every [private link](browsing.md#how-private-links-work) (the password link, the key link, and a private form) an address your phone or another computer can open. Setup offers it up front, in the same question. On any other machine, the agent asks, then [installs it](#installing-cloudflared) the first time a private link needs it. A link opened at the agent's own computer needs it too: there is no local link. |
+| Camoufox | The browser the agent [uses websites in as you](browsing.md#saved-browser-logins), which more sites let in. Setup never offers it. The first errand asks, then [installs it](#installing-camoufox) into your home folder. |
+| Shop's command | What [shopping](shopping.md) runs to search Shop's catalog and pay at its checkout. Setup never offers it. The first shopping request asks, then [installs it](#installing-shops-command) into your home folder. |
+| `x11vnc`, `xdotool`, noVNC | What [a live view](live-view.md) needs to show you the agent's browser at a robot check, on Linux only. Setup never offers them. The first check asks, saying two need admin rights, then [installs them](#installing-the-live-views-tools). |
+
+Each is a **tool, not a toolchain**: nothing is added to your repository — no `package.json`, no dependency entry, no lockfile — which is what lets a Python, Rust, or Go repo walk its own app. A repo that never runs `/verify`, opens a private link, browses as you, meets a robot check, or shops acquires none of them, and every other core verb still needs only the five commands above. The browser is available for ordinary work too, not only inside a walk; `/verify` is just the surface that grades what it sees and posts the evidence.
+
+**Chat wherever your assistant runs.** WongStack needs no chat app. [Paseo](https://paseo.sh) is an optional one: it runs Claude Code or Codex on your own computer and reaches it from your phone, and setup points to it when it's missing ([the check](https://github.com/matthewwong525/WongStack/blob/main/.agents/skills/wong-setup/references/tools.md#paseo-point-to-it-never-install-it)). No verb needs it except one: a request with several separate parts can [open a new workspace per part](the-change-loop.md#several-parts-several-workspaces). [`/schedule`](../../.agents/skills/schedule/SKILL.md) runs schedules on your app's clock or an existing one, such as Paseo's, and verifies future-session access ([host schedules](../stack/host-schedules.md)). Without Paseo, the parts of a request are done one at a time, and work happens in your main folder. You also lose chatting from your phone, `/close` archiving the workspace, a finished private link waking the chat (you type *continue* instead), and the session-start tidy-up of idle workspaces. Every other verb works as before.
+
+**With Paseo, WongStack sets two things.** Paseo keeps settings in two places: the repo's `paseo.json` travels with every clone, and `~/.paseo/config.json` stays on each computer (`paseo reload` rereads it). The repo's [`paseo.json`](../../paseo.json) copies your secrets into each new workspace ([the secrets convention](secrets.md)) and tells Paseo to name workspaces, branches, commits, and pull requests the way [`/save` and `/ship`](the-change-loop.md) do. Setup adds four agent presets, *Explore / Plan* and *Apply / Ship* for Claude and for Codex, with [`presets.mjs`](../../.agents/skills/schedule/scripts/presets.mjs). It adds only missing ones and never changes yours. Everything else stays yours: workspaces start from `main`, Paseo's app remembers whether you pick a new worktree or local, workspaces stay open after a merge (the session-start [tidy-up](../../.agents/skills/schedule/scripts/tidy.mjs) closes saved ones idle three days), and the agent browser stays off. On a new computer, ask your agent to run `node .claude/skills/schedule/scripts/presets.mjs add` once; `--dry-run` shows what it would add. Paseo quirks, handled in [`workspace.mjs`](../../.agents/skills/schedule/scripts/workspace.mjs): `paseo run` makes a sub-agent whenever `PASEO_AGENT_ID` is set, and its `--title` names only the agent, so the script renames the workspace. A saved-branch workspace runs its setup on the local branch as is, so the script pins it to the reviewed commit. The script gives each chat medium thinking or more. Open a workspace only through it, never by a raw `paseo run --new-workspace --new-branch` or Paseo's Handoff skill.
+
+**Setup adds one account: Cloudflare.** Every repo keeps its [memory store](memory.md) there, and every new install hosts its app there.
+
+| Need | Why |
+|---|---|
+| A Cloudflare account | Holds the memory database and hosts the app. [Setup's provisioning](https://github.com/matthewwong525/WongStack/blob/main/.agents/skills/wong-setup/references/cloudflare.md) creates both from one user token. |
+| The user token, `CLOUDFLARE_API_TOKEN` in `.env` | Provisions everything, runs memory's admin jobs, and mints the CI deploy token. It stays on your computer. The [credentials page](../stack/cloudflare-credentials.md) owns how to make it. |
+| The memory key, `CLOUDFLARE_MEMORY_TOKEN` | Only in an app with no sign-in yet: opens this repo's store through the production Worker's memory route. [The memory page](memory.md#sign-in-and-expiry) owns its name. |
+| R2, optional | Keeps raw transcripts. It needs a payment method on file; without it, memory works and keeps no transcripts. |
+
+## Node's minimum
+
+The oldest release of each Node line with current security fixes; an older line takes the next one's. [The helper](../stack/live-line.md#the-helper) warns below it and keeps working. Raise a row at each security release.
+
+| Node line | Minimum |
+|---|---|
+| 22 | 22.22.2 |
+| 24 | 24.15.0 |
+| 26 | 26.0.0 |
+
+## Symbolic links in the agent folder
+
+`.claude` and `.codex` link to one `.agents/` folder ([the agent folder](../../.agents/skills/wong-sync/references/payload-manifest.md#the-agent-folder)). On Windows, Git needs to preserve these links; otherwise, it writes small text files and the agents miss their skills. Setup configures Git before cloning, tests folder and file links, and turns on Developer Mode if needed. You only approve Windows' permission window when it appears. [Windows folder links](https://github.com/matthewwong525/WongStack/blob/main/.agents/skills/wong-setup/references/tools.md#4-windows-folder-links) owns the procedure and fallback; a clone you make yourself needs those settings first.
+
+To check that Codex reads the shared folder, run `codex features list` (the Default-mode question flag shows `true`) and `codex debug prompt-input "hi"` (each skill appears once). Neither calls a model. Run them in a trusted checkout: Codex ignores the project `config.toml` in an untrusted one, whatever the layout.
+
+## `gh` needs the `workflow` scope
+
+`gh auth login`'s minimum scope set is `repo`, `read:org`, `gist` — **`workflow` is not in it.** Without it, pushing any `.github/workflows/*.yml` file fails at *push* time, long after setup reported success, with wording a newcomer can't act on:
+
+```
+refusing to allow an OAuth App to create or update workflow
+```
+
+The pack's deploy workflow is the file that trips this, so every install needs the scope. The plain-language reason, for when you're asking a user: *"GitHub wants your permission before a tool can add an automated deploy step. This is that permission."*
+
+- **Authenticating fresh:** request it up front — `gh auth login --web --git-protocol https --scopes workflow,user:email`. It costs nothing in the browser visit the login already requires. Setup does this for you, in [one sign-in](https://github.com/matthewwong525/WongStack/blob/main/.agents/skills/wong-setup/references/tools.md#2-the-github-sign-in).
+- **Already authenticated:** check `gh auth status` for `workflow` in the token scopes; missing → `gh auth refresh --scopes workflow`.
+
+[Setup's provisioning step](https://github.com/matthewwong525/WongStack/blob/main/.agents/skills/wong-setup/references/cloudflare.md#4e-the-workflow) checks the scope before it relies on a push, and links here rather than re-explaining.
+
+## `gh` needs the `user:email` scope for memory
+
+This heading remains for older links. Memory uses [the company sign-in](memory.md#sign-in-and-expiry) and needs no GitHub scope. Setup may read verified GitHub emails to fill git authorship; that is separate from memory access.
+
+## Runtimes install at the point of need
+
+**Nothing is installed without asking.** Installing a runtime changes the machine, not the repo. When a step needs a tool and it is missing, the skill explains what and why, and asks.
+
+**Setup is the one skill that checks ahead**, because nothing works until its tools exist. Before it writes anything, it checks for `git`, `gh` (not on [the Artifacts route](../stack/artifacts-route.md)), Node.js, and `openspec`, and asks once to install the missing ones ([get the computer ready](https://github.com/matthewwong525/WongStack/blob/main/.agents/skills/wong-setup/references/tools.md)). The same question covers `agent-browser` and `cloudflared`, so nothing stops later to ask; a failed install of either is named and skipped, since setup finishes without them. The owner's memory waits for `cloudflared`, which signs them in once. It uses the system package manager — Homebrew when it is already there, `winget`, or `apt` — only when that needs no password, because an agent can't type one. Otherwise it installs into your home folder, `~/.local`, which also works on managed laptops. It never installs a package manager. It also offers [the background helper](../stack/live-line.md#the-helper). Every other skill keeps point-of-need installs: on a machine setup didn't ready, or where a helper failed, `/verify` adds its browser the first time it needs one, and a private link its tunnel tool. An errand on your accounts always asks for [Camoufox](#installing-camoufox) itself, and a shopping request for [Shop's command](#installing-shops-command).
+
+### Installing `cloudflared`
+
+Setup and a first private link install it from Cloudflare's own channel:
+
+- **macOS:** `brew install cloudflared`
+- **Windows:** `winget install --id Cloudflare.cloudflared`
+- **Linux:** Cloudflare's [package repository](https://pkg.cloudflare.com/) with passwordless `sudo`, or else the release binary into `~/.local/bin`:
+
+  ```bash
+  mkdir -p ~/.local/bin
+  curl -fsSL -o ~/.local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64   # -arm64 on ARM
+  chmod +x ~/.local/bin/cloudflared
+  ```
+
+### Installing Camoufox
+
+The first errand on your accounts asks once, then runs [`browse.mjs install`](../../.agents/skills/browser/scripts/browse.mjs):
+
+- **What it needs.** Python 3.10 or newer with `venv` (else `BROWSE_NEEDS=python`), 3 GB of disk, 700 MB of memory, and no admin password. Linux also needs `Xvfb`; a Mac shows no window.
+- **What it installs.** The pinned [`camoufox`](https://pypi.org/project/camoufox/) Python library and the build it pins, whose disguise it makes. A start refuses a pair that disagrees.
+- **Where it goes.** `~/.wong-stack/camoufox/`: the library in `venv/`, the build in `cache/`, your site logins in `profile/`, and its own temp folder on disk.
+- **To remove it,** stop the browser, then delete `~/.wong-stack/camoufox/`. Your [saved logins](passwords.md) are a separate file. Delete an older install's `~/.wong-stack/camofox/` and `~/.cache/camoufox` once the new browser has your logins.
+
+### Installing the live view's tools
+
+The first [live view](live-view.md) asks once, then runs [`hand-over.mjs`](../../.agents/skills/hand-over/scripts/hand-over.mjs) `install-view`. Linux only: on a Mac the browser has no screen to show, so nothing is installed.
+
+- **`x11vnc` shows the browser's screen** to the link's page. It is a system package, so it needs admin rights.
+- **`xdotool` keeps the page's window in front** and reads the screen's size. It is a system package, so it needs admin rights.
+- **Two gotchas, kept in [`view.mjs`](../../.agents/skills/hand-over/scripts/view.mjs).** `x11vnc` needs both `-rfbport 0` and `-rfbportv6 0`: either alone leaves a network port open with no password, and `-localhost` drops every client on the Unix socket. `xdotool search` finds the browser's window by `--classname Navigator`; `--class` finds none.
+- **noVNC draws the screen on the page you open.** It needs no admin rights: about 700 KB in `~/.wong-stack/live-view/`, in version 1.6.0, the one WongStack has tried, from [its own source release](https://github.com/novnc/noVNC/releases/tag/v1.6.0). Only its `core/` and `vendor/` folders and its licence are kept, and only when they match a recorded fingerprint: a changed file installs nothing.
+- **Admin rights without a password, or one command for you.** The two packages come from `apt-get`, run as root or through `sudo` when it asks no password. Otherwise nothing is installed, the viewer included, and the agent hands you the command to run yourself: `sudo apt-get install -y --no-install-recommends x11vnc xdotool`.
+- **To remove them,** delete `~/.wong-stack/live-view/` and run `sudo apt-get remove x11vnc xdotool`.
+
+### Installing Shop's command
+
+The first [shopping](shopping.md) request asks once, then runs [`shop.mjs install`](../../.agents/skills/shop/scripts/shop.mjs):
+
+- **What it needs.** About 2 MB of disk, no admin password, and Node 22.21 or newer in the 22 line, or 24.5 or newer in the 24 line. On another Node nothing is installed, and the agent browses instead.
+- **Where it goes.** `~/.wong-stack/shop/` holds [`@shopify/shop`](https://www.npmjs.com/package/@shopify/shop), Shopify's own command, in version 1.1.0, the one WongStack has tried, and no other. It has no dependencies, so npm is not run.
+- **Only a matching download is unpacked.** Most of the command is a sealed file no one can read, so the script compares the download with a fingerprint recorded beside the version: a changed file installs nothing. A newer version is tried by hand, then shipped as a release.
+- **To remove it,** delete `~/.wong-stack/shop/`. That removes your Shop sign-in too: [where things are kept](shopping.md#where-things-are-kept).
+
+## Where an assistant finds its tools
+
+An assistant finds a tool in your own folder, `~/.local/bin`, only when it knows that folder. Each learns it differently:
+
+| Assistant | Where it gets `PATH` |
+|---|---|
+| Codex | Each command and hook starts a login shell, which reads your shell's start-up file. |
+| Claude Code | It keeps the `PATH` its app started with, whatever a start-up file sets. |
+
+So setup tells both:
+
+- **Setup's line goes first in the start-up file.** Ubuntu's `~/.bashrc` stops near its top for a shell that is not interactive, so a line below that is never read. [The snippet](https://github.com/matthewwong525/WongStack/blob/main/.agents/skills/wong-setup/references/tools.md#1-the-tools) writes it.
+- **Claude Code is told at session start.** A hook in [`.agents/settings.json`](../../.agents/settings.json) adds the folder when it exists and `PATH` lacks it.
+
+A test of that line starts its shell with `env -i`, `SHLVL=1` and no input: a bash with no `SHLVL` and a socket for input reads `~/.bashrc` by itself, and would pass a broken line ([`tools-on-path.test.mjs`](https://github.com/matthewwong525/WongStack/blob/main/scripts/tests/tools-on-path.test.mjs)).
+
+Any other assistant gets only the line: one that reads no start-up file still misses the tools.
+
+## Optional Cloudflare management tool
+
+[Cloudflare's cf CLI](../stack/cloudflare-cli.md) is an optional tool the assistant installs at the point of need; that guide owns it.
+
+## The Cloudflare stack pack
+
+One exception, and its tools stay in CI. Every new install takes the Cloudflare stack pack, documented under `wiki/stack/`. It ships a handful of scripts that run `node`/`npm` and `wrangler` and expect a Cloudflare account. **Its tools are its own:** they run **only in that repo's own build and CI**, in the pipeline scripts under `scripts/` that migrate and deploy. Nothing on your machine runs them.
+
+**`curl` is a provisioning dependency.** [Setup's provisioning](https://github.com/matthewwong525/WongStack/blob/main/.agents/skills/wong-setup/references/cloudflare.md) drives the Cloudflare REST API with `curl` rather than `wrangler`, so provisioning needs no app dependency installed.
+
+**The pack's scripts may use `node`** where it's the better tool — JSON assembly, editing `wrangler.jsonc` — because the app's build already requires it. The governing rule:
+
+> Use a tool where it is already required. A skill may install a **tool** it needs at the point of need and say so; never let a WongStack skill be the reason a **runtime** gets installed without asking.
+
+That's why provisioning is `curl`-first even though `npx wrangler` would be shorter: reaching for it would add an app dependency to the one flow that has to work on a fresh computer.
+
+So the five-command guarantee stays literally true for every repo: the pack adds tools to *its* repo's deploy pipeline, not to WongStack.
+
+## Working with JSON
+
+Two rules keep it that way.
+
+**In scripts, filter with `gh --jq`.** `gh` embeds its own jq implementation ([gojq](https://github.com/itchyny/gojq)), so `--jq` costs nothing while a `| jq` pipeline is an external dependency:
+
+```bash
+# yes — gh does the filtering
+gh pr checks --json name,bucket,link --jq '.[] | "\(.bucket)\t\(.name)"'
+
+# no — requires jq on PATH
+gh pr checks --json name,bucket,link | jq -r '.[] | .name'
+```
+
+Keep filters inside the syntax jq and gojq share — `select`, `map`, string interpolation, indexing. That covers everything the payload needs.
+
+**For local JSON files, just read them.** Skills are instructions to an agent, and an agent reading a small file beats a subshell parsing it: state the fields, their defaults, and any expansion in prose. It handles absent keys, renamed files, and malformed input by *noticing*, where `jq -r '.x // empty'` silently yields a blank. [`/wong-sync`](../../.agents/skills/wong-sync/SKILL.md) reads `.claude/.wong-stack.json` this way before anything else.
+
+Reach for a shell pipeline only when you need determinism or volume — parsing four scalars is neither.
+
+## Adding a dependency
+
+Don't, unless the payload genuinely can't work without it. If a change seems to need a new tool, the first question is whether `gh`, `git`, or the agent itself can already do the job. If a new tool is truly required, it belongs in this page, in [the preconditions](../../.agents/skills/save/references/preconditions.md) when a verb must check it, and in the `CHANGELOG.md` entry for that change — a downstream repo shouldn't discover it by failing.
+
+Other development processes live in [Development](README.md).

@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+# CI build wrapper: apply D1 migrations to the right database, then build.
+#
+# Wire it up as your `build` script (package.json). Cloudflare Workers Builds
+# runs `npm run build` on every push, so this wrapper makes the dashboard's
+# default command do the right thing with no dashboard config.
+#
+# Behavior:
+#   - In CI (CF_BRANCH or WORKERS_CI_BRANCH is set):
+#       - branch = production branch (default `main`) → apply migrations to
+#         the PRODUCTION D1, then build.
+#       - any other branch → apply migrations to the STAGING D1 (the one
+#         declared by the `staging` environment in wrangler.jsonc), then build.
+#       - a Worker that binds no D1 database → skip the migrate, then build.
+#   - Anywhere else (a developer's terminal, a quality gate) → skip migrate
+#     and just build. A remote database is never touched from a developer
+#     machine.
+#
+# Two flags split the job where the deploy key starts, for the GitHub Actions
+# workflow and the check runner, which build branch code with no key:
+#   --build-only  regenerate the types and build, as above, and touch no
+#                 remote database. No credential is needed.
+#   --migrate     the migration alone, building nothing. The deploy side runs
+#                 it, with the key, from the default branch's copy of this
+#                 script, on a build `cf-deploy.sh --take-build` copied in.
+# No flag does both, as Workers Builds and a local preview expect.
+#
+# Nothing here rewrites wrangler.jsonc. Which Worker a branch lands on is
+# decided by `cf-deploy.sh`, wired to the Workers Builds *deploy* command;
+# this script only decides which database the migrations run against.
+#
+# Zero-config: no database name or id is baked in here. Both names are read
+# from wrangler.jsonc — the top-level one for production, the one inside the
+# `staging` environment for staging. Every repo ships this file byte-for-byte
+# identical.
+#
+# See wiki/stack/d1-pipeline.md for the full lifecycle.
+
+set -euo pipefail
+
+# Anchor every path on this script's own location, not the caller's CWD — the
+# Workers Builds root directory may be the repo root or the app subdirectory.
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ROOT=$(dirname "$SCRIPT_DIR")
+
+# shellcheck source=lib-wrangler-config.sh
+source "$SCRIPT_DIR/lib-wrangler-config.sh"
+
+# `--app-dir` prints the directory holding package.json and exits. It exists so
+# the pack's GitHub Actions workflow can `npm ci` in the right place without
+# duplicating the resolution logic in YAML.
+#
+# It answers with a THIRD outcome as well as found/broken: exit 3 means "this
+# repo has no wrangler config yet" — the state the pack ships in, before
+# setup's Cloudflare provisioning writes one. That is not a build failure and a caller is
+# meant to route it somewhere green; the workflow's locate step does exactly
+# that. Exit 1 stays reserved for a genuine error, so a provisioned repo whose
+# config is broken still fails loudly instead of yielding an empty path and a
+# confusing `npm ci` two steps later.
+#
+# The resolver *returns* non-zero rather than exiting, so guarding the call is
+# all it takes to ask the question without `set -e` killing the script — no
+# duplicate search logic, and the two paths can never disagree about which file
+# they'd pick.
+if [ "${1:-}" = "--app-dir" ]; then
+  if ! wong_resolve_wrangler_config "$ROOT"; then
+    echo "cf-build: this repo is not configured for Cloudflare yet — run /wong-sync to plan provisioning." >&2
+    exit 3
+  fi
+  echo "$BUILD_DIR"
+  exit 0
+fi
+
+# `--types` regenerates the binding types and exits, building nothing. The shared
+# checks call it in CI before the suite compiles, so a binding the config has
+# and the committed types lack fails there, where a save reports it, and never
+# first in the deploy build. A repo with no wrangler config has none to
+# regenerate, and that is a pass.
+if [ "${1:-}" = "--types" ]; then
+  if ! wong_resolve_wrangler_config "$ROOT" 2>/dev/null; then
+    echo "cf-build: no wrangler config, so no binding types to regenerate"
+    exit 0
+  fi
+  wong_regenerate_types cf-build
+  exit 0
+fi
+
+MODE=both
+case "${1:-}" in
+  --build-only) MODE=build ;;
+  --migrate) MODE=migrate ;;
+  "") ;;
+  *) echo "usage: bash scripts/cf-build.sh [--build-only | --migrate | --app-dir | --types]" >&2; exit 2 ;;
+esac
+
+wong_resolve_wrangler_config "$ROOT"
+
+wong_ci_branch "$ROOT"
+
+# Build the app; its mini apps are part of it (app/src/apps/, app/worker/apps/).
+# Then bundle the live line's own Worker into dist/line/, keyless, when the app
+# has one, previews too: an older default branch's cf-deploy.sh deploys a test
+# line from it. The line config has no env.staging, so the bundle ignores
+# CLOUDFLARE_ENV. cf-deploy.sh sends it on the default branch only. wiki/stack/live-line.md
+build() {
+  local line_config
+  (cd "$BUILD_DIR" && npm run build:app)
+  line_config=$(wong_config line-config)
+  [ -n "$line_config" ] || return 0
+  echo "cf-build: bundling the live line's Worker into dist/line"
+  (cd "$APP_DIR" && rm -rf dist/line && env -u CLOUDFLARE_ENV npx wrangler deploy --dry-run --outdir dist/line --config "$line_config")
+}
+
+# Local (non-CI) runs: skip the migrate, just build.
+if [ -z "$BRANCH" ]; then
+  if [ "$MODE" = migrate ]; then
+    echo "cf-build: not in CI — nothing migrated"
+    exit 0
+  fi
+  echo "cf-build: not in CI — running plain build only"
+  build
+  exit 0
+fi
+
+echo "cf-build: branch=$BRANCH (production branch: $PRODUCTION_BRANCH)"
+
+if [ "$BRANCH" = "$PRODUCTION_BRANCH" ]; then
+  WHICH="production"
+  WRANGLER_ENV=()
+else
+  WHICH="staging"
+  WRANGLER_ENV=(--env staging)
+fi
+
+# Which database to migrate. No name is baked into this script, so every repo's
+# copy is identical: `wong_config` reads the top-level `d1_databases` for
+# production, and `staging-database` reads the `staging` environment's own
+# entry. That read refuses a staging entry missing while production binds one,
+# or naming production's database by name or id, so a branch never migrates
+# live data. Each read is an assignment, so a refusal stops the build under
+# `set -e`, before any wrangler call. Empty means no D1 to migrate.
+#
+# A build the default branch's scripts took in must pass their check first;
+# that check is a no-op anywhere no build was taken. Then a preview migrates
+# only the default branch's own staging database (`migrate-database`), which
+# the check made sure is the one the build binds; production keeps main's
+# own config and migrations.
+migrate() {
+  wong_refuse_untrusted_build cf-build
+  wong_wrangler_command
+  if [ "$WHICH" = "production" ]; then
+    DB_NAME=""
+    HAS_D1=$(wong_config has-d1)
+    if [ "$HAS_D1" = true ]; then DB_NAME=$(wong_config database-name); fi
+  else
+    DB_NAME=$(wong_config migrate-database)
+  fi
+
+  # A Worker that binds no D1 database has nothing to migrate.
+  if [ -n "$DB_NAME" ]; then
+    echo "cf-build: $WHICH branch — applying migrations to the $WHICH D1 ($DB_NAME)"
+    # wrangler resolves config-relative paths (migrations_dir, assets) from the
+    # config's own directory, so run it from there.
+    (cd "$APP_DIR" && "${WRANGLER[@]}" d1 migrations apply "$DB_NAME" --remote ${WRANGLER_ENV[@]+"${WRANGLER_ENV[@]}"})
+  else
+    echo "cf-build: $WHICH binds no D1 database — skipping migrations"
+  fi
+}
+
+if [ "$MODE" != build ]; then migrate; fi
+if [ "$MODE" = migrate ]; then exit 0; fi
+
+# Regenerate the binding types before building; the checks did the same before
+# they compiled (`--types` above).
+wong_regenerate_types cf-build
+
+echo "cf-build: building"
+
+# `CLOUDFLARE_ENV` is how a wrangler environment is selected when the build goes
+# through @cloudflare/vite-plugin: the plugin flattens the chosen environment
+# into a generated `dist/**/wrangler.json` and drops a
+# `.wrangler/deploy/config.json` pointing wrangler at it. That selection happens
+# HERE, at build time — Cloudflare's docs are explicit that `--env` on
+# `wrangler deploy` "will have no effect" once the redirect exists.
+#
+# Get this wrong and the failure is silent and severe: the build emits a
+# production config, `wrangler deploy --env staging` finds no environment to
+# apply, does not complain, and deploys branch code to the PRODUCTION Worker
+# bound to the PRODUCTION database. Exporting it here is what makes the staging
+# environment real for a plugin-built app. A plain (non-plugin) build ignores
+# the variable, and `cf-deploy.sh` passes `--env staging` for that case instead.
+if [ "$WHICH" = "staging" ]; then
+  export CLOUDFLARE_ENV=staging
+  echo "cf-build: CLOUDFLARE_ENV=staging (selects the staging environment at build time)"
+fi
+
+build

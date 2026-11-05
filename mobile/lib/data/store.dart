@@ -2,10 +2,14 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 
-/// A note typed on this phone. It stays here; it goes to the server only while sending is on.
+/// How a note on this phone was made.
+enum NoteKind { typed, voice }
+
+/// A note typed or said on this phone. It stays here; it goes to the server only while sending is on.
 class LocalNote {
   const LocalNote({required this.clientId, required this.text, required this.createdAt, this.pin, this.sentAt,
-    this.queued = false, this.pinning = false});
+    this.queued = false, this.pinning = false, this.kind = NoteKind.typed, this.audioPath, this.durationMs,
+    this.wordsPending = false});
 
   final String clientId;
   final String text;
@@ -21,7 +25,16 @@ class LocalNote {
   /// True while the note waits for the phone's fix.
   final bool pinning;
 
-  /// The body the server's `notes` route takes.
+  final NoteKind kind;
+
+  /// A voice note's recording, from the app's support folder. It never leaves the phone.
+  final String? audioPath;
+  final int? durationMs;
+
+  /// True while the phone writes a voice note's words. The note gets no upload until it has them.
+  final bool wordsPending;
+
+  /// The body the server's `notes` route takes: a voice note goes as its words, the same as a typed note.
   Map<String, dynamic> toJson() => {
     'clientId': clientId, 'text': text, 'createdAt': createdAt.millisecondsSinceEpoch,
     if (pin != null) ...{'lat': pin!.lat, 'lon': pin!.lon, 'accuracy': pin!.accuracy, if (pin!.place != null) 'place': pin!.place},
@@ -54,17 +67,21 @@ class OutboxItem {
   final Map<String, dynamic> body;
 }
 
+const _voiceColumns = "kind TEXT NOT NULL DEFAULT 'typed', audio_path TEXT, duration_ms INTEGER, "
+  'words_pending INTEGER NOT NULL DEFAULT 0';
+
 const _schema = [
   'CREATE TABLE outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, destination TEXT NOT NULL DEFAULT \'$relayServer\', route TEXT NOT NULL, '
     'body TEXT NOT NULL, created_at INTEGER NOT NULL)',
   // queued = 1: the note has its upload. pinning = 1: the note waits for its fix, so no upload can go without its place.
+  // words_pending = 1: a voice note still waits for its words, so no upload can go without them.
   'CREATE TABLE notes (client_id TEXT PRIMARY KEY, body TEXT NOT NULL, created_at INTEGER NOT NULL, sent_at INTEGER, '
-    'queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0)',
+    'queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0, $_voiceColumns)',
   'CREATE TABLE points (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
   'CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
 ];
 
-/// The phone's own SQLite file: its typed notes, waiting uploads, location points not yet sent, and small settings.
+/// The phone's own SQLite file: its typed and voice notes, waiting uploads, location points not yet sent, and small settings.
 /// Written as plain SQL through drift, so the app needs no generated code.
 class Store extends GeneratedDatabase {
   Store(super.executor);
@@ -73,7 +90,7 @@ class Store extends GeneratedDatabase {
   Iterable<TableInfo<Table, dynamic>> get allTables => const [];
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(onCreate: (_) async {
@@ -94,6 +111,12 @@ class Store extends GeneratedDatabase {
         'ALTER TABLE notes DROP COLUMN sent',
       ]) {
         await customStatement(statement);
+      }
+    }
+    // Version 3 had typed notes only.
+    if (from < 4) {
+      for (final column in _voiceColumns.split(', ')) {
+        await customStatement('ALTER TABLE notes ADD COLUMN $column');
       }
     }
   });
@@ -148,7 +171,32 @@ class Store extends GeneratedDatabase {
     }
   }
 
-  static const _earlier = 'FROM notes WHERE sent_at IS NULL AND queued = 0 AND pinning = 0';
+  /// Keeps a voice note at once, with no words yet and no upload: [setWords] gives it both.
+  Future<void> addVoiceNote(LocalNote note) =>
+    _run('INSERT INTO notes (client_id, body, created_at, kind, audio_path, duration_ms, words_pending) VALUES (?, ?, ?, ?, ?, ?, 1)',
+      [note.clientId, jsonEncode(note.toJson()), note.createdAt.millisecondsSinceEpoch, NoteKind.voice.name, note.audioPath,
+        note.durationMs]);
+
+  /// Gives a voice note its words, and with [send] its upload in the same step. False when the note is gone or has
+  /// its words already.
+  Future<bool> setWords(String clientId, String text, {required bool send}) => transaction(() async {
+    final notes = await _rows('SELECT body FROM notes WHERE client_id = ? AND words_pending = 1', [clientId]);
+    if (notes.isEmpty) return false;
+    final note = _noteOf(jsonDecode(notes.single.read<String>('body')) as Map<String, dynamic>);
+    final body = LocalNote(clientId: clientId, text: text, createdAt: note.createdAt, pin: note.pin).toJson();
+    await _run('UPDATE notes SET body = ?, words_pending = 0, queued = ? WHERE client_id = ?', [jsonEncode(body), send ? 1 : 0, clientId]);
+    if (send) await enqueue('notes', body);
+    return true;
+  });
+
+  /// Deletes a note that never had words, such as a recording with no speech.
+  Future<void> dropNote(String clientId) => _run('DELETE FROM notes WHERE client_id = ? AND sent_at IS NULL', [clientId]);
+
+  /// Voice notes still waiting for their words, oldest first.
+  Future<List<LocalNote>> pendingWords() async =>
+    [for (final note in (await notes()).reversed) if (note.wordsPending) note];
+
+  static const _earlier = 'FROM notes WHERE sent_at IS NULL AND queued = 0 AND pinning = 0 AND words_pending = 0';
 
   /// How many notes never went to the server and have no upload: the notes the earlier-notes prompt asks about.
   Future<int> earlierCount() async => (await _rows('SELECT count(*) AS n $_earlier')).single.read<int>('n');
@@ -164,20 +212,25 @@ class Store extends GeneratedDatabase {
   Future<void> noteSent(String clientId, DateTime at) =>
     _run('UPDATE notes SET sent_at = ? WHERE client_id = ?', [at.millisecondsSinceEpoch, clientId]);
 
-  /// Every note typed on this phone, newest first.
+  /// Every note made on this phone, newest first.
   Future<List<LocalNote>> notes() async => [
-    for (final row in await _rows('SELECT body, sent_at, queued, pinning FROM notes ORDER BY created_at DESC, client_id DESC'))
+    for (final row in await _rows('SELECT body, sent_at, queued, pinning, kind, audio_path, duration_ms, words_pending FROM notes '
+        'ORDER BY created_at DESC, client_id DESC'))
       _noteOf(jsonDecode(row.read<String>('body')) as Map<String, dynamic>, sentAt: row.read<int?>('sent_at'),
-        queued: row.read<int>('queued') == 1, pinning: row.read<int>('pinning') == 1),
+        queued: row.read<int>('queued') == 1, pinning: row.read<int>('pinning') == 1,
+        kind: NoteKind.values.byName(row.read<String>('kind')), audioPath: row.read<String?>('audio_path'),
+        durationMs: row.read<int?>('duration_ms'), wordsPending: row.read<int>('words_pending') == 1),
   ];
 
-  static LocalNote _noteOf(Map<String, dynamic> body, {int? sentAt, bool queued = false, bool pinning = false}) => LocalNote(
+  static LocalNote _noteOf(Map<String, dynamic> body, {int? sentAt, bool queued = false, bool pinning = false,
+    NoteKind kind = NoteKind.typed, String? audioPath, int? durationMs, bool wordsPending = false}) => LocalNote(
     clientId: body['clientId'] as String, text: body['text'] as String,
     createdAt: DateTime.fromMillisecondsSinceEpoch(body['createdAt'] as int),
     pin: body['lat'] == null ? null : Pin(at: DateTime.fromMillisecondsSinceEpoch(body['createdAt'] as int),
       lat: (body['lat'] as num).toDouble(), lon: (body['lon'] as num).toDouble(),
       accuracy: (body['accuracy'] as num).toDouble(), place: body['place'] as String?),
     sentAt: sentAt == null ? null : DateTime.fromMillisecondsSinceEpoch(sentAt), queued: queued, pinning: pinning,
+    kind: kind, audioPath: audioPath, durationMs: durationMs, wordsPending: wordsPending,
   );
 
   /// Drops the health and location that did not go yet, for when sending turns off. Note uploads stay, so a later

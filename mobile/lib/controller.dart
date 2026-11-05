@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
+
+import 'package:flutter/foundation.dart';
 
 import 'data/api.dart';
 import 'data/connection.dart';
@@ -11,10 +14,23 @@ import 'data/store.dart';
 import 'relay.dart';
 import 'sync/health.dart';
 import 'sync/location.dart';
+import 'voice/model.dart';
+import 'voice/recorder.dart';
+import 'voice/transcriber.dart';
 
 const _cacheKey = 'timeline';
 
-/// A random id for a typed note, so a resend is stored once.
+/// What voice notes need: the speech model, the microphone, the words and playback. All of it stays on this phone.
+class VoiceParts {
+  const VoiceParts({required this.model, required this.recorder, required this.transcriber, required this.player});
+
+  final SpeechModel model;
+  final VoiceRecorder recorder;
+  final Transcriber transcriber;
+  final VoicePlayer player;
+}
+
+/// A random id for a note, so a resend is stored once.
 String newClientId([Random? random]) {
   final source = random ?? Random.secure();
   return List.generate(16, (_) => source.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
@@ -24,8 +40,16 @@ String newClientId([Random? random]) {
 /// it syncs on open, on a new note, on pull, and every hour in the background.
 class RelayController extends Relay {
   RelayController({required this.store, required this.vault, required this.places, required this.health,
-    RelayApi Function(Connection)? apiFor, DateTime Function()? clock, this.schedule})
-    : _sender = Sender(apiFor), _clock = clock ?? DateTime.now;
+    RelayApi Function(Connection)? apiFor, DateTime Function()? clock, this.schedule, this.voice})
+    : _sender = Sender(apiFor), _clock = clock ?? DateTime.now {
+    voice?.model.addListener(notifyListeners);
+    // A recording at its longest ends as if the person let go.
+    voice?.recorder.onLongest = (recording) {
+      _listening = null;
+      notifyListeners();
+      unawaited(_keepVoice(recording));
+    };
+  }
 
   final Store store;
   final KeyVault vault;
@@ -33,6 +57,8 @@ class RelayController extends Relay {
   final HealthSource health;
   /// Turns the hourly background sync on or off.
   final Future<void> Function(bool on)? schedule;
+  /// Voice notes; with none, the app has typed notes only.
+  final VoiceParts? voice;
   final Sender _sender;
   final DateTime Function() _clock;
 
@@ -46,6 +72,9 @@ class RelayController extends Relay {
   Settings _settings = const Settings();
   StreamSubscription<Pin>? _history;
   Future<void>? _syncing;
+  DateTime? _listening;
+  Future<bool>? _starting;
+  final _writing = <Future<void>>{};
 
   @override bool get connected => _connection != null;
   @override String? get server => _connection?.server;
@@ -71,7 +100,10 @@ class RelayController extends Relay {
     if (_settings.history) _startHistory();
     // Nothing waits for a fix yet at start, so a note still waiting lost its wait when the app closed.
     await store.settleWaiting(send: _settings.sending);
+    await voice?.model.load();
     await _refreshLocal();
+    // A voice note whose words the app's close cut short gets them now, from its kept recording.
+    _track(_writePending(dropStray: true));
   }
 
   static Entry _entryOf(RemoteNote note) => Entry(text: note.text, ring: note.source == 'ring', at: note.recordedAt,
@@ -83,7 +115,14 @@ class RelayController extends Relay {
   Entry _entryOfLocal(LocalNote note) => Entry(text: note.text, ring: false, at: note.createdAt,
     // With sending off the phone looks up no place name, so a pin with no name reads as Pinned.
     place: note.pin == null ? null : note.pin!.place ?? 'Pinned',
-    waiting: _settings.sending && note.sentAt == null && (note.queued || note.pinning));
+    waiting: _settings.sending && note.sentAt == null && (note.queued || note.pinning),
+    voice: note.kind == NoteKind.voice, writing: note.wordsPending, recording: note.audioPath,
+    length: note.durationMs == null ? null : Duration(milliseconds: note.durationMs!));
+
+  // The server keeps a voice note as typed words; this phone still knows it as a voice note, with its recording.
+  static Entry _withVoice(Entry entry, LocalNote? note) => note == null ? entry : Entry(text: entry.text, ring: false,
+    at: entry.at, place: entry.place, device: entry.device, waiting: entry.waiting, audio: entry.audio, voice: true,
+    recording: note.audioPath, length: note.durationMs == null ? null : Duration(milliseconds: note.durationMs!));
 
   Future<void> _refreshLocal() async {
     _notes = await store.notes();
@@ -95,11 +134,13 @@ class RelayController extends Relay {
   void _merge() {
     final onServer = {for (final entry in _server) if (!entry.ring) _sameAs(entry.at, entry.text)};
     final local = [for (final note in _notes) if (note.sentAt == null || !onServer.contains(_sameAs(note.createdAt, note.text))) _entryOfLocal(note)];
+    final voiced = {for (final note in _notes) if (note.kind == NoteKind.voice && note.sentAt != null) _sameAs(note.createdAt, note.text): note};
+    final server = [for (final entry in _server) entry.ring ? entry : _withVoice(entry, voiced[_sameAs(entry.at, entry.text)])];
     final merged = <Entry>[];
     var l = 0, s = 0;
-    while (l < local.length || s < _server.length) {
-      final takeLocal = s == _server.length || (l < local.length && !local[l].at.isBefore(_server[s].at));
-      merged.add(takeLocal ? local[l++] : _server[s++]);
+    while (l < local.length || s < server.length) {
+      final takeLocal = s == server.length || (l < local.length && !local[l].at.isBefore(server[s].at));
+      merged.add(takeLocal ? local[l++] : server[s++]);
     }
     _entries = merged;
     notifyListeners();
@@ -286,9 +327,193 @@ class RelayController extends Relay {
     _merge();
   }
 
+  // Voice notes.
+
+  static const _noMicrophone = 'Relay may not use the microphone. Allow it in the phone\'s settings.';
+  static const _microphoneFailed = 'The microphone did not start. Try again.';
+  static const _noRecording = 'This recording is not on this phone.';
+  static const _holdLonger = 'Hold the button while you talk, then let go.';
+  static const _noSpeech = 'No speech heard. Nothing was saved.';
+
+  @override ModelState get speechModel => voice?.model.state ?? ModelState.missing;
+  @override double get modelProgress => voice?.model.progress ?? 0;
+  @override ModelProblem? get modelProblem => voice?.model.problem;
+  @override int get modelBytes => voice?.model.bytes ?? modelSize;
+  @override DateTime? get listening => _listening;
+
+  @override
+  void askSpeechModel() => voice?.model.ask();
+
+  @override
+  void notNowSpeechModel() => voice?.model.notNow();
+
+  @override
+  Future<void> getSpeechModel() async {
+    final parts = voice;
+    if (parts == null) return;
+    // Notes kept while the model was away get their words once it is back.
+    if (await parts.model.download()) _track(_writePending());
+  }
+
+  @override
+  Future<void> removeSpeechModel() async {
+    final parts = voice;
+    if (parts == null) return;
+    await parts.transcriber.close();
+    await parts.model.remove();
+  }
+
+  @override
+  Future<String?> startVoiceNote() async {
+    final parts = voice;
+    if (parts == null || parts.model.state != ModelState.ready || _starting != null || parts.recorder.recording) return null;
+    final bool allowed;
+    try {
+      allowed = await (_starting = parts.recorder.start(newClientId()));
+    } catch (_) {
+      // The recorder keeps no state from a failed start, so the next press tries again.
+      return _microphoneFailed;
+    } finally {
+      _starting = null;
+    }
+    if (!allowed) return _noMicrophone;
+    // A quick release can end it before this line.
+    if (parts.recorder.recording) {
+      _listening = parts.recorder.startedAt;
+      notifyListeners();
+    }
+    return null;
+  }
+
+  /// Waits for a start still running. A failed start has told the person already, so this does not throw.
+  Future<void> _started() async {
+    try {
+      await _starting;
+    } catch (_) {
+      // startVoiceNote returned its message.
+    }
+  }
+
+  @override
+  Future<String?> endVoiceNote() async {
+    final parts = voice;
+    if (parts == null) return null;
+    await _started();
+    if (!parts.recorder.recording) return null;
+    final recording = await parts.recorder.stop();
+    _listening = null;
+    notifyListeners();
+    if (recording == null) return _holdLonger;
+    await _keepVoice(recording);
+    return null;
+  }
+
+  @override
+  Future<void> cancelVoiceNote() async {
+    final parts = voice;
+    if (parts == null) return;
+    await _started();
+    await parts.recorder.cancel();
+    _listening = null;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> play(String recording) async {
+    final parts = voice;
+    if (parts == null) return;
+    final file = await parts.recorder.fileOf(recording);
+    // Phone backups leave recordings out, so a note restored to a new phone has its words but no recording.
+    if (!await file.exists()) return notice(_noRecording);
+    await parts.player.play(file);
+  }
+
+  /// Shows the note at once, with no words yet, and writes them in the background.
+  Future<void> _keepVoice(Recording recording) async {
+    final note = LocalNote(clientId: recording.clientId, text: '', createdAt: recording.startedAt, kind: NoteKind.voice,
+      audioPath: recording.audioPath, durationMs: recording.length.inMilliseconds, wordsPending: true);
+    await store.addVoiceNote(note);
+    await _refreshLocal();
+    _track(_write(note));
+  }
+
+  void _track(Future<void> job) {
+    _writing.add(job);
+    job.whenComplete(() => _writing.remove(job));
+  }
+
+  /// Ends when every voice note being written has its words or is gone. Tests wait on it.
+  @visibleForTesting
+  Future<void> wordsWritten() async {
+    while (_writing.isNotEmpty) {
+      await Future.wait(List.of(_writing));
+    }
+  }
+
+  /// Writes the words of each voice note still waiting, oldest first. With [dropStray], deletes recordings no note
+  /// keeps, such as one the app's close cut off while the person still held the button.
+  Future<void> _writePending({bool dropStray = false}) async {
+    final parts = voice;
+    if (parts == null) return;
+    final pending = await store.pendingWords();
+    if (dropStray) {
+      final kept = {for (final note in await store.notes()) if (note.audioPath != null) note.audioPath};
+      final folder = (await parts.recorder.fileOf(VoiceRecorder.pathOf('x'))).parent;
+      if (await folder.exists()) {
+        await for (final file in folder.list()) {
+          if (file is File && !kept.contains('voice/${file.uri.pathSegments.last}')) await file.delete();
+        }
+      }
+    }
+    for (final note in pending) {
+      await _write(note);
+    }
+  }
+
+  /// Writes one voice note's words. No words: the note and its recording go, and the app says it heard no speech.
+  /// A note waits, kept, while the model is away or the words fail; the next open tries again.
+  Future<void> _write(LocalNote note) async {
+    final parts = voice;
+    if (parts == null) return;
+    final file = await parts.recorder.fileOf(note.audioPath ?? VoiceRecorder.pathOf(note.clientId));
+    if (!await file.exists()) {
+      await store.dropNote(note.clientId);
+      await _refreshLocal();
+      return;
+    }
+    if (parts.model.state != ModelState.ready) return;
+    final String words;
+    try {
+      words = await parts.transcriber.words(file);
+    } on Exception {
+      return;
+    }
+    if (words.isEmpty) {
+      await store.dropNote(note.clientId);
+      await file.delete();
+      await _refreshLocal();
+      notice(_noSpeech);
+      return;
+    }
+    if (await store.setWords(note.clientId, words, send: _settings.sending)) {
+      await _refreshLocal();
+      await sync();
+    }
+  }
+
+  bool _disposed = false;
+
+  // Words written after the app closed its controller change the store only.
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
   @override
   void dispose() {
+    _disposed = true;
     _history?.cancel();
+    voice?.model.removeListener(notifyListeners);
     super.dispose();
   }
 }

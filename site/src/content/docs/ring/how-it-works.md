@@ -23,7 +23,7 @@ The Relay ring is not built yet. The first version, V1, is in design and test pr
 The whole band clicks, so a bump could start a note. Three rules stop it, with no extra parts:
 
 1. **Hold to record.** The ring drops a press shorter than 0.5 s.
-2. **No speech, no note.** The phone deletes a note with no speech in it.
+2. **No speech, no note.** The phone deletes a note with no speech in it. [Voice notes](../../app/voice-notes/#no-speech-no-note) in the app use the same rule.
 3. **Raised edges.** The two edges stand 0.20 mm above the band. A table or a steering wheel touches the edges first; only a fingertip in the middle clicks.
 
 ## More about the ring

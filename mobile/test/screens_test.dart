@@ -59,6 +59,70 @@ class FakeRelay extends Relay {
   @override Future<void> sync() async => calls.add('sync');
   @override Future<void> more() async => calls.add('more');
   @override Future<void> addNote(String text) async => calls.add('note $text');
+
+  @override ModelState speechModel = ModelState.ready;
+  @override double modelProgress = 0;
+  @override ModelProblem? modelProblem;
+  @override int modelBytes = 59721011;
+  @override DateTime? listening;
+  /// What [startVoiceNote] and [endVoiceNote] return.
+  String? startProblem;
+  String? endProblem;
+
+  @override
+  void askSpeechModel() {
+    calls.add('ask model');
+    speechModel = ModelState.asking;
+  }
+
+  @override
+  void notNowSpeechModel() {
+    calls.add('not now');
+    speechModel = ModelState.missing;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> getSpeechModel() async {
+    calls.add('get model');
+    speechModel = ModelState.downloading;
+    modelProgress = 0.4;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> removeSpeechModel() async {
+    calls.add('remove model');
+    speechModel = ModelState.missing;
+    notifyListeners();
+  }
+
+  @override
+  Future<String?> startVoiceNote() async {
+    calls.add('voice start');
+    if (startProblem == null) {
+      listening = DateTime.now();
+      notifyListeners();
+    }
+    return startProblem;
+  }
+
+  @override
+  Future<String?> endVoiceNote() async {
+    calls.add('voice end');
+    listening = null;
+    notifyListeners();
+    return endProblem;
+  }
+
+  @override
+  Future<void> cancelVoiceNote() async {
+    calls.add('voice cancel');
+    listening = null;
+    notifyListeners();
+  }
+
+  @override Future<void> play(String recording) async => calls.add('play $recording');
 }
 
 final now = DateTime.now();
@@ -78,7 +142,7 @@ void main() {
     await tester.pumpWidget(RelayApp(relay: relay));
     expect(find.text('Connect Relay'), findsNothing);
     expect(find.text('On this phone'), findsOneWidget);
-    expect(find.text('No notes yet. Tap New note.'), findsOneWidget);
+    expect(find.text('No notes yet. Tap New note, or hold to talk.'), findsOneWidget);
     await tester.tap(find.text('New note'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Buy milk');
@@ -120,6 +184,7 @@ void main() {
     expect(relay.calls, ['connect key', 'start false']);
     expect(find.text('Settings'), findsOneWidget);
     expect(switchOf(tester, 'Location history').onChanged, isNotNull);
+    await tester.scrollUntilVisible(find.text('Disconnect this phone'), 100);
     expect(find.text('Disconnect this phone'), findsOneWidget);
   });
 
@@ -203,7 +268,7 @@ void main() {
     expect(find.text('No words, only the recording.'), findsOneWidget);
     expect(find.textContaining('Harbord St · Pebble app'), findsOneWidget);
     expect(find.textContaining('Jan 2'), findsOneWidget);
-    expect(find.byIcon(Icons.mic_none), findsOneWidget);
+    expect(find.descendant(of: find.byType(Card), matching: find.byIcon(Icons.mic_none)), findsOneWidget);
     expect(find.text('1 waiting'), findsOneWidget);
     await tester.tap(find.text('Show older notes'));
     await tester.tap(find.text('1 waiting'));
@@ -268,6 +333,7 @@ void main() {
       ..settings = const Settings(sending: true);
     await tester.pumpWidget(RelayApp(relay: relay));
     await openSettings(tester);
+    await tester.scrollUntilVisible(find.text('Disconnect this phone'), 100);
     await tester.tap(find.text('https://relay.example.com'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cancel'));
@@ -291,5 +357,175 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('On this phone'), findsOneWidget);
+  });
+  group('voice notes', () {
+    Finder holdButton() => find.text('Hold to talk');
+
+    testWidgets('hold: the phone listens, and letting go saves', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      final gesture = await tester.startGesture(tester.getCenter(holdButton()));
+      await tester.pump();
+      expect(relay.calls, ['voice start']);
+      expect(find.text('Listening'), findsOneWidget);
+      expect(find.text('Let go to save. Slide off to cancel.'), findsOneWidget);
+      await gesture.up();
+      await tester.pump();
+      expect(relay.calls, ['voice start', 'voice end']);
+      expect(find.text('Listening'), findsNothing);
+    });
+
+    testWidgets('a short press saves nothing and says to hold', (tester) async {
+      relay.endProblem = 'Hold the button while you talk, then let go.';
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.tap(holdButton());
+      await tester.pump();
+      expect(relay.calls, ['voice start', 'voice end']);
+      expect(find.text('Hold the button while you talk, then let go.'), findsOneWidget);
+      expect(find.byType(Card), findsNothing);
+    });
+
+    testWidgets('slide off: the note is cancelled, and letting go then saves nothing', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      final gesture = await tester.startGesture(tester.getCenter(holdButton()));
+      await tester.pump();
+      await gesture.moveBy(const Offset(-200, -200));
+      await tester.pump();
+      expect(find.text('Listening'), findsNothing);
+      await gesture.up();
+      await tester.pump();
+      expect(relay.calls, ['voice start', 'voice cancel']);
+    });
+
+    testWidgets('a voice note shows Writing the words, then its words, its length and Play', (tester) async {
+      relay.entries = [Entry(text: '', ring: false, at: now, voice: true, writing: true, recording: 'voice/a.wav',
+        length: const Duration(seconds: 12))];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      expect(find.text('Voice'), findsOneWidget);
+      expect(find.text('Writing the words…'), findsOneWidget);
+      relay
+        ..entries = [Entry(text: 'Ask the fab if the flex stiffener can be 0.2 mm', ring: false, at: now, voice: true,
+          recording: 'voice/a.wav', length: const Duration(seconds: 12))]
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(find.text('Writing the words…'), findsNothing);
+      expect(find.text('Ask the fab if the flex stiffener can be 0.2 mm'), findsOneWidget);
+      expect(find.textContaining('0:12'), findsOneWidget);
+      await tester.tap(find.text('Play'));
+      expect(relay.calls, ['play voice/a.wav']);
+      // A typed note has no Play.
+      relay
+        ..entries = [Entry(text: 'Typed', ring: false, at: now)]
+        ..changed();
+      await tester.pumpAndSettle();
+      expect([find.text('Play'), find.text('Voice')], [findsNothing, findsNothing]);
+      relay.notice('No speech heard. Nothing was saved.');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('No speech heard. Nothing was saved.'), findsOneWidget);
+    });
+
+    testWidgets('with no model, a press asks first, and Not now gets nothing', (tester) async {
+      relay.speechModel = ModelState.missing;
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.tap(holdButton());
+      await tester.pumpAndSettle();
+      expect(find.text('Get the speech model?'), findsOneWidget);
+      expect(find.textContaining('57 MB'), findsOneWidget);
+      expect(find.textContaining('Your voice never leaves this phone.'), findsOneWidget);
+      await tester.tap(find.text('Not now'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['ask model', 'not now']);
+      expect(find.textContaining('Getting the speech model'), findsNothing);
+    });
+
+    testWidgets('with a screen reader, a tap with no model asks the first-time question once', (tester) async {
+      final semantics = tester.ensureSemantics();
+      relay.speechModel = ModelState.missing;
+      await tester.pumpWidget(RelayApp(relay: relay));
+      tester.semantics.tap(find.semantics.byLabel('Hold to talk'));
+      await tester.pumpAndSettle();
+      expect(find.text('Get the speech model?'), findsOneWidget);
+      await tester.tap(find.text('Not now'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['ask model', 'not now']);
+      // A finger's tap still asks once, not twice.
+      await tester.tap(holdButton());
+      await tester.pumpAndSettle();
+      expect(find.text('Get the speech model?'), findsOneWidget);
+      expect(relay.calls, ['ask model', 'not now', 'ask model']);
+      semantics.dispose();
+    });
+
+    testWidgets('with a screen reader and the model ready, a tap starts nothing', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(RelayApp(relay: relay));
+      tester.semantics.tap(find.semantics.byLabel('Hold to talk'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, isEmpty);
+      semantics.dispose();
+    });
+
+    testWidgets('Get it shows the progress card, and typed notes still work', (tester) async {
+      relay.speechModel = ModelState.missing;
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.tap(holdButton());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Get it'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['ask model', 'get model']);
+      expect(find.text('Getting the speech model… 40%'), findsOneWidget);
+      expect(find.text('You can type notes now. Voice notes start when it is done.'), findsOneWidget);
+      await tester.tap(holdButton());
+      await tester.pump();
+      expect(find.textContaining('still coming'), findsOneWidget);
+      expect(relay.calls, ['ask model', 'get model']);
+    });
+
+    testWidgets('a failed download says why and offers Try again', (tester) async {
+      relay
+        ..speechModel = ModelState.failed
+        ..modelProblem = ModelProblem.offline;
+      await tester.pumpWidget(RelayApp(relay: relay));
+      expect(find.text('The speech model did not finish downloading.'), findsOneWidget);
+      await tester.tap(find.text('Try again'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['get model']);
+      relay
+        ..speechModel = ModelState.failed
+        ..modelProblem = ModelProblem.damaged
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(find.text('The speech model came damaged, so the phone deleted it.'), findsOneWidget);
+    });
+
+    testWidgets('a refused microphone says where to allow it', (tester) async {
+      relay.startProblem = 'Relay may not use the microphone. Allow it in the phone\'s settings.';
+      await tester.pumpWidget(RelayApp(relay: relay));
+      final gesture = await tester.startGesture(tester.getCenter(holdButton()));
+      await tester.pump();
+      expect(find.textContaining('may not use the microphone'), findsOneWidget);
+      expect(find.text('Listening'), findsNothing);
+      await gesture.up();
+      await tester.pump();
+    });
+
+    testWidgets('Settings shows the model and its size; Remove returns the button to the first-time question', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openSettings(tester);
+      expect(find.text('Voice notes'), findsOneWidget);
+      expect(find.text('Speech model: on this phone, 57 MB'), findsOneWidget);
+      expect(find.text('Your voice is written into words on this phone. Recordings never leave it.'), findsOneWidget);
+      await tester.tap(find.text('Remove'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['remove model']);
+      expect(find.text('Remove'), findsNothing);
+      expect(find.textContaining('not on this phone'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.tap(holdButton());
+      await tester.pumpAndSettle();
+      expect(find.text('Get the speech model?'), findsOneWidget);
+      expect(relay.calls, ['remove model', 'ask model']);
+    });
   });
 }

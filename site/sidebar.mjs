@@ -8,7 +8,7 @@ export const sidebar = [
     { label: 'Connect a phone', slug: 'start/connect-a-phone' },
     { label: 'Set up the Pebble webhook', slug: 'start/pebble-webhook' },
   ] },
-  { label: 'Use the app', items: ['app/your-notes', 'app/health', 'app/location', 'app/settings'] },
+  { label: 'Use the app', items: ['app/your-notes', 'app/voice-notes', 'app/health', 'app/location', 'app/settings'] },
   { label: 'Connections', items: [
     { label: 'Your own database', slug: 'connections/your-database' },
     'connections/connect-your-ai',

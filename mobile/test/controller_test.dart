@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +10,7 @@ import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/store.dart';
 import 'package:relay_app/relay.dart';
 import 'package:relay_app/sync/health.dart';
+import 'package:relay_app/voice/model.dart';
 
 import 'fakes.dart';
 
@@ -461,6 +463,264 @@ void main() {
       await relay.sync();
       await relay.more();
       expect(server.requests.every((request) => request.url.host == 'preview.example.com'), isTrue);
+    });
+  });
+
+  group('voice notes', () {
+    late Directory folder;
+    late ModelServer models;
+    late FakeMicrophone microphone;
+    late FakeTranscriber transcriber;
+    late FakePlayer player;
+    late List<String> notices;
+
+    setUp(() async {
+      folder = tempFolder();
+      models = ModelServer();
+      microphone = FakeMicrophone();
+      transcriber = FakeTranscriber();
+      player = FakePlayer();
+      notices = [];
+      await placeModel(folder);
+    });
+
+    RelayController voiceController() {
+      final relay = RelayController(store: store, vault: KeyVault(storage), places: places, health: health, apiFor: server.api,
+        clock: () => clock, schedule: (on) async => scheduled.add(on),
+        voice: fakeVoice(folder, models, clock: () => clock, microphone: microphone, transcriber: transcriber, player: player));
+      relay.notices.listen(notices.add);
+      return relay;
+    }
+
+    /// Holds the button for [length], then lets go.
+    Future<String?> hold(RelayController relay, Duration length) async {
+      expect(await relay.startVoiceNote(), isNull);
+      expect(relay.listening, clock);
+      clock = clock.add(length);
+      return relay.endVoiceNote();
+    }
+
+    List<String> recordings() => [
+      if (Directory('${folder.path}/voice').existsSync())
+        for (final file in Directory('${folder.path}/voice').listSync()) file.uri.pathSegments.last,
+    ];
+
+    test('in airplane mode: the note shows at once, its words fill in, and no request leaves the phone', () async {
+      server = noNetwork();
+      final relay = voiceController();
+      await relay.load();
+      expect(relay.speechModel, ModelState.ready);
+      transcriber.hold = Completer();
+      expect(await hold(relay, const Duration(seconds: 12)), isNull);
+      expect(relay.listening, isNull);
+      final shown = relay.entries.single;
+      expect([shown.voice, shown.writing, shown.text, shown.length, shown.at], [true, true, '', const Duration(seconds: 12), now]);
+      transcriber.hold!.complete('Ask the fab if the flex stiffener can be 0.2 mm');
+      await relay.wordsWritten();
+      final written = relay.entries.single;
+      expect([written.voice, written.writing, written.text], [true, false, 'Ask the fab if the flex stiffener can be 0.2 mm']);
+      expect(recordings(), [transcriber.heard.single]);
+      expect([server.requests, models.requests, await store.outbox()], [isEmpty, isEmpty, isEmpty]);
+      // The recording plays from this phone.
+      await relay.play(written.recording!);
+      expect(player.played, ['${folder.path}/voice/${transcriber.heard.single}']);
+    });
+
+    test('the app closes before the words are written: the next open writes them from the kept recording', () async {
+      final relay = voiceController();
+      await relay.load();
+      transcriber.hold = Completer();
+      await hold(relay, const Duration(seconds: 4));
+      expect((await store.pendingWords()), hasLength(1));
+      relay.dispose();
+      // A recording the close cut off while the button was still held has no note: it is deleted.
+      await File('${folder.path}/voice/stray.wav').writeAsBytes([1]);
+      transcriber.hold = null;
+      final reopened = voiceController();
+      await reopened.load();
+      await reopened.wordsWritten();
+      expect([for (final entry in reopened.entries) (entry.text, entry.writing)], [('Ask the fab if the flex stiffener can be 0.2 mm', false)]);
+      expect(recordings(), hasLength(1));
+      expect(recordings(), isNot(contains('stray.wav')));
+    });
+
+    test('a note whose recording is gone is dropped at the next open', () async {
+      final relay = voiceController();
+      await relay.load();
+      transcriber.hold = Completer();
+      await hold(relay, const Duration(seconds: 4));
+      relay.dispose();
+      Directory('${folder.path}/voice').deleteSync(recursive: true);
+      final reopened = voiceController();
+      await reopened.load();
+      await reopened.wordsWritten();
+      expect([reopened.entries, await store.notes()], [isEmpty, isEmpty]);
+    });
+
+    test('a bump in a pocket: a 0.3 s press saves nothing and the timeline does not change', () async {
+      final relay = voiceController();
+      await relay.load();
+      await relay.addNote('Typed one');
+      final before = relay.entries.length;
+      expect(await hold(relay, const Duration(milliseconds: 300)), contains('Hold the button'));
+      await relay.wordsWritten();
+      expect([relay.entries.length, recordings(), transcriber.heard, notices], [before, isEmpty, isEmpty, isEmpty]);
+    });
+
+    test('slide off: the note is cancelled and nothing is kept', () async {
+      final relay = voiceController();
+      await relay.load();
+      await relay.startVoiceNote();
+      clock = clock.add(const Duration(seconds: 3));
+      await relay.cancelVoiceNote();
+      expect(await relay.endVoiceNote(), isNull);
+      expect([relay.listening, relay.entries, recordings(), transcriber.heard], [null, isEmpty, isEmpty, isEmpty]);
+    });
+
+    test('a silent recording: the app says it heard no speech, and keeps no note and no recording', () async {
+      final relay = voiceController();
+      await relay.load();
+      transcriber.answer = '';
+      expect(await hold(relay, const Duration(seconds: 4)), isNull);
+      await relay.wordsWritten();
+      expect([relay.entries, await store.notes(), recordings()], [isEmpty, isEmpty, isEmpty]);
+      expect(notices, ['No speech heard. Nothing was saved.']);
+    });
+
+    test('a refused microphone says where to allow it, and records nothing', () async {
+      final relay = voiceController();
+      await relay.load();
+      microphone.allowed = false;
+      expect(await relay.startVoiceNote(), contains('microphone'));
+      expect(await relay.endVoiceNote(), isNull);
+      expect([relay.listening, relay.entries, microphone.calls], [null, isEmpty, isEmpty]);
+    });
+
+    test('a microphone that does not start says so, and the next press records', () async {
+      final relay = voiceController();
+      await relay.load();
+      microphone.startError = Exception('busy');
+      expect(await relay.startVoiceNote(), 'The microphone did not start. Try again.');
+      expect(await relay.endVoiceNote(), isNull);
+      await relay.cancelVoiceNote();
+      expect([relay.listening, relay.entries, recordings()], [null, isEmpty, isEmpty]);
+      expect(await hold(relay, const Duration(seconds: 2)), isNull);
+      await relay.wordsWritten();
+      expect(relay.entries.single.text, isNotEmpty);
+    });
+
+    test('a note restored to a new phone has no recording: Play says so', () async {
+      final relay = voiceController();
+      await relay.load();
+      await hold(relay, const Duration(seconds: 2));
+      await relay.wordsWritten();
+      final recording = relay.entries.single.recording!;
+      Directory('${folder.path}/voice').deleteSync(recursive: true);
+      await relay.play(recording);
+      await pumpEventQueue();
+      expect([player.played, notices], [isEmpty, ['This recording is not on this phone.']]);
+    });
+
+    test('words that fail keep the note waiting; the next open tries again', () async {
+      final relay = voiceController();
+      await relay.load();
+      transcriber.error = Exception('engine');
+      await hold(relay, const Duration(seconds: 2));
+      await relay.wordsWritten();
+      expect(relay.entries.single.writing, isTrue);
+      transcriber.error = null;
+      final reopened = voiceController();
+      await reopened.load();
+      await reopened.wordsWritten();
+      expect(reopened.entries.single.writing, isFalse);
+    });
+
+    test('first voice note: with no model, the app records nothing and gets nothing until the person says yes', () async {
+      File('${folder.path}/speech-model/$modelName').deleteSync();
+      final relay = voiceController();
+      await relay.load();
+      expect(relay.speechModel, ModelState.missing);
+      expect(await relay.startVoiceNote(), isNull);
+      expect([relay.listening, microphone.calls], [null, isEmpty]);
+      relay.askSpeechModel();
+      expect(relay.speechModel, ModelState.asking);
+      relay.notNowSpeechModel();
+      expect([relay.speechModel, models.requests], [ModelState.missing, isEmpty]);
+      relay.askSpeechModel();
+      await relay.getSpeechModel();
+      expect([relay.speechModel, models.requests.length], [ModelState.ready, 1]);
+      await hold(relay, const Duration(seconds: 2));
+      await relay.wordsWritten();
+      expect(relay.entries.single.text, isNotEmpty);
+    });
+
+    test('a damaged download is deleted, voice notes stay off, and the app offers to try again', () async {
+      File('${folder.path}/speech-model/$modelName').deleteSync();
+      models.file = List<int>.filled(modelFile.length, 0);
+      final relay = voiceController();
+      await relay.load();
+      await relay.getSpeechModel();
+      expect([relay.speechModel, relay.modelProblem], [ModelState.failed, ModelProblem.damaged]);
+      expect(await relay.startVoiceNote(), isNull);
+      expect(microphone.calls, isEmpty);
+      models.file = modelFile;
+      await relay.getSpeechModel();
+      expect(relay.speechModel, ModelState.ready);
+    });
+
+    test('remove frees the model, and the next voice note asks again', () async {
+      final relay = voiceController();
+      await relay.load();
+      await relay.removeSpeechModel();
+      expect([relay.speechModel, transcriber.closed, File('${folder.path}/speech-model/$modelName').existsSync()],
+        [ModelState.missing, 1, false]);
+    });
+
+    test('with sending on, the server gets the words and the time, never the recording', () async {
+      final relay = voiceController();
+      await relay.load();
+      expect(await relay.connect(code), isNull);
+      await relay.startSending(sendEarlier: false);
+      await pumpEventQueue();
+      final said = now.millisecondsSinceEpoch;
+      await hold(relay, const Duration(seconds: 12));
+      await relay.wordsWritten();
+      await pumpEventQueue();
+      final sent = sentNotes().single;
+      expect(sent.keys, unorderedEquals(['clientId', 'text', 'createdAt']));
+      expect([sent['text'], sent['createdAt']], ['Ask the fab if the flex stiffener can be 0.2 mm', said]);
+      for (final request in server.requests) {
+        expect(request.body, isNot(contains('.wav')));
+      }
+      // The server keeps it as typed words; this phone still shows it as a voice note it can play.
+      final typed = {'id': 'v', 'source': 'typed', 'text': sent['text'], 'recordedAt': said, 'device': 'Android phone', 'audio': false,
+        'place': null};
+      server.answer = (request) => request.url.path.endsWith('timeline')
+        ? FakeServer.json({'notes': [typed, ring], 'next': null}) : FakeServer.ok(request);
+      await relay.sync();
+      expect([for (final entry in relay.entries) (entry.text, entry.voice, entry.device, entry.recording != null)],
+        [(sent['text'], true, 'Android phone', true), ('Call the PCB fab', false, 'Pebble app', false)]);
+    });
+
+    test('words not written yet: the note waits on the phone, skips *Send them*, and is sent only when it has words', () async {
+      final relay = voiceController();
+      await relay.load();
+      await relay.addNote('Typed while off');
+      clock = now.add(const Duration(minutes: 1));
+      transcriber.hold = Completer();
+      await hold(relay, const Duration(seconds: 5));
+      expect(await relay.connect(code), isNull);
+      // Only the typed note is an earlier note: the voice note has no words to send.
+      expect(await relay.earlierNotes(), 1);
+      await relay.startSending(sendEarlier: true);
+      await pumpEventQueue();
+      expect([for (final note in sentNotes()) note['text']], ['Typed while off']);
+      expect(relay.entries.first.writing, isTrue);
+      transcriber.hold!.complete('Order more TL3312 switches');
+      await relay.wordsWritten();
+      await pumpEventQueue();
+      expect([for (final note in sentNotes()) note['text']], ['Typed while off', 'Order more TL3312 switches']);
+      expect(await relay.earlierNotes(), 0);
     });
   });
 

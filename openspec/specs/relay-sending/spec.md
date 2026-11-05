@@ -7,7 +7,7 @@ Keep every Relay note on the phone unless the person chooses to send, and send o
 
 ### Requirement: The app works offline by default
 
-A newly installed Relay phone app SHALL let the person write and read notes with no key, no server and no connection, and SHALL make no network request while sending is off.
+A newly installed Relay phone app SHALL let the person write and read notes with no key, no server and no connection, and SHALL make no network request while sending is off, except to get the speech model after the person agrees to it.
 
 #### Scenario: First open with no key
 - **WHEN** the person opens the app for the first time and writes a note
@@ -16,6 +16,10 @@ A newly installed Relay phone app SHALL let the person write and read notes with
 #### Scenario: A week of notes with sending off
 - **WHEN** the person writes notes, pins them, and opens Settings with sending off
 - **THEN** the app sends nothing to any server and looks up no place names
+
+#### Scenario: Voice notes with sending off
+- **WHEN** sending is off and the person agrees to get the speech model, then makes voice notes
+- **THEN** the only request is the model's download, and no voice note, recording or word leaves the phone
 
 ### Requirement: Health and location history only while sending
 

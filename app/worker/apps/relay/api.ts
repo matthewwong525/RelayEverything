@@ -1,10 +1,11 @@
 // Relay's server: notes, health and location from the phones, sent on to webhooks, and Claude Code chats.
-// A device key reaches only these routes but summary, the AI apps and the webhooks: device.ts.
+// A device key only adds data, and checks itself with GET key: device.ts.
 import type { Route } from "../../api/contract.ts";
 import { aiAppDisconnect, aiApps } from "./ai-apps.ts";
 import { audio } from "./audio.ts";
 import { chatDelete, chatList, chatRead } from "./chat-read.ts";
 import { chats, chatSaves } from "./chats.ts";
+import { key } from "./key.ts";
 import { notes } from "./notes.ts";
 import { pebble } from "./pebble.ts";
 import { health, locations } from "./samples.ts";
@@ -19,6 +20,7 @@ export const routes = new Map<string, Route>([
   ["POST notes", notes],
   ["POST health", health],
   ["POST locations", locations],
+  ["GET key", key],
   ["GET timeline", timeline],
   ["GET summary", summary],
   ["GET audio", audio],

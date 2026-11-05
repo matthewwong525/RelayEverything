@@ -22,3 +22,8 @@ site/dist/
 site/.astro/
 site/node_modules/
 site/.wrangler/
+
+# A Relay-only install's own settings and Cloudflare key: self-host/setup.mjs writes them, per person.
+self-host/wrangler.jsonc
+self-host/wrangler.mcp.jsonc
+app/dist-relay/

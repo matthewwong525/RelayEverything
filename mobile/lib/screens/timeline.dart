@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../relay.dart';
 import 'compose.dart';
@@ -15,13 +16,26 @@ String _time(BuildContext context, DateTime at) {
   return today ? time : '${MaterialLocalizations.of(context).formatShortMonthDay(at)}, $time';
 }
 
-/// Every note, newest first, with the one primary action, a new note, and *Hold to talk* beside it.
+/// Opens an address in the phone's own browser, and says if it did.
+typedef Opener = Future<bool> Function(Uri address);
+
+Future<bool> _openInBrowser(Uri address) async {
+  try {
+    return await launchUrl(address, mode: LaunchMode.externalApplication);
+  } on Exception {
+    return false;
+  }
+}
+
+/// This phone's notes, newest first, with the one primary action, a new note, and *Hold to talk* beside it.
 class TimelineScreen extends StatefulWidget {
-  const TimelineScreen({super.key, required this.relay, this.scanner});
+  const TimelineScreen({super.key, required this.relay, this.scanner, this.opener});
 
   final Relay relay;
   /// The QR scanner the connect screen uses; a test passes its own.
   final Scanner? scanner;
+  /// Opens the Relay page; a test passes its own.
+  final Opener? opener;
 
   @override
   State<TimelineScreen> createState() => _TimelineScreenState();
@@ -55,7 +69,12 @@ class _TimelineScreenState extends State<TimelineScreen> {
       builder: (context, _) {
         final entries = relay.entries;
         final model = relay.speechModel == ModelState.downloading || relay.speechModel == ModelState.failed;
-        final top = model ? 1 : 0;
+        final server = relay.server;
+        final top = <Widget>[
+          // Ring notes and recordings are on the Relay page: a device key can not read them.
+          if (relay.settings.sending && server != null) _PageCard(server: server, opener: widget.opener ?? _openInBrowser),
+          if (model) ModelCard(relay: relay),
+        ];
         final listening = relay.listening;
         return Scaffold(
           appBar: AppBar(title: const Text('Relay'), actions: [
@@ -81,19 +100,16 @@ class _TimelineScreenState extends State<TimelineScreen> {
             onRefresh: relay.sync,
             child: entries.isEmpty
               ? ListView(padding: const EdgeInsets.fromLTRB(12, 8, 12, 96), children: [
-                  if (model) ModelCard(relay: relay),
-                  Padding(padding: const EdgeInsets.all(32),
-                    child: Text(relay.settings.sending ? 'No notes yet. Hold the ring and talk, or tap New note.' : 'No notes yet. Tap New note, or hold to talk.',
-                      textAlign: TextAlign.center)),
+                  ...top,
+                  const Padding(padding: EdgeInsets.all(32),
+                    child: Text('No notes yet. Tap New note, or hold to talk.', textAlign: TextAlign.center)),
                 ])
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 160),
-                  itemCount: top + entries.length + (relay.hasMore ? 1 : 0),
-                  itemBuilder: (context, index) => index < top
-                    ? ModelCard(relay: relay)
-                    : index - top == entries.length
-                      ? Center(child: TextButton(onPressed: relay.more, child: const Text('Show older notes')))
-                      : _NoteCard(entry: entries[index - top], relay: relay),
+                  itemCount: top.length + entries.length,
+                  itemBuilder: (context, index) => index < top.length
+                    ? top[index]
+                    : _NoteCard(entry: entries[index - top.length], relay: relay),
                 ),
           ),
         );
@@ -112,17 +128,15 @@ class _NoteCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final muted = theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant);
-    final line = [_time(context, entry.at), if (entry.length != null) clockOf(entry.length!), entry.place, entry.device]
-      .whereType<String>().join(' · ');
+    final line = [_time(context, entry.at), if (entry.length != null) clockOf(entry.length!), entry.place,
+      if (entry.sent) 'Sent' else if (entry.waiting) 'Waiting to send'].whereType<String>().join(' · ');
     final recording = entry.recording;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 6, children: [
           Row(spacing: 8, children: [
-            Chip(label: Text(entry.ring ? 'Ring' : entry.voice ? 'Voice' : 'Typed'), visualDensity: VisualDensity.compact),
-            if (entry.waiting) Chip(avatar: const Icon(Icons.schedule, size: 16), label: const Text('Waiting'), visualDensity: VisualDensity.compact),
-            if (entry.audio) const Icon(Icons.mic_none, size: 18, semanticLabel: 'Has a recording'),
+            Chip(label: Text(entry.voice ? 'Voice' : 'Typed'), visualDensity: VisualDensity.compact),
             if (recording != null) ...[
               const Spacer(),
               TextButton.icon(onPressed: () => relay.play(recording), icon: const Icon(Icons.play_arrow), label: const Text('Play')),
@@ -134,6 +148,35 @@ class _NoteCard extends StatelessWidget {
           ] else
             Text(entry.text.isEmpty ? 'No words, only the recording.' : entry.text, style: theme.textTheme.bodyLarge),
           Text(line, style: muted),
+        ]),
+      ),
+    );
+  }
+}
+
+/// A quiet card on top of the list while sending is on: the Relay page has the ring notes and recordings.
+class _PageCard extends StatelessWidget {
+  const _PageCard({required this.server, required this.opener});
+
+  final String server;
+  final Opener opener;
+
+  Future<void> _open(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (!await opener(Uri.parse('$server/apps/relay/'))) {
+      messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card.outlined(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Ring notes and recordings are on your Relay page.'),
+          Align(alignment: Alignment.centerRight,
+            child: TextButton(onPressed: () => _open(context), child: const Text('Open your Relay page'))),
         ]),
       ),
     );

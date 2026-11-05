@@ -1,0 +1,14 @@
+// The AI connector of a Relay-only install: the same Worker as app/wrangler.relay-mcp.jsonc, on the install's
+// database. setup.mjs fills in its own names and IDs and writes self-host/wrangler.mcp.jsonc, which git ignores.
+{
+  "$schema": "../app/node_modules/wrangler/config-schema.json",
+  "name": "relay-mcp",
+  "main": "../app/worker/relay-mcp/index.ts",
+  "compatibility_date": "2026-07-28",
+  "compatibility_flags": ["nodejs_compat", "disallow_importable_env"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": { "WONG_OWNER_EMAIL": "owner@example.com", "RELAY_MCP_ADDRESS": "https://relay-mcp.your-subdomain.workers.dev/mcp" },
+  "d1_databases": [{ "binding": "DB", "database_name": "relay-db", "database_id": "00000000-0000-0000-0000-000000000000" }],
+  "kv_namespaces": [{ "binding": "OAUTH_KV" }]
+}

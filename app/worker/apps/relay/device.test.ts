@@ -5,27 +5,31 @@ import { checker, db, deviceKey, laptop, lost, matthew, phone } from "../../../t
 
 // The fingerprint of checker.id, "checker.access".
 const CHECKER_SHA256 = "6a6814c5281a7635cb9d9f881d7feae9b0d6159c868666fad3ffa0a164f4d999";
-const ROUTES = ["pebble", "notes", "health", "locations", "timeline", "audio"].map(route => `/apps/relay/api/${route}`);
+const ROUTES = ["pebble", "notes", "health", "locations"].map(route => `/apps/relay/api/${route}`);
+const KEY = "/apps/relay/api/key";
 const refusal = async (response: Response | null) =>
   [response?.status, ((await response?.json()) as { error: { message: string } } | undefined)?.error.message];
 const gate = (who: Parameters<typeof deviceGate>[1], path: string, method = "GET") =>
   deviceGate({ DB: db.DB, RELAY_CHECKER_SHA256: CHECKER_SHA256 }, who, method, path);
 const CHATS = "/apps/relay/api/chats";
 
-it("lets a device key reach Relay's device routes, and nothing else", async () => {
-  for (const path of ROUTES) expect(await gate(phone, path), path).toBeNull();
-  for (const path of ["/apps/relay/api/summary", "/apps/relay/api/ai-apps", "/apps/relay/api/ai-apps-disconnect", "/apps/relay/", "/apps/hello/api/greeting", "/api/access/apps", "/api/health", "/", "/apps/relay/api/notes/x"]) {
-    expect(await refusal(await gate(phone, path)), path).toEqual([403, "A device key reaches only Relay."]);
-  }
-  // A phone can't send, list, read or delete chats.
-  for (const [method, path] of [["POST", CHATS], ["POST", "/apps/relay/api/chat-saves"], ["GET", CHATS], ["GET", "/apps/relay/api/chat"], ["DELETE", "/apps/relay/api/chat"]]) {
-    expect(await refusal(await gate(phone, path, method)), `${method} ${path}`).toEqual([403, "A device key reaches only Relay."]);
+it("lets a device key only send to Relay and check itself, and nothing else", async () => {
+  for (const path of ROUTES) expect(await gate(phone, path, "POST"), path).toBeNull();
+  expect(await gate(phone, KEY)).toBeNull();
+  // A phone can't read notes, recordings, health or chats, even on an address it sends to.
+  for (const [method, path] of [...ROUTES.map(route => ["GET", route]), ["POST", KEY], ["GET", "/apps/relay/api/timeline"],
+    ["GET", "/apps/relay/api/audio"], ["GET", "/apps/relay/api/summary"], ["GET", "/apps/relay/api/ai-apps"], ["POST", "/apps/relay/api/ai-apps-disconnect"],
+    ["GET", "/apps/relay/api/webhooks"], ["GET", "/apps/relay/"], ["GET", "/apps/hello/api/greeting"], ["GET", "/api/access/apps"], ["GET", "/api/health"],
+    ["GET", "/"], ["POST", "/apps/relay/api/notes/x"], ["POST", CHATS], ["POST", "/apps/relay/api/chat-saves"], ["GET", CHATS],
+    ["GET", "/apps/relay/api/chat"], ["DELETE", "/apps/relay/api/chat"], ["DELETE", ROUTES[1]]]) {
+    expect(await refusal(await gate(phone, path, method)), `${method} ${path}`).toEqual([403, "A device key can only send to Relay."]);
   }
 });
 
 it("lets a chat key only send chats and saves, by POST, and nothing else", async () => {
   expect(await gate(laptop, CHATS, "POST")).toBeNull();
   expect(await gate(laptop, "/apps/relay/api/chat-saves", "POST")).toBeNull();
+  expect(await gate(laptop, KEY)).toBeNull();
   for (const [method, path] of [["GET", CHATS], ["GET", "/apps/relay/api/chat"], ["DELETE", "/apps/relay/api/chat"], ["DELETE", CHATS],
     ["GET", "/apps/relay/api/chat-saves"], ...ROUTES.map(route => ["GET", route]), ...ROUTES.map(route => ["POST", route]),
     ["GET", "/apps/relay/api/summary"], ["GET", "/apps/relay/api/ai-apps"], ["GET", "/api/health"]]) {
@@ -38,7 +42,7 @@ it("stops a revoked key everywhere, Relay included, and leaves the other devices
   for (const path of [...ROUTES, "/api/health"]) {
     expect(await refusal(await gate(lost, path)), path).toEqual([403, "This device key is turned off."]);
   }
-  expect(await gate(phone, ROUTES[1])).toBeNull();
+  expect(await gate(phone, ROUTES[1], "POST")).toBeNull();
   expect(await deviceOf({ DB: db.DB }, lost)).toBeNull();
   expect(await deviceOf({ DB: db.DB }, phone)).toEqual({ id: "d-phone", name: "Android phone", reaches: "phone" });
 });

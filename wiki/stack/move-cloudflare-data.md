@@ -53,6 +53,7 @@ A new Worker name is a new Worker, too. Learned from the Relay move, 2026-11-05:
 
 - **Give its queues new names.** A queue takes one consumer, so the new Worker can't read the old one's queue while the old one runs.
 - **Detach the old Worker from its queue before you deploy a forwarder over it.** Cloudflare refuses a deploy with no queue handler while the Worker still reads a queue (`code: 11001`): run `npx wrangler queues consumer remove <queue> <old-worker>` first.
+- **To delete a Worker that reads a queue, go in three steps.** Cloudflare refuses to delete the Worker while it reads the queue, and the queue while the Worker sends to it: remove the queue's consumer, delete the Worker, then delete the queue. [`self-host/setup.mjs`](../../self-host/setup.mjs) `remove` does this.
 - **Forward to a custom domain, not a `workers.dev` address.** A `workers.dev` Worker that fetches another `workers.dev` Worker in the same account gets *Page not found*.
 - **Put no login app in front of a forwarder that carries device keys.** Access strips the key headers before the Worker sees them ([Cloudflare Access](cloudflare-access.md#verify-the-jwt-dont-trust-the-header)). Move the old login app to an unused address.
 - **The rename shows only once published.** A preview runs only under main's staging Worker name ([GitHub Actions](github-actions.md)), so you try the new staging Worker from your computer before the publish.

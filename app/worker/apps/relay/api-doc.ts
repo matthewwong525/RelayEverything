@@ -46,8 +46,9 @@ function rows(schema: Schema, prefix = ""): string[] {
 
 const table = (lines: string[]) => [HEAD, ...lines].join("\n");
 const json = (value: unknown) => `\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\``;
-const caller = (method: string, path: string) => reaches("phone", method, path) ? "a device key or a signed-in person"
-  : reaches("chats", method, path) ? "a Claude Code chat key only" : "a signed-in person only, not a device key";
+const caller = (method: string, path: string) => reaches("chats", method, path)
+  ? reaches("phone", method, path) ? "any device key" : "a Claude Code chat key only"
+  : reaches("phone", method, path) ? "a phone or Pebble key" : "a signed-in person only, not a device key";
 
 function described({ method, path, action }: { method: string; path: string; action: Action }): string {
   const { inputSchema, outputSchema } = schemas(action) as { inputSchema: Schema; outputSchema: Schema };

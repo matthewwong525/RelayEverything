@@ -73,14 +73,14 @@ void main() {
     expect(find.text('Call the PCB fab about the flex stiffener'), findsOneWidget);
     expect(find.textContaining('Pinned'), findsOneWidget);
     expect(find.text('On this phone'), findsOneWidget);
+    expect(find.text('Open your Relay page'), findsNothing);
 
-    // Pull to refresh, older notes, the app's return and the hourly round.
+    // Pull to refresh, the app's return and the hourly round.
     await tester.drag(find.text('Call the PCB fab about the flex stiffener'), const Offset(0, 300));
     await tester.runAsync(pumpEventQueue);
     await tester.pumpAndSettle();
     await tester.runAsync(() async {
       await relay.sync();
-      await relay.more();
       expect(await backgroundRound(store, connection: await KeyVault(storage).read(), health: health, sender: Sender(server.api)), isTrue);
       expect(await relay.earlierNotes(), 1);
       expect([for (final item in await store.outbox()) item.body['clientId']], ['waiting']);

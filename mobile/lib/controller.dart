@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
@@ -18,7 +17,8 @@ import 'voice/model.dart';
 import 'voice/recorder.dart';
 import 'voice/transcriber.dart';
 
-const _cacheKey = 'timeline';
+// The first versions kept the server's timeline here. A device key reads nothing now, so load deletes it.
+const _oldTimeline = 'timeline';
 
 /// What voice notes need: the speech model, the microphone, the words and playback. All of it stays on this phone.
 class VoiceParts {
@@ -63,10 +63,7 @@ class RelayController extends Relay {
   final DateTime Function() _clock;
 
   Connection? _connection;
-  List<Entry> _server = const [];
-  List<LocalNote> _notes = const [];
   List<Entry> _entries = const [];
-  Cursor? _next;
   SyncStatus _status = SyncStatus.idle;
   int _waiting = 0;
   Settings _settings = const Settings();
@@ -79,14 +76,13 @@ class RelayController extends Relay {
   @override bool get connected => _connection != null;
   @override String? get server => _connection?.server;
   @override List<Entry> get entries => _entries;
-  @override bool get hasMore => _settings.sending && _next != null;
   @override SyncStatus get status => _status;
   @override int get waiting => _waiting;
   @override Settings get settings => _settings;
 
   RelayApi? get _api => _sender.api(_settings, _connection);
 
-  /// Reads the key, the settings, the notes and the last timeline seen, so the app opens with no network.
+  /// Reads the key, the settings and the notes, so the app opens with no network.
   Future<void> load() async {
     _connection = await vault.read();
     final saved = await store.get(settingsKey);
@@ -95,8 +91,7 @@ class RelayController extends Relay {
     if (_connection == null && _settings.sending) _settings = _settings.copyWith(sending: false);
     // The first version's settings, read once by the upgrade rule, are saved in today's shape.
     if (_settings.encode() != saved) await store.set(settingsKey, _settings.encode());
-    final cache = await store.get(_cacheKey);
-    if (cache != null) _server = [for (final note in jsonDecode(cache) as List) _entryOf(RemoteNote.fromJson(note as Map<String, dynamic>))];
+    await store.remove(_oldTimeline);
     if (_settings.history) _startHistory();
     // Nothing waits for a fix yet at start, so a note still waiting lost its wait when the app closed.
     await store.settleWaiting(send: _settings.sending);
@@ -106,43 +101,18 @@ class RelayController extends Relay {
     _track(_writePending(dropStray: true));
   }
 
-  static Entry _entryOf(RemoteNote note) => Entry(text: note.text, ring: note.source == 'ring', at: note.recordedAt,
-    place: note.place, device: note.device, audio: note.audio);
-
-  // A typed note on the server is the same note when its time and words match: the timeline does not give its clientId.
-  static String _sameAs(DateTime at, String text) => '${at.millisecondsSinceEpoch} $text';
-
-  Entry _entryOfLocal(LocalNote note) => Entry(text: note.text, ring: false, at: note.createdAt,
+  Entry _entryOfLocal(LocalNote note) => Entry(text: note.text, at: note.createdAt,
     // With sending off the phone looks up no place name, so a pin with no name reads as Pinned.
     place: note.pin == null ? null : note.pin!.place ?? 'Pinned',
-    waiting: _settings.sending && note.sentAt == null && (note.queued || note.pinning),
+    sent: note.sentAt != null, waiting: _settings.sending && note.sentAt == null && (note.queued || note.pinning),
     voice: note.kind == NoteKind.voice, writing: note.wordsPending, recording: note.audioPath,
     length: note.durationMs == null ? null : Duration(milliseconds: note.durationMs!));
 
-  // The server keeps a voice note as typed words; this phone still knows it as a voice note, with its recording.
-  static Entry _withVoice(Entry entry, LocalNote? note) => note == null ? entry : Entry(text: entry.text, ring: false,
-    at: entry.at, place: entry.place, device: entry.device, waiting: entry.waiting, audio: entry.audio, voice: true,
-    recording: note.audioPath, length: note.durationMs == null ? null : Duration(milliseconds: note.durationMs!));
-
+  /// The list shows this phone's own notes, newest first. Ring notes and recordings are on the person's Relay page.
   Future<void> _refreshLocal() async {
-    _notes = await store.notes();
+    final notes = await store.notes();
     _waiting = await store.waiting();
-    _merge();
-  }
-
-  /// This phone's notes beside the server's, newest first; a note on both shows once, as the server has it.
-  void _merge() {
-    final onServer = {for (final entry in _server) if (!entry.ring) _sameAs(entry.at, entry.text)};
-    final local = [for (final note in _notes) if (note.sentAt == null || !onServer.contains(_sameAs(note.createdAt, note.text))) _entryOfLocal(note)];
-    final voiced = {for (final note in _notes) if (note.kind == NoteKind.voice && note.sentAt != null) _sameAs(note.createdAt, note.text): note};
-    final server = [for (final entry in _server) entry.ring ? entry : _withVoice(entry, voiced[_sameAs(entry.at, entry.text)])];
-    final merged = <Entry>[];
-    var l = 0, s = 0;
-    while (l < local.length || s < server.length) {
-      final takeLocal = s == server.length || (l < local.length && !local[l].at.isBefore(server[s].at));
-      merged.add(takeLocal ? local[l++] : server[s++]);
-    }
-    _entries = merged;
+    _entries = [for (final note in notes) _entryOfLocal(note)];
     notifyListeners();
   }
 
@@ -151,7 +121,7 @@ class RelayController extends Relay {
     final connection = Connection.parse(code);
     if (connection == null) return 'That is not a Relay key. Scan the QR code again, or paste all of it.';
     try {
-      await _sender.check(connection).timeline();
+      await _sender.check(connection).key();
     } on ApiException catch (error) {
       // With no signal the key is kept and tried on the next sync.
       if (error.failure != Failure.offline) return 'The server did not take this key. Make a new key and try again.';
@@ -202,11 +172,8 @@ class RelayController extends Relay {
   Future<void> disconnect() async {
     await stopSending();
     await vault.forget();
-    await store.set(_cacheKey, '[]');
     _connection = null;
-    _server = const [];
-    _next = null;
-    _merge();
+    notifyListeners();
   }
 
   Future<void> _saveSettings(Settings settings) async {
@@ -298,33 +265,9 @@ class RelayController extends Relay {
     if (_settings.sending) await store.queuePoints();
     final result = await flush(store, api, clock: _clock, keepGoing: () => _settings.sending);
     _status = switch (result.failure) { Failure.refused => SyncStatus.refused, null => SyncStatus.synced, _ => SyncStatus.offline };
-    if (result.failure == null && _settings.sending) {
-      try {
-        final page = await api.timeline();
-        _server = [for (final note in page.notes) _entryOf(note)];
-        _next = page.next;
-        await store.set(_cacheKey, jsonEncode([for (final note in page.notes) note.json]));
-      } on ApiException catch (error) {
-        _status = error.failure == Failure.refused ? SyncStatus.refused : SyncStatus.offline;
-      }
-    }
     // The stop's own state wins.
     if (!_settings.sending) _status = SyncStatus.idle;
     await _refreshLocal();
-  }
-
-  @override
-  Future<void> more() async {
-    final api = _api, before = _next;
-    if (api == null || before == null) return;
-    try {
-      final page = await api.timeline(before: before);
-      _server = [..._server, for (final note in page.notes) _entryOf(note)];
-      _next = page.next;
-    } on ApiException {
-      _status = SyncStatus.offline;
-    }
-    _merge();
   }
 
   // Voice notes.

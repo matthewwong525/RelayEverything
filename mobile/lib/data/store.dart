@@ -260,4 +260,6 @@ class Store extends GeneratedDatabase {
   }
 
   Future<void> set(String key, String value) => _run('INSERT OR REPLACE INTO state (key, value) VALUES (?, ?)', [key, value]);
+
+  Future<void> remove(String key) => _run('DELETE FROM state WHERE key = ?', [key]);
 }

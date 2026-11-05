@@ -17,39 +17,8 @@ class ApiException implements Exception {
   String toString() => 'ApiException($failure, $status)';
 }
 
-/// One note as the server's timeline gives it.
-class RemoteNote {
-  const RemoteNote({required this.id, required this.source, required this.text, required this.recordedAt,
-    required this.device, required this.audio, this.place, this.json = const {}});
-
-  final String id;
-  final String source;
-  final String text;
-  final DateTime recordedAt;
-  final String device;
-  final bool audio;
-  final String? place;
-
-  /// The server's own words for this note, kept so the timeline cache reads back the same.
-  final Map<String, dynamic> json;
-
-  factory RemoteNote.fromJson(Map<String, dynamic> json) {
-    final place = json['place'] as Map<String, dynamic>?;
-    return RemoteNote(
-      id: json['id'] as String, source: json['source'] as String, text: json['text'] as String,
-      recordedAt: DateTime.fromMillisecondsSinceEpoch(json['recordedAt'] as int), device: json['device'] as String,
-      audio: json['audio'] as bool,
-      place: place == null ? null : (place['name'] as String?) ??
-        '${(place['lat'] as num).toStringAsFixed(4)}, ${(place['lon'] as num).toStringAsFixed(4)}',
-      json: json,
-    );
-  }
-}
-
-/// Where the timeline's next page starts: the last note's time and id, as two notes can share a time.
-typedef Cursor = ({int at, String? id});
-
-/// Relay's device routes, each call carrying this phone's key in Cloudflare Access's two headers.
+/// Relay's device routes, each call carrying this phone's key in Cloudflare Access's two headers. A device key only
+/// adds data: the server refuses it on every route that reads.
 class RelayApi {
   RelayApi(this.connection, [http.Client? client]) : _client = client ?? http.Client();
 
@@ -57,8 +26,7 @@ class RelayApi {
   final http.Client _client;
   static const _timeout = Duration(seconds: 30);
 
-  Uri _uri(String route, [Map<String, String>? query]) =>
-    Uri.parse('${connection.server}/apps/relay/api/$route').replace(queryParameters: query);
+  Uri _uri(String route) => Uri.parse('${connection.server}/apps/relay/api/$route');
 
   Map<String, String> get _headers =>
     {'CF-Access-Client-Id': connection.clientId, 'CF-Access-Client-Secret': connection.clientSecret, 'Accept': 'application/json'};
@@ -67,15 +35,10 @@ class RelayApi {
   Future<Map<String, dynamic>> post(String route, Map<String, dynamic> body) =>
     _call(() => _client.post(_uri(route), headers: {..._headers, 'Content-Type': 'application/json'}, body: jsonEncode(body)));
 
-  /// The newest notes, or those after [before] in the timeline's order.
-  Future<({List<RemoteNote> notes, Cursor? next})> timeline({Cursor? before}) async {
-    final query = before == null ? null : {'before': '${before.at}', if (before.id != null) 'beforeId': before.id!};
-    final json = await _call(() => _client.get(_uri('timeline', query), headers: _headers));
-    final next = json['next'] as int?;
-    return (
-      notes: [for (final note in json['notes'] as List) RemoteNote.fromJson(note as Map<String, dynamic>)],
-      next: next == null ? null : (at: next, id: json['nextId'] as String?),
-    );
+  /// Checks this phone's key and returns the device name it was made for. It reads no data.
+  Future<String> key() async {
+    final json = await _call(() => _client.get(_uri('key'), headers: _headers));
+    return json['device'] as String? ?? '';
   }
 
   Future<Map<String, dynamic>> _call(Future<http.Response> Function() send) async {

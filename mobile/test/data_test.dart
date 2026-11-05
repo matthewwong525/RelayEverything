@@ -60,20 +60,24 @@ void main() {
       expect(jsonDecode(request.body), {'text': 'hi'});
     });
 
-    test('reads the timeline with each place as a name or coordinates', () async {
-      final server = FakeServer((_) => FakeServer.json({'notes': [
-        {'id': 'a', 'source': 'ring', 'text': '', 'recordedAt': 1793797260000, 'device': 'Pebble app', 'audio': true,
-          'place': {'lat': 43.66291, 'lon': -79.39572, 'accuracy': null, 'name': null, 'from': 'history'}},
-        {'id': 'b', 'source': 'typed', 'text': 'Hi', 'recordedAt': 1793797200000, 'device': 'Phone', 'audio': false,
-          'place': {'lat': 43.6, 'lon': -79.3, 'accuracy': 5, 'name': 'King St W', 'from': 'phone'}},
-        {'id': 'c', 'source': 'typed', 'text': 'No place', 'recordedAt': 1793797100000, 'device': 'Phone', 'audio': false, 'place': null},
-      ], 'next': 1793797100000, 'nextId': 'c'}));
-      final page = await server.api(connection).timeline(before: (at: 1793797300000, id: 'd'));
-      expect(server.requests.single.url.queryParameters, {'before': '1793797300000', 'beforeId': 'd'});
-      expect([for (final note in page.notes) note.place], ['43.6629, -79.3957', 'King St W', null]);
-      expect(page.notes.first.audio, isTrue);
-      expect(page.notes.first.json['id'], 'a');
-      expect(page.next, (at: 1793797100000, id: 'c'));
+    test('checks a key with GET key, which gives the device name and no data', () async {
+      final server = FakeServer((_) => FakeServer.json({'device': 'iPhone'}));
+      expect(await server.api(connection).key(), 'iPhone');
+      final request = server.requests.single;
+      expect([request.method, request.url.toString()], ['GET', 'https://relay.example.com/apps/relay/api/key']);
+      expect(request.headers['CF-Access-Client-Id'], 'phone.access');
+      for (final status in [401, 403]) {
+        await expectLater(FakeServer((_) => FakeServer.json({}, status)).api(connection).key(),
+          throwsA(isA<ApiException>().having((error) => error.failure, 'failure', Failure.refused)), reason: '$status');
+      }
+    });
+
+    test('reads nothing: no code calls the timeline or audio routes, and the one GET is the key check', () {
+      final sources = [
+        for (final file in Directory('lib').listSync(recursive: true)) if (file is File && file.path.endsWith('.dart')) file.readAsStringSync(),
+      ].join('\n');
+      expect([for (final call in RegExp(r"_client\.get\(_uri\('(\w+)'").allMatches(sources)) call[1]], ['key']);
+      expect(sources, isNot(matches(RegExp(r"api/(timeline|audio)|_uri\('(timeline|audio)"))));
     });
 
     test('names each failure: a refused key, a body turned down, or no answer', () async {
@@ -93,7 +97,7 @@ void main() {
       expect(await failureOf(FakeServer.json({}, 413)), Failure.rejected);
       expect(await failureOf(FakeServer.json({}, 503)), Failure.offline);
       final api = RelayApi(connection, MockClient((_) => throw const SocketException('no signal')));
-      await expectLater(api.timeline(), throwsA(isA<ApiException>().having((error) => error.failure, 'failure', Failure.offline)));
+      await expectLater(api.key(), throwsA(isA<ApiException>().having((error) => error.failure, 'failure', Failure.offline)));
       expect(const ApiException(Failure.offline, 503).toString(), contains('503'));
     });
   });

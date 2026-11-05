@@ -170,14 +170,14 @@ describe("private Worker routing", () => {
     }
     expect(assets.fetch).not.toHaveBeenCalled();
   });
-  it("holds a Relay device key to Relay's device routes, and refuses a turned-off, unknown or unreadable one everywhere", async () => {
+  it("holds a Relay device key to sending to Relay, and refuses a turned-off, unknown or unreadable one everywhere", async () => {
     let row: { id: string; name: string; revoked_at: number | null } | Error | null = { id: "d-phone", name: "Phone", revoked_at: null };
     const first = vi.fn(async () => { if (row instanceof Error) throw row; return row; });
     const bindings = { ...env, DB: { withSession: () => ({ prepare: () => ({ bind: () => ({ first }) }) }) } };
     const phone = { "Cf-Access-Jwt-Assertion": await token({ common_name: "phone.access", sub: "" }) };
     const answer = async (path: string) => { const response = await call(path, phone, bindings); return [response.status, ((await response.json()) as { error: { message: string } }).error.message]; };
-    for (const path of ["/", "/apps/hello/api/greeting", "/api/health", "/apps/relay/api/nothing", "/apps/relay/"]) {
-      expect(await answer(path), path).toEqual([403, "A device key reaches only Relay."]);
+    for (const path of ["/", "/apps/hello/api/greeting", "/api/health", "/apps/relay/api/nothing", "/apps/relay/", "/apps/relay/api/timeline"]) {
+      expect(await answer(path), path).toEqual([403, "A device key can only send to Relay."]);
     }
     row = { ...row, revoked_at: 1 };
     expect(await answer("/apps/relay/api/notes")).toEqual([403, "This device key is turned off."]);
@@ -185,7 +185,7 @@ describe("private Worker routing", () => {
     expect(await answer("/apps/relay/api/notes")).toEqual([403, "This key is on no list of devices."]);
     row = new Error("private database detail");
     expect(await answer("/apps/relay/api/notes")).toEqual([503, "Device keys could not be read. Try again."]);
-    expect(first).toHaveBeenCalledTimes(8);
+    expect(first).toHaveBeenCalledTimes(9);
     expect(assets.fetch).not.toHaveBeenCalled();
   });
   it("accepts signed employee discovery and rejects forged, expired and wrong-audience assertions", async () => {

@@ -1,13 +1,13 @@
 ---
 title: Connect a phone
-description: Turn on sending, and give a phone its own key, so it can send notes to your Relay server and read them back.
+description: Turn on sending, and give a phone its own key, so it can send notes to your Relay server.
 ---
 
 The Relay app keeps your notes on the phone, with no key. To send them to your Relay server, you turn on sending and connect the phone with its own key. The key also holds the server's address, so you type no address.
 
 ## Make the key
 
-The owner of the Relay server makes one key for each phone, on the computer that holds the server's project:
+You make one key for each phone, on the computer where you [made your Relay server](../run-your-own/):
 
 ```sh
 node scripts/relay-device-key.mjs create --name "Android phone"
@@ -23,7 +23,7 @@ The key shows once: as a QR code in that terminal, and on a private page on that
    Or tap **Or paste the key**, paste it, and tap **Connect**.
 4. If you wrote notes before, the app asks **Send your earlier notes too?** Tap **Send them** to send them, or **Only new notes** to keep them only on the phone. The app asks again each time you turn sending on.
 
-When the phone connects, your notes go to your server, and the timeline shows your ring notes too. Delete the key's private page when the phone is connected.
+To connect, the phone checks its key with the server, and reads no data. Then your notes go to your server. The key only adds data, so the phone shows only its own notes: ring notes and recordings are on your Relay page, and **Open your Relay page** opens it. Delete the key's private page when the phone is connected.
 
 ## Stop sending
 
@@ -36,7 +36,7 @@ Turn off **Send to your Relay server** in **Settings**, and tap **Stop sending**
 
 ## Try a preview
 
-A preview of a change to Relay has its own address and its own keys. Make its key with `--staging`, then in the app open **Settings**, tap **Server**, and enter the preview's address.
+A preview of a change to Relay's own server has its own address and its own keys. Make its key with `--staging`, then in the app open **Settings**, tap **Server**, and enter the preview's address.
 
 ## Next
 

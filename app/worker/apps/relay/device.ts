@@ -1,21 +1,21 @@
 // Relay's device keys: one Access service token per phone, one for the Pebble app and one per Claude Code computer,
-// each a row in relay_devices. scripts/relay-device-key.mjs makes and revokes them; a revoked key reaches nothing.
+// each a row in relay_devices and each send-only. scripts/relay-device-key.mjs makes and revokes them.
 import { refused, session, type Identity } from "./store.ts";
 
-/** What a key is for: a phone or the Pebble app sends and reads notes; a chat key only adds chats. */
+/** What a key is for: a phone or the Pebble app adds notes, health and places; a chat key adds chats. */
 export type Reach = "phone" | "chats";
 
-/** The only routes each kind of key reaches: the app's router answers the rest. A phone's reach takes any method; a
- *  chat key's takes only POST, because `GET chats`, the owner's list, shares the address with the send. */
-const REACH: Record<Reach, { routes: RegExp; methods?: string[]; refusal: string }> = {
-  phone: { routes: /^\/apps\/relay\/api\/(?:pebble|notes|health|locations|timeline|audio)$/, refusal: "A device key reaches only Relay." },
-  chats: { routes: /^\/apps\/relay\/api\/(?:chats|chat-saves)$/, methods: ["POST"], refusal: "A chat key can only send chats." },
+/** Each kind of key only adds data, so every reach is POST, plus `GET key`, which answers only the key's own name. A
+ *  read such as `GET chats` shares an address with a send, so the method is checked too. */
+const REACH: Record<Reach, { routes: RegExp; refusal: string }> = {
+  phone: { routes: /^\/apps\/relay\/api\/(?:pebble|notes|health|locations)$/, refusal: "A device key can only send to Relay." },
+  chats: { routes: /^\/apps\/relay\/api\/(?:chats|chat-saves)$/, refusal: "A chat key can only send chats." },
 };
+const KEY_CHECK = "/apps/relay/api/key";
 
 /** True when a key of this reach may call the method on the address. */
 export function reaches(reach: Reach, method: string, pathname: string): boolean {
-  const { routes, methods } = REACH[reach];
-  return routes.test(pathname) && (!methods || methods.includes(method));
+  return method === "GET" ? pathname === KEY_CHECK : method === "POST" && REACH[reach].routes.test(pathname);
 }
 
 // Git holds only the checker's fingerprint: its Client ID stays in .env with the other checker values.

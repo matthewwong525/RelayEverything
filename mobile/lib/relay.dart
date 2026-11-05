@@ -8,18 +8,18 @@ import 'voice/model.dart';
 export 'data/settings.dart' show Settings;
 export 'voice/model.dart' show ModelState, ModelProblem;
 
-/// One row of the timeline: a note typed or said on this phone, or one the server has.
+/// One row of the timeline: a note typed or said on this phone.
 class Entry {
-  const Entry({required this.text, required this.ring, required this.at, this.place, this.device, this.waiting = false, this.audio = false,
-    this.voice = false, this.writing = false, this.recording, this.length});
+  const Entry({required this.text, required this.at, this.place, this.sent = false, this.waiting = false, this.voice = false,
+    this.writing = false, this.recording, this.length});
 
   final String text;
-  final bool ring;
   final DateTime at;
   final String? place;
-  final String? device;
+  /// The server took it.
+  final bool sent;
+  /// It has an upload in the outbox, or waits for its pin, while sending is on.
   final bool waiting;
-  final bool audio;
 
   /// Said into this phone's *Hold to talk*.
   final bool voice;
@@ -37,7 +37,6 @@ abstract class Relay extends ChangeNotifier {
   bool get connected;
   String? get server;
   List<Entry> get entries;
-  bool get hasMore;
   SyncStatus get status;
   int get waiting;
   Settings get settings;
@@ -59,7 +58,6 @@ abstract class Relay extends ChangeNotifier {
   /// Forgets the key and turns sending off.
   Future<void> disconnect();
   Future<void> sync();
-  Future<void> more();
   Future<void> addNote(String text);
 
   /// The speech model voice notes need, and its download's progress from 0 to 1.

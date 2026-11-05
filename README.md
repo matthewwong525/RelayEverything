@@ -14,6 +14,7 @@ A ring is one way to take a note: hold the band, talk, and let go. A Pebble Inde
 | [`cad/`](cad/) | The ring's 3D models, in OpenSCAD |
 | [`pcb/`](pcb/) | The ring's board, in KiCad |
 | [`vendor/`](vendor/) | Copied libraries, each with its own license |
+| [`self-host/`](self-host/) | Run your own Relay server in your own Cloudflare account: [`SETUP.md`](self-host/SETUP.md) |
 | [`schema/`](schema/) | The database's tables and migrations |
 | [`scripts/`](scripts/) | The tools that check, build and publish |
 | [`openspec/`](openspec/), [`wiki/`](wiki/) | The plans, and how the project is made |

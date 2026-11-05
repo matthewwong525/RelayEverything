@@ -23,7 +23,7 @@ Future<void> main() async {
     voice: voice);
   await relay.load();
   runApp(RelayApp(relay: relay));
-  // Each open, and each return to the app, sends what waits and reads the newest notes.
+  // Each open, and each return to the app, sends what waits.
   AppLifecycleListener(onResume: relay.sync);
   await relay.sync();
 }

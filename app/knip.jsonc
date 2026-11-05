@@ -6,6 +6,8 @@
     "worker/line-worker.ts",
     // Relay's AI connector, its own Worker (wrangler.relay-mcp.jsonc).
     "worker/relay-mcp/index.ts",
+    "worker/relay-only.ts",
+    "src/relay-only.tsx",
     // Shared signed-identity verifier used by the Worker entry point.
     "worker/access.ts",
     // Each mini app's page and server side, which Vite finds by glob

@@ -11,8 +11,8 @@ import 'package:relay_app/sync/background.dart';
 
 import 'fakes.dart';
 
-// With sending off, the app's promise is that nothing leaves the phone. This drives every screen and job with a
-// server that fails on any call, a phone that would name places over the network, and health that would read.
+// With sending off, the app's promise is that nothing leaves the phone. This drives every screen and job, with a key
+// kept, against a server that fails on any call, a phone that would name places over the network, and health that would read.
 void main() {
   testWidgets('with sending off, no screen or job calls the network, names a place, or reads health', (tester) async {
     final store = memoryStore();
@@ -23,7 +23,16 @@ void main() {
     final scheduled = <bool>[];
     final relay = RelayController(store: store, vault: KeyVault(storage), places: places, health: health, apiFor: server.api,
       schedule: (on) async => scheduled.add(on));
-    await tester.runAsync(relay.load);
+    // A key is kept, sending is off, and a note written while it was on still waits to send: only the Sender gate
+    // keeps that upload on the phone.
+    await tester.runAsync(() async {
+      await KeyVault(storage).save(connection);
+      await store.addNote(LocalNote(clientId: 'waiting', text: 'Written while sending was on', createdAt: DateTime(2026, 11, 4)),
+        send: true);
+      await store.set(settingsKey, const Settings().encode());
+      await relay.load();
+    });
+    expect([relay.connected, relay.settings.sending], [true, false]);
     await tester.pumpWidget(RelayApp(relay: relay, scanner: (_) async => null));
 
     // Settings: pins on (a phone-only fix), and the dependent switches can not turn on.
@@ -59,8 +68,8 @@ void main() {
       await relay.more();
       expect(await backgroundRound(store, connection: await KeyVault(storage).read(), health: health, sender: Sender(server.api)), isTrue);
       expect(await relay.earlierNotes(), 1);
-      expect(await store.outbox(), isEmpty);
-      expect(Settings.decode(await store.get(settingsKey), hasKey: false).sending, isFalse);
+      expect([for (final item in await store.outbox()) item.body['clientId']], ['waiting']);
+      expect(Settings.decode(await store.get(settingsKey), hasKey: true).sending, isFalse);
     });
 
     expect(server.requests, isEmpty);

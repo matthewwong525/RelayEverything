@@ -12,9 +12,11 @@ class FlushResult {
 
 /// Sends waiting uploads oldest first, and stops at the first that can not land now, so order holds.
 /// A body the server turns down is dropped: it would never land, and would hold back the rest.
-Future<FlushResult> flush(Store store, RelayApi api, {DateTime Function()? clock}) async {
+/// [keepGoing] is asked before each upload; when it says no, such as after *Stop sending*, the round stops there.
+Future<FlushResult> flush(Store store, RelayApi api, {DateTime Function()? clock, bool Function()? keepGoing}) async {
   var sent = 0, dropped = 0;
   for (final item in await store.outbox()) {
+    if (keepGoing != null && !keepGoing()) break;
     try {
       await api.post(item.route, item.body);
       sent++;

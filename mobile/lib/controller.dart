@@ -246,6 +246,7 @@ class RelayController extends Relay {
     if (api == null) return;
     _status = SyncStatus.syncing;
     notifyListeners();
+    // Sending can turn off while a round runs: from then on it reads, queues and sends nothing more.
     if (_settings.health) {
       try {
         await syncHealth(store, health, now: _clock());
@@ -253,10 +254,10 @@ class RelayController extends Relay {
         // The health store can be closed for a while, such as on a locked iPhone; the next round reads again.
       }
     }
-    await store.queuePoints();
-    final result = await flush(store, api, clock: _clock);
+    if (_settings.sending) await store.queuePoints();
+    final result = await flush(store, api, clock: _clock, keepGoing: () => _settings.sending);
     _status = switch (result.failure) { Failure.refused => SyncStatus.refused, null => SyncStatus.synced, _ => SyncStatus.offline };
-    if (result.failure == null) {
+    if (result.failure == null && _settings.sending) {
       try {
         final page = await api.timeline();
         _server = [for (final note in page.notes) _entryOf(note)];
@@ -266,7 +267,7 @@ class RelayController extends Relay {
         _status = error.failure == Failure.refused ? SyncStatus.refused : SyncStatus.offline;
       }
     }
-    // Sending can turn off while a round runs; the stop's own state wins.
+    // The stop's own state wins.
     if (!_settings.sending) _status = SyncStatus.idle;
     await _refreshLocal();
   }

@@ -1,10 +1,9 @@
-# Spec Delta
+# relay-sending Specification
 
 ## Purpose
-
 Keep every Relay note on the phone unless the person chooses to send, and send only what they chose.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: The app works offline by default
 
@@ -40,7 +39,7 @@ When the person turns sending on and notes exist that never went to the server, 
 
 #### Scenario: Turned on again later
 - **WHEN** the person turns sending on again after a time with it off
-- **THEN** the app asks again about every note that never went to the server
+- **THEN** the app asks again about every note that never went to the server and was not already waiting to send
 
 ### Requirement: Turning sending off keeps what exists
 

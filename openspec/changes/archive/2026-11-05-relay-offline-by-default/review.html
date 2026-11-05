@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · relay-offline-by-default</title>
+<title>Review · 2026-11-05-relay-offline-by-default</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="relay-offline-by-default" data-own-back>
+<body data-change="2026-11-05-relay-offline-by-default" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>relay-offline-by-default</h1>
+  <h1>2026-11-05-relay-offline-by-default</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -478,6 +478,16 @@
 <li class="decision card" id="decision-14" data-note="decision-14" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-05</p>Assumed: the plan no longer says the Relay ring will reach the phone directly later, because Matthew said on 2026-11-05 that Relay's focus is the app and the ring may never launch.</li>
 <li class="decision card" id="decision-15" data-note="decision-15" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-05</p>Assumed: the public website's pages that describe syncing change with the app, because the website went live after this plan was written and now says the app syncs to the server.</li>
 <li class="decision card" id="decision-16" data-note="decision-16" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-05</p>Assumed: this is a follow-up change on top of the first version, not folded into it, because that chat is already building and this part was asked to plan separately.</li>
+<li class="decision card" id="decision-17" data-note="decision-17" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-05</p>Assumed: a typed note on both the phone and the server shows once by its time and words, because the server's timeline gives no <code>clientId</code> and this change makes no route change.</li>
+<li class="decision card" id="decision-18" data-note="decision-18" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-05</p>Assumed: server notes stay in the first version's timeline cache, not in the <code>notes</code> table, because the cache already keeps them when sending turns off and only <i>Disconnect</i> clears it.</li>
+<li class="decision card" id="decision-19" data-note="decision-19" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-05</p>Assumed: tapping <i>Pinned</i> does not open the map app yet, because that needs a new package and no task asks for it.</li>
+<li class="decision card" id="decision-20" data-note="decision-20" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-05</p>Assumed: the setting keeps the first version's name <code>history</code>, not <code>locationHistory</code>, so the saved settings read back with no rename.</li>
+<li class="decision card" id="decision-21" data-note="decision-21" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-05</p>Assumed: health's first read starts when it turns on, less the first version's 2-hour overlap, because the overlap catches readings the health store saves late.</li>
+<li class="decision card" id="decision-22" data-note="decision-22" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-05</p>Assumed: a phone whose key is gone, such as after a restore, reads sending as off, because it can not send with no key.</li>
+<li class="decision card" id="decision-23" data-note="decision-23" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-05</p>Assumed: the check that the first version's tests pass ran on a clean copy of <code>main</code> after the source was written (38 tests, not 34), because the build writes all source before it runs any test.</li>
+<li class="decision card" id="decision-24" data-note="decision-24" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-05</p>Assumed: a note written while sending was on keeps its waiting upload when sending turns off, so a later turn-on sends it with no prompt, and the spec scenario now says so, because the person wrote it with sending on; the review found the spec and design disagreed, and the orchestrator chat said to take the recommended pick.</li>
+<li class="decision card" id="decision-25" data-note="decision-25" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-05</p>Assumed: the phone checks (a fresh Android install in airplane mode, sending on and off against the site, and the iPhone through TestFlight) leave this change's tasks as a follow-up after the publish, because they need Matthew's phones, the orchestrator chat asked to ship without asking him, and the first version did the same; TestFlight still waits for the paid Apple membership.</li>
+<li class="decision card" id="decision-26" data-note="decision-26" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-05</p>Archive checkpoint: built on branch <code>elderly-husky</code>, reviewed twice (3 findings, all fixed or settled), local checks pass but for timeouts in untouched access and inbox tests under a machine load near 130; archived at <code>openspec/changes/archive/2026-11-05-relay-offline-by-default</code> for publish.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

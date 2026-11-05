@@ -24,6 +24,8 @@ class FakeServer {
 
   http.Response Function(http.Request request) answer;
   final requests = <http.Request>[];
+  /// When set, each reply waits for it, so a test can act while a request is still open.
+  Completer<void>? hold;
 
   static http.Response ok(http.Request request) => json(request.url.path.endsWith('/timeline') ? {'notes': [], 'next': null} : {'added': 1});
   static http.Response json(Object body, [int status = 200]) =>
@@ -31,6 +33,7 @@ class FakeServer {
 
   RelayApi api(Connection connection) => RelayApi(connection, MockClient((request) async {
     requests.add(request);
+    await hold?.future;
     return answer(request);
   }));
 

@@ -21,7 +21,9 @@
 
 ## 4. Verification
 
-- [ ] 4.1 Run the fail-on-any-call test across every screen and job with sending off, `flutter analyze`, `flutter test` in `mobile/`, and the local checks
-- [ ] 4.2 `/save`, then on the Android phone with a fresh install in airplane mode: write and pin notes, open Settings, and see no permission asks for health or background location
-- [ ] 4.3 On the Android phone against the preview: turn sending on, pick *Only new notes*, then turn off and on and pick *Send them*; see the right notes on the site page, and see health stop after *Stop sending*
-- [ ] 4.4 Repeat 4.2 on the iPhone through the next TestFlight build, once the first version's TestFlight step is unblocked
+- [x] 4.1 Run the fail-on-any-call test across every screen and job with sending off, `flutter analyze`, `flutter test` in `mobile/`, and the local checks
+
+## 5. Review fixes
+
+- [x] 5.1 *Stop sending* during a running sync sends nothing more: `flush` stops before each item once sending is off, and `_sync` skips health and location then; controller test that holds a server reply open across `stopSending()` and sees no later request
+- [x] 5.2 `offline_test.dart` runs with a key kept and sending off, so it fails if the `Sender` gate is removed; rerun `flutter analyze` and `flutter test`

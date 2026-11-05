@@ -186,6 +186,35 @@ void main() {
       expect([sentNotes().single['text'], relay.settings.health, relay.settings.history], ['Waits', false, false]);
     });
 
+    test('a round already sending when sending stops sends, reads and queues nothing more', () async {
+      await KeyVault(storage).save(connection);
+      final relay = controller();
+      await relay.load();
+      await relay.setPinNotes(false);
+      expect(await relay.setHistory(true), isNull);
+      expect(await relay.setHealth(true), isNull);
+      await pumpEventQueue();
+      health.readings = [reading(HealthDataType.STEPS, now, now.add(const Duration(minutes: 5)), value: 10)];
+      places.points.add(Pin(at: now, lat: 43.6, lon: -79.3, accuracy: 9));
+      await pumpEventQueue();
+      server.requests.clear();
+      server.hold = Completer();
+      await relay.addNote('First');
+      await relay.addNote('Second');
+      await pumpEventQueue();
+      // The round has read health, queued the location point, and holds open its first upload.
+      expect(server.routes, ['notes']);
+      expect([for (final item in await store.outbox()) item.route], containsAll(['notes', 'health', 'locations']));
+      final reads = health.reads.length;
+      final stopped = relay.stopSending();
+      await pumpEventQueue();
+      server.hold!.complete();
+      await stopped;
+      await pumpEventQueue();
+      expect([server.routes, health.reads.length, relay.status], [['notes'], reads, SyncStatus.idle]);
+      expect([for (final item in await store.outbox()) item.route], ['notes']);
+    });
+
     test('health starts from the moment it turns on, with no earlier backfill', () async {
       await KeyVault(storage).save(connection);
       final relay = controller();

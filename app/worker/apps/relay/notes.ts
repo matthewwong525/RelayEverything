@@ -4,6 +4,7 @@ import { z } from "zod";
 import { defineAction } from "../../api/contract.ts";
 import { deviceOf } from "./device.ts";
 import { accuracy, latitude, longitude, placeName, refused, session, time } from "./store.ts";
+import { wake } from "./webhooks/send.ts";
 
 const noteInput = z.strictObject({
   clientId: z.string().regex(/^[A-Za-z0-9-]{8,64}$/).describe("The phone's own id for the note, so a resend is stored once."),
@@ -29,7 +30,10 @@ export const notes = defineAction({
         place, place_from, created_at) VALUES (?, ?, 'typed', ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (device_id, client_id) DO NOTHING RETURNING id`)
       .bind(crypto.randomUUID(), device.id, note.clientId, note.text, note.createdAt, note.lat ?? null, note.lon ?? null,
         note.accuracy ?? null, note.place ?? null, where, Date.now()).all<{ id: string }>();
-    if (results.length) return Response.json({ id: results[0].id, added: true });
+    if (results.length) {
+      await wake(env, ["notes"]);
+      return Response.json({ id: results[0].id, added: true });
+    }
     const kept = await db.prepare("SELECT id FROM relay_notes WHERE device_id = ? AND client_id = ?").bind(device.id, note.clientId).first<{ id: string }>();
     return Response.json({ id: kept!.id, added: false });
   },

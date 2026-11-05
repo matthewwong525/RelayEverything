@@ -31,7 +31,13 @@
     { "binding": "MEMORY_BUCKET", "bucket_name": "relay-everything-memory" },
     { "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes" }
   ],
-  // Rereads who can push on GitHub, for previews' sign-in.
+  // Relay's webhooks: a message only says "look now" for one webhook; the cursor in D1 holds what was sent.
+  // app/worker/apps/relay/webhooks/send.ts
+  "queues": {
+    "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks" }],
+    "consumers": [{ "queue": "relay-everything-webhooks", "max_batch_size": 10, "max_retries": 10 }]
+  },
+  // Rereads who can push on GitHub, for previews' sign-in, and wakes each Relay webhook left behind.
   "triggers": { "crons": ["*/15 * * * *"] },
   // The private site's own address; the workers.dev address stays on for Access. Staging has none.
   "routes": [{ "pattern": "app.relayeverything.com", "custom_domain": true }],
@@ -59,6 +65,10 @@
       },
       "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db-staging", "database_id": "4f8edf18-ad51-4325-bb98-ec3ca6cc80b0", "migrations_dir": "../schema/migrations" }],
       "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes-staging" }],
+      "queues": {
+        "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks-staging" }],
+        "consumers": [{ "queue": "relay-everything-webhooks-staging", "max_batch_size": 10, "max_retries": 10 }]
+      },
       "services": [{ "binding": "RELAY_MCP", "service": "relay-everything-mcp-staging", "entrypoint": "Grants" }],
       "routes": [],
       "triggers": { "crons": [] }
@@ -68,6 +78,10 @@
       "vars": { "WONG_ENVIRONMENT": "local", "SKIP_AUTH": "true" },
       "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db-local", "database_id": "9f8aa624-0d1c-4abf-902a-7b9430286378", "remote": false, "migrations_dir": "../schema/migrations" }],
       "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes-local", "remote": false }],
+      "queues": {
+        "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks-local" }],
+        "consumers": [{ "queue": "relay-everything-webhooks-local", "max_batch_size": 10, "max_retries": 10 }]
+      },
       "durable_objects": { "bindings": [{ "name": "LIVE_LINE", "class_name": "Line", "script_name": "relay-everything-line-local" }] }
     }
   }

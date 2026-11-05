@@ -1,0 +1,266 @@
+import { Webhook } from "standardwebhooks";
+import { afterEach, beforeEach, expect, it, vi, type Mock } from "vitest";
+import { bucket, call, db, env, matthew, NOW, phone, queue, rows } from "../../../../tests/relay";
+import { consume, DELAYS, post, run } from "./send.ts";
+
+const MINUTE = 60_000;
+const SECRET = "whsec_dGVzdC1vbmx5LXNlY3JldC1mb3ItdGhlLXNlbmRlcg==";
+type Sent = { url: string; headers: Record<string, string>; body: string; redirect: string };
+const sent: Sent[] = [];
+let answer: (index: number) => Promise<Response> | Response;
+
+beforeEach(() => {
+  sent.length = 0;
+  answer = () => new Response(null, { status: 204 });
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
+    sent.push({ url, headers: init.headers as Record<string, string>, body: String(init.body), redirect: String(init.redirect) });
+    return answer(sent.length - 1);
+  }));
+});
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+const hook = (id = "hook-1", more: Record<string, string | number | null> = {}) => {
+  const row = { id, name: "Example database", url: "https://db.example.com/relay", secret: SECRET, kinds: '["notes"]', active: 1, sent_seq: 0,
+    created_at: NOW, ...more };
+  db.sql.prepare(`INSERT INTO relay_webhooks (${Object.keys(row)}) VALUES (${Object.keys(row).map(() => "?")})`).run(...Object.values(row));
+};
+const webhook = (id = "hook-1") => rows("relay_webhooks").find(row => row.id === id)!;
+const note = (clientId: string, text = "Order more switches") => call(phone, "POST", "notes", { clientId, text, createdAt: NOW - MINUTE });
+const ringNote = (id: string, more: { audio?: boolean; createdAt?: number } = {}) => db.sql.prepare(`INSERT INTO relay_notes (id, device_id, source,
+  delivery_id, text, audio_key, recorded_at, created_at) VALUES (?, 'd-pebble', 'ring', ?, 'Ring note', ?, ?, ?)`)
+  .run(id, `delivery-${id}`, more.audio ? `notes/${id}.m4a` : null, NOW - 2 * MINUTE, more.createdAt ?? NOW);
+const message = (body: unknown) => ({ body, ack: vi.fn(), retry: vi.fn() });
+async function deliver(...bodies: unknown[]) {
+  const messages = bodies.map(message);
+  await consume({ queue: "relay-everything-webhooks", messages } as unknown as MessageBatch, env());
+  return messages;
+}
+const bodies = () => sent.map(item => JSON.parse(item.body));
+const types = () => bodies().map(item => item.type);
+const at = (time: number) => vi.setSystemTime(time);
+
+it("sends a stored note, signed, and moves the webhook's place only after a 2xx", async () => {
+  hook();
+  await note("note-0001");
+  expect(queue.sent).toEqual([{ webhook: "hook-1" }]);
+  const [delivered] = await deliver({ webhook: "hook-1" });
+  expect(delivered.ack).toHaveBeenCalledOnce();
+  expect(sent).toHaveLength(1);
+  expect(sent[0]).toMatchObject({ url: "https://db.example.com/relay", redirect: "manual", headers: { "webhook-id": "msg_hook-1_1_1" } });
+  expect(new Webhook(SECRET).verify(sent[0].body, sent[0].headers)).toMatchObject({ version: 1, type: "note.created",
+    timestamp: new Date(NOW).toISOString(), data: { note: { text: "Order more switches", device: { name: "Android phone" }, audio: null } } });
+  expect(webhook()).toMatchObject({ sent_seq: 1, pending_seq: null, lease_until: null, last_status: 204, last_sent_at: NOW, tries: 0 });
+  expect(rows("relay_webhook_attempts")).toEqual([expect.objectContaining({ webhook_id: "hook-1", type: "note.created", first_seq: 1,
+    last_seq: 1, status: 204, error: null })]);
+  // Caught up, a second message sends nothing.
+  await deliver({ webhook: "hook-1" });
+  expect(sent).toHaveLength(1);
+});
+
+it("tries a failed group again with the same id and body, and a parallel message waits for that retry", async () => {
+  hook();
+  await note("note-0001");
+  answer = () => new Response("down", { status: 503 });
+  const [first] = await deliver({ webhook: "hook-1" });
+  expect(first.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+  expect(webhook()).toMatchObject({ sent_seq: 0, pending_seq: 1, tries: 1, next_try_at: NOW + 30_000, last_status: 503,
+    last_error: "Answered 503." });
+  at(NOW + 1000);
+  await note("note-0002");
+  const [early] = await deliver({ webhook: "hook-1" });
+  expect([early.ack.mock.calls.length, sent.length]).toEqual([1, 1]);
+  at(NOW + 30_000);
+  answer = () => new Response("ok");
+  const [again] = await deliver({ webhook: "hook-1" });
+  expect(again.ack).toHaveBeenCalledOnce();
+  expect(sent[1].headers["webhook-id"]).toBe(sent[0].headers["webhook-id"]);
+  expect(sent[1].body).toBe(sent[0].body);
+  expect(bodies().map(item => item.data.note.text)).toEqual(["Order more switches", "Order more switches", "Order more switches"]);
+  expect(sent.map(item => item.headers["webhook-id"])).toEqual(["msg_hook-1_1_1", "msg_hook-1_1_1", "msg_hook-1_2_2"]);
+  expect(webhook()).toMatchObject({ sent_seq: 2, tries: 0, next_try_at: null, last_status: 200, last_error: null });
+});
+
+it("shows a webhook as failing after its last retry, then sends all that waits, in order, once tried again", async () => {
+  const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  hook();
+  await note("note-0001", "First");
+  answer = () => new Response(null, { status: 302, headers: { location: "https://elsewhere.example.com/" } });
+  let time = NOW;
+  for (const delay of [...DELAYS, null]) {
+    const [delivered] = await deliver({ webhook: "hook-1" });
+    if (delay === null) expect(delivered.ack).toHaveBeenCalledOnce();
+    else expect(delivered.retry).toHaveBeenCalledWith({ delaySeconds: delay });
+    time += (delay ?? 0) * 1000;
+    at(time);
+  }
+  expect(sent).toHaveLength(10);
+  expect(webhook()).toMatchObject({ failing_since: time, tries: 10, last_status: 302,
+    last_error: "Answered with a redirect, which Relay does not follow." });
+  queue.sent = [];
+  await note("note-0002", "Second");
+  expect(queue.sent).toEqual([]);
+  answer = () => new Response(null, { status: 204 });
+  await deliver({ webhook: "hook-1" });
+  expect(sent).toHaveLength(10);
+  expect((await call(matthew, "POST", "webhooks/retry", { id: "hook-1" })).json.webhook).toMatchObject({ state: "working", waiting: 2 });
+  await deliver(...queue.sent);
+  expect(bodies().slice(10).map(item => item.data.note.text)).toEqual(["First", "Second"]);
+  expect(webhook()).toMatchObject({ failing_since: null, sent_seq: 2 });
+  expect(error).not.toHaveBeenCalled();
+});
+
+it("keeps its lease while the clock moves: sends every group in one run, and counts each failed try", async () => {
+  hook();
+  for (const id of ["note-0001", "note-0002", "note-0003"]) await note(id);
+  // Each database call takes a millisecond, so each lease renewal writes a new time.
+  const prepare = db.session.prepare.bind(db.session);
+  vi.spyOn(db.session, "prepare").mockImplementation(query => {
+    at(Date.now() + 1);
+    return prepare(query);
+  });
+  await deliver({ webhook: "hook-1" });
+  expect(sent).toHaveLength(3);
+  expect(webhook()).toMatchObject({ sent_seq: 3, pending_seq: null, lease_until: null, tries: 0 });
+  await note("note-0004");
+  answer = () => new Response("down", { status: 503 });
+  await deliver({ webhook: "hook-1" });
+  expect(webhook()).toMatchObject({ sent_seq: 3, pending_seq: 4, lease_until: null, tries: 1 });
+  // A wake before the retry is due stops at once and gives the lease back, so the retry is not turned away.
+  await deliver({ webhook: "hook-1" });
+  expect(webhook()).toMatchObject({ lease_until: null, tries: 1 });
+  at(webhook().next_try_at as number);
+  await deliver({ webhook: "hook-1" });
+  expect(webhook()).toMatchObject({ sent_seq: 3, pending_seq: 4, lease_until: null, tries: 2 });
+  expect(sent).toHaveLength(5);
+});
+
+it("says why a send failed: no answer in time, no connection, or a redirect", async () => {
+  answer = () => {
+    throw Object.assign(new Error("The operation timed out."), { name: "TimeoutError" });
+  };
+  expect(await post("https://db.example.com/", SECRET, "msg_x", "{}")).toEqual({ status: null, ms: 0, error: "No answer in 15 seconds." });
+  answer = () => {
+    throw new TypeError("fetch failed");
+  };
+  expect(await post("https://db.example.com/", SECRET, "msg_x", "{}")).toEqual({ status: null, ms: 0, error: "Could not connect." });
+  answer = () => {
+    throw "a string";
+  };
+  expect((await post("https://db.example.com/", SECRET, "msg_x", "{}")).error).toBe("Could not connect.");
+});
+
+it("stops sending to an address Relay no longer allows, at once", async () => {
+  hook("hook-1", { url: "https://127.0.0.1/relay" });
+  await note("note-0001");
+  const [delivered] = await deliver({ webhook: "hook-1" });
+  expect(delivered.ack).toHaveBeenCalledOnce();
+  expect(sent).toEqual([]);
+  expect(webhook()).toMatchObject({ failing_since: NOW, last_error: "Relay no longer sends to this address: address_private.", last_status: null });
+});
+
+it("runs one sender per webhook: a second waits for the lease, and a lease left by a stopped sender runs out", async () => {
+  hook();
+  await note("note-0001");
+  expect(await Promise.all([run(env(), "hook-1"), run(env(), "hook-1")])).toEqual([null, null]);
+  expect(sent).toHaveLength(1);
+  await note("note-0002");
+  db.sql.prepare("UPDATE relay_webhooks SET lease_until = ?").run(NOW + MINUTE);
+  await run(env(), "hook-1");
+  expect(sent).toHaveLength(1);
+  at(NOW + MINUTE + 1);
+  await run(env(), "hook-1");
+  expect(sent).toHaveLength(2);
+  expect(await run(env(), "nobody")).toBeNull();
+});
+
+it("looks once more after giving up the lease, so a row stored meanwhile goes in the same run", async () => {
+  hook();
+  await note("note-0001");
+  const prepare = db.session.prepare;
+  let stored = false;
+  vi.spyOn(db.session, "prepare").mockImplementation(query => {
+    if (!stored && query.startsWith("UPDATE relay_webhooks SET lease_until = NULL")) {
+      stored = true;
+      ringNote("aaaaaaaa-0000-4000-8000-000000000001");
+    }
+    return prepare(query);
+  });
+  await run(env(), "hook-1");
+  expect(types()).toEqual(["note.created", "note.created"]);
+  expect(webhook().sent_seq).toBe(2);
+});
+
+it("sends nothing while paused, and stops when its owner changes it during a send", async () => {
+  hook("hook-1", { active: 0 });
+  await note("note-0001");
+  await run(env(), "hook-1");
+  expect(sent).toEqual([]);
+  db.sql.prepare("UPDATE relay_webhooks SET active = 1").run();
+  answer = () => {
+    db.sql.prepare("UPDATE relay_webhooks SET active = 0, lease_until = NULL").run();
+    return new Response(null, { status: 204 });
+  };
+  await note("note-0002");
+  expect(await run(env(), "hook-1")).toBeNull();
+  expect(sent).toHaveLength(1);
+  // The address took it, but the change came first: it goes again on resume, and the receiver's upsert keeps one copy.
+  expect(webhook()).toMatchObject({ sent_seq: 0, active: 0 });
+});
+
+it("waits for a ring note's recording, sends it when it comes, and skips a note deleted since", async () => {
+  hook();
+  ringNote("aaaaaaaa-0000-4000-8000-000000000001", { audio: true });
+  const [early] = await deliver({ webhook: "hook-1" });
+  expect(early.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+  expect(sent).toEqual([]);
+  bucket.objects.set("notes/aaaaaaaa-0000-4000-8000-000000000001.m4a", new Uint8Array([0, 0, 0, 24]));
+  ringNote("aaaaaaaa-0000-4000-8000-000000000002", { audio: true, createdAt: NOW - 3 * MINUTE });
+  ringNote("aaaaaaaa-0000-4000-8000-000000000003");
+  db.sql.prepare("DELETE FROM relay_notes WHERE id = 'aaaaaaaa-0000-4000-8000-000000000003'").run();
+  await note("note-0001");
+  await deliver({ webhook: "hook-1" });
+  expect(bodies().map(item => [item.data.note.source, item.data.note.audio])).toEqual([
+    ["ring", { content_type: "audio/mp4", base64: "AAAAGA==" }], ["ring", null], ["typed", null]]);
+  expect(webhook()).toMatchObject({ sent_seq: 4, last_status: 204 });
+});
+
+it("sends health and location only to a webhook that takes them, in groups of one kind, in the order stored", async () => {
+  hook("all", { kinds: '["notes","health","locations"]' });
+  hook("notes");
+  ringNote("aaaaaaaa-0000-4000-8000-000000000001");
+  const sample = { type: "steps", start: NOW - 60 * MINUTE, end: NOW - 30 * MINUTE, value: 1200, unit: "count", source: "Health Connect" };
+  await call(phone, "POST", "health", { samples: [sample, { ...sample, start: NOW - 30 * MINUTE, end: NOW - 10 * MINUTE }] });
+  await call(phone, "POST", "locations", { points: [{ at: NOW - 2 * MINUTE, lat: 43.65, lon: -79.38, accuracy: 10 }] });
+  await call(phone, "POST", "health", { samples: [{ ...sample, type: "heart_rate", unit: "bpm", value: 70 }] });
+  expect(queue.sent).toEqual([{ webhook: "all" }, { webhook: "all" }, { webhook: "notes" }, { webhook: "all" }]);
+  await deliver({ webhook: "all" });
+  expect(types()).toEqual(["note.created", "health.samples", "location.points", "note.updated", "health.samples"]);
+  expect(bodies()[1].data.samples.map((item: { value: number }) => item.value)).toEqual([1200, 1200]);
+  expect(bodies()[2].data.points[0]).toMatchObject({ lat: 43.65, device: { id: "d-phone", name: "Android phone" } });
+  expect(bodies()[3].data.note).toMatchObject({ place: { lat: 43.65, from: "history" } });
+  expect(sent.map(item => item.headers["webhook-id"])).toEqual(["msg_all_1_1", "msg_all_2_3", "msg_all_4_4", "msg_all_5_5", "msg_all_6_6"]);
+  sent.length = 0;
+  await deliver({ webhook: "notes" });
+  expect(types()).toEqual(["note.created", "note.updated"]);
+});
+
+it("sends 20 messages in a run, then queues the webhook again for the rest", async () => {
+  hook();
+  for (let index = 0; index < 21; index++) ringNote(`aaaaaaaa-0000-4000-8000-${String(index).padStart(12, "0")}`);
+  const [delivered] = await deliver({ webhook: "hook-1" });
+  expect([sent.length, delivered.ack.mock.calls.length, queue.sent]).toEqual([20, 1, [{ webhook: "hook-1" }]]);
+  await deliver(...queue.sent);
+  expect(sent).toHaveLength(21);
+});
+
+it("acks a message that names no webhook, and tries a run that failed on Relay's side again in 30 seconds", async () => {
+  const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  const [empty, nothing] = await deliver(null, { webhook: 7 });
+  expect([empty.ack, nothing.ack].map((ack: Mock) => ack.mock.calls.length)).toEqual([1, 1]);
+  vi.spyOn(db.session, "prepare").mockImplementation(() => {
+    throw new Error("D1 is down");
+  });
+  const [failed] = await deliver({ webhook: "hook-1" });
+  expect(failed.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+  expect(error).toHaveBeenCalledWith("Relay webhooks: a run failed", expect.any(Error));
+});

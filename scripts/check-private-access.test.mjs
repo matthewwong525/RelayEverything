@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { checkCheckerKey, checkPolicies, RELAY_DEVICES } from './check-private-access.mjs';
-import { accessConflicts } from './lib-access-config.mjs';
+import { accessConflicts, privateDeployment } from './lib-access-config.mjs';
 
 const token = id => ({ service_token: { token_id: id } });
 const human = { id: 'h', decision: 'allow', name: 'People', include: [{ email: { email: 'owner@example.com' } }] };
@@ -82,4 +82,25 @@ test("Relay's AI connector sign-in, an Access for SaaS app, guards none of the a
   // The same check still catches an app on the live Worker's own address.
   const stray = { id: 'stray', domain: 'relay-everything.example.workers.dev' };
   assert.deepEqual(accessConflicts([saas, stray], workers, 'example', []).map(app => app.id), ['stray']);
+});
+
+test('a private Worker with routes keeps its workers.dev address on, where Access returns each sign-in', () => {
+  const vars = environment => ({
+    WONG_ENVIRONMENT: environment, CF_ACCESS_TEAM_DOMAIN: 'team.cloudflareaccess.com', CF_ACCESS_AUD: 'aud',
+    CF_ACCESS_APP_ID: 'app', CF_ACCESS_WORKER_ID: 'a'.repeat(32),
+  });
+  const config = extra => ({
+    name: 'w', assets: { run_worker_first: true }, vars: vars('production'),
+    routes: [{ pattern: 'app.example.com', custom_domain: true }], ...extra,
+    env: { staging: { name: 'w-staging', vars: vars('staging'), routes: [] } },
+  });
+  assert.throws(() => privateDeployment(config()), /"workers_dev": true in app\/wrangler\.jsonc/);
+  assert.throws(() => privateDeployment(config({ workers_dev: false })), /workers_dev/);
+  assert.equal(privateDeployment(config({ workers_dev: true })).name, 'w');
+  assert.equal(privateDeployment(config(), 'staging').name, 'w-staging');
+  const inherited = config();
+  delete inherited.env.staging.routes;
+  assert.throws(() => privateDeployment(inherited, 'staging'), /workers_dev/);
+  const open = config({ vars: { WONG_ENVIRONMENT: 'production', WORKSPACE_LOGIN: 'off' } });
+  assert.equal(privateDeployment(open).open, true);
 });

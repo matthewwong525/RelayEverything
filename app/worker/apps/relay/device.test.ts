@@ -12,7 +12,7 @@ const gate = (who: Parameters<typeof deviceGate>[1], path: string) => deviceGate
 
 it("lets a device key reach Relay's device routes, and nothing else", async () => {
   for (const path of ROUTES) expect(await gate(phone, path), path).toBeNull();
-  for (const path of ["/apps/relay/api/summary", "/apps/relay/", "/apps/hello/api/greeting", "/api/access/apps", "/api/health", "/", "/apps/relay/api/notes/x"]) {
+  for (const path of ["/apps/relay/api/summary", "/apps/relay/api/ai-apps", "/apps/relay/api/ai-apps-disconnect", "/apps/relay/", "/apps/hello/api/greeting", "/api/access/apps", "/api/health", "/", "/apps/relay/api/notes/x"]) {
     expect(await refusal(await gate(phone, path)), path).toEqual([403, "A device key reaches only Relay."]);
   }
 });

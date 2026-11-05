@@ -4,6 +4,8 @@
     "worker/index.ts",
     // The live line's own Worker (wrangler.line.jsonc).
     "worker/line-worker.ts",
+    // Relay's AI connector, its own Worker (wrangler.relay-mcp.jsonc).
+    "worker/relay-mcp/index.ts",
     // Shared signed-identity verifier used by the Worker entry point.
     "worker/access.ts",
     // Each mini app's page and server side, which Vite finds by glob
@@ -15,6 +17,8 @@
   // The ready-made parts are copied as written, and one exports pieces no screen uses yet.
   // The packages they import are still checked.
   "ignore": ["src/components/ui/**"],
+  // `cloudflare:workers` is the Workers runtime's own module, not an npm package named cloudflare.
+  "ignoreDependencies": ["cloudflare"],
   "vite": {
     "config": ["vite.config.ts"]
   },

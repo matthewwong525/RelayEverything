@@ -39,6 +39,9 @@
   "artifacts": [{ "binding": "ARTIFACTS", "namespace": "wongstack" }],
   // The check runner's runs, which the app reads for a change saved through it. wiki/stack/employee-project.md
   "workflows": [{ "binding": "CODE_CHECKS", "name": "relay-ring-checks", "script_name": "relay-ring-checks", "class_name": "Checks" }],
+  // The AI connector's list of connected AI apps, for the Relay page: app/worker/relay-mcp/index.ts. Its Worker must
+  // exist before this one deploys: scripts/relay-mcp-setup.mjs makes it, and scripts/cf-deploy.sh deploys it first.
+  "services": [{ "binding": "RELAY_MCP", "service": "relay-ring-mcp", "entrypoint": "Grants" }],
   "env": {
     "staging": {
       "name": "relay-ring-staging",
@@ -56,6 +59,7 @@
       },
       "d1_databases": [{ "binding": "DB", "database_name": "relay-ring-db-staging", "database_id": "f5e832b0-fb07-4aef-8d20-3c737b481944", "migrations_dir": "../schema/migrations" }],
       "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-ring-notes-staging" }],
+      "services": [{ "binding": "RELAY_MCP", "service": "relay-ring-mcp-staging", "entrypoint": "Grants" }],
       "triggers": { "crons": [] }
     },
     "local": {

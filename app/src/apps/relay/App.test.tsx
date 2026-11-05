@@ -34,6 +34,8 @@ beforeEach(() => {
   answer = ordinary;
   fetchMock = vi.fn(async (path: string) => {
     if (path === "/api/access/apps") return Response.json({ state: "current", role: "owner", revision: 1, apps: ["access", "relay"] });
+    // The AI apps card has its own test: AiCard.test.tsx.
+    if (path === "/apps/relay/api/ai-apps") return Response.json({ address: "https://relay-mcp.example.com/mcp", apps: [] });
     if (path.startsWith("/apps/relay/api/")) return answer(path.slice("/apps/relay/api/".length));
     throw new Error(`Unexpected request: ${path}`);
   });
@@ -72,7 +74,8 @@ it("shows today's summary, every note with its place and recording, and the plac
   expect(within(typed).queryByLabelText("The recording")).toBeNull();
 
   const { day, offset } = today();
-  expect(reads()).toEqual([`/apps/relay/api/summary?day=${day}&offset=${offset}`, "/apps/relay/api/timeline"]);
+  expect(reads()).toEqual(["/apps/relay/api/ai-apps", `/apps/relay/api/summary?day=${day}&offset=${offset}`, "/apps/relay/api/timeline"]);
+  expect(await screen.findByText("No AI app connected yet.")).toBeTruthy();
 });
 
 it("loads older notes until there are none, and says when a page fails", async () => {

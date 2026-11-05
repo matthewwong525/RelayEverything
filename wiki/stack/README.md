@@ -25,6 +25,7 @@ The pack uses **merge = deploy**, independent staging and branch previews. [One 
 - [Company actions](company-api.md) — described app actions and memory reads for employee assistants, with separate authentication.
 - [The services list](service-catalogue.md) — where a chat starts for any outside service: the keys it can use, search, short answers, the shared error shape, and each service's notes page.
 - [The knowledge reader](knowledge-reader.md) — the Knowledge app: company knowledge's pages at their newest save, search, who can read them, and pages marked public.
+- [Relay's AI connector](relay-ai-connector.md) — connect the Claude app or ChatGPT to read Relay's notes, health and places: the address, what leaves Relay, disconnecting, and setup.
 - [Mini apps](mini-apps.md) — small apps from one request, part of the main app under `/apps/`: the same loop and checks as any change, and a card each on the home page.
 - [Cloudflare Access](cloudflare-access.md) — automatic email login, native Worker and preview coverage, signed identity, and separate machine access.
 - [Employee access](employee-access.md) — the Access mini app: how the owner is known, the live app's key for its sign-in list, the first open, apps by a tick, and key levels.

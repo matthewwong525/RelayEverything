@@ -15,6 +15,7 @@
 #   - production branch (CF_PRODUCTION_BRANCH, else the remote's default
 #     branch, else `main`: wong_production_branch)
 #       → the live line's Worker, when the app has one (wong_deploy_line)
+#       → Relay's AI connector, when app/wrangler.relay-mcp.jsonc exists
 #       → `wrangler deploy`  — the production Worker.
 #   - any other branch (previews have no line: wiki/stack/live-line.md)
 #       → `wrangler deploy --env staging`
@@ -128,6 +129,11 @@ if [ "$BRANCH" = "$PRODUCTION_BRANCH" ]; then
   fi
   node "$SCRIPT_DIR/check-private-access.mjs" --environment production
   wong_deploy_line cf-deploy
+  # Relay's AI connector, before the app whose RELAY_MCP binding needs it: wiki/stack/relay-ai-connector.md
+  if [ -f "$APP_DIR/wrangler.relay-mcp.jsonc" ]; then
+    echo "cf-deploy: deploying Relay's AI connector first"
+    (cd "$APP_DIR" && "${WRANGLER[@]}" deploy --config wrangler.relay-mcp.jsonc)
+  fi
   DEPLOY_LOG=$(mktemp)
   (cd "$APP_DIR" && "${WRANGLER[@]}" deploy ${REPO_VAR[@]+"${REPO_VAR[@]}"}) 2>&1 | tee "$DEPLOY_LOG"
   # Hand the live address to the workflow, which records it on the commit so

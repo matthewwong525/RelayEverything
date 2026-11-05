@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { checkCheckerKey, checkPolicies, RELAY_DEVICES } from './check-private-access.mjs';
+import { accessConflicts } from './lib-access-config.mjs';
 
 const token = id => ({ service_token: { token_id: id } });
 const human = { id: 'h', decision: 'allow', name: 'People', include: [{ email: { email: 'owner@example.com' } }] };
@@ -70,4 +71,15 @@ test('a key that may not read service tokens leaves it unverified; another failu
   const down = async () => { throw Object.assign(new Error('Cloudflare read-only protection check failed (502)'), { status: 502 }); };
   await assert.rejects(checkCheckerKey(config, 'production', [human, checker], down), /502/);
   assert.equal(await checkCheckerKey({ vars: {} }, 'production', [human, checker], down), undefined);
+});
+
+test("Relay's AI connector sign-in, an Access for SaaS app, guards none of the app's addresses", () => {
+  const workers = [{ id: 'w-live', name: 'relay-ring' }, { id: 'w-staging', name: 'relay-ring-staging' }];
+  const saas = { id: 'saas', name: 'relay-ring AI connector', type: 'saas', policies: [{ id: 'owner' }],
+    saas_app: { auth_type: 'oidc', redirect_uris: ['https://relay-ring-mcp.example.workers.dev/callback'] } };
+  const withDomain = { ...saas, id: 'saas-2', domain: 'team.cloudflareaccess.com/cdn-cgi/access/sso/oidc/abc' };
+  assert.deepEqual(accessConflicts([saas, withDomain], workers, 'example', []), []);
+  // The same check still catches an app on the live Worker's own address.
+  const stray = { id: 'stray', domain: 'relay-ring.example.workers.dev' };
+  assert.deepEqual(accessConflicts([saas, stray], workers, 'example', []).map(app => app.id), ['stray']);
 });

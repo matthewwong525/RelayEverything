@@ -2,7 +2,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:health/health.dart';
+import 'package:relay_app/data/sender.dart';
+import 'package:relay_app/data/settings.dart';
 import 'package:relay_app/data/store.dart';
+import 'package:relay_app/sync/background.dart';
 import 'package:relay_app/sync/health.dart';
 import 'package:relay_app/sync/location.dart';
 
@@ -43,6 +46,37 @@ void main() {
       final source = FakeHealth()..readings = [...steps, steps.first];
       expect(await syncHealth(store, source, now: later(600)), 501);
       expect([for (final item in await store.outbox()) (item.route, (item.body['samples'] as List).length)], [('health', 500), ('health', 1)]);
+    });
+  });
+
+  group('the background round', () {
+    test('reads, keeps and sends nothing while sending is off, even with health on from before', () async {
+      final store = memoryStore();
+      addTearDown(store.close);
+      final server = noNetwork();
+      final source = FakeHealth()..readings = [reading(HealthDataType.STEPS, start, later(5), value: 10)];
+      await store.set(settingsKey, '{"sending":false,"pinNotes":true,"history":true,"health":true}');
+      await store.addNote(LocalNote(clientId: 'note-0001', text: 'x', createdAt: start));
+      for (final key in [connection, null]) {
+        expect(await backgroundRound(store, connection: key, health: source, sender: Sender(server.api), now: later(60)), isTrue);
+      }
+      expect([source.reads, server.requests, await store.outbox(), await store.get(healthSince)], [isEmpty, isEmpty, isEmpty, isNull]);
+    });
+
+    test('reads health only while sending and health are on, then sends what waits', () async {
+      final store = memoryStore();
+      addTearDown(store.close);
+      final server = FakeServer();
+      final source = FakeHealth()..readings = [reading(HealthDataType.STEPS, start, later(5), value: 10)];
+      await store.set(settingsKey, const Settings(sending: true).encode());
+      await store.addPoint(Pin(at: start, lat: 1, lon: 1, accuracy: 1));
+      expect(await backgroundRound(store, connection: connection, health: source, sender: Sender(server.api), now: later(60)), isTrue);
+      expect([source.reads, server.routes], [isEmpty, ['locations']]);
+      await store.set(settingsKey, const Settings(sending: true, health: true).encode());
+      expect(await backgroundRound(store, connection: connection, health: source, sender: Sender(server.api), now: later(60)), isTrue);
+      expect([source.reads.length, server.routes.last], [1, 'health']);
+      server.answer = (_) => FakeServer.json({}, 503);
+      expect(await backgroundRound(store, connection: connection, health: source, sender: Sender(server.api), now: later(120)), isFalse);
     });
   });
 

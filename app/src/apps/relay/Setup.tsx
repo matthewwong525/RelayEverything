@@ -21,15 +21,17 @@ function SetupDialog({ label, title, description, children }: { label: string; t
 
 const Code = ({ children }: { children: string }) => <code className="rounded bg-muted px-1 wrap-anywhere">{children}</code>
 
-/** How a phone gets the app and its own key. */
+/** How a phone gets the app and its own key. The app keeps notes on the phone until sending is turned on. */
 export function PhoneSetup({ origin }: { origin: string }) {
-  return <SetupDialog label="Set up a phone" title="Set up a phone" description="Each phone has its own key, so you can turn one off alone.">
+  return <SetupDialog label="Set up a phone" title="Set up a phone"
+    description="The app keeps notes on the phone until you turn on sending. Each phone has its own key, so you can turn one off alone.">
     <li>Install the app: on Android, the newest file from <a className="underline" href={RELEASES}>Relay's releases</a>; on iPhone, the
       newest build in <a className="underline" href={TESTFLIGHT}>TestFlight</a>.</li>
     <li>Ask your assistant to make a key for the phone, or run <Code>node scripts/relay-device-key.mjs create --name "Android phone"</Code>.
       Add <Code>--staging</Code> for a preview.</li>
     <li>The key shows once, as a QR code in the terminal and on a private page.</li>
-    <li>Open the Relay app and tap <b>Scan the QR code</b>, or paste the key. The server address is:
+    <li>In the app, open <b>Settings</b> and turn on <b>Send to your Relay server</b>. Then tap <b>Scan the QR code</b>, or paste
+      the key. The server address is:
       <div className="mt-2"><CopyText text={origin} label="Copy the address" /></div></li>
   </SetupDialog>
 }

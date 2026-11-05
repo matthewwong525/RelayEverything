@@ -26,6 +26,7 @@ let answer: (route: string) => Response | Promise<Response>;
 const ordinary = (route: string) => {
   if (route.startsWith("summary?")) return Response.json(SUMMARY);
   if (route === "timeline") return Response.json(FIRST);
+  if (route === "webhooks") return Response.json({ webhooks: [] });
   if (route === `timeline?before=${NOW}&beforeId=00000000-0000-4000-8000-000000000002`) return Response.json(OLDER);
   throw new Error(`Unexpected route: ${route}`);
 };
@@ -72,7 +73,7 @@ it("shows today's summary, every note with its place and recording, and the plac
   expect(within(typed).queryByLabelText("The recording")).toBeNull();
 
   const { day, offset } = today();
-  expect(reads()).toEqual([`/apps/relay/api/summary?day=${day}&offset=${offset}`, "/apps/relay/api/timeline"]);
+  expect(reads()).toEqual(["/apps/relay/api/webhooks", `/apps/relay/api/summary?day=${day}&offset=${offset}`, "/apps/relay/api/timeline"]);
 });
 
 it("loads older notes until there are none, and says when a page fails", async () => {

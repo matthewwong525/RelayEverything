@@ -162,6 +162,387 @@ Send the input as query parameters.
 | `places[].from` | number | yes |  |
 | `places[].to` | number | yes |  |
 
+## List the webhooks
+
+`GET /apps/relay/api/webhooks` · `relay.webhooks` · reads · called by a signed-in person only, not a device key
+
+List the webhooks Relay sends to, each with its state, what waits, its last answer and its recent tries.
+
+### Input
+
+It takes no input.
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `webhooks` | array of object | yes |  |
+| `webhooks[].id` | string | yes |  |
+| `webhooks[].name` | string | yes |  |
+| `webhooks[].url` | string | yes |  |
+| `webhooks[].kinds` | array of "notes" or "health" or "locations" | yes |  |
+| `webhooks[].state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
+| `webhooks[].waiting` | integer | yes | How many stored items wait to be sent. |
+| `webhooks[].lastStatus` | number or null | yes |  |
+| `webhooks[].lastError` | string or null | yes |  |
+| `webhooks[].lastSentAt` | number or null | yes |  |
+| `webhooks[].nextTryAt` | number or null | yes |  |
+| `webhooks[].failingSince` | number or null | yes |  |
+| `webhooks[].createdAt` | number | yes |  |
+| `webhooks[].attempts` | array of object | yes | The last 20 tries, newest first. |
+| `webhooks[].attempts[].at` | number | yes |  |
+| `webhooks[].attempts[].type` | string | yes |  |
+| `webhooks[].attempts[].status` | number or null | yes |  |
+| `webhooks[].attempts[].ms` | number | yes |  |
+| `webhooks[].attempts[].error` | string or null | yes |  |
+| `webhooks[].attempts[].first` | number or null | yes |  |
+| `webhooks[].attempts[].last` | number or null | yes |  |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `not_found` | No webhook has this id. |
+| `address_invalid` | That is not a web address. |
+| `address_not_https` | The address must start with https://. |
+| `address_has_login` | The address can't hold a user name or password. |
+| `address_private` | The address can't be this computer or a private network. |
+| `address_own_site` | The address can't be Relay's own site. |
+
+## Add a webhook
+
+`POST /apps/relay/api/webhooks` · `relay.webhooks-add` · writes · called by a signed-in person only, not a device key
+
+Add an address that gets each new note, and the health and location ticked for it. The answer holds its secret, once.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `name` | string | yes | A name for the webhook, such as the database's. |
+| `url` | string | yes | The https address Relay sends to. |
+| `kinds` | array of "notes" or "health" or "locations" | yes | What it takes besides notes, which always go: health, locations or both. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `webhook` | object | yes |  |
+| `webhook.id` | string | yes |  |
+| `webhook.name` | string | yes |  |
+| `webhook.url` | string | yes |  |
+| `webhook.kinds` | array of "notes" or "health" or "locations" | yes |  |
+| `webhook.state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
+| `webhook.waiting` | integer | yes | How many stored items wait to be sent. |
+| `webhook.lastStatus` | number or null | yes |  |
+| `webhook.lastError` | string or null | yes |  |
+| `webhook.lastSentAt` | number or null | yes |  |
+| `webhook.nextTryAt` | number or null | yes |  |
+| `webhook.failingSince` | number or null | yes |  |
+| `webhook.createdAt` | number | yes |  |
+| `webhook.attempts` | array of object | yes | The last 20 tries, newest first. |
+| `webhook.attempts[].at` | number | yes |  |
+| `webhook.attempts[].type` | string | yes |  |
+| `webhook.attempts[].status` | number or null | yes |  |
+| `webhook.attempts[].ms` | number | yes |  |
+| `webhook.attempts[].error` | string or null | yes |  |
+| `webhook.attempts[].first` | number or null | yes |  |
+| `webhook.attempts[].last` | number or null | yes |  |
+| `secret` | string | yes | Shown this once. |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `not_found` | No webhook has this id. |
+| `address_invalid` | That is not a web address. |
+| `address_not_https` | The address must start with https://. |
+| `address_has_login` | The address can't hold a user name or password. |
+| `address_private` | The address can't be this computer or a private network. |
+| `address_own_site` | The address can't be Relay's own site. |
+
+## Change a webhook
+
+`POST /apps/relay/api/webhooks/update` · `relay.webhooks-update` · writes · called by a signed-in person only, not a device key
+
+Rename a webhook, change its address or ticks, or pause and resume it. A new address or ticks clear a failure.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | yes | The webhook's id. |
+| `name` | string | no | A name for the webhook, such as the database's. |
+| `url` | string | no | The https address Relay sends to. |
+| `kinds` | array of "notes" or "health" or "locations" | no | What it takes besides notes, which always go: health, locations or both. |
+| `active` | boolean | no | False pauses it; true sends again from where it stopped. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `webhook` | object | yes |  |
+| `webhook.id` | string | yes |  |
+| `webhook.name` | string | yes |  |
+| `webhook.url` | string | yes |  |
+| `webhook.kinds` | array of "notes" or "health" or "locations" | yes |  |
+| `webhook.state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
+| `webhook.waiting` | integer | yes | How many stored items wait to be sent. |
+| `webhook.lastStatus` | number or null | yes |  |
+| `webhook.lastError` | string or null | yes |  |
+| `webhook.lastSentAt` | number or null | yes |  |
+| `webhook.nextTryAt` | number or null | yes |  |
+| `webhook.failingSince` | number or null | yes |  |
+| `webhook.createdAt` | number | yes |  |
+| `webhook.attempts` | array of object | yes | The last 20 tries, newest first. |
+| `webhook.attempts[].at` | number | yes |  |
+| `webhook.attempts[].type` | string | yes |  |
+| `webhook.attempts[].status` | number or null | yes |  |
+| `webhook.attempts[].ms` | number | yes |  |
+| `webhook.attempts[].error` | string or null | yes |  |
+| `webhook.attempts[].first` | number or null | yes |  |
+| `webhook.attempts[].last` | number or null | yes |  |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `not_found` | No webhook has this id. |
+| `address_invalid` | That is not a web address. |
+| `address_not_https` | The address must start with https://. |
+| `address_has_login` | The address can't hold a user name or password. |
+| `address_private` | The address can't be this computer or a private network. |
+| `address_own_site` | The address can't be Relay's own site. |
+
+## Remove a webhook
+
+`POST /apps/relay/api/webhooks/remove` · `relay.webhooks-remove` · writes · called by a signed-in person only, not a device key
+
+Stop sending to a webhook and delete its secret and its tries. Your notes stay in Relay.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | yes | The webhook's id. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `removed` | boolean | yes |  |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `not_found` | No webhook has this id. |
+| `address_invalid` | That is not a web address. |
+| `address_not_https` | The address must start with https://. |
+| `address_has_login` | The address can't hold a user name or password. |
+| `address_private` | The address can't be this computer or a private network. |
+| `address_own_site` | The address can't be Relay's own site. |
+
+## Make a new secret
+
+`POST /apps/relay/api/webhooks/secret` · `relay.webhooks-secret` · writes · called by a signed-in person only, not a device key
+
+Replace a webhook's secret. The old one stops working at once; the answer holds the new one, once.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | yes | The webhook's id. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `secret` | string | yes | Shown this once. |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `not_found` | No webhook has this id. |
+| `address_invalid` | That is not a web address. |
+| `address_not_https` | The address must start with https://. |
+| `address_has_login` | The address can't hold a user name or password. |
+| `address_private` | The address can't be this computer or a private network. |
+| `address_own_site` | The address can't be Relay's own site. |
+
+## Send a test
+
+`POST /apps/relay/api/webhooks/test` · `relay.webhooks-test` · calls another service · called by a signed-in person only, not a device key
+
+Send a signed webhook.test message now, and answer with what the address said. It sends no data.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | yes | The webhook's id. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `status` | number or null | yes | The address's HTTP status, or null with no answer. |
+| `ms` | number | yes |  |
+| `error` | string or null | yes |  |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `not_found` | No webhook has this id. |
+| `address_invalid` | That is not a web address. |
+| `address_not_https` | The address must start with https://. |
+| `address_has_login` | The address can't hold a user name or password. |
+| `address_private` | The address can't be this computer or a private network. |
+| `address_own_site` | The address can't be Relay's own site. |
+
+## Send past data
+
+`POST /apps/relay/api/webhooks/resend` · `relay.webhooks-resend` · writes · called by a signed-in person only, not a device key
+
+Send again everything the webhook takes that was recorded since a time, in the order Relay stored it, then carry on.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | yes | The webhook's id. |
+| `since` | integer | yes | From this Unix time in milliseconds. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `webhook` | object | yes |  |
+| `webhook.id` | string | yes |  |
+| `webhook.name` | string | yes |  |
+| `webhook.url` | string | yes |  |
+| `webhook.kinds` | array of "notes" or "health" or "locations" | yes |  |
+| `webhook.state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
+| `webhook.waiting` | integer | yes | How many stored items wait to be sent. |
+| `webhook.lastStatus` | number or null | yes |  |
+| `webhook.lastError` | string or null | yes |  |
+| `webhook.lastSentAt` | number or null | yes |  |
+| `webhook.nextTryAt` | number or null | yes |  |
+| `webhook.failingSince` | number or null | yes |  |
+| `webhook.createdAt` | number | yes |  |
+| `webhook.attempts` | array of object | yes | The last 20 tries, newest first. |
+| `webhook.attempts[].at` | number | yes |  |
+| `webhook.attempts[].type` | string | yes |  |
+| `webhook.attempts[].status` | number or null | yes |  |
+| `webhook.attempts[].ms` | number | yes |  |
+| `webhook.attempts[].error` | string or null | yes |  |
+| `webhook.attempts[].first` | number or null | yes |  |
+| `webhook.attempts[].last` | number or null | yes |  |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `not_found` | No webhook has this id. |
+| `address_invalid` | That is not a web address. |
+| `address_not_https` | The address must start with https://. |
+| `address_has_login` | The address can't hold a user name or password. |
+| `address_private` | The address can't be this computer or a private network. |
+| `address_own_site` | The address can't be Relay's own site. |
+
+## Try again now
+
+`POST /apps/relay/api/webhooks/retry` · `relay.webhooks-retry` · writes · called by a signed-in person only, not a device key
+
+Clear a webhook's failure and send everything waiting, in order, from where it stopped.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | yes | The webhook's id. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `webhook` | object | yes |  |
+| `webhook.id` | string | yes |  |
+| `webhook.name` | string | yes |  |
+| `webhook.url` | string | yes |  |
+| `webhook.kinds` | array of "notes" or "health" or "locations" | yes |  |
+| `webhook.state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
+| `webhook.waiting` | integer | yes | How many stored items wait to be sent. |
+| `webhook.lastStatus` | number or null | yes |  |
+| `webhook.lastError` | string or null | yes |  |
+| `webhook.lastSentAt` | number or null | yes |  |
+| `webhook.nextTryAt` | number or null | yes |  |
+| `webhook.failingSince` | number or null | yes |  |
+| `webhook.createdAt` | number | yes |  |
+| `webhook.attempts` | array of object | yes | The last 20 tries, newest first. |
+| `webhook.attempts[].at` | number | yes |  |
+| `webhook.attempts[].type` | string | yes |  |
+| `webhook.attempts[].status` | number or null | yes |  |
+| `webhook.attempts[].ms` | number | yes |  |
+| `webhook.attempts[].error` | string or null | yes |  |
+| `webhook.attempts[].first` | number or null | yes |  |
+| `webhook.attempts[].last` | number or null | yes |  |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `not_found` | No webhook has this id. |
+| `address_invalid` | That is not a web address. |
+| `address_not_https` | The address must start with https://. |
+| `address_has_login` | The address can't hold a user name or password. |
+| `address_private` | The address can't be this computer or a private network. |
+| `address_own_site` | The address can't be Relay's own site. |
+
+## Run the sweep (previews only)
+
+`POST /apps/relay/api/webhooks/sweep` · `relay.webhooks-sweep` · writes · called by a signed-in person only, not a device key
+
+Run what production runs every 15 minutes: send every webhook left behind, and drop tries older than 30 days.
+
+### Input
+
+It takes no input.
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `woken` | integer | yes |  |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `not_found` | No webhook has this id. |
+| `address_invalid` | That is not a web address. |
+| `address_not_https` | The address must start with https://. |
+| `address_has_login` | The address can't hold a user name or password. |
+| `address_private` | The address can't be this computer or a private network. |
+| `address_own_site` | The address can't be Relay's own site. |
+
 ## Routes with their own page
 
 - `POST /apps/relay/api/pebble`: [Take a ring note from the Pebble app](../pebble-webhook/)

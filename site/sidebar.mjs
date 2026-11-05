@@ -10,7 +10,7 @@ export const sidebar = [
   ] },
   { label: 'Use the app', items: ['app/your-notes', 'app/health', 'app/location', 'app/settings'] },
   { label: 'Connections', items: [
-    { label: 'Your own database', link: '/connections/#your-own-database', badge: soon },
+    { label: 'Your own database', slug: 'connections/your-database' },
     { label: 'AI assistants (MCP)', link: '/connections/#ai-assistants-mcp', badge: soon },
     { label: 'Example skill and tables', link: '/connections/#an-example-skill-and-tables', badge: soon },
   ] },

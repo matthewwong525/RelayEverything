@@ -5,9 +5,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Notes } from './Notes'
 import { today, useGet, when, type Summary, type Timeline } from './read'
 import { PebbleSetup, PhoneSetup } from './Setup'
+import { Webhooks } from './Webhooks'
 
-// Relay's site page: today's summary, every note with its place and recording, and the places visited. Phones and
-// the Pebble app send to app/worker/apps/relay/; this page only reads.
+// Relay's site page: today's summary, every note with its place and recording, the places visited, and the webhooks
+// that copy them to your own database. Phones and the Pebble app send to app/worker/apps/relay/.
 const number = new Intl.NumberFormat()
 
 function Tile({ label, value }: { label: string; value: string }) {
@@ -68,5 +69,6 @@ export function App() {
     </Loading>}
     {timeline.status === 'failed' && <Failed what="Notes" retry={retryTimeline} />}
     {timeline.status === 'ready' && <Notes first={timeline.value} />}
+    <Webhooks />
   </div>
 }

@@ -73,6 +73,15 @@ You keep no chat open for the daily: say these in any chat, and it does them thr
 - *Stop check-ins* and *start check-ins* turn [check-ins](#check-ins) off and on.
 - *Add checking orders on Mondays to my daily* changes [your settings file](#your-settings-file).
 
+### Ship every chat from one chat
+
+When you tell one chat to get the others shipped with no questions, it drives them through the `paseo` command line:
+
+- **Order by what blocks what.** Ship the changes that others wait for first. Start a plan's build only when its waits are on main, and tell each chat to merge main before each save.
+- **Answer a held question** with `paseo permit allow <chat> <request> --input '{"questions":[…],"answers":{"<question>":"<label>"}}'`. Read the question text from the chat's transcript, because `paseo permit ls` shows only the labels.
+- **Trust the pull request, not the status.** A chat shows *closed* for a moment while it wakes, and *idle* while its helper works in the background. Read its last message and `gh pr list` before you act.
+- **One failing preview can block every chat.** When one change adds a binding to the shared test server, merge it first, then have the others merge main.
+
 ## A to-do for each chat
 
 With `tasks` on, the [worker](#the-daily-on-a-computer) keeps one task on today's column for each chat you open or hand it, with the chat's name. It closes the task when the chat's work is merged or the chat is gone. Mark it Done on the board, and the watch sends that chat `/close` once you have been quiet there for 15 minutes.

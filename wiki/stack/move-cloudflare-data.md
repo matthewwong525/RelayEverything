@@ -47,6 +47,16 @@ bucket old-files -> new-files old=80 new=80 bytes_old=9100000 bytes_new=9100000 
 - `extra`: rows or files only the new side has, such as a note that came in at the new address. The move still passes.
 - `index`: an FTS5 index has one row for each row of its table.
 
+## Move a Worker to a new name
+
+A new Worker name is a new Worker, too. Learned from the Relay move, 2026-11-05:
+
+- **Give its queues new names.** A queue takes one consumer, so the new Worker can't read the old one's queue while the old one runs.
+- **Detach the old Worker from its queue before you deploy a forwarder over it.** Cloudflare refuses a deploy with no queue handler while the Worker still reads a queue (`code: 11001`): run `npx wrangler queues consumer remove <queue> <old-worker>` first.
+- **Forward to a custom domain, not a `workers.dev` address.** A `workers.dev` Worker that fetches another `workers.dev` Worker in the same account gets *Page not found*.
+- **Put no login app in front of a forwarder that carries device keys.** Access strips the key headers before the Worker sees them ([Cloudflare Access](cloudflare-access.md#verify-the-jwt-dont-trust-the-header)). Move the old login app to an unused address.
+- **The rename shows only once published.** A preview runs only under main's staging Worker name ([GitHub Actions](github-actions.md)), so you try the new staging Worker from your computer before the publish.
+
 ## Delete the old store only on a yes
 
 A passed move doesn't delete anything. The old store is a free way back while the new one settles. Ask the owner, with the counts from the check, before you delete each old database, bucket or Worker: a delete can't be undone. Before you delete a D1 database, record `npx wrangler d1 time-travel info <old-db>`.

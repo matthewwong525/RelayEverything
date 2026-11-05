@@ -50,11 +50,11 @@ beforeEach(() => {
 
 export const env = (more: object = {}) => fakeEnv({ DB: db.DB, RELAY_BUCKET: bucket, RELAY_PEBBLE_SIGNING: SECRET, ...more });
 
-/** A Relay route called as `who`: JSON for a POST, query fields for a GET. */
-export async function call(who: AccessIdentity | null, method: string, route: string, input?: Record<string, unknown>) {
+/** A Relay route called as `who`: JSON for a POST, query fields for a GET; `more` adds bindings. */
+export async function call(who: AccessIdentity | null, method: string, route: string, input?: Record<string, unknown>, more?: object) {
   const query = method === "GET" && input ? `?${new URLSearchParams(input as Record<string, string>)}` : "";
   const response = await handleApp(new Request(`https://relay.example.com/apps/relay/api/${route}${query}`, {
-    method, ...(method === "POST" && { headers: { "content-type": "application/json" }, body: JSON.stringify(input) }) }), env(), who);
+    method, ...(method === "POST" && { headers: { "content-type": "application/json" }, body: JSON.stringify(input) }) }), env(more), who);
   return { status: response.status, json: await body(response) };
 }
 

@@ -162,6 +162,58 @@ Send the input as query parameters.
 | `places[].from` | number | yes |  |
 | `places[].to` | number | yes |  |
 
+## List connected AI apps
+
+`GET /apps/relay/api/ai-apps` · `relay.ai-apps` · reads · called by a signed-in person only, not a device key
+
+List the AI chat apps connected to Relay's AI connector, with the address to connect another.
+
+### Input
+
+It takes no input.
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `address` | string | yes |  |
+| `apps` | array of object | yes |  |
+| `apps[].id` | string | yes |  |
+| `apps[].name` | string | yes |  |
+| `apps[].connectedAt` | number | yes |  |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `unavailable` | The AI connector is not set up here. |
+
+## Disconnect an AI app
+
+`POST /apps/relay/api/ai-apps-disconnect` · `relay.ai-app-disconnect` · writes · called by a signed-in person only, not a device key
+
+End one AI app's connection to Relay: its sign-in stops working at once.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | yes | The connection's id, from the list of connected AI apps. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | yes |  |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `unavailable` | The AI connector is not set up here. |
+
 ## Routes with their own page
 
 - `POST /apps/relay/api/pebble`: [Take a ring note from the Pebble app](../pebble-webhook/)

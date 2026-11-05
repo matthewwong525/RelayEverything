@@ -1,0 +1,30 @@
+// Relay's AI connector: its own Worker on its own workers.dev address, which AI chat apps reach with an owner-only
+// sign-in. It reads Relay's database and keeps sign-ins in OAUTH_KV. wiki/stack/relay-ai-connector.md
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "relay-ring-mcp",
+  "main": "worker/relay-mcp/index.ts",
+  "compatibility_date": "2026-07-28",
+  "compatibility_flags": ["nodejs_compat", "disallow_importable_env"],
+  "workers_dev": true,
+  "preview_urls": false,
+  // The Access sign-in's ACCESS_* values are secrets that scripts/relay-mcp-setup.mjs puts.
+  "vars": {
+    "WONG_OWNER_EMAIL": "matthewwong525@gmail.com",
+    "RELAY_MCP_ADDRESS": "https://relay-ring-mcp.matthewwong525.workers.dev/mcp"
+  },
+  "d1_databases": [{ "binding": "DB", "database_name": "relay-ring-db", "database_id": "d7708dbb-6ab7-41d0-b828-440649e753a2" }],
+  // No id: the first deploy, which the setup script runs, makes the store, and later deploys keep it.
+  "kv_namespaces": [{ "binding": "OAUTH_KV" }],
+  "env": {
+    "staging": {
+      "name": "relay-ring-mcp-staging",
+      "vars": {
+        "WONG_OWNER_EMAIL": "matthewwong525@gmail.com",
+        "RELAY_MCP_ADDRESS": "https://relay-ring-mcp-staging.matthewwong525.workers.dev/mcp"
+      },
+      "d1_databases": [{ "binding": "DB", "database_name": "relay-ring-db-staging", "database_id": "f5e832b0-fb07-4aef-8d20-3c737b481944" }],
+      "kv_namespaces": [{ "binding": "OAUTH_KV" }]
+    }
+  }
+}

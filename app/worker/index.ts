@@ -58,7 +58,7 @@ export default {
 
     // A Relay device key passes the sign-in wall like the checker, so it is held to Relay's device routes here, and a
     // service token that is neither is refused.
-    const device = await deviceGate(env, identity, url.pathname);
+    const device = await deviceGate(env, identity, request.method, url.pathname);
     if (device) return device;
 
     // People management answers only the signed-in owner; setup readback answers each person.

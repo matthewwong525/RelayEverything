@@ -1,9 +1,10 @@
-// The connector's six tools, all read-only, over Relay's notes, health and places. Each answer is capped, and none
-// holds a recording's key or a device's id. Every read goes through app/worker/apps/relay/queries.ts.
+// The connector's eight tools, all read-only, over Relay's notes, health, places and saved chats. Each answer is
+// capped, and none holds a recording's key, a device's id or a chat's session id. Every read goes through queries.ts.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
-import { daySummary, healthBuckets, noteById, notePage, placeVisits, type HealthType, type Note, type Span } from "../apps/relay/queries.ts";
+import { chatById, chatLines, chatMessages, chatPage, daySummary, healthBuckets, noteById, notePage, placeVisits, type Chat, type HealthType,
+  type Note, type Span } from "../apps/relay/queries.ts";
 import { session, type Db } from "../apps/relay/store.ts";
 import type { McpEnv } from "./env.ts";
 import { dayOf, HOUR, instant, knownZone, local, nextDay, startOfDay, ZONE } from "./time.ts";
@@ -84,12 +85,42 @@ async function visits(db: Db, from: number, to: number, limit: number, timezone:
     next: found.next === null ? null : local(found.next, timezone) };
 }
 
+const LINES = 3;
+const LINE_CHARACTERS = 300;
+const PART = 200;
+
+/** A chat as the AI reads it: its times in the zone. */
+const chatShown = (chat: Chat, timezone: string) => ({ ...chat, startedAt: local(chat.startedAt, timezone), lastAt: local(chat.lastAt, timezone) });
+
+/** A message cut to LINE_CHARACTERS around its first matching word. */
+function line(text: string, words: string[]): string {
+  const lower = text.toLowerCase();
+  const at = Math.min(...words.map(word => lower.indexOf(word.toLowerCase())).filter(index => index >= 0));
+  const start = Math.max(0, Math.min(at - 60, text.length - LINE_CHARACTERS));
+  return `${start ? "…" : ""}${text.slice(start, start + LINE_CHARACTERS)}${start + LINE_CHARACTERS < text.length ? "…" : ""}`;
+}
+
+async function chatsFound(db: Db, words: string[], page: Parameters<typeof chatPage>[1], timezone: string) {
+  const found = await chatPage(db, { ...page, words });
+  const chats = await Promise.all(found.chats.map(async chat => ({ ...chatShown(chat, timezone),
+    lines: (await chatLines(db, chat.id, words, LINES)).map(({ role, text }) => ({ role, text: line(text, words) })) })));
+  return { chats, nextCursor: nextCursor(found) };
+}
+
+/** Where a chat's next part starts: the last answer's cursor, a message's place in the chat. */
+function partAfter(text: string | undefined): number {
+  if (text === undefined) return -1;
+  if (!/^\d{1,8}$/.test(text)) throw new Refusal("That cursor is not one this connector gave.");
+  return Number(text);
+}
+
 const readOnly = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 
 /** A fresh server per request: the connector keeps no session between calls. */
 function relayServer(db: Db): McpServer {
   const server = new McpServer({ name: "relay", title: "Relay", version: "1.0.0" }, {
-    instructions: "Relay holds one person's notes from a smart ring and their phone, with health and places. Every tool only reads. " +
+    instructions: "Relay holds one person's notes from a smart ring and their phone, with health and places, and the Claude Code chats " +
+      "they saved. Every tool only reads. " +
       `Days and times are ${ZONE} unless you pass a timezone.`,
   });
   server.registerTool("search", {
@@ -144,6 +175,30 @@ function relayServer(db: Db): McpServer {
     inputSchema: { from: when("The first time"), to: when("The time to stop before"),
       limit: z.number().int().min(1).max(200).default(100).describe("How many visits, at most 200. Read on from `next`."), timezone: zone },
   }, tool(async ({ from, to, limit, timezone = ZONE }) => visits(db, ...range(from, to, timezone), limit, timezone)));
+  server.registerTool("search_chats", {
+    title: "Search saved chats", annotations: readOnly,
+    description: "Find saved Claude Code chats whose messages or AI summaries hold every word of the query, newest first, with up to " +
+      `${LINES} matching lines each.`,
+    inputSchema: { query: z.string().trim().min(1).max(200).describe("The words to find."), from: when("Only chats active from this time").optional(),
+      to: when("Only chats last active before this time").optional(),
+      limit: z.number().int().min(1).max(20).default(10).describe("How many chats, at most 20."), cursor, timezone: zone },
+  }, tool(async ({ query, from = "2001-01-01", to = "2286-01-01", limit, cursor: text, timezone = ZONE }) => {
+    const [after, end] = range(from, to, timezone);
+    return chatsFound(db, query.split(/\s+/).slice(0, 10), { after, limit, ...pageBefore(text, end) }, timezone);
+  }));
+  server.registerTool("read_chat", {
+    title: "Read one saved chat", annotations: readOnly,
+    description: `Read one saved chat by its id: the AI's saved summaries, then its messages in order, ${PART} at a time. Each message ` +
+      "is yours (`you`), the AI's (`ai`), or one line for a step the AI took (`step`).",
+    inputSchema: { id: z.string().max(64).describe("The chat's id, from search_chats."), cursor: z.string().max(20).optional()
+      .describe("The last answer's `nextCursor`, to read the next part."), timezone: zone },
+  }, tool(async ({ id, cursor: text, timezone = ZONE }) => {
+    const chat = await chatById(db, id);
+    if (!chat) throw new Refusal("No chat has this id.");
+    const { messages, next } = await chatMessages(db, id, partAfter(text), PART);
+    return { ...chatShown(chat, timezone), saves: chat.saves.map(save => ({ ...save, createdAt: local(save.createdAt, timezone) })),
+      messages: messages.map(message => ({ ...message, at: local(message.at, timezone) })), nextCursor: next === null ? null : String(next) };
+  }));
   return server;
 }
 

@@ -1,5 +1,5 @@
-// What Relay's API tests share: a database from the real migrations with three devices, a stand-in bucket, the
-// callers, and a call through the app router as the Worker makes it.
+// What Relay's API tests share: a database from the real migrations with three devices and a chat key, a stand-in
+// bucket, the callers, and a call through the app router as the Worker makes it.
 import { beforeEach, vi } from "vitest";
 import type { AccessIdentity } from "../worker/access";
 import { handleApp } from "../worker/apps/index";
@@ -15,6 +15,8 @@ export const deviceKey = (clientId: string): AccessIdentity => ({ kind: "service
 export const phone = deviceKey("phone.access");
 export const pebbleApp = deviceKey("pebble.access");
 export const lost = deviceKey("lost.access");
+/** A Claude Code computer's key: it only sends chats. */
+export const laptop = deviceKey("laptop.access");
 export const checker = deviceKey("checker.access");
 export const matthew: AccessIdentity = { kind: "user", id: "matthew@example.com", claims: { ...claims, email: "matthew@example.com", sub: "m" } };
 
@@ -39,10 +41,11 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(NOW);
   db = database();
-  const device = db.sql.prepare("INSERT INTO relay_devices VALUES (?, ?, ?, ?, ?, ?)");
-  device.run("d-phone", "Android phone", "phone.access", "t1", NOW, null);
-  device.run("d-pebble", "Pebble app", "pebble.access", "t2", NOW, null);
-  device.run("d-lost", "Old phone", "lost.access", "t3", NOW, NOW);
+  const device = db.sql.prepare("INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at, reaches) VALUES (?, ?, ?, ?, ?, ?, ?)");
+  device.run("d-phone", "Android phone", "phone.access", "t1", NOW, null, "phone");
+  device.run("d-pebble", "Pebble app", "pebble.access", "t2", NOW, null, "phone");
+  device.run("d-lost", "Old phone", "lost.access", "t3", NOW, NOW, "phone");
+  device.run("d-laptop", "Laptop", "laptop.access", "t4", NOW, null, "chats");
   bucket.objects.clear();
   bucket.failing = false;
   bucket.put.mockClear();
@@ -50,9 +53,9 @@ beforeEach(() => {
 
 export const env = (more: object = {}) => fakeEnv({ DB: db.DB, RELAY_BUCKET: bucket, RELAY_PEBBLE_SIGNING: SECRET, ...more });
 
-/** A Relay route called as `who`: JSON for a POST, query fields for a GET; `more` adds bindings. */
+/** A Relay route called as `who`: JSON for a POST, query fields for a GET or DELETE; `more` adds bindings. */
 export async function call(who: AccessIdentity | null, method: string, route: string, input?: Record<string, unknown>, more?: object) {
-  const query = method === "GET" && input ? `?${new URLSearchParams(input as Record<string, string>)}` : "";
+  const query = method !== "POST" && input ? `?${new URLSearchParams(input as Record<string, string>)}` : "";
   const response = await handleApp(new Request(`https://relay.example.com/apps/relay/api/${route}${query}`, {
     method, ...(method === "POST" && { headers: { "content-type": "application/json" }, body: JSON.stringify(input) }) }), env(more), who);
   return { status: response.status, json: await body(response) };

@@ -1,0 +1,7 @@
+{
+  "relay-save": {
+    "command": "node",
+    "args": ["${CLAUDE_PLUGIN_ROOT}/bin/save-server.mjs"],
+    "env": { "RELAY_CONNECT_CODE": "${user_config.connect_code}" }
+  }
+}

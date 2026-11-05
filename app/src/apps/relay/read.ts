@@ -11,6 +11,12 @@ export type Summary = {
   places: { name: string; lat: number; lon: number; from: number; to: number }[]
 }
 
+export type ChatSummary = { id: string; title: string; project: string; app: 'claude-code'; startedAt: number; lastAt: number; messages: number; savedByAi: boolean }
+export type ChatList = { chats: ChatSummary[]; next: number | null; nextId: string | null }
+type ChatSave = { id: string; title: string; text: string; createdAt: number }
+export type ChatMessage = { seq: number; role: 'you' | 'ai' | 'step'; text: string; at: number }
+export type ChatPart = { chat: ChatSummary; saves: ChatSave[]; messages: ChatMessage[]; next: number | null }
+
 export const API = '/apps/relay/api/'
 
 /** A route's refusal, with its status: 503 says the route's service is not set up here. */
@@ -34,6 +40,9 @@ export const get = <T>(route: string) => json<T>(route)
 /** A change sent as JSON, answered as JSON. */
 export const send = <T>(route: string, body: unknown) =>
   json<T>(route, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+
+/** A delete, answered as JSON. */
+export const remove = <T>(route: string) => json<T>(route, { method: 'DELETE' })
 
 /** Today in this browser's time zone, as the summary route takes it. */
 export function today(now = new Date()) {

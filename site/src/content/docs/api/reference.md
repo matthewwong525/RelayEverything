@@ -214,7 +214,142 @@ Send the input as a JSON body.
 |---|---|
 | `unavailable` | The AI connector is not set up here. |
 
+## Save the AI's summary of a chat
+
+`POST /apps/relay/api/chat-saves` · `relay.chat-saves-add` · writes · called by a Claude Code chat key only
+
+Store a title and a summary the AI wrote for a chat this key sent. The chat's messages stay as they are; the newest save's title shows as the chat's title.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `sessionId` | string | yes | Claude Code's id for the chat. |
+| `title` | string | yes | The AI's title for the chat. |
+| `text` | string | yes | The AI's summary, shown as written by the AI. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `ok` | boolean | yes |  |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `not_found` | This key has sent no chat with that session id. Send the chat first. |
+
+## List the chats
+
+`GET /apps/relay/api/chats` · `relay.chats` · reads · called by a signed-in person only, not a device key
+
+List the saved Claude Code chats, newest first, or only those whose messages or AI summaries hold every word of `q`.
+
+### Input
+
+Send the input as query parameters.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `q` | string | no | Words to find, in any case. |
+| `before` | integer | no | Only chats last active before this Unix time in milliseconds: the last page's `next`. |
+| `beforeId` | string | no | With `before`, also the chats at that time with a lower id: the last page's `nextId`. |
+| `limit` | integer | no | How many chats, 30 when left out. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `chats` | array of object | yes |  |
+| `chats[].id` | string | yes |  |
+| `chats[].title` | string | yes |  |
+| `chats[].project` | string | yes |  |
+| `chats[].app` | string | yes |  |
+| `chats[].startedAt` | number | yes |  |
+| `chats[].lastAt` | number | yes |  |
+| `chats[].messages` | number | yes | How many messages the chat holds. |
+| `chats[].savedByAi` | boolean | yes | True when the AI saved a title and summary for it. |
+| `next` | number or null | yes |  |
+| `nextId` | string or null | yes |  |
+
+## Read one chat
+
+`GET /apps/relay/api/chat` · `relay.chat` · reads · called by a signed-in person only, not a device key
+
+Read one chat: its AI saves, newest first, and its messages in order, a part at a time.
+
+### Input
+
+Send the input as query parameters.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | yes | The chat's id, from the list of chats. |
+| `after` | integer | no | Only messages after this one: the last part's `next`. |
+| `limit` | integer | no | How many messages, 200 when left out. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `chat` | object | yes |  |
+| `chat.id` | string | yes |  |
+| `chat.title` | string | yes |  |
+| `chat.project` | string | yes |  |
+| `chat.app` | string | yes |  |
+| `chat.startedAt` | number | yes |  |
+| `chat.lastAt` | number | yes |  |
+| `chat.messages` | number | yes | How many messages the chat holds. |
+| `chat.savedByAi` | boolean | yes | True when the AI saved a title and summary for it. |
+| `saves` | array of object | yes |  |
+| `saves[].id` | string | yes |  |
+| `saves[].title` | string | yes |  |
+| `saves[].text` | string | yes | The summary, written by the AI. |
+| `saves[].createdAt` | number | yes |  |
+| `messages` | array of object | yes |  |
+| `messages[].seq` | number | yes |  |
+| `messages[].role` | "you" or "ai" or "step" | yes | Yours, the AI's, or one step the AI took. |
+| `messages[].text` | string | yes |  |
+| `messages[].at` | number | yes |  |
+| `next` | number or null | yes |  |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `not_found` | No chat has this id. |
+
+## Delete a chat
+
+`DELETE /apps/relay/api/chat` · `relay.chat-delete` · writes · called by a signed-in person only, not a device key
+
+Delete one chat with its messages and AI saves. It can't be brought back.
+
+### Input
+
+Send the input as query parameters.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | yes | The chat's id, from the list of chats. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | yes |  |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `not_found` | No chat has this id. |
+
 ## Routes with their own page
 
 - `POST /apps/relay/api/pebble`: [Take a ring note from the Pebble app](../pebble-webhook/)
 - `GET /apps/relay/api/audio`: [Play a note's recording](../recordings/)
+- `POST /apps/relay/api/chats`: [Send a Claude Code chat's new messages, with a chat key](../../connections/claude-code/#what-the-server-receives)

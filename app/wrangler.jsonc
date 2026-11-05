@@ -31,7 +31,13 @@
     { "binding": "MEMORY_BUCKET", "bucket_name": "relay-ring-memory" },
     { "binding": "RELAY_BUCKET", "bucket_name": "relay-ring-notes" }
   ],
-  // Rereads who can push on GitHub, for previews' sign-in.
+  // Relay's webhooks: a message only says "look now" for one webhook; the cursor in D1 holds what was sent.
+  // app/worker/apps/relay/webhooks/send.ts
+  "queues": {
+    "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-webhooks" }],
+    "consumers": [{ "queue": "relay-webhooks", "max_batch_size": 10, "max_retries": 10 }]
+  },
+  // Rereads who can push on GitHub, for previews' sign-in, and wakes each Relay webhook left behind.
   "triggers": { "crons": ["*/15 * * * *"] },
   "durable_objects": { "bindings": [{ "name": "LIVE_LINE", "class_name": "Line", "script_name": "relay-ring-line" }] },
   "migrations": [{ "tag": "line-1", "new_sqlite_classes": ["Line"] }, { "tag": "line-2", "deleted_classes": ["Line"] }],
@@ -59,6 +65,10 @@
       },
       "d1_databases": [{ "binding": "DB", "database_name": "relay-ring-db-staging", "database_id": "f5e832b0-fb07-4aef-8d20-3c737b481944", "migrations_dir": "../schema/migrations" }],
       "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-ring-notes-staging" }],
+      "queues": {
+        "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-webhooks-staging" }],
+        "consumers": [{ "queue": "relay-webhooks-staging", "max_batch_size": 10, "max_retries": 10 }]
+      },
       "services": [{ "binding": "RELAY_MCP", "service": "relay-ring-mcp-staging", "entrypoint": "Grants" }],
       "triggers": { "crons": [] }
     },
@@ -67,6 +77,10 @@
       "vars": { "WONG_ENVIRONMENT": "local", "SKIP_AUTH": "true" },
       "d1_databases": [{ "binding": "DB", "database_name": "relay-ring-db-local", "database_id": "d7708dbb-6ab7-41d0-b828-440649e753a2", "remote": false, "migrations_dir": "../schema/migrations" }],
       "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-ring-notes-local", "remote": false }],
+      "queues": {
+        "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-webhooks-local" }],
+        "consumers": [{ "queue": "relay-webhooks-local", "max_batch_size": 10, "max_retries": 10 }]
+      },
       "durable_objects": { "bindings": [{ "name": "LIVE_LINE", "class_name": "Line", "script_name": "relay-ring-line-local" }] }
     }
   }

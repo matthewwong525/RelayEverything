@@ -23,9 +23,13 @@ export type AppHandler = ((request: Request, env: AppEnv, call: AppCall) => Resp
 /** An address the app API answers: /apps/<name>/api, then a route. */
 export const APP_API = /^\/apps\/([^/]+)\/api(?:\/(.*))?$/;
 
+/** A queue consumer an app's api.ts lists in `queues`, keyed by the queue's name without `-staging`. @public */
+export type AppConsumer = (batch: MessageBatch, env: AppEnv) => Promise<void>;
+
 // Each app's routes, keyed "METHOD route", and the saved keys its api.ts exports as `keys`, for routes that list none.
 // Maps, not objects, so a route or an app named `constructor` can't reach a property every object inherits.
-type AppModule = { routes: Map<string, Route>; keys?: readonly string[] };
+type AppModule = { routes: Map<string, Route>; keys?: readonly string[]; queues?: Map<string, AppConsumer>;
+  scheduled?: (env: AppEnv) => Promise<void> };
 const apps = new Map(
   Object.entries(import.meta.glob<AppModule>("./*/api.ts", { eager: true })).map(
     ([path, module]) => [path.split("/")[1], module],
@@ -50,6 +54,16 @@ const alone = new Map([...apps].filter(([name]) => !hasScreen(name)).map(([name,
 export const appActions = [...apps].flatMap(([name, { routes, keys }]) => registrations(routes, name, alone.get(name), keys));
 export const appKeyUse = [...apps].flatMap(([name, { routes, keys }]) => keyUses(routes, name, alone.get(name), keys));
 
+/** The Worker's bindings without the memory store's and the sign-in list key. */
+function appEnvOf(env: Env & PolicyEnv): AppEnv {
+  // Typed so the copy compiles before setup binds a memory store, too.
+  const appEnv: AppEnv & Partial<Record<MemoryBindings, unknown>> = { ...env };
+  delete appEnv.MEMORY_DB;
+  delete appEnv.MEMORY_BUCKET;
+  delete appEnv.WONG_ACCESS_LOGIN_MANAGEMENT;
+  return appEnv;
+}
+
 /** Answer an app API call. The handler's env copy lacks the memory store's bindings and holds only its route's saved
  *  keys; the `disallow_importable_env` flag stops it importing the rest. That stops mistakes, not determined code. */
 export function handleApp(request: Request, env: Env & PolicyEnv, identity: AccessIdentity | null): Response | Promise<Response> {
@@ -59,12 +73,32 @@ export function handleApp(request: Request, env: Env & PolicyEnv, identity: Acce
   const handler = app?.routes.get(`${request.method} ${route}`);
   if (!handler) return Response.json({ error: "Not found" }, { status: 404 });
 
-  // Typed so the copy compiles before setup binds a memory store, too.
-  const appEnv: AppEnv & Partial<Record<MemoryBindings, unknown>> = { ...env };
-  delete appEnv.MEMORY_DB;
-  delete appEnv.MEMORY_BUCKET;
-  delete appEnv.WONG_ACCESS_LOGIN_MANAGEMENT;
+  const appEnv = appEnvOf(env);
   const call: AppCall = name === "knowledge" ? { url, route, identity, knowledge: knowledgeReader(env) } : { url, route, identity };
   return dispatch(handler, request, appEnv, call,
     alone.get(name)?.get(`${request.method} ${route}`) ?? { apps: [name], keys: app!.keys });
+}
+
+/** Hand a queue's batch to the app that lists it, with the same env as a route. A queue no app lists is acked, so its
+ *  messages don't come back. The staging Worker's queues end in `-staging`; the local ones in `-local`. */
+export async function handleAppQueue(batch: MessageBatch, env: Env & PolicyEnv) {
+  const name = batch.queue.replace(/-(?:staging|local)$/, "");
+  const consumer = [...apps.values()].map(app => app.queues?.get(name)).find(Boolean);
+  if (!consumer) {
+    console.error(`No app lists the queue ${batch.queue}; its messages are dropped.`);
+    batch.ackAll();
+    return;
+  }
+  await consumer(batch, appEnvOf(env));
+}
+
+/** Run each app's `scheduled` export, on the Worker's schedule. One app's failure doesn't stop the next. */
+export async function handleAppSchedule(env: Env & PolicyEnv) {
+  for (const [name, app] of apps) {
+    try {
+      await app.scheduled?.(appEnvOf(env));
+    } catch (error) {
+      console.error(`The ${name} app's schedule failed`, error);
+    }
+  }
 }

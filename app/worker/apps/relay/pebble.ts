@@ -6,6 +6,7 @@ import { deviceOf } from "./device.ts";
 import { placeRingNotes } from "./place.ts";
 import { signedBy } from "./signature.ts";
 import { refused, session, type Env } from "./store.ts";
+import { wake } from "./webhooks/send.ts";
 
 const MAX_BODY = 10 * 1024 * 1024;
 const WINDOW_SECONDS = 300;
@@ -80,6 +81,7 @@ async function store(env: PebbleEnv, device: string, delivery: string, { recorde
     }
   }
   await placeRingNotes(db, recordedAt, recordedAt);
+  await wake(env, ["notes"]);
   return ok({ id });
 }
 

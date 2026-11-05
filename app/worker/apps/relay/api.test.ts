@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { handleApp } from "../index";
-import { bucket, call, checker, db, env, lost, matthew, NOW, pebbleApp, phone, rows } from "../../../tests/relay";
+import { bucket, call, checker, db, env, lost, matthew, NOW, pebbleApp, phone, queue, rows } from "../../../tests/relay";
 
 const MINUTE = 60_000;
 const typed = (clientId: string, more: Record<string, unknown> = {}) => ({ clientId, text: "Order more TL3312 switches", createdAt: NOW - 5 * MINUTE, ...more });
@@ -152,4 +152,20 @@ it("answers one byte range of a recording, as Safari asks before it plays", asyn
   const gone = await handleApp(new Request("https://relay.example.com/apps/relay/api/audio?id=aaaaaaaa-0000-4000-8000-000000000002",
     { headers: { Range: "bytes=0-1" } }), env(), phone);
   expect(gone.status).toBe(404);
+});
+
+it("wakes the webhooks that take what was stored, and none for a repeat", async () => {
+  const webhook = db.sql.prepare(`INSERT INTO relay_webhooks (id, name, url, secret, kinds, sent_seq, created_at)
+    VALUES (?, 'Example database', 'https://db.example.com/relay', 'whsec_AAAA', ?, 0, ?)`);
+  webhook.run("notes", '["notes"]', NOW);
+  webhook.run("health", '["notes","health"]', NOW);
+  await call(phone, "POST", "notes", typed("note-0001"));
+  await call(phone, "POST", "notes", typed("note-0001"));
+  expect(queue.sent).toEqual([{ webhook: "notes" }, { webhook: "health" }]);
+  queue.sent = [];
+  const day = [sample("steps", NOW - 60 * MINUTE, NOW - 30 * MINUTE, 1200)];
+  await call(phone, "POST", "health", { samples: day });
+  await call(phone, "POST", "health", { samples: day });
+  await call(phone, "POST", "locations", { points: [point(NOW - 23 * MINUTE)] });
+  expect(queue.sent).toEqual([{ webhook: "health" }]);
 });

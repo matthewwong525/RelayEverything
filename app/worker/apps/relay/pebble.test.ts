@@ -1,9 +1,9 @@
 import { createHmac } from "node:crypto";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import type { AccessIdentity } from "../../access";
 import { handleApp } from "../index";
 import { body as read } from "../../../tests/body";
-import { bucket, db, env, matthew, NOW, pebbleApp, phone, rows, SECRET } from "../../../tests/relay";
+import { bucket, db, env, matthew, NOW, pebbleApp, phone, queue, rows, SECRET } from "../../../tests/relay";
 
 const seconds = String(NOW / 1000);
 const RECORDED = NOW - 20_000;
@@ -122,4 +122,23 @@ it("pins a ring note to the nearest location point within 10 minutes of its reco
   point.run(RECORDED - 60 * 60_000, 43.7, -79.4, "Far away in time");
   await send(await note());
   expect(rows("relay_notes")[0]).toMatchObject({ lat: 43.6487, lon: -79.3962, accuracy: 12, place: "Queen St W", place_from: "history" });
+});
+
+it("wakes each active webhook for a stored ring note, never for a repeat or a test, and answers success if the queue fails", async () => {
+  const webhook = db.sql.prepare(`INSERT INTO relay_webhooks (id, name, url, secret, kinds, active, sent_seq, created_at)
+    VALUES (?, ?, 'https://db.example.com/relay', 'whsec_AAAA', '["notes"]', ?, 0, ?)`);
+  webhook.run("hook-1", "Example database", 1, NOW);
+  webhook.run("hook-2", "Paused", 0, NOW);
+  const sent = await note();
+  await send(sent);
+  await send(sent);
+  const test = await multipart({ test: "true", transcription: "Test event", recordedAt: String(RECORDED), client: "ring" });
+  await send({ ...test, headers: { "X-Index-Test": "true", "X-Index-Trigger": "test-event" } });
+  expect(queue.sent).toEqual([{ webhook: "hook-1" }]);
+  queue.failing = true;
+  const lost = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  expect((await send({ ...sent, headers: { "X-Index-Delivery": "delivery-2" } })).status).toBe(200);
+  expect(lost).toHaveBeenCalledWith("Relay webhooks: the wake-up was lost", expect.any(Error));
+  expect(rows("relay_notes")).toHaveLength(2);
+  lost.mockRestore();
 });

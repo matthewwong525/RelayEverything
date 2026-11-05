@@ -17,7 +17,7 @@ Each permission is asked for only when you turn on its setting. With sending off
 
 ## Get the app
 
-- **Android:** download the newest `.apk` file from [Releases](../../releases/latest) and open it on your phone. Android asks once to allow installs from your browser.
+- **Android:** download the newest `.apk` file from [Releases](https://github.com/matthewwong525/RelayEverything/releases/latest) and open it on your phone. Android asks once to allow installs from your browser.
 - **iPhone:** install the newest build from TestFlight, from the invite the owner sends you.
 
 ## Connect it to a server
@@ -43,11 +43,11 @@ The key is kept in the iPhone Keychain or the Android Keystore, never in the app
 
 ### Builds on GitHub
 
-Each push runs `.github/workflows/ci.yml`: analyze and test, then:
+Each push that changes `mobile/` runs [`.github/workflows/mobile-ci.yml`](../.github/workflows/mobile-ci.yml): analyze and test, then:
 
-- **Android** (`android.yml`): on `main`, a release with a signed `.apk`; on any other branch, the `.apk` as a run artifact. It signs with the upload key in these repository secrets, or with a debug key when they are missing:
+- **Android** ([`mobile-android.yml`](../.github/workflows/mobile-android.yml)): on `main`, a release with a signed `.apk`, tagged `mobile-v<version>+<build>`; on any other branch, the `.apk` as a run artifact. It signs with the upload key in these repository secrets, or with a debug key when they are missing:
   `RELAY_ANDROID_KEYSTORE_BASE64`, `RELAY_ANDROID_KEYSTORE_PASSWORD`, `RELAY_ANDROID_KEY_ALIAS`, `RELAY_ANDROID_KEY_PASSWORD`.
-- **iPhone** (`ios.yml`): on a Mac, fastlane signs the build automatically and sends it to TestFlight. It needs a paid Apple Developer Program membership, the app's record in App Store Connect (bundle id `com.matthewwong525.relayApp`), and these secrets:
+- **iPhone** ([`mobile-ios.yml`](../.github/workflows/mobile-ios.yml)): on a Mac, fastlane signs the build automatically and sends it to TestFlight. It needs a paid Apple Developer Program membership, the app's record in App Store Connect (bundle id `com.matthewwong525.relayApp`), and these secrets:
   `ASC_ISSUER_ID`, `ASC_KEY_ID`, `ASC_KEY_P8` (the `.p8` file in base64), `APPLE_TEAM_ID`. Until they are set, the iPhone job ends with a notice and builds nothing.
 
 Never commit a key, a keystore, a `.p8` file or a signing profile.
@@ -59,4 +59,4 @@ Never commit a key, a keystore, a `.p8` file or a signing profile.
 - `lib/screens/`: timeline, new note, settings and connect.
 - `test/`: unit tests for the store, outbox, API and sync, widget tests for each screen, and a test that no screen or job calls the network while sending is off.
 
-This repository is a copy of the app folder of the Relay ring's private project, updated on each published change. Changes made here directly are overwritten.
+This folder is part of [RelayEverything](https://github.com/matthewwong525/RelayEverything), Relay's one public repository, under [its MIT license](../LICENSE). The old `relay-app` repository is a read-only copy.

@@ -3,7 +3,7 @@ import { CopyText } from '@/components/CopyText'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 
-const RELEASES = 'https://github.com/matthewwong525/relay-app/releases/latest'
+const RELEASES = 'https://github.com/matthewwong525/RelayEverything/releases/latest'
 const TESTFLIGHT = 'https://apps.apple.com/app/testflight/id899247664'
 
 function SetupDialog({ label, title, description, children }: { label: string; title: string; description: string; children: ReactNode }) {
@@ -25,7 +25,7 @@ const Code = ({ children }: { children: string }) => <code className="rounded bg
 export function PhoneSetup({ origin }: { origin: string }) {
   return <SetupDialog label="Set up a phone" title="Set up a phone"
     description="The app keeps notes on the phone until you turn on sending. Each phone has its own key, so you can turn one off alone.">
-    <li>Install the app: on Android, the newest file from <a className="underline" href={RELEASES}>relay-app's releases</a>; on iPhone, the
+    <li>Install the app: on Android, the newest file from <a className="underline" href={RELEASES}>Relay's releases</a>; on iPhone, the
       newest build in <a className="underline" href={TESTFLIGHT}>TestFlight</a>.</li>
     <li>Ask your assistant to make a key for the phone, or run <Code>node scripts/relay-device-key.mjs create --name "Android phone"</Code>.
       Add <Code>--staging</Code> for a preview.</li>

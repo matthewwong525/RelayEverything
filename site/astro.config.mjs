@@ -11,7 +11,7 @@ export default defineConfig({
     description: 'Relay gets your notes, health and location off your phone, into a place you choose, where your own AI can read them.',
     logo: { src: './src/assets/ring-mark.svg' },
     customCss: ['./src/styles/custom.css'],
-    social: [{ icon: 'github', label: 'The app on GitHub', href: 'https://github.com/matthewwong525/relay-app' }],
+    social: [{ icon: 'github', label: 'Relay on GitHub', href: 'https://github.com/matthewwong525/RelayEverything' }],
     sidebar,
   })],
 });

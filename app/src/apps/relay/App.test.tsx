@@ -128,7 +128,7 @@ it("tells how to set up a phone and the Pebble app", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "Set up a phone" }));
   const phone = await screen.findByRole("dialog", { name: "Set up a phone" });
   expect(within(phone).getByText(/relay-device-key\.mjs create --name "Android phone"/)).toBeTruthy();
-  expect(within(phone).getByRole("link", { name: "relay-app's releases" }).getAttribute("href")).toBe("https://github.com/matthewwong525/relay-app/releases/latest");
+  expect(within(phone).getByRole("link", { name: "Relay's releases" }).getAttribute("href")).toBe("https://github.com/matthewwong525/RelayEverything/releases/latest");
   expect(within(phone).getByLabelText("The message to copy")).toHaveProperty("value", window.location.origin);
   // The app keeps notes on the phone by default, so the steps name the Settings switch first.
   expect(within(phone).getByText(/keeps notes on the phone until you turn on sending/)).toBeTruthy();

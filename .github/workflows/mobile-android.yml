@@ -20,6 +20,11 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          # whisper.cpp builds with the NDK on each run: the Gradle cache keeps what it can between runs.
+          cache: gradle
+          cache-dependency-path: |
+            mobile/android/*.gradle*
+            mobile/android/**/gradle-wrapper.properties
       - uses: subosito/flutter-action@v2
         with:
           flutter-version-file: mobile/pubspec.yaml

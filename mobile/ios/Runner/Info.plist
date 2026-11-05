@@ -30,6 +30,8 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Relay records a voice note while you hold Hold to talk. The phone writes its words, and the recording never leaves the phone.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Relay uses the camera only to scan the QR code of your device key.</string>
 	<key>NSHealthShareUsageDescription</key>

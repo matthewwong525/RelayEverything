@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../relay.dart';
+import '../voice/model.dart' show megabytes;
 import 'connect.dart';
 
 /// Each switch acts at once and asks for its permission only when turned on. Sending is off until the person turns it
@@ -32,6 +33,8 @@ class SettingsScreen extends StatelessWidget {
               value: settings.pinNotes,
               onChanged: (on) => _apply(context, relay.setPinNotes(on)),
             ),
+            const Divider(),
+            _VoiceSection(relay: relay),
             const Divider(),
             SwitchListTile(
               title: const Text('Send to your Relay server'),
@@ -116,6 +119,37 @@ class SettingsScreen extends StatelessWidget {
       ],
     ));
     if (sure == true) await relay.disconnect();
+  }
+}
+
+/// The speech model voice notes use: where it is, its size, and *Remove* to free the space.
+class _VoiceSection extends StatelessWidget {
+  const _VoiceSection({required this.relay});
+
+  final Relay relay;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final size = megabytes(relay.modelBytes);
+    final state = switch (relay.speechModel) {
+      ModelState.ready => 'Speech model: on this phone, $size',
+      ModelState.downloading => 'Speech model: getting it… ${(relay.modelProgress * 100).floor()}%',
+      ModelState.failed => 'Speech model: did not download. Hold to talk on the timeline to try again.',
+      _ => 'Speech model: not on this phone. Your first voice note asks to get it, $size.',
+    };
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      ListTile(
+        title: const Text('Voice notes'),
+        subtitle: const Text('Your voice is written into words on this phone. Recordings never leave it.'),
+      ),
+      ListTile(
+        title: Text(state, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        trailing: relay.speechModel == ModelState.ready
+          ? OutlinedButton(onPressed: relay.removeSpeechModel, child: const Text('Remove'))
+          : null,
+      ),
+    ]);
   }
 }
 

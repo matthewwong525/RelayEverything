@@ -8,12 +8,13 @@ This is the phone app, for iPhone and Android. It is written in Flutter.
 
 - **Timeline.** Every note, newest first. With sending off, the top of the screen says *On this phone*. With sending on, it shows ring notes too, and a note not sent yet shows as *Waiting* and goes on the next sync.
 - **New note.** Tap *New note*, type, and tap *Save*. With *Pin notes to where I am* on, the note keeps where you are. This works with no signal. With sending off, the phone does not look up the place's name, so the note shows *Pinned*.
+- **Voice notes.** Hold *Hold to talk*, talk, and let go. The phone writes the words itself with whisper.cpp, with no signal and no server, and the recording stays on the phone, out of iCloud and Google backups. The first time, the app asks before it gets the 57 MB speech model from whisper.cpp's page on Hugging Face; *Remove* in *Settings* deletes it. A press shorter than half a second, or a recording with no words, keeps nothing. With sending on, only the words go to your server, as a typed note.
 - **Send to your Relay server.** Off until you turn it on. The first time, you connect this phone's key. If you have notes from before, the app asks if they go too: *Send them*, or *Only new notes*. Turn it off, and new notes stay on the phone, notes already on your server stay there, and health and location stop.
 - **Health** (only with sending on). The app reads steps, heart rate, sleep and workouts from Apple Health or Health Connect from the moment you turn it on, and sends them every hour.
 - **Location history** (only with sending on). The app keeps a point each 100 m you move. A ring note then takes the nearest point within 10 minutes as its place.
 - **Your server, your key.** The app talks only to the server you connect it to, with a key for this phone alone. You can turn off one phone's key and keep the others.
 
-Each permission is asked for only when you turn on its setting. With sending off, the app keeps no health or location history and makes no network call.
+Each permission is asked for only when you turn on its setting. With sending off, the app keeps no health or location history and makes no network call, except to get the speech model after you tap *Get it*.
 
 ## Get the app
 
@@ -56,7 +57,8 @@ Never commit a key, a keystore, a `.p8` file or a signing profile.
 
 - `lib/data/`: the settings, the local store (SQLite through drift) that keeps every note, the sender that gives no API client while sending is off, the API client, and the outbox that sends waiting uploads in order.
 - `lib/sync/`: health, location and the hourly background sync, which run only while sending is on.
-- `lib/screens/`: timeline, new note, settings and connect.
-- `test/`: unit tests for the store, outbox, API and sync, widget tests for each screen, and a test that no screen or job calls the network while sending is off.
+- `lib/voice/`: voice notes: the speech model's download, the recorder, and the words, written by whisper.cpp on the phone.
+- `lib/screens/`: timeline with *Hold to talk*, new note, settings and connect.
+- `test/`: unit tests for the store, outbox, API, sync and voice notes, widget tests for each screen, and a test that no screen or job calls the network while sending is off.
 
 This folder is part of [RelayEverything](https://github.com/matthewwong525/RelayEverything), Relay's one public repository, under [its MIT license](../LICENSE). The old `relay-app` repository is a read-only copy.

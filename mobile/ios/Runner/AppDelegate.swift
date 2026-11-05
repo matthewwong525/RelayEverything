@@ -16,5 +16,25 @@ import workmanager_apple
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    // iCloud does not back up the speech model (57 MB, and it can be got again) or a recording (it never leaves the
+    // phone). lib/voice/model.dart and lib/voice/recorder.dart call this.
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "RelayFiles") {
+      let files = FlutterMethodChannel(name: "relay/files", binaryMessenger: registrar.messenger())
+      files.setMethodCallHandler { call, result in
+        guard call.method == "excludeFromBackup", let path = call.arguments as? String else {
+          result(FlutterMethodNotImplemented)
+          return
+        }
+        var url = URL(fileURLWithPath: path)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        do {
+          try url.setResourceValues(values)
+          result(nil)
+        } catch {
+          result(FlutterError(code: "backup", message: error.localizedDescription, details: nil))
+        }
+      }
+    }
   }
 }

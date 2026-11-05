@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · relay-webhooks</title>
+<title>Review · 2026-11-05-relay-webhooks</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="relay-webhooks" data-own-back>
+<body data-change="2026-11-05-relay-webhooks" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>relay-webhooks</h1>
+  <h1>2026-11-05-relay-webhooks</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -469,6 +469,8 @@
 <li class="decision card" id="decision-24" data-note="decision-24" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-05</p>Assumed: the <i>Try it</i> lines keep the preview's address, because the review page needs one link, the preview is behind a login, and the repository already names the site's address.</li>
 <li class="decision card" id="decision-25" data-note="decision-25" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-05</p>Built tasks 1.1 to 7.1. A second look found the sender kept an old lease time, so the send position never moved outside the tests; fixed, with a test whose clock moves. Saved for the preview check (7.2), merged with the AI connector change.</li>
 <li class="decision card" id="decision-26" data-note="decision-26" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-05</p>The preview check found a second lease slip: a run that stopped early, because a retry was already planned, gave its lease back with the old time, so the planned retry found the lease taken and was dropped. Fixed, with a test.</li>
+<li class="decision card" id="decision-27" data-note="decision-27" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-05</p>The preview check passed on the staging Worker: a test answered 204; a typed note and a health sample arrived; with the receiver stopped, six notes waited and then arrived in order after a retry; <i>Send past data</i> from a week ago sent the earlier notes and samples; <i>Remove</i> cleared the webhook. The receiver was stopped for about two minutes, not five, so the 2-minute retry carried the notes.</li>
+<li class="decision card" id="decision-28" data-note="decision-28" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-05</p>Archived for publishing, with the spec added to <code>openspec/specs/relay-webhooks/</code>.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

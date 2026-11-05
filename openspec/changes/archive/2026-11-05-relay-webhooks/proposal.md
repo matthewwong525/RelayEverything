@@ -1,6 +1,6 @@
 # Relay webhooks to your own database
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** talented-catfish
 **Open questions:** none
 
@@ -95,3 +95,5 @@ None. `relay-notes` and `relay-sync` come from `relay-app-first-version`; this c
 - **2026-11-05** — Assumed: the *Try it* lines keep the preview's address, because the review page needs one link, the preview is behind a login, and the repository already names the site's address.
 - **2026-11-05** — Built tasks 1.1 to 7.1. A second look found the sender kept an old lease time, so the send position never moved outside the tests; fixed, with a test whose clock moves. Saved for the preview check (7.2), merged with the AI connector change.
 - **2026-11-05** — The preview check found a second lease slip: a run that stopped early, because a retry was already planned, gave its lease back with the old time, so the planned retry found the lease taken and was dropped. Fixed, with a test.
+- **2026-11-05** — The preview check passed on the staging Worker: a test answered 204; a typed note and a health sample arrived; with the receiver stopped, six notes waited and then arrived in order after a retry; *Send past data* from a week ago sent the earlier notes and samples; *Remove* cleared the webhook. The receiver was stopped for about two minutes, not five, so the 2-minute retry carried the notes.
+- **2026-11-05** — Archived for publishing, with the spec added to `openspec/specs/relay-webhooks/`.

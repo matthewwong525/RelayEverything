@@ -1,8 +1,10 @@
 // The one-off Worker that copies D1 databases and R2 buckets to new ones inside the account, answering only names
 // and counts. scripts/cf-move-data.mjs deploys, calls and deletes it: wiki/stack/move-cloudflare-data.md
 
-// Migration ledgers belong to the new side's own schema step, which already wrote them.
-const SKIPPED = /^(sqlite_|_cf_)|^(d1_migrations|schema_migrations)$/i;
+// Migration ledgers belong to the new side's own schema step, which already wrote them; the paused-trigger list is the
+// move's own.
+const PAUSED = '_move_paused_triggers';
+const SKIPPED = /^(sqlite_|_cf_)|^(d1_migrations|schema_migrations|_move_paused_triggers)$/i;
 const FTS_SHADOW = ['data', 'idx', 'content', 'docsize', 'config'];
 const quote = name => `"${String(name).replaceAll('"', '""')}"`;
 const list = names => names.map(quote).join(', ');
@@ -149,23 +151,35 @@ const triggerList = async db => (await db.prepare("SELECT name, sql FROM sqlite_
 // An AFTER trigger writes rows of its own, such as an outbox or a search index: the copy brings those rows already.
 const writes = sql => /^\s*CREATE\s+TRIGGER\s+(?:IF\s+NOT\s+EXISTS\s+)?\S+\s+AFTER\b/i.test(sql ?? '');
 
-/** Drops the new side's AFTER triggers for the copy and answers their SQL, which `triggersOn` puts back. */
+/** Saves the new side's AFTER triggers in its own `_move_paused_triggers`, then drops them for the copy. A rerun keeps
+ *  the first saved SQL, so a stopped run's triggers still come back. */
 async function triggersOff(db) {
   const paused = (await triggerList(db)).filter(trigger => writes(trigger.sql));
-  for (const { name } of paused) await db.prepare(`DROP TRIGGER IF EXISTS ${quote(name)}`).run();
+  await db.prepare(`CREATE TABLE IF NOT EXISTS ${PAUSED} (name TEXT PRIMARY KEY, sql TEXT NOT NULL)`).run();
+  const save = db.prepare(`INSERT OR IGNORE INTO ${PAUSED} (name, sql) VALUES (?, ?)`);
+  if (paused.length) {
+    await db.batch([...paused.map(({ name, sql }) => save.bind(name, sql)), ...paused.map(({ name }) => db.prepare(`DROP TRIGGER IF EXISTS ${quote(name)}`))]);
+  }
   return { triggers: paused };
 }
 
-/** Puts back the paused triggers, then rebuilds each search index they would have filled. Only the new side's own
- *  SQL comes back: an old trigger may name a table the new side lacks, and the check reports any trigger missing. */
-async function triggersOn(to, paused) {
-  const present = new Set((await triggerList(to)).map(trigger => trigger.name));
-  for (const { name, sql } of Array.isArray(paused) ? paused : []) {
-    if (!present.has(name) && writes(sql)) await to.prepare(sql).run();
+/** Puts back the paused triggers, from the saved list and any list given, then rebuilds each search index they fill.
+ *  Only the new side's own SQL comes back: an old trigger may write to a table the new side lacks. */
+async function triggersOn(db, given) {
+  const hasSaved = await db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").bind(PAUSED).first();
+  const saved = hasSaved ? (await db.prepare(`SELECT name, sql FROM ${PAUSED}`).all()).results : [];
+  const present = new Set((await triggerList(db)).map(trigger => trigger.name));
+  const back = new Map();
+  for (const { name, sql } of [...saved, ...(Array.isArray(given) ? given : [])]) {
+    if (!present.has(name) && !back.has(name) && writes(sql)) back.set(name, sql);
   }
-  const virtual = (await to.prepare("SELECT name, sql FROM sqlite_master WHERE type = 'table' AND sql LIKE 'CREATE VIRTUAL TABLE%'").all()).results;
+  // One batch: a trigger that fails to come back keeps the saved list for the next run.
+  const statements = [...back.values()].map(sql => db.prepare(sql));
+  if (hasSaved) statements.push(db.prepare(`DROP TABLE ${PAUSED}`));
+  if (statements.length) await db.batch(statements);
+  const virtual = (await db.prepare("SELECT name, sql FROM sqlite_master WHERE type = 'table' AND sql LIKE 'CREATE VIRTUAL TABLE%'").all()).results;
   for (const { name } of virtual.filter(table => externalContent(table.sql))) {
-    await to.prepare(`INSERT INTO ${quote(name)} (${quote(name)}) VALUES ('rebuild')`).run();
+    await db.prepare(`INSERT INTO ${quote(name)} (${quote(name)}) VALUES ('rebuild')`).run();
   }
   return { ok: true };
 }

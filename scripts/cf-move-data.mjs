@@ -66,9 +66,11 @@ async function moveDatabase(call, pair, { from, to }, { replace, checkOnly, limi
   for (const name of unsupported) print(`table ${name} not copied: a virtual table with rows of its own mismatch`);
   for (const name of absent) print(`table ${name} not copied: the new side has no such table; apply its schema first mismatch`);
   if (!checkOnly) {
-    // The new side's own AFTER triggers would write rows again that the copy already brings.
-    const { triggers } = await call({ op: 'triggers-off', pair });
+    // The new side's own AFTER triggers would write rows again that the copy already brings. An answer lost after
+    // they went off still reaches the finally: `triggers-on` restores them from the list the new side saved.
+    let triggers = [];
     try {
+      ({ triggers } = await call({ op: 'triggers-off', pair }));
       for (const { name, links } of tables) {
         await pages(call, { op: 'copy', pair, table: name, replace, limit });
         if (links) await pages(call, { op: 'link', pair, table: name, replace, limit });
@@ -180,6 +182,10 @@ async function main() {
     }
   };
   let deployed = false;
+  let live = null;
+  let inflight = Promise.resolve();
+  let stopping = false;
+  const paused = new Set();
   const cleanUp = () => {
     if (deployed) {
       try { wrangler(['delete', '--name', parsed.worker, '--force']); console.log(`deleted ${parsed.worker}`); } catch (error) {
@@ -189,7 +195,16 @@ async function main() {
     }
     rmSync(work, { recursive: true, force: true });
   };
-  const stop = () => { cleanUp(); process.exit(130); };
+  // A stop mid-copy would leave the new side's AFTER triggers off: put them back, best effort, before the Worker goes.
+  const stop = async () => {
+    stopping = true;
+    if (live) {
+      const restore = inflight.catch(() => {}).then(() => Promise.allSettled([...paused].map(pair => live({ op: 'triggers-on', pair }))));
+      await Promise.race([restore, new Promise(resolve => setTimeout(resolve, 20000).unref())]);
+    }
+    cleanUp();
+    process.exit(130);
+  };
   process.once('SIGINT', stop).once('SIGTERM', stop);
   try {
     copyFileSync(join(repoRoot, 'scripts', 'cf-move-data', 'worker.mjs'), join(work, 'worker.mjs'));
@@ -200,11 +215,19 @@ async function main() {
     wrangler(['secret', 'put', 'MOVE_KEY'], key);
     const { subdomain } = await cf('/workers/subdomain');
     const url = `https://${parsed.worker}.${subdomain}.workers.dev/`;
-    const call = caller(init => fetch(url, init), key);
+    live = caller(init => fetch(url, init), key);
+    // Once stopped, the move sends nothing more: `stop` restores the paused pairs' triggers after the call in flight.
+    const call = async body => {
+      if (stopping) throw new Error('stopped');
+      if (body.op === 'triggers-off') paused.add(body.pair);
+      const answer = await (inflight = live(body));
+      if (body.op === 'triggers-on') paused.delete(body.pair);
+      return answer;
+    };
     await ready(call);
     return await move({ call, ...parsed });
   } finally {
-    cleanUp();
+    if (!stopping) cleanUp();
   }
 }
 

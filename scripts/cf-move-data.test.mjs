@@ -150,19 +150,42 @@ test('a guarded table is never replaced: a fact with the same id and other words
   assert.equal((await newDb.prepare('SELECT body FROM facts WHERE id = 10').first()).body, 'saved at the new address');
 });
 
-test('a trigger missing on the new side fails the check by count, and the copy never adds an old trigger', async () => {
-  const { triggers } = await call({ op: 'triggers-off', pair: 0 });
-  const stopped = await run();
-  assert.equal(stopped.line('triggers'), 'triggers old=4 new=2 missing=2 mismatch');
-  assert.equal(stopped.passed, false);
-  await call({ op: 'triggers-on', pair: 0, triggers });
-  assert.equal((await run({ checkOnly: true })).line('triggers'), 'triggers old=4 new=4 missing=0 ok');
+test('a move stopped after triggers-off: the next move, or a triggers-on with no list, puts the triggers back', async () => {
+  const saved = async () => (await newDb.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name = '_move_paused_triggers'").first()).n;
+  // The answer is lost, as when a run stops: only the list the new side saved remains.
+  await call({ op: 'triggers-off', pair: 0 });
+  const checked = await run({ checkOnly: true });
+  assert.equal(checked.line('triggers'), 'triggers old=4 new=2 missing=2 mismatch');
+  assert.equal(checked.passed, false);
+  assert.equal(checked.lines.some(line => line.includes('_move_paused_triggers')), false, 'the saved list is never copied or counted');
+  // The fact the guard test left saved under one id with other words still fails as differ; the triggers pass.
+  const moved = await run();
+  assert.equal(moved.line('triggers'), 'triggers old=4 new=4 missing=0 ok');
+  assert.equal(moved.line('index facts_fts'), 'index facts_fts rows=4 source=4 ok');
+  assert.equal(await saved(), 0, 'the saved list goes once the triggers are back');
+  await call({ op: 'triggers-off', pair: 0 });
+  await call({ op: 'triggers-on', pair: 0 });
+  assert.equal((await call({ op: 'triggers', pair: 0 })).missing, 0);
+  await call({ op: 'triggers-on', pair: 0 });
+  assert.equal((await call({ op: 'triggers', pair: 0 })).new, 4, 'a second call adds no trigger twice');
   await exec(newDb, "INSERT INTO devices VALUES ('d9', 'Kept at the new address')");
   assert.equal((await newDb.prepare("SELECT count(*) AS n FROM device_log WHERE device = 'd9'").first()).n, 1);
   await exec(newDb, "DELETE FROM device_log WHERE device = 'd9'", "DELETE FROM devices WHERE id = 'd9'");
 });
 
-test('an old table the new side lacks fails up front, by name, and the other tables still copy', async () => {
+test('an old trigger the new side never had is reported missing and never added', async () => {
+  // As in production: the old side's outbox trigger writes to a table a migration the new side lacks would make.
+  await exec(oldDb, 'CREATE TABLE plain_outbox (label TEXT)',
+    'CREATE TRIGGER plain_queued AFTER INSERT ON plain BEGIN INSERT INTO plain_outbox (label) VALUES (new.label); END');
+  const { passed, line } = await run();
+  assert.equal(passed, false);
+  assert.equal(line('triggers'), 'triggers old=5 new=4 missing=1 mismatch');
+  assert.equal((await newDb.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name = 'plain_queued'").first()).n, 0);
+  await exec(newDb, "INSERT INTO plain VALUES ('new side still takes rows')", "DELETE FROM plain WHERE label = 'new side still takes rows'");
+  await exec(oldDb, 'DROP TRIGGER plain_queued', 'DROP TABLE plain_outbox');
+});
+
+test('an old table the new side lacks: the other tables copy, then the move fails by name', async () => {
   await exec(oldDb, 'CREATE TABLE outbox (id TEXT PRIMARY KEY)', "INSERT INTO outbox VALUES ('o1')", "INSERT INTO devices VALUES ('d4', 'Tablet')");
   const { passed, line } = await run();
   assert.equal(passed, false);

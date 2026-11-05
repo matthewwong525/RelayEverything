@@ -1,0 +1,21 @@
+// The public Relay website: static files only, with no bindings, so it can reach no note, key or private page.
+// `relay` is live at relayeverything.com and www; `relay-staging` shows a change before it publishes, on workers.dev only.
+// scripts/publish-relay-site.mjs deploys both.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "relay",
+  "compatibility_date": "2026-07-28",
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "relayeverything.com", "custom_domain": true },
+    { "pattern": "www.relayeverything.com", "custom_domain": true }
+  ],
+  "assets": { "directory": "./dist", "not_found_handling": "404-page" },
+  "env": {
+    "staging": {
+      "name": "relay-staging",
+      "workers_dev": true,
+      "routes": []
+    }
+  }
+}

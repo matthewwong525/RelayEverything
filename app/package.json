@@ -21,7 +21,8 @@
     "preview": "npm run build && vite preview",
     "deploy": "bash ../scripts/cf-deploy.sh",
     "cf-typegen": "wrangler types",
-    "test:runtime": "vitest run --config vitest.config.runtime.ts"
+    "test:runtime": "vitest run --config vitest.config.runtime.ts",
+    "relay:api-doc": "RELAY_API_DOC_WRITE=1 vitest run worker/apps/relay/api-doc.test.ts"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

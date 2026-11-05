@@ -1,0 +1,71 @@
+---
+title: Your data, in a place you choose
+description: Relay gets your notes, health and location off your phone and devices, into a place you choose, where your own AI can read them.
+template: splash
+hero:
+  title: Your data, in a place you choose.
+  tagline: Relay gets your notes, health and location off your phone and devices. It sends them to your own server and database, where your own AI can read them.
+  image:
+    alt: Data goes from your phone to your own database, and your AI reads it there
+    html: |
+      <svg viewBox="0 0 240 200" width="320" role="img" aria-label="Data goes from your phone to your own database, and your AI reads it there">
+        <rect x="14" y="40" width="58" height="104" rx="12" fill="none" stroke="#6b7486" stroke-width="6"/>
+        <circle cx="43" cy="128" r="4" fill="#6b7486"/>
+        <path d="M84 92h40" stroke="#3b5bdb" stroke-width="6" stroke-linecap="round" stroke-dasharray="2 12"/>
+        <path d="M120 82l12 10-12 10" fill="none" stroke="#3b5bdb" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+        <ellipse cx="176" cy="62" rx="40" ry="13" fill="none" stroke="#6b7486" stroke-width="6"/>
+        <path d="M136 62v64c0 7 18 13 40 13s40-6 40-13V62" fill="none" stroke="#6b7486" stroke-width="6"/>
+        <path d="M136 94c0 7 18 13 40 13s40-6 40-13" fill="none" stroke="#6b7486" stroke-width="6"/>
+        <path d="M176 148v10" stroke="#3b5bdb" stroke-width="5" stroke-linecap="round"/>
+        <path d="M176 166l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#3b5bdb"/>
+      </svg>
+  actions:
+    - text: Get started
+      link: start/what-you-need/
+      icon: right-arrow
+    - text: Android app
+      link: https://github.com/matthewwong525/relay-app/releases/latest
+      variant: secondary
+    - text: iPhone (TestFlight)
+      link: https://apps.apple.com/app/testflight/id899247664
+      variant: secondary
+    - text: The app's code
+      link: https://github.com/matthewwong525/relay-app
+      variant: minimal
+      icon: github
+---
+
+import { Badge, Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid>
+  <Card title="Collect it on your phone">
+    <Badge text="Works today" variant="tip" />
+
+    The Relay app on iPhone and Android collects your notes, steps, heart rate, sleep, workouts and where you were. Take a note by typing, or by voice from a ring.
+  </Card>
+  <Card title="Send it to your own database">
+    <Badge text="Coming" variant="default" />
+
+    Webhooks send each new item to a database you choose. You keep your own tables and tools. [See what is coming](connections/).
+  </Card>
+  <Card title="Let your own AI read it">
+    <Badge text="Coming" variant="default" />
+
+    An MCP connection lets your AI assistant read your data. An example skill and table setup to copy and change come after. [See what is coming](connections/).
+  </Card>
+</CardGrid>
+
+## How your data travels
+
+<ol class="relay-flow">
+  <li><strong>Collect</strong>Your phone and devices make notes, health and location data.</li>
+  <li><strong>Sync</strong>The Relay app sends it to your Relay server.</li>
+  <li><strong>Send on</strong>Webhooks copy each new item to your own database. Coming.</li>
+  <li><strong>Read with AI</strong>Your AI reads it through MCP. Coming.</li>
+</ol>
+
+## A ring to take notes
+
+A ring is one way to take a note: hold the band, talk, and let go. A Pebble Index ring works today. The Relay ring is in design: see [the ring](ring/how-it-works/).
+
+Relay is built in the open. The phone app's code is [on GitHub](https://github.com/matthewwong525/relay-app).

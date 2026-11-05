@@ -3,7 +3,7 @@
 import { refused, session, type Identity } from "./store.ts";
 
 /** The only addresses a device key reaches, whatever the method: the app's router answers the rest. */
-const DEVICE_ROUTES = /^\/apps\/relay\/api\/(?:pebble|notes|health|locations|timeline|audio)$/;
+export const DEVICE_ROUTES = /^\/apps\/relay\/api\/(?:pebble|notes|health|locations|timeline|audio)$/;
 
 // Git holds only the checker's fingerprint: its Client ID stays in .env with the other checker values.
 const sha256 = async (text: string) =>

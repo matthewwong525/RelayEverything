@@ -16,3 +16,9 @@ node_modules/
 # Ring exports: the .scad models in cad/ rebuild every STL.
 *.stl
 __pycache__/
+
+# The Relay website's build output and caches: site/ rebuilds them.
+site/dist/
+site/.astro/
+site/node_modules/
+site/.wrangler/

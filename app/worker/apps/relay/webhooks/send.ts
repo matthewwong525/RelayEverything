@@ -180,10 +180,11 @@ async function drain(env: Env, db: Db, id: string, lease: number, budget: number
   try {
     for (let sent = 0; sent < budget; sent++) {
       const hook = await renew(db, id, lease);
-      // Paused, failing, or waiting for a retry that another message carries.
-      if (!hook || !hook.active || hook.failing_since !== null || (hook.next_try_at ?? 0) > Date.now() + SLACK) return { sent, wait: null };
-      // Each renewal writes a new time, and every later write is guarded by it.
+      if (!hook) return { sent, wait: null };
+      // Each renewal writes a new time, and every later write, the release too, is guarded by it.
       lease = hook.lease_until!;
+      // Paused, failing, or waiting for a retry that another message carries.
+      if (!hook.active || hook.failing_since !== null || (hook.next_try_at ?? 0) > Date.now() + SLACK) return { sent, wait: null };
       const next = await step(env, db, hook, lease);
       if (next === "done") return { sent };
       if (next !== "next") return { sent, ...next };

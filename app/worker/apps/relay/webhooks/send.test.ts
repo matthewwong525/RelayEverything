@@ -125,6 +125,9 @@ it("keeps its lease while the clock moves: sends every group in one run, and cou
   answer = () => new Response("down", { status: 503 });
   await deliver({ webhook: "hook-1" });
   expect(webhook()).toMatchObject({ sent_seq: 3, pending_seq: 4, lease_until: null, tries: 1 });
+  // A wake before the retry is due stops at once and gives the lease back, so the retry is not turned away.
+  await deliver({ webhook: "hook-1" });
+  expect(webhook()).toMatchObject({ lease_until: null, tries: 1 });
   at(webhook().next_try_at as number);
   await deliver({ webhook: "hook-1" });
   expect(webhook()).toMatchObject({ sent_seq: 3, pending_seq: 4, lease_until: null, tries: 2 });

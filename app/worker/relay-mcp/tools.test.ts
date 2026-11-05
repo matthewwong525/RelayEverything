@@ -27,9 +27,9 @@ const ids = (answer: { notes: { id: string }[] }) => answer.notes.map(note => no
 const harbord = { name: "Harbord St", lat: 43.6629, lon: -79.3957, arrived: "2026-11-04T08:00:00-05:00", left: "2026-11-04T08:00:00-05:00" };
 const day = { steps: 8690, sleepMinutes: 450, heartRate: { min: 68, max: 121, average: 95 }, workouts: { count: 1, minutes: 40 } };
 
-it("lists six tools, each marked read-only", async () => {
+it("lists eight tools, each marked read-only", async () => {
   const { tools } = await client.listTools();
-  expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "places"]);
+  expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "places", "search_chats", "read_chat"]);
   for (const tool of tools) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
 });
 
@@ -107,6 +107,54 @@ it("lists visits in order, one per stay at a place, and says where to read on", 
     { name: "King St W", lat: 43.6487, lon: -79.3817, arrived: "2026-11-04T12:00:00-05:00", left: "2026-11-04T12:00:00-05:00" },
     { name: "Kensington Ave", lat: 43.6544, lon: -79.4006, arrived: "2026-11-04T17:00:00-05:00", left: "2026-11-04T17:30:00-05:00" }] });
   expect(await ask("places", { from: "2026-11-04", to: "2026-11-05", limit: 2 })).toMatchObject({ next: "2026-11-04T17:00:00-05:00" });
+});
+
+const CHAT = (n: number) => `c0000000-0000-4000-8000-00000000000${n}`;
+
+it("finds saved chats holding every word, with the matching lines and no device or session id", async () => {
+  const found = await ask("search_chats", { query: "stiffener" });
+  expect(found).toEqual({ nextCursor: null, chats: [{ id: CHAT(1), title: "Stiffener plan", project: "relay-ring", app: "claude-code",
+    startedAt: "2026-11-04T09:00:00-05:00", lastAt: "2026-11-04T09:10:00-05:00", messages: 4, savedByAi: true,
+    lines: [{ role: "you", text: "How thick should the stiffener be?" }, { role: "you", text: "Save the plan for the stiffener to Relay" }] }] });
+  expect(JSON.stringify(found)).not.toMatch(/seed-session|d0000000|device/);
+  // A word in the AI's summary alone finds the chat too; every word must match.
+  expect((await ask("search_chats", { query: "soldered" })).chats.map((chat: { id: string }) => chat.id)).toEqual([CHAT(1)]);
+  expect((await ask("search_chats", { query: "stiffener webhook" })).chats).toEqual([]);
+  const first = await ask("search_chats", { query: "the", limit: 1 });
+  expect([first.chats[0].id, first.nextCursor]).toEqual([CHAT(2), `1793816100000.${CHAT(2)}`]);
+  expect((await ask("search_chats", { query: "the", cursor: first.nextCursor })).chats.map((chat: { id: string }) => chat.id)).toEqual([CHAT(1)]);
+  expect((await ask("search_chats", { query: "the", to: "2026-11-04T12:00" })).chats.map((chat: { id: string }) => chat.id)).toEqual([CHAT(1)]);
+});
+
+it("cuts a long matching line around the word", async () => {
+  const { sql, env: { DB } } = seeded();
+  sql.exec(`INSERT INTO relay_chat_messages (chat_id, seq, role, text, at) VALUES ('${CHAT(2)}', 3, 'ai', '${"a".repeat(500)} needle ${"b".repeat(500)}', 1793816200000)`);
+  client = await connect(DB);
+  const [{ lines }] = (await ask("search_chats", { query: "needle" })).chats;
+  expect(lines[0].text).toMatch(/^…a+ needle b+…$/);
+  expect(lines[0].text.length).toBe(302);
+  client = await connect(seeded().env.DB);
+});
+
+it("reads one chat with its saves and messages, a part at a time", async () => {
+  const chat = await ask("read_chat", { id: CHAT(1) });
+  expect(chat).toMatchObject({ id: CHAT(1), title: "Stiffener plan", nextCursor: null,
+    saves: [{ title: "Stiffener plan", text: "Use a 0.2 mm steel stiffener under the battery, glued, not soldered.", createdAt: "2026-11-04T09:11:00-05:00" }] });
+  expect(chat.messages.map((message: { role: string; text: string }) => [message.role, message.text])).toEqual([
+    ["you", "How thick should the stiffener be?"], ["step", "Read pcb/relay.kicad_pcb"],
+    ["ai", "0.2 mm steel is enough for a ring this size. Glue it under the battery."], ["you", "Save the plan for the stiffener to Relay"]]);
+  expect(JSON.stringify(chat)).not.toMatch(/seed-session|d0000000/);
+  const { sql, env: { DB } } = seeded();
+  const insert = sql.prepare(`INSERT INTO relay_chat_messages (chat_id, seq, role, text, at) VALUES ('${CHAT(2)}', ?, 'you', 'More', 1793816200000)`);
+  for (let seq = 3; seq < 250; seq++) insert.run(seq);
+  client = await connect(DB);
+  const first = await ask("read_chat", { id: CHAT(2) });
+  expect([first.messages.length, first.nextCursor]).toEqual([200, "199"]);
+  const rest = await ask("read_chat", { id: CHAT(2), cursor: first.nextCursor });
+  expect([rest.messages.length, rest.messages[0].text, rest.nextCursor]).toEqual([50, "More", null]);
+  expect(await ask("read_chat", { id: CHAT(2), cursor: "page-2" })).toEqual({ refused: "That cursor is not one this connector gave." });
+  expect(await ask("read_chat", { id: CHAT(9) })).toEqual({ refused: "No chat has this id." });
+  client = await connect(seeded().env.DB);
 });
 
 it("titles a note with no words, and lets a database fault through as an error, not as an answer", async () => {

@@ -2,14 +2,15 @@ import { Loading } from '@/components/Loading'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AiCard } from './AiCard'
+import { Chats } from './Chats'
 import { Failed } from './Failed'
 import { Notes } from './Notes'
 import { today, useGet, when, type Summary, type Timeline } from './read'
 import { PebbleSetup, PhoneSetup } from './Setup'
 import { Webhooks } from './Webhooks'
 
-// Relay's site page: today's summary, every note with its place and recording, the places visited, and the webhooks
-// that copy them to your own database. Phones and the Pebble app send to app/worker/apps/relay/.
+// Relay's site page: today's summary, notes with places and recordings, saved chats, and the webhooks to your own
+// database. Phones, the Pebble app and Claude Code send to app/worker/apps/relay/; this page reads, and deletes a chat.
 const number = new Intl.NumberFormat()
 
 function Tile({ label, value }: { label: string; value: string }) {
@@ -63,6 +64,7 @@ export function App() {
     </Loading>}
     {timeline.status === 'failed' && <Failed what="Notes" retry={retryTimeline} />}
     {timeline.status === 'ready' && <Notes first={timeline.value} />}
+    <Chats />
     <Webhooks />
     <AiCard />
   </div>

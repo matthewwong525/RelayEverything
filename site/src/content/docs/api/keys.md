@@ -26,6 +26,10 @@ A device key reaches only these routes:
 
 Any other address answers `403` to a device key. `GET summary` needs a signed-in person. [Routes](../reference/) shows who can call each route.
 
+## A chat key
+
+A chat key, made with `--for claude-code`, is for the [Relay plugin for Claude Code](../../connections/claude-code/). It reaches only `POST chats` and `POST chat-saves`: it can add chats, but it can't list, read, change or delete them, or reach a phone's routes. A phone's key can't reach the chat routes.
+
 ## Make, list and turn off keys
 
 The owner of the Relay server runs these on the computer that holds the server's project:
@@ -33,7 +37,8 @@ The owner of the Relay server runs these on the computer that holds the server's
 | Command | What it does |
 |---|---|
 | `node scripts/relay-device-key.mjs create --name "Android phone"` | Makes a key. It shows once, as a QR code and on a private page. It lasts one year. |
-| `node scripts/relay-device-key.mjs list` | Lists each key: its name, when it was made, and whether it is off. |
+| `node scripts/relay-device-key.mjs create --name "Laptop" --for claude-code` | Makes a chat key. Its connect code shows once, in the terminal and on a private page. |
+| `node scripts/relay-device-key.mjs list` | Lists each key: its name, its kind (`phone` or `claude-code`), when it was made, and whether it is off. |
 | `node scripts/relay-device-key.mjs revoke --name "Android phone"` | Turns the key off at once. The other keys go on. |
 
 Add `--staging` to make a key for a preview. A preview's key doesn't open the live server, and a live key doesn't open a preview.

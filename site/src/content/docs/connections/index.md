@@ -1,9 +1,9 @@
 ---
 title: Connections
-description: Send your Relay data to your own database, and let your own AI read it. Webhooks work today; the AI connection is coming.
+description: Send your Relay data to your own database, let your own AI read it, and save your Claude Code chats.
 ---
 
-Connections move your notes, health and location from Relay to the place you choose, where your own AI can read them. Webhooks to your own database work today. The others are coming, so this page gives no steps for them.
+Connections move your notes, health and location from Relay to the place you choose, where your own AI can read them. Three work today: webhooks to your own database, the AI connector, and the Relay plugin that saves your Claude Code chats. The others are coming, so this page gives no steps for them.
 
 Relay does not store your data for your AI, and it gives you no plugin format or access roles. You keep your own database, tables and tools. Relay collects the data and sends it to them.
 
@@ -13,9 +13,11 @@ A webhook sends each new note, and the health and location you tick, to an addre
 
 ## AI assistants (MCP)
 
-:::note[Coming]
-Your AI assistant will read your Relay data through MCP, the Model Context Protocol. Its set-up steps come here when it is built.
-:::
+Your AI assistant reads your notes, health, places and chats through MCP, the Model Context Protocol: [Connect your AI](connect-your-ai/).
+
+## Claude Code chats
+
+The Relay plugin saves each Claude Code chat to your Relay server: [Save Claude Code chats](claude-code/).
 
 ## An example skill and tables
 

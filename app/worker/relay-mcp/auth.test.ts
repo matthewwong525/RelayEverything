@@ -140,7 +140,7 @@ it("connects the owner's AI app after they approve it by name, and its token rea
   const token = await connect();
   const answer = await listTools(token);
   expect(answer.status).toBe(200);
-  expect((await answer.json() as { result: { tools: unknown[] } }).result.tools).toHaveLength(6);
+  expect((await answer.json() as { result: { tools: unknown[] } }).result.tools).toHaveLength(8);
 });
 
 it("lists the connected apps newest first, and a disconnected one's token stops at once", async () => {

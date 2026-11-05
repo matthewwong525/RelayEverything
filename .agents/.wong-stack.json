@@ -73,16 +73,6 @@
         "relay-ring-line"
       ]
     },
-    "delivery": {
-      "route": "artifacts",
-      "accountId": "040f88e2bf4f25fb0b91b7cb24f3d442",
-      "namespace": "wongstack",
-      "repo": "relay-ring",
-      "remote": "https://040f88e2bf4f25fb0b91b7cb24f3d442.artifacts.cloudflare.net/git/wongstack/relay-ring.git",
-      "runner": "relay-ring-checks",
-      "workflow": "relay-ring-checks",
-      "bucket": "relay-ring-checks"
-    },
     "knowledge": {
       "namespace": "wongstack",
       "repo": "relay-ring-knowledge"

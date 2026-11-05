@@ -6,8 +6,8 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// The release key: android.yml writes key.properties and the keystore from relay-app's secrets. Without them, as on
-// a contributor's computer, a release build is signed with the debug key.
+// The release key: mobile-android.yml writes key.properties and the keystore from the repository's secrets.
+// Without them, as on a contributor's computer, a release build is signed with the debug key.
 val keyProperties = Properties().apply {
     val file = rootProject.file("key.properties")
     if (file.exists()) file.inputStream().use { load(it) }

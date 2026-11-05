@@ -3,11 +3,11 @@ title: Install the app
 description: Get the Relay app on an Android phone or an iPhone.
 ---
 
-The Relay app runs on Android and on iPhone. Each new version is built from [the app's code](https://github.com/matthewwong525/relay-app) when it changes.
+The Relay app runs on Android and on iPhone. Each new version is built from [the app's code](https://github.com/matthewwong525/RelayEverything/tree/main/mobile) when it changes.
 
 ## Android
 
-1. On the phone, open [the newest release](https://github.com/matthewwong525/relay-app/releases/latest).
+1. On the phone, open [the newest release](https://github.com/matthewwong525/RelayEverything/releases/latest).
 2. Download the `.apk` file.
 3. Open the file. Android asks once to allow installs from your browser: allow it.
 4. Tap **Install**.
@@ -23,7 +23,7 @@ The iPhone app comes through [TestFlight](https://apps.apple.com/app/testflight/
 3. Tap **Install**.
 
 :::note
-The iPhone build is not in TestFlight yet. Until it is, you can build the app yourself: [Build it yourself](https://github.com/matthewwong525/relay-app#build-it-yourself) gives the steps.
+The iPhone build is not in TestFlight yet. Until it is, you can build the app yourself: [Build it yourself](https://github.com/matthewwong525/RelayEverything/tree/main/mobile#build-it-yourself) gives the steps.
 :::
 
 ## Next

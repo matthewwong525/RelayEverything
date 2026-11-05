@@ -1,0 +1,49 @@
+# The phone app in mobile/: analyze and test on each change to it, then the Android file on every branch and the
+# iPhone build where the keys allow. A pull request from a fork runs the tests only, with no secret.
+name: Mobile CI
+on:
+  push:
+    branches: ['**']
+    paths: ['mobile/**', '.github/workflows/mobile-*.yml']
+  pull_request:
+    paths: ['mobile/**', '.github/workflows/mobile-*.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A same-repo pull request is already covered by its own push, as in test.yml.
+concurrency:
+  group: mobile-ci-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: ${{ github.ref_name != github.event.repository.default_branch }}
+
+jobs:
+  flutter:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: mobile/pubspec.yaml
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  android:
+    needs: flutter
+    if: ${{ github.event_name != 'pull_request' }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/mobile-android.yml
+    secrets: inherit
+
+  ios:
+    needs: flutter
+    if: ${{ github.event_name != 'pull_request' }}
+    uses: ./.github/workflows/mobile-ios.yml
+    secrets: inherit

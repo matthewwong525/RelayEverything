@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { isMain, parseCli } from './lib-cli.mjs';
-import { blocked, envSecrets } from './publish-relay-app.mjs';
+import { blocked, envSecrets } from './public-check.mjs';
 import { primaryRoot } from '../.claude/skills/memory/scripts/lib/primary-root.mjs';
 import { parseEnv } from '../.claude/skills/memory/scripts/lib/store.mjs';
 

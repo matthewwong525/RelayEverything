@@ -7,7 +7,7 @@ interface __BaseEnv_Env {
 	ASSETS: Fetcher;
 	WONG_ENVIRONMENT: "staging" | "local" | "production";
 	WONG_KNOWLEDGE_REPOSITORY?: "relay-ring-knowledge";
-	WONG_CODE_REPOSITORY?: "relay-ring";
+	WONG_CODE_REPOSITORY?: "matthewwong525/RelayEverything";
 	WONG_OWNER_EMAIL?: "matthewwong525@gmail.com";
 	CF_ACCESS_TEAM_DOMAIN?: "startuptemplate.cloudflareaccess.com";
 	CF_ACCESS_AUD?: "290a7c4a0ebaae36505385d17a43566e37cc1c2472c55de0f25d4c0c40c51545" | "8c34a3dc4b254dd4d3f4e10d7c5c8648cb2c4abd82a3704054adc3c385ce0dc2";
@@ -31,7 +31,7 @@ declare namespace Cloudflare {
 		ASSETS: Fetcher;
 		WONG_ENVIRONMENT: "staging";
 		WONG_KNOWLEDGE_REPOSITORY: "relay-ring-knowledge";
-		WONG_CODE_REPOSITORY: "relay-ring";
+		WONG_CODE_REPOSITORY: "matthewwong525/RelayEverything";
 		WONG_OWNER_EMAIL: "matthewwong525@gmail.com";
 		CF_ACCESS_TEAM_DOMAIN: "startuptemplate.cloudflareaccess.com";
 		CF_ACCESS_AUD: "290a7c4a0ebaae36505385d17a43566e37cc1c2472c55de0f25d4c0c40c51545";

@@ -1,5 +1,9 @@
 # Relay offline by default
 
+**Status:** ready-to-ship
+**Branch:** elderly-husky
+**Open questions:** none
+
 ## Why
 
 Relay is the fastest way to take a note wherever you are, and a note is private until you choose to share it. Today's first version sends every note, and your health and location, to the Relay server from the start. Now the app keeps everything on your phone. Sending is an add-on that you turn on when you want to do more with your notes.

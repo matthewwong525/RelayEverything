@@ -1,6 +1,6 @@
 # Talk a note into your phone
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** nifty-gecko
 **Open questions:** none
 
@@ -126,3 +126,5 @@ Non-goals: speech to text on a server or in the cloud (a later change, maybe for
 - **2026-11-05** — Assumed: task 5.2's phone check waits on Matthew's iPhone through TestFlight and does not block the ship, because the orchestrator chat, for Matthew, said device-only steps go to an open thread. The thread is in memory.
 - **2026-11-05** — Check: `.github/workflows/mobile-android.yml` adds a Gradle cache to the Java setup; no check is turned off or weakened, because whisper.cpp now compiles with the NDK on each Android build and the cache keeps that time down.
 - **2026-11-05** — Assumed: the build and its review are done and saved for the pull request's checks, because the Android build, the staging site check and the publish run there; the iPhone check waits on TestFlight.
+- **2026-11-05** — Assumed: the pull request's Android build is the build check for tasks 1.1, 3.4 and 5.2: it passed in 9 min 7 s, against 7 min 35 s and 13 min 19 s for the last two builds on `main`, so whisper.cpp adds little; it made the `.apk` file (40 MB zipped). The site preview at commit f304b9c printed `result=deployed` and shows the *Voice notes* page.
+- **2026-11-05** — Assumed: archived for publishing with every task ticked; the iPhone check through TestFlight stays an open thread, because the orchestrator chat, for Matthew, said device-only steps do not block the ship.

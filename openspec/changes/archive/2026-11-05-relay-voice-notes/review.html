@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · relay-voice-notes</title>
+<title>Review · 2026-11-05-relay-voice-notes</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="relay-voice-notes" data-own-back>
+<body data-change="2026-11-05-relay-voice-notes" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>relay-voice-notes</h1>
+  <h1>2026-11-05-relay-voice-notes</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -493,6 +493,8 @@
 <li class="decision card" id="decision-22" data-note="decision-22" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-05</p>Assumed: task 5.2's phone check waits on Matthew's iPhone through TestFlight and does not block the ship, because the orchestrator chat, for Matthew, said device-only steps go to an open thread. The thread is in memory.</li>
 <li class="decision card" id="decision-23" data-note="decision-23" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-05</p>Check: <code>.github/workflows/mobile-android.yml</code> adds a Gradle cache to the Java setup; no check is turned off or weakened, because whisper.cpp now compiles with the NDK on each Android build and the cache keeps that time down.</li>
 <li class="decision card" id="decision-24" data-note="decision-24" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-05</p>Assumed: the build and its review are done and saved for the pull request's checks, because the Android build, the staging site check and the publish run there; the iPhone check waits on TestFlight.</li>
+<li class="decision card" id="decision-25" data-note="decision-25" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-05</p>Assumed: the pull request's Android build is the build check for tasks 1.1, 3.4 and 5.2: it passed in 9 min 7 s, against 7 min 35 s and 13 min 19 s for the last two builds on <code>main</code>, so whisper.cpp adds little; it made the <code>.apk</code> file (40 MB zipped). The site preview at commit f304b9c printed <code>result=deployed</code> and shows the <i>Voice notes</i> page.</li>
+<li class="decision card" id="decision-26" data-note="decision-26" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-05</p>Assumed: archived for publishing with every task ticked; the iPhone check through TestFlight stays an open thread, because the orchestrator chat, for Matthew, said device-only steps do not block the ship.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

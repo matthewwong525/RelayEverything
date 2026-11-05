@@ -1,16 +1,17 @@
 ---
 title: Notes
-description: Read your ring notes and typed notes, and write a new note on your phone.
+description: Read your ring, voice and typed notes, and write a new note on your phone.
 ---
 
-The Relay app opens on your notes, newest first. It keeps every note you type on your phone. With sending on, it also shows ring notes from your Relay server.
+The Relay app opens on your notes, newest first. It keeps every note you type or say into it on your phone. With sending on, it also shows ring notes from your Relay server.
 
 ## Read your notes
 
 Each note shows:
 
-- **Ring** or **Typed**: where the note came from. Ring notes need sending on.
-- A microphone mark when the note has a recording.
+- **Ring**, **Voice** or **Typed**: where the note came from. Ring notes need sending on.
+- A microphone mark when a ring note has a recording on your server.
+- **Play** on a voice note: its recording, from this phone. A voice note shows **Writing the words…** until the phone has written them. [Voice notes](../voice-notes/)
 - The note's words. A ring note with no words shows *No words, only the recording.*
 - When you made it, where you were, and which device sent it. With sending off, a pinned note shows **Pinned**: the phone does not look up the place's name.
 
@@ -23,6 +24,10 @@ With sending on, pull the list down to get new notes, and tap **Show older notes
 3. Tap **Save**.
 
 The note shows at once, with or without a signal. With **Pin notes to where I am** on, it keeps where you are; the pin follows when the phone has a fix. With sending on, the note also goes to your server. A note sent two times, for example after the phone lost its answer, is kept once.
+
+## Talk a note
+
+Hold **Hold to talk**, talk, and let go. The phone writes the words itself. [Voice notes](../voice-notes/)
 
 ## Where a ring note's place comes from
 

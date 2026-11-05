@@ -45,6 +45,12 @@ dependencies:
   geocoding: ^5.0.1
   workmanager: ^0.10.10
   mobile_scanner: ^7.5.0
+  # Voice notes: whisper.cpp writes the words on the phone, record keeps the sound, just_audio plays it back.
+  whisper_cpp_flutter_plus: ^0.5.1
+  record: ^7.1.2
+  just_audio: ^0.10.6
+  path_provider: ^2.1.6
+  crypto: ^3.0.8
 
 dev_dependencies:
   flutter_test:

@@ -1,20 +1,37 @@
 import { expect, it } from "vitest";
 import { fakeEnv } from "../../../tests/env";
 import { deviceGate, deviceOf } from "./device";
-import { checker, db, deviceKey, lost, matthew, phone } from "../../../tests/relay";
+import { checker, db, deviceKey, laptop, lost, matthew, phone } from "../../../tests/relay";
 
 // The fingerprint of checker.id, "checker.access".
 const CHECKER_SHA256 = "6a6814c5281a7635cb9d9f881d7feae9b0d6159c868666fad3ffa0a164f4d999";
 const ROUTES = ["pebble", "notes", "health", "locations", "timeline", "audio"].map(route => `/apps/relay/api/${route}`);
 const refusal = async (response: Response | null) =>
   [response?.status, ((await response?.json()) as { error: { message: string } } | undefined)?.error.message];
-const gate = (who: Parameters<typeof deviceGate>[1], path: string) => deviceGate({ DB: db.DB, RELAY_CHECKER_SHA256: CHECKER_SHA256 }, who, path);
+const gate = (who: Parameters<typeof deviceGate>[1], path: string, method = "GET") =>
+  deviceGate({ DB: db.DB, RELAY_CHECKER_SHA256: CHECKER_SHA256 }, who, method, path);
+const CHATS = "/apps/relay/api/chats";
 
 it("lets a device key reach Relay's device routes, and nothing else", async () => {
   for (const path of ROUTES) expect(await gate(phone, path), path).toBeNull();
   for (const path of ["/apps/relay/api/summary", "/apps/relay/api/ai-apps", "/apps/relay/api/ai-apps-disconnect", "/apps/relay/", "/apps/hello/api/greeting", "/api/access/apps", "/api/health", "/", "/apps/relay/api/notes/x"]) {
     expect(await refusal(await gate(phone, path)), path).toEqual([403, "A device key reaches only Relay."]);
   }
+  // A phone can't send, list, read or delete chats.
+  for (const [method, path] of [["POST", CHATS], ["POST", "/apps/relay/api/chat-saves"], ["GET", CHATS], ["GET", "/apps/relay/api/chat"], ["DELETE", "/apps/relay/api/chat"]]) {
+    expect(await refusal(await gate(phone, path, method)), `${method} ${path}`).toEqual([403, "A device key reaches only Relay."]);
+  }
+});
+
+it("lets a chat key only send chats and saves, by POST, and nothing else", async () => {
+  expect(await gate(laptop, CHATS, "POST")).toBeNull();
+  expect(await gate(laptop, "/apps/relay/api/chat-saves", "POST")).toBeNull();
+  for (const [method, path] of [["GET", CHATS], ["GET", "/apps/relay/api/chat"], ["DELETE", "/apps/relay/api/chat"], ["DELETE", CHATS],
+    ["GET", "/apps/relay/api/chat-saves"], ...ROUTES.map(route => ["GET", route]), ...ROUTES.map(route => ["POST", route]),
+    ["GET", "/apps/relay/api/summary"], ["GET", "/apps/relay/api/ai-apps"], ["GET", "/api/health"]]) {
+    expect(await refusal(await gate(laptop, path, method)), `${method} ${path}`).toEqual([403, "A chat key can only send chats."]);
+  }
+  expect(await deviceOf({ DB: db.DB }, laptop)).toEqual({ id: "d-laptop", name: "Laptop", reaches: "chats" });
 });
 
 it("stops a revoked key everywhere, Relay included, and leaves the other devices working", async () => {
@@ -23,7 +40,7 @@ it("stops a revoked key everywhere, Relay included, and leaves the other devices
   }
   expect(await gate(phone, ROUTES[1])).toBeNull();
   expect(await deviceOf({ DB: db.DB }, lost)).toBeNull();
-  expect(await deviceOf({ DB: db.DB }, phone)).toEqual({ id: "d-phone", name: "Android phone" });
+  expect(await deviceOf({ DB: db.DB }, phone)).toEqual({ id: "d-phone", name: "Android phone", reaches: "phone" });
 });
 
 it("leaves people and the checker to the usual checks, and refuses every other service token", async () => {
@@ -35,12 +52,12 @@ it("leaves people and the checker to the usual checks, and refuses every other s
     expect(await refusal(await gate(deviceKey("reset.access"), path)), path).toEqual([403, "This key is on no list of devices."]);
   }
   // With no checker named, the checker is one more unknown key.
-  expect(await refusal(await deviceGate({ DB: db.DB }, checker, "/api/health"))).toEqual([403, "This key is on no list of devices."]);
-  expect(await refusal(await deviceGate({}, phone, "/api/health"))).toEqual([403, "This key is on no list of devices."]);
+  expect(await refusal(await deviceGate({ DB: db.DB }, checker, "GET", "/api/health"))).toEqual([403, "This key is on no list of devices."]);
+  expect(await refusal(await deviceGate({}, phone, "GET", "/api/health"))).toEqual([403, "This key is on no list of devices."]);
   expect(await deviceOf({ DB: db.DB }, matthew)).toBeNull();
   expect(await deviceOf({ DB: db.DB }, checker)).toBeNull();
   const broken = fakeEnv({ DB: { withSession: () => { throw new Error("D1 is down"); } }, RELAY_CHECKER_SHA256: CHECKER_SHA256 });
-  const refused = await deviceGate(broken, phone, "/api/health");
+  const refused = await deviceGate(broken, phone, "GET", "/api/health");
   expect([refused?.status, ((await refused?.json()) as { error: { code: string } } | undefined)?.error.code]).toEqual([503, "unavailable"]);
-  expect(await deviceGate(broken, checker, "/api/health")).toBeNull();
+  expect(await deviceGate(broken, checker, "GET", "/api/health")).toBeNull();
 });

@@ -1,6 +1,6 @@
 # Relay's AI connector
 
-Relay's AI connector lets an AI chat app, such as the Claude app or ChatGPT, read your Relay notes, health and places when you ask it a question. It only reads: it can't add, change or delete a note. It is part of [the Cloudflare stack](README.md): its own Worker, `relay-everything-mcp`, beside the main app.
+Relay's AI connector lets an AI chat app, such as the Claude app or ChatGPT, read your Relay notes, health, places and saved chats when you ask it a question. It only reads: it can't add, change or delete a note. It is part of [the Cloudflare stack](README.md): its own Worker, `relay-everything-mcp`, beside the main app.
 
 | Where | Address to add |
 | --- | --- |
@@ -23,7 +23,7 @@ Then ask, for example: *What did I note on 4 November?* or *How many steps did I
 
 ## What the app can read
 
-The connector has six tools. Each answer has a limit, so one question can't copy all of Relay.
+The connector has eight tools. Each answer has a limit, so one question can't copy all of Relay.
 
 - **search**: notes that hold every word you give, newest first.
 - **fetch**: one note, the places near it in time, and its day's health totals.
@@ -31,10 +31,12 @@ The connector has six tools. Each answer has a limit, so one question can't copy
 - **day_summary**: one day's notes count, steps, sleep, heart rate, workouts and places.
 - **health**: steps, sleep, heart rate or workouts, one value per hour or per day.
 - **places**: each stay at a place, with when you arrived and left.
+- **search_chats**: saved Claude Code chats that hold every word you give, with the lines that match ([Relay's Claude Code chats](relay-chats.md)).
+- **read_chat**: one saved chat, a part at a time, with the AI's saved summaries.
 
 ## What leaves Relay
 
-When an app uses a tool, the answer goes to that app's company: Anthropic for Claude, OpenAI for ChatGPT. Their own terms then apply to it. An answer can hold a note's words, its time, the place name and coordinates, the device name, and health totals.
+When an app uses a tool, the answer goes to that app's company: Anthropic for Claude, OpenAI for ChatGPT. Their own terms then apply to it. An answer can hold a note's words, its time, the place name and coordinates, the device name, health totals, and a chat's messages.
 
 An answer never holds a recording, a device key, or a device's or delivery's id. The app gets only what a tool answers for one question, not a copy of the database.
 

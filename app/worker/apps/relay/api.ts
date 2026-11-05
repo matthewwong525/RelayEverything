@@ -1,8 +1,10 @@
-// Relay's server: ring notes, typed notes, health and location from the phones, read back and sent on to webhooks.
+// Relay's server: notes, health and location from the phones, sent on to webhooks, and Claude Code chats.
 // A device key reaches only these routes but summary, the AI apps and the webhooks: device.ts.
 import type { Route } from "../../api/contract.ts";
 import { aiAppDisconnect, aiApps } from "./ai-apps.ts";
 import { audio } from "./audio.ts";
+import { chatDelete, chatList, chatRead } from "./chat-read.ts";
+import { chats, chatSaves } from "./chats.ts";
 import { notes } from "./notes.ts";
 import { pebble } from "./pebble.ts";
 import { health, locations } from "./samples.ts";
@@ -31,6 +33,11 @@ export const routes = new Map<string, Route>([
   ["POST webhooks/sweep", sweepNow],
   ["GET ai-apps", aiApps],
   ["POST ai-apps-disconnect", aiAppDisconnect],
+  ["POST chats", chats],
+  ["POST chat-saves", chatSaves],
+  ["GET chats", chatList],
+  ["GET chat", chatRead],
+  ["DELETE chat", chatDelete],
 ]);
 
 /** The webhooks' queue, keyed by its name without `-staging`, and the sweep production runs every 15 minutes. */

@@ -222,6 +222,57 @@ void main() {
       expect(await old.earlierCount(), 0);
     });
 
+    test('upgrades a phone from before voice notes: its notes read as typed, with their uploads', () async {
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+      addTearDown(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = false);
+      final old = Store(NativeDatabase.memory(setup: (db) {
+        for (final statement in [
+          "CREATE TABLE outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, destination TEXT NOT NULL DEFAULT 'relay-server', "
+            'route TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL)',
+          'CREATE TABLE notes (client_id TEXT PRIMARY KEY, body TEXT NOT NULL, created_at INTEGER NOT NULL, sent_at INTEGER, '
+            'queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0)',
+          'CREATE TABLE points (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
+          'CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+        ]) {
+          db.execute(statement);
+        }
+        String body(String id) => jsonEncode(note(id).toJson());
+        db.execute('INSERT INTO notes VALUES (?, ?, ?, 5, 1, 0), (?, ?, ?, NULL, 0, 0)',
+          ['sent', body('sent'), 1, 'local', body('local'), 2]);
+        db.execute('PRAGMA user_version = 3');
+      }));
+      addTearDown(old.close);
+      expect([for (final kept in await old.notes()) (kept.clientId, kept.kind, kept.audioPath, kept.durationMs, kept.wordsPending)],
+        [('local', NoteKind.typed, null, null, false), ('sent', NoteKind.typed, null, null, false)]);
+      expect(await old.earlierCount(), 1);
+      expect(await old.pendingWords(), isEmpty);
+    });
+
+    test('keeps a voice note with no words and no upload until its words land', () async {
+      final voice = LocalNote(clientId: 'v', text: '', createdAt: at, kind: NoteKind.voice, audioPath: 'voice/v.wav', durationMs: 12000);
+      await store.addVoiceNote(voice);
+      final kept = (await store.notes()).single;
+      expect([kept.kind, kept.audioPath, kept.durationMs, kept.wordsPending, kept.text], [NoteKind.voice, 'voice/v.wav', 12000, true, '']);
+      // Not an earlier note: *Send them* can not send it with no words.
+      expect([await store.earlierCount(), (await store.outbox()).length], [0, 0]);
+      expect([for (final note in await store.pendingWords()) note.clientId], ['v']);
+      expect(await store.setWords('v', 'Order more switches', send: true), isTrue);
+      expect(await store.setWords('v', 'Again', send: true), isFalse);
+      // The upload is a typed note's body: the words, never the recording.
+      expect((await store.outbox()).single.body, {'clientId': 'v', 'text': 'Order more switches', 'createdAt': at.millisecondsSinceEpoch});
+      expect([(await store.notes()).single.wordsPending, (await store.notes()).single.queued], [false, true]);
+      expect(await store.pendingWords(), isEmpty);
+    });
+
+    test('a voice note given words with sending off stays only here, and counts as earlier', () async {
+      await store.addVoiceNote(LocalNote(clientId: 'v', text: '', createdAt: at, kind: NoteKind.voice, audioPath: 'voice/v.wav'));
+      expect(await store.setWords('v', 'Words', send: false), isTrue);
+      expect([await store.earlierCount(), (await store.outbox()).length], [1, 0]);
+      await store.addVoiceNote(LocalNote(clientId: 'silent', text: '', createdAt: at, kind: NoteKind.voice, audioPath: 'voice/silent.wav'));
+      await store.dropNote('silent');
+      expect([for (final note in await store.notes()) note.clientId], ['v']);
+    });
+
     test('keeps small values by name', () async {
       expect(await store.get('x'), isNull);
       await store.set('x', '1');

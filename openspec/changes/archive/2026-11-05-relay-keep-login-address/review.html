@@ -447,6 +447,7 @@
 <li class="decision card" id="decision-5" data-note="decision-5" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-05</p>Assumed: add the access-config tests to the <code>npm test</code> chain, because the review found CI never ran them, so the new check could be dropped with CI still passing.</li>
 <li class="decision card" id="decision-6" data-note="decision-6" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-05</p>Assumed: move the after-publish check from the tasks to the design's Migration Plan, because it can only run once the change is live, and the ship runs it then.</li>
 <li class="decision card" id="decision-7" data-note="decision-7" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-05</p>Archive checkpoint: built, reviewed (one gap fixed: the access tests now run in CI), and archived for the ship.</li>
+<li class="decision card" id="decision-8" data-note="decision-8" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-05</p>Check: <code>app/package.json</code> changes the <code>npm test</code> chain only to add <code>../scripts/check-private-access.test.mjs</code>, because CI never ran those tests; no check is loosened.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

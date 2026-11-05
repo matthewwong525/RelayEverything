@@ -49,3 +49,4 @@ Non-goals: moving the login to app.relayeverything.com as its main address, or c
 - **2026-11-05** — Assumed: add the access-config tests to the `npm test` chain, because the review found CI never ran them, so the new check could be dropped with CI still passing.
 - **2026-11-05** — Assumed: move the after-publish check from the tasks to the design's Migration Plan, because it can only run once the change is live, and the ship runs it then.
 - **2026-11-05** — Archive checkpoint: built, reviewed (one gap fixed: the access tests now run in CI), and archived for the ship.
+- **2026-11-05** — Check: `app/package.json` changes the `npm test` chain only to add `../scripts/check-private-access.test.mjs`, because CI never ran those tests; no check is loosened.

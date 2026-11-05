@@ -3,7 +3,7 @@ title: Privacy
 description: What Relay keeps, where it keeps it, and how to turn each part off.
 ---
 
-Relay keeps your notes on your phone. When you turn on sending, it keeps your notes, health and places on your own Relay server, and nowhere else. This website holds none of them.
+Relay keeps your notes on your phone. When you turn on sending, it keeps your notes, health and places on your own Relay server. Your server sends them on only to the webhooks you add: notes to each one, and health and places only to those you tick them for. This website holds none of them.
 
 ## What is kept, and where
 
@@ -18,6 +18,7 @@ Relay keeps your notes on your phone. When you turn on sending, it keeps your no
 | Location history: a point each 100 m you move | Your Relay server's database | With sending and **Location history** on |
 | A copy of the notes on your server | The phone's own storage | Kept when you turn sending off |
 | The phone's key | The iPhone Keychain or the Android Keystore | Never sent, except as the key's headers |
+| A copy of what your server stores | [Your own database](../connections/your-database/), through a webhook you add | Notes always; health and location only if you tick them for that webhook |
 
 With sending off, the app makes no network call, reads no health data, and keeps no location history. The one exception is the speech model for voice notes, and only after you tap **Get it**.
 
@@ -25,7 +26,7 @@ Your Relay server is a private site behind a login. Only its owner, and the devi
 
 ## What is not kept
 
-- The Relay app has no ads and no analytics. It sends your notes, health and places only to your Relay server, and only with sending on.
+- The Relay app has no ads and no analytics. It sends your notes, health and places only to your Relay server, and only with sending on. Your server sends them on only to your webhooks.
 - To name a place, such as a street, the phone uses its own address lookup from Apple or Google, only with sending on. That lookup gets the place's coordinates, not the note. With sending off, a pinned note shows **Pinned**.
 - The phone writes a voice note's words itself. No speech service on a network hears your voice.
 - The speech model comes from [whisper.cpp's page on Hugging Face](https://huggingface.co/ggerganov/whisper.cpp), one time, after you tap **Get it**. Hugging Face sees the phone's internet address, the same as any download. It gets no note, no recording and no key.
@@ -42,5 +43,6 @@ Your Relay server is a private site behind a login. Only its owner, and the devi
 | Health | Turn off **Health** in Settings, and take back the permission in Apple Health or Health Connect. |
 | One phone | Tap **Disconnect this phone** in Settings, or turn its key off: [Keys](../api/keys/#make-list-and-turn-off-keys). |
 | Ring notes | Turn off the webhook in the Pebble app, or turn off the Pebble app's key. |
+| A webhook to your database | **Pause** or **Remove** it on the Relay page: [Your own database](../connections/your-database/). |
 
 Turning a part off stops new data. Data already on your server stays there, and your notes stay on your phone.

@@ -11,6 +11,14 @@ export type Summary = {
   places: { name: string; lat: number; lon: number; from: number; to: number }[]
 }
 
+type Attempt = { at: number; type: string; status: number | null; ms: number; error: string | null; first: number | null; last: number | null }
+export type Webhook = {
+  id: string; name: string; url: string; kinds: ('notes' | 'health' | 'locations')[]
+  state: 'working' | 'paused' | 'failing' | 'backfilling'; waiting: number
+  lastStatus: number | null; lastError: string | null; lastSentAt: number | null; nextTryAt: number | null; failingSince: number | null
+  createdAt: number; attempts: Attempt[]
+}
+
 export const API = '/apps/relay/api/'
 
 /** A route's refusal, with its status: 503 says the route's service is not set up here. */
@@ -26,6 +34,14 @@ async function json<T>(route: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API}${route}`, init)
   if (!response.ok) throw new Refused(route, response.status)
   return await response.json() as T
+}
+
+/** A POST to one route, answered with its JSON; a refusal throws with the route's own message. */
+export async function post<T>(route: string, input: object = {}): Promise<T> {
+  const response = await fetch(`${API}${route}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) })
+  const json = await response.json().catch(() => null) as { error?: { message?: string } } | null
+  if (!response.ok) throw new Error(json?.error?.message ?? `${route}: ${response.status}`)
+  return json as T
 }
 
 /** One route's JSON, or a Refused naming its address when the answer is not one. */

@@ -16,13 +16,12 @@ Relay keeps your notes on your phone. When you turn on sending, it keeps your no
 | Ring notes: the words and the recording | Your Relay server: the words in its database, the recording in its file store | Each time you hold the ring and talk, through the Pebble app |
 | Steps, heart rate, sleep and workouts | Your Relay server's database | On open and every hour, with sending and **Health** on |
 | Location history: a point each 100 m you move | Your Relay server's database | With sending and **Location history** on |
-| A copy of the notes on your server | The phone's own storage | Kept when you turn sending off |
 | The phone's key | The iPhone Keychain or the Android Keystore | Never sent, except as the key's headers |
 | A copy of what your server stores | [Your own database](../connections/your-database/), through a webhook you add | Notes always; health and location only if you tick them for that webhook |
 
 With sending off, the app makes no network call, reads no health data, and keeps no location history. The one exception is the speech model for voice notes, and only after you tap **Get it**.
 
-Your Relay server is a private site behind a login. Only its owner, and the devices with keys, reach it. A key reaches only Relay's routes: [Keys](../api/keys/).
+Your Relay server is a private site behind a login, which you [run in your own Cloudflare account](../start/run-your-own/). Only you sign in. A device's key only adds data: it can't read your notes, health or places back: [Keys](../api/keys/). Relay's makers have no way in.
 
 ## What is not kept
 

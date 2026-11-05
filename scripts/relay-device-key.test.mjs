@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { join } from 'node:path';
 import { parseConfig, repoRoot } from './lib-wrangler-config.mjs';
-import { chatHandOverPage, connectCode, defaultServer, handOverPage, HAND_OVER, listing, parseCommand, slug, withoutToken, withToken } from './relay-device-key.mjs';
+import { chatHandOverPage, configPath, connectCode, defaultServer, INSTALL, handOverPage, HAND_OVER, listing, parseCommand, slug, withoutToken, withToken } from './relay-device-key.mjs';
 
 test('a command needs a known verb, and a name to make or revoke a key', () => {
   assert.deepEqual(parseCommand(['create', '--name', ' Android phone ']), { command: 'create', name: 'Android phone', staging: false, server: undefined, kind: 'phone' });
@@ -62,4 +62,11 @@ test('a new live key carries the site\'s own domain; a preview key keeps its wor
   assert.equal(JSON.parse(connectCode(key)).server, 'https://app.relayeverything.com');
   assert.ok(handOverPage({ ...key, name: 'Phone', qrSvg: null }).includes('https://app.relayeverything.com/apps/relay/api/pebble'));
   assert.match(HAND_OVER, /[\\/]\.relay-everything[\\/]device-keys$/);
+});
+
+test('on a person\'s own Relay server, keys use its config, and there are no previews', () => {
+  assert.equal(configPath(false, true), INSTALL);
+  assert.throws(() => configPath(true, true), /no previews/);
+  assert.equal(configPath(false, false), join(repoRoot, 'app', 'wrangler.jsonc'));
+  assert.equal(defaultServer(parseConfig(join(repoRoot, 'self-host', 'wrangler.template.jsonc')), false), null);
 });

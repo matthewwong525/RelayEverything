@@ -169,3 +169,9 @@ it("wakes the webhooks that take what was stored, and none for a repeat", async 
   await call(phone, "POST", "locations", { points: [point(NOW - 23 * MINUTE)] });
   expect(queue.sent).toEqual([{ webhook: "health" }]);
 });
+
+it("tells a device key its own name, and nothing else, and refuses everyone else", async () => {
+  expect(await call(phone, "GET", "key")).toEqual({ status: 200, json: { device: "Android phone" } });
+  for (const who of [matthew, lost, checker]) expect((await call(who, "GET", "key")).status).toBe(403);
+  expect((await call(null, "GET", "key")).status).toBe(401);
+});

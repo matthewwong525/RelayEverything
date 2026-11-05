@@ -57,7 +57,8 @@ export const missingSecrets = present => SECRETS.filter(name => !present.include
 /** What a run says: names and steps, never a value. */
 export const reportLine = (step, done) => `ok ${step}${done ? ` (${done})` : ''}`;
 
-function cloudflare(token, request) {
+/** Cloudflare's API as one call: its result, or an error with the status and Cloudflare's words, never the token. */
+export function cloudflare(token, request) {
   return async (path, method = 'GET', body) => {
     const response = await request(`https://api.cloudflare.com/client/v4${path}`, {
       method, headers: { Authorization: `Bearer ${token}`, ...(body && { 'Content-Type': 'application/json' }) }, body: body && JSON.stringify(body),

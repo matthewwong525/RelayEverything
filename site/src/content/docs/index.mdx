@@ -59,7 +59,7 @@ import { Badge, Card, CardGrid } from '@astrojs/starlight/components';
 
 <ol class="relay-flow">
   <li><strong>Collect</strong>Your phone keeps each note. Nothing leaves it until you turn on sending.</li>
-  <li><strong>Send</strong>With sending on, the Relay app sends notes, health and location to your Relay server.</li>
+  <li><strong>Send</strong>With sending on, the Relay app sends notes, health and location to your Relay server. Its key only adds data.</li>
   <li><strong>Send on</strong>Webhooks copy each new item to your own database.</li>
   <li><strong>Read with AI</strong>Your AI reads it through MCP. Coming.</li>
 </ol>
@@ -67,5 +67,7 @@ import { Badge, Card, CardGrid } from '@astrojs/starlight/components';
 ## A ring to take notes
 
 A ring is one way to take a note: hold the band, talk, and let go. A Pebble Index ring works today: its notes come through the Pebble app to your Relay server, so they need sending on. The Relay ring is in design: see [the ring](ring/how-it-works/).
+
+Your Relay server is your own: you [run it in your own Cloudflare account](start/run-your-own/), with one request to your AI, on Cloudflare's free plan.
 
 Relay is built in the open. All of its code is [on GitHub](https://github.com/matthewwong525/RelayEverything), under the MIT license: the phone app, the server, this website, and the ring's models and board.

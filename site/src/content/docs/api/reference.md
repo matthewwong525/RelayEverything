@@ -11,7 +11,7 @@ lists the codes.
 
 ## Store a typed note
 
-`POST /apps/relay/api/notes` · `relay.notes-add` · writes · called by a device key or a signed-in person
+`POST /apps/relay/api/notes` · `relay.notes-add` · writes · called by a phone or Pebble key
 
 Store a note typed on a Relay phone, once per phone and clientId.
 
@@ -38,7 +38,7 @@ Send the input as a JSON body.
 
 ## Store a phone's samples
 
-`POST /apps/relay/api/health` · `relay.samples-add` · writes · called by a device key or a signed-in person
+`POST /apps/relay/api/health` · `relay.samples-add` · writes · called by a phone or Pebble key
 
 Store steps, heart rate, sleep and workouts from Apple Health or Health Connect, once per type, time span and source.
 
@@ -65,7 +65,7 @@ Send the input as a JSON body.
 
 ## Store a phone's points
 
-`POST /apps/relay/api/locations` · `relay.points-add` · writes · called by a device key or a signed-in person
+`POST /apps/relay/api/locations` · `relay.points-add` · writes · called by a phone or Pebble key
 
 Store the phone's location history, once per time, and give ring notes near those times their place.
 
@@ -89,9 +89,25 @@ Send the input as a JSON body.
 | `received` | integer | yes |  |
 | `added` | integer | yes |  |
 
+## Check a device key
+
+`GET /apps/relay/api/key` · `relay.key` · reads · called by any device key
+
+Check the calling device key: answers the name it was made with, and no data.
+
+### Input
+
+It takes no input.
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `device` | string | yes | The key's device name. |
+
 ## Read the notes
 
-`GET /apps/relay/api/timeline` · `relay.timeline` · reads · called by a device key or a signed-in person
+`GET /apps/relay/api/timeline` · `relay.timeline` · reads · called by a signed-in person only, not a device key
 
 Read Relay's notes, newest first, with each one's place.
 

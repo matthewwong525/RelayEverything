@@ -17,7 +17,8 @@ const USAGE = `usage: node scripts/relay-device-key.mjs <create|list|revoke> [--
                                   make a key that only sends Claude Code chats; its connect code shows once, as text
   list                            every key: its name, what it is for, when it was made, and whether it is turned off
   revoke --name "Android phone"   turn a key off at once, then delete it from Cloudflare
-  --staging                       the previews' Access app and database, not the live ones`;
+  --staging                       the previews' Access app and database, not the live ones
+On your own Relay server (self-host/SETUP.md), keys go to the server in self-host/wrangler.jsonc.`;
 
 /** What each --for makes: the key's reach in relay_devices and its token's name in Cloudflare. */
 const KINDS = { phone: { reaches: 'phone', token: 'device' }, 'claude-code': { reaches: 'chats', token: 'chats' } };
@@ -115,8 +116,17 @@ function cloudflare(token) {
   };
 }
 
+/** A Relay-only install's config (self-host/SETUP.md), which this command uses when it is there. */
+export const INSTALL = join(repoRoot, 'self-host', 'wrangler.jsonc');
+
+/** Which config the keys belong to: an install's, else the full app's. An install has no previews. */
+export function configPath(staging, installed = existsSync(INSTALL)) {
+  if (installed && staging) throw new Error('your own Relay server has no previews; leave out --staging');
+  return installed ? INSTALL : findWranglerConfig();
+}
+
 function target(staging) {
-  const config = parseConfig(findWranglerConfig());
+  const config = parseConfig(configPath(staging));
   const environment = staging ? 'staging' : 'production';
   const { appId, name } = privateDeployment(config, environment);
   const database = (staging ? config.env?.staging : config).d1_databases?.find(entry => entry.binding === 'DB')?.database_id;

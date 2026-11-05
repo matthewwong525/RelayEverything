@@ -32,6 +32,14 @@ The [Relay website's guard](relay-website.md#what-the-guard-refuses) uses the sa
 
 A change to `mobile/` runs [`mobile-ci.yml`](../.github/workflows/mobile-ci.yml) on GitHub: the Flutter tests, then the Android file, kept with the run. A publish to `main` makes a release, tagged `mobile-v<version>+<build>`; the website's *Android app* link opens the latest one. The iPhone build skips until the repository has the App Store Connect secrets that [`.env.example`](../.env.example) names. [`mobile/README.md`](../mobile/README.md) has the steps.
 
+## Run your own server
+
+Anyone can run Relay in their own Cloudflare account: [`self-host/SETUP.md`](../self-host/SETUP.md) is the guide an AI follows, over [`self-host/setup.mjs`](../self-host/setup.mjs). An install deploys the same Relay files as this repository's app, through its own entry, [`app/worker/relay-only.ts`](../app/worker/relay-only.ts), and its own page build, `npm run build:relay-only`. It carries none of WongStack.
+
+- **A new Relay binding goes in the install too.** Add it to [`self-host/wrangler.template.jsonc`](../self-host/wrangler.template.jsonc) beside [`app/wrangler.jsonc`](../app/wrangler.jsonc); [`bindings.test.mjs`](../self-host/bindings.test.mjs) fails, by name, on one the install lacks, or else every install breaks at its next update.
+- **A Relay migration reads only `relay_` tables.** An install applies every migration, so WongStack's tables are there but empty.
+- **A device key only adds data.** It reads nothing on any server, so a person's data stays theirs: [Keys](https://relayeverything.com/api/keys/).
+
 ## Pull requests from outside
 
 Anyone can open a pull request. Its checks run with none of the project's keys, and nothing deploys from it: [CI on GitHub Actions](stack/github-actions.md#where-the-deploy-key-is) says why.

@@ -33,7 +33,7 @@ class FakeServer {
   /// When set, each reply waits for it, so a test can act while a request is still open.
   Completer<void>? hold;
 
-  static http.Response ok(http.Request request) => json(request.url.path.endsWith('/timeline') ? {'notes': [], 'next': null} : {'added': 1});
+  static http.Response ok(http.Request request) => json(request.url.path.endsWith('/key') ? {'device': 'Android phone'} : {'added': 1});
   static http.Response json(Object body, [int status = 200]) =>
     http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json'});
 

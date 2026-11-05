@@ -51,6 +51,8 @@ dependencies:
   just_audio: ^0.10.6
   path_provider: ^2.1.6
   crypto: ^3.0.8
+  # Opens your Relay page in the phone's browser.
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

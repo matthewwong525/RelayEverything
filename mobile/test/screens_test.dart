@@ -7,7 +7,6 @@ class FakeRelay extends Relay {
   @override bool connected = false;
   @override String? server;
   @override List<Entry> entries = [];
-  @override bool hasMore = false;
   @override SyncStatus status = SyncStatus.synced;
   @override int waiting = 0;
   @override Settings settings = const Settings();
@@ -57,7 +56,6 @@ class FakeRelay extends Relay {
   }
 
   @override Future<void> sync() async => calls.add('sync');
-  @override Future<void> more() async => calls.add('more');
   @override Future<void> addNote(String text) async => calls.add('note $text');
 
   @override ModelState speechModel = ModelState.ready;
@@ -151,11 +149,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(relay.calls, ['note Buy milk']);
     relay
-      ..entries = [Entry(text: 'Buy milk', ring: false, at: now, place: 'Pinned')]
+      ..entries = [Entry(text: 'Buy milk', at: now, place: 'Pinned')]
       ..changed();
     await tester.pump();
     expect(find.textContaining('Pinned'), findsOneWidget);
-    expect(find.text('Waiting'), findsNothing);
+    expect(find.textContaining('Waiting to send'), findsNothing);
+    expect(find.text('Open your Relay page'), findsNothing);
   });
 
   testWidgets('turns sending on: connects a key first, then asks about earlier notes', (tester) async {
@@ -251,28 +250,61 @@ void main() {
     expect(relay.calls, ['connect {"relay":1}', 'start false']);
   });
 
-  testWidgets('shows each note with its source, place and waiting state, and older ones on request', (tester) async {
+  testWidgets('shows each note with its kind, its place, and Sent or Waiting to send', (tester) async {
     relay
       ..connected = true
+      ..server = 'https://relay.example.com'
       ..settings = const Settings(sending: true)
-      ..hasMore = true
       ..waiting = 1
       ..entries = [
-        Entry(text: 'Lunch idea', ring: false, at: now, place: 'King St W', waiting: true),
-        Entry(text: '', ring: true, at: DateTime(2026, 1, 2, 9), place: 'Harbord St', device: 'Pebble app', audio: true),
+        Entry(text: 'Lunch idea', at: now, place: 'King St W', waiting: true),
+        Entry(text: 'Buy 0.2 mm steel for the stiffener', at: DateTime(2026, 1, 2, 9), place: 'Harbord St', sent: true),
       ];
     await tester.pumpWidget(RelayApp(relay: relay));
-    expect(find.text('Typed'), findsOneWidget);
-    expect(find.text('Ring'), findsOneWidget);
-    expect(find.text('Waiting'), findsOneWidget);
-    expect(find.text('No words, only the recording.'), findsOneWidget);
-    expect(find.textContaining('Harbord St · Pebble app'), findsOneWidget);
+    expect(find.text('Typed'), findsNWidgets(2));
+    expect(find.textContaining('King St W · Waiting to send'), findsOneWidget);
+    expect(find.textContaining('Harbord St · Sent'), findsOneWidget);
     expect(find.textContaining('Jan 2'), findsOneWidget);
-    expect(find.descendant(of: find.byType(Card), matching: find.byIcon(Icons.mic_none)), findsOneWidget);
+    expect(find.text('Show older notes'), findsNothing);
     expect(find.text('1 waiting'), findsOneWidget);
-    await tester.tap(find.text('Show older notes'));
     await tester.tap(find.text('1 waiting'));
-    expect(relay.calls, ['more', 'sync']);
+    expect(relay.calls, ['sync']);
+  });
+
+  testWidgets('with sending on, a card opens the Relay page in the browser; with sending off or no key, it is gone', (tester) async {
+    final opened = <Uri>[];
+    var opens = true;
+    relay
+      ..connected = true
+      ..server = 'https://relay.example.com'
+      ..settings = const Settings(sending: true)
+      ..entries = [Entry(text: 'Lunch idea', at: now)];
+    await tester.pumpWidget(RelayApp(relay: relay, opener: (address) async {
+      opened.add(address);
+      return opens;
+    }));
+    expect(find.text('Ring notes and recordings are on your Relay page.'), findsOneWidget);
+    await tester.tap(find.text('Open your Relay page'));
+    await tester.pump();
+    expect(opened, [Uri.parse('https://relay.example.com/apps/relay/')]);
+    opens = false;
+    await tester.tap(find.text('Open your Relay page'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('The browser did not open. Try again.'), findsOneWidget);
+    relay
+      ..settings = const Settings()
+      ..changed();
+    await tester.pump();
+    expect(find.text('Open your Relay page'), findsNothing);
+    relay
+      ..settings = const Settings(sending: true)
+      ..connected = false
+      ..server = null
+      ..changed();
+    await tester.pump();
+    expect(find.text('Ring notes and recordings are on your Relay page.'), findsNothing);
+    expect([opened, relay.calls], [hasLength(2), isEmpty]);
   });
 
   testWidgets('names each sync state while sending, and an empty timeline in words', (tester) async {
@@ -280,7 +312,7 @@ void main() {
       ..connected = true
       ..settings = const Settings(sending: true);
     await tester.pumpWidget(RelayApp(relay: relay));
-    expect(find.text('No notes yet. Hold the ring and talk, or tap New note.'), findsOneWidget);
+    expect(find.text('No notes yet. Tap New note, or hold to talk.'), findsOneWidget);
     expect(find.text('On this phone'), findsNothing);
     for (final (status, waiting, label) in [(SyncStatus.syncing, 0, 'Syncing'), (SyncStatus.refused, 0, 'Key refused'),
       (SyncStatus.offline, 0, 'Offline'), (SyncStatus.offline, 2, '2 waiting'), (SyncStatus.idle, 0, 'Synced')]) {
@@ -397,13 +429,13 @@ void main() {
     });
 
     testWidgets('a voice note shows Writing the words, then its words, its length and Play', (tester) async {
-      relay.entries = [Entry(text: '', ring: false, at: now, voice: true, writing: true, recording: 'voice/a.wav',
+      relay.entries = [Entry(text: '', at: now, voice: true, writing: true, recording: 'voice/a.wav',
         length: const Duration(seconds: 12))];
       await tester.pumpWidget(RelayApp(relay: relay));
       expect(find.text('Voice'), findsOneWidget);
       expect(find.text('Writing the words…'), findsOneWidget);
       relay
-        ..entries = [Entry(text: 'Ask the fab if the flex stiffener can be 0.2 mm', ring: false, at: now, voice: true,
+        ..entries = [Entry(text: 'Ask the fab if the flex stiffener can be 0.2 mm', at: now, voice: true,
           recording: 'voice/a.wav', length: const Duration(seconds: 12))]
         ..changed();
       await tester.pumpAndSettle();
@@ -414,7 +446,7 @@ void main() {
       expect(relay.calls, ['play voice/a.wav']);
       // A typed note has no Play.
       relay
-        ..entries = [Entry(text: 'Typed', ring: false, at: now)]
+        ..entries = [Entry(text: 'Typed', at: now)]
         ..changed();
       await tester.pumpAndSettle();
       expect([find.text('Play'), find.text('Voice')], [findsNothing, findsNothing]);

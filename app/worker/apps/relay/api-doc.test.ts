@@ -14,7 +14,8 @@ test("the website's route page is the one the routes make", () => {
 
 test("the page shows each Relay route, and who can call it", () => {
   const reference = apiReference();
-  expect(reference).toContain("`POST /apps/relay/api/notes` · `relay.notes-add` · writes · called by a device key or a signed-in person");
+  expect(reference).toContain("`POST /apps/relay/api/notes` · `relay.notes-add` · writes · called by a phone or Pebble key");
+  expect(reference).toContain("`GET /apps/relay/api/key` · `relay.key` · reads · called by any device key");
   expect(reference).toContain("`GET /apps/relay/api/summary` · `relay.summary` · reads · called by a signed-in person only");
   expect(reference).toContain("| `notes[].place.name` | string or null | yes |");
   expect(reference).toContain("- `POST /apps/relay/api/pebble`: [Take a ring note from the Pebble app](../pebble-webhook/)");

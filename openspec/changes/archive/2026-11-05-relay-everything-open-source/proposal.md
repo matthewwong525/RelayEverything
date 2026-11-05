@@ -1,6 +1,6 @@
 # Move Relay to a public RelayEverything repo on GitHub
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** relay-everything-data-hub
 **Open questions:** none
 

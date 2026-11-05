@@ -26,5 +26,5 @@
 
 ## 5. Verify
 
-- [ ] 5.1 `/save`: this change's pull request runs on GitHub Actions; the Test, Guard, mobile CI and preview deploy pass; the preview link opens behind the login
-- [ ] 5.2 Open a pull request from a fork-like branch without secrets (or read the run's settings) and confirm no deploy job ran with secrets
+- [x] 5.1 `/save`: this change's pull request runs on GitHub Actions; the Test, Guard, mobile CI and preview deploy pass; the preview link opens behind the login
+- [x] 5.2 Open a pull request from a fork-like branch without secrets (or read the run's settings) and confirm no deploy job ran with secrets

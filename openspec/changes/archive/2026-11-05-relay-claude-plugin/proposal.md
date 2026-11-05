@@ -1,6 +1,6 @@
 # Save your Claude Code chats to Relay
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** afraid-cheetah
 **Open questions:** none
 
@@ -168,3 +168,5 @@ None. The AI connector's chat tools are new requirements in `relay-chats`, becau
 - **2026-11-05** — Check: `app/package.json` adds `../plugin/test/*.test.mjs` to the `node --test` step of `npm test`, because CI should gate the plugin as it gates the app; no check is loosened.
 - **2026-11-05** — Saved after the build and two review rounds: the reviewer's 8 findings (a `!` command's output, a save after `/clear`, the end send while busy, parallel hook writes, the last-sent line, an empty chat on a refused send, a lost busy mark, a lock that retried forever) are fixed with tests. Left: the website preview (6.2) and the live check on the preview (7.2).
 - **2026-11-05** — Merged main with the webhooks change (#5), because the staging server now has its queue and the preview upload failed without it: the Relay page shows Chats above Webhooks, the website's Connections page lists all three working connections, and the migrations run chats before webhooks.
+- **2026-11-05** — Checked on the preview: a real Claude Code chat with the plugin sent your words exactly, `Ran: echo relay-build-check` as one step, a fake token as `[hidden]`, and the AI's save with its title; the chat key was refused on the timeline and on `GET chats`; both test chats were deleted and the key revoked. Assumed: the check loaded the plugin from a folder, where Claude Code asks for no plugin option, so a copy took the connect code from the environment; Claude Code's own debug log showed it reads `connect_code` from the plugin's settings as designed. The website preview's guard passed.
+- **2026-11-05** — Archived for publishing: all tasks done, the checks on GitHub pass, and the preview check passed.

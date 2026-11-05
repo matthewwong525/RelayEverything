@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · relay-claude-plugin</title>
+<title>Review · 2026-11-05-relay-claude-plugin</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="relay-claude-plugin" data-own-back>
+<body data-change="2026-11-05-relay-claude-plugin" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>relay-claude-plugin</h1>
+  <h1>2026-11-05-relay-claude-plugin</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -529,6 +529,8 @@
 <li class="decision card" id="decision-40" data-note="decision-40" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-05</p>Check: <code>app/package.json</code> adds <code>../plugin/test/*.test.mjs</code> to the <code>node --test</code> step of <code>npm test</code>, because CI should gate the plugin as it gates the app; no check is loosened.</li>
 <li class="decision card" id="decision-41" data-note="decision-41" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-05</p>Saved after the build and two review rounds: the reviewer's 8 findings (a <code>!</code> command's output, a save after <code>/clear</code>, the end send while busy, parallel hook writes, the last-sent line, an empty chat on a refused send, a lost busy mark, a lock that retried forever) are fixed with tests. Left: the website preview (6.2) and the live check on the preview (7.2).</li>
 <li class="decision card" id="decision-42" data-note="decision-42" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-05</p>Merged main with the webhooks change (#5), because the staging server now has its queue and the preview upload failed without it: the Relay page shows Chats above Webhooks, the website's Connections page lists all three working connections, and the migrations run chats before webhooks.</li>
+<li class="decision card" id="decision-43" data-note="decision-43" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-05</p>Checked on the preview: a real Claude Code chat with the plugin sent your words exactly, <code>Ran: echo relay-build-check</code> as one step, a fake token as <code>[hidden]</code>, and the AI's save with its title; the chat key was refused on the timeline and on <code>GET chats</code>; both test chats were deleted and the key revoked. Assumed: the check loaded the plugin from a folder, where Claude Code asks for no plugin option, so a copy took the connect code from the environment; Claude Code's own debug log showed it reads <code>connect_code</code> from the plugin's settings as designed. The website preview's guard passed.</li>
+<li class="decision card" id="decision-44" data-note="decision-44" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-05</p>Archived for publishing: all tasks done, the checks on GitHub pass, and the preview check passed.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

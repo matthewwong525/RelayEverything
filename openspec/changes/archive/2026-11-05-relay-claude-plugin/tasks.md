@@ -35,10 +35,10 @@
 
 - [x] 6.1 Add a *Save Claude Code chats* section to the relay wiki page (install, connect code, what is sent, saving off, delete, running your own server), linked from its hub; the repository's wiki checks pass
 
-- [ ] 6.2 Add `site/src/content/docs/connections/claude-code.md` and link it from the Connections index, run `npm run relay:api-doc` in `app/`, and preview with `node scripts/publish-relay-site.mjs --ref HEAD --staging`; its guard prints `result=clean`
+- [x] 6.2 Add `site/src/content/docs/connections/claude-code.md` and link it from the Connections index, run `npm run relay:api-doc` in `app/`, and preview with `node scripts/publish-relay-site.mjs --ref HEAD --staging`; its guard prints `result=clean`
 - [x] 6.3 Add `site/src/content/docs/connections/connect-your-ai.md` (the Claude app, ChatGPT and Claude Code steps, what the AI can read, what leaves Relay, disconnect), replace the Connections index's MCP *Coming* note with a link to it, and use `<your-relay-server>` for every address
 
 ## 7. Check it works
 
 - [x] 7.1 Run `npm test` in `app/`, `node --test plugin/test`, `node --test scripts/*.test.mjs` and `node scripts/public-check.mjs`; all pass and the check prints `result=clean`
-- [ ] 7.2 `/save`, then on the preview: make a staging chat key with `relay-device-key.mjs create --name "Build check" --for claude-code --staging`, add this checkout as a marketplace and install the plugin in a fresh Claude Code session, enter the code, have a short chat that runs one command and holds a fake key, and ask it to save to Relay; check the preview's Chats list shows the chat with exact messages, one step line, the key hidden and the AI's summary; check the chat key is refused on the timeline and on `GET chats`; delete the chat; revoke the key
+- [x] 7.2 `/save`, then on the preview: make a staging chat key with `relay-device-key.mjs create --name "Build check" --for claude-code --staging`, add this checkout as a marketplace and install the plugin in a fresh Claude Code session, enter the code, have a short chat that runs one command and holds a fake key, and ask it to save to Relay; check the preview's Chats list shows the chat with exact messages, one step line, the key hidden and the AI's summary; check the chat key is refused on the timeline and on `GET chats`; delete the chat; revoke the key

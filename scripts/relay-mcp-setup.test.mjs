@@ -24,9 +24,9 @@ test('the check names each missing permission and passes a token that holds all 
 test('each environment gets its own Worker, sign-in app and callback, for the owner alone', () => {
   const live = target(config, false);
   const staging = target(config, true);
-  assert.deepEqual([live.worker, live.app, live.callback], ['relay-ring-mcp', 'relay-ring AI connector', 'https://relay-ring-mcp.matthewwong525.workers.dev/callback']);
+  assert.deepEqual([live.worker, live.app, live.callback], ['relay-everything-mcp', 'relay-everything AI connector', 'https://relay-everything-mcp.matthewwong525.workers.dev/callback']);
   assert.deepEqual([staging.worker, staging.app, staging.callback],
-    ['relay-ring-mcp-staging', 'relay-ring AI connector (staging)', 'https://relay-ring-mcp-staging.matthewwong525.workers.dev/callback']);
+    ['relay-everything-mcp-staging', 'relay-everything AI connector (staging)', 'https://relay-everything-mcp-staging.matthewwong525.workers.dev/callback']);
   assert.equal(staging.owner, 'matthewwong525@gmail.com');
   assert.deepEqual(saasApp(staging).saas_app.redirect_uris, [staging.callback]);
   assert.equal(saasApp(staging).type, 'saas');
@@ -38,7 +38,7 @@ test('the sign-in values come from the team domain and the client', () => {
   assert.equal(values.ACCESS_TOKEN_URL, 'https://team.cloudflareaccess.com/cdn-cgi/access/sso/oidc/abc123/token');
   assert.deepEqual(missingSecrets(['ACCESS_CLIENT_ID', 'OTHER']), Object.keys(values).filter(name => name !== 'ACCESS_CLIENT_ID'));
   assert.deepEqual(missingSecrets(Object.keys(values)), []);
-  assert.equal(reportLine('worker relay-ring-mcp', ''), 'ok worker relay-ring-mcp');
+  assert.equal(reportLine('worker relay-everything-mcp', ''), 'ok worker relay-everything-mcp');
 });
 
 const ACCOUNT = '0123456789abcdef0123456789abcdef';
@@ -73,7 +73,7 @@ function fakeCloudflare() {
   };
   const wrangler = (args, input) => {
     calls.push({ args, input });
-    if (args[0] === 'deploy') state.workers.add(args.includes('staging') ? 'relay-ring-mcp-staging' : 'relay-ring-mcp');
+    if (args[0] === 'deploy') state.workers.add(args.includes('staging') ? 'relay-everything-mcp-staging' : 'relay-everything-mcp');
     if (args[0] === 'secret') for (const name of Object.keys(JSON.parse(input))) state.secrets.add(name);
   };
   const calls = [];
@@ -92,13 +92,13 @@ test('a setup run puts the secrets through wrangler and prints none; a second ru
   assert.deepEqual(cloudflare.calls.map(call => call.args), [['deploy', '--env', 'staging'], ['secret', 'bulk', '--env', 'staging']]);
   const sent = JSON.parse(cloudflare.calls[1].input);
   assert.equal(sent.ACCESS_CLIENT_SECRET, SECRET);
-  assert.match(first, /ok worker relay-ring-mcp-staging \(deployed\)/);
+  assert.match(first, /ok worker relay-everything-mcp-staging \(deployed\)/);
   assert.match(first, /ok sign-in secrets \(put ACCESS_CLIENT_ID, ACCESS_CLIENT_SECRET, /);
   assert.deepEqual(cloudflare.state.policies.get('app-1')[0].include, [{ email: { email: 'matthewwong525@gmail.com' } }]);
   for (const value of [...Object.values(sent), 'cf-user-token-value']) assert.ok(!first.includes(value), `the output shows ${value}`);
 
   const second = await run();
   assert.equal(cloudflare.calls.length, 2);
-  assert.match(second, /^ok worker relay-ring-mcp-staging$/m);
+  assert.match(second, /^ok worker relay-everything-mcp-staging$/m);
   assert.match(second, /^ok sign-in secrets$/m);
 });

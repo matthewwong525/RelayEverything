@@ -1,5 +1,5 @@
 {
-	"name": "relay-ring-checks",
+	"name": "relay-everything-checks",
 	"account_id": "040f88e2bf4f25fb0b91b7cb24f3d442",
 	"main": "worker.mjs",
 	"compatibility_date": "2026-10-01",
@@ -8,7 +8,7 @@
 	"preview_urls": false,
 	"artifacts": [{ "binding": "ARTIFACTS", "namespace": "wongstack" }],
 	"containers": [
-		{ "name": "relay-ring-checks", "class_name": "CiSandbox", "image": "docker.io/cloudflare/sandbox:0.12.5", "max_instances": 2, "instance_type": "standard-4" }
+		{ "name": "relay-everything-checks", "class_name": "CiSandbox", "image": "docker.io/cloudflare/sandbox:0.12.5", "max_instances": 2, "instance_type": "standard-4" }
 	],
 	"durable_objects": {
 		"bindings": [
@@ -17,19 +17,19 @@
 		]
 	},
 	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["CiSandbox", "Turns"] }],
-	"workflows": [{ "name": "relay-ring-checks", "binding": "CI_WORKFLOW", "class_name": "Checks" }],
-	"r2_buckets": [{ "binding": "BACKUP_BUCKET", "bucket_name": "relay-ring-checks" }],
+	"workflows": [{ "name": "relay-everything-checks", "binding": "CI_WORKFLOW", "class_name": "Checks" }],
+	"r2_buckets": [{ "binding": "BACKUP_BUCKET", "bucket_name": "relay-everything-checks" }],
 	"vars": {
-		"WONG_RUNNER": "{\"account\":\"040f88e2bf4f25fb0b91b7cb24f3d442\",\"namespace\":\"wongstack\",\"repo\":\"relay-ring\"}",
+		"WONG_RUNNER": "{\"account\":\"040f88e2bf4f25fb0b91b7cb24f3d442\",\"namespace\":\"wongstack\",\"repo\":\"relay-everything\"}",
 		"CLOUDFLARE_ACCOUNT_ID": "040f88e2bf4f25fb0b91b7cb24f3d442",
-		"BACKUP_BUCKET_NAME": "relay-ring-checks"
+		"BACKUP_BUCKET_NAME": "relay-everything-checks"
 	},
 	"triggers": {
 		"events": [
 			{
 				"type": "cf.artifacts.repo.pushed",
-				"filter": { "namespace": "wongstack", "repo_name": "relay-ring" },
-				"targets": [{ "type": "workflow", "workflow_name": "relay-ring-checks" }]
+				"filter": { "namespace": "wongstack", "repo_name": "relay-everything" },
+				"targets": [{ "type": "workflow", "workflow_name": "relay-everything-checks" }]
 			}
 		]
 	},

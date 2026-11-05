@@ -33,62 +33,62 @@
       "ownerEmail": "matthewwong525@gmail.com",
       "humanLogin": "unverified",
       "accountId": "040f88e2bf4f25fb0b91b7cb24f3d442",
-      "appId": "c148207d-66b5-4373-a690-8942de361acb",
-      "audience": "8c34a3dc4b254dd4d3f4e10d7c5c8648cb2c4abd82a3704054adc3c385ce0dc2",
+      "appId": "f938f676-4c71-445d-bacb-3649b4897276",
+      "audience": "76b579e034cfc7891c67bff9c593e31d2d8dc0b4b5548427d5257a5893ba9879",
       "workers": [
         {
-          "name": "relay-ring",
-          "id": "98c4755718a34f4da4aab47e13986695"
+          "name": "relay-everything",
+          "id": "3994b8ff29ac409dbfe1783049f21864"
         },
         {
-          "name": "relay-ring-staging",
-          "id": "0a28ad88e5e047d6a1b23eb4c29a2cbe"
+          "name": "relay-everything-staging",
+          "id": "21a6605b2bbf465b94f3da684f303350"
         }
       ],
       "staging": {
-        "appId": "a21b4d6b-e12f-45ec-9976-ca3ef4771431",
-        "audience": "290a7c4a0ebaae36505385d17a43566e37cc1c2472c55de0f25d4c0c40c51545",
+        "appId": "8cff403b-fb55-4954-b0c8-5df2cb344722",
+        "audience": "ee3b42931ecd17ee1ef8f1355d6524f27d7abb522ffa2087d9c5f8f31dadce42",
         "serviceTokenId": "2117a57a-eba6-465d-a59f-b797731dd132",
-        "humanPolicyId": "f11dda3d-be09-472c-91b8-902917f38bc2",
-        "machinePolicyId": "4a318de7-c745-4967-b595-4cdee782d5cc"
+        "humanPolicyId": "7085f2fb-4cd1-4ffd-8a8d-49762c4d6c64",
+        "machinePolicyId": "b1045537-a936-4990-8d26-779a0cac813e"
       },
       "coverage": "configured",
       "serviceTokenId": "13276997-c637-48f1-9896-74292dee10af",
-      "humanPolicyId": "238740da-71ce-49d5-83ce-1348b6feb3a6",
-      "machinePolicyId": "392c54c2-d136-4727-a502-3bc85fb4da79",
+      "humanPolicyId": "c6835658-dba9-4181-b4f1-33ce9e769c2d",
+      "machinePolicyId": "f6104024-abdb-4be1-b479-2384219fc723",
       "sessionDuration": "720h"
     },
     "memory": {
       "accountId": "040f88e2bf4f25fb0b91b7cb24f3d442",
-      "databaseId": "5441a6ff-fcef-4870-b651-87a479726aef",
-      "database": "relay-ring-memory",
-      "bucket": "relay-ring-memory",
-      "worker": "https://relay-ring.matthewwong525.workers.dev/_memory"
+      "databaseId": "43757596-8f32-498f-875a-21a2e4108002",
+      "database": "relay-everything-memory",
+      "bucket": "relay-everything-memory",
+      "worker": "https://app.relayeverything.com/_memory"
     },
     "companyApi": {
-      "origin": "https://relay-ring.matthewwong525.workers.dev"
+      "origin": "https://app.relayeverything.com"
     },
     "liveLine": {
       "workers": [
-        "relay-ring-line"
+        "relay-everything-line"
       ]
     },
     "knowledge": {
       "namespace": "wongstack",
-      "repo": "relay-ring-knowledge"
+      "repo": "relay-everything-knowledge"
     },
     "accessKey": {
       "status": "ready",
-      "id": "52a29eec95b1956819919cea537d571a",
-      "policyId": "238740da-71ce-49d5-83ce-1348b6feb3a6",
+      "id": "a2a670aa20efeb5b8956745d0c781482",
+      "policyId": "c6835658-dba9-4181-b4f1-33ce9e769c2d",
       "staging": {
-        "appId": "a21b4d6b-e12f-45ec-9976-ca3ef4771431",
-        "policyId": "f11dda3d-be09-472c-91b8-902917f38bc2"
+        "appId": "8cff403b-fb55-4954-b0c8-5df2cb344722",
+        "policyId": "7085f2fb-4cd1-4ffd-8a8d-49762c4d6c64"
       }
     },
     "cloudflareReadKey": {
       "status": "ready",
-      "id": "a519247ae9e2035742a73ec3e21ddd1b"
+      "id": "54c4840cd7cd0a4394ae62b9b19505fd"
     }
   },
   "installedAt": "2026-11-04"

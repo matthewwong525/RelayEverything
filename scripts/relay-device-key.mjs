@@ -24,7 +24,7 @@ const KINDS = { phone: { reaches: 'phone', token: 'device' }, 'claude-code': { r
 
 const NAME = /^[\p{L}\p{N}][\p{L}\p{N} '’._-]{0,39}$/u;
 // Hand-over pages stay on this computer, outside the repository, readable only by you.
-export const HAND_OVER = join(homedir(), '.relay-ring', 'device-keys');
+export const HAND_OVER = join(homedir(), '.relay-everything', 'device-keys');
 
 /** The command and its flags, or a usage message. */
 export function parseCommand(args) {
@@ -85,6 +85,13 @@ export function listing(rows) {
   return rows.map(row => `${row.name}\t${kind(row.reaches)}\tmade ${day(row.created_at)}\t${row.revoked_at === null ? 'on' : `turned off ${day(row.revoked_at)}`}\t${row.token_client_id}`).join('\n');
 }
 
+/** The site's own domain from its committed routes, which a new key sends to; null when it has only workers.dev. */
+export function defaultServer(config, staging) {
+  const routes = (staging ? config.env?.staging?.routes : undefined) ?? config.routes ?? [];
+  const domain = routes.find(route => route.custom_domain)?.pattern;
+  return domain ? `https://${domain}` : null;
+}
+
 /** A file-safe name for the hand-over page. */
 export const slug = name => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'device';
 
@@ -115,7 +122,7 @@ function target(staging) {
   const database = (staging ? config.env?.staging : config).d1_databases?.find(entry => entry.binding === 'DB')?.database_id;
   const account = config.account_id ?? process.env.CLOUDFLARE_ACCOUNT_ID;
   if (!appId || !database || !/^[a-f0-9]{32}$/i.test(account ?? '')) throw new Error(`the ${environment} Access app, database or account id is missing`);
-  return { appId, database, account, worker: name };
+  return { appId, database, account, worker: name, server: defaultServer(config, staging) };
 }
 
 async function main() {
@@ -125,7 +132,7 @@ async function main() {
   if (!process.env.CLOUDFLARE_API_TOKEN && existsSync(envFile)) process.loadEnvFile(envFile);
   if (!process.env.CLOUDFLARE_API_TOKEN) throw new Error('CLOUDFLARE_API_TOKEN is missing from .env');
   const cf = cloudflare(process.env.CLOUDFLARE_API_TOKEN);
-  const { appId, database, account, worker } = target(parsed.staging);
+  const { appId, database, account, worker, server: domain } = target(parsed.staging);
   const root = `/accounts/${account}`;
   const sql = async (query, ...params) => (await cf(`${root}/d1/database/${database}/query`, 'POST', { sql: query, params }))[0].results;
   const policies = `${root}/access/apps/${appId}/policies`;
@@ -149,9 +156,9 @@ async function main() {
   }
 
   if (active.length) throw new Error(`a key named "${parsed.name}" is already on; revoke it first or pick another name`);
-  const server = parsed.server ?? `https://${worker}.${(await cf(`${root}/workers/subdomain`)).subdomain}.workers.dev`;
+  const server = parsed.server ?? domain ?? `https://${worker}.${(await cf(`${root}/workers/subdomain`)).subdomain}.workers.dev`;
   const kind = KINDS[parsed.kind];
-  const token = await cf(`${root}/access/service_tokens`, 'POST', { name: `relay-ring ${kind.token} ${parsed.name}`, duration: '8760h' });
+  const token = await cf(`${root}/access/service_tokens`, 'POST', { name: `relay-everything ${kind.token} ${parsed.name}`, duration: '8760h' });
   try {
     const policy = await devicesPolicy();
     if (policy) await cf(`${policies}/${policy.id}`, 'PUT', { name: policy.name, decision: policy.decision, include: withToken(policy.include, token.id), precedence: policy.precedence });

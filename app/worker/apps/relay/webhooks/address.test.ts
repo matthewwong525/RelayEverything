@@ -1,11 +1,11 @@
 import { expect, it } from "vitest";
 import { checkAddress } from "./address.ts";
 
-const SITE = "relay-ring-staging.owner.workers.dev";
+const SITE = "relay-everything-staging.owner.workers.dev";
 
 it("allows an outside https address", () => {
   for (const url of ["https://db.example.com/relay", "https://203.0.113.9:8443/hook", "https://[2001:db8::1]/hook", "https://[2001:db8:1:2:3:4:5:6]/", "https://172.32.0.1/",
-    "https://relay-ring-staging.other.workers.dev/", "https://example.local.com/"]) {
+    "https://relay-everything-staging.other.workers.dev/", "https://example.local.com/"]) {
     expect(checkAddress(url, SITE), url).toBeNull();
   }
 });
@@ -31,8 +31,8 @@ it("refuses this computer and each private range, however the address is written
 });
 
 it("refuses the site's own host, its subdomains and the account's other Workers", () => {
-  for (const url of [`https://${SITE}/apps/relay/api/notes`, `https://x.${SITE}/`, "https://relay-ring.owner.workers.dev/",
-    "https://branch-relay-ring-staging.owner.workers.dev/"]) {
+  for (const url of [`https://${SITE}/apps/relay/api/notes`, `https://x.${SITE}/`, "https://relay-everything.owner.workers.dev/",
+    "https://branch-relay-everything-staging.owner.workers.dev/"]) {
     expect(checkAddress(url, SITE), url).toBe("address_own_site");
   }
   expect(checkAddress("https://relay.example.org/hook", "Relay.Example.org")).toBe("address_own_site");

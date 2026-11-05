@@ -7,7 +7,7 @@ import { SHAPES } from '../lib/hide.mjs';
 
 // The plugin is public and installs on any computer: it holds no key, no Relay server's address and no email.
 const PLUGIN = fileURLToPath(new URL('..', import.meta.url));
-const ADDRESS = [/workers\.dev/i, /cloudflareaccess\.com/i, /relay-ring(?:-mcp)?(?:-staging)?\.[a-z]/i];
+const ADDRESS = [/workers\.dev/i, /cloudflareaccess\.com/i, /relay-(?:ring|everything)(?:-mcp)?(?:-staging)?\.[a-z]/i, /app\.relayeverything\.com/i];
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z]{2,}/;
 
 const files = dir => readdirSync(dir, { withFileTypes: true })

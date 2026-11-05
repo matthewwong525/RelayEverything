@@ -41,5 +41,5 @@ export const routes = new Map<string, Route>([
 ]);
 
 /** The webhooks' queue, keyed by its name without `-staging`, and the sweep production runs every 15 minutes. */
-export const queues = new Map([["relay-webhooks", consume]]);
+export const queues = new Map([["relay-everything-webhooks", consume]]);
 export const scheduled = async (env: Parameters<typeof sweep>[0]) => { await sweep(env); };

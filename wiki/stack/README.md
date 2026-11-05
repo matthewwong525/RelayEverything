@@ -20,6 +20,7 @@ The pack uses **merge = deploy**, independent staging and branch previews. [One 
   - [Legacy cloud schedules](legacy-cloud-schedules.md) — preserve installed jobs, move one explicitly, and remove only requested old resources.
 - [The live line](live-line.md) — the one connection your computer and open inbox keep to the app, which only says *look now*; the background helper that holds it, turning it off, and its log.
 - [CI on GitHub Actions](github-actions.md) — the thin deploy workflow that runs the pipeline's scripts, and why not Cloudflare's Workers Builds.
+- [Move Cloudflare data to a new name](move-cloudflare-data.md) — copy a D1 database or R2 bucket to a new name inside the account, the check of every row and file, and the old store kept until you say yes.
 - [Fix a broken production database](d1-recovery.md) — the runbooks for when production is red: undo a bad migration with Time Travel, never hand-apply schema, and repair a drifted `d1_migrations` ledger.
 - [Company knowledge](company-knowledge.md) — the team's own pages in a repository of their own: what goes there, the copy on each computer, a save that goes live at once, conflicts, undo and restore.
 - [Company actions](company-api.md) — described app actions and memory reads for employee assistants, with separate authentication.

@@ -22,7 +22,7 @@ test('each private kind is refused, naming the file and never the value', () => 
   const values = {
     'a.html': 'write to someone@example.com',
     'b.html': 'sign in at team.cloudflareaccess.com',
-    'c.html': 'the private site at relay-ring.example.workers.dev',
+    'c.html': 'the private site at relay-everything.example.workers.dev',
     'd.js': `aud:"${AUD.toUpperCase()}"`,
     'e.json': `{"app":"${APP_ID}"}`,
   };
@@ -40,10 +40,20 @@ test('each private kind is refused, naming the file and never the value', () => 
 });
 
 test('the private values come from the private site\'s config', () => {
-  const config = `{ "vars": { "OWNER": "owner@example.com", "CF_ACCESS_AUD": "${AUD}", "CF_ACCESS_APP_ID": "${APP_ID}", "NAME": "relay-ring" },
+  const config = `{ "vars": { "OWNER": "owner@example.com", "CF_ACCESS_AUD": "${AUD}", "CF_ACCESS_APP_ID": "${APP_ID}", "NAME": "relay-everything" },
     "d1": [{ "database_id": "${APP_ID}" }] }`;
   assert.deepEqual(privateValues(config), ['owner@example.com', AUD, APP_ID]);
   assert.deepEqual(privateValues('{}'), []);
+  const routed = `{ "routes": [{ "pattern": "app.example.com", "custom_domain": true }], // the live site
+    "env": { "staging": { "routes": [] }, "other": { "routes": ["https://x.example.com/*"] } } }`;
+  assert.deepEqual(privateValues(routed), ['app.example.com', 'x.example.com']);
+});
+
+test('a page naming the private site\'s own domain is refused; the public domain passes', () => {
+  const values = privateValues('{ "routes": [{ "pattern": "app.relayeverything.com", "custom_domain": true }] }');
+  assert.deepEqual(siteBlocked([file('a.html', 'open https://app.relayeverything.com/apps/relay')], values),
+    [{ path: 'a.html', why: 'a value from app/wrangler.jsonc' }]);
+  assert.deepEqual(siteBlocked([file('b.html', 'read more at https://relayeverything.com/docs and www.relayeverything.com')], values), []);
 });
 
 test('library code may credit its authors by email, but never holds a private one', () => {
@@ -101,7 +111,7 @@ test('a commit with no site/ folder publishes nothing', () => {
 });
 
 test('a private value in site/ stops the publish before anything is installed or deployed', () => {
-  withRepo({ 'app/wrangler.jsonc': '{}', 'site/x.md': 'the private site at relay-ring.example.workers.dev' }, root => {
+  withRepo({ 'app/wrangler.jsonc': '{}', 'site/x.md': 'the private site at relay-everything.example.workers.dev' }, root => {
     // With no package.json in site/, reaching the install step would return result=failed install instead.
     assert.equal(publish({ root, ref: 'HEAD', dryRun: true }), 'result=refused x.md (another Worker\'s address)');
   });

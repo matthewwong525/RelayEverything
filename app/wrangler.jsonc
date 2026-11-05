@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "relay-ring",
+  "name": "relay-everything",
   "main": "worker/index.ts",
   "compatibility_date": "2026-07-28",
   // disallow_importable_env: code gets a binding only from its route's env,
@@ -10,78 +10,79 @@
   "assets": { "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": true },
   "vars": {
     "WONG_ENVIRONMENT": "production",
-    "WONG_KNOWLEDGE_REPOSITORY": "relay-ring-knowledge",
+    "WONG_KNOWLEDGE_REPOSITORY": "relay-everything-knowledge",
     "WONG_CODE_REPOSITORY": "matthewwong525/RelayEverything",
     "WONG_OWNER_EMAIL": "matthewwong525@gmail.com",
     "CF_ACCESS_TEAM_DOMAIN": "startuptemplate.cloudflareaccess.com",
-    "CF_ACCESS_AUD": "8c34a3dc4b254dd4d3f4e10d7c5c8648cb2c4abd82a3704054adc3c385ce0dc2",
-    "CF_ACCESS_APP_ID": "c148207d-66b5-4373-a690-8942de361acb",
-    "CF_ACCESS_WORKER_ID": "98c4755718a34f4da4aab47e13986695",
+    "CF_ACCESS_AUD": "76b579e034cfc7891c67bff9c593e31d2d8dc0b4b5548427d5257a5893ba9879",
+    "CF_ACCESS_APP_ID": "f938f676-4c71-445d-bacb-3649b4897276",
+    "CF_ACCESS_WORKER_ID": "3994b8ff29ac409dbfe1783049f21864",
     // The live checker's Client ID, which names its service token and opens nothing alone. Relay refuses every
     // other service token that is no device: app/worker/apps/relay/device.ts
     "RELAY_CHECKER_SHA256": "cc48186f16567a1acbcdabbbdce1446b905f77fd265a4e9f79865d1adb9930a1"
   },
   "d1_databases": [
-    { "binding": "DB", "database_name": "relay-ring-db", "database_id": "d7708dbb-6ab7-41d0-b828-440649e753a2", "migrations_dir": "../schema/migrations" },
+    { "binding": "DB", "database_name": "relay-everything-db", "database_id": "9f8aa624-0d1c-4abf-902a-7b9430286378", "migrations_dir": "../schema/migrations" },
     // Session memory, production only. No migrations_dir: the memory skill migrates it.
-    { "binding": "MEMORY_DB", "database_name": "relay-ring-memory", "database_id": "5441a6ff-fcef-4870-b651-87a479726aef" }
+    { "binding": "MEMORY_DB", "database_name": "relay-everything-memory", "database_id": "43757596-8f32-498f-875a-21a2e4108002" }
   ],
   // MEMORY_BUCKET only when the memory store has a bucket. RELAY_BUCKET keeps the ring notes' recordings.
   "r2_buckets": [
-    { "binding": "MEMORY_BUCKET", "bucket_name": "relay-ring-memory" },
-    { "binding": "RELAY_BUCKET", "bucket_name": "relay-ring-notes" }
+    { "binding": "MEMORY_BUCKET", "bucket_name": "relay-everything-memory" },
+    { "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes" }
   ],
   // Relay's webhooks: a message only says "look now" for one webhook; the cursor in D1 holds what was sent.
   // app/worker/apps/relay/webhooks/send.ts
   "queues": {
-    "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-webhooks" }],
-    "consumers": [{ "queue": "relay-webhooks", "max_batch_size": 10, "max_retries": 10 }]
+    "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks" }],
+    "consumers": [{ "queue": "relay-everything-webhooks", "max_batch_size": 10, "max_retries": 10 }]
   },
   // Rereads who can push on GitHub, for previews' sign-in, and wakes each Relay webhook left behind.
   "triggers": { "crons": ["*/15 * * * *"] },
-  "durable_objects": { "bindings": [{ "name": "LIVE_LINE", "class_name": "Line", "script_name": "relay-ring-line" }] },
+  // The private site's own address; the workers.dev address stays on for Access. Staging has none.
+  "routes": [{ "pattern": "app.relayeverything.com", "custom_domain": true }],
+  "durable_objects": { "bindings": [{ "name": "LIVE_LINE", "class_name": "Line", "script_name": "relay-everything-line" }] },
   "migrations": [{ "tag": "line-1", "new_sqlite_classes": ["Line"] }, { "tag": "line-2", "deleted_classes": ["Line"] }],
   // The project's own repository, which Connect your assistant hands out. wiki/stack/employee-project.md
   "artifacts": [{ "binding": "ARTIFACTS", "namespace": "wongstack" }],
-  // The check runner's runs, which the app reads for a change saved through it. wiki/stack/employee-project.md
-  "workflows": [{ "binding": "CODE_CHECKS", "name": "relay-ring-checks", "script_name": "relay-ring-checks", "class_name": "Checks" }],
   // The AI connector's list of connected AI apps, for the Relay page: app/worker/relay-mcp/index.ts. Its Worker must
   // exist before this one deploys: scripts/relay-mcp-setup.mjs makes it, and scripts/cf-deploy.sh deploys it first.
-  "services": [{ "binding": "RELAY_MCP", "service": "relay-ring-mcp", "entrypoint": "Grants" }],
+  "services": [{ "binding": "RELAY_MCP", "service": "relay-everything-mcp", "entrypoint": "Grants" }],
   "env": {
     "staging": {
-      "name": "relay-ring-staging",
+      "name": "relay-everything-staging",
       "vars": {
         "WONG_ENVIRONMENT": "staging",
-        "WONG_KNOWLEDGE_REPOSITORY": "relay-ring-knowledge",
+        "WONG_KNOWLEDGE_REPOSITORY": "relay-everything-knowledge",
         "WONG_CODE_REPOSITORY": "matthewwong525/RelayEverything",
         "WONG_OWNER_EMAIL": "matthewwong525@gmail.com",
         "CF_ACCESS_TEAM_DOMAIN": "startuptemplate.cloudflareaccess.com",
-        "CF_ACCESS_AUD": "290a7c4a0ebaae36505385d17a43566e37cc1c2472c55de0f25d4c0c40c51545",
-        "CF_ACCESS_APP_ID": "a21b4d6b-e12f-45ec-9976-ca3ef4771431",
-        "CF_ACCESS_WORKER_ID": "0a28ad88e5e047d6a1b23eb4c29a2cbe",
+        "CF_ACCESS_AUD": "ee3b42931ecd17ee1ef8f1355d6524f27d7abb522ffa2087d9c5f8f31dadce42",
+        "CF_ACCESS_APP_ID": "8cff403b-fb55-4954-b0c8-5df2cb344722",
+        "CF_ACCESS_WORKER_ID": "21a6605b2bbf465b94f3da684f303350",
         // The preview checker's Client ID.
         "RELAY_CHECKER_SHA256": "449f8b9af84a6d785f1c6a637559764baf7cdb230c4e99ae72d78dd8f33b12c2"
       },
-      "d1_databases": [{ "binding": "DB", "database_name": "relay-ring-db-staging", "database_id": "f5e832b0-fb07-4aef-8d20-3c737b481944", "migrations_dir": "../schema/migrations" }],
-      "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-ring-notes-staging" }],
+      "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db-staging", "database_id": "4f8edf18-ad51-4325-bb98-ec3ca6cc80b0", "migrations_dir": "../schema/migrations" }],
+      "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes-staging" }],
       "queues": {
-        "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-webhooks-staging" }],
-        "consumers": [{ "queue": "relay-webhooks-staging", "max_batch_size": 10, "max_retries": 10 }]
+        "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks-staging" }],
+        "consumers": [{ "queue": "relay-everything-webhooks-staging", "max_batch_size": 10, "max_retries": 10 }]
       },
-      "services": [{ "binding": "RELAY_MCP", "service": "relay-ring-mcp-staging", "entrypoint": "Grants" }],
+      "services": [{ "binding": "RELAY_MCP", "service": "relay-everything-mcp-staging", "entrypoint": "Grants" }],
+      "routes": [],
       "triggers": { "crons": [] }
     },
     "local": {
-      "name": "relay-ring-local",
+      "name": "relay-everything-local",
       "vars": { "WONG_ENVIRONMENT": "local", "SKIP_AUTH": "true" },
-      "d1_databases": [{ "binding": "DB", "database_name": "relay-ring-db-local", "database_id": "d7708dbb-6ab7-41d0-b828-440649e753a2", "remote": false, "migrations_dir": "../schema/migrations" }],
-      "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-ring-notes-local", "remote": false }],
+      "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db-local", "database_id": "9f8aa624-0d1c-4abf-902a-7b9430286378", "remote": false, "migrations_dir": "../schema/migrations" }],
+      "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes-local", "remote": false }],
       "queues": {
-        "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-webhooks-local" }],
-        "consumers": [{ "queue": "relay-webhooks-local", "max_batch_size": 10, "max_retries": 10 }]
+        "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks-local" }],
+        "consumers": [{ "queue": "relay-everything-webhooks-local", "max_batch_size": 10, "max_retries": 10 }]
       },
-      "durable_objects": { "bindings": [{ "name": "LIVE_LINE", "class_name": "Line", "script_name": "relay-ring-line-local" }] }
+      "durable_objects": { "bindings": [{ "name": "LIVE_LINE", "class_name": "Line", "script_name": "relay-everything-line-local" }] }
     }
   }
 }

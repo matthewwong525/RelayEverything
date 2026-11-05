@@ -330,7 +330,7 @@ describe("private Worker routing", () => {
 
   it("hands a queue's batch to the mini apps", async () => {
     const bindings = fakeEnv(env);
-    const batch = { queue: "relay-webhooks", messages: [] } as unknown as MessageBatch;
+    const batch = { queue: "relay-everything-webhooks", messages: [] } as unknown as MessageBatch;
     await worker.queue(batch, bindings);
     expect(appHooks.handleAppQueue).toHaveBeenCalledWith(batch, bindings);
   });

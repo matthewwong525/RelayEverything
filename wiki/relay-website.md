@@ -46,5 +46,6 @@ The guard reads every source file and every built file, the search index include
 - a `*.cloudflareaccess.com` address;
 - a `workers.dev` address of any Worker but `relay` and `relay-staging`;
 - an ID from [`app/wrangler.jsonc`](../app/wrangler.jsonc): every UUID or long hex value, such as the Access app IDs and audiences.
+- the private site's own domain, each `routes` host in [`app/wrangler.jsonc`](../app/wrangler.jsonc), such as `app.relayeverything.com`. The public `relayeverything.com` still passes: the guard matches the whole host.
 
 Never weaken the guard to let a page through: take the private detail out of the page.

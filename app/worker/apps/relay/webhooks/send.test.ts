@@ -32,7 +32,7 @@ const ringNote = (id: string, more: { audio?: boolean; createdAt?: number } = {}
 const message = (body: unknown) => ({ body, ack: vi.fn(), retry: vi.fn() });
 async function deliver(...bodies: unknown[]) {
   const messages = bodies.map(message);
-  await consume({ queue: "relay-webhooks", messages } as unknown as MessageBatch, env());
+  await consume({ queue: "relay-everything-webhooks", messages } as unknown as MessageBatch, env());
   return messages;
 }
 const bodies = () => sent.map(item => JSON.parse(item.body));

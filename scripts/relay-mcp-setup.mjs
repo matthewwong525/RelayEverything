@@ -8,7 +8,7 @@ import { isMain, parseCli, usageError } from './lib-cli.mjs';
 import { parseConfig, repoRoot, workerName } from './lib-wrangler-config.mjs';
 
 const USAGE = `usage: node scripts/relay-mcp-setup.mjs [--staging] [--check]
-  --staging   the previews' connector, relay-ring-mcp-staging, not the live one
+  --staging   the previews' connector, relay-everything-mcp-staging, not the live one
   --check     only check that the Cloudflare token can do each step; change nothing`;
 
 const APP = join(repoRoot, 'app');
@@ -34,7 +34,7 @@ export function target(config, staging) {
   const vars = (staging ? config.env?.staging : config)?.vars ?? {};
   const address = new URL(vars.RELAY_MCP_ADDRESS);
   return { worker: workerName(config, staging ? 'staging' : undefined), address: address.href, callback: new URL('/callback', address).href,
-    owner: vars.WONG_OWNER_EMAIL, app: `relay-ring AI connector${staging ? ' (staging)' : ''}` };
+    owner: vars.WONG_OWNER_EMAIL, app: `relay-everything AI connector${staging ? ' (staging)' : ''}` };
 }
 
 /** The Access for SaaS app: an OIDC sign-in that sends the owner back to the connector's /callback. */

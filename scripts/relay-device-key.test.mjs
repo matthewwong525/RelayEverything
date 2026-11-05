@@ -1,7 +1,9 @@
 // Run with: node --test scripts/relay-device-key.test.mjs
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { chatHandOverPage, connectCode, handOverPage, listing, parseCommand, slug, withoutToken, withToken } from './relay-device-key.mjs';
+import { join } from 'node:path';
+import { parseConfig, repoRoot } from './lib-wrangler-config.mjs';
+import { chatHandOverPage, connectCode, defaultServer, handOverPage, HAND_OVER, listing, parseCommand, slug, withoutToken, withToken } from './relay-device-key.mjs';
 
 test('a command needs a known verb, and a name to make or revoke a key', () => {
   assert.deepEqual(parseCommand(['create', '--name', ' Android phone ']), { command: 'create', name: 'Android phone', staging: false, server: undefined, kind: 'phone' });
@@ -47,4 +49,17 @@ test('a Claude Code key\'s page holds its connect code as text, escaped, with no
 test('a page name is safe as a file name', () => {
   assert.equal(slug("Matt's iPhone 15"), 'matt-s-iphone-15');
   assert.equal(slug('—'), 'device');
+});
+
+test('a new live key carries the site\'s own domain; a preview key keeps its workers.dev address', () => {
+  const config = parseConfig(join(repoRoot, 'app', 'wrangler.jsonc'));
+  const server = defaultServer(config, false);
+  assert.equal(server, 'https://app.relayeverything.com');
+  assert.equal(defaultServer(config, true), null);
+  assert.equal(defaultServer({ routes: [{ pattern: 'a.example.com', custom_domain: true }], env: { staging: {} } }, true), 'https://a.example.com');
+  assert.equal(defaultServer({}, false), null);
+  const key = { server, clientId: 'abc.access', clientSecret: 'shh-secret' };
+  assert.equal(JSON.parse(connectCode(key)).server, 'https://app.relayeverything.com');
+  assert.ok(handOverPage({ ...key, name: 'Phone', qrSvg: null }).includes('https://app.relayeverything.com/apps/relay/api/pebble'));
+  assert.match(HAND_OVER, /[\\/]\.relay-everything[\\/]device-keys$/);
 });

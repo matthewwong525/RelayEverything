@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { cookieJar, parseArgs, pkce, trial } from './relay-mcp-trial.mjs';
 
-const STAGING = 'https://relay-ring-mcp-staging.matthewwong525.workers.dev';
+const STAGING = 'https://relay-everything-mcp-staging.matthewwong525.workers.dev';
 const ACCESS = 'https://team.cloudflareaccess.com/cdn-cgi/access/sso/oidc/client-1/authorization';
 
 /** The staging connector as an AI app meets it, before anyone signs in. `open` lets /mcp in with no token. */
@@ -70,7 +70,7 @@ test('the trial fails a connector that lets /mcp in with no token; the live one 
   assert.equal(passed, false);
   assert.ok(printed.includes('failed refuses /mcp with no token: 200'));
   const live = await run({ request: async url => new URL(url).pathname === '/mcp' ? new Response(null, { status: 401 })
-    : Response.json({ registration_endpoint: 'https://relay-ring-mcp.matthewwong525.workers.dev/register' }) }, { live: true });
-  assert.deepEqual(live, { passed: true, printed: ['Trying relay-ring-mcp at https://relay-ring-mcp.matthewwong525.workers.dev',
+    : Response.json({ registration_endpoint: 'https://relay-everything-mcp.matthewwong525.workers.dev/register' }) }, { live: true });
+  assert.deepEqual(live, { passed: true, printed: ['Trying relay-everything-mcp at https://relay-everything-mcp.matthewwong525.workers.dev',
     'ok answers its OAuth metadata', 'ok refuses /mcp with no token'] });
 });

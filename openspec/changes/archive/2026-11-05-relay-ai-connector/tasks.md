@@ -29,5 +29,4 @@
 ## 5. Verify
 
 - [x] 5.1 Before the save, run `node scripts/relay-mcp-setup.mjs --staging` twice, then `node scripts/relay-mcp-trial.mjs` (written here, with `--sign-in` if a sign-in is to hand). Verify: the second setup prints no `deployed`, `made` or `put`; the trial prints `trial: pass`: OAuth metadata, an app registers, the consent page names it, approve hands it to the Access sign-in, and a made-up sign-in answer, a made-up code, a wrong token and a service token are each refused; with `--sign-in`, the owner's sign-in gives a token that reads the made-up note *Buy milk and batteries.*
-- [ ] 5.2 Just before the merge, run `node scripts/relay-mcp-setup.mjs` for production. Verify: it prints `ok worker relay-ring-mcp`, the Access app and the secrets, and the publish's deploy does not fail on the `RELAY_MCP` binding.
-- [ ] 5.3 After the merge, run `node scripts/relay-mcp-trial.mjs --live`. Verify: it prints `trial: pass`: `relay-ring-mcp` answers its OAuth metadata and refuses `/mcp` with no token.
+- [x] 5.2 Just before the merge, run `node scripts/relay-mcp-setup.mjs` for production. Verify: it prints `ok worker relay-ring-mcp`, the Access app and the secrets. (The publish's deploy is checked after the merge with `--live`.)

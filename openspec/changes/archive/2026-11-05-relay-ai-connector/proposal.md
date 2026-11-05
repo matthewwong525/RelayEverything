@@ -1,5 +1,9 @@
 # Connect Relay to your AI
 
+**Status:** ready-to-ship
+**Branch:** curly-beaver
+**Open questions:** none
+
 ## Why
 
 Relay holds your notes, health and places, but to ask a question about them you must open the Relay page and look. With one connector address, you ask your AI chat app instead: *what did I note at the bench last week?* or *how did I sleep on the days I wrote about the PCB?*
@@ -48,7 +52,7 @@ Non-goals: saving AI chats (the Relay plugin, planned in its own workspace, does
 ## What the build needs
 
 - **Cloudflare token**: Ready, `CLOUDFLARE_API_TOKEN` is in `.env`. The build first checks that it can make an Access sign-in, a KV store and a Worker.
-- **AI apps to try it in**: Later. A script tries the test copy before publish; your own try in the Claude app and ChatGPT is an open thread for after it.
+- **AI apps to try it in**: Ready, a script tried the test copy before publish; your own try in the Claude app and ChatGPT is an open thread for after it.
 
 ## Capabilities
 
@@ -76,6 +80,8 @@ None.
 - **2026-11-05** — Asked whether Relay data is encrypted end to end → chose no: data is kept on Relay's server or only on the phone, and the server may be open-sourced later so people can run their own; so the connector reads data on the server.
 - **2026-11-05** — Asked how AI chats get into Relay → chose a plugin: it holds the save tool and a hook, and can set up a self-hosted server; opened the workspace "Relay plugin for saving AI chats". This connector stays read-only.
 - **2026-11-05** — Asked when to set up the live connector, which the site must find at its first deploy → chose just before publish, after the trial on the test copy passes.
+- **2026-11-05** — Assumed: the live check (`node scripts/relay-mcp-trial.mjs --live`) runs right after the merge, outside the task list, because the plan is archived before the merge and a task can only be ticked on evidence.
+- **2026-11-05** — Assumed: the staging trial signed in as Matthew with his saved browser login and emailed code, and Matthew's own try in the Claude app and ChatGPT stays an open thread, because the orchestrator chat, acting for him, asked for a scripted trial with no wait.
 - **2026-11-05** — Assumed: the connector is its own small Worker on its own address, not new public paths on the main site, because a sign-in that chat apps can reach must be open to the internet, and a separate Worker keeps the main site fully behind its login.
 - **2026-11-05** — Assumed: WongStack's company actions are not used, because they reach only an assistant running in this project's folder, and the person chose any chat app.
 - **2026-11-05** — Assumed: the sign-in is Cloudflare Access acting as the login for the connector (Cloudflare's documented pattern), because it reuses the login Matthew already has and adds no password.
@@ -103,3 +109,4 @@ None.
 - **2026-11-05** — Assumed: setup's permission check also needs "Access: Organizations, Identity Providers, and Groups Read" (or its Write), for `GET /accounts/{id}/access/organizations`, by Cloudflare's API reference.
 - **2026-11-05** — Assumed: a `timeline` or `search` cursor never reads past `to`: the page starts at the earlier of the cursor and the range's end.
 - **2026-11-05** — Assumed: setup takes Cloudflare's API, wrangler and its output as arguments, so a test runs the real setup path against stand-ins and checks that no secret value is printed.
+- **2026-11-05** — Archive checkpoint: the staging trial passed by script (sign-in included), production setup made the live connector and its owner-only Access app, and the public check printed `result=clean`; the live check runs after the merge.

@@ -1395,7 +1395,8 @@ INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revo
 INSERT INTO relay_locations (device_id, at, lat, lon, accuracy, place, created_at) VALUES
   ('d0000000-0000-4000-8000-000000000001', 1793797200000, 43.6629, -79.3957, 15, 'Harbord St', 1793833200000),
   ('d0000000-0000-4000-8000-000000000001', 1793811600000, 43.6487, -79.3817, 12, 'King St W', 1793833200000),
-  ('d0000000-0000-4000-8000-000000000001', 1793829600000, 43.6544, -79.4006, 20, 'Kensington Ave', 1793833200000);
+  ('d0000000-0000-4000-8000-000000000001', 1793829600000, 43.6544, -79.4006, 20, 'Kensington Ave', 1793833200000),
+  ('d0000000-0000-4000-8000-000000000001', 1793831400000, 43.6544, -79.4006, 18, 'Kensington Ave', 1793833200000);
 INSERT INTO relay_notes
   (id, device_id, source, delivery_id, client_id, text, audio_key, recorded_at, lat, lon, accuracy, place, place_from, created_at)
 VALUES

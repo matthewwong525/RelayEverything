@@ -1,6 +1,7 @@
-// Relay's server side: ring notes from the Pebble app, typed notes, health and location from the phones, read back by
-// the phones and the site page, and sent on to the owner's webhooks. A device key reaches neither summary nor webhooks.
+// Relay's server: ring notes, typed notes, health and location from the phones, read back and sent on to webhooks.
+// A device key reaches only these routes but summary, the AI apps and the webhooks: device.ts.
 import type { Route } from "../../api/contract.ts";
+import { aiAppDisconnect, aiApps } from "./ai-apps.ts";
 import { audio } from "./audio.ts";
 import { notes } from "./notes.ts";
 import { pebble } from "./pebble.ts";
@@ -28,6 +29,8 @@ export const routes = new Map<string, Route>([
   ["POST webhooks/resend", resend],
   ["POST webhooks/retry", retry],
   ["POST webhooks/sweep", sweepNow],
+  ["GET ai-apps", aiApps],
+  ["POST ai-apps-disconnect", aiAppDisconnect],
 ]);
 
 /** The webhooks' queue, keyed by its name without `-staging`, and the sweep production runs every 15 minutes. */

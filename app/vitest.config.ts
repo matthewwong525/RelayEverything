@@ -5,10 +5,14 @@ import { defineConfig } from "vitest/config";
 // Worker. This suite imports the Worker's modules directly and needs no runtime around them.
 export default defineConfig({
   // `@/` is app/src/, as in vite.config.ts.
-  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
+  // `cloudflare:workers` exists only in the Workers runtime: the AI connector's tests get a stand-in.
+  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)),
+    "cloudflare:workers": fileURLToPath(new URL("./tests/cloudflare-workers.ts", import.meta.url)) } },
   test: {
     include: ["worker/**/*.test.ts", "src/**/*.test.{ts,tsx}"],
     environment: "node",
+    // The OAuth library imports `cloudflare:workers` too, so it goes through the alias rather than Node's loader.
+    server: { deps: { inline: ["@cloudflare/workers-oauth-provider"] } },
     // What the ready-made parts ask of a browser that the test DOM lacks.
     setupFiles: ["src/dom.test.setup.ts"],
     coverage: {

@@ -25,6 +25,8 @@
     "relay:api-doc": "RELAY_API_DOC_WRITE=1 vitest run worker/apps/relay/api-doc.test.ts worker/apps/relay/webhooks/format.test.ts"
   },
   "dependencies": {
+    "@cloudflare/workers-oauth-provider": "^1.2.4",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "croner": "10.0.1",

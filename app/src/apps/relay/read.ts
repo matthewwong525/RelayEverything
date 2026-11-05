@@ -21,10 +21,18 @@ export type Webhook = {
 
 export const API = '/apps/relay/api/'
 
-/** One route's JSON, or an error naming its address when the answer is not one. */
-export async function get<T>(route: string): Promise<T> {
-  const response = await fetch(`${API}${route}`)
-  if (!response.ok) throw new Error(`${route}: ${response.status}`)
+/** A route's refusal, with its status: 503 says the route's service is not set up here. */
+class Refused extends Error {
+  status: number
+  constructor(route: string, status: number) {
+    super(`${route}: ${status}`)
+    this.status = status
+  }
+}
+
+async function json<T>(route: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API}${route}`, init)
+  if (!response.ok) throw new Refused(route, response.status)
   return await response.json() as T
 }
 
@@ -36,13 +44,21 @@ export async function post<T>(route: string, input: object = {}): Promise<T> {
   return json as T
 }
 
+/** One route's JSON, or a Refused naming its address when the answer is not one. */
+export const get = <T>(route: string) => json<T>(route)
+
+/** A change sent as JSON, answered as JSON. */
+export const send = <T>(route: string, body: unknown) =>
+  json<T>(route, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+
 /** Today in this browser's time zone, as the summary route takes it. */
 export function today(now = new Date()) {
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
   return { day: local.toISOString().slice(0, 10), offset: -now.getTimezoneOffset() }
 }
 
-type State<T> = { status: 'loading' } | { status: 'failed' } | { status: 'ready'; value: T }
+/** `code` is the refusal's status, or null when no answer came. */
+type State<T> = { status: 'loading' } | { status: 'failed'; code: number | null } | { status: 'ready'; value: T }
 
 /** A route read once the page opens, and again on `retry`. */
 export function useGet<T>(route: string): [State<T>, () => void] {
@@ -52,7 +68,7 @@ export function useGet<T>(route: string): [State<T>, () => void] {
     let open = true
     get<T>(route).then(
       (value) => open && setState({ status: 'ready', value, round }),
-      () => open && setState({ status: 'failed', round }),
+      (error) => open && setState({ status: 'failed', code: error instanceof Refused ? error.status : null, round }),
     )
     return () => { open = false }
   }, [route, round])

@@ -1,7 +1,8 @@
 import { Loading } from '@/components/Loading'
-import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { AiCard } from './AiCard'
+import { Failed } from './Failed'
 import { Notes } from './Notes'
 import { today, useGet, when, type Summary, type Timeline } from './read'
 import { PebbleSetup, PhoneSetup } from './Setup'
@@ -41,13 +42,6 @@ function Day({ summary }: { summary: Summary }) {
   </>
 }
 
-function Failed({ what, retry }: { what: string; retry: () => void }) {
-  return <p role="alert" className="flex flex-wrap items-center gap-3">
-    {what} could not be loaded.
-    <Button type="button" variant="outline" size="sm" onClick={retry}>Try again</Button>
-  </p>
-}
-
 export function App() {
   const { day, offset } = today()
   const [summary, retrySummary] = useGet<Summary>(`summary?day=${day}&offset=${offset}`)
@@ -70,5 +64,6 @@ export function App() {
     {timeline.status === 'failed' && <Failed what="Notes" retry={retryTimeline} />}
     {timeline.status === 'ready' && <Notes first={timeline.value} />}
     <Webhooks />
+    <AiCard />
   </div>
 }

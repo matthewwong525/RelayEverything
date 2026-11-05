@@ -16,12 +16,13 @@
     "secrets:push": "node ../scripts/cf-secrets.mjs push",
     "secrets:check": "node ../scripts/cf-secrets.mjs check",
     "lint": "oxlint --deny-warnings",
-    "test": "npm run lint && tsc -b && vitest run --coverage && npm run test:runtime && knip && jscpd && node ../scripts/check-app-keys.mjs && node ../scripts/check-skill-actions.mjs",
+    "test": "npm run lint && tsc -b && vitest run --coverage && npm run test:runtime && knip && jscpd && node ../scripts/check-app-keys.mjs && node ../scripts/check-skill-actions.mjs && node ../scripts/public-check.mjs --tree && node --test ../scripts/public-check.test.mjs",
     "test:checks": "node ../scripts/check-app-checks.mjs",
     "preview": "npm run build && vite preview",
     "deploy": "bash ../scripts/cf-deploy.sh",
     "cf-typegen": "wrangler types",
-    "test:runtime": "vitest run --config vitest.config.runtime.ts"
+    "test:runtime": "vitest run --config vitest.config.runtime.ts",
+    "relay:api-doc": "RELAY_API_DOC_WRITE=1 vitest run worker/apps/relay/api-doc.test.ts"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^1.2.4",

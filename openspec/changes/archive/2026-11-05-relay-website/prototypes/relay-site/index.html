@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relay</title>
+<style>
+  :root { --bg:#fff; --fg:#17181c; --muted:#5c6170; --line:#e4e6eb; --soft:#f5f6f8; --accent:#3b5bdb; --accent-soft:#e8edff; }
+  .dark { --bg:#15171c; --fg:#eceef2; --muted:#a3a8b5; --line:#2b2f38; --soft:#1d2027; --accent:#8ea6ff; --accent-soft:#232b45; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--fg); }
+  button { font:inherit; color:inherit; background:none; border:0; cursor:pointer; }
+  header { position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:16px; padding:12px 24px; border-bottom:1px solid var(--line); background:var(--bg); }
+  .logo { display:flex; align-items:center; gap:8px; font-weight:700; font-size:18px; }
+  .logo svg { width:22px; height:22px; }
+  .search { flex:1; max-width:360px; display:flex; align-items:center; gap:8px; padding:6px 12px; border:1px solid var(--line); border-radius:8px; color:var(--muted); font-size:14px; }
+  .search kbd { margin-left:auto; font:12px ui-monospace,monospace; border:1px solid var(--line); border-radius:4px; padding:0 5px; }
+  .grow { flex:1; }
+  .nav-link { font-size:14px; color:var(--muted); }
+  .nav-link.on { color:var(--fg); font-weight:600; }
+  .icon-btn { width:34px; height:34px; border:1px solid var(--line); border-radius:8px; display:grid; place-items:center; }
+  .menu-btn { display:none; }
+  /* Home */
+  .hero { max-width:1080px; margin:0 auto; padding:72px 24px 48px; display:grid; grid-template-columns:1.2fr 1fr; gap:48px; align-items:center; }
+  .hero h1 { font-size:48px; line-height:1.1; margin:0 0 16px; letter-spacing:-0.02em; }
+  .hero p { font-size:19px; color:var(--muted); margin:0 0 28px; }
+  .actions { display:flex; flex-wrap:wrap; gap:12px; }
+  .btn { display:inline-flex; align-items:center; gap:8px; padding:10px 18px; border-radius:999px; font-weight:600; font-size:15px; border:1px solid var(--line); }
+  .btn.primary { background:var(--fg); color:var(--bg); border-color:var(--fg); }
+  .ring-art { display:grid; place-items:center; }
+  .ring-art svg { width:100%; max-width:340px; }
+  .cards { max-width:1080px; margin:0 auto; padding:0 24px 48px; display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .card { border:1px solid var(--line); border-radius:12px; padding:20px; background:var(--bg); }
+  .card h3 { margin:8px 0 6px; font-size:17px; }
+  .card p { margin:0; color:var(--muted); font-size:15px; }
+  .badge { display:inline-block; font-size:12px; font-weight:600; padding:2px 8px; border-radius:999px; background:var(--accent-soft); color:var(--accent); }
+  .badge.soon { background:var(--soft); color:var(--muted); }
+  .flow { max-width:1080px; margin:0 auto; padding:8px 24px 64px; }
+  .flow h2 { font-size:24px; margin:0 0 16px; }
+  .flow .steps + h2 { margin-top:32px; }
+  .flow p { color:var(--muted); margin:0; }
+  .steps { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; counter-reset:s; }
+  .step { background:var(--soft); border-radius:12px; padding:16px; font-size:15px; }
+  .step b { display:block; margin-bottom:4px; }
+  .step:before { counter-increment:s; content:counter(s); display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--accent); color:var(--bg); font-size:13px; font-weight:700; margin-bottom:8px; }
+  footer { border-top:1px solid var(--line); padding:20px 24px; color:var(--muted); font-size:14px; text-align:center; }
+  /* Docs */
+  .docs { display:none; grid-template-columns:260px 1fr 200px; max-width:1280px; margin:0 auto; }
+  .side { border-right:1px solid var(--line); padding:20px 16px; font-size:14px; height:calc(100vh - 59px); overflow:auto; position:sticky; top:59px; }
+  .side h4 { margin:16px 8px 6px; font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  .side h4:first-child { margin-top:0; }
+  .side a { display:block; padding:4px 8px; border-radius:6px; color:var(--fg); text-decoration:none; }
+  .side a.on { background:var(--accent-soft); color:var(--accent); font-weight:600; }
+  .side a .badge { margin-left:6px; font-size:11px; padding:0 6px; }
+  article { padding:32px 48px 64px; max-width:760px; }
+  article h1 { font-size:34px; margin:0 0 8px; letter-spacing:-0.01em; }
+  article .lead { color:var(--muted); font-size:18px; margin:0 0 24px; }
+  article h2 { font-size:22px; margin:32px 0 8px; }
+  article ol { padding-left:22px; }
+  article li { margin:6px 0; }
+  code { font:14px ui-monospace,SFMono-Regular,Menlo,monospace; background:var(--soft); border:1px solid var(--line); border-radius:4px; padding:1px 5px; }
+  pre { font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; background:var(--soft); border:1px solid var(--line); border-radius:8px; padding:14px 16px; overflow:auto; }
+  table { width:100%; border-collapse:collapse; font-size:14px; margin:12px 0; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  .note { border-left:3px solid var(--accent); background:var(--accent-soft); padding:10px 14px; border-radius:0 8px 8px 0; font-size:15px; margin:16px 0; }
+  .toc { padding:32px 16px; font-size:13px; color:var(--muted); }
+  .toc b { display:block; color:var(--fg); margin-bottom:8px; }
+  .toc a { display:block; color:var(--muted); text-decoration:none; padding:3px 0; }
+  .pager { display:flex; justify-content:space-between; gap:12px; margin-top:40px; }
+  .pager .card { flex:1; font-size:14px; }
+  .pager .card span { color:var(--muted); display:block; font-size:12px; }
+  body.show-docs .home { display:none; }
+  body.show-docs .docs { display:grid; }
+  @media (max-width: 900px) {
+    .hero { grid-template-columns:1fr; padding:40px 20px 24px; gap:24px; }
+    .hero h1 { font-size:36px; }
+    .ring-art svg { max-width:220px; }
+    .cards { grid-template-columns:1fr; padding:0 20px 32px; }
+    .steps { grid-template-columns:1fr 1fr; }
+    .search, .nav-link { display:none; }
+    .menu-btn { display:grid; }
+    header { padding:10px 16px; }
+    .docs { grid-template-columns:1fr; }
+    .side { display:none; position:static; height:auto; border-right:0; border-bottom:1px solid var(--line); }
+    body.menu-open .side { display:block; }
+    .toc { display:none; }
+    article { padding:24px 20px 48px; }
+    article h1 { font-size:28px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <button class="logo" data-go="home" aria-label="Relay home">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><ellipse cx="12" cy="12" rx="9" ry="9"/><path d="M8 12h8" stroke-linecap="round"/></svg>
+    Relay
+  </button>
+  <div class="search">Search the docs <kbd>/</kbd></div>
+  <span class="grow"></span>
+  <button class="nav-link on" data-go="home" id="nav-home">Home</button>
+  <button class="nav-link" data-go="docs" id="nav-docs">Docs</button>
+  <button class="nav-link">GitHub</button>
+  <button class="icon-btn" id="theme" aria-label="Dark or light">☾</button>
+  <button class="icon-btn menu-btn" id="menu" aria-label="Menu">☰</button>
+</header>
+
+<main class="home">
+  <section class="hero">
+    <div>
+      <span class="badge">Open, in progress</span>
+      <h1>Your data, in a place you choose.</h1>
+      <p>Relay gets your notes, health and location off your phone and devices. It sends them to your own server and database, where your own AI can read them.</p>
+      <div class="actions">
+        <button class="btn primary" data-go="docs">Get started</button>
+        <button class="btn">Android app</button>
+        <button class="btn">iPhone (TestFlight)</button>
+      </div>
+    </div>
+    <div class="ring-art" aria-label="Data goes from your phone to your own database, and your AI reads it there">
+      <svg viewBox="0 0 240 200">
+        <rect x="14" y="40" width="58" height="104" rx="12" fill="none" stroke="#6b7486" stroke-width="6"/>
+        <circle cx="43" cy="128" r="4" fill="#6b7486"/>
+        <path d="M84 92h40" stroke="#3b5bdb" stroke-width="6" stroke-linecap="round" stroke-dasharray="2 12"/>
+        <path d="M120 82l12 10-12 10" fill="none" stroke="#3b5bdb" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+        <ellipse cx="176" cy="62" rx="40" ry="13" fill="none" stroke="#6b7486" stroke-width="6"/>
+        <path d="M136 62v64c0 7 18 13 40 13s40-6 40-13V62" fill="none" stroke="#6b7486" stroke-width="6"/>
+        <path d="M136 94c0 7 18 13 40 13s40-6 40-13" fill="none" stroke="#6b7486" stroke-width="6"/>
+        <path d="M176 148v10" stroke="#3b5bdb" stroke-width="5" stroke-linecap="round"/>
+        <path d="M176 166l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#3b5bdb"/>
+      </svg>
+    </div>
+  </section>
+  <section class="cards">
+    <div class="card"><span class="badge">Works today</span><h3>Collect it on your phone</h3><p>The Relay app on iPhone and Android collects your notes, steps, heart rate, sleep, workouts and where you were. Take a note by typing, or by voice from a ring.</p></div>
+    <div class="card"><span class="badge soon">Coming</span><h3>Send it to your own database</h3><p>Webhooks send each new item to a database you choose. You keep your own tables and tools.</p></div>
+    <div class="card"><span class="badge soon">Coming</span><h3>Let your own AI read it</h3><p>An MCP connection lets your AI assistant read your data. An example skill and table setup to copy and change come after.</p></div>
+  </section>
+  <section class="flow">
+    <h2>How your data travels</h2>
+    <div class="steps">
+      <div class="step"><b>Collect</b>Your phone and devices make notes, health and location data.</div>
+      <div class="step"><b>Sync</b>The Relay app sends it to your Relay server.</div>
+      <div class="step"><b>Send on</b>Webhooks copy each new item to your own database. Coming.</div>
+      <div class="step"><b>Read with AI</b>Your AI reads it through MCP. Coming.</div>
+    </div>
+    <h2>A ring to take notes</h2>
+    <p>A ring is one way to take a note: hold the band, talk, and let go. A Pebble Index ring works today. The Relay ring is in design.</p>
+  </section>
+  <footer>Relay is built in the open. The phone app's code is on GitHub.</footer>
+</main>
+
+<div class="docs">
+  <nav class="side">
+    <h4>Get started</h4>
+    <a href="#">What you need</a>
+    <a href="#">Install the app</a>
+    <a href="#">Connect a phone</a>
+    <a href="#" class="on">Set up the Pebble webhook</a>
+    <h4>Use the app</h4>
+    <a href="#">Notes</a><a href="#">Health</a><a href="#">Location</a><a href="#">Settings</a>
+    <h4>Connections</h4>
+    <a href="#">Your own database <span class="badge soon">Soon</span></a>
+    <a href="#">AI assistants (MCP) <span class="badge soon">Soon</span></a>
+    <a href="#">Example skill and tables <span class="badge soon">Soon</span></a>
+    <h4>Server API</h4>
+    <a href="#">Keys</a><a href="#">Notes</a><a href="#">Health and places</a><a href="#">Timeline and summary</a><a href="#">Pebble webhook</a>
+    <h4>The ring</h4>
+    <a href="#">How it works</a><a href="#">Parts and battery</a><a href="#">The board</a><a href="#">3D models and test prints</a>
+    <h4>About</h4>
+    <a href="#">Privacy</a>
+  </nav>
+  <article>
+    <h1>Set up the Pebble webhook</h1>
+    <p class="lead">Send each note from your Pebble Index ring to your Relay server, with its words and recording.</p>
+    <div class="note">You need a Relay server and a key for the Pebble app first. <a href="#">Connect a phone</a> shows how to make a key.</div>
+    <h2 id="steps">Steps</h2>
+    <ol>
+      <li>Open the Pebble app, then <b>Index</b> → <b>Webhook</b>.</li>
+      <li>Set the address to your server's Pebble route:<pre>https://&lt;your-relay-server&gt;/apps/relay/api/pebble</pre></li>
+      <li>Add two custom headers with the Pebble app's key: <code>CF-Access-Client-Id</code> and <code>CF-Access-Client-Secret</code>.</li>
+      <li>Turn on <b>Signing</b> and paste the signing secret.</li>
+      <li>Tick <b>Transcription</b> and <b>Recording</b>.</li>
+      <li>Tap <b>Send test</b>. Relay answers <code>200</code> and keeps nothing from a test.</li>
+    </ol>
+    <h2 id="what-is-sent">What is sent</h2>
+    <table>
+      <tr><th>Field</th><th>What it holds</th></tr>
+      <tr><td><code>audio</code></td><td>The recording, m4a, 16 kHz</td></tr>
+      <tr><td><code>transcription</code></td><td>The words</td></tr>
+      <tr><td><code>recordedAt</code></td><td>When you spoke, in milliseconds</td></tr>
+      <tr><td><code>X-Index-Delivery</code></td><td>One id per note. A note sent twice is kept once.</td></tr>
+    </table>
+    <h2 id="problems">If a note doesn't arrive</h2>
+    <p>A <code>401</code> means the signature or the key is wrong. Pebble's app tries again for 10 minutes after a <code>5xx</code>.</p>
+    <div class="pager">
+      <button class="card" style="text-align:left"><span>Previous</span>Connect a phone</button>
+      <button class="card" style="text-align:right"><span>Next</span>Notes</button>
+    </div>
+  </article>
+  <aside class="toc"><b>On this page</b><a href="#steps">Steps</a><a href="#what-is-sent">What is sent</a><a href="#problems">If a note doesn't arrive</a></aside>
+</div>
+
+<script>
+  const body = document.body;
+  function go(view) {
+    body.classList.toggle('show-docs', view === 'docs');
+    body.classList.remove('menu-open');
+    document.getElementById('nav-home').classList.toggle('on', view !== 'docs');
+    document.getElementById('nav-docs').classList.toggle('on', view === 'docs');
+    window.scrollTo(0, 0);
+  }
+  document.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', () => go(el.dataset.go)));
+  document.querySelectorAll('a[href="#"]').forEach(el => el.addEventListener('click', e => e.preventDefault()));
+  document.getElementById('menu').addEventListener('click', () => { go('docs'); body.classList.add('menu-open'); });
+  document.getElementById('theme').addEventListener('click', e => {
+    const dark = document.documentElement.classList.toggle('dark');
+    e.currentTarget.textContent = dark ? '☀' : '☾';
+  });
+</script>
+</body>
+</html>

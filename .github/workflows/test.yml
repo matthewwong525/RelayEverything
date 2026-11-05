@@ -94,6 +94,10 @@ jobs:
         with:
           node-version-file: .nvmrc
 
+      # The repository is public: every change, docs included, is read for keys and private notes.
+      - name: Check for keys and private notes
+        run: node scripts/public-check.mjs --tree
+
       - name: Check whether this code already passed
         id: passed
         if: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}

@@ -1,13 +1,15 @@
 # Relay's AI connector
 
-Relay's AI connector lets an AI chat app, such as the Claude app or ChatGPT, read your Relay notes, health and places when you ask it a question. It only reads: it can't add, change or delete a note. It is part of [the Cloudflare stack](README.md): its own Worker, `relay-ring-mcp`, beside the main app.
+Relay's AI connector lets an AI chat app, such as the Claude app or ChatGPT, read your Relay notes, health and places when you ask it a question. It only reads: it can't add, change or delete a note. It is part of [the Cloudflare stack](README.md): its own Worker, `relay-everything-mcp`, beside the main app.
 
 | Where | Address to add |
 | --- | --- |
-| Live | `https://relay-ring-mcp.matthewwong525.workers.dev/mcp` |
-| Previews | `https://relay-ring-mcp-staging.matthewwong525.workers.dev/mcp` |
+| Live | `https://relay-everything-mcp.matthewwong525.workers.dev/mcp` |
+| Previews | `https://relay-everything-mcp-staging.matthewwong525.workers.dev/mcp` |
 
 The **AI apps** card at the bottom of the Relay page shows the address, with a *Copy* button, and every app you connected.
+
+**The old address works for 30 days after the move to the new name.** An app you connected at `https://relay-ring-mcp.matthewwong525.workers.dev/mcp` keeps its sign-in there and reads the same current data, because the old Worker reads the new database. Add the new address in the app when it suits you, then remove the old one. After the 30 days, the old Worker goes, only after the owner says yes ([the move](move-cloudflare-data.md)).
 
 ## Connect an app
 
@@ -44,7 +46,7 @@ On the Relay page, find the app in the **AI apps** card and click **Disconnect**
 
 Two locks admit only Relay's owner, the `WONG_OWNER_EMAIL` in `app/wrangler.relay-mcp.jsonc`:
 
-1. An Access for SaaS app, `relay-ring AI connector`, signs you in. Its one policy allows only the owner's email.
+1. An Access for SaaS app, `relay-everything AI connector`, signs you in. Its one policy allows only the owner's email.
 2. The connector then reads the email in Access's signed answer itself, and refuses any other email. A wider Access policy still admits no one else.
 
 An app stays connected while you use it. Its access token works for one hour, and the app gets a new one when it asks again. After 30 days with no use, the sign-in drops, and you connect the app again. Disconnect ends it at once. A device key from the [Relay phones](../../app/worker/apps/relay/device.ts) can't use the connector, and the connector's tokens can't open the main app.
@@ -63,8 +65,8 @@ A second run changes nothing. When `--check` names a missing permission, widen t
 
 Run setup for an environment **before** the main app deploys there. The main app binds the connector as `RELAY_MCP`, and Cloudflare refuses a deploy whose bound Worker does not exist. For the first change that adds the connector:
 
-1. Run setup with `--staging`, then [try it](#try-it), before the change is saved: the preview binds `relay-ring-mcp-staging`.
-2. Run setup for the live connector just before the change is published: the publish deploys `relay-ring-mcp`.
+1. Run setup with `--staging`, then [try it](#try-it), before the change is saved: the preview binds `relay-everything-mcp-staging`.
+2. Run setup for the live connector just before the change is published: the publish deploys `relay-everything-mcp`.
 3. After the publish, run the trial with `--live`.
 
 After that, each publish deploys the live connector first, then the main app ([`scripts/cf-deploy.sh`](../../scripts/cf-deploy.sh)). A preview deploys only the main app, and a second setup run deploys nothing. To put a branch's connector code on staging, deploy it from `app/`:

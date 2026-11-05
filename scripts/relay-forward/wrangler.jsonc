@@ -1,0 +1,17 @@
+// The 30-day forwarder, deployed over the old relay-ring Worker after the move. No data bindings: it only passes
+// requests on. The switch deploys it from this folder: `npx wrangler deploy --var MODE:hold`, then with no --var.
+{
+  "name": "relay-ring",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-07-28",
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    // forward: pass requests on to TARGET. hold: answer 503, try again in a minute, during the last copy.
+    "MODE": "forward",
+    "TARGET": "https://app.relayeverything.com"
+  },
+  // relay-ring's Durable Object history, repeated so the deploy keeps its tag line-2; line-2 left no class.
+  // Drop this list if the deploy refuses it (task 6.5 tries it on a throwaway Worker first).
+  "migrations": [{ "tag": "line-1", "new_sqlite_classes": ["Line"] }, { "tag": "line-2", "deleted_classes": ["Line"] }]
+}

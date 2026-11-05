@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { isMain, parseCli } from './lib-cli.mjs';
 import { blocked, envSecrets } from './public-check.mjs';
+import { stripJsonc } from './lib-wrangler-config.mjs';
 import { primaryRoot } from '../.claude/skills/memory/scripts/lib/primary-root.mjs';
 import { parseEnv } from '../.claude/skills/memory/scripts/lib/store.mjs';
 
@@ -30,8 +31,15 @@ const PICTURE = /\.(png|jpe?g|gif|webp|avif|ico|woff2?|ttf)$/i;
 
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], ...opts }).trim();
 
-/** The private site's IDs and emails from its wrangler config, which no public file may hold. */
-export const privateValues = text => [...new Set(text.match(PRIVATE_VALUE) ?? [])];
+/** Each host the private site's routes name, in every environment, such as its own domain. */
+function routeHosts(text) {
+  const config = JSON.parse(stripJsonc(text));
+  return [config, ...Object.values(config.env ?? {})].flatMap(environment => environment.routes ?? [])
+    .map(route => (typeof route === 'string' ? route : route.pattern).replace(/^https?:\/\//, '').replace(/^\*\.?/, '').split('/')[0]);
+}
+
+/** The private site's IDs, emails and own domains from its wrangler config, which no public file may hold. */
+export const privateValues = text => [...new Set([...(text.match(PRIVATE_VALUE) ?? []), ...routeHosts(text)])];
 
 /** What only the website must not hold, beyond `blocked()`: each file with why, never the value. */
 export function siteBlocked(files, values) {

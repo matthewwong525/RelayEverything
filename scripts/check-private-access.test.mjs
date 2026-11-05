@@ -74,12 +74,12 @@ test('a key that may not read service tokens leaves it unverified; another failu
 });
 
 test("Relay's AI connector sign-in, an Access for SaaS app, guards none of the app's addresses", () => {
-  const workers = [{ id: 'w-live', name: 'relay-ring' }, { id: 'w-staging', name: 'relay-ring-staging' }];
-  const saas = { id: 'saas', name: 'relay-ring AI connector', type: 'saas', policies: [{ id: 'owner' }],
-    saas_app: { auth_type: 'oidc', redirect_uris: ['https://relay-ring-mcp.example.workers.dev/callback'] } };
+  const workers = [{ id: 'w-live', name: 'relay-everything' }, { id: 'w-staging', name: 'relay-everything-staging' }];
+  const saas = { id: 'saas', name: 'relay-everything AI connector', type: 'saas', policies: [{ id: 'owner' }],
+    saas_app: { auth_type: 'oidc', redirect_uris: ['https://relay-everything-mcp.example.workers.dev/callback'] } };
   const withDomain = { ...saas, id: 'saas-2', domain: 'team.cloudflareaccess.com/cdn-cgi/access/sso/oidc/abc' };
   assert.deepEqual(accessConflicts([saas, withDomain], workers, 'example', []), []);
   // The same check still catches an app on the live Worker's own address.
-  const stray = { id: 'stray', domain: 'relay-ring.example.workers.dev' };
+  const stray = { id: 'stray', domain: 'relay-everything.example.workers.dev' };
   assert.deepEqual(accessConflicts([saas, stray], workers, 'example', []).map(app => app.id), ['stray']);
 });

@@ -2,19 +2,19 @@
 // app's database and no web address; a deploy refuses the line otherwise, or with an env.staging.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "relay-ring-line",
+  "name": "relay-everything-line",
   "main": "worker/line-worker.ts",
   "compatibility_date": "2026-07-28",
   "compatibility_flags": ["nodejs_compat", "disallow_importable_env"],
   "workers_dev": false,
   "preview_urls": false,
-  "d1_databases": [{ "binding": "DB", "database_name": "relay-ring-db", "database_id": "d7708dbb-6ab7-41d0-b828-440649e753a2" }],
+  "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db", "database_id": "9f8aa624-0d1c-4abf-902a-7b9430286378" }],
   "durable_objects": { "bindings": [{ "name": "LINE", "class_name": "Line" }] },
   "migrations": [{ "tag": "line-1", "new_sqlite_classes": ["Line"] }],
   "env": {
     "local": {
-      "name": "relay-ring-line-local",
-      "d1_databases": [{ "binding": "DB", "database_name": "relay-ring-db-local", "database_id": "d7708dbb-6ab7-41d0-b828-440649e753a2", "remote": false }],
+      "name": "relay-everything-line-local",
+      "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db-local", "database_id": "9f8aa624-0d1c-4abf-902a-7b9430286378", "remote": false }],
       "durable_objects": { "bindings": [{ "name": "LINE", "class_name": "Line" }] }
     }
   }

@@ -18,6 +18,12 @@ export function privateDeployment(config, environment = 'production') {
     if (vars.WORKSPACE_LOGIN !== 'off') throw new Error('WORKSPACE_LOGIN may only be "off"');
     return { name: selected.name ?? config.name, environment, open: true };
   }
+  // With routes, Wrangler turns the workers.dev address off unless it says true, and Access returns each sign-in
+  // there: wiki/stack/move-cloudflare-data.md#move-a-worker-to-a-new-name
+  const own = entry => entry?.routes ?? (entry?.route ? [entry.route] : undefined);
+  if ((own(selected) ?? own(config) ?? []).length && (selected.workers_dev ?? config.workers_dev) !== true) {
+    throw new Error('a private Worker with routes needs "workers_dev": true in app/wrangler.jsonc, or each sign-in returns to a turned-off address');
+  }
   if (!/^[a-z0-9-]+\.cloudflareaccess\.com$/i.test(vars.CF_ACCESS_TEAM_DOMAIN ?? '') || !vars.CF_ACCESS_AUD || !vars.CF_ACCESS_APP_ID || !/^[a-f0-9]{32}$/i.test(vars.CF_ACCESS_WORKER_ID ?? '')) {
     throw new Error('private Access identifiers are incomplete; finish setup or the reviewed privacy migration');
   }

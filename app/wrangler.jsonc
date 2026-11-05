@@ -41,6 +41,8 @@
   "triggers": { "crons": ["*/15 * * * *"] },
   // The private site's own address; the workers.dev address stays on for Access. Staging has none.
   "routes": [{ "pattern": "app.relayeverything.com", "custom_domain": true }],
+  // With routes, Wrangler turns workers.dev off unless this says true, and Access returns each sign-in there.
+  "workers_dev": true,
   "durable_objects": { "bindings": [{ "name": "LIVE_LINE", "class_name": "Line", "script_name": "relay-everything-line" }] },
   "migrations": [{ "tag": "line-1", "new_sqlite_classes": ["Line"] }, { "tag": "line-2", "deleted_classes": ["Line"] }],
   // The project's own repository, which Connect your assistant hands out. wiki/stack/employee-project.md

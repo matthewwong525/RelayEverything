@@ -3,13 +3,17 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../relay.dart';
 
-/// The first screen: scan the key's QR code, or paste it.
+/// Opens the camera and returns the code it read.
+typedef Scanner = Future<String?> Function(BuildContext context);
+
+/// Scan the key's QR code, or paste it. The sending switch opens it the first time, and it closes with true once the
+/// phone keeps a key.
 class ConnectScreen extends StatefulWidget {
-  const ConnectScreen({super.key, required this.relay, this.scanner = _scan});
+  const ConnectScreen({super.key, required this.relay, Scanner? scanner}) : scanner = scanner ?? _scan;
 
   final Relay relay;
   /// Opens the camera and returns the code it read; a test passes its own.
-  final Future<String?> Function(BuildContext context) scanner;
+  final Scanner scanner;
 
   @override
   State<ConnectScreen> createState() => _ConnectScreenState();
@@ -31,7 +35,9 @@ class _ConnectScreenState extends State<ConnectScreen> {
   Future<void> _connect(String code) async {
     setState(() { _busy = true; _problem = null; });
     final problem = await widget.relay.connect(code);
-    if (mounted) setState(() { _busy = false; _problem = problem; });
+    if (!mounted) return;
+    setState(() { _busy = false; _problem = problem; });
+    if (problem == null) Navigator.of(context).pop(true);
   }
 
   Future<void> _scanned() async {

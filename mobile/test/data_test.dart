@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:drift/drift.dart' show driftRuntimeOptions;
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -104,23 +106,62 @@ void main() {
     final pin = Pin(at: at, lat: 43.65, lon: -79.38, accuracy: 12, place: 'King St W');
     LocalNote note(String id, {Pin? pin}) => LocalNote(clientId: id, text: 'Note $id', createdAt: DateTime.fromMillisecondsSinceEpoch(1793797200000), pin: pin);
 
+    test('keeps a note with no upload while sending is off, and queues the earlier ones oldest first on request', () async {
+      LocalNote at_(String id, int minute) =>
+        LocalNote(clientId: id, text: 'Note $id', createdAt: at.add(Duration(minutes: minute)));
+      await store.addNote(at_('late', 2));
+      await store.addNote(at_('early', 0));
+      await store.addNote(at_('pinning', 1), waitForPin: true);
+      expect([await store.earlierCount(), (await store.outbox()).length, await store.waiting()], [2, 0, 1]);
+      expect([for (final kept in await store.notes()) (kept.clientId, kept.queued, kept.pinning, kept.sentAt)],
+        [('late', false, false, null), ('pinning', false, true, null), ('early', false, false, null)]);
+      // A note settled with sending off stays only here, and counts as earlier.
+      expect(await store.settlePin('pinning', pin, send: false), isTrue);
+      expect([await store.earlierCount(), (await store.outbox()).length], [3, 0]);
+      await store.queueEarlier();
+      expect([for (final item in await store.outbox()) item.body['clientId']], ['early', 'pinning', 'late']);
+      expect((await store.outbox())[1].body['place'], 'King St W');
+      expect(await store.earlierCount(), 0);
+      await flush(store, FakeServer().api(connection), clock: () => at);
+      expect([for (final kept in await store.notes()) kept.sentAt], [at, at, at]);
+    });
+
+    test('drops waiting health and location, and keeps note uploads', () async {
+      await store.addNote(note('note-0001'), send: true);
+      await store.enqueue('health', {'samples': []});
+      await store.addPoint(Pin(at: at, lat: 1, lon: 1, accuracy: 1));
+      await store.queuePoints();
+      await store.addPoint(Pin(at: at.add(const Duration(minutes: 1)), lat: 1, lon: 1, accuracy: 1));
+      await store.dropReadings();
+      expect([for (final item in await store.outbox()) item.route], ['notes']);
+      await store.queuePoints();
+      expect(await store.waiting(), 1);
+    });
+
+    test('keeps each upload under its destination', () async {
+      await store.enqueue('notes', {'clientId': 'a'});
+      await store.enqueue('notes', {'clientId': 'b'}, destination: 'webhook');
+      expect([for (final item in await store.outbox()) item.body['clientId']], ['a']);
+      expect([for (final item in await store.outbox(destination: 'webhook')) item.body['clientId']], ['b']);
+    });
+
     test('keeps a typed note as waiting until its upload lands, in order', () async {
-      await store.addNote(note('note-0001', pin: pin));
-      await store.addNote(note('note-0002'));
-      expect([for (final waiting in await store.waitingNotes()) waiting.clientId], unorderedEquals(['note-0001', 'note-0002']));
-      expect((await store.waitingNotes()).firstWhere((waiting) => waiting.clientId == 'note-0001').pin!.place, 'King St W');
+      await store.addNote(note('note-0001', pin: pin), send: true);
+      await store.addNote(note('note-0002'), send: true);
+      expect([for (final kept in await store.notes()) (kept.clientId, kept.queued)], unorderedEquals([('note-0001', true), ('note-0002', true)]));
+      expect((await store.notes()).firstWhere((kept) => kept.clientId == 'note-0001').pin!.place, 'King St W');
       final server = FakeServer();
       final result = await flush(store, server.api(connection));
       expect([result.sent, result.dropped, result.failure], [2, 0, null]);
       expect([for (final request in server.requests) jsonDecode(request.body)['clientId']], ['note-0001', 'note-0002']);
       expect(jsonDecode(server.requests.first.body), containsPair('place', 'King St W'));
-      expect(await store.waitingNotes(), isEmpty);
+      expect([for (final kept in await store.notes()) kept.sentAt != null], [true, true]);
       expect(await store.waiting(), 0);
     });
 
     test('stops at the first upload that can not land, and keeps it and the rest', () async {
-      await store.addNote(note('note-0001'));
-      await store.addNote(note('note-0002'));
+      await store.addNote(note('note-0001'), send: true);
+      await store.addNote(note('note-0002'), send: true);
       for (final failure in [(503, Failure.offline), (401, Failure.refused)]) {
         final server = FakeServer((_) => FakeServer.json({}, failure.$1));
         final result = await flush(store, server.api(connection));
@@ -130,7 +171,7 @@ void main() {
     });
 
     test('drops a body the server turns down, so it holds back nothing', () async {
-      await store.addNote(note('note-0001'));
+      await store.addNote(note('note-0001'), send: true);
       await store.enqueue('health', {'samples': []});
       final server = FakeServer((request) => request.url.path.endsWith('notes') ? FakeServer.json({}, 400) : FakeServer.ok(request));
       final result = await flush(store, server.api(connection));
@@ -150,6 +191,35 @@ void main() {
       expect((batches.first.first as Map).containsKey('place'), isFalse);
       await store.queuePoints();
       expect(await store.waiting(), 3);
+    });
+
+    test('upgrades a first-version phone: sent notes keep a send time, and a note waiting for its pin still waits', () async {
+      // This test opens a second store beside the group's on purpose.
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+      addTearDown(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = false);
+      final old = Store(NativeDatabase.memory(setup: (db) {
+        for (final statement in [
+          'CREATE TABLE outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, route TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL)',
+          'CREATE TABLE notes (client_id TEXT PRIMARY KEY, body TEXT NOT NULL, created_at INTEGER NOT NULL, sent INTEGER NOT NULL DEFAULT 0, '
+            'queued INTEGER NOT NULL DEFAULT 1)',
+          'CREATE TABLE points (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
+          'CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+        ]) {
+          db.execute(statement);
+        }
+        String body(String id) => jsonEncode(note(id).toJson());
+        db.execute('INSERT INTO notes VALUES (?, ?, ?, 1, 1), (?, ?, ?, 0, 1), (?, ?, ?, 0, 0)',
+          ['sent', body('sent'), 1, 'queued', body('queued'), 2, 'pinning', body('pinning'), 3]);
+        db.execute("INSERT INTO outbox (route, body, created_at) VALUES ('notes', ?, 2)", [body('queued')]);
+        db.execute('PRAGMA user_version = 2');
+      }));
+      addTearDown(old.close);
+      expect([for (final kept in await old.notes()) (kept.clientId, kept.sentAt?.millisecondsSinceEpoch, kept.queued, kept.pinning)],
+        [('pinning', null, false, true), ('queued', null, true, false), ('sent', 1, true, false)]);
+      expect([for (final item in await old.outbox()) item.body['clientId']], ['queued']);
+      await old.settleWaiting(send: true);
+      expect([for (final item in await old.outbox()) item.body['clientId']], ['queued', 'pinning']);
+      expect(await old.earlierCount(), 0);
     });
 
     test('keeps small values by name', () async {

@@ -1,5 +1,5 @@
 name: relay_app
-description: "Relay: notes from a Pebble Index ring and your phone, with your health and places, sent to your own server."
+description: "Relay: notes kept on your phone, and sent with your health and places to your own server when you turn sending on."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev

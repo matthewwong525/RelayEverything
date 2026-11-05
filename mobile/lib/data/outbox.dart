@@ -12,7 +12,7 @@ class FlushResult {
 
 /// Sends waiting uploads oldest first, and stops at the first that can not land now, so order holds.
 /// A body the server turns down is dropped: it would never land, and would hold back the rest.
-Future<FlushResult> flush(Store store, RelayApi api) async {
+Future<FlushResult> flush(Store store, RelayApi api, {DateTime Function()? clock}) async {
   var sent = 0, dropped = 0;
   for (final item in await store.outbox()) {
     try {
@@ -22,7 +22,7 @@ Future<FlushResult> flush(Store store, RelayApi api) async {
       if (error.failure != Failure.rejected) return FlushResult(sent: sent, dropped: dropped, failure: error.failure);
       dropped++;
     }
-    if (item.route == 'notes') await store.noteSent(item.body['clientId'] as String);
+    if (item.route == 'notes') await store.noteSent(item.body['clientId'] as String, (clock ?? DateTime.now)());
     await store.done(item.id);
   }
   return FlushResult(sent: sent, dropped: dropped);

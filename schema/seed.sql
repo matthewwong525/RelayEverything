@@ -1385,3 +1385,30 @@ INSERT INTO schedule_runs
 VALUES
   ('11111111-1111-4111-8111-111111111111', 'fay@example.invalid', 'b0000000000000000000000000000001', 'sales-digest', 1792760400000,
    'clock', 'started', 1792760520000, NULL, 'Sales digest for Friday', 'agent-sales-digest-1', 1792760520000);
+
+-- Relay: a made-up phone and Pebble app key with no real token behind either, one turned-off phone, and a day in
+-- Toronto (Wednesday 4 November 2026): ring and typed notes, health samples, and the location history that placed them.
+INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at) VALUES
+  ('d0000000-0000-4000-8000-000000000001', 'Android phone', 'seed-phone.access', 'seed-token-phone', 1793700000000, NULL),
+  ('d0000000-0000-4000-8000-000000000002', 'Pebble app', 'seed-pebble.access', 'seed-token-pebble', 1793700000000, NULL),
+  ('d0000000-0000-4000-8000-000000000003', 'Old phone', 'seed-old.access', 'seed-token-old', 1793000000000, 1793600000000);
+INSERT INTO relay_locations (device_id, at, lat, lon, accuracy, place, created_at) VALUES
+  ('d0000000-0000-4000-8000-000000000001', 1793797200000, 43.6629, -79.3957, 15, 'Harbord St', 1793833200000),
+  ('d0000000-0000-4000-8000-000000000001', 1793811600000, 43.6487, -79.3817, 12, 'King St W', 1793833200000),
+  ('d0000000-0000-4000-8000-000000000001', 1793829600000, 43.6544, -79.4006, 20, 'Kensington Ave', 1793833200000);
+INSERT INTO relay_notes
+  (id, device_id, source, delivery_id, client_id, text, audio_key, recorded_at, lat, lon, accuracy, place, place_from, created_at)
+VALUES
+  ('a0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000002', 'ring', 'seed-delivery-0001', NULL,
+   'Call the PCB fab about the second batch.', NULL, 1793797260000, 43.6629, -79.3957, 15, 'Harbord St', 'history', 1793797262000),
+  ('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', 'typed', NULL, 'seed-note-0001',
+   'Lunch idea: test the ring on the streetcar.', NULL, 1793811700000, 43.6487, -79.3817, 12, 'King St W', 'phone', 1793811705000),
+  ('a0000000-0000-4000-8000-000000000003', 'd0000000-0000-4000-8000-000000000002', 'ring', 'seed-delivery-0002', NULL,
+   'Buy milk and batteries.', NULL, 1793829500000, NULL, NULL, NULL, NULL, NULL, 1793829502000);
+INSERT INTO relay_health (device_id, type, start_at, end_at, value, unit, source, created_at) VALUES
+  ('d0000000-0000-4000-8000-000000000001', 'sleep', 1793768400000, 1793795400000, 450, 'min', 'com.google.android.apps.fitness', 1793833200000),
+  ('d0000000-0000-4000-8000-000000000001', 'steps', 1793797200000, 1793811600000, 5210, 'count', 'com.google.android.apps.fitness', 1793833200000),
+  ('d0000000-0000-4000-8000-000000000001', 'steps', 1793811600000, 1793833200000, 3480, 'count', 'com.google.android.apps.fitness', 1793833200000),
+  ('d0000000-0000-4000-8000-000000000001', 'heart_rate', 1793800800000, 1793800800000, 68, 'bpm', 'com.google.android.apps.fitness', 1793833200000),
+  ('d0000000-0000-4000-8000-000000000001', 'heart_rate', 1793815200000, 1793815200000, 121, 'bpm', 'com.google.android.apps.fitness', 1793833200000),
+  ('d0000000-0000-4000-8000-000000000001', 'workout', 1793815200000, 1793817600000, 40, 'min', 'com.google.android.apps.fitness', 1793833200000);

@@ -96,9 +96,14 @@ it("refuses mismatched ownership, shared or unreviewed policies without writing"
   cf.extras = [{ id: "another", decision: "non_identity", include: [{ service_token: { token_id: "one" } }] },
     { id: "third", decision: "non_identity", include: [{ service_token: { token_id: "two" } }] }];
   expect(await failure()).toMatchObject({ error_code: "login_policy_review_required" });
+  // Relay's device keys may keep one more machine policy, of service tokens alone; a second is refused.
+  const devices = { id: "devices", name: "Relay devices", decision: "non_identity", include: [{ service_token: { token_id: "phone" } }] };
+  for (const extras of [[cf.extras[0], devices, { ...devices, id: "devices-2" }], [cf.extras[0], { ...devices, include: [{ everyone: {} }] }]]) {
+    cf.extras = extras; expect(await failure()).toMatchObject({ error_code: "login_policy_review_required" });
+  }
   expect(cf.writes).toEqual([]);
-  // The verification machine's own policy is preserved beside the human one.
-  cf.extras = [{ id: "machine", decision: "non_identity", include: [{ service_token: { token_id: "verification" } }] }];
+  // The verification machine's own policy, and Relay's devices', are preserved beside the human one.
+  cf.extras = [{ id: "machine", decision: "non_identity", include: [{ service_token: { token_id: "verification" } }] }, devices];
   expect(await failure()).toMatchObject({ status: "ready" });
   expect(cf.writes).toHaveLength(1);
 });

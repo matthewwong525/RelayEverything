@@ -16,16 +16,20 @@
     "CF_ACCESS_TEAM_DOMAIN": "startuptemplate.cloudflareaccess.com",
     "CF_ACCESS_AUD": "8c34a3dc4b254dd4d3f4e10d7c5c8648cb2c4abd82a3704054adc3c385ce0dc2",
     "CF_ACCESS_APP_ID": "c148207d-66b5-4373-a690-8942de361acb",
-    "CF_ACCESS_WORKER_ID": "98c4755718a34f4da4aab47e13986695"
+    "CF_ACCESS_WORKER_ID": "98c4755718a34f4da4aab47e13986695",
+    // The live checker's Client ID, which names its service token and opens nothing alone. Relay refuses every
+    // other service token that is no device: app/worker/apps/relay/device.ts
+    "RELAY_CHECKER_SHA256": "cc48186f16567a1acbcdabbbdce1446b905f77fd265a4e9f79865d1adb9930a1"
   },
   "d1_databases": [
     { "binding": "DB", "database_name": "relay-ring-db", "database_id": "d7708dbb-6ab7-41d0-b828-440649e753a2", "migrations_dir": "../schema/migrations" },
     // Session memory, production only. No migrations_dir: the memory skill migrates it.
     { "binding": "MEMORY_DB", "database_name": "relay-ring-memory", "database_id": "5441a6ff-fcef-4870-b651-87a479726aef" }
   ],
-  // Only when the memory store has a bucket.
+  // MEMORY_BUCKET only when the memory store has a bucket. RELAY_BUCKET keeps the ring notes' recordings.
   "r2_buckets": [
-    { "binding": "MEMORY_BUCKET", "bucket_name": "relay-ring-memory" }
+    { "binding": "MEMORY_BUCKET", "bucket_name": "relay-ring-memory" },
+    { "binding": "RELAY_BUCKET", "bucket_name": "relay-ring-notes" }
   ],
   // Rereads who can push on GitHub, for previews' sign-in.
   "triggers": { "crons": ["*/15 * * * *"] },
@@ -46,15 +50,19 @@
         "CF_ACCESS_TEAM_DOMAIN": "startuptemplate.cloudflareaccess.com",
         "CF_ACCESS_AUD": "290a7c4a0ebaae36505385d17a43566e37cc1c2472c55de0f25d4c0c40c51545",
         "CF_ACCESS_APP_ID": "a21b4d6b-e12f-45ec-9976-ca3ef4771431",
-        "CF_ACCESS_WORKER_ID": "0a28ad88e5e047d6a1b23eb4c29a2cbe"
+        "CF_ACCESS_WORKER_ID": "0a28ad88e5e047d6a1b23eb4c29a2cbe",
+        // The preview checker's Client ID.
+        "RELAY_CHECKER_SHA256": "449f8b9af84a6d785f1c6a637559764baf7cdb230c4e99ae72d78dd8f33b12c2"
       },
       "d1_databases": [{ "binding": "DB", "database_name": "relay-ring-db-staging", "database_id": "f5e832b0-fb07-4aef-8d20-3c737b481944", "migrations_dir": "../schema/migrations" }],
+      "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-ring-notes-staging" }],
       "triggers": { "crons": [] }
     },
     "local": {
       "name": "relay-ring-local",
       "vars": { "WONG_ENVIRONMENT": "local", "SKIP_AUTH": "true" },
       "d1_databases": [{ "binding": "DB", "database_name": "relay-ring-db-local", "database_id": "d7708dbb-6ab7-41d0-b828-440649e753a2", "remote": false, "migrations_dir": "../schema/migrations" }],
+      "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-ring-notes-local", "remote": false }],
       "durable_objects": { "bindings": [{ "name": "LIVE_LINE", "class_name": "Line", "script_name": "relay-ring-line-local" }] }
     }
   }

@@ -2,6 +2,7 @@
 // "<METHOD> <route>". Vite finds each api.ts at build time, so a new app needs no edit here. wiki/stack/mini-apps.md
 import { dispatch, keyUses, registrations, type Route } from "../api/contract.ts";
 import type { AccessIdentity } from "../access.ts";
+import type { KeyId } from "../keys.ts";
 import { hasScreen } from "../employee-access/catalogue.ts";
 import { knowledgeReader, type KnowledgeReader } from "../employee-access/knowledge-reader.ts";
 import type { PolicyEnv, RouteAccess } from "../employee-access/policy.ts";
@@ -16,8 +17,8 @@ export type AppEnv = Omit<Env, MemoryBindings> & PolicyEnv;
  *  routes get `knowledge`, its read-only reader, and none of them the binding behind it. @public */
 export type AppCall = { url: URL; route: string; identity: AccessIdentity | null; knowledge?: KnowledgeReader | null };
 
-/** One route's handler, listed in an app's api.ts. @public */
-export type AppHandler = (request: Request, env: AppEnv, call: AppCall) => Response | Promise<Response>;
+/** One route's handler, in an app's api.ts. A bare handler may list its own saved keys, like an action. @public */
+export type AppHandler = ((request: Request, env: AppEnv, call: AppCall) => Response | Promise<Response>) & { keys?: readonly KeyId[] };
 
 /** An address the app API answers: /apps/<name>/api, then a route. */
 export const APP_API = /^\/apps\/([^/]+)\/api(?:\/(.*))?$/;
@@ -35,7 +36,7 @@ const apps = new Map(
  *  Throws when the Worker loads, naming the file and both fixes, where a route lists none: nothing would guard it. */
 export function keysAlone(name: string, { routes, keys = [] }: AppModule): ReadonlyMap<string, RouteAccess> {
   for (const [key, route] of routes) {
-    if (!((typeof route === "function" ? undefined : route.keys) ?? keys).length) {
+    if (!(route.keys ?? keys).length) {
       throw new Error(`app/worker/apps/${name}/api.ts: "${key}" has no screen and lists no saved key, so nothing guards it. ` +
         `Give the folder a screen at app/src/apps/${name}/app.json, or list the saved key the route uses.`);
     }

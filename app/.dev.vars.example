@@ -60,3 +60,10 @@ WONG_CODE_WRITE=
 # holds it keeps handing the project out, and saves nothing until the key above is in. A new install leaves
 # it blank. See wiki/stack/employee-project.md.
 WONG_CODE_READ=
+
+# --- Relay ---
+
+# The signing secret the Pebble app's Index webhook signs each ring note with: 32 random bytes as hex, made by
+# `openssl rand -hex 32`, never a password. Enter the same text under Sign requests in the Pebble app. Staging
+# gets its own value in .dev.vars.staging. The relay app lists it as the saved key relay-pebble-signing.
+RELAY_PEBBLE_SIGNING=

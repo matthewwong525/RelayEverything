@@ -38,7 +38,7 @@ it("judges a folder with no screen by the saved key its routes list: refused wit
   expect(await message(await call("mark", "POST"))).toEqual([403, "Cloudflare: Read & write needed"]);
   expect(calls.count).toBe(0);
   // Its key use belongs to no app, and its actions are listed under its folder with the key alone.
-  expect(appKeyUse).toEqual([{ apps: [], keys: ["cloudflare"], need: "read" }, { apps: [], keys: ["cloudflare"], need: "write" }]);
+  expect(appKeyUse.filter(({ keys }) => keys.includes("cloudflare"))).toEqual([{ apps: [], keys: ["cloudflare"], need: "read" }, { apps: [], keys: ["cloudflare"], need: "write" }]);
   const hello = appActions.filter(({ app }) => app === "hello");
   expect(hello.map(({ app, action, access }) => [app, action.operationId, access])).toEqual([["hello", "hello.greeting", { keys: ["cloudflare"] }]]);
 });

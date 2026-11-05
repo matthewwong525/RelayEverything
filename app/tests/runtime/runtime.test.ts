@@ -23,7 +23,7 @@ beforeAll(async () => {
     return Response.json({ keys: [signed.publicKey] });
   });
   runtime = await startRuntime({ WONG_ENVIRONMENT: "staging", WONG_OWNER_EMAIL: site.owner,
-    CF_ACCESS_TEAM_DOMAIN: site.domain, CF_ACCESS_AUD: site.audience });
+    CF_ACCESS_TEAM_DOMAIN: site.domain, CF_ACCESS_AUD: site.audience, RELAY_CHECKER_SHA256: "eb0461bce55e914b46d79464f86bf0b056e430b3650c837367c13a26df4c7459" });
 });
 beforeEach(async () => { await resetDatabase(runtime.env.DB); });
 afterAll(async () => {

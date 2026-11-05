@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // Read-only publication gate. Never modifies an Access policy or publishes content.
+import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { privateDeployment, accessConflicts } from './lib-access-config.mjs';
 import { findWranglerConfig, lineAddressProblem, lineConfigPath, parseConfig, redirectedConfig } from './lib-wrangler-config.mjs';
@@ -65,13 +66,58 @@ export async function checkPrivateAccess(config, environment, cf, generated) {
   const opened = sets.map(set => [...set, publicPages]).some(covered);
   if (app.id !== target.appId || app.aud !== target.audience || app.type !== 'self_hosted' || app.domain !== host || !(opened || sets.some(covered))) throw new Error('Access coverage or its memory and git exceptions are missing or broader than this workspace');
   const policies = await list(`${appPath}/policies`);
-  const human = policies.filter(policy => policy.decision === 'allow');
-  const machine = policies.filter(policy => policy.decision === 'non_identity');
-  if (policies.length !== 2 || human.length !== 1 || machine.length !== 1 || !app.policies?.some(policy => policy.id === human[0].id) || !app.policies?.some(policy => policy.id === machine[0].id)) throw new Error('the separate human and machine policies are missing or unreviewed');
-  if (human[0].include?.length < 1 || !Array.isArray(human[0].include) || human[0].include.some(rule => Object.keys(rule).length !== 1 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rule.email?.email ?? '') || /(?:\.invalid|@(?:[^@]*\.)?noreply\.github\.com)$/i.test(rule.email.email)) || !Array.isArray(machine[0].include) || machine[0].include.length !== 1 || Object.keys(machine[0].include[0]).length !== 1 || !machine[0].include[0].service_token?.token_id || policies.some(policy => (policy.exclude?.length ?? 0) || (policy.require?.length ?? 0))) throw new Error('workspace policies must use exact reachable emails and one separate service token');
+  checkPolicies(policies, app);
+  const checkerKey = await checkCheckerKey(config, environment, policies, id => cf(`${root}/access/service_tokens/${id}`));
   if (accessConflicts(await list(`${root}/access/apps`), workers, subdomain, [production.appId, staging.appId]).length) throw new Error('another Access application overlaps this workspace; review hostname/path/preview precedence');
   const warning = [shared && SHARED, !opened && NO_PUBLIC].filter(Boolean).join('; ');
-  return { environment, worker: target.name, protection: 'configured', humanLogin: 'unverified', ...(warning && { warning }) };
+  return { environment, worker: target.name, protection: 'configured', humanLogin: 'unverified', ...(checkerKey && { checkerKey }), ...(warning && { warning }) };
+}
+
+/** Relay's Worker lets in only devices and the one service token whose Client ID has the SHA-256 each environment's
+ *  committed var holds: git keeps the fingerprint, never the Client ID. */
+export const RELAY_CHECKER_VAR = 'RELAY_CHECKER_SHA256';
+const sha256 = text => createHash('sha256').update(text).digest('hex');
+const relayVars = (config, environment) => (environment === 'staging' ? config.env?.staging?.vars : config.vars) ?? {};
+
+/** Compares the checker policy's token with the var, so a new checker key from /verify or setup fails here and names
+ *  the fix, not later as a 403 on every check. Messages name fingerprints alone; the secret is never read.
+ *  Returns undefined without Relay, 'matches', or 'unverified' when this credential may not read service tokens. */
+export async function checkCheckerKey(config, environment, policies, readToken) {
+  const relay = [config.vars, config.env?.staging?.vars].some(vars => vars && RELAY_CHECKER_VAR in vars);
+  if (!relay) return undefined;
+  const expected = relayVars(config, environment)[RELAY_CHECKER_VAR];
+  const where = `app/wrangler.jsonc (${environment === 'staging' ? 'env.staging.vars' : 'vars'})`;
+  if (!expected) throw new Error(`${RELAY_CHECKER_VAR} is missing for ${environment}; set it in ${where} to the SHA-256 of the checker key's Client ID`);
+  const checker = policies.find(policy => policy.decision === 'non_identity' && policy.name !== RELAY_DEVICES);
+  let token;
+  try {
+    token = await readToken(checker.include[0].service_token.token_id);
+  } catch (error) {
+    // The CI deploy key holds Access: Apps and Policies Read alone; a host run with the user token checks it.
+    if (error.status === 403) return 'unverified';
+    throw error;
+  }
+  const actual = token?.client_id ? sha256(token.client_id) : '(unknown)';
+  if (actual !== expected) {
+    throw new Error(`the ${environment} checker key changed: set ${RELAY_CHECKER_VAR} in ${where} to ${actual} and publish, or Relay refuses every check`);
+  }
+  return 'matches';
+}
+
+/** Relay's device keys: a machine policy of their own, holding only service tokens, beside the checker's. */
+export const RELAY_DEVICES = 'Relay devices';
+const tokensOnly = (policy, count) => Array.isArray(policy.include) && (count === undefined ? policy.include.length >= 1 : policy.include.length === count) &&
+  policy.include.every(rule => Object.keys(rule).length === 1 && !!rule.service_token?.token_id);
+
+/** One human policy of exact reachable emails, one machine policy of one service token, and at most one Relay devices
+ *  policy of service tokens alone, each attached to the app and with no exclude or require rule. */
+export function checkPolicies(policies, app) {
+  const human = policies.filter(policy => policy.decision === 'allow');
+  const devices = policies.filter(policy => policy.decision === 'non_identity' && policy.name === RELAY_DEVICES);
+  const machine = policies.filter(policy => policy.decision === 'non_identity' && policy.name !== RELAY_DEVICES);
+  const reviewed = [...human, ...machine, ...devices];
+  if (policies.length !== reviewed.length || human.length !== 1 || machine.length !== 1 || devices.length > 1 || !reviewed.every(policy => app.policies?.some(attached => attached.id === policy.id))) throw new Error('the separate human and machine policies are missing or unreviewed');
+  if (human[0].include?.length < 1 || !Array.isArray(human[0].include) || human[0].include.some(rule => Object.keys(rule).length !== 1 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rule.email?.email ?? '') || /(?:\.invalid|@(?:[^@]*\.)?noreply\.github\.com)$/i.test(rule.email.email)) || !tokensOnly(machine[0], 1) || !devices.every(policy => tokensOnly(policy)) || policies.some(policy => (policy.exclude?.length ?? 0) || (policy.require?.length ?? 0))) throw new Error('workspace policies must use exact reachable emails and one separate service token');
 }
 
 const OPEN_WARNING = 'this workspace is open without login: anyone with its link can see it. Add a card to Cloudflare and rerun provision to make it private: wiki/stack/cloudflare-access.md#open-until-the-card';
@@ -112,7 +158,7 @@ async function main() {
   const cf = async route => {
     const response = await fetch(`https://api.cloudflare.com/client/v4${route}`, { headers: { Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}` } });
     const body = await response.json();
-    if (!response.ok || !body.success) throw new Error(`Cloudflare read-only protection check failed (${response.status}); finish private setup or restore CI Access: Apps and Policies Read`);
+    if (!response.ok || !body.success) throw Object.assign(new Error(`Cloudflare read-only protection check failed (${response.status}); finish private setup or restore CI Access: Apps and Policies Read`), { status: response.status });
     return body.result;
   };
   const result = await checkPrivateAccess(parseConfig(path), values.environment, cf, redirected && parseConfig(redirected));

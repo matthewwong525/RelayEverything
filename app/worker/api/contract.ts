@@ -138,7 +138,7 @@ export const needFor = (route: Route, method: string): Level =>
 /** The mapping a route is judged by: an action's own keys come before its app's or its mapping's. */
 function accessFor(route: Route, mapping: RouteAccess | undefined): RouteAccess | undefined {
   if (!mapping || "kind" in mapping) return mapping;
-  const keys = (typeof route === "function" ? undefined : route.keys) ?? mapping.keys ?? [];
+  const keys = route.keys ?? mapping.keys ?? [];
   return "apps" in mapping ? { apps: mapping.apps, keys } : { ...mapping, keys };
 }
 

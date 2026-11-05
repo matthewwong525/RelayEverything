@@ -6,6 +6,7 @@ import { API_PREFIX, handleApi } from "./api/router.ts";
 import { services } from "./api/services.ts";
 import { APP_API, handleApp } from "./apps/index.ts";
 import { PUBLIC_KNOWLEDGE, publicKnowledge } from "./apps/knowledge/public.ts";
+import { deviceGate } from "./apps/relay/device.ts";
 import { getAccessIdentity, type AccessEnv } from "./access.ts";
 import { memoryCaller } from "./memory-caller.ts";
 import type { ConnectionEnv } from "./employee-access/core.ts";
@@ -17,6 +18,16 @@ import { SETUP_PATH } from "./employee-access/prompt.ts";
 import { refreshOnSchedule } from "./employee-access/pushers.ts";
 import { handleAccess } from "./employee-access/router.ts";
 import { setupFile } from "./employee-access/setup-file.ts";
+
+function signInRefused(env: AccessEnv, url: URL): Response {
+  const configured = env.CF_ACCESS_TEAM_DOMAIN && env.CF_ACCESS_AUD;
+  // Git's routes skip the edge sign-in, so their sign-in is checked here: wiki/stack/cloudflare-access.md
+  if (configured && [CODE_GIT, KNOWLEDGE_GIT].some(prefix => url.pathname.startsWith(prefix))) return gitSignIn(url.origin);
+  return new Response(configured ? "Unauthorized" : "Workspace access is not configured", {
+    status: configured ? 401 : 503,
+    headers: { "Cache-Control": "no-store" },
+  });
+}
 
 export default {
   async fetch(request, env, ctx) {
@@ -43,15 +54,12 @@ export default {
     // Open without login only by the committed switch, and only while no Access
     // identifier is set: a leftover switch can't weaken a private site.
     const open = env.WORKSPACE_LOGIN === "off" && !env.CF_ACCESS_TEAM_DOMAIN && !env.CF_ACCESS_AUD;
-    if (!identity && !open) {
-      const configured = env.CF_ACCESS_TEAM_DOMAIN && env.CF_ACCESS_AUD;
-      // Git's routes skip the edge sign-in, so their sign-in is checked here: wiki/stack/cloudflare-access.md
-      if (configured && [CODE_GIT, KNOWLEDGE_GIT].some(prefix => url.pathname.startsWith(prefix))) return gitSignIn(url.origin);
-      return new Response(configured ? "Unauthorized" : "Workspace access is not configured", {
-        status: configured ? 401 : 503,
-        headers: { "Cache-Control": "no-store" },
-      });
-    }
+    if (!identity && !open) return signInRefused(env, url);
+
+    // A Relay device key passes the sign-in wall like the checker, so it is held to Relay's device routes here, and a
+    // service token that is neither is refused.
+    const device = await deviceGate(env, identity, url.pathname);
+    if (device) return device;
 
     // People management answers only the signed-in owner; setup readback answers each person.
     if (url.pathname.startsWith("/api/access/")) {

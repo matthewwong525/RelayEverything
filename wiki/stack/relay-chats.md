@@ -26,3 +26,7 @@ Relay saves Claude Code chats through the Relay plugin in [`plugin/`](../../plug
 2. In a new Claude Code session, run `/plugin marketplace add <this checkout's path>` and `/plugin install relay@relay`, then paste the code.
 3. Have a short chat, then ask the AI to save it to Relay. Open the preview's **Chats** card to see it.
 4. Delete the chat, then run `node scripts/relay-device-key.mjs revoke --name "Build check" --staging`.
+
+The connect code from step 1 names the staging server, but the chat routes of a new change live only on its preview. To send there, change the code's `server` to the preview's address before you paste it.
+
+A plugin loaded with `claude --plugin-dir plugin` asks for no connect code. The hooks still run, but Claude Code skips the save tool's server with `Plugin option "connect_code" isn't set`. To try the save tool that way, use a copy of `plugin/` with no `env` in `.mcp.json` and no `userConfig`, and set `RELAY_CONNECT_CODE` before you start Claude Code. The plugin's own way, `/plugin install`, asks for the code.

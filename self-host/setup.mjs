@@ -8,7 +8,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMain, parseCli, usageError } from '../scripts/lib-cli.mjs';
-import { stripJsonc } from '../scripts/lib-wrangler-config.mjs';
+import { redirectedConfig, stripJsonc } from '../scripts/lib-wrangler-config.mjs';
 import { cloudflare, ownerPolicy, saasApp, signInValues } from '../scripts/relay-mcp-setup.mjs';
 
 const USAGE = `usage: node self-host/setup.mjs <check|install|update|status|remove> [--email <you>] [--name <name>] [--yes]
@@ -82,9 +82,10 @@ export function configs(template, mcpTemplate, { name, email, account, database,
   return { app, mcp };
 }
 
-/** The login: a self-hosted Access app on the server's address, with the owner's email as its one person. Device keys
- *  join its "Relay devices" policy when relay-device-key.mjs makes them. */
-export const accessApp = (app, host) => ({ name: app, type: 'self_hosted', domain: host, destinations: [{ type: 'public', uri: host }],
+/** The login: a self-hosted Access app on the server's address and, once it is live, the Worker itself, with the owner's
+ *  email as its one person. Device keys join its "Relay devices" policy when relay-device-key.mjs makes them. */
+export const accessApp = (app, host, workerId) => ({ name: app, type: 'self_hosted', domain: host,
+  destinations: [...(workerId ? [{ type: 'worker', worker_id: workerId }] : []), { type: 'public', uri: host }],
   session_duration: '730h', app_launcher_visible: false });
 
 /** The private page that holds the Pebble signing secret, for the Pebble app's Sign requests setting. */
@@ -108,7 +109,8 @@ function deploy({ wrangler, build, files }, database) {
   wrangler(['d1', 'migrations', 'apply', database, '--remote', '-c', files.config]);
   wrangler(['deploy', '-c', files.mcp]);
   build();
-  wrangler(['deploy', '-c', join(APP, 'dist-relay', JSON.parse(readFileSync(files.config, 'utf8')).name, 'wrangler.json')]);
+  // The build writes the server's config where its redirect file says, beside app/'s own.
+  wrangler(['deploy', '-c', redirectedConfig(join(APP, 'wrangler.jsonc'))]);
 }
 
 async function install(io, cf, root, { name, email, account }) {
@@ -132,8 +134,10 @@ async function install(io, cf, root, { name, email, account }) {
   writeJson(io.files.config, app);
   writeJson(io.files.mcp, mcp);
   deploy(io, part.database);
-  // The Worker's ID exists only once it is live; the key command checks it.
-  writeJson(io.files.config, filled({ workerId: (await cf(`${root}/workers/workers/${part.worker}`)).id }).app);
+  // The Worker's ID exists only once it is live; the login covers it, and the key command checks it.
+  const workerId = (await cf(`${root}/workers/workers/${part.worker}`)).id;
+  if (!access.destinations?.some(item => item.type === 'worker')) await cf(`${root}/access/apps/${access.id}`, 'PUT', accessApp(part.app, host, workerId));
+  writeJson(io.files.config, filled({ workerId }).app);
   io.log('ok server and AI connector live');
 
   const secrets = async worker => (await cf(`${root}/workers/scripts/${worker}/secrets`)).map(secret => secret.name);
@@ -193,9 +197,11 @@ async function remove(io, cf, root, name, yes) {
     for (const token of tokens) await quiet(cf(`${root}/access/service_tokens/${token}`, 'DELETE'));
   }
   const kv = (await quiet(cf(`${root}/workers/scripts/${part.mcp}/settings`)))?.bindings?.filter(binding => binding.type === 'kv_namespace') ?? [];
+  // Cloudflare keeps a Worker that reads a queue, and a queue a Worker sends to: detach the reader, then the Worker.
+  const queue = (await cf(`${root}/queues`)).find(item => item.queue_name === part.queue);
+  if (queue) for (const reader of await cf(`${root}/queues/${queue.queue_id}/consumers`)) await cf(`${root}/queues/${queue.queue_id}/consumers/${reader.consumer_id}`, 'DELETE');
   for (const worker of [part.worker, part.mcp]) await quiet(cf(`${root}/workers/scripts/${worker}?force=true`, 'DELETE'));
   for (const binding of kv) await quiet(cf(`${root}/storage/kv/namespaces/${binding.namespace_id}`, 'DELETE'));
-  const queue = (await cf(`${root}/queues`)).find(item => item.queue_name === part.queue);
   if (queue) await cf(`${root}/queues/${queue.queue_id}`, 'DELETE');
   for (const item of (await cf(`${root}/d1/database?name=${part.database}`)).filter(item => item.name === part.database)) await cf(`${root}/d1/database/${item.uuid}`, 'DELETE');
   if (await cf(`${root}/r2/buckets/${part.bucket}`).then(() => true, () => false)) {

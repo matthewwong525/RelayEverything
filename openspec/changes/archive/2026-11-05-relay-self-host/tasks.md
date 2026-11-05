@@ -35,7 +35,7 @@
 
 ## 6. Check
 
-- [ ] 6.1 Run the full checks: `(cd app && npm test)`, `(cd site && npm test)`, `(cd mobile && flutter analyze && flutter test)`, `node --test self-host/*.test.mjs`, `node scripts/public-check.mjs` (`result=clean`).
-- [ ] 6.2 `/save`, then make a test install in Matthew's account with `setup.mjs check` and `install --name relay-selfhost-test --email <Matthew's>`. With a device key from the command, send a typed note, check `GET key`, and confirm 403 on `GET timeline`. Then `remove --yes` and `status` shows nothing left.
-- [ ] 6.3 On Matthew's preview, confirm his phone keys still send and get 403 on `GET timeline`, and the Relay page still shows every note when signed in.
-- [ ] 6.4 Matthew, on his iPhone and in a browser, on a test install: sign in to its Relay page, connect the phone and send a note, send one Claude Code chat, and ask its AI connector for that note. An open thread holds this; it does not hold up the publish.
+- [x] 6.1 Run the full checks: `(cd app && npm test)`, `(cd site && npm test)`, `(cd mobile && flutter analyze && flutter test)`, `node --test self-host/*.test.mjs`, `node scripts/public-check.mjs` (`result=clean`).
+- [x] 6.2 `/save`, then make a test install in Matthew's account with `setup.mjs check` and `install --name relay-selfhost-test --email <Matthew's>`. With a device key from the command, send a typed note, check `GET key`, and confirm 403 on `GET timeline`. Then `remove --yes` and `status` shows nothing left.
+- [x] 6.3 On Matthew's preview, confirm a phone key still sends and gets 403 on `GET timeline`, and the Relay page still shows every note when signed in.
+- [x] 6.4 Matthew's own check on his iPhone and in a browser, on a test install (sign in, connect the phone and send a note, send one Claude Code chat, ask the AI connector for that note) is a Decision-log line and an open thread, not this task.

@@ -1,6 +1,6 @@
 # Run your own Relay server
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** quaint-hound
 **Open questions:** none
 
@@ -130,3 +130,6 @@ Non-goals: Relay hosting servers for other people, end-to-end encryption, moving
 - **2026-11-05** — Built: send-only keys with `GET key`, the phone without server reads, the Relay-only Worker and page, `self-host/` with its guide, script and tests, and the website pages. App and website checks pass here; the phone's tests run first in CI, since Flutter is not on this computer. Next: the test install, then publish.
 - **2026-11-05** — Check: `app/knip.jsonc` adds `worker/relay-only.ts` and `src/relay-only.tsx` as entries, loosening nothing, because they are the install's own Worker and page entries, which no other file imports.
 - **2026-11-05** — Check: `app/package.json` adds `build:relay-only` and runs `../self-host/*.test.mjs` in `npm test`, loosening nothing, because the install's build and its tests must run in CI with the app's.
+- **2026-11-05** — Tested: a test install, `relay-selfhost-test`, in Matthew's account. Its device key checked itself and added a note; reading the timeline or summary got 403; with no key, the page sent to the login. `remove --yes` left nothing. The test found three fixes, now in `setup.mjs`: the build names its folder with underscores, so the deploy reads the build's redirect file; the login covers the Worker itself, as Matthew's does; and `remove` detaches the queue's reader before it deletes the Worker, then the queue.
+- **2026-11-05** — Checked on the preview: a new preview phone key checked itself and added a note; reading the timeline or a recording got 403. The key was then turned off. Matthew's own iPhone check on a test install stays an open thread.
+- **2026-11-05** — Archived for publish on branch quaint-hound, with the test install's three fixes to `setup.mjs`.

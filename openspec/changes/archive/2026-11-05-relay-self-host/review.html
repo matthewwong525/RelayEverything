@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · relay-self-host</title>
+<title>Review · 2026-11-05-relay-self-host</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="relay-self-host" data-own-back>
+<body data-change="2026-11-05-relay-self-host" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>relay-self-host</h1>
+  <h1>2026-11-05-relay-self-host</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -492,6 +492,9 @@
 <li class="decision card" id="decision-24" data-note="decision-24" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-05</p>Built: send-only keys with <code>GET key</code>, the phone without server reads, the Relay-only Worker and page, <code>self-host/</code> with its guide, script and tests, and the website pages. App and website checks pass here; the phone's tests run first in CI, since Flutter is not on this computer. Next: the test install, then publish.</li>
 <li class="decision card" id="decision-25" data-note="decision-25" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-05</p>Check: <code>app/knip.jsonc</code> adds <code>worker/relay-only.ts</code> and <code>src/relay-only.tsx</code> as entries, loosening nothing, because they are the install's own Worker and page entries, which no other file imports.</li>
 <li class="decision card" id="decision-26" data-note="decision-26" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-05</p>Check: <code>app/package.json</code> adds <code>build:relay-only</code> and runs <code>../self-host/*.test.mjs</code> in <code>npm test</code>, loosening nothing, because the install's build and its tests must run in CI with the app's.</li>
+<li class="decision card" id="decision-27" data-note="decision-27" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-05</p>Tested: a test install, <code>relay-selfhost-test</code>, in Matthew's account. Its device key checked itself and added a note; reading the timeline or summary got 403; with no key, the page sent to the login. <code>remove --yes</code> left nothing. The test found three fixes, now in <code>setup.mjs</code>: the build names its folder with underscores, so the deploy reads the build's redirect file; the login covers the Worker itself, as Matthew's does; and <code>remove</code> detaches the queue's reader before it deletes the Worker, then the queue.</li>
+<li class="decision card" id="decision-28" data-note="decision-28" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-05</p>Checked on the preview: a new preview phone key checked itself and added a note; reading the timeline or a recording got 403. The key was then turned off. Matthew's own iPhone check on a test install stays an open thread.</li>
+<li class="decision card" id="decision-29" data-note="decision-29" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-05</p>Archived for publish on branch quaint-hound, with the test install's three fixes to <code>setup.mjs</code>.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

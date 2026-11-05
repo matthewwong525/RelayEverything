@@ -68,6 +68,7 @@ test('the install\'s configs carry its own names, IDs and owner, and no secret',
   assert.equal(mcp.vars.RELAY_MCP_ADDRESS, 'https://relay-test-mcp.you.workers.dev/mcp');
   assert.equal(mcp.d1_databases[0].database_id, 'db-id');
   assert.deepEqual(accessApp(names('relay-test').app, 'relay-test.you.workers.dev').destinations, [{ type: 'public', uri: 'relay-test.you.workers.dev' }]);
+  assert.deepEqual(accessApp(names('relay-test').app, 'relay-test.you.workers.dev', 'w1').destinations[0], { type: 'worker', worker_id: 'w1' });
 });
 
 test('a failed database change stops update before anything goes live', async () => {

@@ -8,6 +8,7 @@ import 'package:relay_app/controller.dart';
 import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/store.dart';
 import 'package:relay_app/relay.dart';
+import 'package:relay_app/sync/health.dart';
 
 import 'fakes.dart';
 
@@ -22,9 +23,14 @@ void main() {
   late FakePlaces places;
   late FakeHealth health;
   late List<bool> scheduled;
+  var clock = now;
 
   RelayController controller() => RelayController(store: store, vault: KeyVault(storage), places: places, health: health,
-    apiFor: server.api, clock: () => now, schedule: (on) async => scheduled.add(on));
+    apiFor: server.api, clock: () => clock, schedule: (on) async => scheduled.add(on));
+
+  List<Map<String, dynamic>> sentNotes() => [
+    for (final request in server.requests) if (request.url.path.endsWith('notes')) jsonDecode(request.body) as Map<String, dynamic>,
+  ];
 
   setUp(() {
     store = memoryStore();
@@ -35,223 +41,427 @@ void main() {
     places = FakePlaces();
     health = FakeHealth();
     scheduled = [];
+    clock = now;
   });
   tearDown(() => store.close());
 
-  test('connects with a key the server takes, and syncs at once', () async {
-    final relay = controller();
-    await relay.load();
-    expect(relay.connected, isFalse);
-    expect(await relay.connect('nonsense'), contains('not a Relay key'));
-    expect(await relay.connect(code), isNull);
-    await relay.sync();
-    expect(relay.connected, isTrue);
-    expect(relay.server, 'https://relay.example.com');
-    expect(storage.values.values, contains('secret-value'));
-    expect(relay.status, SyncStatus.synced);
-    expect([relay.entries.single.text, relay.entries.single.place, relay.entries.single.ring], ['Call the PCB fab', 'Harbord St', true]);
-    expect(relay.hasMore, isTrue);
-    await relay.more();
-    expect(server.requests.last.url.queryParameters, {'before': '1793797100000', 'beforeId': 'a'});
-    expect(relay.entries, hasLength(2));
-    expect(relay.hasMore, isFalse);
-    await relay.more();
-    expect(server.requests.where((request) => request.url.path.endsWith('timeline')), hasLength(3));
+  group('with sending off', () {
+    test('a new install keeps notes and pins on this phone, and calls no server and no place lookup', () async {
+      server = noNetwork();
+      places.pin = Pin(at: now, lat: 43.64871, lon: -79.38171, accuracy: 12);
+      final relay = controller();
+      await relay.load();
+      expect([relay.connected, relay.settings.sending, relay.settings.pinNotes], [false, false, false]);
+      await relay.addNote('Bare');
+      expect(await relay.setPinNotes(true), isNull);
+      clock = now.add(const Duration(minutes: 1));
+      await relay.addNote('Pinned one');
+      await pumpEventQueue();
+      expect([for (final entry in relay.entries) (entry.text, entry.place, entry.waiting)],
+        [('Pinned one', 'Pinned', false), ('Bare', null, false)]);
+      expect(places.named, [false]);
+      await relay.sync();
+      await relay.more();
+      expect([relay.hasMore, relay.status, relay.waiting], [false, SyncStatus.idle, 0]);
+      expect(await store.outbox(), isEmpty);
+      expect(await relay.earlierNotes(), 2);
+      expect(await relay.setHealth(true), contains('Send to your Relay server'));
+      expect(await relay.setHistory(true), contains('Send to your Relay server'));
+      expect([places.asked, health.reads, scheduled], [[false], isEmpty, [false]]);
+      expect(server.requests, isEmpty);
+    });
+
+    test('a key kept with sending off sends nothing, and turning on with no key is refused', () async {
+      final relay = controller();
+      await relay.load();
+      expect(await relay.startSending(sendEarlier: true), 'Connect a key first.');
+      expect(relay.settings.sending, isFalse);
+      server.answer = FakeServer.ok;
+      expect(await relay.connect(code), isNull);
+      final checked = server.requests.length;
+      expect([relay.connected, relay.settings.sending, checked], [true, false, 1]);
+      await relay.addNote('Still local');
+      await relay.sync();
+      expect([server.requests.length, (await store.outbox()).length], [checked, 0]);
+    });
   });
 
-  test('refuses a key the server turns down, and keeps one it could not try', () async {
-    final relay = controller();
-    server.answer = (_) => FakeServer.json({}, 403);
-    expect(await relay.connect(code), contains('did not take this key'));
-    expect(relay.connected, isFalse);
-    server.answer = (_) => FakeServer.json({}, 503);
-    expect(await relay.connect(code), isNull);
-    await relay.sync();
-    expect([relay.connected, relay.status], [true, SyncStatus.offline]);
+  group('turning sending on', () {
+    Future<RelayController> offlineWithNotes(List<String> texts) async {
+      final relay = controller();
+      await relay.load();
+      for (final (index, text) in texts.indexed) {
+        clock = now.add(Duration(minutes: index));
+        await relay.addNote(text);
+      }
+      await pumpEventQueue();
+      expect(await relay.connect(code), isNull);
+      return relay;
+    }
+
+    test('only new notes: the earlier ones stay, and the next turn-on asks about them again', () async {
+      final relay = await offlineWithNotes(['One', 'Two', 'Three']);
+      expect(await relay.earlierNotes(), 3);
+      expect(await relay.startSending(sendEarlier: false), isNull);
+      await pumpEventQueue();
+      expect(sentNotes(), isEmpty);
+      clock = now.add(const Duration(hours: 1));
+      await relay.addNote('New');
+      await pumpEventQueue();
+      expect([for (final note in sentNotes()) note['text']], ['New']);
+      await relay.stopSending();
+      await relay.addNote('Off again');
+      expect(await relay.earlierNotes(), 4);
+      expect(await relay.startSending(sendEarlier: true), isNull);
+      await pumpEventQueue();
+      expect([for (final note in sentNotes()) note['text']], ['New', 'One', 'Two', 'Three', 'Off again']);
+      expect(await relay.earlierNotes(), 0);
+      expect(storage.values.values, contains('secret-value'));
+    });
+
+    test('a pinned note written while on gets its place name from the phone, as in the first version', () async {
+      final relay = await offlineWithNotes([]);
+      await relay.setPinNotes(true);
+      await relay.startSending(sendEarlier: false);
+      await pumpEventQueue();
+      places.pin = Pin(at: now, lat: 43.65, lon: -79.4, accuracy: 8, place: 'Ossington Ave');
+      await relay.addNote('Named');
+      await pumpEventQueue();
+      expect(places.named, [true]);
+      expect(sentNotes().single['place'], 'Ossington Ave');
+    });
+
+    test('a sent note shows once, as the server has it, beside notes only on this phone', () async {
+      final relay = await offlineWithNotes(['Local only']);
+      final typed = {'id': 'b', 'source': 'typed', 'text': 'Sent', 'recordedAt': now.add(const Duration(hours: 1)).millisecondsSinceEpoch,
+        'device': 'Android phone', 'audio': false, 'place': null};
+      server.answer = (request) => request.url.path.endsWith('timeline')
+        ? FakeServer.json({'notes': [typed, ring], 'next': null}) : FakeServer.ok(request);
+      await relay.startSending(sendEarlier: false);
+      await pumpEventQueue();
+      clock = now.add(const Duration(hours: 1));
+      await relay.addNote('Sent');
+      await pumpEventQueue();
+      await relay.sync();
+      expect([for (final entry in relay.entries) (entry.text, entry.device)],
+        [('Sent', 'Android phone'), ('Local only', null), ('Call the PCB fab', 'Pebble app')]);
+      await relay.stopSending();
+      expect(relay.entries, hasLength(3));
+    });
   });
 
-  test('shows a note at once as waiting, with its pin, and on the server after the next sync', () async {
-    await KeyVault(storage).save(connection);
-    places.pin = Pin(at: now, lat: 43.64871, lon: -79.38171, accuracy: 12);
-    server.answer = (_) => FakeServer.json({}, 503);
-    final relay = controller();
-    await relay.load();
-    await relay.addNote('  Lunch idea  ');
-    await pumpEventQueue();
-    await relay.sync();
-    expect([relay.entries.single.text, relay.entries.single.waiting, relay.entries.single.place], ['Lunch idea', true, '43.6487, -79.3817']);
-    expect([relay.status, relay.waiting], [SyncStatus.offline, 1]);
-    server.answer = (request) => request.url.path.endsWith('timeline') ? FakeServer.json({'notes': [ring], 'next': null}) : FakeServer.ok(request);
-    await relay.sync();
-    expect([relay.entries.single.text, relay.waiting, relay.status], ['Call the PCB fab', 0, SyncStatus.synced]);
-    final sent = jsonDecode(server.requests.firstWhere((request) => request.url.path.endsWith('notes')).body) as Map<String, dynamic>;
-    expect(sent, containsPair('createdAt', 1793797200000));
-    expect(sent['clientId'], matches(RegExp(r'^[0-9a-f]{32}$')));
+  group('turning sending off', () {
+    test('drops waiting health and location, stops reading them, and keeps notes, their uploads and the key', () async {
+      await KeyVault(storage).save(connection);
+      server.answer = (_) => FakeServer.json({}, 503);
+      final relay = controller();
+      await relay.load();
+      expect(await relay.setHistory(true), isNull);
+      expect(await relay.setHealth(true), isNull);
+      await pumpEventQueue();
+      health.readings = [reading(HealthDataType.STEPS, now, now.add(const Duration(minutes: 5)), value: 10)];
+      await relay.sync();
+      places.points.add(Pin(at: now, lat: 43.6, lon: -79.3, accuracy: 9));
+      await pumpEventQueue();
+      await relay.setPinNotes(false);
+      await relay.addNote('Waits');
+      await pumpEventQueue();
+      expect(places.points.hasListener, isTrue);
+      expect([for (final item in await store.outbox()) item.route], containsAll(['health', 'notes']));
+      await relay.stopSending();
+      expect([relay.settings.sending, relay.settings.health, relay.settings.history, places.points.hasListener], [false, false, false, false]);
+      expect([for (final item in await store.outbox()) item.route], ['notes']);
+      await store.queuePoints();
+      expect([for (final item in await store.outbox()) item.route], ['notes']);
+      expect([scheduled.last, relay.connected, relay.entries.single.text], [false, true, 'Waits']);
+      final reads = health.reads.length;
+      server.requests.clear();
+      await relay.sync();
+      expect([health.reads.length, server.requests], [reads, isEmpty]);
+      // Back on: the note's upload goes with no second prompt, and health and history stay off until turned on.
+      expect(await relay.earlierNotes(), 0);
+      server.answer = FakeServer.ok;
+      await relay.startSending(sendEarlier: false);
+      await pumpEventQueue();
+      expect([sentNotes().single['text'], relay.settings.health, relay.settings.history], ['Waits', false, false]);
+    });
+
+    test('a round already sending when sending stops sends, reads and queues nothing more', () async {
+      await KeyVault(storage).save(connection);
+      final relay = controller();
+      await relay.load();
+      await relay.setPinNotes(false);
+      expect(await relay.setHistory(true), isNull);
+      expect(await relay.setHealth(true), isNull);
+      await pumpEventQueue();
+      health.readings = [reading(HealthDataType.STEPS, now, now.add(const Duration(minutes: 5)), value: 10)];
+      places.points.add(Pin(at: now, lat: 43.6, lon: -79.3, accuracy: 9));
+      await pumpEventQueue();
+      server.requests.clear();
+      server.hold = Completer();
+      await relay.addNote('First');
+      await relay.addNote('Second');
+      await pumpEventQueue();
+      // The round has read health, queued the location point, and holds open its first upload.
+      expect(server.routes, ['notes']);
+      expect([for (final item in await store.outbox()) item.route], containsAll(['notes', 'health', 'locations']));
+      final reads = health.reads.length;
+      final stopped = relay.stopSending();
+      await pumpEventQueue();
+      server.hold!.complete();
+      await stopped;
+      await pumpEventQueue();
+      expect([server.routes, health.reads.length, relay.status], [['notes'], reads, SyncStatus.idle]);
+      expect([for (final item in await store.outbox()) item.route], ['notes']);
+    });
+
+    test('health starts from the moment it turns on, with no earlier backfill', () async {
+      await KeyVault(storage).save(connection);
+      final relay = controller();
+      await relay.load();
+      expect(await relay.setHealth(true), isNull);
+      await pumpEventQueue();
+      expect(health.reads.first.$2, now);
+      expect(health.reads.first.$1, now.subtract(const Duration(hours: 2)));
+      expect(await store.get(healthSince), '${now.millisecondsSinceEpoch}');
+    });
   });
 
-  test('asks for location once, right after the phone connects, as pins start on', () async {
-    final relay = controller();
-    await relay.load();
-    server.answer = (_) => FakeServer.json({}, 403);
-    expect(await relay.connect(code), contains('did not take this key'));
-    expect(places.asked, isEmpty);
-    server.answer = FakeServer.ok;
-    places.allowed = false;
-    expect(await relay.connect(code), isNull);
-    expect([places.asked, relay.settings.pinNotes, relay.connected], [[false], true, true]);
-    await relay.disconnect();
-    expect(await relay.setPinNotes(false), isNull);
-    places.asked.clear();
-    expect(await relay.connect(code), isNull);
-    expect(places.asked, isEmpty);
+  group('settings', () {
+    test('start off on a new install; sending off forces health and history off', () {
+      const fresh = Settings();
+      expect([fresh.sending, fresh.pinNotes, fresh.history, fresh.health], [false, false, false, false]);
+      expect([const Settings(history: true, health: true).history, const Settings(history: true, health: true).health], [false, false]);
+      const on = Settings(sending: true, history: true, health: true);
+      expect([on.copyWith(sending: false).history, on.copyWith(sending: false).health], [false, false]);
+      expect(jsonDecode(on.encode()), {'sending': true, 'pinNotes': false, 'history': true, 'health': true});
+      final back = Settings.decode(on.encode(), hasKey: false);
+      expect([back.sending, back.health], [true, true]);
+    });
+
+    test('an upgrade from the first version keeps sending on for a phone with a key', () {
+      final kept = Settings.decode(null, hasKey: true);
+      expect([kept.sending, kept.pinNotes, kept.history], [true, true, false]);
+      final saved = jsonEncode({'pinNotes': false, 'history': true, 'health': true});
+      final upgraded = Settings.decode(saved, hasKey: true);
+      expect([upgraded.sending, upgraded.pinNotes, upgraded.history, upgraded.health], [true, false, true, true]);
+      final noKey = Settings.decode(saved, hasKey: false);
+      expect([noKey.sending, noKey.history, noKey.health], [false, false, false]);
+      expect(Settings.decode(null, hasKey: false).sending, isFalse);
+    });
+
+    test('are saved in the new shape on load, and sending reads as off with no key', () async {
+      await store.set('settings', jsonEncode({'sending': true, 'pinNotes': true, 'history': true, 'health': false}));
+      final relay = controller();
+      await relay.load();
+      expect([relay.settings.sending, relay.settings.pinNotes], [false, true]);
+      expect(jsonDecode((await store.get('settings'))!), {'sending': false, 'pinNotes': true, 'history': false, 'health': false});
+    });
+
+    test('turn each on only with its permission, and schedule the hourly sync only while sending', () async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', const Settings().encode());
+      final relay = controller();
+      await relay.load();
+      places.allowed = false;
+      health.allowed = false;
+      expect(await relay.setPinNotes(true), contains('location'));
+      expect(await relay.startSending(sendEarlier: false), isNull);
+      expect(await relay.setHistory(true), contains('all the time'));
+      expect(await relay.setHealth(true), contains('health'));
+      expect([relay.settings.history, relay.settings.health], [false, false]);
+      places.allowed = true;
+      health.allowed = true;
+      expect(await relay.setHistory(true), isNull);
+      expect(await relay.setHealth(true), isNull);
+      expect(await relay.setHistory(false), isNull);
+      expect(await relay.setPinNotes(true), isNull);
+      expect(scheduled, [false, true, true, true, true]);
+      expect(jsonDecode((await store.get('settings'))!), {'sending': true, 'pinNotes': true, 'history': false, 'health': true});
+      expect(places.asked, [false, true, true, false]);
+    });
   });
 
-  test('keeps a note at once, and adds its pin when the phone has a fix', () async {
-    await KeyVault(storage).save(connection);
-    server.answer = (_) => FakeServer.json({}, 503);
-    places.fix = Completer();
-    final relay = controller();
-    await relay.load();
-    await relay.addNote('Bench idea');
-    expect([relay.entries.single.text, relay.entries.single.place, relay.waiting], ['Bench idea', null, 1]);
-    places.fix!.complete(Pin(at: now, lat: 43.64871, lon: -79.38171, accuracy: 12, place: 'Queen St W'));
-    await pumpEventQueue();
-    expect(relay.entries.single.place, 'Queen St W');
-    final sent = jsonDecode(server.requests.firstWhere((request) => request.url.path.endsWith('notes')).body) as Map<String, dynamic>;
-    expect([sent['text'], sent['lat'], sent['place']], ['Bench idea', 43.64871, 'Queen St W']);
-    // A note not waiting, such as one sent already, keeps no late pin.
-    expect(await store.queueNote('gone', Pin(at: now, lat: 1, lon: 1, accuracy: 1)), isFalse);
-  });
+  group('with sending on', () {
+    test('connects with a key the server takes, and syncs once sending is on', () async {
+      final relay = controller();
+      await relay.load();
+      expect(relay.connected, isFalse);
+      expect(await relay.connect('nonsense'), contains('not a Relay key'));
+      expect(await relay.connect(code), isNull);
+      expect(await relay.startSending(sendEarlier: false), isNull);
+      await relay.sync();
+      expect(relay.connected, isTrue);
+      expect(relay.server, 'https://relay.example.com');
+      expect(storage.values.values, contains('secret-value'));
+      expect(relay.status, SyncStatus.synced);
+      expect([relay.entries.single.text, relay.entries.single.place, relay.entries.single.ring], ['Call the PCB fab', 'Harbord St', true]);
+      expect(relay.hasMore, isTrue);
+      final reads = server.requests.length;
+      await relay.more();
+      expect(server.requests.last.url.queryParameters, {'before': '1793797100000', 'beforeId': 'a'});
+      expect(relay.entries, hasLength(2));
+      expect(relay.hasMore, isFalse);
+      await relay.more();
+      expect(server.requests, hasLength(reads + 1));
+    });
 
-  test('a second note syncs while the first waits for its pin, and the first goes later with its place', () async {
-    await KeyVault(storage).save(connection);
-    final first = Completer<Pin?>();
-    places.fix = first;
-    final relay = controller();
-    await relay.load();
-    await relay.addNote('First');
-    await pumpEventQueue();
-    places
-      ..fix = null
-      ..pin = Pin(at: now, lat: 43.65, lon: -79.40, accuracy: 8, place: 'Ossington Ave');
-    await relay.addNote('Second');
-    await pumpEventQueue();
-    await relay.sync(); // pull to refresh, the sync chip or the app's return
-    List<Map<String, dynamic>> sent() => [
-      for (final request in server.requests) if (request.url.path.endsWith('notes')) jsonDecode(request.body) as Map<String, dynamic>,
-    ];
-    expect([for (final note in sent()) note['text']], ['Second']);
-    expect(sent().single['place'], 'Ossington Ave');
-    expect([relay.waiting, for (final entry in relay.entries) if (entry.waiting) entry.text], [1, 'First']);
-    first.complete(Pin(at: now, lat: 43.64871, lon: -79.38171, accuracy: 12, place: 'Queen St W'));
-    await pumpEventQueue();
-    await relay.sync();
-    expect([for (final note in sent()) note['text']], ['Second', 'First']);
-    expect([sent().last['lat'], sent().last['place']], [43.64871, 'Queen St W']);
-    expect(relay.waiting, 0);
-  });
+    test('refuses a key the server turns down, and keeps one it could not try', () async {
+      final relay = controller();
+      server.answer = (_) => FakeServer.json({}, 403);
+      expect(await relay.connect(code), contains('did not take this key'));
+      expect(relay.connected, isFalse);
+      server.answer = (_) => FakeServer.json({}, 503);
+      expect(await relay.connect(code), isNull);
+      await relay.startSending(sendEarlier: false);
+      await relay.sync();
+      expect([relay.connected, relay.status], [true, SyncStatus.offline]);
+    });
 
-  test('a note goes without a place when the phone gives up, or when the app closed while it waited', () async {
-    await KeyVault(storage).save(connection);
-    final relay = controller();
-    await relay.load();
-    await relay.addNote('No fix');
-    await pumpEventQueue();
-    await relay.sync();
-    expect(jsonDecode(server.requests.firstWhere((request) => request.url.path.endsWith('notes')).body), isNot(contains('lat')));
-    await store.addNote(LocalNote(clientId: 'closed', text: 'Cut short', createdAt: now), waitForPin: true);
-    expect([(await store.outbox()).length, await store.waiting()], [0, 1]);
-    await controller().load();
-    expect((await store.outbox()).single.body, {'clientId': 'closed', 'text': 'Cut short', 'createdAt': now.millisecondsSinceEpoch});
-  });
+    test('shows a note at once as waiting, with its pin, and sent after the next sync', () async {
+      await KeyVault(storage).save(connection);
+      places.pin = Pin(at: now, lat: 43.64871, lon: -79.38171, accuracy: 12);
+      server.answer = (_) => FakeServer.json({}, 503);
+      final relay = controller();
+      await relay.load();
+      await relay.addNote('  Lunch idea  ');
+      await pumpEventQueue();
+      await relay.sync();
+      expect([relay.entries.single.text, relay.entries.single.waiting, relay.entries.single.place], ['Lunch idea', true, 'Pinned']);
+      expect([relay.status, relay.waiting], [SyncStatus.offline, 1]);
+      server.answer = (request) => request.url.path.endsWith('timeline') ? FakeServer.json({'notes': [ring], 'next': null}) : FakeServer.ok(request);
+      await relay.sync();
+      expect([for (final entry in relay.entries) (entry.text, entry.waiting)], [('Lunch idea', false), ('Call the PCB fab', false)]);
+      expect([relay.waiting, relay.status], [0, SyncStatus.synced]);
+      // The two tries with no signal reached the notes route too; the last one landed.
+      final sent = sentNotes().last;
+      expect(sent, containsPair('createdAt', 1793797200000));
+      expect(sent['clientId'], matches(RegExp(r'^[0-9a-f]{32}$')));
+    });
 
-  test('opens with the last timeline and settings it saw, with no network', () async {
-    await KeyVault(storage).save(connection);
-    await store.set('timeline', jsonEncode([ring]));
-    await store.set('settings', jsonEncode({'pinNotes': false, 'history': true, 'health': true}));
-    final relay = controller();
-    await relay.load();
-    expect(relay.entries.single.text, 'Call the PCB fab');
-    expect([relay.settings.pinNotes, relay.settings.history, relay.settings.health], [false, true, true]);
-    places.points.add(Pin(at: now, lat: 43.6, lon: -79.3, accuracy: 9));
-    await pumpEventQueue();
-    await relay.addNote('No pin');
-    await relay.sync();
-    final routes = server.routes;
-    expect(routes, containsAll(['notes', 'locations', 'timeline']));
-    expect(jsonDecode(server.requests.firstWhere((request) => request.url.path.endsWith('notes')).body), isNot(contains('lat')));
-    relay.dispose();
-  });
+    test('keeps a note at once, and adds its pin when the phone has a fix', () async {
+      await KeyVault(storage).save(connection);
+      server.answer = (_) => FakeServer.json({}, 503);
+      places.fix = Completer();
+      final relay = controller();
+      await relay.load();
+      await relay.addNote('Bench idea');
+      expect([relay.entries.single.text, relay.entries.single.place, relay.waiting], ['Bench idea', null, 1]);
+      places.fix!.complete(Pin(at: now, lat: 43.64871, lon: -79.38171, accuracy: 12, place: 'Queen St W'));
+      await pumpEventQueue();
+      expect(relay.entries.single.place, 'Queen St W');
+      final sent = sentNotes().single;
+      expect([sent['text'], sent['lat'], sent['place']], ['Bench idea', 43.64871, 'Queen St W']);
+      // A note not waiting, such as one settled already, keeps no late pin.
+      expect(await store.settlePin('gone', Pin(at: now, lat: 1, lon: 1, accuracy: 1), send: true), isFalse);
+    });
 
-  test('turns each setting on only with its permission, and schedules the hourly sync', () async {
-    final relay = controller();
-    await relay.load();
-    places.allowed = false;
-    health.allowed = false;
-    expect(await relay.setPinNotes(true), contains('location'));
-    expect(await relay.setHistory(true), contains('all the time'));
-    expect(await relay.setHealth(true), contains('health'));
-    expect([relay.settings.history, relay.settings.health], [false, false]);
-    expect(await relay.setPinNotes(false), isNull);
-    places.allowed = true;
-    health.allowed = true;
-    expect(await relay.setHistory(true), isNull);
-    expect(await relay.setHealth(true), isNull);
-    expect(await relay.setHistory(false), isNull);
-    expect(await relay.setPinNotes(true), isNull);
-    expect(scheduled, [false, true, true, true, true]);
-    expect(jsonDecode((await store.get('settings'))!), {'pinNotes': true, 'history': false, 'health': true});
-  });
+    test('a second note syncs while the first waits for its pin, and the first goes later with its place', () async {
+      await KeyVault(storage).save(connection);
+      final first = Completer<Pin?>();
+      places.fix = first;
+      final relay = controller();
+      await relay.load();
+      await relay.addNote('First');
+      await pumpEventQueue();
+      places
+        ..fix = null
+        ..pin = Pin(at: now, lat: 43.65, lon: -79.40, accuracy: 8, place: 'Ossington Ave');
+      await relay.addNote('Second');
+      await pumpEventQueue();
+      await relay.sync(); // pull to refresh, the sync chip or the app's return
+      expect([for (final note in sentNotes()) note['text']], ['Second']);
+      expect(sentNotes().single['place'], 'Ossington Ave');
+      expect([relay.waiting, for (final entry in relay.entries) if (entry.waiting) entry.text], [1, 'First']);
+      first.complete(Pin(at: now, lat: 43.64871, lon: -79.38171, accuracy: 12, place: 'Queen St W'));
+      await pumpEventQueue();
+      await relay.sync();
+      expect([for (final note in sentNotes()) note['text']], ['Second', 'First']);
+      expect([sentNotes().last['lat'], sentNotes().last['place']], [43.64871, 'Queen St W']);
+      expect(relay.waiting, 0);
+    });
 
-  test('sends health on each sync, and goes on when the health store is closed', () async {
-    await KeyVault(storage).save(connection);
-    await store.set('settings', jsonEncode({'pinNotes': true, 'history': false, 'health': true}));
-    final relay = controller();
-    await relay.load();
-    health.readings = [reading(HealthDataType.STEPS, now.subtract(const Duration(hours: 1)), now, value: 100)];
-    await relay.sync();
-    expect(server.routes.first, 'health');
-    health.error = Exception('locked');
-    await relay.sync();
-    expect(relay.status, SyncStatus.synced);
-  });
+    test('a note goes without a place when the phone gives up, or when the app closed while it waited', () async {
+      await KeyVault(storage).save(connection);
+      final relay = controller();
+      await relay.load();
+      await relay.addNote('No fix');
+      await pumpEventQueue();
+      await relay.sync();
+      expect(sentNotes().single, isNot(contains('lat')));
+      await store.addNote(LocalNote(clientId: 'closed', text: 'Cut short', createdAt: now), waitForPin: true, send: true);
+      expect([(await store.outbox()).length, await store.waiting()], [0, 1]);
+      await controller().load();
+      expect((await store.outbox()).single.body, {'clientId': 'closed', 'text': 'Cut short', 'createdAt': now.millisecondsSinceEpoch});
+    });
 
-  test('says when the key is refused, or the timeline or an older page can not be read', () async {
-    await KeyVault(storage).save(connection);
-    final relay = controller();
-    await relay.load();
-    await relay.sync();
-    server.answer = (_) => FakeServer.json({}, 401);
-    await relay.addNote('x');
-    await relay.sync();
-    expect(relay.status, SyncStatus.refused);
-    server.answer = (request) => request.url.path.endsWith('timeline') ? FakeServer.json({}, 401) : FakeServer.ok(request);
-    await relay.sync();
-    expect(relay.status, SyncStatus.refused);
-    server.answer = (request) => request.url.path.endsWith('timeline') ? FakeServer.json({}, 502) : FakeServer.ok(request);
-    await relay.sync();
-    expect(relay.status, SyncStatus.offline);
-    await relay.more();
-    expect(relay.status, SyncStatus.offline);
-  });
+    test('opens with the last timeline and settings it saw, with no network', () async {
+      await KeyVault(storage).save(connection);
+      await store.set('timeline', jsonEncode([ring]));
+      await store.set('settings', jsonEncode({'pinNotes': false, 'history': true, 'health': true}));
+      final relay = controller();
+      await relay.load();
+      expect(relay.entries.single.text, 'Call the PCB fab');
+      expect([relay.settings.sending, relay.settings.pinNotes, relay.settings.history, relay.settings.health], [true, false, true, true]);
+      places.points.add(Pin(at: now, lat: 43.6, lon: -79.3, accuracy: 9));
+      await pumpEventQueue();
+      await relay.addNote('No pin');
+      await relay.sync();
+      expect(server.routes, containsAll(['notes', 'locations', 'timeline']));
+      expect(sentNotes().single, isNot(contains('lat')));
+      relay.dispose();
+    });
 
-  test('changes the server, and disconnects keeping notes not sent', () async {
-    final relay = controller();
-    expect(await relay.setServer('https://preview.example.com'), 'Connect a key first.');
-    await KeyVault(storage).save(connection);
-    await relay.load();
-    expect(await relay.setServer('preview.example.com'), contains('https://'));
-    expect(await relay.setServer('https://preview.example.com/'), isNull);
-    expect(relay.server, 'https://preview.example.com');
-    server.answer = (_) => FakeServer.json({}, 503);
-    await relay.addNote('Kept');
-    await relay.disconnect();
-    expect([relay.connected, relay.status, relay.hasMore], [false, SyncStatus.idle, false]);
-    expect(storage.values, isEmpty);
-    expect(relay.entries.single.text, 'Kept');
-    await relay.sync();
-    await relay.more();
-    expect(server.requests.every((request) => request.url.host == 'preview.example.com'), isTrue);
+    test('sends health on each sync, and goes on when the health store is closed', () async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', jsonEncode({'pinNotes': true, 'history': false, 'health': true}));
+      final relay = controller();
+      await relay.load();
+      health.readings = [reading(HealthDataType.STEPS, now.subtract(const Duration(hours: 1)), now, value: 100)];
+      await relay.sync();
+      expect(server.routes.first, 'health');
+      health.error = Exception('locked');
+      await relay.sync();
+      expect(relay.status, SyncStatus.synced);
+    });
+
+    test('says when the key is refused, or the timeline or an older page can not be read', () async {
+      await KeyVault(storage).save(connection);
+      final relay = controller();
+      await relay.load();
+      await relay.sync();
+      server.answer = (_) => FakeServer.json({}, 401);
+      await relay.addNote('x');
+      await relay.sync();
+      expect(relay.status, SyncStatus.refused);
+      server.answer = (request) => request.url.path.endsWith('timeline') ? FakeServer.json({}, 401) : FakeServer.ok(request);
+      await relay.sync();
+      expect(relay.status, SyncStatus.refused);
+      server.answer = (request) => request.url.path.endsWith('timeline') ? FakeServer.json({}, 502) : FakeServer.ok(request);
+      await relay.sync();
+      expect(relay.status, SyncStatus.offline);
+      await relay.more();
+      expect(relay.status, SyncStatus.offline);
+    });
+
+    test('changes the server, and disconnects: the key goes, sending turns off, notes stay', () async {
+      final relay = controller();
+      expect(await relay.setServer('https://preview.example.com'), 'Connect a key first.');
+      await KeyVault(storage).save(connection);
+      await relay.load();
+      expect(await relay.setServer('preview.example.com'), contains('https://'));
+      expect(await relay.setServer('https://preview.example.com/'), isNull);
+      expect(relay.server, 'https://preview.example.com');
+      server.answer = (_) => FakeServer.json({}, 503);
+      await relay.addNote('Kept');
+      await relay.disconnect();
+      expect([relay.connected, relay.settings.sending, relay.status, relay.hasMore], [false, false, SyncStatus.idle, false]);
+      expect(storage.values, isEmpty);
+      expect(relay.entries.single.text, 'Kept');
+      await relay.sync();
+      await relay.more();
+      expect(server.requests.every((request) => request.url.host == 'preview.example.com'), isTrue);
+    });
   });
 
   test('makes a note id the server takes', () {

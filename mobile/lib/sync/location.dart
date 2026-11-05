@@ -23,7 +23,9 @@ Pin pinOf(Position position, String? place) => Pin(
 abstract class Places {
   /// Asks for location, [always] for the background history. True when it may be read.
   Future<bool> allow({required bool always});
-  Future<Pin?> here();
+  /// One fix for a note. With [name] the phone names the place through Apple's or Google's lookup, a network call,
+  /// so the app asks for a name only while sending is on.
+  Future<Pin?> here({required bool name});
   Stream<Pin> history();
 }
 
@@ -51,11 +53,11 @@ class PhonePlaces implements Places {
   }
 
   @override
-  Future<Pin?> here() async {
+  Future<Pin?> here({required bool name}) async {
     try {
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 10)));
-      return pinOf(position, await _name(position));
+      return pinOf(position, name ? await _name(position) : null);
     } on Exception {
       // No fix in time, or no permission: the note is kept without a place.
       return null;

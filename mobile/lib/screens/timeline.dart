@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../relay.dart';
 import 'compose.dart';
+import 'connect.dart' show Scanner;
 import 'settings.dart';
 
 String _time(BuildContext context, DateTime at) {
@@ -13,9 +14,11 @@ String _time(BuildContext context, DateTime at) {
 
 /// Every note, newest first, with the one primary action: a new note.
 class TimelineScreen extends StatelessWidget {
-  const TimelineScreen({super.key, required this.relay});
+  const TimelineScreen({super.key, required this.relay, this.scanner});
 
   final Relay relay;
+  /// The QR scanner the connect screen uses; a test passes its own.
+  final Scanner? scanner;
 
   @override
   Widget build(BuildContext context) {
@@ -25,11 +28,11 @@ class TimelineScreen extends StatelessWidget {
         final entries = relay.entries;
         return Scaffold(
           appBar: AppBar(title: const Text('Relay'), actions: [
-            _SyncChip(relay: relay),
+            relay.settings.sending ? _SyncChip(relay: relay) : const _LocalChip(),
             IconButton(
               tooltip: 'Settings',
               icon: const Icon(Icons.settings_outlined),
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SettingsScreen(relay: relay))),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SettingsScreen(relay: relay, scanner: scanner))),
             ),
           ]),
           floatingActionButton: FloatingActionButton.extended(
@@ -40,8 +43,9 @@ class TimelineScreen extends StatelessWidget {
           body: RefreshIndicator(
             onRefresh: relay.sync,
             child: entries.isEmpty
-              ? ListView(children: const [Padding(padding: EdgeInsets.all(32),
-                  child: Text('No notes yet. Hold the ring and talk, or tap New note.', textAlign: TextAlign.center))])
+              ? ListView(children: [Padding(padding: const EdgeInsets.all(32),
+                  child: Text(relay.settings.sending ? 'No notes yet. Hold the ring and talk, or tap New note.' : 'No notes yet. Tap New note.',
+                    textAlign: TextAlign.center))])
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
                   itemCount: entries.length + (relay.hasMore ? 1 : 0),
@@ -97,5 +101,15 @@ class _SyncChip extends StatelessWidget {
       _ => (Icons.cloud_done_outlined, relay.waiting > 0 ? '${relay.waiting} waiting' : 'Synced'),
     };
     return ActionChip(avatar: Icon(icon, size: 18), label: Text(label), tooltip: 'Sync now', onPressed: relay.sync);
+  }
+}
+
+/// With sending off, the header says where notes are, in place of the sync mark.
+class _LocalChip extends StatelessWidget {
+  const _LocalChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Chip(avatar: Icon(Icons.phone_android, size: 18), label: Text('On this phone'));
   }
 }

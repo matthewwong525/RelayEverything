@@ -24,6 +24,8 @@ class FakeServer {
 
   http.Response Function(http.Request request) answer;
   final requests = <http.Request>[];
+  /// When set, each reply waits for it, so a test can act while a request is still open.
+  Completer<void>? hold;
 
   static http.Response ok(http.Request request) => json(request.url.path.endsWith('/timeline') ? {'notes': [], 'next': null} : {'added': 1});
   static http.Response json(Object body, [int status = 200]) =>
@@ -31,11 +33,16 @@ class FakeServer {
 
   RelayApi api(Connection connection) => RelayApi(connection, MockClient((request) async {
     requests.add(request);
+    await hold?.future;
     return answer(request);
   }));
 
   List<String> get routes => [for (final request in requests) request.url.path.split('/').last];
 }
+
+/// A server for sending off: it answers every call with an error, and the test checks that [FakeServer.requests]
+/// stays empty.
+FakeServer noNetwork() => FakeServer((_) => FakeServer.json({'error': 'no call may reach the network'}, 500));
 
 class MemoryStorage extends Fake implements FlutterSecureStorage {
   final values = <String, String>{};
@@ -60,6 +67,8 @@ class FakePlaces implements Places {
   Completer<Pin?>? fix;
   /// Each ask for location, by whether it was for all the time.
   final asked = <bool>[];
+  /// Each fix for a note, by whether it asked for the place's name: a network lookup.
+  final named = <bool>[];
   final points = StreamController<Pin>.broadcast();
 
   @override
@@ -69,7 +78,12 @@ class FakePlaces implements Places {
   }
 
   @override
-  Future<Pin?> here() async => fix == null ? pin : fix!.future;
+  Future<Pin?> here({required bool name}) async {
+    named.add(name);
+    final found = await (fix == null ? Future.value(pin) : fix!.future);
+    // As on a phone: with no name asked for, the pin has none.
+    return found == null || name ? found : Pin(at: found.at, lat: found.lat, lon: found.lon, accuracy: found.accuracy);
+  }
 
   @override
   Stream<Pin> history() => points.stream;

@@ -1,10 +1,10 @@
 ---
 title: Your data, in a place you choose
-description: Relay gets your notes, health and location off your phone and devices, into a place you choose, where your own AI can read them.
+description: Relay keeps your notes on your phone. When you choose, it sends your notes, health and location to a place you choose, where your own AI can read them.
 template: splash
 hero:
   title: Your data, in a place you choose.
-  tagline: Relay gets your notes, health and location off your phone and devices. It sends them to your own server and database, where your own AI can read them.
+  tagline: Relay keeps your notes on your phone. When you choose, it sends your notes, health and location to your own server and database, where your own AI can read them.
   image:
     alt: Data goes from your phone to your own database, and your AI reads it there
     html: |
@@ -41,7 +41,7 @@ import { Badge, Card, CardGrid } from '@astrojs/starlight/components';
   <Card title="Collect it on your phone">
     <Badge text="Works today" variant="tip" />
 
-    The Relay app on iPhone and Android collects your notes, steps, heart rate, sleep, workouts and where you were. Take a note by typing, or by voice from a ring.
+    The Relay app on iPhone and Android keeps your notes on your phone, with no account and no signal. Turn on sending, and it also sends your steps, heart rate, sleep, workouts and where you were. Take a note by typing, or by voice from a ring.
   </Card>
   <Card title="Send it to your own database">
     <Badge text="Coming" variant="default" />
@@ -58,14 +58,14 @@ import { Badge, Card, CardGrid } from '@astrojs/starlight/components';
 ## How your data travels
 
 <ol class="relay-flow">
-  <li><strong>Collect</strong>Your phone and devices make notes, health and location data.</li>
-  <li><strong>Sync</strong>The Relay app sends it to your Relay server.</li>
+  <li><strong>Collect</strong>Your phone keeps each note. Nothing leaves it until you turn on sending.</li>
+  <li><strong>Send</strong>With sending on, the Relay app sends notes, health and location to your Relay server.</li>
   <li><strong>Send on</strong>Webhooks copy each new item to your own database. Coming.</li>
   <li><strong>Read with AI</strong>Your AI reads it through MCP. Coming.</li>
 </ol>
 
 ## A ring to take notes
 
-A ring is one way to take a note: hold the band, talk, and let go. A Pebble Index ring works today. The Relay ring is in design: see [the ring](ring/how-it-works/).
+A ring is one way to take a note: hold the band, talk, and let go. A Pebble Index ring works today: its notes come through the Pebble app to your Relay server, so they need sending on. The Relay ring is in design: see [the ring](ring/how-it-works/).
 
 Relay is built in the open. All of its code is [on GitHub](https://github.com/matthewwong525/RelayEverything), under the MIT license: the phone app, the server, this website, and the ring's models and board.

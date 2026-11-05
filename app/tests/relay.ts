@@ -36,6 +36,13 @@ export const bucket = { objects: new Map<string, Uint8Array>(), failing: false,
     return data ? { size: data.byteLength } : null;
   }) };
 
+/** The webhooks' queue: each message's body, in order; `failing` makes the next send throw. */
+export const queue = { sent: [] as unknown[], failing: false,
+  sendBatch: vi.fn(async (messages: { body: unknown }[]) => {
+    if (queue.failing) throw new Error("The queue is down");
+    queue.sent.push(...messages.map(message => message.body));
+  }) };
+
 export let db: ReturnType<typeof database>;
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
@@ -49,9 +56,12 @@ beforeEach(() => {
   bucket.objects.clear();
   bucket.failing = false;
   bucket.put.mockClear();
+  queue.sent = [];
+  queue.failing = false;
 });
 
-export const env = (more: object = {}) => fakeEnv({ DB: db.DB, RELAY_BUCKET: bucket, RELAY_PEBBLE_SIGNING: SECRET, ...more });
+export const env = (more: object = {}) =>
+  fakeEnv({ DB: db.DB, RELAY_BUCKET: bucket, RELAY_PEBBLE_SIGNING: SECRET, RELAY_WEBHOOKS: queue, ...more });
 
 /** A Relay route called as `who`: JSON for a POST, query fields for a GET or DELETE; `more` adds bindings. */
 export async function call(who: AccessIdentity | null, method: string, route: string, input?: Record<string, unknown>, more?: object) {

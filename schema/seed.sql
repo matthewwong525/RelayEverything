@@ -1433,3 +1433,14 @@ INSERT INTO relay_chat_messages (chat_id, seq, role, text, at) VALUES
 INSERT INTO relay_chat_saves (id, chat_id, title, text, created_at) VALUES
   ('e0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', 'Stiffener plan',
    'Use a 0.2 mm steel stiffener under the battery, glued, not soldered.', 1793801460000);
+-- Relay webhooks: one made-up address at example.com, paused so a preview never sends to it, with notes sent and the
+-- health batch waiting. The rows above filled relay_outbox through its triggers: locations 1-3, notes 4-6, health 7-12.
+INSERT INTO relay_webhooks (id, name, url, secret, kinds, active, sent_seq, last_status, last_sent_at, created_at) VALUES
+  ('e0000000-0000-4000-8000-000000000001', 'Example database', 'https://example.com/relay',
+   'whsec_c2VlZC1vbmx5LW5vdC1hLXJlYWwtc2VjcmV0LTAwMDA=', '["notes","health"]', 0, 6, 200, 1793829510000, 1793790000000);
+INSERT INTO relay_webhook_attempts (webhook_id, at, first_seq, last_seq, type, status, ms, error) VALUES
+  ('e0000000-0000-4000-8000-000000000001', 1793790060000, NULL, NULL, 'webhook.test', 200, 182, NULL),
+  ('e0000000-0000-4000-8000-000000000001', 1793797270000, 4, 4, 'note.created', 503, 2140, NULL),
+  ('e0000000-0000-4000-8000-000000000001', 1793797300000, 4, 4, 'note.created', 200, 164, NULL),
+  ('e0000000-0000-4000-8000-000000000001', 1793811710000, 5, 5, 'note.created', 200, 171, NULL),
+  ('e0000000-0000-4000-8000-000000000001', 1793829510000, 6, 6, 'note.created', 200, 158, NULL);

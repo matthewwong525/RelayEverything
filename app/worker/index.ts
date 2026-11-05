@@ -4,7 +4,7 @@ import { handleWalkPictures, WALK_PREFIX } from "../../.agents/skills/verify/wor
 import { discovery } from "./api/discovery.ts";
 import { API_PREFIX, handleApi } from "./api/router.ts";
 import { services } from "./api/services.ts";
-import { APP_API, handleApp } from "./apps/index.ts";
+import { APP_API, handleApp, handleAppQueue, handleAppSchedule } from "./apps/index.ts";
 import { PUBLIC_KNOWLEDGE, publicKnowledge } from "./apps/knowledge/public.ts";
 import { deviceGate } from "./apps/relay/device.ts";
 import { getAccessIdentity, type AccessEnv } from "./access.ts";
@@ -98,9 +98,15 @@ export default {
     return env.ASSETS.fetch(request);
   },
 
-  // Every 15 minutes on the live app alone: who can push on GitHub joins the previews' sign-in list.
-  // Staging's schedule is empty, and a preview never reads GitHub: wiki/stack/preview-access.md
+  // Every 15 minutes on the live app alone: who can push on GitHub joins the previews' sign-in list, then each mini
+  // app's own job runs. Staging's schedule is empty, and a preview never reads GitHub: wiki/stack/preview-access.md
   async scheduled(_controller, env) {
     await refreshOnSchedule(env);
+    await handleAppSchedule(env);
+  },
+
+  // A mini app's queues, such as Relay's webhooks: wiki/stack/mini-apps.md
+  async queue(batch, env) {
+    await handleAppQueue(batch, env);
   },
 } satisfies ExportedHandler<Env & AccessEnv & ConnectionEnv>;

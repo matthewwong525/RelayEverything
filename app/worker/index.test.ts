@@ -16,6 +16,8 @@ vi.mock("./apps/hello/api.ts", async (original) => {
 
 const refreshOnSchedule = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock("./employee-access/pushers.ts", async (original) => ({ ...await original<object>(), refreshOnSchedule }));
+const appHooks = vi.hoisted(() => ({ handleAppQueue: vi.fn(async () => {}), handleAppSchedule: vi.fn(async () => {}) }));
+vi.mock("./apps/index.ts", async (original) => ({ ...await original<object>(), ...appHooks }));
 
 const TEAM = "routing-team.cloudflareaccess.com";
 const AUD = "routing-workspace";
@@ -319,9 +321,17 @@ describe("private Worker routing", () => {
     expect(db.withSession).toHaveBeenCalledWith("first-primary");
   });
 
-  it("hands the timetable to the pushers' refresh", async () => {
+  it("hands the timetable to the pushers' refresh, then to each mini app's own job", async () => {
     const bindings = fakeEnv(env);
     await worker.scheduled({} as ScheduledController, bindings);
     expect(refreshOnSchedule).toHaveBeenCalledWith(bindings);
+    expect(appHooks.handleAppSchedule).toHaveBeenCalledWith(bindings);
+  });
+
+  it("hands a queue's batch to the mini apps", async () => {
+    const bindings = fakeEnv(env);
+    const batch = { queue: "relay-webhooks", messages: [] } as unknown as MessageBatch;
+    await worker.queue(batch, bindings);
+    expect(appHooks.handleAppQueue).toHaveBeenCalledWith(batch, bindings);
   });
 });

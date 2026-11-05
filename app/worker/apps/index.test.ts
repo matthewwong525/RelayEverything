@@ -1,14 +1,18 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi, type Mock } from "vitest";
 import type { AccessIdentity } from "../access";
-import { APP_API, handleApp, type AppCall, type AppEnv } from "./index";
+import { APP_API, handleApp, handleAppQueue, handleAppSchedule, type AppCall, type AppEnv } from "./index";
 import type { Route } from "../api/contract";
 import { fakeEnv } from "../../tests/env";
 
-// Hello's routes, swapped for one that records what a handler receives.
+// Hello's routes, swapped for one that records what a handler receives, and a queue and a schedule that record theirs.
 const seen = vi.hoisted(() => [] as { env: AppEnv; call: AppCall }[]);
+const consumed = vi.hoisted(() => [] as { queue: string; env: AppEnv }[]);
+const scheduled = vi.hoisted(() => vi.fn(async (_env: AppEnv) => {}));
 vi.mock("./hello/api.ts", async (original) => ({
   // The registry reads each app's `keys`; the supplied example lists none.
   keys: undefined,
+  queues: new Map([["hello-jobs", async (batch: MessageBatch, env: AppEnv) => { consumed.push({ queue: batch.queue, env }); }]]),
+  scheduled,
   routes: new Map((await original<{ routes: Map<string, Route> }>()).routes).set(
     "GET peek", (_request: Request, env: AppEnv, call: AppCall) => {
       seen.push({ env, call });
@@ -20,6 +24,8 @@ vi.mock("./hello/api.ts", async (original) => ({
 // The Knowledge app's routes, plus one that records what its handler receives.
 vi.mock("./knowledge/api.ts", async (original) => ({
   keys: undefined,
+  queues: undefined,
+  scheduled: undefined,
   routes: new Map((await original<{ routes: Map<string, Route> }>()).routes).set(
     "GET peek", (_request: Request, env: AppEnv, call: AppCall) => {
       seen.push({ env, call });
@@ -30,6 +36,7 @@ vi.mock("./knowledge/api.ts", async (original) => ({
 
 afterEach(() => {
   seen.length = 0;
+  consumed.length = 0;
 });
 
 const person: AccessIdentity = { id: "owner@example.com", kind: "user", claims: { aud: "a", iss: "i", exp: 0 } };
@@ -126,4 +133,39 @@ it("hands only the Knowledge app's routes the knowledge reader, and none of them
   expect(Object.keys(knowledge.call.knowledge ?? {}).sort()).toEqual(["head", "name", "readFile", "readTree"]);
   expect(knowledge.call.knowledge?.name).toBe("acme-knowledge");
   expect("knowledge" in hello.call).toBe(false);
+});
+
+const batchOf = (queue: string) => ({ queue, messages: [], ackAll: vi.fn(), retryAll: vi.fn() }) as unknown as MessageBatch & { ackAll: Mock };
+
+it("hands a queue's batch to the app that lists it, by its name with or without -staging, and no memory binding", async () => {
+  for (const queue of ["hello-jobs", "hello-jobs-staging", "hello-jobs-local"]) await handleAppQueue(batchOf(queue), env);
+  expect(consumed.map(entry => entry.queue)).toEqual(["hello-jobs", "hello-jobs-staging", "hello-jobs-local"]);
+  for (const { env: appEnv } of consumed) {
+    expect(appEnv.DB).toBe(env.DB);
+    for (const name of ["MEMORY_DB", "MEMORY_BUCKET", "WONG_ACCESS_LOGIN_MANAGEMENT"]) expect(name in appEnv).toBe(false);
+  }
+});
+
+it("acks a queue no app lists, so its messages don't come back", async () => {
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  const batch = batchOf("nobody-listens");
+  await handleAppQueue(batch, env);
+  expect(batch.ackAll).toHaveBeenCalledOnce();
+  expect(error).toHaveBeenCalledWith("No app lists the queue nobody-listens; its messages are dropped.");
+  expect(consumed).toEqual([]);
+  error.mockRestore();
+});
+
+it("runs each app's schedule with no memory binding, and one failure stops no other", async () => {
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  scheduled.mockRejectedValueOnce(new Error("hello failed"));
+  await handleAppSchedule(env);
+  await handleAppSchedule(env);
+  expect(scheduled).toHaveBeenCalledTimes(2);
+  const appEnv = scheduled.mock.calls[0][0];
+  for (const name of ["MEMORY_DB", "MEMORY_BUCKET", "WONG_ACCESS_LOGIN_MANAGEMENT"]) expect(name in appEnv).toBe(false);
+  // Relay's sweep runs too, and fails on this database with no tables, as hello's did once.
+  expect(error).toHaveBeenCalledWith("The hello app's schedule failed", expect.any(Error));
+  expect(error).toHaveBeenCalledWith("The relay app's schedule failed", expect.any(Error));
+  error.mockRestore();
 });

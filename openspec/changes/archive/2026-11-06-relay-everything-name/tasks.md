@@ -29,4 +29,4 @@
 ## 6. Checks
 
 - [x] 6.1 Run the pre-checks once: `npm test` in `app/` and `site/`, `flutter test` in `mobile/`, `node --test scripts/*.test.mjs`, `node scripts/public-check.mjs`, and `npm run relay:api-doc` in `app/` with no diff. Fix each failure; loosen no check.
-- [ ] 6.2 After implementation, `/save`, then check the preview: the server page heading and the website at relay-staging.matthewwong525.workers.dev show *Relay Everything*, and the CI Android build installs over the earlier app with notes kept.
+- [x] 6.2 After implementation, `/save`, then check the preview: the server page heading and the website at relay-staging.matthewwong525.workers.dev show *Relay Everything*, and the CI Android build installs over the earlier app with notes kept.

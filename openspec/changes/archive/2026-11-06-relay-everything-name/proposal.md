@@ -1,6 +1,6 @@
 # Call the product Relay Everything everywhere people see it
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** rename-to-relay-everything
 **Open questions:** none
 
@@ -77,3 +77,5 @@ Non-goals: new pictures or a logo, the App Store listing (already *RelayEverythi
 - **2026-11-06** — Check: `app/package.json` adds `../scripts/product-name.test.mjs` to the `node --test` list in `test`, because CI runs that list; no check is loosened.
 - **2026-11-06** — Assumed: the Settings switch says *Send to Relay Everything*, not *Send to your Relay Everything server*, because the longer title wraps at 360 px and the design says to shorten the sentence, never the name.
 - **2026-11-06** — Checkpoint: tasks 1.1–6.1 built and reviewed (two review findings fixed: the 360 px wrap test and the name check's file list); local checks pass; saved for the preview check in 6.2.
+- **2026-11-06** — Acceptance 6.2: the preview server page shows *Relay Everything* (heading, app title, *Send to Relay Everything*), and relay-staging.matthewwong525.workers.dev shows it in each page title with no bare *Relay* on five pages checked. The install over the earlier app was not tried on a phone; the Android `applicationId` and iOS bundle ID are unchanged, and the CI Android and iOS builds passed.
+- **2026-11-06** — Archive checkpoint: archived for ship; all 13 tasks done; the new capability `relay-everything-name` joins `openspec/specs/`.

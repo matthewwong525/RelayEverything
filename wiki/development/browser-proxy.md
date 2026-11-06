@@ -41,6 +41,16 @@ A running browser also prints `BROWSE_LANGUAGE=`: `english`, `random (browser to
 
 On `direct (upstream unreachable)`, tell the person to check the home proxy and the upstream account.
 
+## Test a change to the routes
+
+CI does not run the browser's tests: it runs `npm test` only at the root and one folder down. After a change to the route scripts, run them yourself:
+
+```bash
+node --test .agents/skills/browser/scripts/*.test.mjs
+```
+
+Name each file: the folder form, `node --test .agents/skills/browser/scripts/`, fails on Node 22. The tests use local listeners and a temporary home folder, so they never touch the running browser.
+
 ## Turn it off
 
 - **Only the first proxy:** blank `BROWSE_FIRST_PROXY` in each repo's `.env` and empty `~/.wong-stack/camoufox/first-proxy`. Empty the file, do not delete it, or the old camofox line comes back. Then restart the browser after the person's yes.

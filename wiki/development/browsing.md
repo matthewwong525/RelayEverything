@@ -48,7 +48,7 @@ A failed command prints one `BROWSE_ERROR=` line. A ref comes from the newest sn
 
 **Every new start uses a local forwarding proxy automatically**, with no extra install or account. It keeps no browsing logs and tunnels secure traffic encrypted. Startup failure stops the browser; stopping the browser closes its proxy.
 
-It uses this computer's own network, so sites see the computer's country; its timezone and English follow that address. It needs no WARP, relay, or phone connection, and chooses no country. Sites can still [refuse](#when-a-site-refuses-the-browser).
+It goes out through [the browser routes](browser-proxy.md): a first proxy, such as your home, then an upstream proxy, then this computer's own network. With no route saved, it uses this computer's own network, so sites see the computer's country. Its timezone and English follow the address that sites see. Sites can still [refuse](#when-a-site-refuses-the-browser).
 
 A running browser keeps its pages and logins, and takes this default only once you stop it and a later errand starts it. Never restart it just for an update.
 
@@ -108,7 +108,7 @@ Some sites turn the browser away, keep it on a *Verify you are human* page as Do
 2. **Stop browsing that site.** No other browser and no second link.
 3. **Give [steps to finish it yourself](#steps-for-you-to-finish)**, with the page's link.
 
-A check that clears by itself in a few seconds is not a refusal: the agent reads the page again first. It never routes its traffic through a hired or borrowed network address, uses a check-solving service, or solves a check that asks whether a person is there. One refusal ends the try: repeats can lock your account.
+A check that clears by itself in a few seconds is not a refusal: the agent reads the page again first. It never moves to another network address to get past a refusal, uses a check-solving service, or solves a check that asks whether a person is there: [the browser routes](browser-proxy.md) are set before, not changed for one site. One refusal ends the try: repeats can lock your account.
 
 ## Saved details
 

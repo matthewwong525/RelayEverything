@@ -9,9 +9,10 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { startArgs as addonArgs } from './addons.mjs';
 import { FILES, LAUNCH_MS, OLD_PROFILES, launchConfig, windowSetting } from './browse.mjs';
-import { startForwarder } from './forwarder.mjs';
+import { NETWORK_FILE, startForwarder } from './forwarder.mjs';
 import { moveLogins } from './login-move.mjs';
 import { ADDON_PAGE, ADDON_REFUSAL, MAX_FRAMES, buildSnapshot, frameHasBoxes, frameLabel, frameSkipped, windowSnapshot } from './refs.mjs';
+import { resolveFirst, resolveUpstream } from './server.mjs';
 import { isMain } from '../../memory/scripts/lib/cli.mjs';
 
 /** Xvfb as camofox ran it: one 1280x720 screen, no TCP, and the extensions a real desktop lacks turned off. */
@@ -421,7 +422,7 @@ async function main() {
   try {
     await new Promise((resolve, reject) => server.once('error', reject).listen(port, '127.0.0.1', resolve));
     stops.push(() => new Promise(done => { handle?.close(); server.close(done); server.closeAllConnections(); }));
-    const proxy = await startForwarder();
+    const proxy = await startForwarder({ first: resolveFirst(), upstream: resolveUpstream(), networkFile: NETWORK_FILE, extra: { language: 'english' } });
     stops.push(() => proxy.close());
     // Only Linux gets Xvfb; a Mac or Windows browser shows in a window, or none when turned off.
     const screen = process.platform === 'linux' ? await startXvfb() : null;

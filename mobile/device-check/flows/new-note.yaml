@@ -1,0 +1,17 @@
+# A typed note: New note, type, Save, and the note is in the timeline.
+appId: com.matthewwong525.relayApp
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "New note"
+    timeout: 60000
+- tapOn: "New note"
+- inputText: "Device check note"
+- tapOn: "Save"
+- extendedWaitUntil:
+    visible: "Typed"
+    timeout: 10000
+# Flutter joins a card's lines into one label, so match its start.
+- assertVisible: 'Device check note(.|\n)*'
+- takeScreenshot: new-note

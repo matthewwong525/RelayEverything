@@ -1,0 +1,12 @@
+# The timeline on a fresh install: the app opens with sending off and no notes.
+appId: com.matthewwong525.relayApp
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Relay Everything"
+    timeout: 60000
+- assertVisible: "On this phone"
+- assertVisible: "No notes yet.*"
+- assertVisible: "New note"
+- takeScreenshot: timeline

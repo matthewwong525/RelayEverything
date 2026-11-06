@@ -51,6 +51,8 @@ Each push that changes `mobile/` runs [`.github/workflows/mobile-ci.yml`](../.gi
 - **iPhone** ([`mobile-ios.yml`](../.github/workflows/mobile-ios.yml)): on a Mac, fastlane signs the build automatically and sends it to TestFlight. It needs a paid Apple Developer Program membership, the app's record in App Store Connect (bundle id `com.matthewwong525.relayApp`), and these secrets:
   `ASC_ISSUER_ID`, `ASC_KEY_ID`, `ASC_KEY_P8` (the `.p8` file in base64), `APPLE_TEAM_ID`. Until they are set, the iPhone job ends with a notice and builds nothing.
 
+- **iPhone device check** ([`mobile-device-check.yml`](../.github/workflows/mobile-device-check.yml)): only on request, never on a push. It builds the app for the iPhone simulator on a Mac, opens it, runs a fixed tour of the timeline, a new note and Settings, and lets Claude try the change. You get a report, screenshots and a video. Start it with `/verify`, or put the label *check on iPhone* on a pull request. It needs no Apple key; Claude needs the secret `CLAUDE_CODE_OAUTH_TOKEN` (a Claude subscription token) or `ANTHROPIC_API_KEY`. See [the device check](../wiki/development/device-check.md).
+
 Never commit a key, a keystore, a `.p8` file or a signing profile.
 
 ## Where the code is

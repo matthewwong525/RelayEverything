@@ -12,7 +12,7 @@ This page owns the reasons. [The walkthrough reference](../../.agents/skills/ver
 
 ## The probe ladder
 
-[The scout](../../.agents/skills/verify/references/walkthrough.md#a--scout-the-scenarios) selects the strongest existing browser, request, deployed-state or CI capture route for each scenario. An API-only or command-line change can therefore get evidence too.
+[The scout](../../.agents/skills/verify/references/walkthrough.md#a--scout-the-scenarios) selects the strongest existing browser, request, deployed-state or CI capture route for each scenario. An API-only, command-line or [phone app](device-check.md) change can therefore get evidence too.
 
 A scenario **no probe reaches** is **listed by name as unverified**. Missing access or evidence for a known route holds up that check alone; independent checks still finish. Repository code never runs locally to fill a gap.
 

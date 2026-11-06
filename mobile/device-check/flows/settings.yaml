@@ -1,0 +1,13 @@
+# Settings: sending is off, and its switches are there.
+appId: com.matthewwong525.relayApp
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 60000
+- tapOn: "Settings"
+# Flutter joins a row's title and subtitle into one label, so match its start.
+- assertVisible: 'Send to Relay Everything(.|\n)*'
+- assertVisible: 'Pin notes to where I am(.|\n)*'
+- takeScreenshot: settings

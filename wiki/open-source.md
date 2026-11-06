@@ -4,7 +4,7 @@ Relay is one public repository, [matthewwong525/RelayEverything](https://github.
 
 ## What is public, and what is not
 
-Everything in the repository is public: the server and web app in `app/`, the phone app in `mobile/`, the website in `site/`, the ring in `cad/` and `pcb/`, and the plans and this wiki. `vendor/` keeps each library's own license.
+Everything in the repository is public: the server and web app in `app/`, the phone app in `mobile/`, the website in `site/`, the Claude Code plugin in [`plugin/`](../plugin/README.md) with its marketplace file in [`.claude-plugin/`](../.claude-plugin/marketplace.json), the ring in `cad/` and `pcb/`, and the plans and this wiki. `vendor/` keeps each library's own license.
 
 These stay in Cloudflare, never in the repository: memory, company knowledge, notes, keys, and health and location data. A plan or wiki page is for anyone to read: write no person's phone number, address, email, health or place in it.
 
@@ -38,6 +38,7 @@ Anyone can run Relay in their own Cloudflare account: [`self-host/SETUP.md`](../
 
 - **A new Relay binding goes in the install too.** Add it to [`self-host/wrangler.template.jsonc`](../self-host/wrangler.template.jsonc) beside [`app/wrangler.jsonc`](../app/wrangler.jsonc); [`bindings.test.mjs`](../self-host/bindings.test.mjs) fails, by name, on one the install lacks, or else every install breaks at its next update.
 - **A Relay migration reads only `relay_` tables.** An install applies every migration, so WongStack's tables are there but empty.
+- **Relay has no end-to-end encryption.** Data lives on a Relay server or only on the phone. A person who wants more control runs their own server.
 - **A device key only adds data.** It reads nothing on any server, so a person's data stays theirs: [Keys](https://relayeverything.com/api/keys/).
 
 ## Pull requests from outside

@@ -54,7 +54,7 @@ RELAY_CONFIG=wrangler.relay.jsonc CLOUDFLARE_ENV=staging npm run build:relay-onl
 npx wrangler deploy                                                               # follows the build's redirect
 ```
 
-The shared server shares the company app's database, bucket and queue. The company app keeps the queue's one consumer. Until the switch, the company app holds `app.relayeverything.com`: at the switch, take the address off the company app first, then deploy the live shared server, which claims it.
+The shared server shares the company app's database, bucket and queue. On production the company app keeps the queue's one consumer. Staging is different: previews reach no other Worker's objects ([the live line](stack/live-line.md)), so the company app's staging Worker has no `SPACES`, its relay routes answer 503, and the staging shared server consumes the queue. Until the switch, the company app holds `app.relayeverything.com`: at the switch, take the address off the company app first, then deploy the live shared server, which claims it.
 
 ## See also
 

@@ -193,3 +193,8 @@ it("answers an empty name for a key whose device is no longer in the space", asy
     .run(await hashToken(gone), ANA, NOW);
   expect(await call({ bearer: gone }, "GET", "key")).toEqual({ status: 200, json: { device: "" } });
 });
+
+it("answers 503 on a server with no spaces, as a preview has none", async () => {
+  expect((await call(phone, "POST", "notes", typed("note-0099"), { SPACES: undefined })).status).toBe(503);
+  expect((await call(matthew, "GET", "timeline", {}, { SPACES: undefined })).status).toBe(503);
+});

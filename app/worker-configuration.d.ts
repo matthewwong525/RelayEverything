@@ -15,7 +15,7 @@ interface __BaseEnv_Env {
 	CF_ACCESS_APP_ID?: "8cff403b-fb55-4954-b0c8-5df2cb344722" | "f938f676-4c71-445d-bacb-3649b4897276";
 	CF_ACCESS_WORKER_ID?: "21a6605b2bbf465b94f3da684f303350" | "3994b8ff29ac409dbfe1783049f21864";
 	RELAY_CHECKER_SHA256?: "449f8b9af84a6d785f1c6a637559764baf7cdb230c4e99ae72d78dd8f33b12c2" | "cc48186f16567a1acbcdabbbdce1446b905f77fd265a4e9f79865d1adb9930a1";
-	SPACES: DurableObjectNamespace /* Space from relay-everything-spaces-staging */ | DurableObjectNamespace /* Space from relay-everything-spaces-local */ | DurableObjectNamespace /* Space from relay-everything-spaces */;
+	SPACES?: DurableObjectNamespace /* Space from relay-everything-spaces-local */ | DurableObjectNamespace /* Space from relay-everything-spaces */;
 	RELAY_MCP?: Service /* entrypoint Grants from relay-everything-mcp-staging */ | Service /* entrypoint Grants from relay-everything-mcp */;
 	SKIP_AUTH?: "true";
 	LIVE_LINE?: DurableObjectNamespace /* Line from relay-everything-line-local */ | DurableObjectNamespace /* Line from relay-everything-line */;
@@ -41,7 +41,6 @@ declare namespace Cloudflare {
 		CF_ACCESS_APP_ID: "8cff403b-fb55-4954-b0c8-5df2cb344722";
 		CF_ACCESS_WORKER_ID: "21a6605b2bbf465b94f3da684f303350";
 		RELAY_CHECKER_SHA256: "449f8b9af84a6d785f1c6a637559764baf7cdb230c4e99ae72d78dd8f33b12c2";
-		SPACES: DurableObjectNamespace /* Space from relay-everything-spaces-staging */;
 		RELAY_MCP: Service /* entrypoint Grants from relay-everything-mcp-staging */;
 	}
 	interface LocalEnv {

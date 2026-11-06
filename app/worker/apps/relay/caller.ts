@@ -100,6 +100,10 @@ export async function relayGate(request: Request, env: CallerEnv, identity: Iden
 }
 
 type Call = { identity: Identity };
+
+// A preview reaches no other Worker's objects, so it has no spaces: wiki/stack/live-line.md
+const openSpace = (env: Env, caller: Caller) => env.SPACES ? spaceOf(env as SpaceEnv, caller)
+  : refused(503, "This Relay Everything server has no spaces. Use the shared server.");
 type Context<C> = { space: PersonSpace; caller: Caller; request: Request; env: Env; call: C };
 
 /** A route for a signed-in person: their session, Access email or the checker. A device key reads nothing. */
@@ -109,7 +113,8 @@ export const asPerson = <C extends Call>(run: (context: Context<C>) => Promise<R
     if (caller instanceof Response) return caller;
     if (!caller) return refused(401, "Sign in to Relay Everything.");
     if (caller.device) return refused(403, "A device key can only send to Relay Everything.");
-    return run({ space: spaceOf(env as SpaceEnv, caller), caller, request, env, call });
+    const space = openSpace(env, caller);
+    return space instanceof Response ? space : run({ space, caller, request, env, call });
   };
 
 /** A route for a device key: it adds data to its own person's space, named by its own device. */
@@ -118,5 +123,6 @@ export const asDevice = <C extends Call>(refusal: string, run: (context: Context
     const caller = await callerOf(request, env, call.identity);
     if (caller instanceof Response) return caller;
     if (!caller?.device) return refused(403, refusal);
-    return run({ space: spaceOf(env as SpaceEnv, caller), caller, device: caller.device, request, env, call });
+    const space = openSpace(env, caller);
+    return space instanceof Response ? space : run({ space, caller, device: caller.device, request, env, call });
   };

@@ -5,14 +5,14 @@ import { getAccessIdentity, type AccessEnv } from "./access.ts";
 import type { AppEnv } from "./apps/index.ts";
 import { queues, routes } from "./apps/relay/api.ts";
 import { relayGate } from "./apps/relay/caller.ts";
-import { move } from "./apps/relay/move.ts";
+import { move, type MoveEnv } from "./apps/relay/move.ts";
 import { signIn, type SignInEnv } from "./apps/relay/sign-in/index.ts";
 
 const PAGE = "/apps/relay/";
 const RELAY_API = /^\/apps\/relay\/api(?:\/(.*))?$/;
 
 /** `access` on a self-host, which keeps Cloudflare Access for its owner; the shared server signs people in itself. */
-type ServerEnv = AppEnv & AccessEnv & SignInEnv & { RELAY_SIGN_IN?: string };
+type ServerEnv = AppEnv & AccessEnv & SignInEnv & MoveEnv & { RELAY_SIGN_IN?: string };
 
 /** Relay Everything's API, or null for an address that is not its. Each route opens only its caller's space, so the
  *  company's sign-in policy has no part here: without the owner email it reads as an older install's, which admits. */

@@ -1,5 +1,5 @@
 // Relay Everything's shared server: worker/relay-only.ts on its own address, outside Access, where anyone can sign
-// up. It shares the app's database, bucket and queue; the app consumes the queue. wiki/relay-spaces.md
+// up. It shares the app's database, bucket and queue; the app consumes the live queue. wiki/relay-spaces.md
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "relay-everything-server",
@@ -43,7 +43,11 @@
       "routes": [{ "pattern": "app-staging.relayeverything.com", "custom_domain": true }],
       "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db-staging", "database_id": "4f8edf18-ad51-4325-bb98-ec3ca6cc80b0", "migrations_dir": "../schema/migrations" }],
       "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes-staging" }],
-      "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks-staging" }] },
+      // On staging this server consumes the queue, because the company app's staging Worker has no SPACES.
+      "queues": {
+        "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks-staging" }],
+        "consumers": [{ "queue": "relay-everything-webhooks-staging", "max_batch_size": 10, "max_retries": 10 }]
+      },
       "send_email": [{ "name": "RELAY_EMAIL" }],
       "ratelimits": [{ "name": "RELAY_SIGN_IN_LIMIT", "namespace_id": "2102", "simple": { "limit": 10, "period": 60 } }],
       "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces-staging" }] },

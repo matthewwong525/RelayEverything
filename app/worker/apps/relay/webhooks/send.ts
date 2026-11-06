@@ -1,6 +1,6 @@
 // The sender: each webhook reads the send log from its own place, one group at a time, and moves its place only after a
 // 2xx. A queue message only says "look now" for one webhook; the lease keeps one sender per webhook at a time.
-import { spaceOf, vouch, type Files, type PersonSpace } from "../space.ts";
+import { spaceOf, vouch, type Files, type PersonSpace, type SpaceEnv } from "../space.ts";
 import { MINUTE, type Db, type Env } from "../store.ts";
 import { checkAddress } from "./address.ts";
 import { healthSamples, locationPoints, noteCreated, noteUpdated, type HealthRow, type LocationRow, type NoteRow } from "./format.ts";
@@ -210,13 +210,13 @@ export async function run(env: Env, space: PersonSpace, id: string): Promise<Wai
   }
 }
 
-/** The queue's consumer: each message names a webhook and its person, whose space it opens; the server alone sends
- *  these. A message from before spaces names no person and is dropped. A run that fails on our side tries again. */
+/** The queue's consumer, only on a Worker with SPACES: each message names a webhook and its person, whose space it
+ *  opens. A message from before spaces names no person and is dropped. A run that fails on our side tries again. */
 export async function consume(batch: MessageBatch, env: Env) {
   for (const message of batch.messages) {
     const { webhook, person } = (message.body ?? {}) as { webhook?: unknown; person?: unknown };
     try {
-      const wait = typeof webhook === "string" && typeof person === "string" ? await run(env, spaceOf(env, vouch("queue", person)), webhook) : null;
+      const wait = typeof webhook === "string" && typeof person === "string" ? await run(env, spaceOf(env as SpaceEnv, vouch("queue", person)), webhook) : null;
       if (wait === null) message.ack();
       else message.retry({ delaySeconds: wait });
     } catch (error) {

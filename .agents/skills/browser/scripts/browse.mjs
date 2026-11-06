@@ -9,8 +9,10 @@ import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMain, parseCli, usageError } from '../../memory/scripts/lib/cli.mjs';
+import { NETWORK_FILE, languageLine, networkLine } from './forwarder.mjs';
 import { MOVE_MS } from './login-move.mjs';
 import { INTERACTIVE_ROLES, MAX_REFS, SKIP_PATTERNS, parseLine } from './refs.mjs';
+import { FIRST_FILE, FIRST_KEY, PROXY_KEY, UPSTREAM_FILE, repoLine } from './server.mjs';
 
 const USAGE = `usage: browse.mjs <command> [--session <name>]
   open <url>                    open the page in this task's tab; prints BROWSE_URL=
@@ -29,7 +31,9 @@ const USAGE = `usage: browse.mjs <command> [--session <name>]
                                 prints BROWSE_WINDOW=on|off; alone, the setting (on unless turned off)
   close                         close this task's tab
   status | install | stop       the install and the server; status and install print BROWSE_ADDON=, and so
-                                does a task's first open while no choice is saved: =none, for the one offer
+                                does a task's first open while no choice is saved: =none, for the one offer;
+                                status also prints BROWSE_NETWORK= and, while the browser runs, BROWSE_LANGUAGE=
+  network off                   blank this computer's saved first and upstream proxy lines
   addon find <name>             up to three Firefox add-ons: BROWSE_ADDON_FOUND=<slug> | <name> | <maker> |
                                 <website> | <daily users> | featured or not; BROWSE_ADDON_WARN=<slug> when
                                 not featured and under 10,000 daily users
@@ -558,6 +562,7 @@ async function terminate(pid) {
 export async function stopServer() {
   await terminate(readJson(FILES.server)?.pid);
   rmSync(FILES.server, { force: true });
+  rmSync(NETWORK_FILE, { force: true });
 }
 
 async function stop() {
@@ -565,10 +570,33 @@ async function stop() {
   console.log('BROWSE_SERVER=stopped');
 }
 
+const readLine = file => { try { return readFileSync(file, 'utf8').trim(); } catch { return ''; } };
+
+/** Blanks the computer's first and upstream lines; a blank file, not none, so an old camofox line is not copied back.
+ * A running browser keeps its network until it starts again, and a repo key still set saves its line again then. */
+function networkOff() {
+  mkdirSync(DIR, { recursive: true, mode: 0o700 });
+  for (const [name, file] of [['BROWSE_FIRST', FIRST_FILE], ['BROWSE_UPSTREAM', UPSTREAM_FILE]]) {
+    const had = Boolean(readLine(file));
+    writeFileSync(file, '', { mode: 0o600 });
+    console.log(`${name}=${had ? 'deleted' : 'none'}`);
+  }
+  const set = [FIRST_KEY, PROXY_KEY].filter(key => repoLine(process.env, undefined, key));
+  const [verb, them] = set.length > 1 ? ['are', 'them'] : ['is', 'it'];
+  const still = set.length ? ` ${set.join(' and ')} ${verb} still set in this repo: blank ${them} first, or the next start saves ${them} again.` : '';
+  console.log(`Blank ${FIRST_KEY} and ${PROXY_KEY} in each repo's .env, then stop and start the browser to use this computer's own network.${still}`);
+}
+
 async function status() {
   const check = installed() ? await launchConfig(['--check']) : null;
   console.log(`BROWSE_INSTALLED=${installedLine(check)}`);
-  console.log(`BROWSE_SERVER=${(await liveServer()) ? 'running' : 'stopped'}`);
+  const live = await liveServer();
+  console.log(`BROWSE_SERVER=${live ? 'running' : 'stopped'}`);
+  const state = readJson(NETWORK_FILE);
+  const pid = live ? serverPid() : null;
+  console.log(`BROWSE_NETWORK=${networkLine(state, pid)}`);
+  const language = languageLine(state, pid);
+  if (language) console.log(`BROWSE_LANGUAGE=${language}`);
   if (check && !check.error) await addonLine();
 }
 
@@ -799,6 +827,7 @@ const COMMANDS = {
   status: [0, status],
   install: [0, install],
   stop: [0, stop],
+  network: [1, networkOff],
   window: (_, [choice]) => windowCommand(choice),
   async get(page, [what, target]) {
     console.log(await { url: () => page.url(), count: () => page.count(target), value: () => page.value(target) }[what]());
@@ -834,6 +863,7 @@ function runnerFor(command, words) {
   const [count, runner] = COMMANDS[command];
   if (words.length !== count) usage(`${command} takes ${count} word${count === 1 ? '' : 's'} after it`);
   if (command === 'open' && !/^https?:\/\//.test(words[0])) usage('open takes an http(s) address');
+  if (command === 'network' && words[0] !== 'off') usage('network takes off');
   return runner;
 }
 

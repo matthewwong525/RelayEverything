@@ -67,6 +67,8 @@ afterEach(() => {
 });
 
 const open = async (entry = "/apps/relay/") => {
+  const { search } = new URL(entry, "https://relay.example.com");
+  vi.spyOn(window, "location", "get").mockReturnValue({ ...window.location, origin: "https://relay.example.com", search, assign });
   const router = createMemoryRouter(routes, { initialEntries: [entry] });
   await act(async () => { render(<RouterProvider router={router} />); });
 };

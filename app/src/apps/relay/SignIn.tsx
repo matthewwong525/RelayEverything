@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -64,7 +63,8 @@ function EmailForm({ onSent }: { onSent: (email: string) => void }) {
 /** The sign-in screen, shown in place of the page while nobody is signed in. */
 export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
   const methods = useMethods()
-  const [params] = useSearchParams()
+  // The shared server's page has no router, so this reads the address itself.
+  const params = new URLSearchParams(window.location.search)
   const [sentTo, setSentTo] = useState<string | null>(null)
   const next = nextOf(params.get('next'))
   const link = (provider: string) => `${SIGN_IN}${provider}${next ? `?next=${encodeURIComponent(next)}` : ''}`

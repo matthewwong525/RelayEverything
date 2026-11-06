@@ -1,6 +1,6 @@
 # Give each person their own locked space on Relay Everything
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** per-user-d1-database
 **Open questions:** none
 
@@ -121,3 +121,4 @@ Non-goals: free and paid tiers, taking payment, phone-side encryption, an owner 
 - **2026-11-06** — Check: `app/worker/keys.test.ts` leaves out the four sign-in secrets (`RELAY_APPLE_SIGN_IN_KEY`, `RELAY_APPLE_SIGN_IN_KEY_ID`, `RELAY_GOOGLE_SIGN_IN_SECRET`, `RELAY_APPLE_TEAM_ID`), as it leaves out the core's own key, because only the server's sign-in reads them and no company route may list them; `relay-pebble-signing` leaves the key list, because each Pebble device now has its own secret in its space.
 - **2026-11-06** — Check: `app/knip.jsonc` adds `worker/spaces-worker.ts` as an entry, because it is its own Worker's entry (`wrangler.spaces.jsonc`); `app/vitest.config.ts` and `app/vite.config.ts` load `.sql` files as text, as Wrangler's Text rule does on a deploy; no test or threshold is skipped.
 - **2026-11-06** — Assumed: the staging shared server gets its own webhooks queue, `relay-everything-server-webhooks-staging`, and the company app's staging Worker keeps consuming its own, because the parity check needs staging to declare as many consumers as production.
+- **2026-11-06** — Staging acceptance passed on app-staging: two people signed up by email code, each key sent a note, and neither saw the other's notes, devices or webhooks on the page, through the AI connector or in webhook sends; a cross-person id got 404; the owner signed up with Google, the move gave result=ok and a second run added nothing; a deleted account's session got 401. It found and fixed a blank page on the shared server: the sign-in read the address through the company app's router. Apple sign-in was not tried.

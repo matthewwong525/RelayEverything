@@ -49,5 +49,5 @@
 
 ## 10. Checks and acceptance
 
-- [ ] 10.1 Run `npm test` in `app/`, `site/` and the repo root, `flutter test` in `mobile/`, `node --test self-host/*.test.mjs` and `node scripts/public-check.mjs`. All must pass.
-- [ ] 10.2 `/save`, then on staging: sign up two test people, send from a key each, check that neither sees the other's data on the page, through the AI connector or in webhooks, run the move on staging, and check its counts.
+- [x] 10.1 Run `npm test` in `app/`, `site/` and the repo root, `flutter test` in `mobile/`, `node --test self-host/*.test.mjs` and `node scripts/public-check.mjs`. All must pass.
+- [x] 10.2 `/save`, then on staging: sign up two test people, send from a key each, check that neither sees the other's data on the page, through the AI connector or in webhooks, run the move on staging, and check its counts.

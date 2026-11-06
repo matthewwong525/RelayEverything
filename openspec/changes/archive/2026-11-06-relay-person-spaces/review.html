@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · relay-person-spaces</title>
+<title>Review · 2026-11-06-relay-person-spaces</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="relay-person-spaces" data-own-back>
+<body data-change="2026-11-06-relay-person-spaces" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>relay-person-spaces</h1>
+  <h1>2026-11-06-relay-person-spaces</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -499,6 +499,7 @@
 <li class="decision card" id="decision-39" data-note="decision-39" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-06</p>Check: <code>app/worker/keys.test.ts</code> leaves out the four sign-in secrets (<code>RELAY_APPLE_SIGN_IN_KEY</code>, <code>RELAY_APPLE_SIGN_IN_KEY_ID</code>, <code>RELAY_GOOGLE_SIGN_IN_SECRET</code>, <code>RELAY_APPLE_TEAM_ID</code>), as it leaves out the core's own key, because only the server's sign-in reads them and no company route may list them; <code>relay-pebble-signing</code> leaves the key list, because each Pebble device now has its own secret in its space.</li>
 <li class="decision card" id="decision-40" data-note="decision-40" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-06</p>Check: <code>app/knip.jsonc</code> adds <code>worker/spaces-worker.ts</code> as an entry, because it is its own Worker's entry (<code>wrangler.spaces.jsonc</code>); <code>app/vitest.config.ts</code> and <code>app/vite.config.ts</code> load <code>.sql</code> files as text, as Wrangler's Text rule does on a deploy; no test or threshold is skipped.</li>
 <li class="decision card" id="decision-41" data-note="decision-41" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-06</p>Assumed: the staging shared server gets its own webhooks queue, <code>relay-everything-server-webhooks-staging</code>, and the company app's staging Worker keeps consuming its own, because the parity check needs staging to declare as many consumers as production.</li>
+<li class="decision card" id="decision-42" data-note="decision-42" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-06</p>Staging acceptance passed on app-staging: two people signed up by email code, each key sent a note, and neither saw the other's notes, devices or webhooks on the page, through the AI connector or in webhook sends; a cross-person id got 404; the owner signed up with Google, the move gave result=ok and a second run added nothing; a deleted account's session got 401. It found and fixed a blank page on the shared server: the sign-in read the address through the company app's router. Apple sign-in was not tried.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

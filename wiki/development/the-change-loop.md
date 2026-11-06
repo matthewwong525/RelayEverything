@@ -38,6 +38,8 @@ A person need not know the verbs. *Go test X* is research, run and reported befo
 
 A verb the person types keeps its own reach: `/ship` runs the whole chain with no stop, and `/apply` plans and builds without one.
 
+A skill whose page fixes a small change's shape, such as [connecting tools](../stack/connect-your-tools.md), records and builds it when you ask and stops only at *publish it?*.
+
 ### Offer a routine or an app
 
 When a task done by hand — a plain request, or non-code work under a verb — will clearly come back, offer to make next time easier: one option in [the next-step question](../../.agents/skills/explore/references/asking-the-user.md#end-every-reply-with-the-next-step), beside *stop here*, never a question of its own. Most tasks get none.
@@ -88,12 +90,12 @@ Every chat starts in plan; only you move it on. Each step may read, research, ru
 | Step | May change in the repo |
 |---|---|
 | `/explore` | nothing |
-| `/plan` and `/improve-code` | plans, wiki pages and [schedules](../stack/host-schedules.md) |
+| `/plan` and `/improve-code` | plans and wiki pages; a [schedule](../stack/host-schedules.md) goes to the app after your OK |
 | `/apply`, `/ship`, any other step you type | anything |
 
 You move it on by typing a step, tapping *Build it* or *Build and publish* on a plan's page, or picking build or publish when asked. A step run inside another, such as `/plan` inside `/ship`, keeps the outer step's reach. Add your own step as `.agents/skills/<name>/SKILL.md`, linked from this page.
 
-**A chat's name starts with its step**: `EXPLORE: `, `PLAN: `, `APPLY: `, `SHIP: `, or `DONE: `, then its task. [`step-title.mjs`](../../.agents/skills/explore/scripts/step-title.mjs) writes the whole name, at once in Paseo and Codex's chat list; in Claude Code alone, a move it makes shows at your next message. The Daily chat, routines and helpers keep theirs.
+**A chat's name starts with the step at work**: `EXPLORE: `, `PLAN: `, `APPLY: `, `SHIP: `, or `DONE: `, then its task. It moves as each step starts; a chat that starts none, such as a question, keeps its name. A typed command shows at once: `/plan` as `PLAN`, `/verify` as `VERIFY`; `/apply`, `/continue` and `/ship` wait for their step. A plan's title replaces a name Paseo copied from your first message. [`step-title.mjs`](../../.agents/skills/explore/scripts/step-title.mjs) writes it, at once in Paseo and Codex; in Claude Code alone, a later step shows at your next message. The Daily chat, routines and helpers keep theirs.
 
 ### Fix it or ask
 
@@ -113,16 +115,16 @@ In `/ship` and its steps, rules 1 and 5 take a recommendation that stays in the 
 
 ### `/apply` never saves to stop, but may save to finish a task
 
-`/apply` writes the whole change, source and tests, before it checks any of it, and never saves to stop or between parts. Checking each part of a long build cost over three minutes, again for every part and repair, so the checks run once, at the end. [The helper brief](../../.agents/skills/apply/references/build-helper.md) owns how the build does it, and [`/plan`](../../.agents/skills/plan/SKILL.md#finish) lays the tasks out for it.
+`/apply` writes the whole change, source and tests, before it checks any of it, and never saves to stop or between parts. Checking each part cost over three minutes, again for each repair, so the checks run once, at the end. [The helper brief](../../.agents/skills/apply/references/build-helper.md) owns how the build does it, and [`/plan`](../../.agents/skills/plan/SKILL.md#finish) lays the tasks out for it.
 
 Nothing is checked less: deployed acceptance still needs evidence, and only acceptance seen to pass ticks its task. Final checks, fresh preview evidence and the one live look stay; batch repairs, and every pushed revision takes all required CI jobs.
 
 ### Verbs for any work
 
-A verb you invoke for work that changes no repo file — research, an errand, a message, a change to data in a service — keeps its stage and drops the git and OpenSpec records:
+A verb you invoke for work that changes no repo file, such as research, a message or a change to data in a service, keeps its stage and drops the git and OpenSpec records:
 
 - **`/plan`** writes a short numbered to-do in the chat, marking each step that acts outside it.
-- **`/apply`** works the to-do. Only an outward action — a sent message, a post, a written record, a payment, a deletion — asks first, showing exactly what it will do.
+- **`/apply`** works the to-do. Only an outward action, such as a sent message or a payment, asks first, showing exactly what it will do.
 - **`/save`** keeps the progress as a memory `thread` fact, and **`/continue`** resumes it.
 - **`/ship`** is for repo changes only; the work finishes in `/apply`.
 
@@ -132,15 +134,15 @@ A verb you invoke for work that changes no repo file — research, an errand, a 
 
 ### Verifying the app
 
-**[`/verify`](../../.agents/skills/verify/SKILL.md)** sits *beside* the loop: it exercises the change's OpenSpec scenarios against the deployed preview and posts evidence and a verdict to the PR. It **gates nothing**, so run it early and often. [The staging walkthrough](staging-walkthrough.md) explains how and why.
+**[`/verify`](../../.agents/skills/verify/SKILL.md)** sits *beside* the loop: it exercises the change's OpenSpec scenarios against the deployed preview and posts evidence and a verdict to the PR. It **gates nothing**, so run it early and often. [The staging walkthrough](staging-walkthrough.md) explains it.
 
 ## The gate
 
 This page owns delivery; other surfaces link here.
 
-**The GitHub gate is CI when present, else PR review**: Where checks exist, push and let CI run; the skills wait and fix failures. Where they don't, a human reviews the PR, with the change and its archive. Either way, **no local run is the gate**; `/apply`'s host preview gates nothing and never reaches production. [Artifacts](../stack/artifacts-route.md) runs them in Cloudflare.
+**The GitHub gate is CI when present, else PR review**: Where checks exist, push and let CI run; the skills wait and fix failures. Where they don't, a human reviews the PR. Either way, **no local run is the gate**; `/apply`'s host preview gates nothing and never reaches production. [Artifacts](../stack/artifacts-route.md) runs them in Cloudflare.
 
-**A finished build is checked on this computer first.** [`checks.mjs --worktree`](../../.github/scripts/checks.mjs) runs CI's checks for the changed files, before the first push and again after publishing brings the default branch in; the build repairs what fails. It is a pre-check, never the gate: it decides no save and no publish, and [the build brief](../../.agents/skills/apply/references/build-helper.md) reads its last line.
+**A finished build is checked on this computer first.** [`checks.mjs --worktree`](../../.github/scripts/checks.mjs) runs CI's checks for the changed files, before the first push and again after publishing brings the default branch in; the build repairs what fails. [The build brief](../../.agents/skills/apply/references/build-helper.md) reads its last line.
 
 **Every file edit takes the gate**, through a branch and pull request. Plans and archives stay with the verbs. Only code needs a change record; [`/save`](../../.agents/skills/save/SKILL.md) decides.
 
@@ -181,7 +183,3 @@ The change folder on the feature branch *is* the plan, and `/continue <name>` fi
 Most changes are `proposal.md` and `tasks.md` only. A change writes delta specs **only** when it formally revises a capability's spec; `/save` folds them into `openspec/specs/`, and `/ship` archives with the specs synced.
 
 Part of [development](README.md).
-
-## Publishing scheduled records
-
-[Host scheduling](../stack/host-schedules.md) keeps routine definitions and open goal plans. Selected records resume before code or checkout; unchanged records do not block unrelated code. [Record-only delivery](../../.agents/skills/save/references/schedule-records.md) publishes one through the normal gate and owns the steps; mixed code uses the ordinary loop. Ordinary errands retain [their reach](#verbs-for-any-work).

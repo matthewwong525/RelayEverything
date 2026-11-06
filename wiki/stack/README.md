@@ -16,7 +16,7 @@ The pack uses **merge = deploy**, independent staging and branch previews. [One 
 - [Deploy and data pipeline](d1-pipeline.md) — *how* code and data ship: the `env.staging` model, auto-applied migrations, and seeded staging.
 - [Staging bindings and secrets](staging-bindings.md) — the staging Worker's own database, queue, bucket, and secrets, so a branch never writes to production.
 - [The Artifacts route](artifacts-route.md) — an install with one account: your project, its checks and its publishing in your own Cloudflare account, with no GitHub; what it costs, how setup and the verbs differ, and teardown.
-- [Host schedules](host-schedules.md) — predictable scripts first, then assistant work on an existing host clock; ongoing routines, finite goals, permissions, questions, and management.
+- [Host schedules](host-schedules.md) — predictable scripts first, then assistant work on an existing host clock; schedules held in the app, the OK on each computer, goals with an end, and the move from old lists.
   - [Legacy cloud schedules](legacy-cloud-schedules.md) — preserve installed jobs, move one explicitly, and remove only requested old resources.
 - [The live line](live-line.md) — the one connection your computer and open inbox keep to the app, which only says *look now*; the background helper that holds it, turning it off, and its log.
 - [CI on GitHub Actions](github-actions.md) — the thin deploy workflow that runs the pipeline's scripts, and why not Cloudflare's Workers Builds.
@@ -25,6 +25,7 @@ The pack uses **merge = deploy**, independent staging and branch previews. [One 
 - [Company knowledge](company-knowledge.md) — the team's own pages in a repository of their own: what goes there, the copy on each computer, a save that goes live at once, conflicts, undo and restore.
 - [Company actions](company-api.md) — described app actions and memory reads for employee assistants, with separate authentication.
 - [The services list](service-catalogue.md) — where a chat starts for any outside service: the keys it can use, search, short answers, the shared error shape, and each service's notes page.
+- [Connect your tools](connect-your-tools.md) — right after install, or when you name one tool: which tools work now, how a new one is added with one key link and one yes, and a teammate's message for the owner.
 - [The knowledge reader](knowledge-reader.md) — the Knowledge app: company knowledge's pages at their newest save, search, who can read them, and pages marked public.
 - [Relay's AI connector](relay-ai-connector.md) — connect the Claude app or ChatGPT to read Relay's notes, health and places: the address, what leaves Relay, disconnecting, and setup.
 - [Relay's Claude Code chats](relay-chats.md) — how the Relay plugin saves Claude Code chats to the server: the chat key, the hooks, hiding keys, and how to change and try the plugin.

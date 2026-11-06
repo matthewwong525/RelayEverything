@@ -17,12 +17,12 @@ const noteInput = z.strictObject({
 }).refine(note => (note.lat === undefined) === (note.lon === undefined), "Send lat and lon together.");
 
 export const notes = defineAction({
-  operationId: "relay.notes-add", summary: "Store a typed note", description: "Store a note typed on a Relay phone, once per phone and clientId.",
+  operationId: "relay.notes-add", summary: "Store a typed note", description: "Store a note typed on a Relay Everything phone, once per phone and clientId.",
   input: noteInput, output: z.strictObject({ id: z.string(), added: z.boolean() }),
   encoding: "json", effect: "write", agentAvailable: false, errors: {}, examples: [],
   async handler(_request, env, { identity, input }) {
     const device = await deviceOf(env, identity);
-    if (!device) return refused(403, "Only a Relay device key can send notes");
+    if (!device) return refused(403, "Only a Relay Everything device key can send notes");
     const note = input as z.infer<typeof noteInput>;
     const db = session(env);
     const where = note.lat === undefined ? null : "phone";

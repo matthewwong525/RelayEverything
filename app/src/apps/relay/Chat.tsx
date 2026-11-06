@@ -75,7 +75,7 @@ export function Chat({ id, close }: { id: string; close: (changed: boolean) => v
       <AlertDialogContent className="wrap-anywhere">
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {title}?</AlertDialogTitle>
-          <AlertDialogDescription>Relay removes the chat, its messages and the AI's summary. You can't undo it.</AlertDialogDescription>
+          <AlertDialogDescription>Relay Everything removes the chat, its messages and the AI's summary. You can't undo it.</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>

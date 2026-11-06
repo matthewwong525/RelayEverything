@@ -1,4 +1,4 @@
-// Relay V1 ring: the first ring with real parts inside.
+// Relay Everything V1 ring: the first ring with real parts inside.
 // Ready-made curved cell on the palm side, flexible board around the ring,
 // six 0.35 mm tact switches (E-Switch TL3312) under a floating band.
 //
@@ -110,6 +110,6 @@ else {
     fit_check_parts();
 }
 
-echo(str("Relay V1: cell ", cell, ", US ", us_size, ", width ", w, " mm, thickness ",
+echo(str("Relay Everything V1: cell ", cell, ", US ", us_size, ", width ", w, " mm, thickness ",
          r_edge - r_in, " mm at the edges, ", r_out - r_in, " mm at the band, inner diameter ",
          2 * r_in, " mm"));

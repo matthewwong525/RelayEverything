@@ -27,6 +27,11 @@ const ids = (answer: { notes: { id: string }[] }) => answer.notes.map(note => no
 const harbord = { name: "Harbord St", lat: 43.6629, lon: -79.3957, arrived: "2026-11-04T08:00:00-05:00", left: "2026-11-04T08:00:00-05:00" };
 const day = { steps: 8690, sleepMinutes: 450, heartRate: { min: 68, max: 121, average: 95 }, workouts: { count: 1, minutes: 40 } };
 
+it("names itself Relay Everything to the AI app", () => {
+  expect(client.getServerVersion()).toMatchObject({ name: "relay", title: "Relay Everything" });
+  expect(client.getInstructions()).toMatch(/^Relay Everything /);
+});
+
 it("lists eight tools, each marked read-only", async () => {
   const { tools } = await client.listTools();
   expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "places", "search_chats", "read_chat"]);

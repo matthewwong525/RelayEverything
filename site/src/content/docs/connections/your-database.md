@@ -1,24 +1,24 @@
 ---
 title: Your own database
-description: Add a webhook, and your Relay server sends each new note, and the health and location you tick, to an address you own, in one signed format.
+description: Add a webhook, and your Relay Everything server sends each new note, and the health and location you tick, to an address you own, in one signed format.
 ---
 
-A webhook copies what your Relay server stores to an address you own, such as a small receiver beside your database. Your server sends each new note there a few seconds after it gets it. Health and location go only if you tick them.
+A webhook copies what your Relay Everything server stores to an address you own, such as a small receiver beside your database. Your server sends each new note there a few seconds after it gets it. Health and location go only if you tick them.
 
 Only data that reached your server goes out. The app keeps notes on the phone until you turn on sending, so a note that stays on the phone never reaches a webhook.
 
 ## Add a webhook
 
-1. Open the Relay page on your Relay server, `https://<your-relay-server>/apps/relay/`.
+1. Open your Relay Everything page, `https://<your-relay-server>/apps/relay/`.
 2. Under **Send to your database**, click **Add a webhook**.
-3. Give it a name and its address. The address must start with `https://`. It can't be this computer, a private network, or your Relay server itself.
+3. Give it a name and its address. The address must start with `https://`. It can't be this computer, a private network, or your Relay Everything server itself.
 4. Tick **Health** or **Location history** only for a database you control: they are sensitive. Notes always go.
-5. Click **Add**, then copy the secret. Relay shows it once. Your receiver uses it to check each message.
+5. Click **Add**, then copy the secret. Relay Everything shows it once. Your receiver uses it to check each message.
 6. Click **Send a test**. The card shows the answer, such as *Answered 200 in 180 ms*.
 
 A new webhook gets only data stored after you add it. To send earlier data too, click **Send past data** and pick a day.
 
-Each card shows the webhook's state: **Working**, **Paused**, **Failing** or **Sending past data**, with what waits and the last answer. **New secret** replaces the secret, and the old one stops working at once. **Remove** deletes the webhook, its secret and its send history. Your notes stay in Relay.
+Each card shows the webhook's state: **Working**, **Paused**, **Failing** or **Sending past data**, with what waits and the last answer. **New secret** replaces the secret, and the old one stops working at once. **Remove** deletes the webhook, its secret and its send history. Your notes stay in Relay Everything.
 
 ## The message
 
@@ -33,7 +33,7 @@ Every message is a `POST` with a JSON body in one envelope:
 }
 ```
 
-`timestamp` is when Relay stored what the message holds. Times are ISO 8601, in UTC. [`v1.schema.json`](../../webhooks/v1.schema.json) is the JSON Schema of every message. A change that breaks a receiver gets a new `version`.
+`timestamp` is when Relay Everything stored what the message holds. Times are ISO 8601, in UTC. [`v1.schema.json`](../../webhooks/v1.schema.json) is the JSON Schema of every message. A change that breaks a receiver gets a new `version`.
 
 | `type` | When | `data` holds |
 |---|---|---|
@@ -69,7 +69,7 @@ Every message is a `POST` with a JSON body in one envelope:
 
 ### `note.updated`
 
-The same `note` as `note.created`, without `audio`. Relay sends it when a ring note gets its place after it arrived. Update the note's row by its `id`.
+The same `note` as `note.created`, without `audio`. Relay Everything sends it when a ring note gets its place after it arrived. Update the note's row by its `id`.
 
 ### `health.samples`
 
@@ -108,7 +108,7 @@ The same `note` as `note.created`, without `audio`. Relay sends it when a ring n
 
 ## Check the signature
 
-Relay signs each message by [Standard Webhooks](https://www.standardwebhooks.com/), which has ready libraries for most languages. Each message has three headers:
+Relay Everything signs each message by [Standard Webhooks](https://www.standardwebhooks.com/), which has ready libraries for most languages. Each message has three headers:
 
 | Header | Holds |
 |---|---|
@@ -126,9 +126,9 @@ const payload = new Webhook(process.env.RELAY_WEBHOOK_SECRET).verify(body, heade
 
 ## Order, retries and repeats
 
-- Each webhook gets every item it takes, in the order Relay stored them, with none skipped.
-- Answer with a `2xx` status within 15 seconds. Relay does not follow a redirect.
-- After any other answer, Relay tries the same message again after 30 s, 2 min, 10 min, 30 min, 1 h, 2 h, 4 h, 6 h and 8 h: about a day. Then the card shows **Failing**, with the last answer and how many items wait. **Try again now** sends them all, in order, from where it stopped.
+- Each webhook gets every item it takes, in the order Relay Everything stored them, with none skipped.
+- Answer with a `2xx` status within 15 seconds. Relay Everything does not follow a redirect.
+- After any other answer, Relay Everything tries the same message again after 30 s, 2 min, 10 min, 30 min, 1 h, 2 h, 4 h, 6 h and 8 h: about a day. Then the card shows **Failing**, with the last answer and how many items wait. **Try again now** sends them all, in order, from where it stopped.
 - A retry can send a message you already saved, when your answer was lost. Its id and body are the same. So save each note, sample and point by its `id`, as an upsert.
 - Accept bodies up to 16 MB. A ring note's recording is about 100 KB a minute, and base64 makes it a third larger.
 
@@ -180,4 +180,4 @@ curl -O https://relayeverything.com/webhooks/receiver.mjs
 RELAY_WEBHOOK_SECRET=whsec_... PORT=8787 DATABASE=relay.sqlite node receiver.mjs
 ```
 
-Your Relay server must reach it at an `https` address. To try it from your own computer, put it behind a tunnel, such as `cloudflared tunnel --url http://localhost:8787`, and add the tunnel's address as the webhook.
+Your Relay Everything server must reach it at an `https` address. To try it from your own computer, put it behind a tunnel, such as `cloudflared tunnel --url http://localhost:8787`, and add the tunnel's address as the webhook.

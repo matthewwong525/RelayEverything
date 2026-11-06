@@ -1,10 +1,10 @@
-# Relay plugin for Claude Code
+# Relay Everything plugin for Claude Code
 
-The Relay plugin saves each Claude Code chat to your own Relay server, where you find it on the Relay page and your AI can search it. It also gives the AI a `save_to_relay` tool: ask *save this to Relay*, and the AI writes a title and a summary of what you decided, kept beside the chat.
+The Relay Everything plugin saves each Claude Code chat to your own Relay Everything server, where you find it on the Relay Everything page and your AI can search it. It also gives the AI a `save_to_relay` tool: ask *save this to Relay Everything*, and the AI writes a title and a summary of what you decided, kept beside the chat.
 
 ## Install
 
-1. Make a connect code. In your copy of the Relay repository, run:
+1. Make a connect code. In your copy of the Relay Everything repository, run:
 
    ```bash
    node scripts/relay-device-key.mjs create --name "Laptop" --for claude-code
@@ -18,15 +18,15 @@ The Relay plugin saves each Claude Code chat to your own Relay server, where you
    /plugin install relay@relay
    ```
 
-3. When Claude Code asks for the **Relay connect code**, paste the code. Claude Code keeps it in your system's secure store.
+3. When Claude Code asks for the **Relay Everything connect code**, paste the code. Claude Code keeps it in your system's secure store.
 
 Chats from then on are saved. Chats from before the install are not sent.
 
-To keep chats in your own account, run your own Relay server and make the code there. The plugin sends only to the server in the connect code; it has no address built in.
+To keep chats in your own account, run your own Relay Everything server and make the code there. The plugin sends only to the server in the connect code; it has no address built in.
 
 ## What is sent
 
-After each answer, the plugin sends the chat's new messages to your Relay server:
+After each answer, the plugin sends the chat's new messages to your Relay Everything server:
 
 - each message you typed, and each answer the AI wrote, word for word;
 - one line for each step the AI took, such as `Ran: npm test` or `Read src/app.ts`, and for each `!` command you run, never the step's output;
@@ -39,11 +39,11 @@ It never sends the AI's thinking, a file's contents, a command's output or a hel
 - In one project: type `/relay:saving off`. Type `/relay:saving on` to save again, or `/relay:saving` to see which it is and when the project last sent a chat.
 - For one run of Claude Code: start it with `RELAY_SAVE=0 claude`.
 
-A chat you don't want on the server: open it on the Relay page and click **Delete**. If the chat is still open in Claude Code, turn saving off first, or the plugin sends it again with your next message.
+A chat you don't want on the server: open it on the Relay Everything page and click **Delete**. If the chat is still open in Claude Code, turn saving off first, or the plugin sends it again with your next message.
 
 ## Let Claude Code read your notes
 
-Type `/relay:connect-ai https://<your-relay-server>/mcp` with the address from the **AI apps** card on your Relay page. Then type `/mcp`, pick `relay`, and sign in.
+Type `/relay:connect-ai https://<your-relay-server>/mcp` with the address from the **AI apps** card on your Relay Everything page. Then type `/mcp`, pick `relay`, and sign in.
 
 ## What the plugin keeps on your computer
 

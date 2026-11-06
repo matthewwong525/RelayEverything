@@ -73,7 +73,7 @@ void main() {
     expect(find.text('Call the PCB fab about the flex stiffener'), findsOneWidget);
     expect(find.textContaining('Pinned'), findsOneWidget);
     expect(find.text('On this phone'), findsOneWidget);
-    expect(find.text('Open your Relay page'), findsNothing);
+    expect(find.text('Open your Relay Everything page'), findsNothing);
 
     // Pull to refresh, the app's return and the hourly round.
     await tester.drag(find.text('Call the PCB fab about the flex stiffener'), const Offset(0, 300));

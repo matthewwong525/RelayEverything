@@ -3,7 +3,7 @@ title: Recordings
 description: The route that plays a ring note's recording.
 ---
 
-`GET /apps/relay/api/audio?id=<note id>` sends a ring note's recording, as `audio/mp4`. Only a signed-in person can call it, on the Relay page: a [device key](../keys/) only adds data.
+`GET /apps/relay/api/audio?id=<note id>` sends a ring note's recording, as `audio/mp4`. Only a signed-in person can call it, on the Relay Everything page: a [device key](../keys/) only adds data.
 
 Take the note's id from [`GET timeline`](../reference/#read-the-notes): a note with `"audio": true` has a recording.
 

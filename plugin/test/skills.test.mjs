@@ -14,18 +14,18 @@ const bin = name => fileURLToPath(new URL(`../bin/${name}`, import.meta.url));
 test('/relay:saving turns a project off and on, and says which it is', () => {
   const place = project();
   assert.deepEqual(saving(place.store, place.root, undefined), [
-    'Saving to Relay is on for relay-ring.', 'Each chat here goes to your Relay server as you talk. Type /relay:saving off to stop.',
-    'No chat from this project has gone to Relay yet.']);
+    'Saving to Relay Everything is on for relay-ring.', 'Each chat here goes to your Relay Everything server as you talk. Type /relay:saving off to stop.',
+    'No chat from this project has gone to Relay Everything yet.']);
   assert.deepEqual(saving(place.store, place.root, 'off').slice(0, 2), [
-    'Saving to Relay is off for relay-ring.', 'Chats in this project stay on this computer. Type /relay:saving on to save them again.']);
+    'Saving to Relay Everything is off for relay-ring.', 'Chats in this project stay on this computer. Type /relay:saving on to save them again.']);
   assert.equal(place.store.isOff(place.root), true);
-  assert.equal(saving(place.store, place.root, 'on')[0], 'Saving to Relay is on for relay-ring.');
+  assert.equal(saving(place.store, place.root, 'on')[0], 'Saving to Relay Everything is on for relay-ring.');
   assert.equal(place.store.isOff(place.root), false);
   assert.deepEqual(saving(place.store, place.root, 'maybe'), ['Type /relay:saving on, /relay:saving off, or /relay:saving to see which it is.']);
   assert.match(saving(place.store, place.root, undefined, { RELAY_SAVE: '0' }).at(-1), /RELAY_SAVE is 0/);
   // As the skill runs it: in the project, with the data folder.
   const printed = execFileSync(process.execPath, [bin('saving.mjs'), '--data', place.data, 'off'], { cwd: place.root, encoding: 'utf8' });
-  assert.match(printed, /^Saving to Relay is off for relay-ring\.\n/);
+  assert.match(printed, /^Saving to Relay Everything is off for relay-ring\.\n/);
   assert.equal(place.store.isOff(place.root), true);
 });
 
@@ -41,7 +41,7 @@ test('/relay:saving says when the project last sent a chat: the newest send of i
   assert.equal(place.store.sessions()[SESSION].sentAt, sentAt);
   place.store.update('older-session-01', { root: place.root, sentAt: sentAt - 3_600_000 });
   place.store.update('elsewhere-sess-01', { root: place.home, sentAt: sentAt + 60_000 });
-  assert.equal(saving(place.store, place.root, undefined, {}, sentAt + 5 * 60_000).at(-1), 'This project last sent a chat to Relay 5 minutes ago.');
+  assert.equal(saving(place.store, place.root, undefined, {}, sentAt + 5 * 60_000).at(-1), 'This project last sent a chat to Relay Everything 5 minutes ago.');
   assert.deepEqual([ago(0, 30_000), ago(0, 60_000), ago(0, 3 * 3_600_000), ago(0, 3 * 86_400_000)],
     ['less than a minute ago', '1 minute ago', '3 hours ago', '3 days ago']);
 });
@@ -50,7 +50,7 @@ test('/relay:connect-ai adds the connector with claude mcp add, and refuses a wr
   const runs = [];
   const ran = (status = 0) => (command, args) => (runs.push([command, ...args]), { status });
   assert.deepEqual(connectAi('https://relay.example.com/mcp', ran()), {
-    code: 0, lines: ['Relay is added. Type /mcp, pick relay, and sign in with your Relay email.'] });
+    code: 0, lines: ['Relay Everything is added. Type /mcp, pick relay, and sign in with your Relay Everything email.'] });
   assert.deepEqual(runs, [['claude', 'mcp', 'add', '--transport', 'http', '--scope', 'user', 'relay', 'https://relay.example.com/mcp']]);
   for (const wrong of ['http://relay.example.com/mcp', 'https://relay.example.com', 'https://relay.example.com/mcp/x', 'relay', undefined]) {
     assert.equal(connectAi(wrong, ran()).code, 2, String(wrong));

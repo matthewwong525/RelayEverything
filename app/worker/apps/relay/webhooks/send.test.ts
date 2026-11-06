@@ -95,7 +95,7 @@ it("shows a webhook as failing after its last retry, then sends all that waits, 
   }
   expect(sent).toHaveLength(10);
   expect(webhook()).toMatchObject({ failing_since: time, tries: 10, last_status: 302,
-    last_error: "Answered with a redirect, which Relay does not follow." });
+    last_error: "Answered with a redirect, which Relay Everything does not follow." });
   queue.sent = [];
   await note("note-0002", "Second");
   expect(queue.sent).toEqual([]);
@@ -155,7 +155,7 @@ it("stops sending to an address Relay no longer allows, at once", async () => {
   const [delivered] = await deliver({ webhook: "hook-1" });
   expect(delivered.ack).toHaveBeenCalledOnce();
   expect(sent).toEqual([]);
-  expect(webhook()).toMatchObject({ failing_since: NOW, last_error: "Relay no longer sends to this address: address_private.", last_status: null });
+  expect(webhook()).toMatchObject({ failing_since: NOW, last_error: "Relay Everything no longer sends to this address: address_private.", last_status: null });
 });
 
 it("runs one sender per webhook: a second waits for the lease, and a lease left by a stopped sender runs out", async () => {

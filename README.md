@@ -1,20 +1,20 @@
-# Relay
+# Relay Everything
 
-Relay gets your notes, health and location off your phone and devices, into a place you choose, where your own AI can read them. Read more and get started at [relayeverything.com](https://relayeverything.com), from [what you need](https://relayeverything.com/start/what-you-need/).
+Relay Everything gets your notes, health and location off your phone and devices, into a place you choose, where your own AI can read them. Read more and get started at [relayeverything.com](https://relayeverything.com), from [what you need](https://relayeverything.com/start/what-you-need/).
 
-A ring is one way to take a note: hold the band, talk, and let go. A Pebble Index ring works today. The Relay ring, in [`cad/`](cad/) and [`pcb/`](pcb/), is in design.
+A ring is one way to take a note: hold the band, talk, and let go. A Pebble Index ring works today. The Relay Everything ring, in [`cad/`](cad/) and [`pcb/`](pcb/), is in design.
 
 ## What is here
 
 | Folder | What it holds |
 |---|---|
-| [`app/`](app/) | The Relay server and its private web app, a Cloudflare Worker |
+| [`app/`](app/) | The Relay Everything server and its private web app, a Cloudflare Worker |
 | [`mobile/`](mobile/) | The phone app for Android and iPhone, in Flutter |
 | [`site/`](site/) | The public website at relayeverything.com |
 | [`cad/`](cad/) | The ring's 3D models, in OpenSCAD |
 | [`pcb/`](pcb/) | The ring's board, in KiCad |
 | [`vendor/`](vendor/) | Copied libraries, each with its own license |
-| [`self-host/`](self-host/) | Run your own Relay server in your own Cloudflare account: [`SETUP.md`](self-host/SETUP.md) |
+| [`self-host/`](self-host/) | Run your own Relay Everything server in your own Cloudflare account: [`SETUP.md`](self-host/SETUP.md) |
 | [`schema/`](schema/) | The database's tables and migrations |
 | [`scripts/`](scripts/) | The tools that check, build and publish |
 | [`openspec/`](openspec/), [`wiki/`](wiki/) | The plans, and how the project is made |

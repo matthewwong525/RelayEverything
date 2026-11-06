@@ -1,4 +1,4 @@
-// Relay click test: the floating-band button with no electronics.
+// Relay Everything click test: the floating-band button with no electronics.
 // Three printed parts:
 //   base - the inside wall and one polished edge, with six raised seats
 //   cap  - the other polished edge; glue it onto the base after the band is in
@@ -127,6 +127,6 @@ else {
 
 assert(!tl || sw_size + 0.2 <= w - 2 * fw - 0.1, "The TL3312 is too wide for this band: use scale_factor 2");
 
-echo(str("Relay click test: ", button, ", scale ", s, ", US ", us_size,
+echo(str("Relay Everything click test: ", button, ", scale ", s, ", US ", us_size,
          ", band ", band_recess, " mm below the edges",
          ", room under band ", r_band - r_floor, " mm, seat height ", r_seat - r_floor, " mm"));

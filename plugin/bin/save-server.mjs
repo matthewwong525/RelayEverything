@@ -15,9 +15,9 @@ const SUMMARY_CHARACTERS = 20_000;
 const SEND_WAIT = 15_000;
 export const TOOL = {
   name: 'save_to_relay',
-  title: 'Save to Relay',
-  description: 'Save this chat to Relay, with a short title and a summary you write of what was decided and why. '
-    + 'Use it when the person asks to save the chat, a plan or a decision to Relay.',
+  title: 'Save to Relay Everything',
+  description: 'Save this chat to Relay Everything, with a short title and a summary you write of what was decided and why. '
+    + 'Use it when the person asks to save the chat, a plan or a decision to Relay Everything.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -28,7 +28,7 @@ export const TOOL = {
   },
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
 };
-const OFF = 'Saving to Relay is off in this project. To turn it on, type /relay:saving on.';
+const OFF = 'Saving to Relay Everything is off in this project. To turn it on, type /relay:saving on.';
 const said = (text, isError = false) => ({ content: [{ type: 'text', text }], ...(isError ? { isError } : {}) });
 
 /**
@@ -50,8 +50,8 @@ export async function save({ title, summary }, { env, store, cwd, fetcher = fetc
     return said('Give a title and a summary.', true);
   }
   const id = findSession(store, env, cwd);
-  if (!id) return said('Relay has not seen this chat yet. Send one more message, then ask again.', true);
-  if (env.RELAY_SAVE === '0') return said('Saving to Relay is off, because RELAY_SAVE is 0 where Claude Code started.', true);
+  if (!id) return said('Relay Everything has not seen this chat yet. Send one more message, then ask again.', true);
+  if (env.RELAY_SAVE === '0') return said('Saving to Relay Everything is off, because RELAY_SAVE is 0 where Claude Code started.', true);
   const options = { env, store, fetcher, wait: SEND_WAIT };
   const hide = hider(store.sessions()[id].cwd);
   const body = { sessionId: id, title: hide(title.trim()).slice(0, TITLE_CHARACTERS), text: hide(summary.trim()).slice(0, SUMMARY_CHARACTERS) };
@@ -59,13 +59,13 @@ export async function save({ title, summary }, { env, store, cwd, fetcher = fetc
     if (again) store.update(id, { stored: 0 });
     const sent = await sendSession(id, options);
     if (sent === 'off') return said(OFF, true);
-    if (sent === 'no-code') return said('The Relay plugin has no connect code. Type /plugin, open relay, and enter it.', true);
-    if (sent !== 'sent') return said('Relay could not take this chat now. It sends it again at the next start; ask to save again then.', true);
+    if (sent === 'no-code') return said('The Relay Everything plugin has no connect code. Type /plugin, open relay, and enter it.', true);
+    if (sent !== 'sent') return said('Relay Everything could not take this chat now. It sends it again at the next start; ask to save again then.', true);
     const { status } = await post(codeFrom(env), 'chat-saves', body, fetcher);
-    if (status === 200) return said(`Saved to Relay: ${body.title}`);
+    if (status === 200) return said(`Saved to Relay Everything: ${body.title}`);
     if (status !== 404) break;
   }
-  return said('Relay could not keep the save. Try again in a minute.', true);
+  return said('Relay Everything could not keep the save. Try again in a minute.', true);
 }
 
 /** Answers one JSON-RPC request; a notification answers nothing. */
@@ -93,7 +93,7 @@ export function serve(context, input = process.stdin, output = process.stdout) {
       return;
     }
     const reply = await answer(request, context).catch(() => request.id === undefined ? null
-      : { jsonrpc: '2.0', id: request.id, result: said('Relay could not be reached. Try again in a minute.', true) });
+      : { jsonrpc: '2.0', id: request.id, result: said('Relay Everything could not be reached. Try again in a minute.', true) });
     if (reply) output.write(`${JSON.stringify(reply)}\n`);
   });
 }

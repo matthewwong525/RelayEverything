@@ -99,7 +99,7 @@ export async function checkCheckerKey(config, environment, policies, readToken) 
   }
   const actual = token?.client_id ? sha256(token.client_id) : '(unknown)';
   if (actual !== expected) {
-    throw new Error(`the ${environment} checker key changed: set ${RELAY_CHECKER_VAR} in ${where} to ${actual} and publish, or Relay refuses every check`);
+    throw new Error(`the ${environment} checker key changed: set ${RELAY_CHECKER_VAR} in ${where} to ${actual} and publish, or Relay Everything refuses every check`);
   }
   return 'matches';
 }

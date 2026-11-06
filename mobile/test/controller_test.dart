@@ -62,8 +62,8 @@ void main() {
       expect([relay.status, relay.waiting], [SyncStatus.idle, 0]);
       expect(await store.outbox(), isEmpty);
       expect(await relay.earlierNotes(), 2);
-      expect(await relay.setHealth(true), contains('Send to your Relay server'));
-      expect(await relay.setHistory(true), contains('Send to your Relay server'));
+      expect(await relay.setHealth(true), contains('Send to Relay Everything'));
+      expect(await relay.setHistory(true), contains('Send to Relay Everything'));
       expect([places.asked, health.reads, scheduled], [[false], isEmpty, [false]]);
       expect(server.requests, isEmpty);
     });
@@ -281,7 +281,7 @@ void main() {
       final relay = controller();
       await relay.load();
       expect(relay.connected, isFalse);
-      expect(await relay.connect('nonsense'), contains('not a Relay key'));
+      expect(await relay.connect('nonsense'), contains('not a Relay Everything key'));
       expect(await relay.connect(code), isNull);
       expect([server.requests.single.method, server.routes], ['GET', ['key']]);
       expect(await relay.startSending(sendEarlier: false), isNull);

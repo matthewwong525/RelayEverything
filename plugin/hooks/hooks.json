@@ -1,5 +1,5 @@
 {
-  "description": "Records each session and sends its chat to Relay after each answer and at the end.",
+  "description": "Records each session and sends its chat to Relay Everything after each answer and at the end.",
   "hooks": {
     "SessionStart": [
       { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/hook.mjs\" session-start", "async": true, "timeout": 120 }] }

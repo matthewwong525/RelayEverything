@@ -19,7 +19,7 @@ function fakeConnector({ open = false } = {}) {
       case 'GET /.well-known/oauth-protected-resource/mcp': return Response.json({ resource: `${STAGING}/mcp` });
       case 'POST /mcp': return new Response(null, { status: open ? 200 : 401 });
       case 'POST /register': return Response.json({ client_id: 'c1' }, { status: 201 });
-      case 'GET /authorize': return new Response('<h1>Connect Relay trial to Relay?</h1><input name="handle" value="h1">',
+      case 'GET /authorize': return new Response('<h1>Connect Relay Everything trial to Relay Everything?</h1><input name="handle" value="h1">',
         { headers: { 'Set-Cookie': '__Host-oauth-consent-x=abc; Path=/; Secure' } });
       case 'POST /authorize': return new Response(null, { status: 302,
         headers: { Location: `${ACCESS}?redirect_uri=${encodeURIComponent(`${STAGING}/callback`)}&state=s1` } });

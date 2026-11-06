@@ -17,7 +17,7 @@ const FORGET = 30 * 24 * 60 * 60_000;
 export function dataDir(env, argv = []) {
   const at = argv.indexOf('--data');
   const dir = at >= 0 ? argv[at + 1] : env.CLAUDE_PLUGIN_DATA;
-  if (!dir) throw new Error('Claude Code gave no data folder for the Relay plugin.');
+  if (!dir) throw new Error('Claude Code gave no data folder for the Relay Everything plugin.');
   return dir;
 }
 

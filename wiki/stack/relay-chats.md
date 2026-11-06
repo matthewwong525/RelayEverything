@@ -1,6 +1,6 @@
-# Relay's Claude Code chats
+# Relay Everything's Claude Code chats
 
-Relay saves Claude Code chats through the Relay plugin in [`plugin/`](../../plugin/README.md): each chat goes to the Relay server as you talk, shows in the **Chats** card on the Relay page, and the [AI connector](relay-ai-connector.md) searches it. It is part of [the Cloudflare stack](README.md). The website's [Save Claude Code chats](../../site/src/content/docs/connections/claude-code.md) page owns the person's steps; this page owns how it works and how to change it.
+Relay Everything saves Claude Code chats through the Relay Everything plugin in [`plugin/`](../../plugin/README.md): each chat goes to the Relay Everything server as you talk, shows in the **Chats** card on the Relay Everything page, and the [AI connector](relay-ai-connector.md) searches it. It is part of [the Cloudflare stack](README.md). The website's [Save Claude Code chats](../../site/src/content/docs/connections/claude-code.md) page owns the person's steps; this page owns how it works and how to change it.
 
 ## How a chat travels
 
@@ -24,7 +24,7 @@ Relay saves Claude Code chats through the Relay plugin in [`plugin/`](../../plug
 
 1. Make a staging chat key: `node scripts/relay-device-key.mjs create --name "Build check" --for claude-code --staging`.
 2. In a new Claude Code session, run `/plugin marketplace add <this checkout's path>` and `/plugin install relay@relay`, then paste the code.
-3. Have a short chat, then ask the AI to save it to Relay. Open the preview's **Chats** card to see it.
+3. Have a short chat, then ask the AI to save it to Relay Everything. Open the preview's **Chats** card to see it.
 4. Delete the chat, then run `node scripts/relay-device-key.mjs revoke --name "Build check" --staging`.
 
 The connect code from step 1 names the staging server, but the chat routes of a new change live only on its preview. To send there, change the code's `server` to the preview's address before you paste it.

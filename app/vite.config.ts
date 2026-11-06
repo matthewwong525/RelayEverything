@@ -10,7 +10,7 @@ const bootstrap = fileURLToPath(new URL('../scripts/employee-bootstrap.mjs', imp
 // A Relay-only install (self-host/SETUP.md) builds the same index.html around src/relay-only.tsx, with the install's
 // own config; RELAY_CONFIG is the filled copy setup.mjs writes, and the template stands in for a check's build.
 const relayOnly: Plugin = { name: 'relay-only', transformIndexHtml: { order: 'pre',
-  handler: html => html.replace('/src/main.tsx', '/src/relay-only.tsx').replace('<title>Your apps</title>', '<title>Relay</title>') } }
+  handler: html => html.replace('/src/main.tsx', '/src/relay-only.tsx').replace('<title>Your apps</title>', '<title>Relay Everything</title>') } }
 const relayConfig = process.env.RELAY_CONFIG ?? '../self-host/wrangler.template.jsonc'
 
 // https://vite.dev/config/

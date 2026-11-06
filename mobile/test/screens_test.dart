@@ -138,7 +138,7 @@ void main() {
 
   testWidgets('opens on the timeline with no key, and keeps a note on this phone', (tester) async {
     await tester.pumpWidget(RelayApp(relay: relay));
-    expect(find.text('Connect Relay'), findsNothing);
+    expect(find.text('Connect Relay Everything'), findsNothing);
     expect(find.text('On this phone'), findsOneWidget);
     expect(find.text('No notes yet. Tap New note, or hold to talk.'), findsOneWidget);
     await tester.tap(find.text('New note'));
@@ -154,7 +154,7 @@ void main() {
     await tester.pump();
     expect(find.textContaining('Pinned'), findsOneWidget);
     expect(find.textContaining('Waiting to send'), findsNothing);
-    expect(find.text('Open your Relay page'), findsNothing);
+    expect(find.text('Open your Relay Everything page'), findsNothing);
   });
 
   testWidgets('turns sending on: connects a key first, then asks about earlier notes', (tester) async {
@@ -165,14 +165,14 @@ void main() {
     expect(switchOf(tester, 'Location history').onChanged, isNull);
     expect(find.text('Disconnect this phone'), findsNothing);
     expect(find.text('Server'), findsNothing);
-    await tester.tap(find.text('Send to your Relay server'));
+    await tester.tap(find.text('Send to Relay Everything'));
     await tester.pumpAndSettle();
-    expect(find.text('Connect Relay'), findsOneWidget);
+    expect(find.text('Connect Relay Everything'), findsOneWidget);
     // Back from the connect screen with no key: sending stays off.
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(relay.calls, isEmpty);
-    await tester.tap(find.text('Send to your Relay server'));
+    await tester.tap(find.text('Send to Relay Everything'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'key');
     await tester.tap(find.text('Connect'));
@@ -194,25 +194,25 @@ void main() {
       ..earlier = 1;
     await tester.pumpWidget(RelayApp(relay: relay));
     await openSettings(tester);
-    await tester.tap(find.text('Send to your Relay server'));
+    await tester.tap(find.text('Send to Relay Everything'));
     await tester.pumpAndSettle();
     expect(find.text('Send your earlier note too?'), findsOneWidget);
     await tester.tap(find.text('Send it'));
     await tester.pumpAndSettle();
     relay.earlier = 0;
-    await tester.tap(find.text('Send to your Relay server'));
+    await tester.tap(find.text('Send to Relay Everything'));
     await tester.pumpAndSettle();
     expect(find.text('Stop sending?'), findsOneWidget);
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(relay.settings.sending, isTrue);
-    await tester.tap(find.text('Send to your Relay server'));
+    await tester.tap(find.text('Send to Relay Everything'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Stop sending'));
     await tester.pumpAndSettle();
     expect(relay.calls, ['start true', 'stop']);
     // Off and on again with nothing earlier: no prompt.
-    await tester.tap(find.text('Send to your Relay server'));
+    await tester.tap(find.text('Send to Relay Everything'));
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsNothing);
     expect(relay.calls, ['start true', 'stop', 'start false']);
@@ -221,13 +221,13 @@ void main() {
   testWidgets('connects by a pasted key, and says why one is refused', (tester) async {
     await tester.pumpWidget(RelayApp(relay: relay));
     await openSettings(tester);
-    await tester.tap(find.text('Send to your Relay server'));
+    await tester.tap(find.text('Send to Relay Everything'));
     await tester.pumpAndSettle();
-    relay.problem = 'That is not a Relay key.';
+    relay.problem = 'That is not a Relay Everything key.';
     await tester.enterText(find.byType(TextField), 'nonsense');
     await tester.tap(find.text('Connect'));
     await tester.pumpAndSettle();
-    expect(find.text('That is not a Relay key.'), findsOneWidget);
+    expect(find.text('That is not a Relay Everything key.'), findsOneWidget);
     relay.problem = null;
     await tester.tap(find.text('Connect'));
     await tester.pumpAndSettle();
@@ -239,7 +239,7 @@ void main() {
     String? scanned;
     await tester.pumpWidget(RelayApp(relay: relay, scanner: (_) async => scanned));
     await openSettings(tester);
-    await tester.tap(find.text('Send to your Relay server'));
+    await tester.tap(find.text('Send to Relay Everything'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Scan the QR code'));
     await tester.pumpAndSettle();
@@ -283,12 +283,12 @@ void main() {
       opened.add(address);
       return opens;
     }));
-    expect(find.text('Ring notes and recordings are on your Relay page.'), findsOneWidget);
-    await tester.tap(find.text('Open your Relay page'));
+    expect(find.text('Ring notes and recordings are on your Relay Everything page.'), findsOneWidget);
+    await tester.tap(find.text('Open your Relay Everything page'));
     await tester.pump();
     expect(opened, [Uri.parse('https://relay.example.com/apps/relay/')]);
     opens = false;
-    await tester.tap(find.text('Open your Relay page'));
+    await tester.tap(find.text('Open your Relay Everything page'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('The browser did not open. Try again.'), findsOneWidget);
@@ -296,14 +296,14 @@ void main() {
       ..settings = const Settings()
       ..changed();
     await tester.pump();
-    expect(find.text('Open your Relay page'), findsNothing);
+    expect(find.text('Open your Relay Everything page'), findsNothing);
     relay
       ..settings = const Settings(sending: true)
       ..connected = false
       ..server = null
       ..changed();
     await tester.pump();
-    expect(find.text('Ring notes and recordings are on your Relay page.'), findsNothing);
+    expect(find.text('Ring notes and recordings are on your Relay Everything page.'), findsNothing);
     expect([opened, relay.calls], [hasLength(2), isEmpty]);
   });
 
@@ -351,10 +351,10 @@ void main() {
     await openSettings(tester);
     await tester.tap(find.text('Pin notes to where I am'));
     await tester.tap(find.text('Location history'));
-    relay.problem = 'Relay may not read your health data.';
+    relay.problem = 'Relay Everything may not read your health data.';
     await tester.tap(find.text('Health: steps, heart rate, sleep, workouts'));
     await tester.pump();
-    expect(find.text('Relay may not read your health data.'), findsOneWidget);
+    expect(find.text('Relay Everything may not read your health data.'), findsOneWidget);
     expect(relay.calls, ['pin false', 'history true', 'health true']);
   });
 
@@ -385,7 +385,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(relay.calls, ['server https://preview.example.com', 'disconnect']);
     expect(find.text('Disconnect this phone'), findsNothing);
-    expect(switchOf(tester, 'Send to your Relay server').value, isFalse);
+    expect(switchOf(tester, 'Send to Relay Everything').value, isFalse);
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('On this phone'), findsOneWidget);
@@ -531,7 +531,7 @@ void main() {
     });
 
     testWidgets('a refused microphone says where to allow it', (tester) async {
-      relay.startProblem = 'Relay may not use the microphone. Allow it in the phone\'s settings.';
+      relay.startProblem = 'Relay Everything may not use the microphone. Allow it in the phone\'s settings.';
       await tester.pumpWidget(RelayApp(relay: relay));
       final gesture = await tester.startGesture(tester.getCenter(holdButton()));
       await tester.pump();

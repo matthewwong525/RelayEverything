@@ -1,29 +1,29 @@
-# Relay's AI connector
+# Relay Everything's AI connector
 
-Relay's AI connector lets an AI chat app, such as the Claude app or ChatGPT, read your Relay notes, health, places and saved chats when you ask it a question. It only reads: it can't add, change or delete a note. It is part of [the Cloudflare stack](README.md): its own Worker, `relay-everything-mcp`, beside the main app.
+Relay Everything's AI connector lets an AI chat app, such as the Claude app or ChatGPT, read your Relay Everything notes, health, places and saved chats when you ask it a question. It only reads: it can't add, change or delete a note. It is part of [the Cloudflare stack](README.md): its own Worker, `relay-everything-mcp`, beside the main app.
 
 | Where | Address to add |
 | --- | --- |
 | Live | `https://relay-everything-mcp.matthewwong525.workers.dev/mcp` |
 | Previews | `https://relay-everything-mcp-staging.matthewwong525.workers.dev/mcp` |
 
-The **AI apps** card at the bottom of the Relay page shows the address, with a *Copy* button, and every app you connected.
+The **AI apps** card at the bottom of the Relay Everything page shows the address, with a *Copy* button, and every app you connected.
 
 **The old address works for 30 days after the move to the new name.** An app you connected at `https://relay-ring-mcp.matthewwong525.workers.dev/mcp` keeps its sign-in there and reads the same current data, because the old Worker reads the new database. Add the new address in the app when it suits you, then remove the old one. After the 30 days, the old Worker goes, only after the owner says yes ([the move](move-cloudflare-data.md)).
 
 ## Connect an app
 
-You connect each app one time. Each app opens a sign-in page: you click **Connect**, then you sign in with your Relay email.
+You connect each app one time. Each app opens a sign-in page: you click **Connect**, then you sign in with your Relay Everything email.
 
-- **The Claude app** (web, desktop or phone): open **Settings → Connectors → Add custom connector**. Type `Relay` as the name and paste the address. Click **Connect**, then sign in. On a new chat, turn Relay on in the tools menu.
-- **ChatGPT**: open **Settings → Apps & Connectors → Advanced settings** and turn on **Developer mode**. Then click **Create**, type `Relay`, paste the address and pick **OAuth** for the sign-in. Click **Create**, then sign in. In a chat, pick Relay from the developer-mode tools.
+- **The Claude app** (web, desktop or phone): open **Settings → Connectors → Add custom connector**. Type `Relay Everything` as the name and paste the address. Click **Connect**, then sign in. On a new chat, turn Relay Everything on in the tools menu.
+- **ChatGPT**: open **Settings → Apps & Connectors → Advanced settings** and turn on **Developer mode**. Then click **Create**, type `Relay Everything`, paste the address and pick **OAuth** for the sign-in. Click **Create**, then sign in. In a chat, pick Relay Everything from the developer-mode tools.
 - **Claude Code**: run `claude mcp add --transport http relay <address>`, then type `/mcp` in Claude Code and pick `relay` to sign in.
 
 Then ask, for example: *What did I note on 4 November?* or *How many steps did I walk last week?* Days are Toronto days unless you name another time zone.
 
 ## What the app can read
 
-The connector has eight tools. Each answer has a limit, so one question can't copy all of Relay.
+The connector has eight tools. Each answer has a limit, so one question can't copy all of Relay Everything.
 
 - **search**: notes that hold every word you give, newest first.
 - **fetch**: one note, the places near it in time, and its day's health totals.
@@ -31,10 +31,10 @@ The connector has eight tools. Each answer has a limit, so one question can't co
 - **day_summary**: one day's notes count, steps, sleep, heart rate, workouts and places.
 - **health**: steps, sleep, heart rate or workouts, one value per hour or per day.
 - **places**: each stay at a place, with when you arrived and left.
-- **search_chats**: saved Claude Code chats that hold every word you give, with the lines that match ([Relay's Claude Code chats](relay-chats.md)).
+- **search_chats**: saved Claude Code chats that hold every word you give, with the lines that match ([Relay Everything's Claude Code chats](relay-chats.md)).
 - **read_chat**: one saved chat, a part at a time, with the AI's saved summaries.
 
-## What leaves Relay
+## What leaves Relay Everything
 
 When an app uses a tool, the answer goes to that app's company: Anthropic for Claude, OpenAI for ChatGPT. Their own terms then apply to it. An answer can hold a note's words, its time, the place name and coordinates, the device name, health totals, and a chat's messages.
 
@@ -42,16 +42,16 @@ An answer never holds a recording, a device key, or a device's or delivery's id.
 
 ## Disconnect an app
 
-On the Relay page, find the app in the **AI apps** card and click **Disconnect**, then confirm. Its sign-in stops at once: its next question gets a refusal. To use it again, connect it again from the app. You can also remove Relay in the app's own settings, but that does not end the sign-in on Relay's side.
+On the Relay Everything page, find the app in the **AI apps** card and click **Disconnect**, then confirm. Its sign-in stops at once: its next question gets a refusal. To use it again, connect it again from the app. You can also remove Relay Everything in the app's own settings, but that does not end the sign-in on Relay Everything's side.
 
 ## How the sign-in keeps others out
 
-Two locks admit only Relay's owner, the `WONG_OWNER_EMAIL` in `app/wrangler.relay-mcp.jsonc`:
+Two locks admit only Relay Everything's owner, the `WONG_OWNER_EMAIL` in `app/wrangler.relay-mcp.jsonc`:
 
 1. An Access for SaaS app, `relay-everything AI connector`, signs you in. Its one policy allows only the owner's email.
 2. The connector then reads the email in Access's signed answer itself, and refuses any other email. A wider Access policy still admits no one else.
 
-An app stays connected while you use it. Its access token works for one hour, and the app gets a new one when it asks again. After 30 days with no use, the sign-in drops, and you connect the app again. Disconnect ends it at once. A device key from the [Relay phones](../../app/worker/apps/relay/device.ts) can't use the connector, and the connector's tokens can't open the main app.
+An app stays connected while you use it. Its access token works for one hour, and the app gets a new one when it asks again. After 30 days with no use, the sign-in drops, and you connect the app again. Disconnect ends it at once. A device key from the [Relay Everything phones](../../app/worker/apps/relay/device.ts) can't use the connector, and the connector's tokens can't open the main app.
 
 ## Set it up
 
@@ -89,12 +89,12 @@ node scripts/relay-mcp-trial.mjs --sign-in    # staging, then you sign in once i
 node scripts/relay-mcp-trial.mjs --live       # the live connector: its metadata, and /mcp refused with no token
 ```
 
-With no sign-in, it checks each step up to the Access sign-in: the metadata, an app's registration, the consent page, and the hand-off to Access. It also checks that a made-up sign-in answer, a made-up code, a wrong token and the checker's service token are each refused. It can't sign in by itself: only the owner's email gets in, and a service token has no email. With `--sign-in`, it shows a link; you click **Connect** and sign in, and the app's token then reads a made-up note. Disconnect the app **Relay trial** on the preview's **AI apps** card after.
+With no sign-in, it checks each step up to the Access sign-in: the metadata, an app's registration, the consent page, and the hand-off to Access. It also checks that a made-up sign-in answer, a made-up code, a wrong token and the checker's service token are each refused. It can't sign in by itself: only the owner's email gets in, and a service token has no email. With `--sign-in`, it shows a link; you click **Connect** and sign in, and the app's token then reads a made-up note. Disconnect the app **Relay Everything trial** on the preview's **AI apps** card after.
 
 ## Where the code is
 
 - [`app/worker/relay-mcp/`](../../app/worker/relay-mcp/index.ts): the connector Worker, its sign-in pages and its tools.
-- [`app/worker/apps/relay/queries.ts`](../../app/worker/apps/relay/queries.ts): the reads the tools and the Relay page share. A test fails on any statement there but `SELECT`.
+- [`app/worker/apps/relay/queries.ts`](../../app/worker/apps/relay/queries.ts): the reads the tools and the Relay Everything page share. A test fails on any statement there but `SELECT`.
 - [`app/worker/apps/relay/ai-apps.ts`](../../app/worker/apps/relay/ai-apps.ts): the routes behind the **AI apps** card.
 - [`scripts/relay-mcp-setup.mjs`](../../scripts/relay-mcp-setup.mjs): setup.
 - [`scripts/relay-mcp-trial.mjs`](../../scripts/relay-mcp-trial.mjs): the trial.

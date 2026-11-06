@@ -118,8 +118,8 @@ const readOnly = { readOnlyHint: true, destructiveHint: false, openWorldHint: fa
 
 /** A fresh server per request: the connector keeps no session between calls. */
 function relayServer(db: Db): McpServer {
-  const server = new McpServer({ name: "relay", title: "Relay", version: "1.0.0" }, {
-    instructions: "Relay holds one person's notes from a smart ring and their phone, with health and places, and the Claude Code chats " +
+  const server = new McpServer({ name: "relay", title: "Relay Everything", version: "1.0.0" }, {
+    instructions: "Relay Everything holds one person's notes from a smart ring and their phone, with health and places, and the Claude Code chats " +
       "they saved. Every tool only reads. " +
       `Days and times are ${ZONE} unless you pass a timezone.`,
   });

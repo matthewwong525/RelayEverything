@@ -15,7 +15,7 @@ class RelayApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Relay',
+      title: 'Relay Everything',
       theme: ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true),
       darkTheme: ThemeData(colorSchemeSeed: Colors.indigo, brightness: Brightness.dark, useMaterial3: true),
       home: TimelineScreen(relay: relay, scanner: scanner, opener: opener),

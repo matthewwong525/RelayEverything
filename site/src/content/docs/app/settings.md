@@ -1,6 +1,6 @@
 ---
 title: Settings
-description: Each setting in the Relay app, and what it does.
+description: Each setting in the Relay Everything app, and what it does.
 ---
 
 Open **Settings** from the gear at the top of your notes. Each switch acts at once, and asks for its permission only when you turn it on. On a new phone, every switch is off: your notes stay on the phone, and the app sends nothing.
@@ -9,7 +9,7 @@ Open **Settings** from the gear at the top of your notes. Each switch acts at on
 |---|---|
 | **Pin notes to where I am** | Each typed note keeps where you were. It works with no signal. [Location](../location/#pin-notes-to-where-i-am) |
 | **Voice notes** | Shows the speech model and its size, with **Remove**. Your voice is written into words on this phone, and recordings never leave it. [More below](#voice-notes) |
-| **Send to your Relay server** | Sends your notes to your Relay server, which can pass them to your own database and your AI. Off: nothing leaves this phone. Ring notes from the Pebble app come through your server, so they need it on. [Connect a phone](../../start/connect-a-phone/) |
+| **Send to Relay Everything** | Sends your notes to your Relay Everything server, which can pass them to your own database and your AI. Off: nothing leaves this phone. Ring notes from the Pebble app come through your server, so they need it on. [Connect a phone](../../start/connect-a-phone/) |
 | **Health: steps, heart rate, sleep, workouts** | Sends them every hour. Only with sending on. [Health](../health/) |
 | **Location history** | Keeps a point each 100 m you move, so ring notes get a place too. Only with sending on. [Location](../location/#location-history) |
 | **Server** | The server this phone sends to. Change it to try a preview. Shows when a key is kept. [Connect a phone](../../start/connect-a-phone/#try-a-preview) |

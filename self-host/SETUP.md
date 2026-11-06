@@ -1,6 +1,6 @@
-# Set up your own Relay server
+# Set up your own Relay Everything server
 
-This guide is for the AI that sets up a person's own Relay server. It makes Relay in the person's own Cloudflare account: the server, the Relay page, device keys and the AI connector. It installs nothing else from this repository. The person's website guide is [Run your own Relay server](https://relayeverything.com/start/run-your-own/).
+This guide is for the AI that sets up a person's own Relay Everything server. It makes Relay Everything in the person's own Cloudflare account: the server, the Relay Everything page, device keys and the AI connector. It installs nothing else from this repository. The person's website guide is [Run your own Relay Everything server](https://relayeverything.com/start/run-your-own/).
 
 `self-host/setup.mjs` does each step the same way every time. Run it from the repository root, and read its `result=` line: `ok`, `refused` or `failed`. It never prints a key.
 
@@ -10,7 +10,7 @@ In the person's Cloudflare account, each named after the server (`relay` by defa
 
 | Part | Name |
 |---|---|
-| The server and the Relay page, one Worker | `relay` |
+| The server and the Relay Everything page, one Worker | `relay` |
 | The AI connector, its own Worker and sign-in store | `relay-mcp` |
 | The database | `relay-db` |
 | The file store for recordings | `relay-notes` |
@@ -40,7 +40,7 @@ It costs nothing on Cloudflare's free plan. Tell the person this, and ask before
    Never run it for them and never copy its output: the key must not reach the chat. Then point them to [Connect a phone](https://relayeverything.com/start/connect-a-phone/) and [the Pebble webhook](https://relayeverything.com/start/pebble-webhook/).
 7. **AI connector:** the person adds the `connector=` address to their AI, as [Connect your AI](https://relayeverything.com/connections/connect-your-ai/) shows.
 
-## Update my Relay
+## Update my Relay Everything
 
 When the person asks to update: `git pull`, then `npm ci` in `app/`, then `node self-host/setup.mjs update`. It applies the new database changes first, then puts the new server live. If a database change fails, it stops, and the old server stays live. The data stays.
 
@@ -48,7 +48,7 @@ When the person asks to update: `git pull`, then `npm ci` in `app/`, then `node 
 
 `node self-host/setup.mjs status` lists each part and whether the server's address answers.
 
-## Remove my Relay
+## Remove my Relay Everything
 
 `node self-host/setup.mjs remove` lists what it would delete. Show the person that list. It deletes every note, recording, health sample and place, and it can't be undone. Run `remove --yes` only after the person says yes in the chat.
 

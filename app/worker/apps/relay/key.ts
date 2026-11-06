@@ -12,6 +12,6 @@ export const key = defineAction({
   encoding: "none", effect: "read", agentAvailable: false, errors: {}, examples: [],
   async handler(_request, env, { identity }) {
     const device = await deviceOf(env, identity);
-    return device ? Response.json({ device: device.name }) : refused(403, "Only a Relay device key can check itself.");
+    return device ? Response.json({ device: device.name }) : refused(403, "Only a Relay Everything device key can check itself.");
   },
 });

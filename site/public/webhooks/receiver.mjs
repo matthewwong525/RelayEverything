@@ -51,4 +51,4 @@ const server = createServer(async (request, response) => {
   save(JSON.parse(body));
   response.writeHead(204).end();
 });
-server.listen(Number(process.env.PORT ?? 8787), () => console.log(`Relay receiver on http://localhost:${server.address().port}`));
+server.listen(Number(process.env.PORT ?? 8787), () => console.log(`Relay Everything receiver on http://localhost:${server.address().port}`));

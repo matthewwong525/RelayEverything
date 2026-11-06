@@ -22,7 +22,7 @@ const guarded = (run: (connector: Grants, input: unknown) => Promise<Response>):
   async (_request, env, { identity, input }) => {
     const connector = grants(env);
     if (!connector) return refused(503, ERRORS.unavailable);
-    if (!isOwner(env, identity)) return refused(403, "Only Relay's owner sees the connected AI apps.");
+    if (!isOwner(env, identity)) return refused(403, "Only Relay Everything's owner sees the connected AI apps.");
     return run(connector, input);
   };
 
@@ -30,7 +30,7 @@ const app = z.strictObject({ id: z.string(), name: z.string(), connectedAt: z.nu
 
 export const aiApps = defineAction({
   operationId: "relay.ai-apps", summary: "List connected AI apps",
-  description: "List the AI chat apps connected to Relay's AI connector, with the address to connect another.",
+  description: "List the AI chat apps connected to Relay Everything's AI connector, with the address to connect another.",
   input: z.strictObject({}), output: z.strictObject({ address: z.string(), apps: z.array(app) }),
   encoding: "none", effect: "read", agentAvailable: false, errors: ERRORS, examples: [],
   handler: guarded(async connector => Response.json(await connector.list())),
@@ -38,7 +38,7 @@ export const aiApps = defineAction({
 
 export const aiAppDisconnect = defineAction({
   operationId: "relay.ai-app-disconnect", summary: "Disconnect an AI app",
-  description: "End one AI app's connection to Relay: its sign-in stops working at once.",
+  description: "End one AI app's connection to Relay Everything: its sign-in stops working at once.",
   input: z.strictObject({ id: z.string().regex(/^[A-Za-z0-9_:-]{1,128}$/).describe("The connection's id, from the list of connected AI apps.") }),
   output: z.strictObject({ id: z.string() }), encoding: "json", effect: "write", agentAvailable: false, confirmWith: "relay.ai-apps",
   errors: ERRORS, examples: [],

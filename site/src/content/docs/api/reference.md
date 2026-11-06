@@ -1,6 +1,6 @@
 ---
 title: Routes
-description: Every route of the Relay server, with its fields, made from the server's own route list.
+description: Every route of the Relay Everything server, with its fields, made from the server's own route list.
 ---
 
 <!-- Made by `npm run relay:api-doc` in app/ from app/worker/apps/relay/. Do not edit it by hand. -->
@@ -13,7 +13,7 @@ lists the codes.
 
 `POST /apps/relay/api/notes` · `relay.notes-add` · writes · called by a phone or Pebble key
 
-Store a note typed on a Relay phone, once per phone and clientId.
+Store a note typed on a Relay Everything phone, once per phone and clientId.
 
 ### Input
 
@@ -109,7 +109,7 @@ It takes no input.
 
 `GET /apps/relay/api/timeline` · `relay.timeline` · reads · called by a signed-in person only, not a device key
 
-Read Relay's notes, newest first, with each one's place.
+Read Relay Everything's notes, newest first, with each one's place.
 
 ### Input
 
@@ -182,7 +182,7 @@ Send the input as query parameters.
 
 `GET /apps/relay/api/webhooks` · `relay.webhooks` · reads · called by a signed-in person only, not a device key
 
-List the webhooks Relay sends to, each with its state, what waits, its last answer and its recent tries.
+List the webhooks Relay Everything sends to, each with its state, what waits, its last answer and its recent tries.
 
 ### Input
 
@@ -223,7 +223,7 @@ It takes no input.
 | `address_not_https` | The address must start with https://. |
 | `address_has_login` | The address can't hold a user name or password. |
 | `address_private` | The address can't be this computer or a private network. |
-| `address_own_site` | The address can't be Relay's own site. |
+| `address_own_site` | The address can't be Relay Everything's own site. |
 
 ## Add a webhook
 
@@ -238,7 +238,7 @@ Send the input as a JSON body.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `name` | string | yes | A name for the webhook, such as the database's. |
-| `url` | string | yes | The https address Relay sends to. |
+| `url` | string | yes | The https address Relay Everything sends to. |
 | `kinds` | array of "notes" or "health" or "locations" | yes | What it takes besides notes, which always go: health, locations or both. |
 
 ### Output
@@ -277,7 +277,7 @@ Send the input as a JSON body.
 | `address_not_https` | The address must start with https://. |
 | `address_has_login` | The address can't hold a user name or password. |
 | `address_private` | The address can't be this computer or a private network. |
-| `address_own_site` | The address can't be Relay's own site. |
+| `address_own_site` | The address can't be Relay Everything's own site. |
 
 ## Change a webhook
 
@@ -293,7 +293,7 @@ Send the input as a JSON body.
 |---|---|---|---|
 | `id` | string | yes | The webhook's id. |
 | `name` | string | no | A name for the webhook, such as the database's. |
-| `url` | string | no | The https address Relay sends to. |
+| `url` | string | no | The https address Relay Everything sends to. |
 | `kinds` | array of "notes" or "health" or "locations" | no | What it takes besides notes, which always go: health, locations or both. |
 | `active` | boolean | no | False pauses it; true sends again from where it stopped. |
 
@@ -332,13 +332,13 @@ Send the input as a JSON body.
 | `address_not_https` | The address must start with https://. |
 | `address_has_login` | The address can't hold a user name or password. |
 | `address_private` | The address can't be this computer or a private network. |
-| `address_own_site` | The address can't be Relay's own site. |
+| `address_own_site` | The address can't be Relay Everything's own site. |
 
 ## Remove a webhook
 
 `POST /apps/relay/api/webhooks/remove` · `relay.webhooks-remove` · writes · called by a signed-in person only, not a device key
 
-Stop sending to a webhook and delete its secret and its tries. Your notes stay in Relay.
+Stop sending to a webhook and delete its secret and its tries. Your notes stay in Relay Everything.
 
 ### Input
 
@@ -363,7 +363,7 @@ Send the input as a JSON body.
 | `address_not_https` | The address must start with https://. |
 | `address_has_login` | The address can't hold a user name or password. |
 | `address_private` | The address can't be this computer or a private network. |
-| `address_own_site` | The address can't be Relay's own site. |
+| `address_own_site` | The address can't be Relay Everything's own site. |
 
 ## Make a new secret
 
@@ -394,7 +394,7 @@ Send the input as a JSON body.
 | `address_not_https` | The address must start with https://. |
 | `address_has_login` | The address can't hold a user name or password. |
 | `address_private` | The address can't be this computer or a private network. |
-| `address_own_site` | The address can't be Relay's own site. |
+| `address_own_site` | The address can't be Relay Everything's own site. |
 
 ## Send a test
 
@@ -427,13 +427,13 @@ Send the input as a JSON body.
 | `address_not_https` | The address must start with https://. |
 | `address_has_login` | The address can't hold a user name or password. |
 | `address_private` | The address can't be this computer or a private network. |
-| `address_own_site` | The address can't be Relay's own site. |
+| `address_own_site` | The address can't be Relay Everything's own site. |
 
 ## Send past data
 
 `POST /apps/relay/api/webhooks/resend` · `relay.webhooks-resend` · writes · called by a signed-in person only, not a device key
 
-Send again everything the webhook takes that was recorded since a time, in the order Relay stored it, then carry on.
+Send again everything the webhook takes that was recorded since a time, in the order Relay Everything stored it, then carry on.
 
 ### Input
 
@@ -479,7 +479,7 @@ Send the input as a JSON body.
 | `address_not_https` | The address must start with https://. |
 | `address_has_login` | The address can't hold a user name or password. |
 | `address_private` | The address can't be this computer or a private network. |
-| `address_own_site` | The address can't be Relay's own site. |
+| `address_own_site` | The address can't be Relay Everything's own site. |
 
 ## Try again now
 
@@ -530,7 +530,7 @@ Send the input as a JSON body.
 | `address_not_https` | The address must start with https://. |
 | `address_has_login` | The address can't hold a user name or password. |
 | `address_private` | The address can't be this computer or a private network. |
-| `address_own_site` | The address can't be Relay's own site. |
+| `address_own_site` | The address can't be Relay Everything's own site. |
 
 ## Run the sweep (previews only)
 
@@ -557,13 +557,13 @@ It takes no input.
 | `address_not_https` | The address must start with https://. |
 | `address_has_login` | The address can't hold a user name or password. |
 | `address_private` | The address can't be this computer or a private network. |
-| `address_own_site` | The address can't be Relay's own site. |
+| `address_own_site` | The address can't be Relay Everything's own site. |
 
 ## List connected AI apps
 
 `GET /apps/relay/api/ai-apps` · `relay.ai-apps` · reads · called by a signed-in person only, not a device key
 
-List the AI chat apps connected to Relay's AI connector, with the address to connect another.
+List the AI chat apps connected to Relay Everything's AI connector, with the address to connect another.
 
 ### Input
 
@@ -589,7 +589,7 @@ It takes no input.
 
 `POST /apps/relay/api/ai-apps-disconnect` · `relay.ai-app-disconnect` · writes · called by a signed-in person only, not a device key
 
-End one AI app's connection to Relay: its sign-in stops working at once.
+End one AI app's connection to Relay Everything: its sign-in stops working at once.
 
 ### Input
 

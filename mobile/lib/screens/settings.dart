@@ -37,7 +37,7 @@ class SettingsScreen extends StatelessWidget {
             _VoiceSection(relay: relay),
             const Divider(),
             SwitchListTile(
-              title: const Text('Send to your Relay server'),
+              title: const Text('Send to Relay Everything'),
               subtitle: const Text('Your server can pass notes to your own database and your AI. Ring notes from the Pebble app '
                 'come through it. Off: nothing leaves this phone.'),
               value: sending,
@@ -95,7 +95,7 @@ class SettingsScreen extends StatelessWidget {
   Future<void> _stopSending(BuildContext context) async {
     final sure = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
       title: const Text('Stop sending?'),
-      content: const Text('New notes stay on this phone. Notes already on your Relay server stay there. Health and location stop.'),
+      content: const Text('New notes stay on this phone. Notes already on your Relay Everything server stay there. Health and location stop.'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
         FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Stop sending')),
@@ -164,7 +164,7 @@ class _EarlierDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Text(count == 1 ? 'Send your earlier note too?' : 'Send your $count earlier notes too?'),
-      content: Text('${count == 1 ? 'It was' : 'They were'} only on this phone. New notes go to your Relay server from now on.'),
+      content: Text('${count == 1 ? 'It was' : 'They were'} only on this phone. New notes go to your Relay Everything server from now on.'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Only new notes')),
         FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(count == 1 ? 'Send it' : 'Send them')),

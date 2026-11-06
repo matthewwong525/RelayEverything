@@ -1,9 +1,9 @@
 ---
 title: Parts and battery
-description: The Relay ring's size, its main parts, and how long its battery lasts.
+description: The Relay Everything ring's size, its main parts, and how long its battery lasts.
 ---
 
-This page gives the Relay ring's size, its main parts and its battery life. All of them are design values for V1, the first version; some are estimates.
+This page gives the Relay Everything ring's size, its main parts and its battery life. All of them are design values for V1, the first version; some are estimates.
 
 ## Size
 

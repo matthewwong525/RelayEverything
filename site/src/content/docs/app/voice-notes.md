@@ -1,9 +1,9 @@
 ---
 title: Voice notes
-description: Hold a button in the Relay app, talk, and let go. The phone writes your words itself, and your voice never leaves the phone.
+description: Hold a button in the Relay Everything app, talk, and let go. The phone writes your words itself, and your voice never leaves the phone.
 ---
 
-Hold **Hold to talk** in the Relay app, talk, and let go. The note shows at once, and its words fill in a few seconds later. The phone writes the words itself, with no signal and no server. Your voice never leaves the phone.
+Hold **Hold to talk** in the Relay Everything app, talk, and let go. The note shows at once, and its words fill in a few seconds later. The phone writes the words itself, with no signal and no server. Your voice never leaves the phone.
 
 ## Make a voice note
 
@@ -13,7 +13,7 @@ Hold **Hold to talk** in the Relay app, talk, and let go. The note shows at once
 
 The note shows **Voice** and **Writing the words…**, then its words. A note ends by itself after 5 minutes.
 
-The first time you hold the button, the phone asks for the microphone. If you said no, allow the microphone for Relay in the phone's settings.
+The first time you hold the button, the phone asks for the microphone. If you said no, allow the microphone for Relay Everything in the phone's settings.
 
 ## Get the speech model
 
@@ -37,7 +37,7 @@ The app keeps nothing from:
 - A note you slide off to cancel.
 - A recording with no words in it. The app says **No speech heard**.
 
-The Relay ring uses the same rule: [How the ring works](../../ring/how-it-works/#against-bumps).
+The Relay Everything ring uses the same rule: [How the ring works](../../ring/how-it-works/#against-bumps).
 
 ## Play a note back
 
@@ -50,6 +50,6 @@ The phone does not back up recordings to iCloud or Google. When you move to a ne
 | What | Where |
 |---|---|
 | The recording | This phone only. It is never sent, and phone backups leave it out. |
-| The words | This phone. With sending on, they go to your Relay server, the same as a typed note. |
+| The words | This phone. With sending on, they go to your Relay Everything server, the same as a typed note. |
 
 On your server and in other places that read it, a voice note shows as a typed note. A note goes to your server only when it has its words. [Privacy](../../privacy/)

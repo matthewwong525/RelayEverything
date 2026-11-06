@@ -1,6 +1,6 @@
 # Open source
 
-Relay is one public repository, [matthewwong525/RelayEverything](https://github.com/matthewwong525/RelayEverything), under the [MIT license](../LICENSE). Part of [the wiki](README.md); the rule is in the Relay section of [`AGENTS.md`](../AGENTS.md).
+Relay Everything is one public repository, [matthewwong525/RelayEverything](https://github.com/matthewwong525/RelayEverything), under the [MIT license](../LICENSE). Part of [the wiki](README.md); the rule is in the Relay Everything section of [`AGENTS.md`](../AGENTS.md).
 
 ## What is public, and what is not
 
@@ -26,7 +26,7 @@ The IDs in `.agents/.wong-stack.json` and `app/wrangler.jsonc`, such as the acco
 
 On `result=refused`, take the private detail out of the file. A refused file in history stays public in every copy once pushed: removing it means rewriting history, which changes every commit ID, so it waits for the person's decision. Never weaken the check to let a file through.
 
-The [Relay website's guard](relay-website.md#what-the-guard-refuses) uses the same rules, and adds its own.
+The [Relay Everything website's guard](relay-website.md#what-the-guard-refuses) uses the same rules, and adds its own.
 
 ## Phone builds
 
@@ -34,11 +34,11 @@ A change to `mobile/` runs [`mobile-ci.yml`](../.github/workflows/mobile-ci.yml)
 
 ## Run your own server
 
-Anyone can run Relay in their own Cloudflare account: [`self-host/SETUP.md`](../self-host/SETUP.md) is the guide an AI follows, over [`self-host/setup.mjs`](../self-host/setup.mjs). An install deploys the same Relay files as this repository's app, through its own entry, [`app/worker/relay-only.ts`](../app/worker/relay-only.ts), and its own page build, `npm run build:relay-only`. It carries none of WongStack.
+Anyone can run Relay Everything in their own Cloudflare account: [`self-host/SETUP.md`](../self-host/SETUP.md) is the guide an AI follows, over [`self-host/setup.mjs`](../self-host/setup.mjs). An install deploys the same Relay Everything files as this repository's app, through its own entry, [`app/worker/relay-only.ts`](../app/worker/relay-only.ts), and its own page build, `npm run build:relay-only`. It carries none of WongStack.
 
-- **A new Relay binding goes in the install too.** Add it to [`self-host/wrangler.template.jsonc`](../self-host/wrangler.template.jsonc) beside [`app/wrangler.jsonc`](../app/wrangler.jsonc); [`bindings.test.mjs`](../self-host/bindings.test.mjs) fails, by name, on one the install lacks, or else every install breaks at its next update.
-- **A Relay migration reads only `relay_` tables.** An install applies every migration, so WongStack's tables are there but empty.
-- **Relay has no end-to-end encryption.** Data lives on a Relay server or only on the phone. A person who wants more control runs their own server.
+- **A new Relay Everything binding goes in the install too.** Add it to [`self-host/wrangler.template.jsonc`](../self-host/wrangler.template.jsonc) beside [`app/wrangler.jsonc`](../app/wrangler.jsonc); [`bindings.test.mjs`](../self-host/bindings.test.mjs) fails, by name, on one the install lacks, or else every install breaks at its next update.
+- **A Relay Everything migration reads only `relay_` tables.** An install applies every migration, so WongStack's tables are there but empty.
+- **Relay Everything has no end-to-end encryption.** Data lives on a Relay Everything server or only on the phone. A person who wants more control runs their own server.
 - **A device key only adds data.** It reads nothing on any server, so a person's data stays theirs: [Keys](https://relayeverything.com/api/keys/).
 
 ## Pull requests from outside

@@ -1,6 +1,6 @@
-# Relay board plan (draft 1, 2026-11-04)
+# Relay Everything ring board plan (draft 1, 2026-11-04)
 
-Relay is a 3D-printed resin voice-note ring with a centre band that clicks anywhere you press it. This plan covers the board, the parts and the build order for **V1** (US size 10). Sizes marked *est.* are estimates; confirm each one against its datasheet before layout.
+The Relay Everything ring is a 3D-printed resin voice-note ring with a centre band that clicks anywhere you press it. This plan covers the board, the parts and the build order for **V1** (US size 10). Sizes marked *est.* are estimates; confirm each one against its datasheet before layout.
 
 | Version | Width | Thickness | Battery | Life at 5 min of notes a day (est.) |
 |---|---|---|---|---|

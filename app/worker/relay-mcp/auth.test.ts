@@ -127,7 +127,7 @@ const grants = () => new Grants(ctx, env);
 
 it("connects the owner's AI app after they approve it by name, and its token reads Relay", async () => {
   const { html, approved, access, back } = await signIn();
-  expect(html).toContain("Connect Claude to Relay?");
+  expect(html).toContain("Connect Claude to Relay Everything?");
   expect(html).toContain("<b>claude.ai</b>");
   expect(approved.status).toBe(302);
   expect(Object.fromEntries(access.searchParams)).toMatchObject({ client_id: "client-1", redirect_uri: `${ORIGIN}/callback`,
@@ -180,7 +180,7 @@ it("names an app on this computer, or one with no name by its id", async () => {
   const local = { redirect_uris: ["http://127.0.0.1:33418/callback"] };
   const { html, clientId } = await consentPage(local);
   expect(html).toContain("That is an app on this computer.");
-  expect(html).toContain(`Connect ${clientId} to Relay?`);
+  expect(html).toContain(`Connect ${clientId} to Relay Everything?`);
   await connect(local);
   // A client's id is 16 random characters.
   expect((await grants().list()).apps.map(app => app.name)).toEqual([expect.stringMatching(/^[A-Za-z0-9_-]{16}$/)]);
@@ -198,7 +198,7 @@ it("lets no one but the owner in, and keeps no connection for them", async () =>
   tokenAnswer = async () => Response.json({ id_token: await idToken({ email: "someone@example.com" }) });
   const { back } = await signIn();
   expect(back.status).toBe(403);
-  expect(await back.text()).toContain("Only Relay&#39;s owner can connect an AI app.");
+  expect(await back.text()).toContain("Only Relay Everything&#39;s owner can connect an AI app.");
   tokenAnswer = async () => Response.json({ id_token: await idToken({ email: undefined }) });
   expect((await signIn()).back.status).toBe(403);
   expect((await grants().list()).apps).toEqual([]);
@@ -243,4 +243,6 @@ it("answers a bad connect link, an unknown page, and /mcp with no token or a dev
   expect((await listTools("matthew@example.com:grant:forged")).status).toBe(401);
   const metadata = await provider.fetch(new Request(`${ORIGIN}/.well-known/oauth-authorization-server`), env, ctx);
   expect(await metadata.json()).toMatchObject({ authorization_endpoint: `${ORIGIN}/authorize`, registration_endpoint: `${ORIGIN}/register` });
+  const resource = await provider.fetch(new Request(`${ORIGIN}/.well-known/oauth-protected-resource/mcp`), env, ctx);
+  expect(await resource.json()).toMatchObject({ resource: `${ORIGIN}/mcp`, resource_name: "Relay Everything" });
 });

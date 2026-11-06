@@ -7,10 +7,10 @@ const html = (body: string, status = 200, headers = new Headers()) => {
   headers.set("Content-Type", "text/html; charset=utf-8");
   headers.set("Cache-Control", "no-store");
   return new Response(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>Relay</title><body style="font-family:system-ui;max-width:32rem;margin:3rem auto;padding:0 1rem">${body}</body>`, { status, headers });
+<title>Relay Everything</title><body style="font-family:system-ui;max-width:32rem;margin:3rem auto;padding:0 1rem">${body}</body>`, { status, headers });
 };
 const escape = (text: string) => text.replace(/[&<>"']/g, char => `&#${char.charCodeAt(0)};`);
-const refused = (message: string, status = 400) => html(`<h1>Relay</h1><p>${escape(message)}</p>`, status);
+const refused = (message: string, status = 400) => html(`<h1>Relay Everything</h1><p>${escape(message)}</p>`, status);
 
 /** The page that names the AI app and where its answers go, before any sign-in. */
 async function consent(request: Request, env: McpEnv): Promise<Response> {
@@ -22,8 +22,8 @@ async function consent(request: Request, env: McpEnv): Promise<Response> {
   }
   const about = await env.OAUTH_PROVIDER.describeConsent(authRequest);
   const { handle, headers } = await env.OAUTH_PROVIDER.beginConsent(authRequest);
-  return html(`<h1>Connect ${escape(about.clientName)} to Relay?</h1>
-<p>It can then read your Relay notes, health and places when you ask it. It can't change them.</p>
+  return html(`<h1>Connect ${escape(about.clientName)} to Relay Everything?</h1>
+<p>It can then read your Relay Everything notes, health and places when you ask it. It can't change them.</p>
 <p>Its answers go to <b>${escape(about.redirectHost)}</b>.${about.redirectIsLoopback ? " That is an app on this computer." : ""}</p>
 <form method="post"><input type="hidden" name="handle" value="${escape(handle)}">
 <button name="choice" value="approve">Connect</button> <button name="choice" value="deny">Cancel</button></form>`, 200, headers);
@@ -80,7 +80,7 @@ async function callback(request: Request, env: McpEnv): Promise<Response> {
   const claims = idToken ? await verifyIdToken(idToken, env) : null;
   if (!claims) return refused("The sign-in could not be checked. Start again from your AI app.", 403);
   // The second lock: a wider Access policy still admits no one else.
-  if (claims.email?.toLowerCase() !== owner(env)) return refused("Only Relay's owner can connect an AI app.", 403);
+  if (claims.email?.toLowerCase() !== owner(env)) return refused("Only Relay Everything's owner can connect an AI app.", 403);
   const client = await env.OAUTH_PROVIDER.lookupClient(authRequest.clientId);
   const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({ request: authRequest, userId: owner(env),
     metadata: { name: client?.clientName?.trim() || authRequest.clientId }, scope: authRequest.scope, props: { email: owner(env) } });

@@ -77,7 +77,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
         ];
         final listening = relay.listening;
         return Scaffold(
-          appBar: AppBar(title: const Text('Relay'), actions: [
+          appBar: AppBar(title: const Text('Relay Everything'), actions: [
             relay.settings.sending ? _SyncChip(relay: relay) : const _LocalChip(),
             IconButton(
               tooltip: 'Settings',
@@ -174,9 +174,9 @@ class _PageCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Ring notes and recordings are on your Relay page.'),
+          const Text('Ring notes and recordings are on your Relay Everything page.'),
           Align(alignment: Alignment.centerRight,
-            child: TextButton(onPressed: () => _open(context), child: const Text('Open your Relay page'))),
+            child: TextButton(onPressed: () => _open(context), child: const Text('Open your Relay Everything page'))),
         ]),
       ),
     );

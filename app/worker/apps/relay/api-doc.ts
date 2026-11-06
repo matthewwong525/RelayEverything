@@ -76,7 +76,7 @@ export function apiReference(routes: Map<string, Route> = relayRoutes, pages: Re
   const handlers = [...routes].filter(([, route]) => typeof route === "function").map(([key]) => bare(key, pages));
   return `---
 title: Routes
-description: Every route of the Relay server, with its fields, made from the server's own route list.
+description: Every route of the Relay Everything server, with its fields, made from the server's own route list.
 ---
 
 <!-- Made by \`npm run relay:api-doc\` in app/ from app/worker/apps/relay/. Do not edit it by hand. -->

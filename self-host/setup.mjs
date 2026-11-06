@@ -13,10 +13,10 @@ import { cloudflare, ownerPolicy, saasApp, signInValues } from '../scripts/relay
 
 const USAGE = `usage: node self-host/setup.mjs <check|install|update|status|remove> [--email <you>] [--name <name>] [--yes]
   check                       check the Cloudflare key and account; make nothing
-  install --email <you>       make your Relay server; your email is its only login
-  update                      apply new database changes, then put the newest Relay live; your data stays
+  install --email <you>       make your Relay Everything server; your email is its only login
+  update                      apply new database changes, then put the newest Relay Everything live; your data stays
   status                      your server's address, and whether each part answers
-  remove --yes                delete your Relay server and all its data; this can't be undone
+  remove --yes                delete your Relay Everything server and all its data; this can't be undone
   --name <name>               the server's name in Cloudflare (default relay)`;
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -89,7 +89,7 @@ export const accessApp = (app, host, workerId) => ({ name: app, type: 'self_host
   session_duration: '730h', app_launcher_visible: false });
 
 /** The private page that holds the Pebble signing secret, for the Pebble app's Sign requests setting. */
-export const signingPage = (server, secret) => `<!doctype html><meta charset="utf-8"><title>Relay: Pebble signing secret</title>
+export const signingPage = (server, secret) => `<!doctype html><meta charset="utf-8"><title>Relay Everything: Pebble signing secret</title>
 <h1>Pebble signing secret</h1><p>For ${server}. In the Pebble app's webhook, turn on Sign requests and enter:</p><p><code>${secret}</code></p>`;
 
 const readTemplate = file => readFileSync(join(HERE, file), 'utf8');
@@ -245,7 +245,7 @@ export async function setup({ args, env, request = fetch, wrangler = runWrangler
   if (parsed.command === 'update') {
     if (!installed) throw new Error('no install here: run install first, or copy self-host/wrangler.jsonc and wrangler.mcp.jsonc back');
     deploy(io, installed.d1_databases[0].database_name);
-    log('ok database changes applied, then the newest Relay put live');
+    log('ok database changes applied, then the newest Relay Everything put live');
     return 'ok';
   }
   if (parsed.command === 'status') return await status(io, cf, root, name, request) ? 'ok' : 'none';

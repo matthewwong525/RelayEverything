@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Relay</string>
+	<string>Relay Everything</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Relay</string>
+	<string>Relay Everything</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -31,17 +31,17 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Relay records a voice note while you hold Hold to talk. The phone writes its words, and the recording never leaves the phone.</string>
+	<string>Relay Everything records a voice note while you hold Hold to talk. The phone writes its words, and the recording never leaves the phone.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Relay uses the camera only to scan the QR code of your device key.</string>
+	<string>Relay Everything uses the camera only to scan the QR code of your device key.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Relay reads your steps, heart rate, sleep and workouts and sends them to your own Relay server.</string>
+	<string>Relay Everything reads your steps, heart rate, sleep and workouts and sends them to your own Relay Everything server.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>Relay does not write to Health. iOS asks each app that reads Health for this text.</string>
+	<string>Relay Everything does not write to Health. iOS asks each app that reads Health for this text.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>With location history on, Relay keeps a point each 100 m you move, so ring notes get a place. Turn it off in Relay settings.</string>
+	<string>With location history on, Relay Everything keeps a point each 100 m you move, so ring notes get a place. Turn it off in Relay Everything settings.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Relay adds where you are to each note you type.</string>
+	<string>Relay Everything adds where you are to each note you type.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

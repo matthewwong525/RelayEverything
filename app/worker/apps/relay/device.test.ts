@@ -22,7 +22,7 @@ it("lets a device key only send to Relay and check itself, and nothing else", as
     ["GET", "/apps/relay/api/webhooks"], ["GET", "/apps/relay/"], ["GET", "/apps/hello/api/greeting"], ["GET", "/api/access/apps"], ["GET", "/api/health"],
     ["GET", "/"], ["POST", "/apps/relay/api/notes/x"], ["POST", CHATS], ["POST", "/apps/relay/api/chat-saves"], ["GET", CHATS],
     ["GET", "/apps/relay/api/chat"], ["DELETE", "/apps/relay/api/chat"], ["DELETE", ROUTES[1]]]) {
-    expect(await refusal(await gate(phone, path, method)), `${method} ${path}`).toEqual([403, "A device key can only send to Relay."]);
+    expect(await refusal(await gate(phone, path, method)), `${method} ${path}`).toEqual([403, "A device key can only send to Relay Everything."]);
   }
 });
 

@@ -16,7 +16,7 @@
           "type": "string",
           "format": "date-time",
           "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
-          "description": "When Relay stored what this message holds."
+          "description": "When Relay Everything stored what this message holds."
         },
         "data": {
           "type": "object",
@@ -49,14 +49,14 @@
                   "type": "string",
                   "format": "date-time",
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
-                  "description": "When Relay stored it."
+                  "description": "When Relay Everything stored it."
                 },
                 "device": {
                   "type": "object",
                   "properties": {
                     "id": {
                       "type": "string",
-                      "description": "The device key's id in Relay."
+                      "description": "The device key's id in Relay Everything."
                     },
                     "name": {
                       "type": "string"
@@ -177,7 +177,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "A note reached Relay."
+      "description": "A note reached Relay Everything."
     },
     {
       "type": "object",
@@ -194,7 +194,7 @@
           "type": "string",
           "format": "date-time",
           "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
-          "description": "When Relay stored what this message holds."
+          "description": "When Relay Everything stored what this message holds."
         },
         "data": {
           "type": "object",
@@ -227,14 +227,14 @@
                   "type": "string",
                   "format": "date-time",
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
-                  "description": "When Relay stored it."
+                  "description": "When Relay Everything stored it."
                 },
                 "device": {
                   "type": "object",
                   "properties": {
                     "id": {
                       "type": "string",
-                      "description": "The device key's id in Relay."
+                      "description": "The device key's id in Relay Everything."
                     },
                     "name": {
                       "type": "string"
@@ -346,7 +346,7 @@
           "type": "string",
           "format": "date-time",
           "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
-          "description": "When Relay stored what this message holds."
+          "description": "When Relay Everything stored what this message holds."
         },
         "data": {
           "type": "object",
@@ -362,14 +362,14 @@
                     "type": "integer",
                     "minimum": -9007199254740991,
                     "maximum": 9007199254740991,
-                    "description": "Unique in this Relay."
+                    "description": "Unique in this Relay Everything server."
                   },
                   "device": {
                     "type": "object",
                     "properties": {
                       "id": {
                         "type": "string",
-                        "description": "The device key's id in Relay."
+                        "description": "The device key's id in Relay Everything."
                       },
                       "name": {
                         "type": "string"
@@ -441,7 +441,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Health samples, in the order Relay stored them."
+      "description": "Health samples, in the order Relay Everything stored them."
     },
     {
       "type": "object",
@@ -458,7 +458,7 @@
           "type": "string",
           "format": "date-time",
           "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
-          "description": "When Relay stored what this message holds."
+          "description": "When Relay Everything stored what this message holds."
         },
         "data": {
           "type": "object",
@@ -474,14 +474,14 @@
                     "type": "integer",
                     "minimum": -9007199254740991,
                     "maximum": 9007199254740991,
-                    "description": "Unique in this Relay."
+                    "description": "Unique in this Relay Everything server."
                   },
                   "device": {
                     "type": "object",
                     "properties": {
                       "id": {
                         "type": "string",
-                        "description": "The device key's id in Relay."
+                        "description": "The device key's id in Relay Everything."
                       },
                       "name": {
                         "type": "string"
@@ -547,7 +547,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Location points, in the order Relay stored them."
+      "description": "Location points, in the order Relay Everything stored them."
     },
     {
       "type": "object",
@@ -564,7 +564,7 @@
           "type": "string",
           "format": "date-time",
           "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
-          "description": "When Relay stored what this message holds."
+          "description": "When Relay Everything stored what this message holds."
         },
         "data": {
           "type": "object",
@@ -599,9 +599,9 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Send a test, from the Relay page."
+      "description": "Send a test, from the Relay Everything page."
     }
   ],
-  "title": "Relay webhook message, version 1",
-  "description": "The JSON body of each message a Relay webhook sends."
+  "title": "Relay Everything webhook message, version 1",
+  "description": "The JSON body of each message a Relay Everything webhook sends."
 }

@@ -1,6 +1,6 @@
-# The Relay website
+# The Relay Everything website
 
-The Relay website is Relay's public home page and docs, at <https://relayeverything.com> (and `www.`), open to anyone with no login. Part of [the wiki](README.md); the rule to update it after each publish is in the Relay section of [`AGENTS.md`](../AGENTS.md).
+The Relay Everything website is Relay Everything's public home page and docs, at <https://relayeverything.com> (and `www.`), open to anyone with no login. Part of [the wiki](README.md); the rule to update it after each publish is in the Relay Everything section of [`AGENTS.md`](../AGENTS.md).
 
 ## Where it lives
 
@@ -13,9 +13,9 @@ The Relay website is Relay's public home page and docs, at <https://relayeveryth
 1. Write the page in `site/src/content/docs/<section>/<page>.md`, with a `title` and a `description`.
 2. Add it to the menu in [`site/sidebar.mjs`](../site/sidebar.mjs). The menu order is the reading order.
 3. Link other pages relatively, such as `../keys/`, so a new address later breaks no link.
-4. Name the server *your Relay server* and write its address as `https://<your-relay-server>/...`, never the private site's address.
+4. Name the server *your Relay Everything server* and write its address as `https://<your-relay-server>/...`, never the private site's address.
 
-Describe Relay as a way to get your own notes, health and location off your phone and devices, into a place you choose, where your own AI can read them. Do not describe it as a smart ring first: the ring is one way to take notes, and it may never ship. Do not describe it as a memory platform: Relay has no plugin format, no `relay init` and no access roles, and developers use their own database and tools. A connection that is not built yet shows as *Coming*, with no steps. Say the app keeps notes on the phone by default, and sending to your Relay server is an add-on the person turns on: never say the app syncs everything from the start.
+Describe Relay Everything as a way to get your own notes, health and location off your phone and devices, into a place you choose, where your own AI can read them. Do not describe it as a smart ring first: the ring is one way to take notes, and it may never ship. Do not describe it as a memory platform: Relay Everything has no plugin format, no `relay init` and no access roles, and developers use their own database and tools. A connection that is not built yet shows as *Coming*, with no steps. Say the app keeps notes on the phone by default, and sending to your Relay Everything server is an add-on the person turns on: never say the app syncs everything from the start.
 
 A page's folder can't be named `notes/`: [the public check](open-source.md#the-public-check) refuses any `notes/` folder as private notes, so the notes page is `app/your-notes/`.
 

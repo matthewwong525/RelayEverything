@@ -12,5 +12,6 @@ appId: com.matthewwong525.relayApp
 - extendedWaitUntil:
     visible: "Typed"
     timeout: 10000
-- assertVisible: "Device check note"
+# Flutter joins a card's lines into one label, so match its start.
+- assertVisible: 'Device check note(.|\n)*'
 - takeScreenshot: new-note

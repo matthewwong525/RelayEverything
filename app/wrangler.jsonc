@@ -70,8 +70,11 @@
       "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db-staging", "database_id": "4f8edf18-ad51-4325-bb98-ec3ca6cc80b0", "migrations_dir": "../schema/migrations" }],
       "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes-staging" }],
       // Previews reach no other Worker's objects (wiki/stack/live-line.md), so staging has no SPACES: the staging
-      // shared server, wrangler.relay.jsonc, holds the spaces and consumes the queue.
-      "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks-staging" }] },
+      // shared server, wrangler.relay.jsonc, holds the spaces and its own queue.
+      "queues": {
+        "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks-staging" }],
+        "consumers": [{ "queue": "relay-everything-webhooks-staging", "max_batch_size": 10, "max_retries": 10 }]
+      },
       "services": [{ "binding": "RELAY_MCP", "service": "relay-everything-mcp-staging", "entrypoint": "Grants" }],
       "routes": [],
       "triggers": { "crons": [] }

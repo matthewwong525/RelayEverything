@@ -43,10 +43,10 @@
       "routes": [{ "pattern": "app-staging.relayeverything.com", "custom_domain": true }],
       "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db-staging", "database_id": "4f8edf18-ad51-4325-bb98-ec3ca6cc80b0", "migrations_dir": "../schema/migrations" }],
       "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes-staging" }],
-      // On staging this server consumes the queue, because the company app's staging Worker has no SPACES.
+      // On staging this server has its own queue, because the company app's staging Worker has no SPACES.
       "queues": {
-        "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks-staging" }],
-        "consumers": [{ "queue": "relay-everything-webhooks-staging", "max_batch_size": 10, "max_retries": 10 }]
+        "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-server-webhooks-staging" }],
+        "consumers": [{ "queue": "relay-everything-server-webhooks-staging", "max_batch_size": 10, "max_retries": 10 }]
       },
       "send_email": [{ "name": "RELAY_EMAIL" }],
       "ratelimits": [{ "name": "RELAY_SIGN_IN_LIMIT", "namespace_id": "2102", "simple": { "limit": 10, "period": 60 } }],

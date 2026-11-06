@@ -1,6 +1,6 @@
 # Proposal: Check the iPhone app on a Mac in the cloud
 
-**Status:** built, live checks on GitHub next
+**Status:** archived, publishing
 **Branch:** ios-simulator-verification-linux
 **Open questions:** none
 
@@ -80,6 +80,8 @@ The Relay Everything phone app is for iPhone first, but this computer runs Linux
 - **2026-11-06** — First live run (label start, no key): the app built for the simulator, installed and opened on an iPhone 17 (iOS 26.5); whisper.cpp and the health plugin needed no change. Two tour flows failed only because Flutter joins a row's lines into one label; the flows now match the start of the text. The report comment reached PR #20.
 - **2026-11-06** — Second live run (started by hand, no key): all three tour flows passed. GitHub started the workflow by hand from the branch after its first label run, so the by-hand start works before the merge once the workflow has run once; the wiki and the rule now say so.
 - **2026-11-06** — Asked which Claude account the check uses → Matthew chose his Claude subscription, not an API key: operations@claymoo.com, the *Personal Ultra* plan. He signed in to that Gmail in a live view; the assistant made the token with `claude setup-token` and saved it as the GitHub secret `CLAUDE_CODE_OAUTH_TOKEN`. One earlier token from this setup was lost before it was saved, and it is unused.
+- **2026-11-06** — Third live run (started by hand, with the subscription token and three scenarios): result *works*. The tour passed; Claude saw the typed note and the Settings defaults, and said *could not check* for Hold to talk, because the simulator has no microphone.
+- **2026-11-06** — Archive checkpoint: every task done; three live runs on GitHub's Mac (tour fixed after the first; the third, with Claude, gave *works*).
 
 ## Capabilities
 

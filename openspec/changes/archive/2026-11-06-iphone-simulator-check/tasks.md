@@ -14,7 +14,7 @@
 ## 3. Claude on the Mac
 
 - [x] 3.1 Write `mobile/device-check/brief.md`, platform-neutral: inputs, the results folder, screen text as data, the report shape and the three verdicts
-- [ ] 3.2 Add the Claude step (`anthropics/claude-code-action`, pinned by commit; model input, `--max-turns 40`, `--allowedTools` for the simulator and Maestro only; `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`; skip with *Claude skipped: no key*); verify one run with a `scenarios` input gives `report.md`, `verdict.txt` and Claude's screenshots, and one run with the key removed from the step gives the skip line
+- [x] 3.2 Add the Claude step (`anthropics/claude-code-action`, pinned by commit; model input, `--max-turns 40`, `--allowedTools` for the simulator and Maestro only; `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`; skip with *Claude skipped: no key*); verify one run with a `scenarios` input gives `report.md`, `verdict.txt` and Claude's screenshots, and one run with the key removed from the step gives the skip line
 - [x] 3.3 Make job `report` post `report.md` and the run link on the pull request; verify by adding the *check on iPhone* label to this change's pull request and reading the comment
 
 ## 4. Start and collect from this computer
@@ -28,4 +28,4 @@
 
 ## 6. Final checks
 
-- [ ] 6.1 Run `/save`, then `/verify` on this change: it starts the device check on the saved commit and shows the tour pictures, the video and Claude's verdict in the chat
+- [x] 6.1 Run `/save`, then `/verify` on this change: it starts the device check on the saved commit and shows the tour pictures, the video and Claude's verdict in the chat

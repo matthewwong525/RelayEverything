@@ -1,0 +1,12 @@
+# Settings: sending is off, and its switches are there.
+appId: com.matthewwong525.relayApp
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 60000
+- tapOn: "Settings"
+- assertVisible: "Send to Relay Everything"
+- assertVisible: "Pin notes to where I am"
+- takeScreenshot: settings

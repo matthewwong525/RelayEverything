@@ -1,0 +1,16 @@
+# A typed note: New note, type, Save, and the note is in the timeline.
+appId: com.matthewwong525.relayApp
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "New note"
+    timeout: 60000
+- tapOn: "New note"
+- inputText: "Device check note"
+- tapOn: "Save"
+- extendedWaitUntil:
+    visible: "Typed"
+    timeout: 10000
+- assertVisible: "Device check note"
+- takeScreenshot: new-note

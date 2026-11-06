@@ -64,10 +64,10 @@
       "databaseId": "43757596-8f32-498f-875a-21a2e4108002",
       "database": "relay-everything-memory",
       "bucket": "relay-everything-memory",
-      "worker": "https://app.relayeverything.com/_memory"
+      "worker": "https://admin.relayeverything.com/_memory"
     },
     "companyApi": {
-      "origin": "https://app.relayeverything.com"
+      "origin": "https://admin.relayeverything.com"
     },
     "liveLine": {
       "workers": [

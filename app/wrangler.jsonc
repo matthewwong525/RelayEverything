@@ -40,7 +40,8 @@
   // Rereads who can push on GitHub, for previews' sign-in.
   "triggers": { "crons": ["*/15 * * * *"] },
   // The private site's own address; the workers.dev address stays on for Access. Staging has none.
-  "routes": [{ "pattern": "app.relayeverything.com", "custom_domain": true }],
+  // app.relayeverything.com is the shared server's: wrangler.relay.jsonc.
+  "routes": [{ "pattern": "admin.relayeverything.com", "custom_domain": true }],
   // With routes, Wrangler turns workers.dev off unless this says true, and Access returns each sign-in there.
   "workers_dev": true,
   // SPACES: each Relay Everything person's own space, in its own Worker (wrangler.spaces.jsonc), which deploys first.

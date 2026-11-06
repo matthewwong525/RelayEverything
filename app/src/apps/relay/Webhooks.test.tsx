@@ -102,8 +102,8 @@ it("sends a test and says what came back, or why nothing did", async () => {
   await open();
   const working = card("Database 1");
   for (const [reply, line] of [[{ status: 200, ms: 180, error: null }, "Answered 200 in 180 ms."],
-    [{ status: 302, ms: 1500, error: "Answered with a redirect, which Relay does not follow." },
-      "Answered 302 in 1.5 s. Answered with a redirect, which Relay does not follow."],
+    [{ status: 302, ms: 1500, error: "Answered with a redirect, which Relay Everything does not follow." },
+      "Answered 302 in 1.5 s. Answered with a redirect, which Relay Everything does not follow."],
     [{ status: null, ms: 15000, error: "No answer in 15 seconds." }, "No answer: No answer in 15 seconds."]] as const) {
     replying(() => Response.json(reply));
     await press("Send a test", working);

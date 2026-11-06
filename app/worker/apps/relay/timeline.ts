@@ -12,7 +12,7 @@ const timelineNote = z.strictObject({ id: z.string(), source: z.enum(["ring", "t
   device: z.string(), audio: z.boolean(), place: place.nullable() });
 
 export const timeline = defineAction({
-  operationId: "relay.timeline", summary: "Read the notes", description: "Read Relay's notes, newest first, with each one's place.",
+  operationId: "relay.timeline", summary: "Read the notes", description: "Read Relay Everything's notes, newest first, with each one's place.",
   input: z.strictObject({
     before: time.optional().describe("Only notes recorded before this Unix time in milliseconds: the last page's `next`."),
     beforeId: z.string().max(64).optional().describe("With `before`, also the notes at that time with a lower id: the last page's `nextId`."),

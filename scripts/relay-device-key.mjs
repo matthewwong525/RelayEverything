@@ -18,7 +18,7 @@ const USAGE = `usage: node scripts/relay-device-key.mjs <create|list|revoke> [--
   list                            every key: its name, what it is for, when it was made, and whether it is turned off
   revoke --name "Android phone"   turn a key off at once, then delete it from Cloudflare
   --staging                       the previews' Access app and database, not the live ones
-On your own Relay server (self-host/SETUP.md), keys go to the server in self-host/wrangler.jsonc.`;
+On your own Relay Everything server (self-host/SETUP.md), keys go to the server in self-host/wrangler.jsonc.`;
 
 /** What each --for makes: the key's reach in relay_devices and its token's name in Cloudflare. */
 const KINDS = { phone: { reaches: 'phone', token: 'device' }, 'claude-code': { reaches: 'chats', token: 'chats' } };
@@ -54,12 +54,12 @@ const escape = text => text.replace(/[&<>"']/g, char => `&#${char.charCodeAt(0)}
 export function handOverPage({ name, server, clientId, clientSecret, qrSvg }) {
   const row = (label, value) => `<dt>${escape(label)}</dt><dd><code>${escape(value)}</code></dd>`;
   return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>Relay key: ${escape(name)}</title>
+<title>Relay Everything key: ${escape(name)}</title>
 <style>body{font:16px system-ui;max-width:40rem;margin:2rem auto;padding:0 1rem}code{word-break:break-all}dd{margin:0 0 1rem}svg{width:16rem;height:auto}</style>
-<h1>Relay key: ${escape(name)}</h1>
+<h1>Relay Everything key: ${escape(name)}</h1>
 <p>This key shows only here. Delete this file when the device is connected.</p>
 <h2>A phone</h2>
-<p>Open the Relay app and tap Scan the QR code, then scan this code.</p>
+<p>Open the Relay Everything app and tap Scan the QR code, then scan this code.</p>
 ${qrSvg ?? '<p>No QR code: install qrencode, or paste the values below.</p>'}
 <h2>The Pebble app, or by hand</h2>
 <dl>${row('Server', server)}${row('Webhook address', `${server}/apps/relay/api/pebble`)}${row('CF-Access-Client-Id', clientId)}${row('CF-Access-Client-Secret', clientSecret)}</dl>
@@ -69,11 +69,11 @@ ${qrSvg ?? '<p>No QR code: install qrencode, or paste the values below.</p>'}
 /** The private page of a Claude Code key: the connect code to paste when Claude Code asks for it. */
 export function chatHandOverPage({ name, code }) {
   return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>Relay chat key: ${escape(name)}</title>
+<title>Relay Everything chat key: ${escape(name)}</title>
 <style>body{font:16px system-ui;max-width:40rem;margin:2rem auto;padding:0 1rem}code{word-break:break-all}</style>
-<h1>Relay chat key: ${escape(name)}</h1>
+<h1>Relay Everything chat key: ${escape(name)}</h1>
 <p>This key shows only here. Delete this file when Claude Code is connected.</p>
-<p>In Claude Code, add the Relay plugin, then paste this connect code when it asks. The key can only send chats.</p>
+<p>In Claude Code, add the Relay Everything plugin, then paste this connect code when it asks. The key can only send chats.</p>
 <p><code>${escape(code)}</code></p>
 `;
 }
@@ -121,7 +121,7 @@ export const INSTALL = join(repoRoot, 'self-host', 'wrangler.jsonc');
 
 /** Which config the keys belong to: an install's, else the full app's. An install has no previews. */
 export function configPath(staging, installed = existsSync(INSTALL)) {
-  if (installed && staging) throw new Error('your own Relay server has no previews; leave out --staging');
+  if (installed && staging) throw new Error('your own Relay Everything server has no previews; leave out --staging');
   return installed ? INSTALL : findWranglerConfig();
 }
 

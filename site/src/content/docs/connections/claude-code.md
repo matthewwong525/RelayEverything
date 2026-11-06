@@ -1,13 +1,13 @@
 ---
 title: Save Claude Code chats
-description: Save each Claude Code chat to your Relay server with the Relay plugin, find it on the Relay page, and let your AI search it.
+description: Save each Claude Code chat to your Relay Everything server with the Relay Everything plugin, find it on the Relay Everything page, and let your AI search it.
 ---
 
-The Relay plugin for Claude Code saves each chat to your Relay server as you talk. You find a chat on the Relay page by a word, and your AI can search it through the [AI connector](../connect-your-ai/). Ask *save this to Relay*, and the AI also writes a title and a summary of what you decided, kept beside the chat.
+The Relay Everything plugin for Claude Code saves each chat to your Relay Everything server as you talk. You find a chat on the Relay Everything page by a word, and your AI can search it through the [AI connector](../connect-your-ai/). Ask *save this to Relay Everything*, and the AI also writes a title and a summary of what you decided, kept beside the chat.
 
 ## Make a connect code
 
-The owner of the Relay server makes one connect code for each computer, on the computer that holds the server's project:
+The owner of the Relay Everything server makes one connect code for each computer, on the computer that holds the server's project:
 
 ```sh
 node scripts/relay-device-key.mjs create --name "Laptop" --for claude-code
@@ -15,18 +15,18 @@ node scripts/relay-device-key.mjs create --name "Laptop" --for claude-code
 
 The code shows once: in that terminal, and on a private page on that computer. It is a [key](../../api/keys/) that can only add chats. It can't read, change or delete anything on your server, and it lasts one year.
 
-To keep chats in your own account, run your own Relay server and make the code there. The plugin sends only to the server in the code: it has no address built in.
+To keep chats in your own account, run your own Relay Everything server and make the code there. The plugin sends only to the server in the code: it has no address built in.
 
 ## Install the plugin
 
-1. In Claude Code, add the plugin from the public Relay repository:
+1. In Claude Code, add the plugin from the public Relay Everything repository:
 
    ```text
    /plugin marketplace add matthewwong525/RelayEverything
    /plugin install relay@relay
    ```
 
-2. When Claude Code asks for the **Relay connect code**, paste the code. Claude Code keeps it in your system's secure store.
+2. When Claude Code asks for the **Relay Everything connect code**, paste the code. Claude Code keeps it in your system's secure store.
 3. Delete the code's private page.
 
 Chats from then on are saved. Chats from before the install are not sent.
@@ -45,7 +45,7 @@ A send that fails waits on your computer, and the next start of Claude Code send
 
 ## Read your chats
 
-The **Chats** card on the Relay page lists your chats, newest first. Type words in its search to find the chats that hold all of them. Open a chat to read it: the AI's saved summary shows at the top, marked *Written by the AI*, and each step shows as a grey line.
+The **Chats** card on the Relay Everything page lists your chats, newest first. Type words in its search to find the chats that hold all of them. Open a chat to read it: the AI's saved summary shows at the top, marked *Written by the AI*, and each step shows as a grey line.
 
 Your AI can search the chats too: the [AI connector](../connect-your-ai/) has the tools `search_chats` and `read_chat`.
 
@@ -57,7 +57,7 @@ Your AI can search the chats too: the [AI connector](../connect-your-ai/) has th
 
 ## Delete a chat
 
-Open the chat on the Relay page, click **Delete**, then confirm. Relay removes the chat, its messages and the AI's summary. You can't undo it. If the chat is still open in Claude Code, turn saving off first, or the plugin sends it again with your next message.
+Open the chat on the Relay Everything page, click **Delete**, then confirm. Relay Everything removes the chat, its messages and the AI's summary. You can't undo it. If the chat is still open in Claude Code, turn saving off first, or the plugin sends it again with your next message.
 
 ## What the server receives
 

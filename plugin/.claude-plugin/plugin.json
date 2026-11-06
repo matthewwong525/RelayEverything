@@ -1,7 +1,7 @@
 {
   "name": "relay",
   "version": "0.1.0",
-  "description": "Saves each Claude Code chat to your Relay server, with a tool to save the AI's summary beside it.",
+  "description": "Saves each Claude Code chat to your Relay Everything server, with a tool to save the AI's summary beside it.",
   "author": { "name": "Matthew Wong" },
   "homepage": "https://relayeverything.com/connections/claude-code/",
   "repository": "https://github.com/matthewwong525/RelayEverything",
@@ -10,7 +10,7 @@
   "userConfig": {
     "connect_code": {
       "type": "string",
-      "title": "Relay connect code",
+      "title": "Relay Everything connect code",
       "description": "The connect code from `node scripts/relay-device-key.mjs create --name \"<computer>\" --for claude-code`. It can only add chats.",
       "sensitive": true,
       "required": true

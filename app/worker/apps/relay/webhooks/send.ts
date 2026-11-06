@@ -122,7 +122,7 @@ export async function post(url: string, secret: string, id: string, body: string
       signal: AbortSignal.timeout(TIMEOUT) });
     await response.body?.cancel();
     const { status } = response;
-    const error = status >= 300 && status < 400 ? "Answered with a redirect, which Relay does not follow." : null;
+    const error = status >= 300 && status < 400 ? "Answered with a redirect, which Relay Everything does not follow." : null;
     return { status, ms: Date.now() - started, error };
   } catch (error) {
     const timedOut = error instanceof Error && error.name === "TimeoutError";
@@ -157,7 +157,7 @@ async function failed(db: Db, hook: Hook, lease: number, error: string, status: 
 /** Sends the next group and says what follows: "next" for another, "done" when caught up, or how the run ends. */
 async function step(env: Env, db: Db, hook: Hook, lease: number): Promise<"next" | "done" | { wait: Wait }> {
   const refusal = checkAddress(hook.url);
-  if (refusal) return { wait: await failed(db, { ...hook, tries: DELAYS.length }, lease, `Relay no longer sends to this address: ${refusal}.`) };
+  if (refusal) return { wait: await failed(db, { ...hook, tries: DELAYS.length }, lease, `Relay Everything no longer sends to this address: ${refusal}.`) };
   const group = await groupOf(db, hook);
   if (!group.length) return "done";
   const last = group.at(-1)!.seq;

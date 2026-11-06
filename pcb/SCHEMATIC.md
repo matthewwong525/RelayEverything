@@ -1,4 +1,4 @@
-# Relay V1 schematic, as a connection list (draft 1, 2026-11-04)
+# Relay Everything ring V1 schematic, as a connection list (draft 1, 2026-11-04)
 
 This list is the input for the KiCad schematic. Each block names its parts and the nets between them. Pin and ball numbers come from each datasheet at drawing time; no pin is fixed here. Start from Nordic's nRF54L15 WLCSP reference circuit for the chip, the crystal and the antenna, and do not change their values.
 

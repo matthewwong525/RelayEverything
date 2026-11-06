@@ -22,7 +22,7 @@ const pageLoad = request => request.method === 'GET' && !request.headers.has('up
 export default {
   async fetch(request, env) {
     if (env.MODE === 'hold') {
-      return new Response('Relay is moving; try again in a minute.\n', {
+      return new Response('Relay Everything is moving; try again in a minute.\n', {
         status: 503, headers: { 'Retry-After': '60', 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
       });
     }

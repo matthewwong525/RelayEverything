@@ -1,4 +1,4 @@
-// Relay flexible board outline, laid flat, for KiCad (Edge.Cuts).
+// Relay Everything flexible board outline, laid flat, for KiCad (Edge.Cuts).
 // The strip wraps once around the inside wall of the ring, outer face toward the band.
 // Export: openscad -o relay-flex-outline-size10.dxf -D us_size=10 relay-flex-outline.scad
 // Zones along the strip, measured from the top centre (0 mm), are in the plan (PLAN.md).
@@ -20,5 +20,5 @@ length = 2 * PI * r_flex - end_gap;
 
 translate([-length / 2, -strip_width / 2]) square([length, strip_width]);
 
-echo(str("Relay flex strip ", version, ": US ", us_size, ", length ", length, " mm, width ", strip_width,
+echo(str("Relay Everything flex strip ", version, ": US ", us_size, ", length ", length, " mm, width ", strip_width,
          " mm, switch spacing ", 2 * PI * r_flex / 6, " mm"));

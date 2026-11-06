@@ -37,7 +37,7 @@ function Secret({ secret }: { secret: string }) {
   return <>
     <Input aria-label="The secret" className="font-mono" value={secret} readOnly />
     <CopyText text={secret} label="Copy the secret" variant="default" shown />
-    <p className="text-sm text-muted-foreground">Your database uses it to check each message came from Relay. Lost it? Make a new one from the webhook's card.</p>
+    <p className="text-sm text-muted-foreground">Your database uses it to check each message came from Relay Everything. Lost it? Make a new one from the webhook's card.</p>
   </>
 }
 
@@ -71,7 +71,7 @@ function AddWebhook({ onAdd }: { onAdd: Changed }) {
       {secret === null ? <>
         <DialogHeader>
           <DialogTitle>Add a webhook</DialogTitle>
-          <DialogDescription>Relay sends each new note to this address, signed, a few seconds after it gets it.</DialogDescription>
+          <DialogDescription>Relay Everything sends each new note to this address, signed, a few seconds after it gets it.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
           <div className="grid gap-2"><Label htmlFor="hook-name">Name</Label><Input id="hook-name" value={name} placeholder="My Postgres" onChange={(event) => setName(event.target.value)} /></div>
@@ -88,7 +88,7 @@ function AddWebhook({ onAdd }: { onAdd: Changed }) {
       </> : <>
         <DialogHeader>
           <DialogTitle>Webhook added</DialogTitle>
-          <DialogDescription>Copy this secret now. Relay shows it once.</DialogDescription>
+          <DialogDescription>Copy this secret now. Relay Everything shows it once.</DialogDescription>
         </DialogHeader>
         <Secret secret={secret} />
         <DialogFooter><Button type="button" onClick={() => close(false)}>Done</Button></DialogFooter>
@@ -111,7 +111,7 @@ function PastData({ hook, act }: { hook: Webhook; act: (work: () => Promise<{ we
     <DialogContent>
       <DialogHeader>
         <DialogTitle>Send past data</DialogTitle>
-        <DialogDescription>Relay sends everything this webhook takes, recorded since this day, then carries on with new data.</DialogDescription>
+        <DialogDescription>Relay Everything sends everything this webhook takes, recorded since this day, then carries on with new data.</DialogDescription>
       </DialogHeader>
       <div className="grid gap-2"><Label htmlFor={`since-${hook.id}`}>From</Label><Input id={`since-${hook.id}`} type="date" value={since} onChange={(event) => setSince(event.target.value)} /></div>
       <DialogFooter><Button type="button" disabled={!since} onClick={send}>Send</Button></DialogFooter>
@@ -167,14 +167,14 @@ function HookCard({ hook, onChange, onRemove }: { hook: Webhook; onChange: Chang
         description="The old secret stops working at once. Put the new one in your database before the next message." />
       <Button type="button" variant="ghost" size="sm" onClick={() => act(() => post<{ webhook: Webhook }>('webhooks/update', { id: hook.id, active: paused }))}>{paused ? 'Resume' : 'Pause'}</Button>
       <Confirm label="Remove" title={`Remove ${hook.name}?`} onConfirm={() => act(async () => { await post('webhooks/remove', { id: hook.id }); onRemove(); return {} })}
-        description="Relay stops sending to it and deletes its secret and send history. This can't be undone. Your notes stay in Relay." />
+        description="Relay Everything stops sending to it and deletes its secret and send history. This can't be undone. Your notes stay in Relay Everything." />
     </div>
     {message && <p role="status" className="text-sm">{message}</p>}
     <Dialog open={secret !== null} onOpenChange={() => setSecret(null)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>New secret</DialogTitle>
-          <DialogDescription>Copy this secret now. Relay shows it once.</DialogDescription>
+          <DialogDescription>Copy this secret now. Relay Everything shows it once.</DialogDescription>
         </DialogHeader>
         {secret !== null && <Secret secret={secret} />}
         <DialogFooter><Button type="button" onClick={() => setSecret(null)}>Done</Button></DialogFooter>

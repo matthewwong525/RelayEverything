@@ -119,7 +119,7 @@ class RelayController extends Relay {
   @override
   Future<String?> connect(String code) async {
     final connection = Connection.parse(code);
-    if (connection == null) return 'That is not a Relay key. Scan the QR code again, or paste all of it.';
+    if (connection == null) return 'That is not a Relay Everything key. Scan the QR code again, or paste all of it.';
     try {
       await _sender.check(connection).key();
     } on ApiException catch (error) {
@@ -183,8 +183,8 @@ class RelayController extends Relay {
     notifyListeners();
   }
 
-  static const _noLocation = 'Relay may not read your location. Allow it in the phone\'s settings.';
-  static const _sendFirst = 'Turn on Send to your Relay server first.';
+  static const _noLocation = 'Relay Everything may not read your location. Allow it in the phone\'s settings.';
+  static const _sendFirst = 'Turn on Send to Relay Everything first.';
 
   @override
   Future<String?> setPinNotes(bool on) async {
@@ -196,7 +196,7 @@ class RelayController extends Relay {
   @override
   Future<String?> setHistory(bool on) async {
     if (on && !_settings.sending) return _sendFirst;
-    if (on && !await places.allow(always: true)) return 'Relay may not read your location all the time. Allow it in the phone\'s settings.';
+    if (on && !await places.allow(always: true)) return 'Relay Everything may not read your location all the time. Allow it in the phone\'s settings.';
     await _saveSettings(_settings.copyWith(history: on));
     if (on) {
       _startHistory();
@@ -214,7 +214,7 @@ class RelayController extends Relay {
   @override
   Future<String?> setHealth(bool on) async {
     if (on && !_settings.sending) return _sendFirst;
-    if (on && !await health.allow()) return 'Relay may not read your health data. Allow it in the phone\'s health settings.';
+    if (on && !await health.allow()) return 'Relay Everything may not read your health data. Allow it in the phone\'s health settings.';
     // Health starts from now: nothing was kept while it was off, and there is no earlier backfill.
     if (on) await store.set(healthSince, '${_clock().millisecondsSinceEpoch}');
     await _saveSettings(_settings.copyWith(health: on));
@@ -272,7 +272,7 @@ class RelayController extends Relay {
 
   // Voice notes.
 
-  static const _noMicrophone = 'Relay may not use the microphone. Allow it in the phone\'s settings.';
+  static const _noMicrophone = 'Relay Everything may not use the microphone. Allow it in the phone\'s settings.';
   static const _microphoneFailed = 'The microphone did not start. Try again.';
   static const _noRecording = 'This recording is not on this phone.';
   static const _holdLonger = 'Hold the button while you talk, then let go.';

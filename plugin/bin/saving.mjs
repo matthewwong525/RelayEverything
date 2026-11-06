@@ -21,7 +21,7 @@ export function ago(at, now) {
 /** When a chat in the project at `root` last went to Relay, as a line to print. */
 function lastSent(store, root, now) {
   const at = Math.max(0, ...Object.values(store.sessions()).filter(item => item.root === root).map(item => item.sentAt ?? 0));
-  return at ? `This project last sent a chat to Relay ${ago(at, now)}.` : 'No chat from this project has gone to Relay yet.';
+  return at ? `This project last sent a chat to Relay Everything ${ago(at, now)}.` : 'No chat from this project has gone to Relay Everything yet.';
 }
 
 /** The lines to print for `choice` in the project at `cwd`. */
@@ -31,8 +31,8 @@ export function saving(store, cwd, choice, env = {}, now = Date.now()) {
   if (choice === 'on' || choice === 'off') store.setOff(root, choice === 'off');
   else if (choice) return [`Type /relay:saving on, /relay:saving off, or /relay:saving to see which it is.`];
   const lines = store.isOff(root)
-    ? [`Saving to Relay is off for ${name}.`, 'Chats in this project stay on this computer. Type /relay:saving on to save them again.']
-    : [`Saving to Relay is on for ${name}.`, 'Each chat here goes to your Relay server as you talk. Type /relay:saving off to stop.'];
+    ? [`Saving to Relay Everything is off for ${name}.`, 'Chats in this project stay on this computer. Type /relay:saving on to save them again.']
+    : [`Saving to Relay Everything is on for ${name}.`, 'Each chat here goes to your Relay Everything server as you talk. Type /relay:saving off to stop.'];
   lines.push(lastSent(store, root, now));
   return env.RELAY_SAVE === '0' ? [...lines, 'RELAY_SAVE is 0 where Claude Code started, so no chat is saved now.'] : lines;
 }

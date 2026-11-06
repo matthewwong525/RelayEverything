@@ -25,7 +25,7 @@ const webhook = z.strictObject({
 });
 const one = z.strictObject({ webhook });
 const name = z.string().trim().min(1).max(80).describe("A name for the webhook, such as the database's.");
-const url = z.string().max(2000).describe("The https address Relay sends to.");
+const url = z.string().max(2000).describe("The https address Relay Everything sends to.");
 const kinds = z.array(kind).max(3).describe("What it takes besides notes, which always go: health, locations or both.");
 
 type View = z.infer<typeof webhook>;
@@ -71,7 +71,7 @@ const owner = ({ handler, ...action }: Owner) => defineAction({ encoding: "json"
 
 export const list = owner({
   operationId: "relay.webhooks", summary: "List the webhooks", encoding: "none", effect: "read",
-  description: "List the webhooks Relay sends to, each with its state, what waits, its last answer and its recent tries.",
+  description: "List the webhooks Relay Everything sends to, each with its state, what waits, its last answer and its recent tries.",
   input: z.strictObject({}), output: z.strictObject({ webhooks: z.array(webhook) }),
   handler: async (_env, db) => Response.json({ webhooks: await views(db) }),
 });
@@ -114,7 +114,7 @@ export const update = owner({
 
 export const remove = owner({
   operationId: "relay.webhooks-remove", summary: "Remove a webhook",
-  description: "Stop sending to a webhook and delete its secret and its tries. Your notes stay in Relay.",
+  description: "Stop sending to a webhook and delete its secret and its tries. Your notes stay in Relay Everything.",
   input: z.strictObject({ id }), output: z.strictObject({ removed: z.literal(true) }),
   handler: async (_env, db, input: { id: string }) => {
     const row = await db.prepare("DELETE FROM relay_webhooks WHERE id = ? RETURNING id").bind(input.id).first();
@@ -153,7 +153,7 @@ export const test = owner({
 
 export const resend = owner({
   operationId: "relay.webhooks-resend", summary: "Send past data",
-  description: "Send again everything the webhook takes that was recorded since a time, in the order Relay stored it, then carry on.",
+  description: "Send again everything the webhook takes that was recorded since a time, in the order Relay Everything stored it, then carry on.",
   input: z.strictObject({ id, since: time.describe("From this Unix time in milliseconds.") }), output: one,
   handler: async (env, db, input: { id: string; since: number }) => answer(db, await backfill(env, db, input.id, input.since), input.id),
 });

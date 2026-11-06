@@ -10,11 +10,11 @@ const ADDRESS = /^https:\/\/[^/\s?#@]+\/mcp$/;
 /** Runs `claude mcp add` for a connector address, and answers the lines to print and the exit code. */
 export function connectAi(address, run = (command, args) => spawnSync(command, args, { stdio: 'inherit' })) {
   if (!ADDRESS.test(address ?? '')) {
-    return { code: 2, lines: ['Give the connector address from the AI apps card on your Relay page: https://<your-relay-server>/mcp'] };
+    return { code: 2, lines: ['Give the connector address from the AI apps card on your Relay Everything page: https://<your-relay-server>/mcp'] };
   }
   const done = run('claude', ['mcp', 'add', '--transport', 'http', '--scope', 'user', 'relay', address]);
   if (done.error || done.status !== 0) return { code: 1, lines: ['Claude Code could not add the connector. The message above says why.'] };
-  return { code: 0, lines: ['Relay is added. Type /mcp, pick relay, and sign in with your Relay email.'] };
+  return { code: 0, lines: ['Relay Everything is added. Type /mcp, pick relay, and sign in with your Relay Everything email.'] };
 }
 
 const self = fileURLToPath(import.meta.url);

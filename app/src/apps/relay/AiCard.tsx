@@ -46,7 +46,7 @@ function Connected({ value, changed }: { value: AiApps; changed: () => void }) {
       <AlertDialogContent className="wrap-anywhere">
         <AlertDialogHeader>
           <AlertDialogTitle>Disconnect {leaving?.name}?</AlertDialogTitle>
-          <AlertDialogDescription>It can't read Relay any more. To use it again, connect it again from the app.</AlertDialogDescription>
+          <AlertDialogDescription>It can't read Relay Everything any more. To use it again, connect it again from the app.</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>

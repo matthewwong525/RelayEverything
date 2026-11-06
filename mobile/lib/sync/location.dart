@@ -69,7 +69,7 @@ class PhonePlaces implements Places {
     // A point every 100 m of movement, not constant GPS: it keeps battery use low.
     final LocationSettings settings = Platform.isAndroid
       ? AndroidSettings(accuracy: LocationAccuracy.medium, distanceFilter: 100, foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationTitle: 'Relay is keeping your places', notificationText: 'Turn this off in Relay settings.', setOngoing: true))
+          notificationTitle: 'Relay Everything is keeping your places', notificationText: 'Turn this off in Relay Everything settings.', setOngoing: true))
       : AppleSettings(accuracy: LocationAccuracy.medium, distanceFilter: 100, activityType: ActivityType.other,
           pauseLocationUpdatesAutomatically: true, allowBackgroundLocationUpdates: true, showBackgroundLocationIndicator: false);
     return Geolocator.getPositionStream(locationSettings: settings).asyncMap((position) async => pinOf(position, await _name(position)));

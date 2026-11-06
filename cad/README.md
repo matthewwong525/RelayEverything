@@ -1,4 +1,4 @@
-# Relay 3D files
+# Relay Everything ring 3D files
 
 Open the .scad files in OpenSCAD (free, openscad.org), change the values at the top, then Render (F6) and Export STL.
 

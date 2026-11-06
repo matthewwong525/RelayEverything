@@ -25,7 +25,7 @@ function batch<Item>(name: string, kind: Kind, items: z.ZodType<Item[]>, descrip
     output, encoding: "json", effect: "write", agentAvailable: false, errors: {}, examples: [], limits,
     async handler(_request, env, { identity, input }) {
       const device = await deviceOf(env, identity);
-      if (!device) return refused(403, "Only a Relay device key can send this");
+      if (!device) return refused(403, "Only a Relay Everything device key can send this");
       const rows = (input as Record<string, Item[]>)[name];
       const db = session(env);
       const added = await save(db, device.id, rows);

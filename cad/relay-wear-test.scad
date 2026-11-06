@@ -1,4 +1,4 @@
-// Relay wear test: a plain ring in the final Relay shape, with no electronics.
+// Relay Everything wear test: a plain ring in the final Relay Everything shape, with no electronics.
 // Print it, wear it for a few days, and check size, feel and comfort.
 // Shape: flat top, polished-style 45° bevels at both edges, comfort-fit inside.
 //
@@ -36,5 +36,5 @@ outer_edge = [
 
 rotate_extrude() polygon(concat(inner_curve, outer_edge));
 
-echo(str("Relay wear test: US ", us_size, ", inner diameter ",
+echo(str("Relay Everything wear test: US ", us_size, ", inner diameter ",
          2 * r_in, " mm, outer diameter ", 2 * r_out, " mm"));

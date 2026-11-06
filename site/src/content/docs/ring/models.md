@@ -1,9 +1,9 @@
 ---
 title: 3D models and test prints
-description: The 3D models of the Relay ring, and the test prints that check its size and click.
+description: The 3D models of the Relay Everything ring, and the test prints that check its size and click.
 ---
 
-The Relay ring is designed as 3D models in [OpenSCAD](https://openscad.org). Before the real ring, two test prints check the size and the click. The model files are [on GitHub](https://github.com/matthewwong525/RelayEverything/tree/main/cad), with the steps to change and print them.
+The Relay Everything ring is designed as 3D models in [OpenSCAD](https://openscad.org). Before the real ring, two test prints check the size and the click. The model files are [on GitHub](https://github.com/matthewwong525/RelayEverything/tree/main/cad), with the steps to change and print them.
 
 ## Wear test
 

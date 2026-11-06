@@ -55,7 +55,7 @@ async function receive(request: Request, env: PebbleEnv, { identity }: Pick<Acti
     return refused(401, "Invalid signature");
   }
   const device = await deviceOf(env, identity);
-  if (!device) return refused(403, "Only a Relay device key can send ring notes");
+  if (!device) return refused(403, "Only a Relay Everything device key can send ring notes");
   // A test event is checked like a note and then dropped, so it never shows in the timeline.
   if (signed.test) return ok({ test: true });
   const fields = await fieldsOf(body, request.headers.get("content-type") ?? "");

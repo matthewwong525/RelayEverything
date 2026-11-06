@@ -12,7 +12,7 @@ const IDLE = 30 * 24 * 3600;
 const options = (env: McpEnv): OAuthProviderOptions<McpEnv> => ({
   apiRoute: "/mcp", apiHandler: mcpHandler, defaultHandler: authHandler,
   authorizeEndpoint: "/authorize", tokenEndpoint: "/token", clientRegistrationEndpoint: "/register",
-  resourceMetadata: { resource: env.RELAY_MCP_ADDRESS, resource_name: "Relay" },
+  resourceMetadata: { resource: env.RELAY_MCP_ADDRESS, resource_name: "Relay Everything" },
   // A stolen access token works for an hour at most; the app refreshes it while the owner keeps it connected.
   accessTokenTTL: 3600,
   // An app in use stays connected: each refresh moves its end 30 days on, so it drops after 30 days unused.

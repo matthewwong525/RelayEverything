@@ -48,12 +48,12 @@ test('a call sends the chat, then the save beside it', async () => {
   const server = fakeServer();
   record(place.store, place.input);
   const reply = await call(place, server, { title: 'Stiffener plan', summary: 'Use 0.2 mm steel, glued.' });
-  assert.equal(text(reply), 'Saved to Relay: Stiffener plan');
+  assert.equal(text(reply), 'Saved to Relay Everything: Stiffener plan');
   assert.deepEqual(server.calls.map(item => item.route), ['chats', 'chat-saves']);
   assert.deepEqual(server.saves, [{ sessionId: SESSION, title: 'Stiffener plan', text: 'Use 0.2 mm steel, glued.' }]);
   // A chat deleted on the server since goes again whole, then the save.
   server.chats.clear();
-  assert.equal(text(await call(place, server, { title: 'Again', summary: 'Again.' })), 'Saved to Relay: Again');
+  assert.equal(text(await call(place, server, { title: 'Again', summary: 'Again.' })), 'Saved to Relay Everything: Again');
   assert.deepEqual(server.calls.map(item => item.route).slice(2), ['chat-saves', 'chats', 'chat-saves']);
   assert.equal(server.chats.get(SESSION).length, 2);
 });
@@ -73,7 +73,7 @@ test('after /clear, a call saves the chat that follows, though the save tool kee
   // An older chat in the same project is not the newest.
   record(place.store, { ...place.input, session_id: 'older-session-01' }, Date.now() - 60_000);
   const reply = await call(place, server, { title: 'T', summary: 'S' }, { CLAUDE_CODE_SESSION_ID: SESSION });
-  assert.equal(text(reply), 'Saved to Relay: T');
+  assert.equal(text(reply), 'Saved to Relay Everything: T');
   assert.deepEqual(server.saves.map(save => save.sessionId), ['chat-b-session-01']);
   assert.deepEqual(server.chats.get('chat-b-session-01').map(message => message.text), ['A new question']);
   // An id this computer never recorded falls back the same way.
@@ -93,7 +93,7 @@ test('refuses in a project with saving off, and says how to turn it on', async (
   record(place.store, place.input);
   place.store.setOff(place.root, true);
   const reply = await call(place, server, { title: 'T', summary: 'S' });
-  assert.deepEqual([reply.result.isError, text(reply)], [true, 'Saving to Relay is off in this project. To turn it on, type /relay:saving on.']);
+  assert.deepEqual([reply.result.isError, text(reply)], [true, 'Saving to Relay Everything is off in this project. To turn it on, type /relay:saving on.']);
   assert.match(text(await call(place, server, { title: 'T', summary: 'S' }, { RELAY_SAVE: '0' })), /RELAY_SAVE is 0/);
   assert.equal(server.calls.length, 0);
 });

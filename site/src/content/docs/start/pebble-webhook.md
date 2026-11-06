@@ -1,12 +1,12 @@
 ---
 title: Set up the Pebble webhook
-description: Send each note from your Pebble Index ring to your Relay server, with its words and recording.
+description: Send each note from your Pebble Index ring to your Relay Everything server, with its words and recording.
 ---
 
-Send each note from your Pebble Index ring to your Relay server, with its words and recording.
+Send each note from your Pebble Index ring to your Relay Everything server, with its words and recording.
 
 :::note
-You need a Relay server and a key for the Pebble app first. [Connect a phone](../connect-a-phone/#make-the-key) shows how to make a key.
+You need a Relay Everything server and a key for the Pebble app first. [Connect a phone](../connect-a-phone/#make-the-key) shows how to make a key.
 :::
 
 ## Steps
@@ -22,9 +22,9 @@ You need a Relay server and a key for the Pebble app first. [Connect a phone](..
    ```
    The key's private page shows this address in full.
 4. Add two custom headers with the values from the key's private page: `CF-Access-Client-Id` and `CF-Access-Client-Secret`.
-5. Turn on **Sign requests**, and enter the signing secret. The owner of the Relay server gives you the secret on a private page.
+5. Turn on **Sign requests**, and enter the signing secret. The owner of the Relay Everything server gives you the secret on a private page.
 6. Choose **Both**, so each note sends its words and its recording.
-7. Tap **Send test event**. Relay answers `200` with `{ "ok": true, "test": true }` and keeps nothing from a test.
+7. Tap **Send test event**. Relay Everything answers `200` with `{ "ok": true, "test": true }` and keeps nothing from a test.
 8. When the test shows success, tap **Save**.
 
 ## What is sent

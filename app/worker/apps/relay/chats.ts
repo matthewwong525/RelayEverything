@@ -52,7 +52,7 @@ const field = (name: string) => `json_extract(value, '$.${name}')`;
 /** POST chats: a bare route, so a send over the caps answers 413 and a gap answers 400 with `stored`. */
 export async function chats(request: Request, env: Env, { identity }: Pick<ActionCall, "identity">): Promise<Response> {
   const device = await chatKey(env, identity);
-  if (!device) return refused(403, "Only a Relay chat key can send chats.");
+  if (!device) return refused(403, "Only a Relay Everything chat key can send chats.");
   if (request.headers.get("content-type")?.split(";")[0] !== "application/json") return refused(400, "Send the chat as a JSON body.");
   let body: string;
   try {
@@ -105,7 +105,7 @@ export const chatSaves = defineAction({
   output: z.strictObject({ ok: z.literal(true) }), encoding: "json", effect: "write", agentAvailable: false, errors: ERRORS, examples: [],
   async handler(_request, env, { identity, input }) {
     const device = await chatKey(env, identity);
-    if (!device) return refused(403, "Only a Relay chat key can save to a chat.");
+    if (!device) return refused(403, "Only a Relay Everything chat key can save to a chat.");
     const save = input as { sessionId: string; title: string; text: string };
     const db = session(env);
     const chat = await stored(db, device.id, save.sessionId);

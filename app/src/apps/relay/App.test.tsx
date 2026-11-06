@@ -71,7 +71,7 @@ const reads = () => fetchMock.mock.calls.map(([path]) => path).filter(path => pa
 
 it("shows today's summary, every note with its place and recording, and the places", async () => {
   await open();
-  expect(await screen.findByRole("heading", { level: 1, name: "Relay" })).toBeTruthy();
+  expect(await screen.findByRole("heading", { level: 1, name: "Relay Everything" })).toBeTruthy();
   const tiles = await screen.findByRole("region", { name: "Today" });
   expect(within(tiles).getByText("8,432")).toBeTruthy();
   expect(within(tiles).getByText("7 h 35 min")).toBeTruthy();
@@ -151,11 +151,11 @@ it("tells how to set up a phone and the Pebble app", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "Set up a phone" }));
   const phone = await screen.findByRole("dialog", { name: "Set up a phone" });
   expect(within(phone).getByText(/relay-device-key\.mjs create --name "Android phone"/)).toBeTruthy();
-  expect(within(phone).getByRole("link", { name: "Relay's releases" }).getAttribute("href")).toBe("https://github.com/matthewwong525/RelayEverything/releases/latest");
+  expect(within(phone).getByRole("link", { name: "Relay Everything's releases" }).getAttribute("href")).toBe("https://github.com/matthewwong525/RelayEverything/releases/latest");
   expect(within(phone).getByLabelText("The message to copy")).toHaveProperty("value", window.location.origin);
   // The app keeps notes on the phone by default, so the steps name the Settings switch first.
   expect(within(phone).getByText(/keeps notes on the phone until you turn on sending/)).toBeTruthy();
-  expect(within(phone).getByText("Send to your Relay server").tagName).toBe("B");
+  expect(within(phone).getByText("Send to Relay Everything").tagName).toBe("B");
   expect(within(phone).getByText("Scan the QR code").tagName).toBe("B");
   fireEvent.keyDown(phone, { key: "Escape" });
   fireEvent.click(await screen.findByRole("button", { name: "Pebble webhook" }));
@@ -261,7 +261,7 @@ it("tells how to connect Claude Code, that its key only adds chats, and that you
   expect(within(dialog).getByText('node scripts/relay-device-key.mjs create --name "Laptop" --for claude-code')).toBeTruthy();
   expect(within(dialog).getByText("/plugin marketplace add matthewwong525/RelayEverything")).toBeTruthy();
   expect(within(dialog).getByText("/plugin install relay@relay")).toBeTruthy();
-  expect(within(dialog).getByText(/run your own Relay server/)).toBeTruthy();
+  expect(within(dialog).getByText(/run your own Relay Everything server/)).toBeTruthy();
 });
 
 it("writes times, places and the day as the page shows them", () => {

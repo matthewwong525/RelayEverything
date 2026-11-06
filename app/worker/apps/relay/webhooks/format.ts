@@ -3,7 +3,7 @@
 import { z } from "zod";
 
 const iso = z.iso.datetime().describe("A time in ISO 8601, UTC.");
-const device = z.strictObject({ id: z.string().describe("The device key's id in Relay."), name: z.string() })
+const device = z.strictObject({ id: z.string().describe("The device key's id in Relay Everything."), name: z.string() })
   .describe("The phone or Pebble app that sent the item.");
 const place = z.strictObject({
   lat: z.number(), lon: z.number(), accuracy: z.number().nullable().describe("In meters."),
@@ -13,31 +13,31 @@ const place = z.strictObject({
 const note = z.strictObject({
   id: z.string().describe("The note's id: a UUID, the same in every message about this note."),
   source: z.enum(["ring", "typed"]), text: z.string().describe("The words: a typed note, or a ring note's transcription."),
-  recorded_at: iso, created_at: iso.describe("When Relay stored it."), device, place: place.nullable(),
+  recorded_at: iso, created_at: iso.describe("When Relay Everything stored it."), device, place: place.nullable(),
 });
 const audio = z.strictObject({ content_type: z.literal("audio/mp4"), base64: z.string() }).nullable()
   .describe("A ring note's recording, or null for a typed note or a ring note with words only.");
 const sample = z.strictObject({
-  id: z.number().int().describe("Unique in this Relay."), device, type: z.enum(["steps", "heart_rate", "sleep", "workout"]),
+  id: z.number().int().describe("Unique in this Relay Everything server."), device, type: z.enum(["steps", "heart_rate", "sleep", "workout"]),
   start: iso, end: iso, value: z.number(), unit: z.string(), source: z.string().describe("The app or watch that counted it."),
 });
 const point = z.strictObject({
-  id: z.number().int().describe("Unique in this Relay."), device, at: iso, lat: z.number(), lon: z.number(),
+  id: z.number().int().describe("Unique in this Relay Everything server."), device, at: iso, lat: z.number(), lon: z.number(),
   accuracy: z.number().describe("In meters."), place: z.string().nullable(),
 });
 
 const BATCH = 500;
 const envelope = <Type extends string, Data extends z.ZodType>(type: Type, data: Data, description: string) =>
-  z.strictObject({ version: z.literal(1), type: z.literal(type), timestamp: iso.describe("When Relay stored what this message holds."), data })
+  z.strictObject({ version: z.literal(1), type: z.literal(type), timestamp: iso.describe("When Relay Everything stored what this message holds."), data })
     .describe(description);
 
 export const message = z.discriminatedUnion("type", [
-  envelope("note.created", z.strictObject({ note: note.extend({ audio }) }), "A note reached Relay."),
+  envelope("note.created", z.strictObject({ note: note.extend({ audio }) }), "A note reached Relay Everything."),
   envelope("note.updated", z.strictObject({ note }), "A ring note got its place from a later location batch. It has no audio."),
-  envelope("health.samples", z.strictObject({ samples: z.array(sample).min(1).max(BATCH) }), "Health samples, in the order Relay stored them."),
-  envelope("location.points", z.strictObject({ points: z.array(point).min(1).max(BATCH) }), "Location points, in the order Relay stored them."),
-  envelope("webhook.test", z.strictObject({ webhook: z.strictObject({ id: z.string(), name: z.string() }) }), "Send a test, from the Relay page."),
-]).meta({ title: "Relay webhook message, version 1", description: "The JSON body of each message a Relay webhook sends." });
+  envelope("health.samples", z.strictObject({ samples: z.array(sample).min(1).max(BATCH) }), "Health samples, in the order Relay Everything stored them."),
+  envelope("location.points", z.strictObject({ points: z.array(point).min(1).max(BATCH) }), "Location points, in the order Relay Everything stored them."),
+  envelope("webhook.test", z.strictObject({ webhook: z.strictObject({ id: z.string(), name: z.string() }) }), "Send a test, from the Relay Everything page."),
+]).meta({ title: "Relay Everything webhook message, version 1", description: "The JSON body of each message a Relay Everything webhook sends." });
 
 type Message = z.infer<typeof message>;
 

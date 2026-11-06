@@ -18,7 +18,7 @@ const USAGE = `usage: node scripts/relay-mcp-trial.mjs [--live | --sign-in]
   --sign-in  the same, then the owner signs in once in a browser on this computer; the app's token reads a made-up note
   --live     the live connector: it answers its metadata and refuses /mcp with no token`;
 
-const APP_NAME = 'Relay trial';
+const APP_NAME = 'Relay Everything trial';
 // A note in schema/seed.sql, which staging's made-up data holds.
 const SEED_NOTE = 'Buy milk and batteries.';
 const WAIT = 10 * 60 * 1000;
@@ -112,7 +112,7 @@ export async function trial({ live, signIn, env, request = fetch, log = console.
     jar.keep(consent);
     const page = await consent.text();
     const handle = /name="handle" value="([^"]+)"/.exec(page)?.[1];
-    check('shows a consent page that names the app', consent.status === 200 && page.includes(`Connect ${APP_NAME} to Relay?`) && !!handle,
+    check('shows a consent page that names the app', consent.status === 200 && page.includes(`Connect ${APP_NAME} to Relay Everything?`) && !!handle,
       `${consent.status}`);
     const approved = await request(`${origin}/authorize`, { method: 'POST', redirect: 'manual', headers: { Cookie: jar.header() },
       body: new URLSearchParams({ handle: handle ?? '', choice: 'approve' }) });

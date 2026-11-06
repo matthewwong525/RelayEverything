@@ -131,7 +131,7 @@ if [ "$BRANCH" = "$PRODUCTION_BRANCH" ]; then
   wong_deploy_line cf-deploy
   # Relay's AI connector, before the app whose RELAY_MCP binding needs it: wiki/stack/relay-ai-connector.md
   if [ -f "$APP_DIR/wrangler.relay-mcp.jsonc" ]; then
-    echo "cf-deploy: deploying Relay's AI connector first"
+    echo "cf-deploy: deploying Relay Everything's AI connector first"
     (cd "$APP_DIR" && "${WRANGLER[@]}" deploy --config wrangler.relay-mcp.jsonc)
   fi
   DEPLOY_LOG=$(mktemp)

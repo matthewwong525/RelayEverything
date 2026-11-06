@@ -70,7 +70,7 @@ test('hold answers 503 with try again in a minute, to a send and a page alike', 
     const answer = await hold.dispatchFetch('https://relay-ring.example.workers.dev/apps/relay/api/pebble', init);
     assert.equal(answer.status, 503);
     assert.equal(answer.headers.get('retry-after'), '60');
-    assert.match(await answer.text(), /Relay is moving; try again in a minute/);
+    assert.match(await answer.text(), /Relay Everything is moving; try again in a minute/);
   }
   assert.equal(seen.length, 0);
 });

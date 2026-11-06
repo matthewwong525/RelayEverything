@@ -1,12 +1,12 @@
 ---
 title: How it works
-description: How the Relay ring records a note while you hold its band, and why a bump doesn't start one.
+description: How the Relay Everything ring records a note while you hold its band, and why a bump doesn't start one.
 ---
 
-The Relay ring records a note while you hold its band, like a walkie-talkie, and sends it to your phone when you let go.
+The Relay Everything ring records a note while you hold its band, like a walkie-talkie, and sends it to your phone when you let go.
 
 :::caution[In design]
-The Relay ring is not built yet. The first version, V1, is in design and test prints. Until it is ready, a [Pebble Index ring](../../start/pebble-webhook/) sends the same notes.
+The Relay Everything ring is not built yet. The first version, V1, is in design and test prints. Until it is ready, a [Pebble Index ring](../../start/pebble-webhook/) sends the same notes.
 :::
 
 ![The V1 ring with its parts inside, from the 3D model](../../../assets/ring/v1-assembly.png)
@@ -16,7 +16,7 @@ The Relay ring is not built yet. The first version, V1, is in design and test pr
 1. **Hold the band.** The centre band clicks anywhere you press it: six small switches sit under it, around the ring.
 2. **Talk.** The ring records only while you hold the band.
 3. **Let go.** The ring sends the recording to your phone over Bluetooth.
-4. **The phone sends it on.** The phone posts it to your Relay server in the same shape as the [Pebble webhook](../../api/pebble-webhook/), and the note shows in the app.
+4. **The phone sends it on.** The phone posts it to your Relay Everything server in the same shape as the [Pebble webhook](../../api/pebble-webhook/), and the note shows in the app.
 
 ## Against bumps
 

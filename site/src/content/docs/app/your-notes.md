@@ -1,11 +1,11 @@
 ---
 title: Notes
-description: Read the notes you write on your phone, open your Relay page for ring notes, and write a new note.
+description: Read the notes you write on your phone, open your Relay Everything page for ring notes, and write a new note.
 ---
 
-The Relay app opens on your notes, newest first. It shows the notes that you type or say into this phone. It keeps them on the phone.
+The Relay Everything app opens on your notes, newest first. It shows the notes that you type or say into this phone. It keeps them on the phone.
 
-Ring notes and recordings are on your Relay page, not in the app. Your phone's key can only send to your Relay server. It can not read your notes from the server.
+Ring notes and recordings are on your Relay Everything page, not in the app. Your phone's key can only send to your Relay Everything server. It can not read your notes from the server.
 
 ## Read your notes
 
@@ -17,9 +17,9 @@ Each note shows:
 - When you made it and where you were. With sending off, a pinned note shows **Pinned**: the phone does not look up the place's name.
 - With sending on, **Sent** or **Waiting to send**. **Sent** means your server has the note. **Waiting to send** means the note goes on the next sync.
 
-## Open your Relay page
+## Open your Relay Everything page
 
-With sending on, a card at the top of the list says *Ring notes and recordings are on your Relay page.* Tap **Open your Relay page**. The phone's browser opens `<your-relay-server>/apps/relay/`. Sign in with your email. Your ring notes, their recordings, and the notes from all your devices are there.
+With sending on, a card at the top of the list says *Ring notes and recordings are on your Relay Everything page.* Tap **Open your Relay Everything page**. The phone's browser opens `<your-relay-server>/apps/relay/`. Sign in with your email. Your ring notes, their recordings, and the notes from all your devices are there.
 
 With sending off, the card does not show.
 
@@ -37,7 +37,7 @@ Hold **Hold to talk**, talk, and let go. The phone writes the words itself. [Voi
 
 ## Where a ring note's place comes from
 
-The Pebble ring sends no place. With sending and **Location history** on, a ring note takes the history point nearest in time, up to 10 minutes before or after you spoke. You see the place on your Relay page. [Location](../location/) tells more.
+The Pebble ring sends no place. With sending and **Location history** on, a ring note takes the history point nearest in time, up to 10 minutes before or after you spoke. You see the place on your Relay Everything page. [Location](../location/) tells more.
 
 ## The sync mark
 

@@ -8,7 +8,7 @@ export type Reach = "phone" | "chats";
 /** Each kind of key only adds data, so every reach is POST, plus `GET key`, which answers only the key's own name. A
  *  read such as `GET chats` shares an address with a send, so the method is checked too. */
 const REACH: Record<Reach, { routes: RegExp; refusal: string }> = {
-  phone: { routes: /^\/apps\/relay\/api\/(?:pebble|notes|health|locations)$/, refusal: "A device key can only send to Relay." },
+  phone: { routes: /^\/apps\/relay\/api\/(?:pebble|notes|health|locations)$/, refusal: "A device key can only send to Relay Everything." },
   chats: { routes: /^\/apps\/relay\/api\/(?:chats|chat-saves)$/, refusal: "A chat key can only send chats." },
 };
 const KEY_CHECK = "/apps/relay/api/key";

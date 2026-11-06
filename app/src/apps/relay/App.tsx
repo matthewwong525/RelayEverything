@@ -34,7 +34,7 @@ function Day({ summary }: { summary: Summary }) {
     </p>
     <section className="grid gap-3" aria-label="Places">
       <h2>Places today</h2>
-      {places.length === 0 ? <p className="text-muted-foreground">No places yet today. Turn on location history in the Relay app.</p> :
+      {places.length === 0 ? <p className="text-muted-foreground">No places yet today. Turn on location history in the Relay Everything app.</p> :
         <Card className="grid gap-2 p-4">{places.map((place) => <div key={place.from} className="flex flex-wrap justify-between gap-2">
           <span className="wrap-anywhere">{place.name}</span>
           <span className="text-sm text-muted-foreground">{when(place.from)}{place.to > place.from && ` to ${when(place.to)}`}</span>
@@ -50,7 +50,7 @@ export function App() {
   const origin = window.location.origin
   return <div className="grid gap-6">
     <div className="flex flex-wrap items-center gap-2">
-      <h1 className="grow">Relay</h1>
+      <h1 className="grow">Relay Everything</h1>
       <PhoneSetup origin={origin} />
       <PebbleSetup origin={origin} />
     </div>

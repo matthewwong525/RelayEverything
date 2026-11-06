@@ -29,7 +29,7 @@ test('the connect code and the private page carry the key; the list never does',
   assert.deepEqual(JSON.parse(connectCode(key)), { relay: 1, ...key });
   const page = handOverPage({ ...key, name: '<Phone>', qrSvg: '<svg></svg>' });
   for (const part of ['&#60;Phone&#62;', 'shh-secret', 'abc.access', 'https://relay.example.com/apps/relay/api/pebble', '<svg></svg>',
-    'Open the Relay app and tap Scan the QR code']) assert.ok(page.includes(part), part);
+    'Open the Relay Everything app and tap Scan the QR code']) assert.ok(page.includes(part), part);
   assert.ok(handOverPage({ ...key, name: 'Phone', qrSvg: null }).includes('No QR code'));
   const rows = [{ name: 'Phone', reaches: 'phone', token_client_id: 'abc.access', created_at: Date.UTC(2026, 10, 5), revoked_at: null },
     { name: 'Old', reaches: 'phone', token_client_id: 'old.access', created_at: Date.UTC(2026, 0, 1), revoked_at: Date.UTC(2026, 5, 1) },
@@ -42,7 +42,7 @@ test('the connect code and the private page carry the key; the list never does',
 test('a Claude Code key\'s page holds its connect code as text, escaped, with no QR code', () => {
   const code = connectCode({ server: 'https://relay.example.com', clientId: 'abc.access', clientSecret: 'shh-secret' });
   const page = chatHandOverPage({ name: 'Laptop', code });
-  for (const part of ['Relay chat key: Laptop', '&#34;clientSecret&#34;:&#34;shh-secret&#34;', 'paste this connect code']) assert.ok(page.includes(part), part);
+  for (const part of ['Relay Everything chat key: Laptop', '&#34;clientSecret&#34;:&#34;shh-secret&#34;', 'paste this connect code']) assert.ok(page.includes(part), part);
   assert.ok(!page.includes('<svg'));
 });
 

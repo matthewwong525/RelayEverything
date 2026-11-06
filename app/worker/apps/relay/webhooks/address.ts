@@ -14,7 +14,7 @@ export const REFUSALS: Record<Refusal, string> = {
   address_not_https: "The address must start with https://.",
   address_has_login: "The address can't hold a user name or password.",
   address_private: "The address can't be this computer or a private network.",
-  address_own_site: "The address can't be Relay's own site.",
+  address_own_site: "The address can't be Relay Everything's own site.",
 };
 
 const privateV4 = (address: number) => PRIVATE_V4.some(([network, bits]) => (address >>> (32 - bits)) === (network >>> (32 - bits)));

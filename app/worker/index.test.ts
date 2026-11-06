@@ -178,7 +178,7 @@ describe("private Worker routing", () => {
     const phone = { "Cf-Access-Jwt-Assertion": await token({ common_name: "phone.access", sub: "" }) };
     const answer = async (path: string) => { const response = await call(path, phone, bindings); return [response.status, ((await response.json()) as { error: { message: string } }).error.message]; };
     for (const path of ["/", "/apps/hello/api/greeting", "/api/health", "/apps/relay/api/nothing", "/apps/relay/", "/apps/relay/api/timeline"]) {
-      expect(await answer(path), path).toEqual([403, "A device key can only send to Relay."]);
+      expect(await answer(path), path).toEqual([403, "A device key can only send to Relay Everything."]);
     }
     row = { ...row, revoked_at: 1 };
     expect(await answer("/apps/relay/api/notes")).toEqual([403, "This device key is turned off."]);

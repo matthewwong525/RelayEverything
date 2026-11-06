@@ -34,7 +34,7 @@ export function Notes({ first }: { first: Timeline }) {
   return <section className="grid gap-3" aria-label="Notes">
     <h2>Notes</h2>
     {notes.map((note) => <NoteCard key={note.id} note={note} />)}
-    {notes.length === 0 && <p className="text-muted-foreground">No notes yet. Hold the ring and talk, or write one in the Relay app.</p>}
+    {notes.length === 0 && <p className="text-muted-foreground">No notes yet. Hold the ring and talk, or write one in the Relay Everything app.</p>}
     {failed && <p role="alert">Older notes could not be loaded.</p>}
     {next !== null && <Button type="button" variant="outline" className="justify-self-start" onClick={() => void more()}>Show older notes</Button>}
   </section>

@@ -48,7 +48,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Connect Relay')),
+      appBar: AppBar(title: const Text('Connect Relay Everything')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         const Text('Ask your assistant for a key for this phone. It shows once, as a QR code and on a private page.'),
         const SizedBox(height: 16),

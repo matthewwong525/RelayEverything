@@ -5,8 +5,8 @@ description: Every route of the Relay Everything server, with its fields, made f
 
 <!-- Made by `npm run relay:api-doc` in app/ from app/worker/apps/relay/. Do not edit it by hand. -->
 
-Each route sits under `https://<your-relay-server>/apps/relay/api/`. Send your key's two headers with each call, as
-[Keys](../keys/) shows. A refused call answers `{ "error": { "code": "...", "message": "..." } }`; [Keys](../keys/#errors)
+Each route sits under `https://<your-relay-server>/apps/relay/api/`. A device sends its key as
+`Authorization: Bearer rek_…`, as [Keys](../keys/) shows; a person signs in on the page. A refused call answers `{ "error": { "code": "...", "message": "..." } }`; [Keys](../keys/#errors)
 lists the codes.
 
 ## Store a typed note
@@ -536,7 +536,7 @@ Send the input as a JSON body.
 
 `POST /apps/relay/api/webhooks/sweep` · `relay.webhooks-sweep` · writes · called by a signed-in person only, not a device key
 
-Run what production runs every 15 minutes: send every webhook left behind, and drop tries older than 30 days.
+Run what your space's alarm runs every 15 minutes: send each of your webhooks left behind, and drop tries older than 30 days.
 
 ### Input
 
@@ -563,7 +563,7 @@ It takes no input.
 
 `GET /apps/relay/api/ai-apps` · `relay.ai-apps` · reads · called by a signed-in person only, not a device key
 
-List the AI chat apps connected to Relay Everything's AI connector, with the address to connect another.
+List the AI chat apps you connected to Relay Everything's AI connector, with the address to connect another.
 
 ### Input
 
@@ -584,12 +584,13 @@ It takes no input.
 | Code | When |
 |---|---|
 | `unavailable` | The AI connector is not set up here. |
+| `not_found` | You have no connected AI app with this id. |
 
 ## Disconnect an AI app
 
 `POST /apps/relay/api/ai-apps-disconnect` · `relay.ai-app-disconnect` · writes · called by a signed-in person only, not a device key
 
-End one AI app's connection to Relay Everything: its sign-in stops working at once.
+End one of your AI apps' connection to Relay Everything: its sign-in stops working at once.
 
 ### Input
 
@@ -610,6 +611,7 @@ Send the input as a JSON body.
 | Code | When |
 |---|---|
 | `unavailable` | The AI connector is not set up here. |
+| `not_found` | You have no connected AI app with this id. |
 
 ## Save the AI's summary of a chat
 
@@ -744,6 +746,122 @@ Send the input as query parameters.
 | Code | When |
 |---|---|
 | `not_found` | No chat has this id. |
+
+## List the devices
+
+`GET /apps/relay/api/devices` · `relay.devices` · reads · called by a signed-in person only, not a device key
+
+List your devices and their keys' state, newest last. No key shows.
+
+### Input
+
+It takes no input.
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `devices` | array of object | yes |  |
+| `devices[].id` | string | yes |  |
+| `devices[].name` | string | yes |  |
+| `devices[].reaches` | "phone" or "chats" | yes | phone: notes, health and places, from a phone or the Pebble app. chats: Claude Code chats. |
+| `devices[].createdAt` | number | yes |  |
+| `devices[].revokedAt` | number or null | yes |  |
+
+## Add a device
+
+`POST /apps/relay/api/devices` · `relay.devices-add` · writes · called by a signed-in person only, not a device key
+
+Make a key for a new device. The answer holds the key, its QR code text and, for a phone key, the Pebble signing secret: each shows only this once.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `name` | string | yes | A name you know the device by. |
+| `reaches` | "phone" or "chats" | yes | phone: notes, health and places, from a phone or the Pebble app. chats: Claude Code chats. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | yes |  |
+| `name` | string | yes |  |
+| `reaches` | "phone" or "chats" | yes | phone: notes, health and places, from a phone or the Pebble app. chats: Claude Code chats. |
+| `key` | string | yes | Shown this once. |
+| `qr` | string | yes | What the phone scans: the server's address and the key. |
+| `pebbleSecret` | string or null | yes | A phone key's Pebble signing secret, shown this once. |
+
+## Turn off a device
+
+`POST /apps/relay/api/devices/off` · `relay.devices-off` · writes · called by a signed-in person only, not a device key
+
+Turn off a device's key: it stops at once. The device's notes stay.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | yes | The device's id, from the list of devices. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | yes |  |
+| `revokedAt` | number | yes |  |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `not_found` | You have no device with this id. |
+
+## Read the account
+
+`GET /apps/relay/api/account` · `relay.account` · reads · called by a signed-in person only, not a device key
+
+Answer the signed-in person's email.
+
+### Input
+
+It takes no input.
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `email` | string | yes |  |
+
+## Delete my account
+
+`POST /apps/relay/api/account-delete` · `relay.account-delete` · writes · called by a signed-in person only, not a device key
+
+Delete your account: your notes, recordings, health, places, chats, devices, webhooks and AI apps. It can't be undone.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `email` | string | yes | Your account's email, typed to confirm. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `deleted` | boolean | yes |  |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `invalid_input` | Type your account's email to confirm. |
 
 ## Routes with their own page
 

@@ -9,7 +9,7 @@ description: The route that takes a ring note from the Pebble app's Index webhoo
 
 | Header | What it holds |
 |---|---|
-| `CF-Access-Client-Id`, `CF-Access-Client-Secret` | The Pebble app's [device key](../keys/), as custom headers |
+| `Authorization` | `Bearer` and the Pebble device's [key](../keys/), as a custom header |
 | `X-Index-Webhook-Version` | `1` |
 | `X-Index-Timestamp` | When the Pebble app sent it, in Unix seconds. It must be within 300 s of the server's time. |
 | `X-Index-Delivery` | One id for each note: 1 to 200 letters, digits and `. _ : -` |
@@ -29,7 +29,7 @@ A `multipart/form-data` body, up to 10 MB:
 
 ## Signature
 
-The signature is HMAC-SHA256, keyed with the signing secret's UTF-8 bytes, over this text followed by the raw body:
+The signature is HMAC-SHA256, keyed with the UTF-8 bytes of the device's own signing secret, which the page shows once with its key, over this text followed by the raw body:
 
 ```text
 v1\n{X-Index-Timestamp}\n{X-Index-Delivery}\n{X-Index-Trigger}\n{1 for a test, else 0}\n
@@ -37,7 +37,7 @@ v1\n{X-Index-Timestamp}\n{X-Index-Delivery}\n{X-Index-Trigger}\n{1 for a test, e
 
 ## Answers
 
-The server checks in this order: version, time, delivery id, size, signature, then the key.
+The server checks the key first, as it needs the device's own signing secret. Then it checks in this order: version, time, delivery id, size and signature.
 
 | Status | Body | When |
 |---|---|---|
@@ -46,7 +46,7 @@ The server checks in this order: version, time, delivery id, size, signature, th
 | `200` | `{ "ok": true, "test": true }` | A test event: checked, then dropped. |
 | `400` | an error | Wrong version, time or delivery id, or no readable `recordedAt` |
 | `401` | an error | The time is more than 300 s off, or the signature is wrong. |
-| `403` | an error | The key is not a device key, or it is off. |
+| `403` | an error | The key is not a device key, it is off, or it is a chat key. |
 | `413` | an error | The body is larger than 10 MB. |
 | `503` | an error | The recording could not be saved. The Pebble app sends it again. |
 

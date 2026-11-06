@@ -4,7 +4,7 @@ Relay Everything saves Claude Code chats through the Relay Everything plugin in 
 
 ## How a chat travels
 
-1. A chat key, made with `node scripts/relay-device-key.mjs create --name "<computer>" --for claude-code`, is a device row with `reaches = 'chats'`. It reaches only `POST chats` and `POST chat-saves`; [`device.ts`](../../app/worker/apps/relay/device.ts) checks the method and path. A phone key (`reaches = 'phone'`) can't reach a chat route.
+1. A chat key, made on the Relay Everything page with **Add a device** → **Claude Code**, is a device row with `reaches = 'chats'`. The connect code is `{"relay":1,"server":…,"key":"rek_…"}`, and the plugin sends the key as `Authorization: Bearer`. It reaches only `POST chats` and `POST chat-saves`; [`caller.ts`](../../app/worker/apps/relay/caller.ts) checks the method and path. A phone key (`reaches = 'phone'`) can't reach a chat route.
 2. The plugin's hooks run `bin/hook.mjs`: `SessionStart` notes the session and sends any send that failed before, `Stop` sends the new messages, and `SessionEnd` starts a detached send so Claude Code's short end budget never cuts it.
 3. [`lib/transcript.mjs`](../../plugin/lib/transcript.mjs) reads the transcript JSONL: what you typed, the AI's text, and one line per tool step. Tool output, thinking, helper chats and unknown lines are never sent. [`lib/hide.mjs`](../../plugin/lib/hide.mjs) replaces key shapes and `.env` values with `[hidden]` first.
 4. [`chats.ts`](../../app/worker/apps/relay/chats.ts) stores messages once each by `(chat, seq)` and answers only `stored`. A gap answers 400 with `stored`, and the plugin sends again from there, as after a delete.
@@ -22,10 +22,10 @@ Relay Everything saves Claude Code chats through the Relay Everything plugin in 
 
 ## Try it on a preview
 
-1. Make a staging chat key: `node scripts/relay-device-key.mjs create --name "Build check" --for claude-code --staging`.
+1. Make a chat key named *Build check* on the staging server's page (`app-staging.relayeverything.com`): **Add a device** → **Claude Code**.
 2. In a new Claude Code session, run `/plugin marketplace add <this checkout's path>` and `/plugin install relay@relay`, then paste the code.
 3. Have a short chat, then ask the AI to save it to Relay Everything. Open the preview's **Chats** card to see it.
-4. Delete the chat, then run `node scripts/relay-device-key.mjs revoke --name "Build check" --staging`.
+4. Delete the chat, then select **Turn off** beside *Build check* in **Devices**.
 
 The connect code from step 1 names the staging server, but the chat routes of a new change live only on its preview. To send there, change the code's `server` to the preview's address before you paste it.
 

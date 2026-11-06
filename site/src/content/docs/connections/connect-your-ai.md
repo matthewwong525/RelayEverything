@@ -3,13 +3,13 @@ title: Connect your AI
 description: Let the Claude app, ChatGPT or Claude Code read your Relay Everything notes, health, places and chats, with one connector address and your own sign-in.
 ---
 
-Relay Everything's AI connector lets an AI chat app read your Relay Everything data when you ask it a question. It only reads: it can't add, change or delete anything. Only you, the server's owner, can sign in to it.
+Relay Everything's AI connector lets an AI chat app read your Relay Everything data when you ask it a question. It only reads: it can't add, change or delete anything. Each person with a Relay Everything account can connect their own apps, and each app reads only that person's own space.
 
 The connector's address is on the **AI apps** card at the bottom of the Relay Everything page, with a **Copy** button. It looks like `https://<your-relay-server>/mcp`.
 
 ## Connect an app
 
-You connect each app one time. Each app opens a sign-in page: click **Connect**, then sign in with your Relay Everything email.
+You connect each app one time. Each app opens a sign-in page: click **Connect**, then sign in to Relay Everything the way you sign in to your page: an email code, Apple or Google, or your own server's login.
 
 - **The Claude app** (web, desktop or phone): open **Settings → Connectors → Add custom connector**. Type `Relay Everything` as the name and paste the address. Click **Connect**, then sign in. On a new chat, turn Relay Everything on in the tools menu.
 - **ChatGPT**: open **Settings → Apps & Connectors → Advanced settings** and turn on **Developer mode**. Then click **Create**, type `Relay Everything`, paste the address and pick **OAuth** for the sign-in. Click **Create**, then sign in. In a chat, pick Relay Everything from the developer-mode tools.
@@ -19,7 +19,7 @@ Then ask, for example: *What did I note on 4 November?* or *What did I decide ab
 
 ## What the AI can read
 
-The connector has eight tools. Each answer has a limit, so one question can't copy all of Relay Everything.
+The connector has eight tools. Each tool reads only the space of the person who connected the app. Each answer has a limit, so one question can't copy all of your space.
 
 - **search**: notes that hold every word you give, newest first.
 - **fetch**: one note, the places near it in time, and its day's health totals.
@@ -38,4 +38,4 @@ An answer never holds a recording, a device key, or a device's or delivery's id.
 
 ## Disconnect an app
 
-On the Relay Everything page, find the app in the **AI apps** card and click **Disconnect**, then confirm. Its sign-in stops at once: its next question gets a refusal. To use it again, connect it again from the app. Removing Relay Everything in the app's own settings does not end the sign-in on Relay Everything's side.
+On the Relay Everything page, find the app in the **AI apps** card and click **Disconnect**, then confirm. The card lists only the apps you connected. Its sign-in stops at once: its next question gets a refusal. To use it again, connect it again from the app. Removing Relay Everything in the app's own settings does not end the sign-in on Relay Everything's side.

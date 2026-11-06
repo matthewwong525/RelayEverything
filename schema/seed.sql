@@ -1462,3 +1462,7 @@ INSERT INTO relay_webhook_attempts (webhook_id, at, first_seq, last_seq, type, s
   ('e0000000-0000-4000-8000-000000000001', 1793797300000, 4, 4, 'note.created', 200, 164, NULL),
   ('e0000000-0000-4000-8000-000000000001', 1793811710000, 5, 5, 'note.created', 200, 171, NULL),
   ('e0000000-0000-4000-8000-000000000001', 1793829510000, 6, 6, 'note.created', 200, 158, NULL);
+-- Relay Everything's directory: the preview checker's fixed test person (CHECKER_PERSON in caller.ts), so a device key
+-- the checker adds has its person. The rows above are the owner's old data, which the one-time move copies to a space.
+INSERT INTO relay_people (id, email, created_at) VALUES
+  ('00000000-0000-4000-8000-000000000000', 'checker@example.invalid', 1793700000000);

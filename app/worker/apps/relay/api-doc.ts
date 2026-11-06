@@ -2,7 +2,7 @@
 // fails api-doc.test.ts. `npm run relay:api-doc` writes it to site/src/content/docs/api/reference.md.
 import { registrations, schemas, type Action, type Route } from "../../api/contract.ts";
 import { routes as relayRoutes } from "./api.ts";
-import { reaches } from "./device.ts";
+import { reaches } from "./caller.ts";
 
 type Schema = { type?: string; enum?: unknown[]; items?: Schema; anyOf?: Schema[]; properties?: Record<string, Schema>;
   required?: string[]; description?: string };
@@ -81,8 +81,8 @@ description: Every route of the Relay Everything server, with its fields, made f
 
 <!-- Made by \`npm run relay:api-doc\` in app/ from app/worker/apps/relay/. Do not edit it by hand. -->
 
-Each route sits under \`https://<your-relay-server>/apps/relay/api/\`. Send your key's two headers with each call, as
-[Keys](../keys/) shows. A refused call answers \`{ "error": { "code": "...", "message": "..." } }\`; [Keys](../keys/#errors)
+Each route sits under \`https://<your-relay-server>/apps/relay/api/\`. A device sends its key as
+\`Authorization: Bearer rek_…\`, as [Keys](../keys/) shows; a person signs in on the page. A refused call answers \`{ "error": { "code": "...", "message": "..." } }\`; [Keys](../keys/#errors)
 lists the codes.
 
 ${registrations(routes, "relay").map(described).join("\n\n")}

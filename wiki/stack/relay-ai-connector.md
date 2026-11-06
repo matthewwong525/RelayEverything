@@ -46,16 +46,16 @@ On the Relay Everything page, find the app in the **AI apps** card and click **D
 
 ## How the sign-in keeps others out
 
-Two locks admit only Relay Everything's owner, the `WONG_OWNER_EMAIL` in `app/wrangler.relay-mcp.jsonc`:
+The connector has no sign-in of its own. After you click **Connect**, it sends you to the Relay Everything server named by `RELAY_SERVER_URL` in `app/wrangler.relay-mcp.jsonc`, which signs you in as it does on the page ([Relay Everything spaces](../relay-spaces.md)):
 
-1. An Access for SaaS app, `relay-everything AI connector`, signs you in. Its one policy allows only the owner's email.
-2. The connector then reads the email in Access's signed answer itself, and refuses any other email. A wider Access policy still admits no one else.
+1. The server sends you back to the connector's `/callback` with a one-time code. The code works once, for a few minutes.
+2. The connector trades the code in the shared database for your person id, and puts it in the grant. Each tool opens only that person's space.
 
-An app stays connected while you use it. Its access token works for one hour, and the app gets a new one when it asks again. After 30 days with no use, the sign-in drops, and you connect the app again. Disconnect ends it at once. A device key from the [Relay Everything phones](../../app/worker/apps/relay/device.ts) can't use the connector, and the connector's tokens can't open the main app.
+An app stays connected while you use it. Its access token works for one hour, and the app gets a new one when it asks again. After 30 days with no use, the sign-in drops, and you connect the app again. Disconnect ends it at once. A device key from the [Relay Everything phones](../../app/worker/apps/relay/caller.ts) can't use the connector, and the connector's tokens can't open the main app.
 
 ## Set it up
 
-The setup script makes the connector's Worker, its sign-in store, and the Access app, and saves the sign-in's values as the Worker's secrets. It never shows a secret. Run it from the repository with the user token in `.env` ([Cloudflare credentials](cloudflare-credentials.md)):
+The setup script makes the connector's Worker and its sign-in store. The connector has no secret. Run it from the repository with the user token in `.env` ([Cloudflare credentials](cloudflare-credentials.md)):
 
 ```bash
 node scripts/relay-mcp-setup.mjs --check            # the token can do each step; changes nothing
@@ -65,13 +65,13 @@ node scripts/relay-mcp-setup.mjs                    # the live connector
 
 A second run changes nothing. When `--check` names a missing permission, widen the token as [Cloudflare credentials](cloudflare-credentials.md#how-two-permission-rows-become-enough) says, then run it again.
 
-Run setup for an environment **before** the main app deploys there. The main app binds the connector as `RELAY_MCP`, and Cloudflare refuses a deploy whose bound Worker does not exist. For the first change that adds the connector:
+Deploy the spaces Worker (`app/wrangler.spaces.jsonc`), then run setup for an environment, **before** the main app deploys there. The connector binds `SPACES`, the main app binds the connector as `RELAY_MCP`, and Cloudflare refuses a deploy whose bound Worker does not exist. For the first change that adds the connector:
 
 1. Run setup with `--staging`, then [try it](#try-it), before the change is saved: the preview binds `relay-everything-mcp-staging`.
 2. Run setup for the live connector just before the change is published: the publish deploys `relay-everything-mcp`.
 3. After the publish, run the trial with `--live`.
 
-After that, each publish deploys the live connector first, then the main app ([`scripts/cf-deploy.sh`](../../scripts/cf-deploy.sh)). A preview deploys only the main app, and a second setup run deploys nothing. To put a branch's connector code on staging, deploy it from `app/`:
+After that, each publish deploys the live spaces Worker, then the live connector, then the main app ([`scripts/cf-deploy.sh`](../../scripts/cf-deploy.sh)). A preview deploys only the main app, and a second setup run deploys nothing. To put a branch's connector code on staging, deploy it from `app/`:
 
 ```bash
 npx wrangler deploy -c wrangler.relay-mcp.jsonc --env staging
@@ -89,7 +89,7 @@ node scripts/relay-mcp-trial.mjs --sign-in    # staging, then you sign in once i
 node scripts/relay-mcp-trial.mjs --live       # the live connector: its metadata, and /mcp refused with no token
 ```
 
-With no sign-in, it checks each step up to the Access sign-in: the metadata, an app's registration, the consent page, and the hand-off to Access. It also checks that a made-up sign-in answer, a made-up code, a wrong token and the checker's service token are each refused. It can't sign in by itself: only the owner's email gets in, and a service token has no email. With `--sign-in`, it shows a link; you click **Connect** and sign in, and the app's token then reads a made-up note. Disconnect the app **Relay Everything trial** on the preview's **AI apps** card after.
+With no sign-in, it checks each step up to the server's sign-in: the metadata, an app's registration, the consent page, and the hand-off to the server. It also checks that a made-up sign-in answer, a made-up code, a wrong token and a service token are each refused. It can't sign in by itself. With `--sign-in`, it shows a link; you click **Connect** and sign in, and the app's token then reads a made-up note. Disconnect the app **Relay Everything trial** on the preview's **AI apps** card after.
 
 ## Where the code is
 

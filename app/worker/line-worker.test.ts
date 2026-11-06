@@ -15,10 +15,10 @@ it("exports the inbox's line and answers 404 to any request", async () => {
   expect(answer.status).toBe(404);
 });
 
-it("runs the line beside the app in local dev, and leaves it out of a build", async () => {
+it("runs the line and the spaces beside the app in local dev, and leaves them out of a build", async () => {
   const { default: config } = await import("../vite.config") as { default: (env: ConfigEnv) => UserConfig };
   const at = (command: ConfigEnv["command"]) => (config({ command, mode: "test" }), cloudflare.mock.lastCall?.[0]);
-  expect(at("serve")).toEqual({ auxiliaryWorkers: [{ configPath: "./wrangler.line.jsonc" }] });
+  expect(at("serve")).toEqual({ auxiliaryWorkers: [{ configPath: "./wrangler.line.jsonc" }, { configPath: "./wrangler.spaces.jsonc" }] });
   expect(at("build")).toEqual({});
 });
 

@@ -2,19 +2,34 @@ import { readdirSync, readFileSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { beforeAll, expect, it } from "vitest";
-import { seeded } from "../../tests/employee-access/connections";
+import { ANA, BEN, fakeSpaces } from "../../tests/relay";
 import { mcpHandler } from "./tools";
 
-/** An MCP client that reaches the connector over this database. */
-async function connect(DB: D1Database) {
+const SPACE_ROWS = /^INSERT INTO relay_(?:devices|notes|health|locations|chats|chat_messages|chat_saves|webhooks|webhook_attempts)\b/;
+const seedRows = readFileSync(new URL("../../../schema/seed.sql", import.meta.url), "utf8").split(/;\s*$/m)
+  .map(part => part.replace(/^\s*(?:--.*\n\s*)*/, "")).filter(part => SPACE_ROWS.test(part));
+
+/** Ana's space with staging's made-up rows, and Ben's with a note of his own that holds the same words. */
+function seeded() {
+  const made = fakeSpaces();
+  const sql = made.sql(ANA);
+  for (const statement of seedRows) sql.exec(statement);
+  made.sql(BEN).exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-ben', 'Phone', 'rek:d-ben', '', 0, 'phone');
+    INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at)
+    VALUES ('${ID(7)}', 'd-ben', 'typed', 'ben-1', 'Ben: buy milk and the ring.', 1793811000000, 0)`);
+  return { sql, SPACES: made.SPACES };
+}
+
+/** An MCP client that reaches the connector with a grant for this person's space. */
+async function connect(SPACES: DurableObjectNamespace, personId = ANA) {
   const connected = new Client({ name: "test", version: "1.0.0" });
   await connected.connect(new StreamableHTTPClientTransport(new URL("https://relay-mcp.example.com/mcp"),
-    { fetch: (url, init) => mcpHandler.fetch(new Request(url, init), { DB }) }));
+    { fetch: (url, init) => mcpHandler.fetch(new Request(url, init), { SPACES }, { props: { personId } }) }));
   return connected;
 }
 
 let client: Client;
-beforeAll(async () => { client = await connect(seeded().env.DB); });
+beforeAll(async () => { client = await connect(seeded().SPACES); });
 
 /** A tool's answer as JSON, or its refusal's text. */
 async function ask(name: string, args: Record<string, unknown>) {
@@ -132,13 +147,13 @@ it("finds saved chats holding every word, with the matching lines and no device 
 });
 
 it("cuts a long matching line around the word", async () => {
-  const { sql, env: { DB } } = seeded();
+  const { sql, SPACES } = seeded();
   sql.exec(`INSERT INTO relay_chat_messages (chat_id, seq, role, text, at) VALUES ('${CHAT(2)}', 3, 'ai', '${"a".repeat(500)} needle ${"b".repeat(500)}', 1793816200000)`);
-  client = await connect(DB);
+  client = await connect(SPACES);
   const [{ lines }] = (await ask("search_chats", { query: "needle" })).chats;
   expect(lines[0].text).toMatch(/^…a+ needle b+…$/);
   expect(lines[0].text.length).toBe(302);
-  client = await connect(seeded().env.DB);
+  client = await connect(seeded().SPACES);
 });
 
 it("reads one chat with its saves and messages, a part at a time", async () => {
@@ -149,31 +164,43 @@ it("reads one chat with its saves and messages, a part at a time", async () => {
     ["you", "How thick should the stiffener be?"], ["step", "Read pcb/relay.kicad_pcb"],
     ["ai", "0.2 mm steel is enough for a ring this size. Glue it under the battery."], ["you", "Save the plan for the stiffener to Relay"]]);
   expect(JSON.stringify(chat)).not.toMatch(/seed-session|d0000000/);
-  const { sql, env: { DB } } = seeded();
+  const { sql, SPACES } = seeded();
   const insert = sql.prepare(`INSERT INTO relay_chat_messages (chat_id, seq, role, text, at) VALUES ('${CHAT(2)}', ?, 'you', 'More', 1793816200000)`);
   for (let seq = 3; seq < 250; seq++) insert.run(seq);
-  client = await connect(DB);
+  client = await connect(SPACES);
   const first = await ask("read_chat", { id: CHAT(2) });
   expect([first.messages.length, first.nextCursor]).toEqual([200, "199"]);
   const rest = await ask("read_chat", { id: CHAT(2), cursor: first.nextCursor });
   expect([rest.messages.length, rest.messages[0].text, rest.nextCursor]).toEqual([50, "More", null]);
   expect(await ask("read_chat", { id: CHAT(2), cursor: "page-2" })).toEqual({ refused: "That cursor is not one this connector gave." });
   expect(await ask("read_chat", { id: CHAT(9) })).toEqual({ refused: "No chat has this id." });
-  client = await connect(seeded().env.DB);
+  client = await connect(seeded().SPACES);
 });
 
 it("titles a note with no words, and lets a database fault through as an error, not as an answer", async () => {
-  const { sql, env: { DB } } = seeded();
+  const { sql, SPACES } = seeded();
   sql.exec(`INSERT INTO relay_notes (id, device_id, source, delivery_id, text, recorded_at, created_at) VALUES
     ('${ID(8)}', 'd0000000-0000-4000-8000-000000000002', 'ring', 'empty-delivery', '', 1793900000000, 0)`);
-  client = await connect(DB);
+  client = await connect(SPACES);
   expect((await ask("fetch", { id: ID(8) })).title).toBe("A ring note with no words");
-  client = await connect({ withSession: () => ({ prepare: () => { throw new Error("D1 is down"); } }) } as unknown as D1Database);
+  client = await connect({ idFromName: () => ({}), get: () => ({ query: async () => { throw new Error("The space is down"); } }) } as never);
   const { content, isError } = await client.callTool({ name: "fetch", arguments: { id: ID(1) } }) as { content: { text: string }[]; isError?: boolean };
-  expect([isError, content[0].text]).toEqual([true, expect.stringContaining("D1 is down")]);
+  expect([isError, content[0].text]).toEqual([true, expect.stringContaining("The space is down")]);
+  client = await connect(seeded().SPACES);
 });
 
-// The connector reads with every note's rights: only SELECT reaches the database from its code.
+it("reads only the grant's own person's space, and asks an app from before spaces to connect again", async () => {
+  const { SPACES } = seeded();
+  const ben = await connect(SPACES, BEN);
+  const found = JSON.parse((await ben.callTool({ name: "search", arguments: { query: "milk" } }) as { content: { text: string }[] }).content[0].text);
+  expect(found.notes.map((note: { id: string }) => note.id)).toEqual([ID(7)]);
+  expect(ids(await ask("search", { query: "ring" }))).not.toContain(ID(7));
+  const old = await mcpHandler.fetch(new Request("https://relay-mcp.example.com/mcp", { method: "POST" }), { SPACES }, { props: {} });
+  expect([old.status, await old.json()]).toEqual([401, { error: "invalid_token", error_description: "Connect this AI app again." }]);
+});
+
+// The connector reads with every note's rights: only SELECT reaches a space from its code. Its one write takes a
+// used sign-in code out of the directory.
 const WRITES = /\b(?:INSERT|UPDATE|DELETE|REPLACE|UPSERT|CREATE|DROP|ALTER|PRAGMA|ATTACH|VACUUM)\b|\b(?:db|DB)\.exec\(|\.(?:batch|run)\(/;
 const writes = (source: string) => WRITES.test(source);
 
@@ -182,6 +209,8 @@ it("holds no statement but SELECT in the connector or its queries", () => {
   const files = [...readdirSync(folder).filter(name => name.endsWith(".ts") && !name.endsWith(".test.ts")).map(name => new URL(name, folder)),
     new URL("../apps/relay/queries.ts", import.meta.url)];
   expect(files.length).toBeGreaterThan(5);
-  for (const file of files) expect(writes(readFileSync(file, "utf8")), file.pathname).toBe(false);
+  const CODE_TAKEN = "DELETE FROM relay_connect_codes WHERE code_sha256 = ? AND expires_at > ? RETURNING person_id";
+  expect(readFileSync(new URL("auth.ts", folder), "utf8")).toContain(CODE_TAKEN);
+  for (const file of files) expect(writes(readFileSync(file, "utf8").replace(CODE_TAKEN, "")), file.pathname).toBe(false);
   for (const bad of ["INSERT INTO relay_notes", "db.exec('x')", "db.batch([])", "statement.run()"]) expect(writes(bad), bad).toBe(true);
 });

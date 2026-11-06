@@ -8,6 +8,7 @@ import { fakeEnv } from "../../tests/env";
 const seen = vi.hoisted(() => [] as { env: AppEnv; call: AppCall }[]);
 const consumed = vi.hoisted(() => [] as { queue: string; env: AppEnv }[]);
 const scheduled = vi.hoisted(() => vi.fn(async (_env: AppEnv) => {}));
+const knowledgeScheduled = vi.hoisted(() => vi.fn(async (_env: AppEnv) => {}));
 vi.mock("./hello/api.ts", async (original) => ({
   // The registry reads each app's `keys`; the supplied example lists none.
   keys: undefined,
@@ -25,7 +26,7 @@ vi.mock("./hello/api.ts", async (original) => ({
 vi.mock("./knowledge/api.ts", async (original) => ({
   keys: undefined,
   queues: undefined,
-  scheduled: undefined,
+  scheduled: knowledgeScheduled,
   routes: new Map((await original<{ routes: Map<string, Route> }>()).routes).set(
     "GET peek", (_request: Request, env: AppEnv, call: AppCall) => {
       seen.push({ env, call });
@@ -164,8 +165,8 @@ it("runs each app's schedule with no memory binding, and one failure stops no ot
   expect(scheduled).toHaveBeenCalledTimes(2);
   const appEnv = scheduled.mock.calls[0][0];
   for (const name of ["MEMORY_DB", "MEMORY_BUCKET", "WONG_ACCESS_LOGIN_MANAGEMENT"]) expect(name in appEnv).toBe(false);
-  // Relay's sweep runs too, and fails on this database with no tables, as hello's did once.
-  expect(error).toHaveBeenCalledWith("The hello app's schedule failed", expect.any(Error));
-  expect(error).toHaveBeenCalledWith("The relay app's schedule failed", expect.any(Error));
+  // Hello fails first, and Knowledge's schedule still runs; Relay Everything has none, as each space wakes itself.
+  expect(knowledgeScheduled).toHaveBeenCalledTimes(2);
+  expect(error).toHaveBeenCalledExactlyOnceWith("The hello app's schedule failed", expect.any(Error));
   error.mockRestore();
 });

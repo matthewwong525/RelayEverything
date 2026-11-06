@@ -1,6 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { handleApp } from "../index";
-import { call, checker, env, laptop, lost, matthew, NOW, pebbleApp, phone, rows } from "../../../tests/relay";
+import { hashToken } from "./people";
+import { call, checker, env, laptop, lost, matthew, NOW, pebbleApp, phone, request, rows } from "../../../tests/relay";
 
 const MINUTE = 60_000;
 const SESSION = "0b6f3c1e-5d2a-4e8b-9c7f-1a2b3c4d5e6f";
@@ -66,19 +67,16 @@ it("refuses a malformed send, and messages out of order", async () => {
     chat([{ ...said(0), role: "system" }]), chat([said(0)], { project: "" }), chat([{ ...said(0), at: NOW / 1000 }])]) {
     expect((await call(laptop, "POST", "chats", wrong)).status, JSON.stringify(wrong).slice(0, 80)).toBe(400);
   }
-  const text = await handleApp(new Request("https://relay.example.com/apps/relay/api/chats", { method: "POST", body: "{",
-    headers: { "content-type": "application/json" } }), env(), laptop);
-  expect(text.status).toBe(400);
-  const plain = await handleApp(new Request("https://relay.example.com/apps/relay/api/chats", { method: "POST", body: "{}" }), env(), laptop);
-  expect(plain.status).toBe(400);
-  const empty = await handleApp(new Request("https://relay.example.com/apps/relay/api/chats", { method: "POST",
-    headers: { "content-type": "application/json" } }), env(), laptop);
-  expect(empty.status).toBe(400);
+  const send = (init: RequestInit) => handleApp(request(laptop, "POST", "https://relay.example.com/apps/relay/api/chats", init), env(), null);
+  const json = { "content-type": "application/json" };
+  expect((await send({ body: "{", headers: json })).status).toBe(400);
+  expect((await send({ body: "{}" })).status).toBe(400);
+  expect((await send({ headers: json })).status).toBe(400);
   expect(chatRows()).toEqual([]);
 });
 
 it("takes chats only from a chat key: a phone, the Pebble app, a person or a revoked key is refused", async () => {
-  for (const who of [phone, pebbleApp, matthew, checker, lost]) {
+  for (const who of [phone, pebbleApp, matthew, checker, lost, null]) {
     expect((await call(who, "POST", "chats", chat([said(0)]))).status).toBe(403);
     expect((await call(who, "POST", "chat-saves", { sessionId: SESSION, title: "T", text: "S" })).status).toBe(403);
   }
@@ -163,6 +161,8 @@ it("refuses every device key on the list, a chat and delete, and changes nothing
     expect((await call(who, "DELETE", "chat", { id })).status).toBe(403);
   }
   expect(chatRows()).toHaveLength(1);
-  // The checker reads a preview's chats, as it reads the notes.
-  expect((await call(checker, "GET", "chats")).status).toBe(200);
+  // The checker reads its own empty test space, never Ana's chats.
+  expect((await call(checker, "GET", "chats", undefined, { RELAY_CHECKER_SHA256: await hashToken("checker.access") })).json)
+    .toEqual({ chats: [], next: null, nextId: null });
+  expect((await call(null, "GET", "chats")).status).toBe(401);
 });

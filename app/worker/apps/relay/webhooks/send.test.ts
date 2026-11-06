@@ -1,6 +1,7 @@
 import { Webhook } from "standardwebhooks";
 import { afterEach, beforeEach, expect, it, vi, type Mock } from "vitest";
-import { bucket, call, db, env, matthew, NOW, phone, queue, rows } from "../../../../tests/relay";
+import { ANA, ben, BEN, benPhone, call, db, env, matthew, NOW, phone, queue, rows, spaces } from "../../../../tests/relay";
+import { spaceOf, vouch, type SqlValue } from "../space.ts";
 import { consume, DELAYS, post, run } from "./send.ts";
 
 const MINUTE = 60_000;
@@ -26,9 +27,20 @@ const hook = (id = "hook-1", more: Record<string, string | number | null> = {}) 
 };
 const webhook = (id = "hook-1") => rows("relay_webhooks").find(row => row.id === id)!;
 const note = (clientId: string, text = "Order more switches") => call(phone, "POST", "notes", { clientId, text, createdAt: NOW - MINUTE });
+const anaSpace = () => spaceOf(env(), vouch("queue", ANA));
 const ringNote = (id: string, more: { audio?: boolean; createdAt?: number } = {}) => db.sql.prepare(`INSERT INTO relay_notes (id, device_id, source,
   delivery_id, text, audio_key, recorded_at, created_at) VALUES (?, 'd-pebble', 'ring', ?, 'Ring note', ?, ?, ?)`)
-  .run(id, `delivery-${id}`, more.audio ? `notes/${id}.m4a` : null, NOW - 2 * MINUTE, more.createdAt ?? NOW);
+  .run(id, `delivery-${id}`, more.audio ? anaSpace().files.nameOf(id) : null, NOW - 2 * MINUTE, more.createdAt ?? NOW);
+/** Ana's space's SQL: `spy` sees each statement before it runs. */
+const watchSql = (spy: (sql: string) => void) => {
+  const { space } = spaces.open(ANA);
+  const query = space.query.bind(space);
+  return vi.spyOn(space, "query").mockImplementation((sql: string, params?: SqlValue[]) => {
+    spy(sql);
+    return query(sql, params);
+  });
+};
+const wakeUp = (webhook: string, person = ANA) => ({ webhook, person });
 const message = (body: unknown) => ({ body, ack: vi.fn(), retry: vi.fn() });
 async function deliver(...bodies: unknown[]) {
   const messages = bodies.map(message);
@@ -42,8 +54,8 @@ const at = (time: number) => vi.setSystemTime(time);
 it("sends a stored note, signed, and moves the webhook's place only after a 2xx", async () => {
   hook();
   await note("note-0001");
-  expect(queue.sent).toEqual([{ webhook: "hook-1" }]);
-  const [delivered] = await deliver({ webhook: "hook-1" });
+  expect(queue.sent).toEqual([wakeUp("hook-1")]);
+  const [delivered] = await deliver(wakeUp("hook-1"));
   expect(delivered.ack).toHaveBeenCalledOnce();
   expect(sent).toHaveLength(1);
   expect(sent[0]).toMatchObject({ url: "https://db.example.com/relay", redirect: "manual", headers: { "webhook-id": "msg_hook-1_1_1" } });
@@ -53,7 +65,7 @@ it("sends a stored note, signed, and moves the webhook's place only after a 2xx"
   expect(rows("relay_webhook_attempts")).toEqual([expect.objectContaining({ webhook_id: "hook-1", type: "note.created", first_seq: 1,
     last_seq: 1, status: 204, error: null })]);
   // Caught up, a second message sends nothing.
-  await deliver({ webhook: "hook-1" });
+  await deliver(wakeUp("hook-1"));
   expect(sent).toHaveLength(1);
 });
 
@@ -61,17 +73,17 @@ it("tries a failed group again with the same id and body, and a parallel message
   hook();
   await note("note-0001");
   answer = () => new Response("down", { status: 503 });
-  const [first] = await deliver({ webhook: "hook-1" });
+  const [first] = await deliver(wakeUp("hook-1"));
   expect(first.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
   expect(webhook()).toMatchObject({ sent_seq: 0, pending_seq: 1, tries: 1, next_try_at: NOW + 30_000, last_status: 503,
     last_error: "Answered 503." });
   at(NOW + 1000);
   await note("note-0002");
-  const [early] = await deliver({ webhook: "hook-1" });
+  const [early] = await deliver(wakeUp("hook-1"));
   expect([early.ack.mock.calls.length, sent.length]).toEqual([1, 1]);
   at(NOW + 30_000);
   answer = () => new Response("ok");
-  const [again] = await deliver({ webhook: "hook-1" });
+  const [again] = await deliver(wakeUp("hook-1"));
   expect(again.ack).toHaveBeenCalledOnce();
   expect(sent[1].headers["webhook-id"]).toBe(sent[0].headers["webhook-id"]);
   expect(sent[1].body).toBe(sent[0].body);
@@ -87,7 +99,7 @@ it("shows a webhook as failing after its last retry, then sends all that waits, 
   answer = () => new Response(null, { status: 302, headers: { location: "https://elsewhere.example.com/" } });
   let time = NOW;
   for (const delay of [...DELAYS, null]) {
-    const [delivered] = await deliver({ webhook: "hook-1" });
+    const [delivered] = await deliver(wakeUp("hook-1"));
     if (delay === null) expect(delivered.ack).toHaveBeenCalledOnce();
     else expect(delivered.retry).toHaveBeenCalledWith({ delaySeconds: delay });
     time += (delay ?? 0) * 1000;
@@ -100,7 +112,7 @@ it("shows a webhook as failing after its last retry, then sends all that waits, 
   await note("note-0002", "Second");
   expect(queue.sent).toEqual([]);
   answer = () => new Response(null, { status: 204 });
-  await deliver({ webhook: "hook-1" });
+  await deliver(wakeUp("hook-1"));
   expect(sent).toHaveLength(10);
   expect((await call(matthew, "POST", "webhooks/retry", { id: "hook-1" })).json.webhook).toMatchObject({ state: "working", waiting: 2 });
   await deliver(...queue.sent);
@@ -113,23 +125,19 @@ it("keeps its lease while the clock moves: sends every group in one run, and cou
   hook();
   for (const id of ["note-0001", "note-0002", "note-0003"]) await note(id);
   // Each database call takes a millisecond, so each lease renewal writes a new time.
-  const prepare = db.session.prepare.bind(db.session);
-  vi.spyOn(db.session, "prepare").mockImplementation(query => {
-    at(Date.now() + 1);
-    return prepare(query);
-  });
-  await deliver({ webhook: "hook-1" });
+  watchSql(() => at(Date.now() + 1));
+  await deliver(wakeUp("hook-1"));
   expect(sent).toHaveLength(3);
   expect(webhook()).toMatchObject({ sent_seq: 3, pending_seq: null, lease_until: null, tries: 0 });
   await note("note-0004");
   answer = () => new Response("down", { status: 503 });
-  await deliver({ webhook: "hook-1" });
+  await deliver(wakeUp("hook-1"));
   expect(webhook()).toMatchObject({ sent_seq: 3, pending_seq: 4, lease_until: null, tries: 1 });
   // A wake before the retry is due stops at once and gives the lease back, so the retry is not turned away.
-  await deliver({ webhook: "hook-1" });
+  await deliver(wakeUp("hook-1"));
   expect(webhook()).toMatchObject({ lease_until: null, tries: 1 });
   at(webhook().next_try_at as number);
-  await deliver({ webhook: "hook-1" });
+  await deliver(wakeUp("hook-1"));
   expect(webhook()).toMatchObject({ sent_seq: 3, pending_seq: 4, lease_until: null, tries: 2 });
   expect(sent).toHaveLength(5);
 });
@@ -149,10 +157,10 @@ it("says why a send failed: no answer in time, no connection, or a redirect", as
   expect((await post("https://db.example.com/", SECRET, "msg_x", "{}")).error).toBe("Could not connect.");
 });
 
-it("stops sending to an address Relay no longer allows, at once", async () => {
+it("stops sending to an address Relay Everything no longer allows, at once", async () => {
   hook("hook-1", { url: "https://127.0.0.1/relay" });
   await note("note-0001");
-  const [delivered] = await deliver({ webhook: "hook-1" });
+  const [delivered] = await deliver(wakeUp("hook-1"));
   expect(delivered.ack).toHaveBeenCalledOnce();
   expect(sent).toEqual([]);
   expect(webhook()).toMatchObject({ failing_since: NOW, last_error: "Relay Everything no longer sends to this address: address_private.", last_status: null });
@@ -161,31 +169,29 @@ it("stops sending to an address Relay no longer allows, at once", async () => {
 it("runs one sender per webhook: a second waits for the lease, and a lease left by a stopped sender runs out", async () => {
   hook();
   await note("note-0001");
-  expect(await Promise.all([run(env(), "hook-1"), run(env(), "hook-1")])).toEqual([null, null]);
+  expect(await Promise.all([run(env(), anaSpace(), "hook-1"), run(env(), anaSpace(), "hook-1")])).toEqual([null, null]);
   expect(sent).toHaveLength(1);
   await note("note-0002");
   db.sql.prepare("UPDATE relay_webhooks SET lease_until = ?").run(NOW + MINUTE);
-  await run(env(), "hook-1");
+  await run(env(), anaSpace(), "hook-1");
   expect(sent).toHaveLength(1);
   at(NOW + MINUTE + 1);
-  await run(env(), "hook-1");
+  await run(env(), anaSpace(), "hook-1");
   expect(sent).toHaveLength(2);
-  expect(await run(env(), "nobody")).toBeNull();
+  expect(await run(env(), anaSpace(), "nobody")).toBeNull();
 });
 
 it("looks once more after giving up the lease, so a row stored meanwhile goes in the same run", async () => {
   hook();
   await note("note-0001");
-  const prepare = db.session.prepare;
   let stored = false;
-  vi.spyOn(db.session, "prepare").mockImplementation(query => {
-    if (!stored && query.startsWith("UPDATE relay_webhooks SET lease_until = NULL")) {
+  watchSql(sql => {
+    if (!stored && sql.startsWith("UPDATE relay_webhooks SET lease_until = NULL")) {
       stored = true;
       ringNote("aaaaaaaa-0000-4000-8000-000000000001");
     }
-    return prepare(query);
   });
-  await run(env(), "hook-1");
+  await run(env(), anaSpace(), "hook-1");
   expect(types()).toEqual(["note.created", "note.created"]);
   expect(webhook().sent_seq).toBe(2);
 });
@@ -193,7 +199,7 @@ it("looks once more after giving up the lease, so a row stored meanwhile goes in
 it("sends nothing while paused, and stops when its owner changes it during a send", async () => {
   hook("hook-1", { active: 0 });
   await note("note-0001");
-  await run(env(), "hook-1");
+  await run(env(), anaSpace(), "hook-1");
   expect(sent).toEqual([]);
   db.sql.prepare("UPDATE relay_webhooks SET active = 1").run();
   answer = () => {
@@ -201,7 +207,7 @@ it("sends nothing while paused, and stops when its owner changes it during a sen
     return new Response(null, { status: 204 });
   };
   await note("note-0002");
-  expect(await run(env(), "hook-1")).toBeNull();
+  expect(await run(env(), anaSpace(), "hook-1")).toBeNull();
   expect(sent).toHaveLength(1);
   // The address took it, but the change came first: it goes again on resume, and the receiver's upsert keeps one copy.
   expect(webhook()).toMatchObject({ sent_seq: 0, active: 0 });
@@ -210,15 +216,15 @@ it("sends nothing while paused, and stops when its owner changes it during a sen
 it("waits for a ring note's recording, sends it when it comes, and skips a note deleted since", async () => {
   hook();
   ringNote("aaaaaaaa-0000-4000-8000-000000000001", { audio: true });
-  const [early] = await deliver({ webhook: "hook-1" });
+  const [early] = await deliver(wakeUp("hook-1"));
   expect(early.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
   expect(sent).toEqual([]);
-  bucket.objects.set("notes/aaaaaaaa-0000-4000-8000-000000000001.m4a", new Uint8Array([0, 0, 0, 24]));
+  await anaSpace().files.put("aaaaaaaa-0000-4000-8000-000000000001", new Uint8Array([0, 0, 0, 24]).buffer);
   ringNote("aaaaaaaa-0000-4000-8000-000000000002", { audio: true, createdAt: NOW - 3 * MINUTE });
   ringNote("aaaaaaaa-0000-4000-8000-000000000003");
   db.sql.prepare("DELETE FROM relay_notes WHERE id = 'aaaaaaaa-0000-4000-8000-000000000003'").run();
   await note("note-0001");
-  await deliver({ webhook: "hook-1" });
+  await deliver(wakeUp("hook-1"));
   expect(bodies().map(item => [item.data.note.source, item.data.note.audio])).toEqual([
     ["ring", { content_type: "audio/mp4", base64: "AAAAGA==" }], ["ring", null], ["typed", null]]);
   expect(webhook()).toMatchObject({ sent_seq: 4, last_status: 204 });
@@ -232,35 +238,51 @@ it("sends health and location only to a webhook that takes them, in groups of on
   await call(phone, "POST", "health", { samples: [sample, { ...sample, start: NOW - 30 * MINUTE, end: NOW - 10 * MINUTE }] });
   await call(phone, "POST", "locations", { points: [{ at: NOW - 2 * MINUTE, lat: 43.65, lon: -79.38, accuracy: 10 }] });
   await call(phone, "POST", "health", { samples: [{ ...sample, type: "heart_rate", unit: "bpm", value: 70 }] });
-  expect(queue.sent).toEqual([{ webhook: "all" }, { webhook: "all" }, { webhook: "notes" }, { webhook: "all" }]);
-  await deliver({ webhook: "all" });
+  expect(queue.sent).toEqual([wakeUp("all"), wakeUp("all"), wakeUp("notes"), wakeUp("all")]);
+  await deliver(wakeUp("all"));
   expect(types()).toEqual(["note.created", "health.samples", "location.points", "note.updated", "health.samples"]);
   expect(bodies()[1].data.samples.map((item: { value: number }) => item.value)).toEqual([1200, 1200]);
   expect(bodies()[2].data.points[0]).toMatchObject({ lat: 43.65, device: { id: "d-phone", name: "Android phone" } });
   expect(bodies()[3].data.note).toMatchObject({ place: { lat: 43.65, from: "history" } });
   expect(sent.map(item => item.headers["webhook-id"])).toEqual(["msg_all_1_1", "msg_all_2_3", "msg_all_4_4", "msg_all_5_5", "msg_all_6_6"]);
   sent.length = 0;
-  await deliver({ webhook: "notes" });
+  await deliver(wakeUp("notes"));
   expect(types()).toEqual(["note.created", "note.updated"]);
 });
 
 it("sends 20 messages in a run, then queues the webhook again for the rest", async () => {
   hook();
   for (let index = 0; index < 21; index++) ringNote(`aaaaaaaa-0000-4000-8000-${String(index).padStart(12, "0")}`);
-  const [delivered] = await deliver({ webhook: "hook-1" });
-  expect([sent.length, delivered.ack.mock.calls.length, queue.sent]).toEqual([20, 1, [{ webhook: "hook-1" }]]);
+  const [delivered] = await deliver(wakeUp("hook-1"));
+  expect([sent.length, delivered.ack.mock.calls.length, queue.sent]).toEqual([20, 1, [wakeUp("hook-1")]]);
   await deliver(...queue.sent);
   expect(sent).toHaveLength(21);
 });
 
-it("acks a message that names no webhook, and tries a run that failed on Relay's side again in 30 seconds", async () => {
+it("acks a message that names no webhook or no person, and tries a run that failed on our side again in 30 seconds", async () => {
   const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
-  const [empty, nothing] = await deliver(null, { webhook: 7 });
-  expect([empty.ack, nothing.ack].map((ack: Mock) => ack.mock.calls.length)).toEqual([1, 1]);
-  vi.spyOn(db.session, "prepare").mockImplementation(() => {
-    throw new Error("D1 is down");
+  hook();
+  await note("note-0001");
+  const acked = await deliver(null, { webhook: 7, person: ANA }, { webhook: "hook-1" }, { webhook: "hook-1", person: 7 });
+  expect(acked.map(({ ack }: { ack: Mock }) => ack.mock.calls.length)).toEqual([1, 1, 1, 1]);
+  expect(sent).toEqual([]);
+  watchSql(() => {
+    throw new Error("The space is down");
   });
-  const [failed] = await deliver({ webhook: "hook-1" });
+  const [failed] = await deliver(wakeUp("hook-1"));
   expect(failed.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
-  expect(error).toHaveBeenCalledWith("Relay webhooks: a run failed", expect.any(Error));
+  expect(error).toHaveBeenCalledWith("Relay Everything webhooks: a run failed", expect.any(Error));
+});
+
+it("sends Ben's note only to Ben's webhook, never to Ana's", async () => {
+  hook("ana-hook");
+  const added = await call(ben, "POST", "webhooks", { name: "Ben's database", url: "https://ben.example.com/relay", kinds: [] });
+  const benHook = String(added.json.webhook.id);
+  await call(benPhone, "POST", "notes", { clientId: "ben-0001", text: "Ben's errand", createdAt: NOW - MINUTE });
+  expect(queue.sent).toEqual([wakeUp(benHook, BEN)]);
+  // A message that names Ana with Ben's webhook opens Ana's space, where no such webhook is.
+  await deliver(wakeUp("ana-hook"), wakeUp(benHook), ...queue.sent);
+  expect(sent.map(item => [item.url, JSON.parse(item.body).data.note.text])).toEqual([["https://ben.example.com/relay", "Ben's errand"]]);
+  expect([webhook("ana-hook").sent_seq, rows("relay_webhooks", BEN)[0].sent_seq]).toEqual([0, 1]);
+  expect(rows("relay_notes")).toEqual([]);
 });

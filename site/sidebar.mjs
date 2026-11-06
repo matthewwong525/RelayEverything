@@ -5,6 +5,7 @@ export const sidebar = [
   { label: 'Get started', items: [
     { label: 'What you need', slug: 'start/what-you-need' },
     { label: 'Run your own server', slug: 'start/run-your-own' },
+    { label: 'Sign up', slug: 'start/sign-up' },
     { label: 'Install the app', slug: 'start/install' },
     { label: 'Connect a phone', slug: 'start/connect-a-phone' },
     { label: 'Set up the Pebble webhook', slug: 'start/pebble-webhook' },

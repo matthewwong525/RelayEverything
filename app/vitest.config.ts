@@ -4,6 +4,8 @@ import { defineConfig } from "vitest/config";
 // A config of its own, not `vite.config.ts`: that one loads the Cloudflare plugin, which builds and serves the
 // Worker. This suite imports the Worker's modules directly and needs no runtime around them.
 export default defineConfig({
+  // The spaces Worker bundles its migrations as text, by Wrangler's Text rule; this does the same here.
+  plugins: [{ name: "sql-text", transform: (code, id) => id.endsWith(".sql") ? `export default ${JSON.stringify(code)};` : undefined }],
   // `@/` is app/src/, as in vite.config.ts.
   // `cloudflare:workers` exists only in the Workers runtime: the AI connector's tests get a stand-in.
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)),

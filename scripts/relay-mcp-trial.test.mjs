@@ -5,7 +5,7 @@ import test from 'node:test';
 import { cookieJar, parseArgs, pkce, trial } from './relay-mcp-trial.mjs';
 
 const STAGING = 'https://relay-everything-mcp-staging.matthewwong525.workers.dev';
-const ACCESS = 'https://team.cloudflareaccess.com/cdn-cgi/access/sso/oidc/client-1/authorization';
+const SERVER = 'https://app-staging.relayeverything.com';
 
 /** The staging connector as an AI app meets it, before anyone signs in. `open` lets /mcp in with no token. */
 function fakeConnector({ open = false } = {}) {
@@ -22,8 +22,8 @@ function fakeConnector({ open = false } = {}) {
       case 'GET /authorize': return new Response('<h1>Connect Relay Everything trial to Relay Everything?</h1><input name="handle" value="h1">',
         { headers: { 'Set-Cookie': '__Host-oauth-consent-x=abc; Path=/; Secure' } });
       case 'POST /authorize': return new Response(null, { status: 302,
-        headers: { Location: `${ACCESS}?redirect_uri=${encodeURIComponent(`${STAGING}/callback`)}&state=s1` } });
-      case 'GET https://team.cloudflareaccess.com': return new Response(null, { status: 302, headers: { Location: 'https://team.cloudflareaccess.com/login' } });
+        headers: { Location: `${SERVER}/apps/relay/sign-in/connect?state=s1` } });
+      case `GET ${SERVER}`: return new Response('<h1>Sign in to Relay Everything</h1>');
       case 'GET /callback': return new Response('refused', { status: 400 });
       case 'POST /token': return Response.json({ error: 'invalid_grant' }, { status: 400 });
       default: throw new Error(`unexpected ${key}`);
@@ -59,7 +59,8 @@ test('the staging trial passes a connector that refuses every stranger, and keep
   const { passed, printed } = await run(connector);
   assert.equal(passed, true, printed.join('\n'));
   assert.ok(printed.includes('ok refuses a service token'));
-  assert.ok(printed.includes('ok a service token does not get through the Access sign-in'));
+  assert.ok(printed.includes("ok sends an approved app on to the server's sign-in"));
+  assert.ok(printed.includes('ok the server sends no code to someone not signed in'));
   const approve = connector.seen.find(call => call.key === 'POST /authorize');
   assert.equal(approve.headers.get('Cookie'), '__Host-oauth-consent-x=abc');
   assert.ok(!printed.join('\n').includes('checker-secret'));

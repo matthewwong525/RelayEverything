@@ -1,16 +1,19 @@
+import { useEffect, useState } from 'react'
 import { Loading } from '@/components/Loading'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Account } from './Account'
 import { AiCard } from './AiCard'
 import { Chats } from './Chats'
+import { Devices } from './Devices'
 import { Failed } from './Failed'
 import { Notes } from './Notes'
-import { today, useGet, when, type Summary, type Timeline } from './read'
-import { PebbleSetup, PhoneSetup } from './Setup'
+import { SIGNED_OUT, today, useGet, when, type Summary, type Timeline } from './read'
+import { SignIn } from './SignIn'
 import { Webhooks } from './Webhooks'
 
-// Relay's site page: today's summary, notes with places and recordings, saved chats, and the webhooks to your own
-// database. Phones, the Pebble app and Claude Code send to app/worker/apps/relay/; this page reads, and deletes a chat.
+// Relay Everything's page: the sign-in, then today's summary, notes, chats, webhooks, devices and the account. Devices
+// send to app/worker/apps/relay/; this page reads the signed-in person's own space.
 const number = new Intl.NumberFormat()
 
 function Tile({ label, value }: { label: string; value: string }) {
@@ -43,17 +46,12 @@ function Day({ summary }: { summary: Summary }) {
   </>
 }
 
-export function App() {
+function Home({ email, onSignedOut }: { email: string; onSignedOut: () => void }) {
   const { day, offset } = today()
   const [summary, retrySummary] = useGet<Summary>(`summary?day=${day}&offset=${offset}`)
   const [timeline, retryTimeline] = useGet<Timeline>('timeline')
-  const origin = window.location.origin
   return <div className="grid gap-6">
-    <div className="flex flex-wrap items-center gap-2">
-      <h1 className="grow">Relay Everything</h1>
-      <PhoneSetup origin={origin} />
-      <PebbleSetup origin={origin} />
-    </div>
+    <h1>Relay Everything</h1>
     {summary.status === 'loading' && <Loading label="Loading today" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {[1, 2, 3, 4].map((tile) => <Skeleton key={tile} className="h-20" />)}
     </Loading>}
@@ -67,5 +65,22 @@ export function App() {
     <Chats />
     <Webhooks />
     <AiCard />
+    <Devices />
+    <Account email={email} onSignedOut={onSignedOut} />
   </div>
+}
+
+export function App() {
+  const [account, retry] = useGet<{ email: string }>('account')
+  const [signedOut, setSignedOut] = useState(false)
+  useEffect(() => {
+    const out = () => setSignedOut(true)
+    window.addEventListener(SIGNED_OUT, out)
+    return () => window.removeEventListener(SIGNED_OUT, out)
+  }, [])
+  const signedIn = () => { setSignedOut(false); retry() }
+  if (signedOut || (account.status === 'failed' && account.code === 401)) return <SignIn onSignedIn={signedIn} />
+  if (account.status === 'failed') return <Failed what="Your account" retry={retry} />
+  if (account.status === 'loading') return <Loading label="Loading Relay Everything" className="grid gap-3"><Skeleton className="h-24" /></Loading>
+  return <Home email={account.value.email} onSignedOut={() => setSignedOut(true)} />
 }

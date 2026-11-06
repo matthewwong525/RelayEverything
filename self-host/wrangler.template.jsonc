@@ -16,7 +16,10 @@
     "CF_ACCESS_AUD": "",
     "CF_ACCESS_APP_ID": "",
     "CF_ACCESS_WORKER_ID": "",
-    "RELAY_CHECKER_SHA256": ""
+    "RELAY_CHECKER_SHA256": "",
+    // Access signs the owner in; no one else gets an account until the owner sets RELAY_SIGN_UP to "open".
+    "RELAY_SIGN_IN": "access",
+    "RELAY_MCP_CALLBACK": "https://relay-mcp.your-subdomain.workers.dev/callback"
   },
   "d1_databases": [{ "binding": "DB", "database_name": "relay-db", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "../schema/migrations" }],
   "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-notes" }],
@@ -24,6 +27,7 @@
     "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-webhooks" }],
     "consumers": [{ "queue": "relay-webhooks", "max_batch_size": 10, "max_retries": 10 }]
   },
-  "triggers": { "crons": ["*/15 * * * *"] },
+  // Each person's space, in the install's own spaces Worker: spaces.template.jsonc. Its alarm wakes late webhooks.
+  "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-spaces" }] },
   "services": [{ "binding": "RELAY_MCP", "service": "relay-mcp", "entrypoint": "Grants" }]
 }

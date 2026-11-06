@@ -3,25 +3,43 @@ title: Privacy
 description: What Relay Everything keeps, where it keeps it, and how to turn each part off.
 ---
 
-Relay Everything keeps your notes on your phone. When you turn on sending, it keeps your notes, health and places on your own Relay Everything server. Your server sends them on only to the webhooks you add: notes to each one, and health and places only to those you tick them for. This website holds none of them.
+Relay Everything keeps your notes on your phone. When you turn on sending, it keeps your notes, health and places in your own space on a Relay Everything server. Your server sends them on only to the webhooks you add: notes to each one, and health and places only to those you tick them for. This website holds none of them.
 
 ## What is kept, and where
 
 | What | Where | Sent when |
 |---|---|---|
 | Typed notes, with their pin | The phone's own storage, always | Never, while sending is off |
-| Typed notes, with their place | Your Relay Everything server's database | With sending on: each time you save a note. Notes from before go only if you tap **Send them**. |
+| Typed notes, with their place | Your space on your Relay Everything server | With sending on: each time you save a note. Notes from before go only if you tap **Send them**. |
 | Voice notes from the app: the recording | The phone's own storage, only. iCloud and Google backups leave it out. | Never |
-| Voice notes from the app: the words | The phone's own storage; with sending on, also your Relay Everything server's database | The same as a typed note, once the phone has written the words |
-| Ring notes: the words and the recording | Your Relay Everything server: the words in its database, the recording in its file store | Each time you hold the ring and talk, through the Pebble app |
-| Steps, heart rate, sleep and workouts | Your Relay Everything server's database | On open and every hour, with sending and **Health** on |
-| Location history: a point each 100 m you move | Your Relay Everything server's database | With sending and **Location history** on |
-| The phone's key | The iPhone Keychain or the Android Keystore | Never sent, except as the key's headers |
+| Voice notes from the app: the words | The phone's own storage; with sending on, also your space on your Relay Everything server | The same as a typed note, once the phone has written the words |
+| Ring notes: the words and the recording | Your Relay Everything server: the words in your space, the recording sealed in your folder of its file store | Each time you hold the ring and talk, through the Pebble app |
+| Steps, heart rate, sleep and workouts | Your space on your Relay Everything server | On open and every hour, with sending and **Health** on |
+| Location history: a point each 100 m you move | Your space on your Relay Everything server | With sending and **Location history** on |
+| The phone's key | The iPhone Keychain or the Android Keystore; the server keeps only its fingerprint | Never sent, except as the key's header |
+| Your email | The server's list of accounts, to sign you in | When you sign up |
+| Your sign-in | A cookie in your browser, for 30 days | With each visit to your Relay Everything page |
 | A copy of what your server stores | [Your own database](../connections/your-database/), through a webhook you add | Notes always; health and location only if you tick them for that webhook |
 
 With sending off, the app makes no network call, reads no health data, and keeps no location history. The one exception is the speech model for voice notes, and only after you tap **Get it**.
 
-Your Relay Everything server is a private site behind a login, which you [run in your own Cloudflare account](../start/run-your-own/). Only you sign in. A device's key only adds data: it can't read your notes, health or places back: [Keys](../api/keys/). Relay Everything's makers have no way in.
+## Who can see what
+
+Each person's data is in their own space: a separate store that holds only that person's notes, health, places, chats, devices and webhooks. One shared list holds only who has an account, how they sign in, and a fingerprint of each key.
+
+- **You** see your own space on your Relay Everything page, after you sign in.
+- **Your devices** only add data to your space. A device's key can't read your notes, health or places back: [Keys](../api/keys/).
+- **Your AI apps** read only your space, and only after you connect them: [Connect your AI](../connections/connect-your-ai/).
+- **Your webhooks** send only your data, to the addresses you add.
+- **No one else.** The server opens a space only for the person who signed in, or for that person's own key or AI app. There is no screen, route or tool for the server's owner to open another person's space. [The code is public](https://github.com/matthewwong525/RelayEverything), and a test fails if such a way in is added.
+
+Each recording is in your own folder of the server's file store, sealed with a key that is kept in your space. The file store alone, as in the Cloudflare dashboard, shows only sealed bytes.
+
+**The limit:** the owner of the Cloudflare account that runs a server could change its code to read a space. Only encryption on the phone stops that, and Relay Everything does not have it yet. On [your own server](../start/run-your-own/), that owner is you.
+
+## Delete your account
+
+Click **Delete my account** on your Relay Everything page, and type your email to confirm. It deletes your space, your recordings, your keys, your sign-ins and your connected AI apps. You can't undo it. Your notes stay on your phone.
 
 ## What is not kept
 
@@ -40,8 +58,8 @@ Your Relay Everything server is a private site behind a login, which you [run in
 | Pins on typed notes | Turn off **Pin notes to where I am** in Settings. |
 | Location history | Turn off **Location history** in Settings. |
 | Health | Turn off **Health** in Settings, and take back the permission in Apple Health or Health Connect. |
-| One phone | Tap **Disconnect this phone** in Settings, or turn its key off: [Keys](../api/keys/#make-list-and-turn-off-keys). |
-| Ring notes | Turn off the webhook in the Pebble app, or turn off the Pebble app's key. |
+| One phone | Tap **Disconnect this phone** in Settings, or click **Turn off** beside it on your Relay Everything page: [Keys](../api/keys/#make-list-and-turn-off-keys). |
+| Ring notes | Turn off the webhook in the Pebble app, or turn off the Pebble app's key on your Relay Everything page. |
 | A webhook to your database | **Pause** or **Remove** it on the Relay Everything page: [Your own database](../connections/your-database/). |
 
-Turning a part off stops new data. Data already on your server stays there, and your notes stay on your phone.
+Turning a part off stops new data. Data already in your space stays there until you [delete your account](#delete-your-account), and your notes stay on your phone.

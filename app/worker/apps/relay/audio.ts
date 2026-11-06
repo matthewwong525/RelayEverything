@@ -1,7 +1,8 @@
-// GET audio?id=: a ring note's recording, streamed from R2 for the site page and the phones to play. It answers one
-// byte range too, as Safari asks for one before it plays anything.
+// GET audio?id=: a ring note's recording from the caller's own space, opened with its file key, for the site page and
+// the phones to play. It answers one byte range too, as Safari asks for one before it plays anything.
 import type { ActionCall } from "../../api/contract.ts";
-import { refused, session, type Env } from "./store.ts";
+import { asPerson } from "./caller.ts";
+import { refused, type Env } from "./store.ts";
 
 const ID = /^[0-9a-f-]{36}$/;
 const RANGE = /^bytes=(\d*)-(\d*)$/;
@@ -23,26 +24,21 @@ function bytesOf(wanted: Wanted, size: number): [number, number] | null {
   return first <= last ? [first, last] : null;
 }
 
-export async function audio(request: Request, env: Env, { url }: Pick<ActionCall, "url">): Promise<Response> {
-  const id = url.searchParams.get("id") ?? "";
+type Call = Pick<ActionCall, "url" | "identity">;
+
+// A sealed file opens only whole, so a range is cut from the opened bytes: a ring note's recording is small.
+export const audio: (request: Request, env: Env, call: Call) => Promise<Response> = asPerson<Call>(async ({ space, request, call }) => {
+  const id = call.url.searchParams.get("id") ?? "";
   if (!ID.test(id)) return refused(400, "Give a note's id");
-  const note = await session(env).prepare("SELECT audio_key FROM relay_notes WHERE id = ?").bind(id).first<{ audio_key: string | null }>();
-  const key = note?.audio_key;
-  const notFound = () => Response.json({ error: "Not found" }, { status: 404 });
-  if (!key) return notFound();
+  const note = await space.db.prepare("SELECT audio_key FROM relay_notes WHERE id = ?").bind(id).first<{ audio_key: string | null }>();
+  const data = note?.audio_key ? await space.files.open(note.audio_key) : null;
+  if (!data) return Response.json({ error: "Not found" }, { status: 404 });
   const headers = { "Content-Type": "audio/mp4", "Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600" };
   const wanted = rangeOf(request.headers.get("Range"));
-  if (!wanted) {
-    const object = await env.RELAY_BUCKET.get(key);
-    return object ? new Response(object.body, { headers: { ...headers, "Content-Length": String(object.size) } }) : notFound();
-  }
-  const head = await env.RELAY_BUCKET.head(key);
-  if (!head) return notFound();
-  const bytes = bytesOf(wanted, head.size);
-  if (!bytes) return new Response(null, { status: 416, headers: { ...headers, "Content-Range": `bytes */${head.size}` } });
+  if (!wanted) return new Response(data, { headers: { ...headers, "Content-Length": String(data.byteLength) } });
+  const bytes = bytesOf(wanted, data.byteLength);
+  if (!bytes) return new Response(null, { status: 416, headers: { ...headers, "Content-Range": `bytes */${data.byteLength}` } });
   const [first, last] = bytes;
-  // The object was there a moment ago, at head().
-  const object = (await env.RELAY_BUCKET.get(key, { range: { offset: first, length: last - first + 1 } }))!;
-  return new Response(object.body, { status: 206, headers: { ...headers, "Content-Length": String(last - first + 1),
-    "Content-Range": `bytes ${first}-${last}/${head.size}` } });
-}
+  return new Response(data.slice(first, last + 1), { status: 206, headers: { ...headers, "Content-Length": String(last - first + 1),
+    "Content-Range": `bytes ${first}-${last}/${data.byteLength}` } });
+});

@@ -31,6 +31,24 @@ void main() {
       }
     });
 
+    test('is read in the page\'s form too: a rek_ key alone', () {
+      final parsed = Connection.parse(pageCode)!;
+      expect([parsed.server, parsed.key, parsed.clientId, parsed.clientSecret], [bearer.server, pageKey, null, null]);
+      expect(parsed.headers, {'Authorization': 'Bearer $pageKey'});
+      expect(parsed.withServer('https://other.example.com').key, pageKey);
+    });
+
+    test('is refused in the page\'s form when the key is bad, or both forms come at once', () {
+      Map<String, Object?> with_(Map<String, Object?> change) => {'relay': 1, 'server': 'https://relay.example.com', 'key': pageKey, ...change};
+      for (final text in [jsonEncode(with_({'key': ''})), jsonEncode(with_({'key': 3})), jsonEncode(with_({'key': 'rek_short'})),
+        jsonEncode(with_({'key': '${pageKey}A'})), jsonEncode(with_({'key': pageKey.replaceFirst('rek_', 'rex_')})),
+        jsonEncode(with_({'key': pageKey.replaceFirst('A', '+')})), jsonEncode(with_({'clientId': 'a', 'clientSecret': 'b'})),
+        jsonEncode(with_({'clientSecret': 'b'})), jsonEncode(with_({'server': 'http://relay.example.com'})),
+        jsonEncode({'relay': 1, 'server': 'https://relay.example.com'})]) {
+        expect(Connection.parse(text), isNull, reason: text);
+      }
+    });
+
     test('keeps a server address as its origin alone', () {
       expect(Connection.serverOf('https://preview.example.com/'), 'https://preview.example.com');
       for (final value in [null, 3, 'preview.example.com', 'https://', 'https://x.example.com?a=1']) {
@@ -47,6 +65,27 @@ void main() {
       await vault.forget();
       expect(storage.values, isEmpty);
     });
+
+    test('keeps a page key in the secure store, and a new key of either form replaces the other whole', () async {
+      final storage = MemoryStorage();
+      final vault = KeyVault(storage);
+      await vault.save(connection);
+      await vault.save(bearer);
+      final read = (await vault.read())!;
+      expect([read.server, read.key, read.clientId], [bearer.server, pageKey, null]);
+      expect(storage.values.keys, unorderedEquals(['relay.server', 'relay.key']));
+      await vault.save(connection);
+      expect([(await vault.read())!.clientSecret, (await vault.read())!.key], [connection.clientSecret, null]);
+      expect(storage.values.keys, unorderedEquals(['relay.server', 'relay.clientId', 'relay.clientSecret']));
+      await vault.save(bearer);
+      await vault.forget();
+      expect(storage.values, isEmpty);
+    });
+
+    test('reads nothing from a store with a server but no whole key', () async {
+      final storage = MemoryStorage()..values.addAll({'relay.server': 'https://relay.example.com', 'relay.clientId': 'a'});
+      expect(await KeyVault(storage).read(), isNull);
+    });
   });
 
   group('the API', () {
@@ -57,7 +96,18 @@ void main() {
       expect(request.url.toString(), 'https://relay.example.com/apps/relay/api/notes');
       expect(request.headers['CF-Access-Client-Id'], 'phone.access');
       expect(request.headers['CF-Access-Client-Secret'], 'secret-value');
+      expect(request.headers['Authorization'], isNull);
       expect(jsonDecode(request.body), {'text': 'hi'});
+    });
+
+    test('sends a page key as Authorization: Bearer, and no Access headers', () async {
+      final server = FakeServer();
+      expect(await server.api(bearer).post('notes', {'text': 'hi'}), {'added': 1});
+      expect(await server.api(bearer).key(), 'Android phone');
+      for (final request in server.requests) {
+        expect(request.headers['Authorization'], 'Bearer $pageKey');
+        expect(request.headers.keys.where((name) => name.toLowerCase().startsWith('cf-access')), isEmpty);
+      }
     });
 
     test('checks a key with GET key, which gives the device name and no data', () async {

@@ -6,23 +6,20 @@ description: Send each note from your Pebble Index ring to your Relay Everything
 Send each note from your Pebble Index ring to your Relay Everything server, with its words and recording.
 
 :::note
-You need a Relay Everything server and a key for the Pebble app first. [Connect a phone](../connect-a-phone/#make-the-key) shows how to make a key.
+You need a Relay Everything account first: [Sign up](../sign-up/).
 :::
 
 ## Steps
 
-1. Make the Pebble app's key on the server's computer:
-   ```sh
-   node scripts/relay-device-key.mjs create --name "Pebble app"
-   ```
+1. On your Relay Everything page, click **Add a device**, and name it `Pebble app`. The page shows the device's key and its signing secret once. Keep the page open until step 8.
 2. In the Pebble app, open **Index 01 Settings**, then **Webhook**, then **Hold & talk**.
 3. Enter your server's Pebble address:
    ```text
    https://<your-relay-server>/apps/relay/api/pebble
    ```
-   The key's private page shows this address in full.
-4. Add two custom headers with the values from the key's private page: `CF-Access-Client-Id` and `CF-Access-Client-Secret`.
-5. Turn on **Sign requests**, and enter the signing secret. The owner of the Relay Everything server gives you the secret on a private page.
+   The page that shows the key also shows this address in full.
+4. Add one custom header: `Authorization`, with the value `Bearer ` and then the key, such as `Bearer rek_…`.
+5. Turn on **Sign requests**, and enter the signing secret from the same page. Each Pebble device has its own secret.
 6. Choose **Both**, so each note sends its words and its recording.
 7. Tap **Send test event**. Relay Everything answers `200` with `{ "ok": true, "test": true }` and keeps nothing from a test.
 8. When the test shows success, tap **Save**.
@@ -39,7 +36,7 @@ You need a Relay Everything server and a key for the Pebble app first. [Connect 
 ## If a note doesn't arrive
 
 - `401` means the signature or the time is wrong: check the signing secret, and the phone's clock.
-- `403` means the key is wrong or turned off: check the two headers, or make a new key.
+- `403` means the key is wrong or turned off: check the `Authorization` header, or add the device again for a new key.
 - After a `408`, `429` or `5xx`, the Pebble app tries again for 10 minutes.
 
 [The Pebble webhook](../../api/pebble-webhook/) in the server API gives every field, header and answer.

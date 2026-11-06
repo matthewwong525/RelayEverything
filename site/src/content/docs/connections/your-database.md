@@ -3,13 +3,15 @@ title: Your own database
 description: Add a webhook, and your Relay Everything server sends each new note, and the health and location you tick, to an address you own, in one signed format.
 ---
 
-A webhook copies what your Relay Everything server stores to an address you own, such as a small receiver beside your database. Your server sends each new note there a few seconds after it gets it. Health and location go only if you tick them.
+A webhook copies what your Relay Everything server stores in your space to an address you own, such as a small receiver beside your database. Your server sends each new note there a few seconds after it gets it. Health and location go only if you tick them.
+
+Your data lives in your own space: one Durable Object with its own SQLite database, in the spaces Worker (`relay-everything-spaces`, or `<name>-spaces` on [your own server](../../start/run-your-own/)). The server's D1 database holds only the list of accounts: each person, their sign-ins and sessions, and a fingerprint of each key. Each webhook belongs to one person's space, and it sends only that person's data.
 
 Only data that reached your server goes out. The app keeps notes on the phone until you turn on sending, so a note that stays on the phone never reaches a webhook.
 
 ## Add a webhook
 
-1. Open your Relay Everything page, `https://<your-relay-server>/apps/relay/`.
+1. Open your Relay Everything page, `https://<your-relay-server>/apps/relay/`, and sign in.
 2. Under **Send to your database**, click **Add a webhook**.
 3. Give it a name and its address. The address must start with `https://`. It can't be this computer, a private network, or your Relay Everything server itself.
 4. Tick **Health** or **Location history** only for a database you control: they are sensitive. Notes always go.
@@ -128,7 +130,7 @@ const payload = new Webhook(process.env.RELAY_WEBHOOK_SECRET).verify(body, heade
 
 - Each webhook gets every item it takes, in the order Relay Everything stored them, with none skipped.
 - Answer with a `2xx` status within 15 seconds. Relay Everything does not follow a redirect.
-- After any other answer, Relay Everything tries the same message again after 30 s, 2 min, 10 min, 30 min, 1 h, 2 h, 4 h, 6 h and 8 h: about a day. Then the card shows **Failing**, with the last answer and how many items wait. **Try again now** sends them all, in order, from where it stopped.
+- After any other answer, Relay Everything tries the same message again after 30 s, 2 min, 10 min, 30 min, 1 h, 2 h, 4 h, 6 h and 8 h: about a day. Then the card shows **Failing**, with the last answer and how many items wait. If a send is lost, your space wakes itself every 15 minutes while it has a webhook, and sends what waits. **Try again now** sends them all, in order, from where it stopped.
 - A retry can send a message you already saved, when your answer was lost. Its id and body are the same. So save each note, sample and point by its `id`, as an upsert.
 - Accept bodies up to 16 MB. A ring note's recording is about 100 KB a minute, and base64 makes it a third larger.
 

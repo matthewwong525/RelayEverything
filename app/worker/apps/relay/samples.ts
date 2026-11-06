@@ -1,10 +1,10 @@
 // POST health and POST locations: a phone's batch of health samples or location points, each stored once per device,
 // however often the phone sends it. Both answer how many rows were new.
 import { z } from "zod";
-import { defineAction, type Action } from "../../api/contract.ts";
-import { deviceOf } from "./device.ts";
+import { defineAction, type Action, type ActionCall } from "../../api/contract.ts";
+import { asDevice } from "./caller.ts";
 import { placeRingNotes } from "./place.ts";
-import { accuracy, BATCH, insertNew, latitude, longitude, placeName, refused, session, time, type Db } from "./store.ts";
+import { accuracy, BATCH, insertNew, latitude, longitude, placeName, time, type Db } from "./store.ts";
 import { wake, type Kind } from "./webhooks/send.ts";
 
 const sample = z.strictObject({
@@ -22,17 +22,14 @@ function batch<Item>(name: string, kind: Kind, items: z.ZodType<Item[]>, descrip
   return defineAction({
     operationId: `relay.${name}-add`, summary: `Store a phone's ${name}`, description,
     input: z.strictObject({ [name]: items.describe(`Up to ${BATCH} rows; a row stored before is skipped.`) }),
-    output, encoding: "json", effect: "write", agentAvailable: false, errors: {}, examples: [], limits,
-    async handler(_request, env, { identity, input }) {
-      const device = await deviceOf(env, identity);
-      if (!device) return refused(403, "Only a Relay Everything device key can send this");
-      const rows = (input as Record<string, Item[]>)[name];
-      const db = session(env);
-      const added = await save(db, device.id, rows);
-      const placed = await after?.(db, rows) ?? 0;
-      await wake(env, [...(added ? [kind] : []), ...(placed ? ["notes" as const] : [])]);
+    output, encoding: "json", effect: "write", agentAvailable: false, requiresIdentity: false, errors: {}, examples: [], limits,
+    handler: asDevice<ActionCall>("Only a Relay Everything device key can send this", async ({ space, device, env, call }) => {
+      const rows = (call.input as Record<string, Item[]>)[name];
+      const added = await save(space.db, device.id, rows);
+      const placed = await after?.(space.db, rows) ?? 0;
+      await wake(env, space, [...(added ? [kind] : []), ...(placed ? ["notes" as const] : [])]);
       return Response.json({ received: rows.length, added });
-    },
+    }),
   });
 }
 

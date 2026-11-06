@@ -1,13 +1,16 @@
-// The owner's webhook routes, for the Relay page. Only a signed-in person reaches them, never a device key, and no
-// answer holds a secret but the one that makes or replaces it.
+// A person's webhook routes, for the Relay Everything page. Only a signed-in person reaches them, in their own space,
+// never a device key, and no answer holds a secret but the one that makes or replaces it.
 import { z } from "zod";
 import { defineAction, type Action, type ActionCall } from "../../../api/contract.ts";
-import { refused, session, time, type Db, type Env } from "../store.ts";
+import { asPerson } from "../caller.ts";
+import type { PersonSpace } from "../space.ts";
+import { refused, time, type Db, type Env } from "../store.ts";
 import { checkAddress, REFUSALS } from "./address.ts";
 import { webhookTest } from "./format.ts";
 import { newSecret } from "./sign.ts";
-import { post, record, TAKES, wakeEach, type Hook, type Kind } from "./send.ts";
-import { backfill, sweep } from "./sweep.ts";
+import { TAKES } from "./log.ts";
+import { post, record, wakeEach, type Hook, type Kind } from "./send.ts";
+import { backfill } from "./sweep.ts";
 
 const RECENT = 20;
 
@@ -62,12 +65,18 @@ const refusalOf = (address: string, { url: page }: Pick<ActionCall, "url">) => {
 };
 
 type Owner = Pick<Action, "operationId" | "summary" | "description" | "input" | "output"> & Partial<Pick<Action, "effect" | "encoding">> &
-  { handler: (env: Env, db: Db, input: never, call: ActionCall) => Promise<Response> };
+  { handler: (env: Env, db: Db, input: never, call: ActionCall, space: PersonSpace) => Promise<Response> };
 
-/** A route only a signed-in person reaches, even if the device keys' routes change. */
+/** A route only a signed-in person reaches, in their own space, even if the device keys' routes change. */
 const owner = ({ handler, ...action }: Owner) => defineAction({ encoding: "json", effect: "write", agentAvailable: false,
-  errors: { not_found: "No webhook has this id.", ...REFUSALS }, examples: [], ...action,
-  allowed: identity => identity?.kind === "user", handler: (_request, env, call) => handler(env, session(env), call.input as never, call) });
+  errors: { not_found: "No webhook has this id.", ...REFUSALS }, examples: [], ...action, requiresIdentity: false,
+  handler: asPerson<ActionCall>(({ env, space, call }) => handler(env, space.db, call.input as never, call, space)) });
+
+/** Runs the webhook now, and keeps the space's alarm set for one whose wake-up is lost. */
+const wakeOne = async (env: Env, space: PersonSpace, id: string) => {
+  await wakeEach(env, space.personId, [id]);
+  await space.watch();
+};
 
 export const list = owner({
   operationId: "relay.webhooks", summary: "List the webhooks", encoding: "none", effect: "read",
@@ -80,13 +89,14 @@ export const add = owner({
   operationId: "relay.webhooks-add", summary: "Add a webhook",
   description: "Add an address that gets each new note, and the health and location ticked for it. The answer holds its secret, once.",
   input: z.strictObject({ name, url, kinds }), output: one.extend({ secret: z.string().describe("Shown this once.") }),
-  handler: async (_env, db, input: { name: string; url: string; kinds: Kind[] }, call) => {
+  handler: async (_env, db, input: { name: string; url: string; kinds: Kind[] }, call, space) => {
     const refusal = refusalOf(input.url, call);
     if (refusal) return refusal;
     const [made, secret] = [crypto.randomUUID(), newSecret()];
     await db.prepare(`INSERT INTO relay_webhooks (id, name, url, secret, kinds, sent_seq, created_at)
       VALUES (?, ?, ?, ?, ?, (SELECT coalesce(max(seq), 0) FROM relay_outbox), ?)`)
       .bind(made, input.name, input.url, secret, kindsOf(input.kinds), Date.now()).run();
+    await space.watch();
     return Response.json({ webhook: (await views(db, made))[0], secret });
   },
 });
@@ -97,7 +107,7 @@ export const update = owner({
   input: z.strictObject({ id, name: name.optional(), url: url.optional(), kinds: kinds.optional(),
     active: z.boolean().optional().describe("False pauses it; true sends again from where it stopped.") }),
   output: one,
-  handler: async (env, db, input: { id: string; name?: string; url?: string; kinds?: Kind[]; active?: boolean }, call) => {
+  handler: async (env, db, input: { id: string; name?: string; url?: string; kinds?: Kind[]; active?: boolean }, call, space) => {
     const refusal = input.url === undefined ? null : refusalOf(input.url, call);
     if (refusal) return refusal;
     const changed = input.url !== undefined || input.kinds !== undefined ? 1 : 0;
@@ -107,7 +117,7 @@ export const update = owner({
         failing_since = CASE WHEN ? THEN NULL ELSE failing_since END
       WHERE id = ? RETURNING active`).bind(input.name ?? null, input.url ?? null, input.kinds ? kindsOf(input.kinds) : null,
       input.active === undefined ? null : Number(input.active), changed, changed, changed, changed, input.id).first<{ active: number }>();
-    if (row?.active) await wakeEach(env, [input.id]);
+    if (row?.active) await wakeOne(env, space, input.id);
     return answer(db, row, input.id);
   },
 });
@@ -155,25 +165,29 @@ export const resend = owner({
   operationId: "relay.webhooks-resend", summary: "Send past data",
   description: "Send again everything the webhook takes that was recorded since a time, in the order Relay Everything stored it, then carry on.",
   input: z.strictObject({ id, since: time.describe("From this Unix time in milliseconds.") }), output: one,
-  handler: async (env, db, input: { id: string; since: number }) => answer(db, await backfill(env, db, input.id, input.since), input.id),
+  handler: async (env, db, input: { id: string; since: number }, _call, space) => {
+    const found = await backfill(env, space, input.id, input.since);
+    if (found) await space.watch();
+    return answer(db, found, input.id);
+  },
 });
 
 export const retry = owner({
   operationId: "relay.webhooks-retry", summary: "Try again now",
   description: "Clear a webhook's failure and send everything waiting, in order, from where it stopped.",
   input: z.strictObject({ id }), output: one,
-  handler: async (env, db, input: { id: string }) => {
+  handler: async (env, db, input: { id: string }, _call, space) => {
     const row = await db.prepare(`UPDATE relay_webhooks SET failing_since = NULL, tries = 0, next_try_at = NULL, lease_until = NULL
       WHERE id = ? RETURNING id`).bind(input.id).first();
-    if (row) await wakeEach(env, [input.id]);
+    if (row) await wakeOne(env, space, input.id);
     return answer(db, row, input.id);
   },
 });
 
 export const sweepNow = owner({
   operationId: "relay.webhooks-sweep", summary: "Run the sweep (previews only)", encoding: "none",
-  description: "Run what production runs every 15 minutes: send every webhook left behind, and drop tries older than 30 days.",
+  description: "Run what your space's alarm runs every 15 minutes: send each of your webhooks left behind, and drop tries older than 30 days.",
   input: z.strictObject({}), output: z.strictObject({ woken: z.number().int() }),
-  handler: async env => env.WONG_ENVIRONMENT === "production" ? refused(403, "Production runs the sweep every 15 minutes.")
-    : Response.json({ woken: await sweep(env) }),
+  handler: async (env, _db, _input, _call, space) => env.WONG_ENVIRONMENT === "production"
+    ? refused(403, "On the live server, your space runs the sweep every 15 minutes.") : Response.json({ woken: await space.sweep() }),
 });

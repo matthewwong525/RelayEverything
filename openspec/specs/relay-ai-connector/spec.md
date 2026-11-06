@@ -13,18 +13,6 @@ Relay SHALL offer one remote MCP connector address that a chat app supporting re
 - **WHEN** Matthew adds the connector address in the Claude app and approves the Relay sign-in
 - **THEN** the app lists Relay's tools and a chat can answer "what did I note yesterday?" from his notes
 
-### Requirement: Only the owner can connect
-
-The connector SHALL admit only a sign-in by the site's owner, and SHALL refuse every request that has no valid connector token, including one carrying a Relay device key or any other site login.
-
-#### Scenario: Someone else signs in
-- **WHEN** a person other than the owner completes the sign-in
-- **THEN** no connection is made and no Relay data is returned
-
-#### Scenario: A request with no token
-- **WHEN** a request reaches the connector without a valid token
-- **THEN** it is refused before any data is read
-
 ### Requirement: The AI reads but never changes
 
 Every connector tool SHALL be marked read-only and SHALL only read notes, health samples and locations; no tool SHALL add, edit or delete any Relay data, and recordings SHALL NOT be returned.
@@ -48,3 +36,19 @@ The Relay page SHALL list each connected AI app with when it connected, and remo
 #### Scenario: Disconnecting ChatGPT
 - **WHEN** Matthew presses Disconnect beside ChatGPT
 - **THEN** ChatGPT's next question to Relay is refused and the Claude app still answers
+
+### Requirement: Each person connects only their own space
+
+The connector SHALL admit a sign-in by any person with an account on its server, and each connection SHALL read only that person's space. It SHALL refuse every request that has no valid connector token, including one carrying a device key or a site session.
+
+#### Scenario: Two people connect
+- **WHEN** Ana and Ben each connect Claude and ask for today's notes
+- **THEN** each gets only their own notes
+
+#### Scenario: Someone with no account signs in
+- **WHEN** a person with no account completes the connector sign-in on a server with sign-up off
+- **THEN** no connection is made and no data is returned
+
+#### Scenario: A request with no token
+- **WHEN** a request reaches the connector without a valid token
+- **THEN** it is refused before any data is read

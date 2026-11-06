@@ -1,12 +1,12 @@
-// The connector's eight tools, all read-only, over Relay's notes, health, places and saved chats. Each answer is
+// The connector's eight tools, all read-only, over one person's notes, health, places and chats. Each answer is
 // capped, and none holds a recording's key, a device's id or a chat's session id. Every read goes through queries.ts.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 import { chatById, chatLines, chatMessages, chatPage, daySummary, healthBuckets, noteById, notePage, placeVisits, type Chat, type HealthType,
   type Note, type Span } from "../apps/relay/queries.ts";
-import { session, type Db } from "../apps/relay/store.ts";
-import type { McpEnv } from "./env.ts";
+import { spaceOf, vouch, type Db, type SpaceEnv } from "../apps/relay/space.ts";
+import type { GrantProps, McpEnv } from "./env.ts";
 import { dayOf, HOUR, instant, knownZone, local, nextDay, startOfDay, ZONE } from "./time.ts";
 
 const MAX_BUCKETS = 400;
@@ -202,11 +202,16 @@ function relayServer(db: Db): McpServer {
   return server;
 }
 
-/** The connector's /mcp: Streamable HTTP, answered as JSON, with no session. */
+/** The connector's /mcp: Streamable HTTP, answered as JSON, with no session. Each token reads only its grant's person's
+ *  space; a grant from before spaces names no person, so its app must connect again. */
 export const mcpHandler = {
-  async fetch(request: Request, env: Pick<McpEnv, "DB">): Promise<Response> {
+  async fetch(request: Request, env: Pick<McpEnv, "SPACES">, ctx: Pick<ExecutionContext, "props">): Promise<Response> {
+    const personId = (ctx.props as GrantProps | undefined)?.personId;
+    if (!personId) return Response.json({ error: "invalid_token", error_description: "Connect this AI app again." }, { status: 401 });
+    // The tools read no recording, so the connector binds no file store.
+    const space = spaceOf({ SPACES: env.SPACES } as SpaceEnv, vouch("grant", personId));
     const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
-    await relayServer(session(env)).connect(transport);
+    await relayServer(space.db).connect(transport);
     return transport.handleRequest(request);
   },
 };

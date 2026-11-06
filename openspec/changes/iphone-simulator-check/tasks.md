@@ -9,7 +9,7 @@
 
 - [x] 2.1 Write `.github/workflows/mobile-device-check.yml` with the two starts, the `sha` check, job `iphone` (build for simulator, boot the newest iPhone, install, record video, upload `device-check-iphone`) and job `report`; verify with `npx --yes @action-validator/cli` and one hand-started run on this branch that uploads a build log, a home screenshot and `run.mp4`
 - [x] 2.2 If a native part (whisper.cpp, health) fails the simulator build in 2.1, fix it for the simulator only and name the limit in the report; verify the next run installs and opens the app
-- [ ] 2.3 Write Maestro flows `mobile/device-check/flows/` (timeline, new note and save, settings), each with a screenshot, and the step that writes `out/tour.json` and a `broken` verdict on a failed build or launch; add any missing semantics label in `lib/` with a widget test; verify a run passes all three flows, and `flutter test` passes
+- [x] 2.3 Write Maestro flows `mobile/device-check/flows/` (timeline, new note and save, settings), each with a screenshot, and the step that writes `out/tour.json` and a `broken` verdict on a failed build or launch; add any missing semantics label in `lib/` with a widget test; verify a run passes all three flows, and `flutter test` passes
 
 ## 3. Claude on the Mac
 
@@ -20,7 +20,7 @@
 ## 4. Start and collect from this computer
 
 - [x] 4.1 Write `scripts/device-check.mjs` (`run`: start, find the run by branch and sha, watch with a 50-minute limit, download to a temp folder, print `result=`, `folder=`, `run=`) and `scripts/device-check.test.mjs` for the run finding and the verdict reading; verify `node --test scripts/device-check.test.mjs` passes and one real `run` prints `result=works` or a reasoned other result
-- [ ] 4.2 Write `.agents/rules/mobile.md` (`paths: ["mobile/**"]`): `/verify` runs the device check for a phone app change and maps its result into its verdicts; verify the rule loads for a `mobile/` path
+- [x] 4.2 Write `.agents/rules/mobile.md` (`paths: ["mobile/**"]`): `/verify` runs the device check for a phone app change and maps its result into its verdicts; verify the rule loads for a `mobile/` path
 
 ## 5. Docs
 

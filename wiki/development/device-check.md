@@ -41,7 +41,7 @@ The check never runs on a push. Start it in one of three ways:
 - **With the label.** Put the label *check on iPhone* on a pull request. The check runs on the pull request's newest commit, then posts its report there. To run it again, take the label off and put it on again.
 - **By hand on GitHub**, with the inputs `sha`, `pr`, `scenarios` and `model`.
 
-**GitHub starts a workflow by hand only when the workflow is on the default branch.** Before that, `gh workflow run` fails. `device-check.mjs` then puts the label on the pull request, so the check runs from the branch's own copy of the workflow. A label start has no inputs: Claude reads the open change's specs that name the phone app.
+**GitHub starts a new workflow by hand only after it knows the workflow:** once the workflow is on the default branch, or after one run of it on any branch. Before that, `gh workflow run` fails. `device-check.mjs` then puts the label on the pull request, so the check runs from the branch's own copy of the workflow, and later starts work by hand. A label start has no inputs: Claude reads the open change's specs that name the phone app.
 
 A new push to a labelled pull request does not run the check again. That keeps the rule: a push never spends the key.
 

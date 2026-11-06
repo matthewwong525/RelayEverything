@@ -78,6 +78,7 @@ The Relay Everything phone app is for iPhone first, but this computer runs Linux
 - **2026-11-06** — Assumed: the review's two findings are fixed in the workflow: Claude's commands never see the key, and Claude writes only in its results folder, because the spec already promises both.
 - **2026-11-06** — Checkpoint: source, tests and docs built and reviewed; local checks pass. The live runs on GitHub's Mac (2.1–2.3, 3.2, 3.3, 4.1) and the key (1.1, 1.2) are still open.
 - **2026-11-06** — First live run (label start, no key): the app built for the simulator, installed and opened on an iPhone 17 (iOS 26.5); whisper.cpp and the health plugin needed no change. Two tour flows failed only because Flutter joins a row's lines into one label; the flows now match the start of the text. The report comment reached PR #20.
+- **2026-11-06** — Second live run (started by hand, no key): all three tour flows passed. GitHub started the workflow by hand from the branch after its first label run, so the by-hand start works before the merge once the workflow has run once; the wiki and the rule now say so.
 
 ## Capabilities
 

@@ -54,13 +54,13 @@ test('a page name is safe as a file name', () => {
 test('a new live key carries the site\'s own domain; a preview key keeps its workers.dev address', () => {
   const config = parseConfig(join(repoRoot, 'app', 'wrangler.jsonc'));
   const server = defaultServer(config, false);
-  assert.equal(server, 'https://app.relayeverything.com');
+  assert.equal(server, 'https://admin.relayeverything.com');
   assert.equal(defaultServer(config, true), null);
   assert.equal(defaultServer({ routes: [{ pattern: 'a.example.com', custom_domain: true }], env: { staging: {} } }, true), 'https://a.example.com');
   assert.equal(defaultServer({}, false), null);
   const key = { server, clientId: 'abc.access', clientSecret: 'shh-secret' };
-  assert.equal(JSON.parse(connectCode(key)).server, 'https://app.relayeverything.com');
-  assert.ok(handOverPage({ ...key, name: 'Phone', qrSvg: null }).includes('https://app.relayeverything.com/apps/relay/api/pebble'));
+  assert.equal(JSON.parse(connectCode(key)).server, 'https://admin.relayeverything.com');
+  assert.ok(handOverPage({ ...key, name: 'Phone', qrSvg: null }).includes('https://admin.relayeverything.com/apps/relay/api/pebble'));
   assert.match(HAND_OVER, /[\\/]\.relay-everything[\\/]device-keys$/);
 });
 

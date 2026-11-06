@@ -50,12 +50,12 @@ The Relay Everything phone app is for iPhone first, but this computer runs Linux
 
 **What you do yourself**
 
-- **Give an Anthropic key once**, through a private link. It goes into the repository's secret store on GitHub, never into a file.
+- **Nothing more.** Claude on the Mac uses your Claude subscription (operations@claymoo.com, *Personal Ultra*) through a token that lasts a year. It is in the repository's secret store on GitHub.
 
 ## What the build needs
 
 - **Apple keys for TestFlight**: Ready. They are in the repository's secrets. The simulator check doesn't need them, because a simulator build is not signed.
-- **Anthropic key for Claude on the Mac**: Needs you. Make a key in the Anthropic console. The build then sends a private link to save it as `ANTHROPIC_API_KEY` and copies it into the repository's GitHub secrets. Until then, the check runs the fixed tour only and says that Claude was skipped. Get it: <https://console.anthropic.com/settings/keys>
+- **Claude token for the Mac**: Ready. `CLAUDE_CODE_OAUTH_TOKEN`, from the operations@claymoo.com *Personal Ultra* plan, is in the repository's GitHub secrets and in `.env`.
 
 ## Decision log
 
@@ -79,6 +79,7 @@ The Relay Everything phone app is for iPhone first, but this computer runs Linux
 - **2026-11-06** — Checkpoint: source, tests and docs built and reviewed; local checks pass. The live runs on GitHub's Mac (2.1–2.3, 3.2, 3.3, 4.1) and the key (1.1, 1.2) are still open.
 - **2026-11-06** — First live run (label start, no key): the app built for the simulator, installed and opened on an iPhone 17 (iOS 26.5); whisper.cpp and the health plugin needed no change. Two tour flows failed only because Flutter joins a row's lines into one label; the flows now match the start of the text. The report comment reached PR #20.
 - **2026-11-06** — Second live run (started by hand, no key): all three tour flows passed. GitHub started the workflow by hand from the branch after its first label run, so the by-hand start works before the merge once the workflow has run once; the wiki and the rule now say so.
+- **2026-11-06** — Asked which Claude account the check uses → Matthew chose his Claude subscription, not an API key: operations@claymoo.com, the *Personal Ultra* plan. He signed in to that Gmail in a live view; the assistant made the token with `claude setup-token` and saved it as the GitHub secret `CLAUDE_CODE_OAUTH_TOKEN`. One earlier token from this setup was lost before it was saved, and it is unused.
 
 ## Capabilities
 
@@ -96,6 +97,6 @@ None.
 - New `mobile/device-check/`: Maestro flows for the fixed tour, and `brief.md`, the platform-neutral brief for Claude.
 - New `scripts/device-check.mjs` and its test: start, wait and download from this computer.
 - New rule `.agents/rules/mobile.md` (paths `mobile/**`): `/verify` runs the device check for a phone app change.
-- `.env.example`: blank `ANTHROPIC_API_KEY=`; GitHub secret `ANTHROPIC_API_KEY`.
+- `.env.example`: blank `CLAUDE_CODE_OAUTH_TOKEN=` and `ANTHROPIC_API_KEY=`; GitHub secret `CLAUDE_CODE_OAUTH_TOKEN`.
 - Docs: `mobile/README.md` (*Builds on GitHub*), a new `wiki/development/device-check.md`, linked from `wiki/development/README.md` and `wiki/development/staging-walkthrough.md`.
 - New dependencies in CI only: `anthropics/claude-code-action`, Maestro.

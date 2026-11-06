@@ -48,8 +48,8 @@ A new push to a labelled pull request does not run the check again. That keeps t
 ## The key and what it costs
 
 - **GitHub's Macs cost nothing**, because the repository is public. A run takes about 15 minutes.
-- **Claude uses the repository secret `ANTHROPIC_API_KEY`.** Get the key in the [Anthropic console](https://console.anthropic.com/settings/keys) and save it through [a private key link](secrets.md#receive-a-key-through-a-private-link); then copy it to GitHub with `gh secret set ANTHROPIC_API_KEY`, through stdin. A `CLAUDE_CODE_OAUTH_TOKEN` secret works in its place. With no key, the tour still runs and the report says *Claude skipped: no key*.
-- **Each run uses Sonnet 5.5, with at most 40 turns.** A run started by hand can ask for another model, such as `claude-opus-5-5`. The Claude step's summary on GitHub gives the cost of each run.
+- **Claude uses the repository secret `CLAUDE_CODE_OAUTH_TOKEN`**, a token from a Claude subscription, so each run uses that plan's usage and costs nothing more. Today it is the operations@claymoo.com *Personal Ultra* plan. Make a new one with `claude setup-token`: it prints a sign-in link, and the code from the signed-in page goes back into it. The token lasts a year. Copy it to GitHub with `gh secret set CLAUDE_CODE_OAUTH_TOKEN`, through stdin, and keep it in `.env`. An Anthropic API key in `ANTHROPIC_API_KEY` works in its place, billed for each run. With neither, the tour still runs and the report says *Claude skipped: no key*.
+- **Each run uses Sonnet 5.5, with at most 40 turns.** A run started by hand can ask for another model, such as `claude-opus-5-5`. The Claude step's summary on GitHub gives the cost each run would have with an API key.
 
 ## What keeps the key safe
 

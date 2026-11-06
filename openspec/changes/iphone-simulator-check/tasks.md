@@ -2,8 +2,8 @@
 
 ## 1. The key
 
-- [ ] 1.1 Declare a blank `ANTHROPIC_API_KEY=`, with a one-line hint, in `.env.example`; send the private key link and wait for it; verify `HANDOVER_SAVED` names `ANTHROPIC_API_KEY` and `node scripts/public-check.mjs --tree` passes
-- [ ] 1.2 Copy the key to GitHub through stdin with `gh secret set ANTHROPIC_API_KEY`; verify `gh secret list` shows it and no value was printed
+- [x] 1.1 Declare blank `CLAUDE_CODE_OAUTH_TOKEN=` and `ANTHROPIC_API_KEY=`, with hints, in `.env.example`; make a Claude subscription token with `claude setup-token` and keep it in `.env`; verify `node scripts/public-check.mjs --tree` passes
+- [x] 1.2 Copy the token to GitHub through stdin with `gh secret set CLAUDE_CODE_OAUTH_TOKEN`; verify `gh secret list` shows it and no value was printed
 
 ## 2. Simulator build and fixed tour
 

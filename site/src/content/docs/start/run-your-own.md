@@ -24,26 +24,26 @@ Cloudflare's free plan is enough. Cloudflare asks you to turn on two parts once,
 
 | Your server has | Your server does not have |
 |---|---|
-| The Relay Everything server: notes, recordings, health, places and AI chats | The tools that build Relay Everything |
-| Your Relay Everything page, with your email as its only login | A login for anyone else |
+| The Relay Everything server: notes, recordings, health, places and AI chats, each person's in their own space | The tools that build Relay Everything |
+| Your Relay Everything page, with your email as its only login | A login for anyone else, until you turn sign-up on |
 | A key for each phone, Pebble app and Claude Code computer | A way for a key to read your data |
 | Your AI connector, so your own AI reads your data | A way in for Relay Everything's makers |
 | [Webhooks](../../connections/your-database/) to your own database | A cost, on the free plan |
 
 ## Your devices
 
-Make a key for each device on the computer where you made the server:
+Sign in on your Relay Everything page with your server's own login, then click **Add a device** for each device. [Connect a phone](../connect-a-phone/) tells the rest. A key only adds data: [Keys](../../api/keys/#what-a-device-key-reaches).
 
-```sh
-node scripts/relay-device-key.mjs create --name "iPhone"
-```
+## Who can sign in
 
-[Connect a phone](../connect-a-phone/) tells the rest. A key only adds data: [Keys](../../api/keys/#what-a-device-key-reaches).
+Your server keeps Cloudflare Access, the login it was made with: `RELAY_SIGN_IN` is `access`. Only your email gets an account, and your data goes in your own space. To let other people sign up, set `RELAY_SIGN_UP` to `open` in your server's settings, and let their emails through your Cloudflare Access login. Each new person then gets their own space, and you can't open it: [Privacy](../../privacy/).
 
 ## Update it
 
 Ask your AI *update my Relay Everything*. It gets the newest version of Relay Everything, applies its database changes, then puts it live. Your data stays. If a database change fails, your server stays as it was.
 
+The update that adds spaces also makes your spaces Worker, `<name>-spaces`, and your own account. Then it moves your data into your space with `scripts/relay-move-to-space.mjs`, and prints the count of each kind, old and new. The old data stays where it was until a later update. The old keys stop with this update: make a new key for each device on your page with **Add a device**, and connect it again.
+
 ## Remove it
 
-Ask your AI *remove my Relay Everything*. It shows what it will delete and asks first: the server, its notes, recordings, health and places, and its keys. This can't be undone.
+Ask your AI *remove my Relay Everything*. It shows what it will delete and asks first: the server, its spaces with their notes, recordings, health and places, and its keys. This can't be undone.

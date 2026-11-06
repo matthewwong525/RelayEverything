@@ -1,15 +1,14 @@
-// What Relay's routes share: the database, the shapes a phone sends, and how many rows one batch may hold.
+// What Relay Everything's routes share: the shapes a phone sends, refusals, and how many rows one batch may hold.
 import { z } from "zod";
 import type { Action } from "../../api/contract.ts";
+import type { Db } from "./space.ts";
 
 export type Env = Parameters<Action["handler"]>[1];
 export type Identity = Parameters<NonNullable<Action["allowed"]>>[0];
-export type Db = D1DatabaseSession;
+export type { Db } from "./space.ts";
 
 export const BATCH = 500;
 export const MINUTE = 60_000;
-
-export const session = (env: Pick<Env, "DB">): Db => env.DB.withSession("first-primary");
 
 /** A Unix time in milliseconds, from 2001 to 2286, so a time sent in seconds is refused. */
 export const time = z.number().int().min(1e12).max(1e13);

@@ -1,18 +1,18 @@
-// POST pebble: a ring note from the Pebble app's Index webhook. Checked in Pebble's order (version, timestamp,
-// signature), then stored once per X-Index-Delivery; Pebble retries a 408, 429 or 5xx for 10 minutes.
+// POST pebble: a ring note from the Pebble app's Index webhook, sent with its device key. Checked in Pebble's order
+// (version, timestamp, signature by the device's own secret), then stored once per X-Index-Delivery.
 import { boundedBytes } from "../../api/body.ts";
 import type { ActionCall } from "../../api/contract.ts";
-import { deviceOf } from "./device.ts";
+import { asDevice } from "./caller.ts";
 import { placeRingNotes } from "./place.ts";
 import { signedBy } from "./signature.ts";
-import { refused, session, type Env } from "./store.ts";
+import type { PersonSpace } from "./space.ts";
+import { refused, type Env } from "./store.ts";
 import { wake } from "./webhooks/send.ts";
 
 const MAX_BODY = 10 * 1024 * 1024;
 const WINDOW_SECONDS = 300;
 const DELIVERY = /^[A-Za-z0-9._:-]{1,200}$/;
 
-type PebbleEnv = Env & { RELAY_PEBBLE_SIGNING?: string };
 const ok = (more: Record<string, unknown>) => Response.json({ ok: true, ...more });
 
 /** The request's checked headers, or the refusal Pebble's guide gives for the first one that fails. */
@@ -42,7 +42,8 @@ async function fieldsOf(body: Uint8Array, type: string) {
   }
 }
 
-async function receive(request: Request, env: PebbleEnv, { identity }: Pick<ActionCall, "identity">): Promise<Response> {
+/** Pebble retries a 408, 429 or 5xx for 10 minutes. */
+export const pebble = asDevice<Pick<ActionCall, "identity">>("Only a Relay Everything device key can send ring notes", async ({ space, device, env, request }) => {
   const signed = headersOf(request.headers);
   if (signed instanceof Response) return signed;
   let body: Uint8Array;
@@ -51,22 +52,23 @@ async function receive(request: Request, env: PebbleEnv, { identity }: Pick<Acti
   } catch {
     return refused(413, "The recording is larger than 10 MB");
   }
-  if (!await signedBy(env.RELAY_PEBBLE_SIGNING!, signed, body, request.headers.get("X-Index-Signature") ?? "")) {
+  const secret = await space.db.prepare("SELECT pebble_secret FROM relay_device_secrets WHERE device_id = ?").bind(device.id)
+    .first<{ pebble_secret: string }>();
+  if (!secret || !await signedBy(secret.pebble_secret, signed, body, request.headers.get("X-Index-Signature") ?? "")) {
     return refused(401, "Invalid signature");
   }
-  const device = await deviceOf(env, identity);
-  if (!device) return refused(403, "Only a Relay Everything device key can send ring notes");
   // A test event is checked like a note and then dropped, so it never shows in the timeline.
   if (signed.test) return ok({ test: true });
   const fields = await fieldsOf(body, request.headers.get("content-type") ?? "");
   if (!fields) return refused(400, "The body has no readable recordedAt");
-  return store(env, device.id, signed.delivery, fields);
-}
+  return store(env, space, device.id, signed.delivery, fields);
+});
 
-async function store(env: PebbleEnv, device: string, delivery: string, { recordedAt, audio, text }: NonNullable<Awaited<ReturnType<typeof fieldsOf>>>) {
-  const db = session(env);
+async function store(env: Env, space: PersonSpace, device: string, delivery: string,
+  { recordedAt, audio, text }: NonNullable<Awaited<ReturnType<typeof fieldsOf>>>) {
+  const { db } = space;
   const id = crypto.randomUUID();
-  const key = audio && `notes/${id}.m4a`;
+  const key = audio && space.files.nameOf(id);
   const { results } = await db.prepare(`INSERT INTO relay_notes (id, device_id, source, delivery_id, text, audio_key, recorded_at, created_at)
     VALUES (?, ?, 'ring', ?, ?, ?, ?, ?) ON CONFLICT (delivery_id) DO NOTHING RETURNING id`)
     .bind(id, device, delivery, text, key, recordedAt, Date.now()).all();
@@ -74,16 +76,13 @@ async function store(env: PebbleEnv, device: string, delivery: string, { recorde
   if (!results.length) return ok({ duplicate: true });
   if (audio) {
     try {
-      await env.RELAY_BUCKET.put(key!, await audio.arrayBuffer(), { httpMetadata: { contentType: "audio/mp4" } });
+      await space.files.put(id, await audio.arrayBuffer());
     } catch {
       await db.prepare("DELETE FROM relay_notes WHERE id = ?").bind(id).run();
       return refused(503, "The recording could not be saved. Pebble sends it again.");
     }
   }
   await placeRingNotes(db, recordedAt, recordedAt);
-  await wake(env, ["notes"]);
+  await wake(env, space, ["notes"]);
   return ok({ id });
 }
-
-/** Lists its saved key itself, so only this route needs the signing secret saved. */
-export const pebble = Object.assign(receive, { keys: ["relay-pebble-signing"] as const });

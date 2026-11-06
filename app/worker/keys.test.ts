@@ -4,7 +4,9 @@ import { keyProblems, undescribed } from "./key-rules";
 import { keys } from "./keys";
 
 // The core's own key for the sign-in list is no business key: no route lists it and Access shows no level for it.
-const CORE = ["WONG_ACCESS_LOGIN_MANAGEMENT"];
+// So are Relay Everything's own sign-in secrets: only its server's sign-in reads them (apps/relay/sign-in/oidc.ts).
+const CORE = ["WONG_ACCESS_LOGIN_MANAGEMENT", "RELAY_APPLE_SIGN_IN_KEY", "RELAY_APPLE_SIGN_IN_KEY_ID", "RELAY_GOOGLE_SIGN_IN_SECRET",
+  "RELAY_APPLE_TEAM_ID"];
 type Registry = Record<string, { secrets: readonly string[] }>;
 /** The names a file declares, and the setup-made `WONG_` names it keeps commented out. */
 const names = (text: string) => [...text.matchAll(/^(?:# (?=WONG_)|export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/gm)]

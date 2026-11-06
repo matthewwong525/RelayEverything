@@ -50,7 +50,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Connect Relay Everything')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
-        const Text('Ask your assistant for a key for this phone. It shows once, as a QR code and on a private page.'),
+        const Text('Make a key for this phone on your Relay Everything page: tap Add a device. The page shows the key once, as a QR code.'),
         const SizedBox(height: 16),
         FilledButton.icon(onPressed: _busy ? null : _scanned, icon: const Icon(Icons.qr_code_scanner), label: const Text('Scan the QR code')),
         const SizedBox(height: 24),

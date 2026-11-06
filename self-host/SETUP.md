@@ -11,11 +11,13 @@ In the person's Cloudflare account, each named after the server (`relay` by defa
 | Part | Name |
 |---|---|
 | The server and the Relay Everything page, one Worker | `relay` |
+| Each person's own space for their data, one Worker | `relay-spaces` |
 | The AI connector, its own Worker and sign-in store | `relay-mcp` |
-| The database | `relay-db` |
+| The list of accounts and device keys | `relay-db` |
 | The file store for recordings | `relay-notes` |
 | The webhooks' queue | `relay-webhooks` |
-| The login: an Access app for the person's email, and one for the AI connector | `Relay (relay)`, `Relay AI connector (relay)` |
+| The login: an Access app for the person's email | `Relay (relay)` |
+| The device keys' way past the login: the server checks each key itself | `Relay Everything device keys (relay)` |
 
 It costs nothing on Cloudflare's free plan. Tell the person this, and ask before you run `install`.
 
@@ -31,18 +33,18 @@ It costs nothing on Cloudflare's free plan. Tell the person this, and ask before
    - **Zero Trust:** the free plan, with a team name. It holds the login.
    - **R2:** Cloudflare can ask for a payment card before it turns R2 on, even on the free plan. Say so before the person starts.
    - **Workers:** open Workers & Pages once, to get a `workers.dev` address.
-4. **Install:** `node self-host/setup.mjs install --email <the person's email>`. Their email is the only login. Add `--name <name>` for another name. It prints `server=` and `connector=`. It also writes the Pebble signing secret on a private page under `~/.relay-everything/self-host/`; give the person that path, never the secret.
-5. **Sign in:** the person opens the `server=` address, enters their email, and types the code Cloudflare sends.
-6. **Keys:** for each device, the person runs this in their own terminal, since the key shows only there:
-   - A phone or the Pebble app: `node scripts/relay-device-key.mjs create --name "iPhone"`
-   - Claude Code: `node scripts/relay-device-key.mjs create --name "Laptop" --for claude-code`
-
-   Never run it for them and never copy its output: the key must not reach the chat. Then point them to [Connect a phone](https://relayeverything.com/start/connect-a-phone/) and [the Pebble webhook](https://relayeverything.com/start/pebble-webhook/).
-7. **AI connector:** the person adds the `connector=` address to their AI, as [Connect your AI](https://relayeverything.com/connections/connect-your-ai/) shows.
+4. **Install:** `node self-host/setup.mjs install --email <the person's email>`. Their email is the only login. Add `--name <name>` for another name. It prints `server=` and `connector=`.
+5. **Sign in:** the person opens the `server=` address, enters their email, and types the code Cloudflare sends. Their first visit makes their account and their own empty space. Only the owner's email gets an account. To let other people make one, the owner sets `RELAY_SIGN_UP` to `open` in `self-host/wrangler.jsonc` and runs `update`.
+6. **Keys:** on the Relay Everything page, the person taps *Add a device* for each phone, the Pebble app and each Claude Code computer. The page shows the key once, as a QR code, and the Pebble app's signing secret with it. Never ask for a key in the chat. Then point them to [Connect a phone](https://relayeverything.com/start/connect-a-phone/) and [the Pebble webhook](https://relayeverything.com/start/pebble-webhook/).
+7. **AI connector:** the person adds the `connector=` address to their AI, as [Connect your AI](https://relayeverything.com/connections/connect-your-ai/) shows. The AI app sends them to their server's own login.
 
 ## Update my Relay Everything
 
-When the person asks to update: `git pull`, then `npm ci` in `app/`, then `node self-host/setup.mjs update`. It applies the new database changes first, then puts the new server live. If a database change fails, it stops, and the old server stays live. The data stays.
+When the person asks to update: `git pull`, then `npm ci` in `app/`, then `node self-host/setup.mjs update`. It writes the server's settings again from this repository, applies the new database changes, then puts the new server live. If a database change fails, it stops, and the old server stays live. The data stays.
+
+Then it moves data from before spaces into the owner's own space, and prints a `move result=` line. `move result=ok` means the space holds at least as many of each kind as the old data; it holds more once people use it. A `move result=mismatch` line names a kind the space holds fewer of: run `update` again, since the move skips what is there already. The old data stays in the database until a later update removes it.
+
+After the first update with spaces, device keys made with `scripts/relay-device-key.mjs` stop working. The person makes a new key for each device on the page, as in step 6, and scans it again.
 
 ## Status
 
@@ -56,4 +58,4 @@ When the person asks to update: `git pull`, then `npm ci` in `app/`, then `node 
 
 - `result=refused` from `check` or `install`: fix each `missing` line, then run it again. Nothing was made.
 - `result=failed`: the line before names the step. Run the same command again: each step that is done is skipped.
-- `install` writes `self-host/wrangler.jsonc` and `self-host/wrangler.mcp.jsonc`, which `update`, `status` and the key command read. Keep them. Git ignores them.
+- `install` writes `self-host/wrangler.jsonc`, `self-host/wrangler.mcp.jsonc` and `self-host/wrangler.spaces.jsonc`, which `update` and `status` read. Keep them. Git ignores them.

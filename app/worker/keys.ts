@@ -42,9 +42,6 @@ export const keys = {
   // saves a change and saves knowledge, Write also publishes. ARTIFACTS stands in for the secrets on Cloudflare.
   code: { title: "Project code", purpose: "This project's own code and company knowledge, to install, read and save them", secrets: ["WONG_CODE_READ", "WONG_CODE_WRITE"], levels: ["read", "write"], alone: true, bindings: ["ARTIFACTS", "CODE_CHECKS"],
     liveOnly: true },
-  // The secret the Pebble app signs each ring note with: Relay's webhook route checks it. relay-app-first-version
-  "relay-pebble-signing": { title: "Pebble webhook signing", purpose: "Check that a ring note really came from your Pebble app",
-    secrets: ["RELAY_PEBBLE_SIGNING"], levels: ["read"] },
   // Add a key as: stripe: { title: "Stripe", purpose: "Payments and refunds", secrets: ["STRIPE_SECRET_KEY"] },
   // Direct use adds `forward` and `docs: "https://docs.stripe.com/api"`: wiki/stack/company-api.md#use-a-key-directly
 

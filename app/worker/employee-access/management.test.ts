@@ -273,7 +273,7 @@ it('lets an Admin the owner picked add people, edit roles and set levels as the 
   for (const table of ['role_apps', 'role_keys', 'grants', 'key_grants']) expect(f.sql.prepare(`SELECT COUNT(*) count FROM wong_access_${table}`).get(), table).toEqual({ count: 0 });
   // Kim is still an employee: every app and key, Access to manage, and no owner route.
   expect(await (await handleAccess(req('apps', 'GET'), f.env, kim)).json()).toMatchObject({ role: 'employee', manages: true, apps: ['access', 'orders', 'payroll'],
-    keys: [{ id: 'cloudflare', level: 'read' }, { id: 'code', level: 'write' }, { id: 'relay-pebble-signing', level: 'read' }] });
+    keys: [{ id: 'cloudflare', level: 'read' }, { id: 'code', level: 'write' }] });
   // Her own setup lists the apps a person can be given: Access itself is nobody's to list.
   expect(await (await setupStatus(req('setup', 'GET'), f.env, kim)).json()).toMatchObject({ role: 'employee', apps: both });
   expect((await authorizeRequest(f.env, kim, { kind: 'owner' }))?.status).toBe(403);

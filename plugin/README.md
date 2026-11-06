@@ -4,13 +4,9 @@ The Relay Everything plugin saves each Claude Code chat to your own Relay Everyt
 
 ## Install
 
-1. Make a connect code. In your copy of the Relay Everything repository, run:
+1. Make a connect code. On the Relay Everything page, open **Devices**, select **Add a device**, then **Claude Code**.
 
-   ```bash
-   node scripts/relay-device-key.mjs create --name "Laptop" --for claude-code
-   ```
-
-   The code shows once, in your terminal and on a private page on your computer. It can only add chats: it can't read, change or delete anything on your server.
+   The code shows once. It can only add chats: it can't read, change or delete anything on your server.
 2. In Claude Code, add the plugin:
 
    ```text

@@ -17,8 +17,9 @@ class ApiException implements Exception {
   String toString() => 'ApiException($failure, $status)';
 }
 
-/// Relay's device routes, each call carrying this phone's key in Cloudflare Access's two headers. A device key only
-/// adds data: the server refuses it on every route that reads.
+/// Relay's device routes, each call carrying this phone's key: `Authorization: Bearer` for a page-made key, or
+/// Cloudflare Access's two headers for an older one. A device key only adds data: the server refuses it on every
+/// route that reads.
 class RelayApi {
   RelayApi(this.connection, [http.Client? client]) : _client = client ?? http.Client();
 
@@ -28,8 +29,7 @@ class RelayApi {
 
   Uri _uri(String route) => Uri.parse('${connection.server}/apps/relay/api/$route');
 
-  Map<String, String> get _headers =>
-    {'CF-Access-Client-Id': connection.clientId, 'CF-Access-Client-Secret': connection.clientSecret, 'Accept': 'application/json'};
+  Map<String, String> get _headers => {...connection.headers, 'Accept': 'application/json'};
 
   /// Sends one JSON body to a POST route and returns its answer.
   Future<Map<String, dynamic>> post(String route, Map<String, dynamic> body) =>

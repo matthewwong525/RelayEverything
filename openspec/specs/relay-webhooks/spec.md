@@ -49,18 +49,6 @@ A new webhook SHALL get only data stored after it was added. When the owner asks
 - **WHEN** the owner adds a webhook and sends past data from 1 October
 - **THEN** the address gets every note since 1 October, then new notes as they arrive
 
-### Requirement: Only the owner manages webhooks, and only safe addresses
-
-Only a signed-in person with access to the Relay app SHALL add, change, test, pause or remove a webhook, or read its deliveries; a device key SHALL be refused. A webhook address SHALL be `https` and SHALL NOT point at `localhost`, a private or link-local network, or Relay's own site. A webhook's secret SHALL be shown once, when it is made or replaced, and never again.
-
-#### Scenario: A device key tries to add a webhook
-- **WHEN** a phone's device key calls the add-webhook route
-- **THEN** Relay refuses it and adds nothing
-
-#### Scenario: An address on a private network
-- **WHEN** the owner adds `https://192.168.1.10/hook` or `http://db.example.com`
-- **THEN** Relay refuses it and says why
-
 ### Requirement: A test shows the answer at once
 
 *Send a test* SHALL send a signed `webhook.test` message right away and show the address's answer, or the error, to the owner.
@@ -68,3 +56,19 @@ Only a signed-in person with access to the Relay app SHALL add, change, test, pa
 #### Scenario: A wrong address
 - **WHEN** the owner sends a test to an address that answers 404
 - **THEN** the page shows the 404, and no data is sent
+
+### Requirement: Each person manages only their own webhooks, and only safe addresses
+
+Only the signed-in person whose space holds a webhook SHALL add, change, test, pause or remove it, or read its deliveries; a device key and every other person SHALL be refused. A webhook SHALL send only its own person's data. A webhook address SHALL be `https` and SHALL NOT point at `localhost`, a private or link-local network, or Relay Everything's own site. A webhook's secret SHALL be shown once, when it is made or replaced, and never again.
+
+#### Scenario: A device key tries to add a webhook
+- **WHEN** a phone's device key calls the add-webhook route
+- **THEN** the server refuses it and adds nothing
+
+#### Scenario: Another person's data
+- **WHEN** Ben stores a note and Ana has a webhook
+- **THEN** Ana's webhook gets nothing from Ben
+
+#### Scenario: An address on a private network
+- **WHEN** a person adds `https://192.168.1.10/hook` or `http://db.example.com`
+- **THEN** the server refuses it and says why

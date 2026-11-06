@@ -1,9 +1,8 @@
 import { createHmac } from "node:crypto";
 import { expect, it, vi } from "vitest";
-import type { AccessIdentity } from "../../access";
 import { handleApp } from "../index";
 import { body as read } from "../../../tests/body";
-import { bucket, db, env, matthew, NOW, pebbleApp, phone, queue, rows, SECRET } from "../../../tests/relay";
+import { ANA, ben, BEN, benPhone, bucket, call, db, env, matthew, NOW, pebbleApp, phone, queue, request, rows, SECRET, type Who } from "../../../tests/relay";
 
 const seconds = String(NOW / 1000);
 const RECORDED = NOW - 20_000;
@@ -20,19 +19,25 @@ const recording = new Blob([new Uint8Array([0, 0, 0, 24, 102, 116, 121, 112])], 
 const note = (more: Record<string, string | Blob> = {}) =>
   multipart({ audio: new File([recording], "rec-1.m4a"), transcription: "Call the PCB fab about the flex stiffener", recordedAt: String(RECORDED), client: "ring", ...more });
 
-type Sent = { bytes?: Uint8Array; type?: string; headers?: Record<string, string>; who?: AccessIdentity | null; secret?: string; bindings?: object };
+type Sent = { bytes?: Uint8Array; type?: string; headers?: Record<string, string>; who?: Who; secret?: string };
 
 /** A webhook call signed as Pebble signs it; `headers` replaces or, set to "", drops any header. */
-async function send({ bytes, type, headers = {}, who = pebbleApp, secret = SECRET, bindings = {} }: Sent) {
+async function send({ bytes, type, headers = {}, who = pebbleApp, secret = SECRET }: Sent) {
   const base: Record<string, string> = { "X-Index-Webhook-Version": "1", "X-Index-Timestamp": seconds, "X-Index-Delivery": "delivery-1",
     "X-Index-Trigger": "single-click-hold", ...(type && { "content-type": type }), ...headers };
   const test = base["X-Index-Test"] === "true" ? 1 : 0;
   const prefix = `v${base["X-Index-Webhook-Version"]}\n${base["X-Index-Timestamp"]}\n${base["X-Index-Delivery"]}\n${base["X-Index-Trigger"] ?? ""}\n${test}\n`;
   const signature = createHmac("sha256", secret).update(prefix).update(bytes ?? new Uint8Array()).digest("hex");
   const sent = Object.fromEntries(Object.entries({ "X-Index-Signature": signature, ...base }).filter(([, value]) => value !== ""));
-  const response = await handleApp(new Request("https://relay.example.com/apps/relay/api/pebble", { method: "POST", headers: sent, body: bytes }),
-    env(bindings), who);
+  const response = await handleApp(request(who, "POST", "https://relay.example.com/apps/relay/api/pebble", { headers: sent, body: bytes }), env(),
+    who && "kind" in who ? who : null);
   return { status: response.status, json: await read(response) };
+}
+
+/** A note's recording as Ana's page plays it, opened with her space's file key, or the status when it can't be. */
+async function played(id: string) {
+  const response = await handleApp(request(matthew, "GET", `https://relay.example.com/apps/relay/api/audio?id=${id}`), env(), null);
+  return response.ok ? new Uint8Array(await response.arrayBuffer()) : response.status;
 }
 
 it("stores a signed ring note once, with its words and its recording, however often Pebble sends it", async () => {
@@ -40,11 +45,16 @@ it("stores a signed ring note once, with its words and its recording, however of
   const first = await send(sent);
   expect(first).toEqual({ status: 200, json: { ok: true, id: expect.any(String) } });
   expect(await send(sent)).toEqual({ status: 200, json: { ok: true, duplicate: true } });
+  const name = `people/${ANA}/${first.json.id}`;
   expect(rows("relay_notes")).toEqual([expect.objectContaining({ id: first.json.id, device_id: "d-pebble", source: "ring", delivery_id: "delivery-1",
-    text: "Call the PCB fab about the flex stiffener", audio_key: `notes/${first.json.id}.m4a`, recorded_at: RECORDED, lat: null })]);
-  expect([...bucket.objects.keys()]).toEqual([`notes/${first.json.id}.m4a`]);
-  expect(bucket.objects.get(`notes/${first.json.id}.m4a`)).toEqual(new Uint8Array(await recording.arrayBuffer()));
-  expect(bucket.put).toHaveBeenCalledWith(`notes/${first.json.id}.m4a`, expect.any(ArrayBuffer), { httpMetadata: { contentType: "audio/mp4" } });
+    text: "Call the PCB fab about the flex stiffener", audio_key: name, recorded_at: RECORDED, lat: null })]);
+  expect([...bucket.objects.keys()]).toEqual([name]);
+  expect(bucket.put).toHaveBeenCalledWith(name, expect.any(Uint8Array), { httpMetadata: { contentType: "application/octet-stream" } });
+  // The bucket holds the recording only sealed: the bytes open only through Ana's own space.
+  const raw = new Uint8Array(await recording.arrayBuffer());
+  expect(Buffer.from(bucket.objects.get(name)!).includes(Buffer.from(raw))).toBe(false);
+  expect(await played(String(first.json.id))).toEqual(raw);
+  expect(rows("relay_notes", BEN)).toEqual([]);
 });
 
 it("keeps a transcription-only note with no recording, and a recording-only note with no words", async () => {
@@ -101,18 +111,27 @@ it("checks a test event and answers success, but never stores it", async () => {
 
 it("takes notes only from a device key, and answers 503 so Pebble retries when the recording can't be saved", async () => {
   const sent = await note();
-  expect((await send({ ...sent, who: matthew })).status).toBe(403);
+  for (const who of [matthew, ben, null]) {
+    const { status, json } = await send({ ...sent, who });
+    expect([status, json.error.message]).toEqual([403, "Only a Relay Everything device key can send ring notes"]);
+  }
   bucket.failing = true;
   expect((await send(sent)).status).toBe(503);
   expect(rows("relay_notes")).toEqual([]);
   bucket.failing = false;
   expect((await send(sent)).status).toBe(200);
-  expect((await send({ ...sent, headers: { "X-Index-Delivery": "phone-sent" }, who: phone })).status).toBe(200);
 });
 
-it("needs the signing key saved: without it the route is unavailable and nothing is read", async () => {
-  const { status, json } = await send({ ...await note(), bindings: { RELAY_PEBBLE_SIGNING: "" } });
-  expect([status, json.error.code]).toEqual([503, "unavailable"]);
+it("checks each note with its own device's secret: a key with none, or a secret from another device, is refused", async () => {
+  const sent = await note();
+  // Ana's phone and Ben's phone hold no Pebble secret, so even Pebble's own signature is refused.
+  for (const who of [phone, benPhone]) expect((await send({ ...sent, who })).json.error.message).toBe("Invalid signature");
+  const made = (await call(matthew, "POST", "devices", { name: "Second Pebble", reaches: "phone" })).json;
+  const key = { bearer: String(made.key) };
+  expect((await send({ ...sent, who: key })).status).toBe(401);
+  expect(await send({ ...sent, who: key, secret: String(made.pebbleSecret) })).toEqual({ status: 200, json: { ok: true, id: expect.any(String) } });
+  expect(rows("relay_notes").map(row => row.device_id)).toEqual([made.id]);
+  expect(rows("relay_notes", BEN)).toEqual([]);
 });
 
 it("pins a ring note to the nearest location point within 10 minutes of its recording", async () => {
@@ -134,11 +153,11 @@ it("wakes each active webhook for a stored ring note, never for a repeat or a te
   await send(sent);
   const test = await multipart({ test: "true", transcription: "Test event", recordedAt: String(RECORDED), client: "ring" });
   await send({ ...test, headers: { "X-Index-Test": "true", "X-Index-Trigger": "test-event" } });
-  expect(queue.sent).toEqual([{ webhook: "hook-1" }]);
+  expect(queue.sent).toEqual([{ webhook: "hook-1", person: ANA }]);
   queue.failing = true;
   const lost = vi.spyOn(console, "error").mockImplementation(() => undefined);
   expect((await send({ ...sent, headers: { "X-Index-Delivery": "delivery-2" } })).status).toBe(200);
-  expect(lost).toHaveBeenCalledWith("Relay webhooks: the wake-up was lost", expect.any(Error));
+  expect(lost).toHaveBeenCalledWith("Relay Everything webhooks: the wake-up was lost", expect.any(Error));
   expect(rows("relay_notes")).toHaveLength(2);
   lost.mockRestore();
 });

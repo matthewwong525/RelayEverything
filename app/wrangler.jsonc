@@ -17,8 +17,8 @@
     "CF_ACCESS_AUD": "76b579e034cfc7891c67bff9c593e31d2d8dc0b4b5548427d5257a5893ba9879",
     "CF_ACCESS_APP_ID": "f938f676-4c71-445d-bacb-3649b4897276",
     "CF_ACCESS_WORKER_ID": "3994b8ff29ac409dbfe1783049f21864",
-    // The live checker's Client ID, which names its service token and opens nothing alone. Relay refuses every
-    // other service token that is no device: app/worker/apps/relay/device.ts
+    // The live checker's Client ID, which names its service token and opens nothing alone. Relay Everything
+    // refuses every other service token: app/worker/apps/relay/caller.ts
     "RELAY_CHECKER_SHA256": "cc48186f16567a1acbcdabbbdce1446b905f77fd265a4e9f79865d1adb9930a1"
   },
   "d1_databases": [
@@ -31,19 +31,21 @@
     { "binding": "MEMORY_BUCKET", "bucket_name": "relay-everything-memory" },
     { "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes" }
   ],
-  // Relay's webhooks: a message only says "look now" for one webhook; the cursor in D1 holds what was sent.
+  // Relay Everything's webhooks: a message says "look now" for one person's webhook; the space holds what was sent.
   // app/worker/apps/relay/webhooks/send.ts
   "queues": {
     "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks" }],
     "consumers": [{ "queue": "relay-everything-webhooks", "max_batch_size": 10, "max_retries": 10 }]
   },
-  // Rereads who can push on GitHub, for previews' sign-in, and wakes each Relay webhook left behind.
+  // Rereads who can push on GitHub, for previews' sign-in.
   "triggers": { "crons": ["*/15 * * * *"] },
   // The private site's own address; the workers.dev address stays on for Access. Staging has none.
   "routes": [{ "pattern": "app.relayeverything.com", "custom_domain": true }],
   // With routes, Wrangler turns workers.dev off unless this says true, and Access returns each sign-in there.
   "workers_dev": true,
-  "durable_objects": { "bindings": [{ "name": "LIVE_LINE", "class_name": "Line", "script_name": "relay-everything-line" }] },
+  // SPACES: each Relay Everything person's own space, in its own Worker (wrangler.spaces.jsonc), which deploys first.
+  "durable_objects": { "bindings": [{ "name": "LIVE_LINE", "class_name": "Line", "script_name": "relay-everything-line" },
+    { "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces" }] },
   "migrations": [{ "tag": "line-1", "new_sqlite_classes": ["Line"] }, { "tag": "line-2", "deleted_classes": ["Line"] }],
   // The project's own repository, which Connect your assistant hands out. wiki/stack/employee-project.md
   "artifacts": [{ "binding": "ARTIFACTS", "namespace": "wongstack" }],
@@ -72,6 +74,7 @@
         "consumers": [{ "queue": "relay-everything-webhooks-staging", "max_batch_size": 10, "max_retries": 10 }]
       },
       "services": [{ "binding": "RELAY_MCP", "service": "relay-everything-mcp-staging", "entrypoint": "Grants" }],
+      "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces-staging" }] },
       "routes": [],
       "triggers": { "crons": [] }
     },
@@ -84,7 +87,8 @@
         "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks-local" }],
         "consumers": [{ "queue": "relay-everything-webhooks-local", "max_batch_size": 10, "max_retries": 10 }]
       },
-      "durable_objects": { "bindings": [{ "name": "LIVE_LINE", "class_name": "Line", "script_name": "relay-everything-line-local" }] }
+      "durable_objects": { "bindings": [{ "name": "LIVE_LINE", "class_name": "Line", "script_name": "relay-everything-line-local" },
+        { "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces-local" }] }
     }
   }
 }

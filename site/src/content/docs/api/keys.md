@@ -1,47 +1,49 @@
 ---
 title: Keys
-description: How a device proves who it is to the Relay Everything server, which routes its key reaches, and how to turn a key off.
+description: How a device proves who it is to the Relay Everything server, which routes its key reaches, and how to make and turn off a key on the page.
 ---
 
-Each call to the Relay Everything server needs a key. A phone and the Pebble app each have their own device key; a person in a browser signs in instead.
+Each call to the Relay Everything server needs a key or a sign-in. A phone, the Pebble app and each Claude Code computer have their own device key; a person in a browser signs in instead: [Sign up](../../start/sign-up/).
 
 ## Send a key
 
-A device key is a pair of values. Send both as headers on each call:
+A device key starts with `rek_`. Send it in the `Authorization` header on each call:
 
 ```sh
 curl https://<your-relay-server>/apps/relay/api/key \
-  -H "CF-Access-Client-Id: <client id>" \
-  -H "CF-Access-Client-Secret: <client secret>"
+  -H "Authorization: Bearer rek_…"
 ```
 
-A call with no key, or a wrong one, stops at the server's login and never reaches Relay Everything.
+A call with a wrong key, or a key that is off, answers `403`.
 
 ## What a device key reaches
 
-A device key only adds data. It reaches only these routes:
+A device key only adds data, and only to the space of the person who made it. It reaches only these routes:
 
 - `POST pebble`, `POST notes`, `POST health`, `POST locations`
 - `GET key`, which answers the key's own device name and no data, so a device can check its key
 
-Any other address or method answers `403` to a device key. To read, a person signs in on the Relay Everything page: `GET timeline`, `GET audio` and `GET summary` need a signed-in person. [Routes](../reference/) shows who can call each route.
+Any other address or method answers `403` to a device key. To read, a person signs in on the Relay Everything page: `GET timeline`, `GET audio` and `GET summary` need a signed-in person, and each answers only from that person's own space. [Routes](../reference/) shows who can call each route.
 
 ## A chat key
 
-A chat key, made with `--for claude-code`, is for the [Relay Everything plugin for Claude Code](../../connections/claude-code/). It reaches only `POST chats`, `POST chat-saves` and `GET key`: it can add chats, but it can't list, read, change or delete them, or reach a phone's routes. A phone's key can't reach the chat routes.
+A chat key is for the [Relay Everything plugin for Claude Code](../../connections/claude-code/). It reaches only `POST chats`, `POST chat-saves` and `GET key`: it can add chats, but it can't list, read, change or delete them, or reach a phone's routes. A phone's key can't reach the chat routes.
 
 ## Make, list and turn off keys
 
-The owner of the Relay Everything server runs these on the computer that holds the server's project. On [your own server](../../start/run-your-own/), that is the computer where you made it:
+You make and turn off your keys on your Relay Everything page, signed in:
 
-| Command | What it does |
+| On the page | What it does |
 |---|---|
-| `node scripts/relay-device-key.mjs create --name "Android phone"` | Makes a key. It shows once, as a QR code and on a private page. It lasts one year. |
-| `node scripts/relay-device-key.mjs create --name "Laptop" --for claude-code` | Makes a chat key. Its connect code shows once, in the terminal and on a private page. |
-| `node scripts/relay-device-key.mjs list` | Lists each key: its name, its kind (`phone` or `claude-code`), when it was made, and whether it is off. |
-| `node scripts/relay-device-key.mjs revoke --name "Android phone"` | Turns the key off at once. The other keys go on. |
+| **Add a device** | Makes a key for a phone, the Pebble app or a Claude Code computer. It shows once, as a QR code. A Pebble device also gets its own signing secret, shown once with the key. |
+| The list of devices | Shows each key: its name, its kind, when it was made, and whether it is off. |
+| **Turn off** | Turns the key off at once. The other keys go on. |
 
-Add `--staging` to make a key for a preview of Relay Everything's own server; your own server has no previews. A preview's key doesn't open the live server, and a live key doesn't open a preview.
+Relay Everything keeps only a fingerprint of each key, never the key itself, so a lost key can't be shown again: add the device again for a new key. A preview of Relay Everything's own server has its own accounts and keys. A preview's key doesn't open the live server, and a live key doesn't open a preview.
+
+:::note
+A server you run yourself and have not updated yet still makes keys with `node scripts/relay-device-key.mjs`. Its next update moves it to keys from the page: [Run your own server](../../start/run-your-own/#update-it).
+:::
 
 ## Errors
 
@@ -54,7 +56,7 @@ A refused call answers with a status and an error:
 | Status | Code | When |
 |---|---|---|
 | `400` | `invalid_input` | A field is missing or wrong. The answer's `issues` names each field. |
-| `401` | `authentication_required` | A Pebble webhook's signature or time is wrong. |
+| `401` | `authentication_required` | No one is signed in, or a Pebble webhook's signature or time is wrong. |
 | `403` | `forbidden` | The key is off, on no list of devices, or calls a route it doesn't reach. |
 | `413` | `invalid_input` | The body is too large. |
 | `503` | `unavailable` | The server could not save or read. Send it again. |

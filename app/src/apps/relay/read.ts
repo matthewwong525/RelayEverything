@@ -25,6 +25,13 @@ export type Webhook = {
 }
 
 export const API = '/apps/relay/api/'
+export const SIGN_IN = '/apps/relay/sign-in/'
+/** The page's own event when a route answers 401: the session ended, so the page shows the sign-in again. */
+export const SIGNED_OUT = 'relay-signed-out'
+
+const signedOut = (path: string, status: number) => {
+  if (status === 401 && path.startsWith(API)) window.dispatchEvent(new Event(SIGNED_OUT))
+}
 
 /** A route's refusal, with its status: 503 says the route's service is not set up here. */
 class Refused extends Error {
@@ -37,17 +44,22 @@ class Refused extends Error {
 
 async function json<T>(route: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API}${route}`, init)
+  signedOut(API, response.status)
   if (!response.ok) throw new Refused(route, response.status)
   return await response.json() as T
 }
 
-/** A POST to one route, answered with its JSON; a refusal throws with the route's own message. */
-export async function post<T>(route: string, input: object = {}): Promise<T> {
-  const response = await fetch(`${API}${route}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) })
+/** A POST to one address, answered with its JSON; a refusal throws with the server's own message. */
+export async function postTo<T>(path: string, input: object = {}, name = path): Promise<T> {
+  const response = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) })
+  signedOut(path, response.status)
   const json = await response.json().catch(() => null) as { error?: { message?: string } } | null
-  if (!response.ok) throw new Error(json?.error?.message ?? `${route}: ${response.status}`)
+  if (!response.ok) throw new Error(json?.error?.message ?? `${name}: ${response.status}`)
   return json as T
 }
+
+/** A POST to one of the app's routes. */
+export const post = <T>(route: string, input: object = {}) => postTo<T>(`${API}${route}`, input, route)
 
 /** One route's JSON, or a Refused naming its address when the answer is not one. */
 export const get = <T>(route: string) => json<T>(route)

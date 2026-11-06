@@ -5,9 +5,9 @@ import { join } from 'node:path';
 import { state } from '../lib/state.mjs';
 
 export const SESSION = '5d1c2b7a-0e4f-4a6b-9c3d-8e7f6a5b4c3d';
-export const SECRET = 'client-secret-made-up';
+export const SECRET = `rek_${'made-up'.padEnd(43, 'x')}`;
 export const connectCode = (server = 'https://relay.example.com') =>
-  JSON.stringify({ relay: 1, server, clientId: 'made-up.access', clientSecret: SECRET });
+  JSON.stringify({ relay: 1, server, key: SECRET });
 
 const answer = (status, json) => new Response(JSON.stringify(json), { status, headers: { 'content-type': 'application/json' } });
 

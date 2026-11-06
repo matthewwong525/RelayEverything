@@ -1,6 +1,9 @@
 import { expect, it } from "vitest";
 import { handleApp } from "../index";
-import { bucket, call, checker, db, env, lost, matthew, NOW, pebbleApp, phone, queue, rows } from "../../../tests/relay";
+import { hashToken } from "./people";
+import { spaceOf, vouch } from "./space";
+import { ANA, call, checker, db, directoryDb, env, laptop, lost, makeKey, matthew, NOW, pebbleApp, phone, queue, request, rows,
+  type Who } from "../../../tests/relay";
 
 const MINUTE = 60_000;
 const typed = (clientId: string, more: Record<string, unknown> = {}) => ({ clientId, text: "Order more TL3312 switches", createdAt: NOW - 5 * MINUTE, ...more });
@@ -8,7 +11,13 @@ const sample = (type: string, start: number, end: number, value: number, more: R
   ({ type, start, end, value, unit: type === "heart_rate" ? "bpm" : type === "steps" ? "count" : "minutes", source: "Health Connect", ...more });
 const point = (at: number, more: Record<string, unknown> = {}) => ({ at, lat: 43.6487, lon: -79.3962, accuracy: 15, place: "Queen St W", ...more });
 const ringNote = (id: string, recordedAt: number) => db.sql.prepare(`INSERT INTO relay_notes (id, device_id, source, delivery_id, text, audio_key,
-  recorded_at, created_at) VALUES (?, 'd-pebble', 'ring', ?, 'Ring note', ?, ?, 0)`).run(id, `delivery-${id}`, `notes/${id}.m4a`, recordedAt);
+  recorded_at, created_at) VALUES (?, 'd-pebble', 'ring', ?, 'Ring note', ?, ?, 0)`).run(id, `delivery-${id}`, `people/${ANA}/${id}`, recordedAt);
+const RING = "aaaaaaaa-0000-4000-8000-000000000001";
+/** Seals a recording into Ana's folder, as the Pebble route stores one. */
+const seal = (id: string, bytes: number[]) => spaceOf(env() as never, vouch("session", ANA)).files.put(id, new Uint8Array(bytes).buffer);
+/** The audio route as `who` plays it, with a Range header when one is given. */
+const play = (who: Who, id: string, range?: string) => handleApp(request(who, "GET", `https://relay.example.com/apps/relay/api/audio?id=${id}`,
+  range ? { headers: { Range: range } } : {}), env(), null);
 
 it("stores a typed note once per phone, with the place its phone sent", async () => {
   const first = await call(phone, "POST", "notes", typed("note-0001", { lat: 43.65, lon: -79.38, accuracy: 8, place: "Home" }));
@@ -20,8 +29,7 @@ it("stores a typed note once per phone, with the place its phone sent", async ()
 });
 
 it("refuses a note from a person, a revoked key or another machine, and a malformed one", async () => {
-  for (const who of [matthew, lost, checker]) expect((await call(who, "POST", "notes", typed("note-0003"))).status).toBe(403);
-  expect((await call(null, "POST", "notes", typed("note-0003"))).status).toBe(401);
+  for (const who of [matthew, lost, checker, null]) expect((await call(who, "POST", "notes", typed("note-0003"))).status).toBe(403);
   for (const wrong of [typed("short"), typed("note-0004", { lat: 43.6 }), typed("note-0005", { text: "" }), typed("note-0006", { createdAt: NOW / 1000 })]) {
     expect((await call(phone, "POST", "notes", wrong)).status, JSON.stringify(wrong)).toBe(400);
   }
@@ -53,7 +61,7 @@ it("stores location points once, and places ring notes that came before them", a
   expect((await call(matthew, "POST", "locations", { points })).status).toBe(403);
 });
 
-it("reads the timeline newest first, a page at a time, for phones and the site page", async () => {
+it("reads the timeline newest first, a page at a time, for the site page, and refuses a device key", async () => {
   ringNote("aaaaaaaa-0000-4000-8000-000000000001", NOW - 3 * MINUTE);
   await call(phone, "POST", "notes", typed("note-0001", { createdAt: NOW - 2 * MINUTE, lat: 43.65, lon: -79.38 }));
   await call(phone, "POST", "notes", typed("note-0002", { createdAt: NOW - MINUTE }));
@@ -64,22 +72,25 @@ it("reads the timeline newest first, a page at a time, for phones and the site p
     ["typed", "Android phone", false, { lat: 43.65, lon: -79.38, accuracy: null, name: null, from: "phone" }],
     ["ring", "Pebble app", true, null]]);
   expect(all.json.next).toBeNull();
-  const first = await call(phone, "GET", "timeline", { limit: 2 });
+  const first = await call(matthew, "GET", "timeline", { limit: 2 });
   expect([first.json.notes.length, first.json.next, first.json.nextId]).toEqual([2, NOW - 2 * MINUTE, first.json.notes[1].id]);
-  const rest = await call(phone, "GET", "timeline", { limit: 2, before: first.json.next, beforeId: first.json.nextId });
-  expect(rest.json.notes.map(note => note.id)).toEqual(["aaaaaaaa-0000-4000-8000-000000000001"]);
-  expect((await call(phone, "GET", "timeline", { limit: 101 })).status).toBe(400);
+  const rest = await call(matthew, "GET", "timeline", { limit: 2, before: first.json.next, beforeId: first.json.nextId });
+  expect(rest.json.notes.map(note => note.id)).toEqual([RING]);
+  expect((await call(matthew, "GET", "timeline", { limit: 101 })).status).toBe(400);
+  for (const [who, status] of [[phone, 403], [laptop, 403], [lost, 403], [null, 401]] as const) {
+    expect((await call(who, "GET", "timeline")).status).toBe(status);
+  }
 });
 
 it("pages past two notes that share a time, one at a time, missing neither", async () => {
   ringNote("aaaaaaaa-0000-4000-8000-000000000001", NOW - MINUTE);
   ringNote("aaaaaaaa-0000-4000-8000-000000000002", NOW - MINUTE);
   const seen: unknown[] = [];
-  let page = await call(phone, "GET", "timeline", { limit: 1 });
+  let page = await call(matthew, "GET", "timeline", { limit: 1 });
   while (true) {
     seen.push(...page.json.notes.map(note => note.id));
     if (page.json.next === null) break;
-    page = await call(phone, "GET", "timeline", { limit: 1, before: page.json.next, beforeId: page.json.nextId });
+    page = await call(matthew, "GET", "timeline", { limit: 1, before: page.json.next, beforeId: page.json.nextId });
   }
   expect(seen).toEqual(["aaaaaaaa-0000-4000-8000-000000000002", "aaaaaaaa-0000-4000-8000-000000000001"]);
 });
@@ -104,6 +115,7 @@ it("sums a day for the site page: notes, the larger phone's steps and sleep, hea
   expect((await call(matthew, "GET", "summary", { day: "2026-11-04" })).json).toEqual({ day: "2026-11-04", notes: 1, steps: 0, sleepMinutes: 0,
     heartRate: null, workouts: { count: 0, minutes: 0 }, places: [] });
   for (const day of ["yesterday", "2026-13-45"]) expect((await call(matthew, "GET", "summary", { day })).status).toBe(400);
+  for (const [who, status] of [[phone, 403], [null, 401]] as const) expect((await call(who, "GET", "summary", { day: "2026-11-05" })).status).toBe(status);
 });
 
 it("takes the larger source's steps and sleep when a phone and its watch both count them", async () => {
@@ -118,9 +130,9 @@ it("takes the larger source's steps and sleep when a phone and its watch both co
 });
 
 it("streams a ring note's recording, and answers not found for a note without one", async () => {
-  ringNote("aaaaaaaa-0000-4000-8000-000000000001", NOW);
-  bucket.objects.set("notes/aaaaaaaa-0000-4000-8000-000000000001.m4a", new Uint8Array([1, 2, 3]));
-  const played = await handleApp(new Request("https://relay.example.com/apps/relay/api/audio?id=aaaaaaaa-0000-4000-8000-000000000001"), env(), phone);
+  ringNote(RING, NOW);
+  await seal(RING, [1, 2, 3]);
+  const played = await play(matthew, RING);
   expect([played.status, played.headers.get("content-type"), played.headers.get("content-length")]).toEqual([200, "audio/mp4", "3"]);
   expect(new Uint8Array(await played.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
   await call(phone, "POST", "notes", typed("note-0001"));
@@ -130,28 +142,27 @@ it("streams a ring note's recording, and answers not found for a note without on
     expect((await call(matthew, "GET", "audio", { id })).status, String(id)).toBe(status);
   }
   expect((await call(matthew, "GET", "audio")).status).toBe(400);
+  // A device key only sends: it plays no recording.
+  for (const [who, status] of [[phone, 403], [pebbleApp, 403], [null, 401]] as const) expect((await play(who, RING)).status).toBe(status);
 });
 
 it("answers one byte range of a recording, as Safari asks before it plays", async () => {
-  ringNote("aaaaaaaa-0000-4000-8000-000000000001", NOW);
-  bucket.objects.set("notes/aaaaaaaa-0000-4000-8000-000000000001.m4a", new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]));
-  const play = async (range: string) => {
-    const response = await handleApp(new Request("https://relay.example.com/apps/relay/api/audio?id=aaaaaaaa-0000-4000-8000-000000000001",
-      { headers: { Range: range } }), env(), phone);
+  ringNote(RING, NOW);
+  await seal(RING, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  const part = async (range: string) => {
+    const response = await play(matthew, RING, range);
     return [response.status, response.headers.get("content-range"), response.headers.get("content-length"), [...new Uint8Array(await response.arrayBuffer())]];
   };
-  expect(await play("bytes=0-1")).toEqual([206, "bytes 0-1/10", "2", [0, 1]]);
-  expect(await play("bytes=7-")).toEqual([206, "bytes 7-9/10", "3", [7, 8, 9]]);
-  expect(await play("bytes=-2")).toEqual([206, "bytes 8-9/10", "2", [8, 9]]);
-  expect(await play("bytes=8-50")).toEqual([206, "bytes 8-9/10", "2", [8, 9]]);
-  expect((await play("bytes=10-")).slice(0, 2)).toEqual([416, "bytes */10"]);
+  expect(await part("bytes=0-1")).toEqual([206, "bytes 0-1/10", "2", [0, 1]]);
+  expect(await part("bytes=7-")).toEqual([206, "bytes 7-9/10", "3", [7, 8, 9]]);
+  expect(await part("bytes=-2")).toEqual([206, "bytes 8-9/10", "2", [8, 9]]);
+  expect(await part("bytes=8-50")).toEqual([206, "bytes 8-9/10", "2", [8, 9]]);
+  expect((await part("bytes=10-")).slice(0, 2)).toEqual([416, "bytes */10"]);
   // Several ranges, or a range it can't read, get the whole file.
-  for (const range of ["bytes=0-1,4-5", "bytes=5-2", "items=0-1"]) expect((await play(range))[0], range).toBe(200);
-  expect((await play("bytes=-0")).slice(0, 2)).toEqual([416, "bytes */10"]);
+  for (const range of ["bytes=0-1,4-5", "bytes=5-2", "items=0-1"]) expect((await part(range))[0], range).toBe(200);
+  expect((await part("bytes=-0")).slice(0, 2)).toEqual([416, "bytes */10"]);
   ringNote("aaaaaaaa-0000-4000-8000-000000000002", NOW);
-  const gone = await handleApp(new Request("https://relay.example.com/apps/relay/api/audio?id=aaaaaaaa-0000-4000-8000-000000000002",
-    { headers: { Range: "bytes=0-1" } }), env(), phone);
-  expect(gone.status).toBe(404);
+  expect((await play(matthew, "aaaaaaaa-0000-4000-8000-000000000002", "bytes=0-1")).status).toBe(404);
 });
 
 it("wakes the webhooks that take what was stored, and none for a repeat", async () => {
@@ -161,17 +172,24 @@ it("wakes the webhooks that take what was stored, and none for a repeat", async 
   webhook.run("health", '["notes","health"]', NOW);
   await call(phone, "POST", "notes", typed("note-0001"));
   await call(phone, "POST", "notes", typed("note-0001"));
-  expect(queue.sent).toEqual([{ webhook: "notes" }, { webhook: "health" }]);
+  expect(queue.sent).toEqual([{ webhook: "notes", person: ANA }, { webhook: "health", person: ANA }]);
   queue.sent = [];
   const day = [sample("steps", NOW - 60 * MINUTE, NOW - 30 * MINUTE, 1200)];
   await call(phone, "POST", "health", { samples: day });
   await call(phone, "POST", "health", { samples: day });
   await call(phone, "POST", "locations", { points: [point(NOW - 23 * MINUTE)] });
-  expect(queue.sent).toEqual([{ webhook: "health" }]);
+  expect(queue.sent).toEqual([{ webhook: "health", person: ANA }]);
 });
 
 it("tells a device key its own name, and nothing else, and refuses everyone else", async () => {
   expect(await call(phone, "GET", "key")).toEqual({ status: 200, json: { device: "Android phone" } });
-  for (const who of [matthew, lost, checker]) expect((await call(who, "GET", "key")).status).toBe(403);
-  expect((await call(null, "GET", "key")).status).toBe(401);
+  expect(await call(laptop, "GET", "key")).toEqual({ status: 200, json: { device: "Laptop" } });
+  for (const who of [matthew, lost, checker, null]) expect((await call(who, "GET", "key")).status).toBe(403);
+});
+
+it("answers an empty name for a key whose device is no longer in the space", async () => {
+  const gone = makeKey("gone");
+  directoryDb.sql.prepare("INSERT INTO relay_keys (key_sha256, person_id, device_id, reaches, created_at) VALUES (?, ?, 'd-gone', 'phone', ?)")
+    .run(await hashToken(gone), ANA, NOW);
+  expect(await call({ bearer: gone }, "GET", "key")).toEqual({ status: 200, json: { device: "" } });
 });

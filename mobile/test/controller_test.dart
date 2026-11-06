@@ -297,6 +297,20 @@ void main() {
       expect([for (final request in server.requests) if (request.method == 'GET') request.url.path.split('/').last], ['key']);
     });
 
+    test('connects with a key from the Relay Everything page, and sends it as Authorization: Bearer', () async {
+      final relay = controller();
+      await relay.load();
+      expect(await relay.connect(pageCode), isNull);
+      expect(storage.values['relay.key'], pageKey);
+      await relay.startSending(sendEarlier: false);
+      await relay.addNote('From a page key');
+      await pumpEventQueue();
+      await relay.sync();
+      expect(server.routes, ['key', 'notes']);
+      expect([for (final request in server.requests) request.headers['Authorization']], ['Bearer $pageKey', 'Bearer $pageKey']);
+      expect([for (final request in server.requests) request.headers['CF-Access-Client-Id']], [null, null]);
+    });
+
     test('refuses a key the server turns down, and keeps one it could not try', () async {
       final relay = controller();
       for (final status in [401, 403]) {

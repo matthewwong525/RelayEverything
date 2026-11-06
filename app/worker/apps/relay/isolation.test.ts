@@ -1,0 +1,66 @@
+import { expect, it } from "vitest";
+import { handleApp } from "../index";
+import { spaceOf, vouch } from "./space";
+import { ANA, BEN, ben, benPhone, bucket, call, env, laptop, matthew, NOW, owner, phone, request, rows, spaces, type Who } from "../../../tests/relay";
+
+const ANA_RING = "aaaaaaaa-0000-4000-8000-0000000000a1";
+const BEN_RING = "bbbbbbbb-0000-4000-8000-0000000000b1";
+const SOUND = [0, 0, 0, 24, 102, 116, 121, 112, 77, 52, 65, 32];
+
+const note = (clientId: string, text: string) => ({ clientId, text, createdAt: NOW - 60_000 });
+const texts = async (who: Who) => (await call(who, "GET", "timeline")).json.notes.map(item => item.text);
+/** A ring note in a person's space, its recording at `key`; the Pebble route writes the same row. */
+const ringNote = (person: string, device: string, id: string, key: string) => spaces.sql(person).prepare(`INSERT INTO relay_notes (id, device_id,
+  source, delivery_id, text, audio_key, recorded_at, created_at) VALUES (?, ?, 'ring', ?, 'Ring note', ?, ?, 0)`).run(id, device, `delivery-${id}`, key, NOW);
+const filesOf = (person: string) => spaceOf(env() as never, vouch("session", person)).files;
+const play = (who: Who, id: string) => handleApp(request(who, "GET", `https://relay.example.com/apps/relay/api/audio?id=${id}`), env(),
+  who && "kind" in who ? who : null);
+
+it("lets Ana's session, phone key and Access email reach only Ana's rows", async () => {
+  await call(phone, "POST", "notes", note("ana-note-01", "Ana's note"));
+  await call(benPhone, "POST", "notes", note("ben-note-01", "Ben's note"));
+  await call(phone, "POST", "health", { samples: [{ type: "steps", start: NOW - 60_000, end: NOW, value: 900, unit: "count", source: "Health Connect" }] });
+  await call(phone, "POST", "locations", { points: [{ at: NOW, lat: 43.65, lon: -79.38, accuracy: 10 }] });
+  expect(rows("relay_notes").map(row => row.text)).toEqual(["Ana's note"]);
+  expect(rows("relay_notes", BEN).map(row => row.text)).toEqual(["Ben's note"]);
+  expect([rows("relay_health").length, rows("relay_locations").length]).toEqual([1, 1]);
+  expect([rows("relay_health", BEN), rows("relay_locations", BEN)]).toEqual([[], []]);
+  for (const who of [matthew, owner]) expect(await texts(who)).toEqual(["Ana's note"]);
+  expect((await call(ben, "GET", "summary", { day: "2026-11-05" })).json).toMatchObject({ notes: 1, steps: 0, places: [] });
+});
+
+it("never shows Ben Ana's notes or chats, and lets him delete none of hers", async () => {
+  await call(phone, "POST", "notes", note("ana-note-01", "Ana's note"));
+  await call(laptop, "POST", "chats", { sessionId: "ana-session-0001", project: "relay-ring", startedAt: NOW - 60_000,
+    messages: [{ seq: 0, role: "you", text: "Ana's question", at: NOW - 60_000 }] });
+  const chat = rows("relay_chats")[0].id as string;
+  expect(await texts(ben)).toEqual([]);
+  expect((await call(ben, "GET", "chats", { q: "question" })).json.chats).toEqual([]);
+  expect((await call(ben, "GET", "chat", { id: chat })).status).toBe(404);
+  expect((await call(ben, "DELETE", "chat", { id: chat })).status).toBe(404);
+  expect(rows("relay_chats")).toHaveLength(1);
+  expect((await call(matthew, "GET", "chats", { q: "question" })).json.chats).toHaveLength(1);
+});
+
+it("answers not found when Ana asks for Ben's recording, by its note id or by its name", async () => {
+  ringNote(BEN, "d-ben", BEN_RING, await filesOf(BEN).put(BEN_RING, new Uint8Array(SOUND).buffer));
+  expect((await play(ben, BEN_RING)).status).toBe(200);
+  for (const who of [matthew, owner]) expect((await play(who, BEN_RING)).status).toBe(404);
+  // A row in Ana's space that names Ben's object still opens nothing: it is outside her folder.
+  ringNote(ANA, "d-pebble", ANA_RING, `people/${BEN}/${BEN_RING}`);
+  expect((await play(matthew, ANA_RING)).status).toBe(404);
+});
+
+it("stores a recording sealed, plays back the bytes sent, and opens no copy under another name", async () => {
+  const name = await filesOf(ANA).put(ANA_RING, new Uint8Array(SOUND).buffer);
+  ringNote(ANA, "d-pebble", ANA_RING, name);
+  expect(name).toBe(`people/${ANA}/${ANA_RING}`);
+  const stored = bucket.objects.get(name)!;
+  expect(stored).not.toEqual(new Uint8Array(SOUND));
+  expect(Buffer.from(stored).includes(Buffer.from(SOUND))).toBe(false);
+  expect(new Uint8Array(await (await play(matthew, ANA_RING)).arrayBuffer())).toEqual(new Uint8Array(SOUND));
+  const copy = "aaaaaaaa-0000-4000-8000-0000000000a2";
+  bucket.objects.set(`people/${ANA}/${copy}`, stored);
+  ringNote(ANA, "d-pebble", copy, `people/${ANA}/${copy}`);
+  expect((await play(matthew, copy)).status).toBe(404);
+});

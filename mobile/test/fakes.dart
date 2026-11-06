@@ -21,6 +21,10 @@ import 'package:relay_app/voice/transcriber.dart';
 
 const connection = Connection(server: 'https://relay.example.com', clientId: 'phone.access', clientSecret: 'secret-value');
 final code = jsonEncode({'relay': 1, 'server': connection.server, 'clientId': connection.clientId, 'clientSecret': connection.clientSecret});
+/// A key from the Relay Everything page: `rek_` and 43 base64url characters.
+const pageKey = 'rek_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE';
+const bearer = Connection.bearer(server: 'https://relay.example.com', key: pageKey);
+final pageCode = jsonEncode({'relay': 1, 'server': bearer.server, 'key': pageKey});
 
 Store memoryStore() => Store(NativeDatabase.memory());
 

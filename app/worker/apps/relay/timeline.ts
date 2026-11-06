@@ -1,8 +1,9 @@
 // GET timeline: every note, newest first, with its place, a page at a time. Phones and the site page read it.
 import { z } from "zod";
-import { defineAction } from "../../api/contract.ts";
+import { defineAction, type ActionCall } from "../../api/contract.ts";
 import { notePage } from "./queries.ts";
-import { session, time } from "./store.ts";
+import { asPerson } from "./caller.ts";
+import { time } from "./store.ts";
 
 const PAGE = 50;
 
@@ -19,9 +20,9 @@ export const timeline = defineAction({
     limit: z.number().int().min(1).max(100).optional().describe(`How many notes, ${PAGE} when left out.`),
   }),
   output: z.strictObject({ notes: z.array(timelineNote), next: z.number().nullable(), nextId: z.string().nullable() }),
-  encoding: "query", effect: "read", agentAvailable: false, errors: {}, examples: [],
-  async handler(_request, env, { input }) {
-    const { before, beforeId, limit = PAGE } = input as { before?: number; beforeId?: string; limit?: number };
-    return Response.json(await notePage(session(env), { before, beforeId, limit }));
-  },
+  encoding: "query", effect: "read", agentAvailable: false, requiresIdentity: false, errors: {}, examples: [],
+  handler: asPerson<ActionCall>(async ({ space, call }) => {
+    const { before, beforeId, limit = PAGE } = call.input as { before?: number; beforeId?: string; limit?: number };
+    return Response.json(await notePage(space.db, { before, beforeId, limit }));
+  }),
 });

@@ -30,7 +30,7 @@ describe("private Worker routing", () => {
   let publicKey: JsonWebKey;
   const assets = { fetch: vi.fn(async () => new Response("asset")) };
   const env = { ASSETS: assets, CF_ACCESS_TEAM_DOMAIN: TEAM, CF_ACCESS_AUD: AUD };
-  // The one service token, beside Relay's devices, that the site lets through.
+  // The one service token, beside Relay Everything's device keys, that the site lets through.
   const checked = { ...env, RELAY_CHECKER_SHA256: "d6a52a0ed3c19d4124a9a4874fda18b08a533d0fea7d4d989587c074f5ac5fd9" };
   const call = (path: string, headers: Record<string, string> = {}, bindings: object = env, method = "GET") => worker.fetch(
     new Request(`https://workspace.example.com${path}`, { headers, method }), fakeEnv(bindings), context,
@@ -134,9 +134,7 @@ describe("private Worker routing", () => {
     const ownerEmail = "owner@example.com";
     const origin = "https://workspace.example.com";
     const first = vi.fn(async () => { throw new Error("private database detail"); });
-    // The checker is never looked up as a Relay device key.
-    const device = vi.fn(async () => null);
-    const prepare = (sql: string) => sql.includes("relay_devices") ? { bind: () => ({ first: device }) } : { first, bind: () => ({ first }) };
+    const prepare = () => ({ first, bind: () => ({ first }) });
     const db = { withSession: vi.fn(() => ({ prepare })) };
     const bindings = { ...checked, WONG_ENVIRONMENT: "production", WONG_OWNER_EMAIL: ownerEmail, DB: db };
     for (const [endpoint, method] of [["/api/access/status", "GET"], ["/api/access/people", "POST"], ["/api/access/retry", "POST"]]) {
@@ -151,7 +149,6 @@ describe("private Worker routing", () => {
     const forged = `${header}.${encode({ email: ownerEmail, sub: "any-signed-subject" })}.${signature}`;
     expect((await call("/api/access/status", { "Cf-Access-Jwt-Assertion": forged }, bindings)).status).toBe(401);
     expect(first).not.toHaveBeenCalled();
-    expect(device).not.toHaveBeenCalled();
     db.withSession.mockClear();
     // A signed-in visitor could be an Admin, so the database decides: unreadable, they are refused with no detail.
     const visitor = await token({ email: "visitor@example.com", sub: "visitor" });
@@ -171,22 +168,35 @@ describe("private Worker routing", () => {
     }
     expect(assets.fetch).not.toHaveBeenCalled();
   });
-  it("holds a Relay device key to sending to Relay, and refuses a turned-off, unknown or unreadable one everywhere", async () => {
-    let row: { id: string; name: string; revoked_at: number | null } | Error | null = { id: "d-phone", name: "Phone", revoked_at: null };
+  it("keeps a Relay Everything device key behind the sign-in wall, and refuses every service token but the checker", async () => {
+    let row: object | Error | null = { person_id: "person-1", email: "ana@example.com", device_id: "d-phone", reaches: "phone", revoked_at: null };
     const first = vi.fn(async () => { if (row instanceof Error) throw row; return row; });
-    const bindings = { ...env, DB: { withSession: () => ({ prepare: () => ({ bind: () => ({ first }) }) }) } };
+    const DB = { withSession: () => ({ prepare: () => ({ bind: () => ({ first }) }) }) };
+    const key = { Authorization: `Bearer rek_${"k".repeat(43)}` };
+    const answer = async (path: string, headers: Record<string, string>, bindings: object) => {
+      const response = await call(path, headers, bindings);
+      const text = await response.text();
+      return [response.status, text.startsWith("{") ? (JSON.parse(text) as { error: { message: string } }).error.message : text];
+    };
+    // On the company app, a key alone never passes Access's wall.
+    for (const path of ["/apps/relay/api/key", "/api/health"]) expect(await answer(path, key, { ...checked, DB }), path).toEqual([401, "Unauthorized"]);
     const phone = { "Cf-Access-Jwt-Assertion": await token({ common_name: "phone.access", sub: "" }) };
-    const answer = async (path: string) => { const response = await call(path, phone, bindings); return [response.status, ((await response.json()) as { error: { message: string } }).error.message]; };
-    for (const path of ["/", "/apps/hello/api/greeting", "/api/health", "/apps/relay/api/nothing", "/apps/relay/", "/apps/relay/api/timeline"]) {
-      expect(await answer(path), path).toEqual([403, "A device key can only send to Relay Everything."]);
+    for (const path of ["/", "/apps/hello/api/greeting", "/api/health", "/apps/relay/api/notes", "/apps/relay/"]) {
+      expect(await answer(path, phone, { ...checked, DB }), path).toEqual([403, "This key is on no list of devices."]);
+    }
+    expect(first).not.toHaveBeenCalled();
+    // Where the workspace is open, the key itself is checked, and reaches only its own routes.
+    const open = { ASSETS: assets, WORKSPACE_LOGIN: "off", DB };
+    for (const path of ["/", "/apps/hello/api/greeting", "/api/health", "/apps/relay/api/timeline"]) {
+      expect(await answer(path, key, open), path).toEqual([403, "A device key can only send to Relay Everything."]);
     }
     row = { ...row, revoked_at: 1 };
-    expect(await answer("/apps/relay/api/notes")).toEqual([403, "This device key is turned off."]);
+    expect(await answer("/api/health", key, open)).toEqual([403, "This device key is turned off."]);
     row = null;
-    expect(await answer("/apps/relay/api/notes")).toEqual([403, "This key is on no list of devices."]);
+    expect(await answer("/api/health", key, open)).toEqual([403, "This key is on no list of devices."]);
     row = new Error("private database detail");
-    expect(await answer("/apps/relay/api/notes")).toEqual([503, "Device keys could not be read. Try again."]);
-    expect(first).toHaveBeenCalledTimes(9);
+    expect(await answer("/api/health", key, open)).toEqual([503, "Relay Everything's accounts could not be read. Try again."]);
+    expect(first).toHaveBeenCalledTimes(7);
     expect(assets.fetch).not.toHaveBeenCalled();
   });
   it("accepts signed employee discovery and rejects forged, expired and wrong-audience assertions", async () => {

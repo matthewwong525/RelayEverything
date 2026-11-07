@@ -34,4 +34,4 @@
 
 - [x] 5.1 Run `flutter test` and `flutter analyze` in `mobile/`, `node scripts/public-check.mjs`, and `node scripts/product-name.test.mjs`; all pass.
 - [ ] 5.2 `/save`, then check that CI's Android build and the iPhone device check pass, with the share flow's pictures.
-- [ ] 5.3 Preview the website with `node scripts/publish-relay-site.mjs --ref HEAD --staging` and check the *Share from any app* page.
+- [x] 5.3 Preview the website with `node scripts/publish-relay-site.mjs --ref HEAD --staging` and check the *Share from any app* page.

@@ -5,15 +5,13 @@ import { beforeAll, expect, it } from "vitest";
 import { ANA, BEN, fakeSpaces } from "../../tests/relay";
 import { mcpHandler } from "./tools";
 
-const SPACE_ROWS = /^INSERT INTO relay_(?:devices|notes|health|locations|chats|chat_messages|chat_saves|webhooks|webhook_attempts)\b/;
-const seedRows = readFileSync(new URL("../../../schema/seed.sql", import.meta.url), "utf8").split(/;\s*$/m)
-  .map(part => part.replace(/^\s*(?:--.*\n\s*)*/, "")).filter(part => SPACE_ROWS.test(part));
+const spaceRows = readFileSync(new URL("../../tests/relay-space-rows.sql", import.meta.url), "utf8");
 
-/** Ana's space with staging's made-up rows, and Ben's with a note of his own that holds the same words. */
+/** Ana's space with the made-up rows, and Ben's with a note of his own that holds the same words. */
 function seeded() {
   const made = fakeSpaces();
   const sql = made.sql(ANA);
-  for (const statement of seedRows) sql.exec(statement);
+  sql.exec(spaceRows);
   made.sql(BEN).exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-ben', 'Phone', 'rek:d-ben', '', 0, 'phone');
     INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at)
     VALUES ('${ID(7)}', 'd-ben', 'typed', 'ben-1', 'Ben: buy milk and the ring.', 1793811000000, 0)`);

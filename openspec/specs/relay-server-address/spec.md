@@ -17,14 +17,6 @@ For 30 days after the move, the old relay-ring workers.dev address SHALL pass ev
 - **WHEN** the owner opens a page at the old address
 - **THEN** the browser goes to the same page at app.relayeverything.com
 
-### Requirement: The AI connector keeps answering for 30 days
-
-The AI connector SHALL answer at its new relay-everything-mcp address with a new sign-in. For 30 days after the move, an AI app connected at the old relay-ring-mcp address SHALL keep its sign-in and SHALL read the same current data as the new address.
-
-#### Scenario: The Claude app asks after the move
-- **WHEN** the Claude app, still connected at the old connector address, asks for a note kept after the move
-- **THEN** it gets that note
-
 ### Requirement: A sign-in finishes on the site after every publish
 
 A person who signs in at admin.relayeverything.com SHALL land on the company app, in a browser and through the command-line sign-in. A publish SHALL keep the address that the login returns to turned on. A publish whose settings would turn that address off SHALL stop before it changes the site, and SHALL name the setting to add.

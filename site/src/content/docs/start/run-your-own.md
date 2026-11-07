@@ -42,7 +42,7 @@ Your server keeps Cloudflare Access, the login it was made with: `RELAY_SIGN_IN`
 
 Ask your AI *update my Relay Everything*. It gets the newest version of Relay Everything, applies its database changes, then puts it live. Your data stays. If a database change fails, your server stays as it was.
 
-The update that adds spaces also makes your spaces Worker, `<name>-spaces`, and your own account. Then it moves your data into your space with `scripts/relay-move-to-space.mjs`, and prints the count of each kind, old and new. The old data stays where it was until a later update. The old keys stop with this update: make a new key for each device on your page with **Add a device**, and connect it again.
+If your server is from before spaces, the update also makes your spaces Worker, `<name>-spaces`, and your own account. It doesn't move your old data: the update removes the old shared tables, and the notes in them. The old keys stop too: make a new key for each device on your page with **Add a device**, and connect it again.
 
 ## Remove it
 

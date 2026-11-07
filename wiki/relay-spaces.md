@@ -1,11 +1,11 @@
 # Relay Everything's person spaces
 
-Each person's Relay Everything data lives in their own space: one SQLite-backed Durable Object, opened only for that person's checked sign-in, device key or AI app grant. This page tells how a space is opened, the check that keeps it that way, the shared directory, the space's migrations, sealed recordings, and the one-time move. It is part of [the wiki](README.md); the website's [Privacy](../site/src/content/docs/privacy.md) page owns what a person reads about it, and [the plan](../openspec/changes/archive/2026-11-06-relay-person-spaces/design.md) owns why it has this shape.
+Each person's Relay Everything data lives in their own space: one SQLite-backed Durable Object, opened only for that person's checked sign-in, device key or AI app grant. This page tells how a space is opened, the check that keeps it that way, the shared directory, the space's migrations, and sealed recordings. It is part of [the wiki](README.md); the website's [Privacy](../site/src/content/docs/privacy.md) page owns what a person reads about it, and [the plan](../openspec/changes/archive/2026-11-06-relay-person-spaces/design.md) owns why it has this shape.
 
 ## How a space is opened
 
 1. The Worker's gate asks [`caller.ts`](../app/worker/apps/relay/caller.ts) who calls: a device key (`Authorization: Bearer rek_…`, looked up by SHA-256 in `relay_keys`), the preview checker (its Client ID's SHA-256 is `RELAY_CHECKER_SHA256`), a session cookie (`__Host-relay_session`), or, on a server that signs in with Access, Access's email. The answer is cached per request, so the route gets the same caller.
-2. Only a checked identity becomes a caller, through `vouch` in [`space.ts`](../app/worker/apps/relay/space.ts). A few files may call `vouch`: the caller check, the sign-in, the AI connector's sign-in and tools, the webhooks' queue consumer, and the move.
+2. Only a checked identity becomes a caller, through `vouch` in [`space.ts`](../app/worker/apps/relay/space.ts). A few files may call `vouch`: the caller check, the sign-in, the AI connector's sign-in and tools, and the webhooks' queue consumer.
 3. A route calls `spaceOf(env, caller)`. It names the space by the caller's random person id, never by an id from the request, and gives back a `Db` in D1's shape, so each route keeps its own SQL.
 4. A device key adds data only, to its own person's space: `reaches` in `caller.ts` holds it to its routes. A person's routes refuse a key.
 
@@ -17,11 +17,11 @@ Only `space.ts` opens a space or the file store. [`space-access.test.ts`](../app
 
 ## The directory
 
-The shared D1 database keeps only who has an account and how they sign in, in [`20261107120000_relay_people.sql`](../schema/migrations/20261107120000_relay_people.sql): `relay_people` (a random id and the email), `relay_logins` (Apple and Google subjects), `relay_sessions`, `relay_sign_in_codes`, `relay_keys`, `relay_connect_codes` (the AI connector's single-use codes) and `relay_move_tickets`. Each code, session and key is kept only as its SHA-256. No note, sample, place, chat or recording goes in the directory.
+The shared D1 database keeps only who has an account and how they sign in, in [`20261107120000_relay_people.sql`](../schema/migrations/20261107120000_relay_people.sql): `relay_people` (a random id and the email), `relay_logins` (Apple and Google subjects), `relay_sessions`, `relay_sign_in_codes`, `relay_keys`, and `relay_connect_codes` (the AI connector's single-use codes). Each code, session and key is kept only as its SHA-256. No note, sample, place, chat or recording goes in the directory. The shared tables from before spaces, and the one-time move that copied them into the owner's space, are gone: [`20261107180000_relay_drop_old_tables.sql`](../schema/migrations/20261107180000_relay_drop_old_tables.sql) drops them.
 
 ## Space migrations
 
-A space runs [`schema/space-migrations/`](../schema/space-migrations/) in order, in its constructor under `blockConcurrencyWhile`, and records each in its `space_migrations` table. `0001_relay.sql` is the D1 `relay_*` schema as is; a test compares a new space's schema with D1's after the `relay` migrations, so the two can't drift. `0002_space.sql` adds what only a space has: its file key, each Pebble device's signing secret, and the person the alarm sends for.
+A space runs [`schema/space-migrations/`](../schema/space-migrations/) in order, in its constructor under `blockConcurrencyWhile`, and records each in its `space_migrations` table. `0001_relay.sql` is the D1 `relay_*` schema as it was before spaces; [`space-schema.test.ts`](../app/worker/apps/relay/space-schema.test.ts) checks that a space holds each person's tables and D1 only the directory. `0002_space.sql` adds what only a space has: its file key, each Pebble device's signing secret, and the person the alarm sends for.
 
 A new space table goes in a new numbered file: never edit one a space already ran.
 
@@ -32,10 +32,6 @@ A recording's file store key is `people/<person id>/<note id>`. Each is sealed w
 ## Webhooks
 
 The send log, `relay_outbox`, and `relay_webhooks` live in each space. A queue message carries the webhook and its person, and the consumer opens that person's space. Each space with a webhook sets an alarm every 15 minutes, which wakes any webhook left behind and drops tries older than 30 days. No job walks over all spaces, and a space with no webhook costs nothing.
-
-## The move
-
-`scripts/relay-move-to-space.mjs` moves the owner's data from the old D1 `relay_*` tables into the owner's space. It writes a ticket to `relay_move_tickets` with the deploy key, then the server reads the old tables a page at a time, writes each page through the space's write-only `import` (`INSERT OR IGNORE` on the same ids), and seals each recording into the owner's folder. It prints the count of each kind and `result=ok`, `result=mismatch` or `result=failed`. A mismatch is a kind the space holds fewer of than the old tables: the old tables stay as they were, while the space grows from use. It is safe to run again. The old tables stay until the owner confirms the counts; a later change drops them. A self-host's update runs the same move: [`self-host/SETUP.md`](../self-host/SETUP.md).
 
 ## The Workers and their order
 

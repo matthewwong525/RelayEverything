@@ -1,6 +1,6 @@
--- A person's space: today's relay_* schema, as D1 holds it after 20261105120000_relay.sql, 20261105180000_relay_chats.sql
+-- A person's space: today's relay_* schema, as D1 held it after 20261105120000_relay.sql, 20261105180000_relay_chats.sql
 -- and 20261106120000_relay_webhooks.sql, copied in that order. Each space runs it once, in its own SQLite.
--- app/worker/spaces-worker.ts. A test compares the result with D1's: space-schema.test.ts.
+-- app/worker/spaces-worker.ts.
 
 -- Relay: notes from the Pebble ring and the phones, the phones' health samples and location history, and the device
 -- keys that send them. openspec/changes/relay-app-first-version. Additive only. Times are Unix milliseconds.

@@ -28,9 +28,6 @@ const readOnly = ["id", "created_at", "updated_at", "uid", "app_count"];
 // The lease (120 s) and the provider timeout (30 s) bound how long a lost write could still land.
 const SETTLED_MS = 150_000;
 
-/** The machine policy scripts/relay-device-key.mjs keeps; scripts/check-private-access.mjs knows it too. */
-const RELAY_DEVICES = "Relay devices";
-
 /** The key, read from the environment on each use; null until setup has supplied it. */
 export function loginAuthority(env: ConnectionEnv): Authority | null {
   try { return authoritySchema.parse(JSON.parse(env.WONG_ACCESS_LOGIN_MANAGEMENT ?? "")); }
@@ -55,10 +52,8 @@ async function review(authority: Authority, appId: string, policyId: string, own
   if (app.id !== appId || !owned(app)) throw new AccessError("login_resource_mismatch");
   const policies = z.array(z.object({ id: z.string(), decision: z.string(), include: z.array(z.unknown()) }).passthrough())
     .parse(envelope(await provider(cf, `${path}/policies?per_page=1000`, authority.token)));
-  // An unreviewed allow/bypass policy must never become an alternate employee admission. Relay's device keys keep one
-  // machine policy of their own beside the checker's, held to the same service-token-only rule.
-  const devices = policies.filter(policy => policy.name === RELAY_DEVICES).length;
-  if (policies.length - Math.min(devices, 1) > 2 || policies.some(policy => policy.id !== policyId &&
+  // An unreviewed allow/bypass policy must never become an alternate employee admission.
+  if (policies.length > 2 || policies.some(policy => policy.id !== policyId &&
     (policy.decision !== "non_identity" || !policy.include.length || !policy.include.every(rule =>
       z.object({ service_token: z.object({ token_id: z.string().min(1) }).strict() }).strict().safeParse(rule).success)))) {
     throw new AccessError("login_policy_review_required");

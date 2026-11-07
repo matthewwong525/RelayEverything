@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { accessApp, bypassPolicy, configs, keysApp, names, PARTS, parseCommand, settingsOf, setup } from './setup.mjs';
-import { MOVED } from '../scripts/relay-move-to-space.mjs';
 
 const TOKEN = 'test-token-never-printed-0123456789';
 const ACCOUNT = 'a'.repeat(32);
@@ -77,7 +76,7 @@ test('the install\'s configs carry its own names, IDs and owner, and no secret',
   assert.deepEqual([spaces.name, spaces.account_id, spaces.queues.producers[0].queue], ['relay-test-spaces', ACCOUNT, 'relay-test-webhooks']);
   for (const config of [app, mcp]) assert.equal(config.durable_objects.bindings[0].script_name, 'relay-test-spaces');
   assert.equal(app.triggers, undefined);
-  assert.deepEqual(keysApp('Keys', 'h.example.com').destinations.map(item => item.uri), ['h.example.com/apps/relay/api', 'h.example.com/apps/relay/move']);
+  assert.deepEqual(keysApp('Keys', 'h.example.com').destinations.map(item => item.uri), ['h.example.com/apps/relay/api']);
   assert.equal(bypassPolicy.decision, 'bypass');
   assert.deepEqual(accessApp(names('relay-test').app, 'relay-test.you.workers.dev').destinations, [{ type: 'public', uri: 'relay-test.you.workers.dev' }]);
   assert.deepEqual(accessApp(names('relay-test').app, 'relay-test.you.workers.dev', 'w1').destinations[0], { type: 'worker', worker_id: 'w1' });
@@ -91,24 +90,15 @@ function installed() {
   const answers = { [`GET /accounts/${ACCOUNT}/workers/subdomain`]: { subdomain: 'you' },
     [`GET /accounts/${ACCOUNT}/access/apps`]: [{ id: 'sso', name: names('relay').mcpApp }],
     [`POST /accounts/${ACCOUNT}/access/apps`]: { id: 'keys' }, [`GET /accounts/${ACCOUNT}/access/apps/keys/policies`]: [],
-    [`POST /accounts/${ACCOUNT}/access/apps/keys/policies`]: {}, [`DELETE /accounts/${ACCOUNT}/access/apps/sso`]: {},
-    [`POST /accounts/${ACCOUNT}/d1/database/db-id/query`]: [{ results: [] }] };
+    [`POST /accounts/${ACCOUNT}/access/apps/keys/policies`]: {}, [`DELETE /accounts/${ACCOUNT}/access/apps/sso`]: {} };
   return { place, answers };
 }
-/** The server's move route, as update calls it: `old` and `space` are what each table counts in each store. */
-const withServer = (request, { old = 0, space = 0 } = {}) => async (url, init) => {
-  if (!url.startsWith('https://relay.you.workers.dev/')) return request(url, init);
-  const body = JSON.parse(init.body);
-  const counts = value => Object.fromEntries(MOVED.map(table => [table, value]));
-  return Response.json(body.counts ? { old: counts(old), space: counts(space) } : { table: body.table, read: 0, added: 0, missingFiles: 0, next: null });
-};
-
-test('update writes each config again, opens the keys\' way past the login, puts it live in order, then moves the data', async () => {
+test('update writes each config again, opens the keys\' way past the login, and puts it live in order', async () => {
   const { place, answers } = installed();
   const ran = [];
   const lines = [];
   const { request, calls } = fakeCloudflare(answers);
-  const result = await setup({ args: ['update'], env: { CLOUDFLARE_API_TOKEN: TOKEN, CLOUDFLARE_ACCOUNT_ID: ACCOUNT }, request: withServer(request),
+  const result = await setup({ args: ['update'], env: { CLOUDFLARE_API_TOKEN: TOKEN, CLOUDFLARE_ACCOUNT_ID: ACCOUNT }, request,
     wrangler: args => ran.push(args.join(' ')), build: () => ran.push('build'), log: line => lines.push(line), files: place });
   assert.equal(result, 'ok');
   assert.deepEqual(ran.map(line => line.replace(place.config.replace(/wrangler\.jsonc$/, ''), '')), ['d1 migrations apply relay-db --remote -c wrangler.jsonc',
@@ -119,23 +109,7 @@ test('update writes each config again, opens the keys\' way past the login, puts
   assert.deepEqual(settingsOf(JSON.parse(readFileSync(place.config, 'utf8')), 'you'), { ...SETTINGS, name: 'relay', workerId: 'w1' });
   assert.ok(calls.includes(`POST /accounts/${ACCOUNT}/access/apps/keys/policies`), 'the keys app gets its bypass policy');
   assert.ok(calls.includes(`DELETE /accounts/${ACCOUNT}/access/apps/sso`), 'the old connector sign-in app goes');
-  assert.ok(lines.includes('move result=ok'));
-});
-
-test('update fails when the move\'s counts differ', async () => {
-  const { place, answers } = installed();
-  const { request } = fakeCloudflare(answers);
-  await assert.rejects(setup({ args: ['update'], env: { CLOUDFLARE_API_TOKEN: TOKEN, CLOUDFLARE_ACCOUNT_ID: ACCOUNT }, request: withServer(request, { old: 2, space: 1 }),
-    wrangler: () => {}, build: () => {}, log: () => {}, files: place }), /counts differ/);
-});
-
-test('update passes again once the space holds more rows than the old store', async () => {
-  const { place, answers } = installed();
-  const { request } = fakeCloudflare(answers);
-  const lines = [];
-  assert.equal(await setup({ args: ['update'], env: { CLOUDFLARE_API_TOKEN: TOKEN, CLOUDFLARE_ACCOUNT_ID: ACCOUNT },
-    request: withServer(request, { old: 2, space: 7 }), wrangler: () => {}, build: () => {}, log: line => lines.push(line), files: place }), 'ok');
-  assert.ok(lines.includes('move result=ok'));
+  assert.ok(lines.includes('ok database changes applied, then the newest Relay Everything put live'));
 });
 
 test('a failed database change stops update before anything goes live', async () => {

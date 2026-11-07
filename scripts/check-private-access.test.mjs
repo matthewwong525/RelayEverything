@@ -1,37 +1,32 @@
 // Run with: node --test scripts/check-private-access.test.mjs
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { checkCheckerKey, checkPolicies, RELAY_DEVICES } from './check-private-access.mjs';
+import { checkCheckerKey, checkPolicies } from './check-private-access.mjs';
 import { accessConflicts, privateDeployment } from './lib-access-config.mjs';
 
 const token = id => ({ service_token: { token_id: id } });
 const human = { id: 'h', decision: 'allow', name: 'People', include: [{ email: { email: 'owner@example.com' } }] };
 const checker = { id: 'm', decision: 'non_identity', name: 'Checker', include: [token('t-checker')] };
-const devices = { id: 'r', decision: 'non_identity', name: RELAY_DEVICES, include: [token('t-phone'), token('t-pebble')] };
+const devices = { id: 'r', decision: 'non_identity', name: 'Relay devices', include: [token('t-phone'), token('t-pebble')] };
 const app = (...policies) => ({ policies: policies.map(({ id }) => ({ id })) });
 const unreviewed = /missing or unreviewed/;
 const narrow = /exact reachable emails and one separate service token/;
 
-test('the human and the checker policies pass, with or without Relay devices', () => {
+test('the human and the checker policies pass', () => {
   checkPolicies([human, checker], app(human, checker));
-  checkPolicies([human, checker, devices], app(human, checker, devices));
 });
 
-test('a policy the app does not hold, a second devices policy or a stray one is refused', () => {
-  assert.throws(() => checkPolicies([human, checker, devices], app(human, checker)), unreviewed);
-  assert.throws(() => checkPolicies([human, checker, devices, { ...devices, id: 'r2' }], app(human, checker, devices, { id: 'r2' })), unreviewed);
+test('a policy the app does not hold, an old Relay devices policy or a stray one is refused', () => {
+  assert.throws(() => checkPolicies([human, checker], app(human)), unreviewed);
+  assert.throws(() => checkPolicies([human, checker, devices], app(human, checker, devices)), unreviewed);
   assert.throws(() => checkPolicies([human, checker, { ...human, id: 'b', decision: 'bypass' }], app(human, checker, { id: 'b' })), unreviewed);
-  assert.throws(() => checkPolicies([human, { ...devices, id: 'm' }], app(human, devices)), unreviewed);
 });
 
-test('Relay devices holds service tokens alone, at least one, and no exception', () => {
+test('the checker keeps exactly one service token and no exception, and the human policy exact emails', () => {
   for (const include of [[], [token('t'), { everyone: {} }], [{ ...token('t'), email: { email: 'a@b.co' } }], [{ service_token: {} }]]) {
-    assert.throws(() => checkPolicies([human, checker, { ...devices, include }], app(human, checker, devices)), narrow, JSON.stringify(include));
+    assert.throws(() => checkPolicies([human, { ...checker, include }], app(human, checker)), narrow, JSON.stringify(include));
   }
-  assert.throws(() => checkPolicies([human, checker, { ...devices, require: [token('t')] }], app(human, checker, devices)), narrow);
-});
-
-test('the checker keeps exactly one service token, and the human policy exact emails', () => {
+  assert.throws(() => checkPolicies([human, { ...checker, require: [token('t')] }], app(human, checker)), narrow);
   assert.throws(() => checkPolicies([human, { ...checker, include: [token('a'), token('b')] }], app(human, checker)), narrow);
   assert.throws(() => checkPolicies([{ ...human, include: [{ email: { email: 'bot@users.noreply.github.com' } }] }, checker], app(human, checker)), narrow);
 });
@@ -42,7 +37,7 @@ const reads = clientId => { const asked = []; return { asked, read: async id => 
 
 test("the checker policy's token must be the Client ID each environment's var names", async () => {
   const live = reads('live.access');
-  assert.equal(await checkCheckerKey(config, 'production', [human, checker, devices], live.read), 'matches');
+  assert.equal(await checkCheckerKey(config, 'production', [human, checker], live.read), 'matches');
   assert.deepEqual(live.asked, ['t-checker']);
   assert.equal(await checkCheckerKey(config, 'staging', [human, checker], reads('preview.access').read), 'matches');
 });

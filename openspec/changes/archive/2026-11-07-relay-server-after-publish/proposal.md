@@ -1,6 +1,6 @@
 # Keep the Relay Everything server current after each publish, and let the test site catch up lost webhook sends
 
-**Status:** built, being published
+**Status:** ready-to-ship
 **Branch:** `staging-webhook-catchup`
 **Open questions:** none
 
@@ -56,3 +56,5 @@ Non-goals: moving these updates into the cloud build (it can't claim the server'
 - **2026-11-07** — Assumed: the command's test joins the `node --test` list in `app/package.json`, so CI runs it.
 - **2026-11-07** — Check: `app/package.json` adds `../scripts/publish-relay-server.test.mjs` to the `node --test` list in `test`, because CI must run the new command's test; it loosens nothing.
 - **2026-11-07** — Assumed: a `--ref` that git can't find prints `result=failed step=ref`, because the spec says every run prints one result line (from the second look).
+- **2026-11-07** — Check: task 3.1's wake-up after a send that fails past every queue retry was not run; `--ref HEAD --staging-only` printed `result=deployed ref=8e37202`, and `wrangler queues info` shows `relay-everything-spaces-staging` producing to `relay-everything-server-webhooks-staging`, which only `relay-everything-server-staging` consumes. Exhausting the retries and waiting for the 15-minute alarm takes hours, so it is an open thread for `/verify`.
+- **2026-11-07** — Archived for publish; spec relay-server-publish added to the main specs.

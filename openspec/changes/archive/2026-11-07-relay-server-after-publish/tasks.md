@@ -13,5 +13,5 @@
 
 ## 3. Checks
 
-- [ ] 3.1 Run `node scripts/publish-relay-server.mjs --ref HEAD --staging-only` and confirm `result=deployed`; then on app-staging.relayeverything.com, with a webhook whose receiver answers 503 past the queue's retries, confirm the space's next 15-minute wake-up sends the missed note (wrangler tail on `relay-everything-server-staging`).
-- [ ] 3.2 Run `/save` and confirm CI is green, including the new tests.
+- [x] 3.1 Run `node scripts/publish-relay-server.mjs --ref HEAD --staging-only` and confirm `result=deployed`; then on app-staging.relayeverything.com, with a webhook whose receiver answers 503 past the queue's retries, confirm the space's next 15-minute wake-up sends the missed note (wrangler tail on `relay-everything-server-staging`).
+- [x] 3.2 Run `/save` and confirm CI is green, including the new tests.

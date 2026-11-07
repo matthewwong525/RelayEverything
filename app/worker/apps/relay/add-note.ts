@@ -6,7 +6,7 @@ import { wake } from "./webhooks/send.ts";
 export type TypedNote = { clientId: string; text: string; createdAt: number; lat?: number; lon?: number; accuracy?: number; place?: string;
   attachments?: { id: string; name: string; type: string; size: number }[] };
 
-/** Stores the note once per device and `clientId`, with its files' names: `added` is false when the device sent it before. */
+/** Stores the note and its files' names once per device and `clientId`: `added` is false when sent before. */
 export async function addNote(env: Parameters<typeof wake>[0], space: PersonSpace, deviceId: string, note: TypedNote) {
   const { db } = space;
   const where = note.lat === undefined ? null : "phone";

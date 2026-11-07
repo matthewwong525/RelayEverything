@@ -111,3 +111,4 @@ Non-goals: sending the old library, videos, sending photos to webhooks, captions
 - **2026-11-07** — Assumed: Android keeps `READ_MEDIA_IMAGES` and `READ_EXTERNAL_STORAGE` up to Android 12, which main's file opener had removed, because *Photos* needs them. Video and audio stay removed.
 - **2026-11-07** — Assumed: iOS has one `NSPhotoLibraryUsageDescription` that covers both photos picked for a note and *Photos* sending.
 - **2026-11-07** — Assumed: the photo upload call on the phone is `RelayApi.multipart`, because main's `RelayApi.upload` already sends note files.
+- **2026-11-07** — Saved after bringing in main: the 48 overlapping files are resolved with main's designs kept, photos are a data kind with no webhook, *Photos* hides in phone-webhook mode, and the Privacy page limits its no-webhook lines to the *Photos* switch, because a photo shared into a note is a note's file; the staging check (7.2) and the phone build check (7.3) remain.

@@ -1,6 +1,10 @@
 /// Files on a note: the limits, the names the app shows, and the content type the server keeps.
 library;
 
+import 'dart:io';
+
+import 'store.dart';
+
 /// A note holds up to this many files.
 const maxFiles = 10;
 
@@ -53,6 +57,38 @@ FilesCheck checkFiles(List<NewFile> current, List<NewFile> picked) {
     if (tooMany > 0) 'A note holds up to $maxFiles files. $tooMany ${tooMany == 1 ? 'file was' : 'files were'} not added.',
   ];
   return FilesCheck(kept, problems.isEmpty ? null : problems.join(' '));
+}
+
+/// Copies a file into `attachments/<id><.ext>` under [root], the app's support folder, or moves it there when it is the
+/// app's own copy. Null when it could not, or when the file is over 25 MB. A file already at its place, such as one an
+/// earlier try moved before the app closed, is kept as it is.
+Future<Attachment?> keepFile(String root, NewFile file, String id) async {
+  final path = 'attachments/$id${extensionOf(file.name)}';
+  final target = File('$root/$path');
+  final source = File(file.path.startsWith('/') ? file.path : '$root/${file.path}');
+  try {
+    await target.parent.create(recursive: true);
+    if (!await source.exists() && await target.exists()) {
+      // Moved already.
+    } else if (file.move) {
+      try {
+        await source.rename(target.path);
+      } on FileSystemException {
+        await source.copy(target.path);
+        await source.delete();
+      }
+    } else {
+      await source.copy(target.path);
+    }
+    final size = await target.length();
+    if (size > maxFileBytes) {
+      await target.delete();
+      return null;
+    }
+    return Attachment(id: id, name: file.name, type: file.type, size: size, path: path);
+  } on FileSystemException {
+    return null;
+  }
 }
 
 /// 512 B, 240 KB, 1.2 MB.

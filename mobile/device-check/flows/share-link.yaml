@@ -1,0 +1,37 @@
+# Share a web page from Safari into Relay Everything with sending off: the card keeps it, and the note is in the
+# timeline. Not in the fixed tour: Safari's share sheet changes with each iOS, so run it by name.
+appId: com.matthewwong525.relayApp
+---
+# The first open makes the App Group and leaves sending off.
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "New note"
+    timeout: 60000
+- openLink:
+    link: https://example.com/
+    browser: true
+- extendedWaitUntil:
+    visible: "Example Domain"
+    timeout: 30000
+# Safari's share button, in its bottom bar.
+- tapOn:
+    id: "ShareButton"
+- extendedWaitUntil:
+    visible: "Relay Everything"
+    timeout: 20000
+- tapOn: "Relay Everything"
+- extendedWaitUntil:
+    visible: "Kept on this phone. Sending is off."
+    timeout: 20000
+- tapOn: "Add words"
+- inputText: "Share check"
+- tapOn: "Save"
+- launchApp:
+    stopApp: false
+- extendedWaitUntil:
+    visible: "Typed"
+    timeout: 20000
+# Flutter joins a card's lines into one label, so match its start.
+- assertVisible: 'Share check(.|\n)*'
+- takeScreenshot: share-link

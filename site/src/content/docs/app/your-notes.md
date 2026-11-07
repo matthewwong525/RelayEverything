@@ -54,6 +54,8 @@ Where the files go:
 
 [Shortcuts](../shortcuts/) can also add a note with files, with no tap in the app.
 
+To keep a web page, a photo or a file from another app, use its share button: [Share from any app](../share/). A shared note has no place.
+
 ## Talk a note
 
 Hold **Hold to talk**, talk, and let go. The phone writes the words itself. [Voice notes](../voice-notes/)

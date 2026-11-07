@@ -12,6 +12,7 @@ Relay Everything keeps your notes on your phone. When you turn on sending, it ke
 | Typed notes, with their pin | The phone's own storage, always | Never, while sending is off |
 | Typed notes, with their place | Your space on your Relay Everything server | With sending on: each time you save a note. Notes from before go only if you tap **Send them**. |
 | Files on a note: photos, PDFs and other files | The phone's own storage, always. iPhone backups keep them; Android cloud backup leaves them out. With sending on, also your space's folder of the file store, sealed. | With sending on: after their note. Files of earlier notes go only if you tap **Send them**. |
+| Notes you share from another app, with their files | The phone's own storage, always, with no place | With sending on: when you tap **Save** on the share card, or the next time the app opens |
 | Voice notes from the app: the recording | The phone's own storage, only. iCloud and Google backups leave it out. | Never |
 | Voice notes from the app: the words | The phone's own storage; with sending on, also your space on your Relay Everything server | The same as a typed note, once the phone has written the words |
 | Ring notes: the words and the recording | Your Relay Everything server: the words in your space, the recording sealed in your folder of its file store | Each time you hold the ring and talk, through the Pebble app |
@@ -22,7 +23,7 @@ Relay Everything keeps your notes on your phone. When you turn on sending, it ke
 | Your sign-in | A cookie in your browser, for 30 days | With each visit to your Relay Everything page |
 | A copy of what your server stores | [Your own database](../connections/your-database/), through a webhook you add | Notes always, with each file's name, type and size but not the file; health and location only if you tick them for that webhook |
 
-With sending off, the app makes no network call, reads no health data, and keeps no location history. The one exception is the speech model for voice notes, and only after you tap **Get it**. The same is true when a shortcut adds a note: [Shortcuts](../app/shortcuts/#what-is-sent) follow your sending setting, and **Get notes** reads only the phone.
+With sending off, the app makes no network call, reads no health data, and keeps no location history. The one exception is the speech model for voice notes, and only after you tap **Get it**. The same is true when a shortcut adds a note: [Shortcuts](../app/shortcuts/#what-is-sent) follow your sending setting, and **Get notes** reads only the phone. The share card also follows it: with sending off it makes no network call: [Share from any app](../app/share/#what-is-sent).
 
 ## Who can see what
 

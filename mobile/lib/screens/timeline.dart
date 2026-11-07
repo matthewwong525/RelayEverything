@@ -170,6 +170,9 @@ class _NoteCard extends StatelessWidget {
           if (entry.writing) ...[
             Text('Writing the words…', style: muted),
             const LinearProgressIndicator(),
+          ] else if (entry.failed) ...[
+            Text('The words did not come. Your recording is safe.', style: muted),
+            FilledButton(onPressed: relay.writeWordsAgain, child: const Text('Try again')),
           ] else if (entry.text.isNotEmpty || entry.files.isEmpty)
             Text(entry.text.isEmpty ? 'No words, only the recording.' : entry.text, style: theme.textTheme.bodyLarge),
           if (entry.files.any((file) => file.picture))

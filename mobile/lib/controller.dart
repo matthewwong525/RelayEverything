@@ -51,6 +51,10 @@ class Kept {
   final String? problem;
 }
 
+/// How long a voice note's words may take: 2 minutes, or the recording's [length] when it is longer. A 5-minute note
+/// can take near a minute on an older phone.
+Duration wordsLimitOf(Duration length) => length > const Duration(minutes: 2) ? length : const Duration(minutes: 2);
+
 /// A random id for a note, so a resend is stored once.
 String newClientId([Random? random]) {
   final source = random ?? Random.secure();
@@ -63,8 +67,9 @@ class RelayController extends Relay {
   RelayController({required this.store, required this.vault, required this.places, required this.health,
     RelayApi Function(Connection)? apiFor, http.Client Function()? signInClient, WebAuth? webAuth, DateTime Function()? clock,
     WebhookClient Function(Webhook webhook, String installId)? webhookFor, this.schedule, this.voice, this.native, this.folder,
-    this.opener, this.share, this.calendar})
-    : _sender = Sender(apiFor, signInClient, webhookFor), _webAuth = webAuth ?? phoneWebAuth, _clock = clock ?? DateTime.now {
+    this.opener, this.share, this.calendar, Duration Function(Duration length)? wordsLimit})
+    : _sender = Sender(apiFor, signInClient, webhookFor), _webAuth = webAuth ?? phoneWebAuth, _clock = clock ?? DateTime.now,
+      _wordsLimit = wordsLimit ?? wordsLimitOf {
     voice?.model.addListener(notifyListeners);
     // A recording at its longest ends as if the person let go.
     voice?.recorder.onLongest = (recording) {
@@ -95,6 +100,8 @@ class RelayController extends Relay {
   final Sender _sender;
   final WebAuth _webAuth;
   final DateTime Function() _clock;
+  /// How long a voice note's words may take, from its recording's length; a test makes it short.
+  final Duration Function(Duration length) _wordsLimit;
 
   Connection? _connection;
   Webhook? _webhook;
@@ -113,6 +120,8 @@ class RelayController extends Relay {
   DateTime? _listening;
   Future<bool>? _starting;
   final _writing = <Future<void>>{};
+  // Voice notes whose words failed in this run of the app. The next open, or *Try again*, writes them again.
+  final _wordsFailed = <String>{};
   final _pinning = <Future<void>>{};
   String? _root;
 
@@ -201,7 +210,8 @@ class RelayController extends Relay {
     // With sending off the phone looks up no place name, so a pin with no name reads as Pinned.
     place: note.pin == null ? null : note.pin!.place ?? 'Pinned',
     sent: note.sentAt != null, waiting: _settings.sending && note.sentAt == null && (note.queued || note.pinning),
-    voice: note.kind == NoteKind.voice, writing: note.wordsPending, recording: note.audioPath,
+    voice: note.kind == NoteKind.voice, writing: note.wordsPending && !_wordsFailed.contains(note.clientId),
+    failed: note.wordsPending && _wordsFailed.contains(note.clientId), recording: note.audioPath,
     length: note.durationMs == null ? null : Duration(milliseconds: note.durationMs!),
     files: [for (final file in note.attachments)
       EntryFile(name: file.name, type: file.type, size: file.size, path: fullPath(file.path))]);
@@ -668,6 +678,7 @@ class RelayController extends Relay {
   static const _noRecording = 'This recording is not on this phone.';
   static const _holdLonger = 'Hold the button while you talk, then let go.';
   static const _noSpeech = 'No speech heard. Nothing was saved.';
+  static const _wordsDidNotCome = 'The words did not come. Tap Try again on the note.';
 
   @override ModelState get speechModel => voice?.model.state ?? ModelState.missing;
   @override double get modelProgress => voice?.model.progress ?? 0;
@@ -771,6 +782,16 @@ class RelayController extends Relay {
     _track(_write(note));
   }
 
+  @override
+  Future<void> writeWordsAgain() async {
+    if (_wordsFailed.isEmpty) return;
+    // Only the failed notes: a note whose words are being written now must not be written twice.
+    final failed = Set.of(_wordsFailed);
+    _wordsFailed.clear();
+    await _refreshLocal();
+    _track(_writePending(only: failed));
+  }
+
   void _track(Future<void> job) {
     _writing.add(job);
     job.whenComplete(() => _writing.remove(job));
@@ -784,9 +805,9 @@ class RelayController extends Relay {
     }
   }
 
-  /// Writes the words of each voice note still waiting, oldest first. With [dropStray], deletes recordings no note
-  /// keeps, such as one the app's close cut off while the person still held the button.
-  Future<void> _writePending({bool dropStray = false}) async {
+  /// Writes the words of each voice note still waiting, oldest first, or only of the notes in [only]. With [dropStray],
+  /// deletes recordings no note keeps, such as one the app's close cut off while the person still held the button.
+  Future<void> _writePending({bool dropStray = false, Set<String>? only}) async {
     final parts = voice;
     if (parts == null) return;
     final pending = await store.pendingWords();
@@ -800,12 +821,12 @@ class RelayController extends Relay {
       }
     }
     for (final note in pending) {
-      await _write(note);
+      if (only == null || only.contains(note.clientId)) await _write(note);
     }
   }
 
   /// Writes one voice note's words. No words: the note and its recording go, and the app says it heard no speech.
-  /// A note waits, kept, while the model is away or the words fail; the next open tries again.
+  /// It waits while the model is away; failed words, or words past the time limit, show *Try again* on the note.
   Future<void> _write(LocalNote note) async {
     final parts = voice;
     if (parts == null) return;
@@ -818,8 +839,15 @@ class RelayController extends Relay {
     if (parts.model.state != ModelState.ready) return;
     final String words;
     try {
-      words = await parts.transcriber.words(file);
-    } on Exception {
+      // The limit counts from when the note before ends or passes its limit, and stops only this note's writing.
+      words = await parts.transcriber.words(file, limit: _wordsLimit(Duration(milliseconds: note.durationMs ?? 0)));
+    } on Object catch (error, stack) {
+      // Any error, an Error too, such as an ArgumentError from the speech engine: the note must never wait silently.
+      debugPrint('Voice note ${note.clientId}: the words failed: $error\n$stack');
+      final first = _wordsFailed.isEmpty;
+      _wordsFailed.add(note.clientId);
+      await _refreshLocal();
+      if (first && !_disposed) notice(_wordsDidNotCome);
       return;
     }
     if (words.isEmpty) {

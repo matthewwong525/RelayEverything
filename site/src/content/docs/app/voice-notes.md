@@ -13,6 +13,12 @@ Hold **Hold to talk** in the Relay Everything app, talk, and let go. The note sh
 
 The note shows **Voice** and **Writing the words…**, then its words. A note ends by itself after 5 minutes.
 
+## When the words do not come
+
+If the phone can not write the words, or they take longer than 2 minutes (or the recording's length, if it is longer), the note says **The words did not come. Your recording is safe.** The app tells you once. The note keeps its recording, and **Play** still works.
+
+Tap **Try again** on the note to write the words again. The next time you open the app, it also tries again by itself.
+
 The first time you hold the button, the phone asks for the microphone. If you said no, allow the microphone for Relay Everything in the phone's settings.
 
 ## Get the speech model

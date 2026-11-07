@@ -193,6 +193,7 @@ class FakeRelay extends Relay {
   }
 
   @override Future<void> play(String recording) async => calls.add('play $recording');
+  @override Future<void> writeWordsAgain() async => calls.add('words again');
 }
 
 final now = DateTime.now();
@@ -752,6 +753,22 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.text('No speech heard. Nothing was saved.'), findsOneWidget);
+    });
+
+    testWidgets('a note whose words failed says its recording is safe, keeps Play, and Try again writes them again', (tester) async {
+      relay.entries = [Entry(text: '', at: now, voice: true, failed: true, recording: 'voice/a.wav',
+        length: const Duration(seconds: 3))];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      expect(find.text('The words did not come. Your recording is safe.'), findsOneWidget);
+      expect([find.text('Writing the words…'), find.byType(LinearProgressIndicator)], [findsNothing, findsNothing]);
+      expect(find.text('Play'), findsOneWidget);
+      await tester.tap(find.text('Try again'));
+      await tester.pump();
+      expect(relay.calls, ['words again']);
+      relay.notice('The words did not come. Tap Try again on the note.');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('The words did not come. Tap Try again on the note.'), findsOneWidget);
     });
 
     testWidgets('with no model, a press asks first, and Not now gets nothing', (tester) async {

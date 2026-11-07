@@ -1,6 +1,6 @@
 # Proposal: Voice notes get their words on the iPhone
 
-**Status:** parked
+**Status:** in-progress
 **Branch:** repo-status-next-steps
 **Open questions:** none
 
@@ -66,6 +66,10 @@ On the iPhone test build, a voice note never gets its words. Matthew held the bu
 - **2026-11-06** — Assumed: a failed note shows a **Try again** button, not only a message, because Matthew waited with no way to act.
 - **2026-11-06** — Assumed: the Admin-access fix to the setup notes goes in this change, because it is a small doc fix found in the same TestFlight work.
 - **2026-11-06** — Matthew parked this plan before the build: the project moves to Durable Objects first, and this plan may come back later. Check it against that work before you build it.
+- **2026-11-07** — Assumed: the plan still fits main after the spaces work and 23 other changes: the voice code, the speech package (0.5.1) and the iOS build are as the plan found them. Two tasks change: the setup-notes fix now touches only `.env.example`, because `mobile/README.md` no longer names the key's access and the wiki already says Admin; and the link flags go beside the flags Runner now has.
+- **2026-11-07** — Assumed: the iPhone build keeps global symbols (Strip Style Non-Global) and the speech-parts check reads the `.ipa` sent to TestFlight, because an archive's default strip removes the symbols the app looks up, which `-u` cannot stop.
+- **2026-11-07** — Check: `mobile/ios/fastlane/Fastfile` gets a new step that stops the iPhone build when the archive lacks a speech part, because a build with that fault must not reach TestFlight. It loosens nothing: it adds a check.
+- **2026-11-07** — Built and saved; local checks pass. Left: the first iOS build with the new check, then one voice note on Matthew's phone. Matthew asked whether whisper.cpp is the best speech engine: research says keep it and fix it, because it is small (57 MB) and works fully offline; the next choice is `sherpa_onnx` with Moonshine or Parakeet, after the app is timed on a real iPhone.
 
 ## Capabilities
 
@@ -83,5 +87,5 @@ On the iPhone test build, a voice note never gets its words. Matthew held the bu
 - `mobile/ios/Runner.xcodeproj/project.pbxproj`: keep each looked-up `wf_*` symbol linked in Release.
 - `.github/workflows/mobile-ios.yml`: a symbol check after the build.
 - `mobile/test/`: tests for an Error, a time-out, and the retry.
-- `.env.example`, `mobile/README.md`: App Store Connect key access is Admin.
+- `.env.example`: App Store Connect key access is Admin.
 - `site/src/content/docs/app/voice-notes.md`: the failed state and **Try again**.

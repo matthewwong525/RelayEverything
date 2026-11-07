@@ -500,9 +500,32 @@
 					"$(inherited)",
 					"-weak_framework",
 					AppIntents,
+					"-Wl,-u,_wf_benchmark",
+					"-Wl,-u,_wf_context_create",
+					"-Wl,-u,_wf_context_free",
+					"-Wl,-u,_wf_job_cancel",
+					"-Wl,-u,_wf_job_create",
+					"-Wl,-u,_wf_job_free",
+					"-Wl,-u,_wf_job_progress",
+					"-Wl,-u,_wf_job_set_double",
+					"-Wl,-u,_wf_job_set_int",
+					"-Wl,-u,_wf_job_set_string",
+					"-Wl,-u,_wf_last_error",
+					"-Wl,-u,_wf_model_info",
+					"-Wl,-u,_wf_run",
+					"-Wl,-u,_wf_string_free",
+					"-Wl,-u,_wf_system_info",
+					"-Wl,-u,_wf_tokenize",
+					"-Wl,-u,_wf_vad_create",
+					"-Wl,-u,_wf_vad_free",
+					"-Wl,-u,_wf_vad_is_speech",
+					"-Wl,-u,_wf_vad_reset",
+					"-Wl,-u,_wf_vad_segments",
+					"-Wl,-u,_wf_version",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.matthewwong525.relayApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRIP_STYLE = "non-global";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -715,9 +738,32 @@
 					"$(inherited)",
 					"-weak_framework",
 					AppIntents,
+					"-Wl,-u,_wf_benchmark",
+					"-Wl,-u,_wf_context_create",
+					"-Wl,-u,_wf_context_free",
+					"-Wl,-u,_wf_job_cancel",
+					"-Wl,-u,_wf_job_create",
+					"-Wl,-u,_wf_job_free",
+					"-Wl,-u,_wf_job_progress",
+					"-Wl,-u,_wf_job_set_double",
+					"-Wl,-u,_wf_job_set_int",
+					"-Wl,-u,_wf_job_set_string",
+					"-Wl,-u,_wf_last_error",
+					"-Wl,-u,_wf_model_info",
+					"-Wl,-u,_wf_run",
+					"-Wl,-u,_wf_string_free",
+					"-Wl,-u,_wf_system_info",
+					"-Wl,-u,_wf_tokenize",
+					"-Wl,-u,_wf_vad_create",
+					"-Wl,-u,_wf_vad_free",
+					"-Wl,-u,_wf_vad_is_speech",
+					"-Wl,-u,_wf_vad_reset",
+					"-Wl,-u,_wf_vad_segments",
+					"-Wl,-u,_wf_version",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.matthewwong525.relayApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRIP_STYLE = "non-global";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";

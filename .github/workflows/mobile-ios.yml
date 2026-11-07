@@ -46,6 +46,8 @@ jobs:
         run: |
           flutter pub get
           flutter build ios --release --no-codesign --build-number="$BUILD_NUMBER"
+      # fastlane beta checks the archive it uploads for the speech parts, and stops before TestFlight if one is
+      # missing (check_speech_parts in mobile/ios/fastlane/Fastfile).
       - name: TestFlight
         if: steps.key.outputs.ready == 'true'
         working-directory: mobile/ios

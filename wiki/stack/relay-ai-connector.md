@@ -9,7 +9,7 @@ Relay Everything's AI connector lets an AI chat app, such as the Claude app or C
 
 The **AI apps** card at the bottom of the Relay Everything page shows the address, with a *Copy* button, and every app you connected.
 
-**The old address works for 30 days after the move to the new name.** An app you connected at `https://relay-ring-mcp.matthewwong525.workers.dev/mcp` keeps its sign-in there and reads the same current data, because the old Worker reads the new database. Add the new address in the app when it suits you, then remove the old one. After the 30 days, the old Worker goes, only after the owner says yes ([the move](move-cloudflare-data.md)).
+**The old address no longer answers.** An app you connected at `https://relay-ring-mcp.matthewwong525.workers.dev/mcp` must connect again at the address above: the old Worker read the old shared tables, which are gone.
 
 ## Connect an app
 

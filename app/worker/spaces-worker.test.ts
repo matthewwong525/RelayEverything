@@ -14,6 +14,13 @@ const storageOf = (space: object) => (space as { ctx: DurableObjectState }).ctx.
 const device = { id: "d-new", name: "New phone", token_client_id: "rek:d-new", token_id: "", created_at: NOW, reaches: "phone" };
 const webhook = (id: string, more: object = {}) => ({ id, name: "Example database", url: "https://db.example.com/relay", secret: "whsec_x",
   kinds: '["notes"]', sent_seq: 0, created_at: NOW, ...more });
+/** Adds each row to `table` through the space's own SQL. */
+const insert = (space: { query: (sql: string, params: never[]) => unknown }, table: string, rows: Record<string, unknown>[]) => {
+  for (const row of rows) {
+    const names = Object.keys(row);
+    space.query(`INSERT INTO ${table} (${names.join(", ")}) VALUES (${names.map(() => "?").join(", ")})`, Object.values(row) as never[]);
+  }
+};
 
 it("runs each migration once and records it in space_migrations", async () => {
   const { space, state } = await fresh();
@@ -24,33 +31,6 @@ it("runs each migration once and records it in space_migrations", async () => {
   migrate(storageOf(space));
   expect(applied()).toHaveLength(MIGRATIONS.length);
   expect(space.query("SELECT value FROM space_meta WHERE name = 'kept'")).toEqual([{ value: "yes" }]);
-});
-
-it("adds moved rows once, and refuses a table or column the move does not write", async () => {
-  const { space } = await fresh();
-  expect(space.import("relay_devices", [device])).toBe(1);
-  expect(space.import("relay_devices", [device, { ...device, id: "d-other", token_client_id: "rek:d-other" }])).toBe(1);
-  expect(() => space.import("space_keys" as never, [{ name: "files" }])).toThrow("space_keys is not a table the move writes.");
-  expect(() => space.import("relay_devices", [{ ...device, id: "d-bad", "name) VALUES (1); --": "x" }]))
-    .toThrow("A column name is not one the move writes.");
-  expect(space.query("SELECT id FROM relay_devices ORDER BY id")).toEqual([{ id: "d-new" }, { id: "d-other" }]);
-});
-
-it("counts only the moved rows it added, not the send log rows their triggers write", async () => {
-  const { space } = await fresh();
-  space.import("relay_devices", [device]);
-  const note = (id: string) => ({ id, device_id: "d-new", source: "typed", text: "A note", recorded_at: NOW, created_at: NOW });
-  expect(space.import("relay_notes", [note("n-1"), note("n-2")])).toBe(2);
-  expect(space.query("SELECT count(*) AS count FROM relay_outbox")).toEqual([{ count: 2 }]);
-  expect(space.import("relay_notes", [note("n-1"), note("n-3")])).toBe(1);
-});
-
-it("counts the rows in each moved table", async () => {
-  const { space } = await fresh();
-  space.import("relay_devices", [device]);
-  space.import("relay_webhooks", [webhook("w-1"), webhook("w-2")]);
-  expect(space.counts()).toEqual({ relay_devices: 1, relay_notes: 0, relay_health: 0, relay_locations: 0, relay_chats: 0,
-    relay_chat_messages: 0, relay_chat_saves: 0, relay_webhooks: 2 });
 });
 
 it("runs a batch in one transaction: all of it, or none", async () => {
@@ -71,8 +51,8 @@ it("makes the file key once and gives the same one after", async () => {
 
 it("sends each webhook behind from its alarm with the person watch kept, and drops tries older than 30 days", async () => {
   const { space, state } = await fresh();
-  space.import("relay_devices", [device]);
-  space.import("relay_webhooks", [webhook("w-behind", { kinds: '["notes","health"]' }), webhook("w-paused", { active: 0 }),
+  insert(space, "relay_devices", [device]);
+  insert(space, "relay_webhooks", [webhook("w-behind", { kinds: '["notes","health"]' }), webhook("w-paused", { active: 0 }),
     webhook("w-waiting", { next_try_at: NOW + MINUTE })]);
   space.query("INSERT INTO relay_notes (id, device_id, source, text, recorded_at, created_at) VALUES ('n', 'd-new', 'typed', 'A note', ?, ?)",
     [NOW, NOW]);
@@ -94,14 +74,14 @@ it("sends each webhook behind from its alarm with the person watch kept, and dro
 
 it("deletes every row, the file key and the alarm", async () => {
   const { space, state } = await fresh();
-  space.import("relay_webhooks", [webhook("w-1")]);
+  insert(space, "relay_webhooks", [webhook("w-1")]);
   const key = new Uint8Array(space.fileKey());
   await space.watch(ANA);
   await space.deleteEverything();
   expect(state.alarm).toBeNull();
   expect(state.sql.prepare("SELECT name FROM sqlite_master").all()).toEqual([]);
   migrate(storageOf(space));
-  expect(space.counts().relay_webhooks).toBe(0);
+  expect(space.query("SELECT count(*) AS count FROM relay_webhooks")).toEqual([{ count: 0 }]);
   expect(new Uint8Array(space.fileKey())).not.toEqual(key);
 });
 

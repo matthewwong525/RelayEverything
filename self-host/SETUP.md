@@ -42,9 +42,7 @@ It costs nothing on Cloudflare's free plan. Tell the person this, and ask before
 
 When the person asks to update: `git pull`, then `npm ci` in `app/`, then `node self-host/setup.mjs update`. It writes the server's settings again from this repository, applies the new database changes, then puts the new server live. If a database change fails, it stops, and the old server stays live. The data stays.
 
-Then it moves data from before spaces into the owner's own space, and prints a `move result=` line. `move result=ok` means the space holds at least as many of each kind as the old data; it holds more once people use it. A `move result=mismatch` line names a kind the space holds fewer of: run `update` again, since the move skips what is there already. The old data stays in the database until a later update removes it.
-
-After the first update with spaces, device keys made with `scripts/relay-device-key.mjs` stop working. The person makes a new key for each device on the page, as in step 6, and scans it again.
+An install from before spaces gets no move of its old data: the update removes the old shared tables, and the notes in them with it. Old device keys stop working too. The person makes a new key for each device on the page, as in step 6, and scans it again.
 
 ## Status
 

@@ -41,9 +41,7 @@ You make and turn off your keys on your Relay Everything page, signed in:
 
 Relay Everything keeps only a fingerprint of each key, never the key itself, so a lost key can't be shown again: add the device again for a new key. A preview of Relay Everything's own server has its own accounts and keys. A preview's key doesn't open the live server, and a live key doesn't open a preview.
 
-:::note
-A server you run yourself and have not updated yet still makes keys with `node scripts/relay-device-key.mjs`. Its next update moves it to keys from the page: [Run your own server](../../start/run-your-own/#update-it).
-:::
+A server you run yourself makes its keys on the page too. An older server gets this with its next update: [Run your own server](../../start/run-your-own/#update-it).
 
 ## Errors
 

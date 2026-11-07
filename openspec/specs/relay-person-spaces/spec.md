@@ -40,15 +40,3 @@ A signed-in person SHALL be able to delete their account after they confirm it. 
 #### Scenario: Ana deletes her account
 - **WHEN** Ana confirms *Delete my account*
 - **THEN** her phone's next send is refused, her AI app is refused, signing in again makes a new empty space, and Ben's data is unchanged
-
-### Requirement: The owner's existing data moves to their space
-
-Moving an existing server to spaces SHALL copy every note, recording, health sample, place, chat, device and webhook into the owner's space, and SHALL report a count for each kind in the old store and in the space. The space SHALL hold at least as many of each kind as the old store, since it grows from use after the move. The old data SHALL stay until the owner says the counts match, and only then be removed.
-
-#### Scenario: The counts match
-- **WHEN** the move finishes and the space holds at least as many of each kind as the old store
-- **THEN** the owner's page, phone, AI app and webhooks work as before, and the old data is still there until the owner says to remove it
-
-#### Scenario: A move stops halfway
-- **WHEN** the move fails partway
-- **THEN** it says what failed, the old data is untouched, and running it again finishes without making two copies

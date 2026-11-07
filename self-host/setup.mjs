@@ -8,13 +8,11 @@ import { fileURLToPath } from 'node:url';
 import { isMain, parseCli, usageError } from '../scripts/lib-cli.mjs';
 import { redirectedConfig, stripJsonc } from '../scripts/lib-wrangler-config.mjs';
 import { cloudflare } from '../scripts/relay-mcp-setup.mjs';
-import { moveToSpace } from '../scripts/relay-move-to-space.mjs';
 
 const USAGE = `usage: node self-host/setup.mjs <check|install|update|status|remove> [--email <you>] [--name <name>] [--yes]
   check                       check the Cloudflare key and account; make nothing
   install --email <you>       make your Relay Everything server; your email is its only login
-  update                      apply new database changes, put the newest Relay Everything live, then move old data
-                              into your own space; your data stays
+  update                      apply new database changes, then put the newest Relay Everything live; your data stays
   status                      your server's address, and whether each part answers
   remove --yes                delete your Relay Everything server and all its data; this can't be undone
   --name <name>               the server's name in Cloudflare (default relay)`;
@@ -92,7 +90,7 @@ export const settingsOf = (installed, subdomain) => ({ name: installed.name, ema
   access: { id: installed.vars.CF_ACCESS_APP_ID, aud: installed.vars.CF_ACCESS_AUD }, workerId: installed.vars.CF_ACCESS_WORKER_ID });
 
 /** The login: a self-hosted Access app on the server's address and, once it is live, the Worker itself, with the owner's
- *  email as its one person. Device keys join its "Relay devices" policy when relay-device-key.mjs makes them. */
+ *  email as its one person. */
 export const accessApp = (app, host, workerId) => ({ name: app, type: 'self_hosted', domain: host,
   destinations: [...(workerId ? [{ type: 'worker', worker_id: workerId }] : []), { type: 'public', uri: host }],
   session_duration: '730h', app_launcher_visible: false });
@@ -100,10 +98,10 @@ export const accessApp = (app, host, workerId) => ({ name: app, type: 'self_host
 /** The login's one policy: the owner's email and no one else. */
 export const ownerPolicy = owner => ({ name: 'Relay owner', decision: 'allow', include: [{ email: { email: owner } }], precedence: 1 });
 
-/** Device keys and the move skip the login: the server checks each key, and each move ticket, itself. A browser still
- *  sends its login cookie on these addresses, which the server checks too. */
+/** Device keys skip the login: the server checks each key itself. A browser still sends its login cookie on this
+ *  address, which the server checks too. */
 export const keysApp = (app, host) => ({ name: app, type: 'self_hosted', domain: `${host}/apps/relay/api`,
-  destinations: [{ type: 'public', uri: `${host}/apps/relay/api` }, { type: 'public', uri: `${host}/apps/relay/move` }],
+  destinations: [{ type: 'public', uri: `${host}/apps/relay/api` }],
   session_duration: '24h', app_launcher_visible: false });
 export const bypassPolicy = { name: 'Relay Everything keys check themselves', decision: 'bypass', include: [{ everyone: {} }], precedence: 1 };
 
@@ -159,7 +157,7 @@ async function install(io, cf, root, { name, email, account }) {
   const written = filled();
   writeConfigs(io.files, written);
   deploy(io, part.database);
-  // The Worker's ID exists only once it is live; the login covers it, and the key command checks it.
+  // The Worker's ID exists only once it is live; the login covers it.
   const workerId = (await cf(`${root}/workers/workers/${part.worker}`)).id;
   if (!access.destinations?.some(item => item.type === 'worker')) await cf(`${root}/access/apps/${access.id}`, 'PUT', accessApp(part.app, host, workerId));
   writeJson(io.files.config, filled({ workerId }).app);
@@ -169,9 +167,8 @@ async function install(io, cf, root, { name, email, account }) {
   io.log(`connector=${written.mcp.vars.RELAY_MCP_ADDRESS}`);
 }
 
-/** Update: each config written again from the templates, the keys' way past the login, the newest code live, then the
- *  one-time move of old data into the owner's space, which adds nothing when run again. */
-async function update(io, cf, root, installed, request) {
+/** Update: each config written again from the templates, the keys' way past the login, then the newest code live. */
+async function update(io, cf, root, installed) {
   const part = names(installed.name);
   const { subdomain } = await cf(`${root}/workers/subdomain`);
   const host = `${part.worker}.${subdomain}.workers.dev`;
@@ -183,9 +180,6 @@ async function update(io, cf, root, installed, request) {
   writeConfigs(io.files, configs(templates(), settingsOf(installed, subdomain)));
   deploy(io, part.database);
   io.log('ok database changes applied, then the newest Relay Everything put live');
-  const moved = await moveToSpace({ cf, account: installed.account_id, database: installed.d1_databases[0].database_id,
-    server: `https://${host}`, request, log: line => io.log(`move ${line}`) });
-  if (moved !== 'ok') throw new Error('the move\'s counts differ: the space holds fewer rows than the old data. Run update again, and keep the old data until it passes');
 }
 
 async function status(io, cf, root, name, request) {
@@ -211,7 +205,7 @@ async function status(io, cf, root, name, request) {
 async function remove(io, cf, root, name, yes) {
   const part = names(name);
   const plan = [`Workers ${part.worker} and ${part.mcp}`, `Worker ${part.spaces} (every person's space: notes, health samples and places)`,
-    `D1 database ${part.database} (the accounts, and any data not yet moved)`, `R2 bucket ${part.bucket} (every recording)`, `queue ${part.queue}`,
+    `D1 database ${part.database} (the accounts and sign-ins)`, `R2 bucket ${part.bucket} (every recording)`, `queue ${part.queue}`,
     `Access apps "${part.app}", "${part.keysApp}" and "${part.mcpApp}", and their old device keys`];
   if (!yes) {
     io.log(`remove would delete, and this can't be undone:\n${plan.map(line => `- ${line}`).join('\n')}`);
@@ -273,7 +267,7 @@ export async function setup({ args, env, request = fetch, wrangler = runWrangler
   }
   if (parsed.command === 'update') {
     if (!installed) throw new Error('no install here: run install first, or copy self-host/wrangler.jsonc and wrangler.mcp.jsonc back');
-    await update(io, cf, root, installed, request);
+    await update(io, cf, root, installed);
     return 'ok';
   }
   if (parsed.command === 'status') return await status(io, cf, root, name, request) ? 'ok' : 'none';

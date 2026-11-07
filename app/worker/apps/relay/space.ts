@@ -7,16 +7,11 @@ export type SqlValue = string | number | null | ArrayBuffer;
 export type Sql = { sql: string; params: SqlValue[] };
 export type Row = Record<string, SqlValue>;
 
-/** The tables the one-time move writes, in an order their foreign keys accept. */
-export const MOVED = ["relay_devices", "relay_notes", "relay_health", "relay_locations", "relay_chats", "relay_chat_messages",
-  "relay_chat_saves", "relay_webhooks"] as const;
-export type Moved = typeof MOVED[number];
-
 const checked = Symbol("checked caller");
 
 /** How the caller proved who they are: a signed-in browser, a device key, an AI app's grant, Access on a self-host,
- *  the preview checker, a queue message the server itself sent, or the move's ticket. */
-export type CallerKind = "session" | "key" | "grant" | "access" | "checker" | "queue" | "move";
+ *  the preview checker, or a queue message the server itself sent. */
+export type CallerKind = "session" | "key" | "grant" | "access" | "checker" | "queue";
 export type Reach = "phone" | "chats";
 export type Caller = {
   readonly kind: CallerKind; readonly personId: string; readonly email?: string;
@@ -44,7 +39,7 @@ export interface Db {
 /** The space's RPC methods, as spaces-worker.ts serves them: the class lives in its own Worker, bound by name. */
 type Stub = {
   query(sql: string, params: SqlValue[]): Promise<Row[]>; batch(statements: Sql[]): Promise<Row[][]>;
-  import(table: Moved, rows: Row[]): Promise<number>; counts(): Promise<Record<Moved, number>>; fileKey(): Promise<ArrayBuffer>;
+  fileKey(): Promise<ArrayBuffer>;
   watch(personId: string): Promise<void>; sweep(personId: string): Promise<number>; deleteEverything(): Promise<void>;
 };
 export type SpaceEnv = { SPACES: DurableObjectNamespace; RELAY_BUCKET: R2Bucket };
@@ -105,11 +100,6 @@ function filesOf(bucket: R2Bucket, stub: Pick<Stub, "fileKey">, personId: string
         return null;
       }
     },
-    /** The move: seals an old, unsealed recording into the person's folder. The old object stays. */
-    async adopt(oldName: string, noteId: string): Promise<string | null> {
-      const object = await bucket.get(oldName);
-      return object ? files.put(noteId, await object.arrayBuffer()) : null;
-    },
     /** Deletes every object in the person's folder, a page at a time; answers how many. */
     async removeAll(): Promise<number> {
       let removed = 0;
@@ -132,8 +122,6 @@ export type PersonSpace = {
   /** Keeps the webhook alarm set while the space has a webhook. */
   watch(): Promise<void>;
   sweep(): Promise<number>;
-  import(table: Moved, rows: Row[]): Promise<number>;
-  counts(): Promise<Record<Moved, number>>;
   deleteEverything(): Promise<void>;
 };
 
@@ -144,7 +132,6 @@ export function spaceOf(env: SpaceEnv, caller: Caller): PersonSpace {
   return {
     personId: caller.personId, db: dbOf(stub), files: filesOf(env.RELAY_BUCKET, stub, caller.personId),
     watch: async () => stub.watch(caller.personId), sweep: async () => stub.sweep(caller.personId),
-    import: async (table, rows) => stub.import(table, rows), counts: async () => stub.counts(),
     deleteEverything: async () => stub.deleteEverything(),
   };
 }

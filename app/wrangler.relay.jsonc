@@ -9,7 +9,7 @@
   "workers_dev": false,
   "preview_urls": false,
   "assets": { "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": true },
-  // The sign-in's public IDs; its keys are secrets: app/.dev.vars.example. WONG_OWNER_EMAIL is whose space the move fills.
+  // The sign-in's public IDs; its keys are secrets: app/.dev.vars.example. WONG_OWNER_EMAIL may always sign up.
   "vars": {
     "WONG_ENVIRONMENT": "production",
     "WONG_OWNER_EMAIL": "matthewwong525@gmail.com",

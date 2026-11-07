@@ -73,7 +73,7 @@ export async function checkPrivateAccess(config, environment, cf, generated) {
   return { environment, worker: target.name, protection: 'configured', humanLogin: 'unverified', ...(checkerKey && { checkerKey }), ...(warning && { warning }) };
 }
 
-/** Relay's Worker lets in only devices and the one service token whose Client ID has the SHA-256 each environment's
+/** Relay's Worker lets in only the one service token whose Client ID has the SHA-256 each environment's
  *  committed var holds: git keeps the fingerprint, never the Client ID. */
 export const RELAY_CHECKER_VAR = 'RELAY_CHECKER_SHA256';
 const sha256 = text => createHash('sha256').update(text).digest('hex');
@@ -88,7 +88,7 @@ export async function checkCheckerKey(config, environment, policies, readToken) 
   const expected = relayVars(config, environment)[RELAY_CHECKER_VAR];
   const where = `app/wrangler.jsonc (${environment === 'staging' ? 'env.staging.vars' : 'vars'})`;
   if (!expected) throw new Error(`${RELAY_CHECKER_VAR} is missing for ${environment}; set it in ${where} to the SHA-256 of the checker key's Client ID`);
-  const checker = policies.find(policy => policy.decision === 'non_identity' && policy.name !== RELAY_DEVICES);
+  const checker = policies.find(policy => policy.decision === 'non_identity');
   let token;
   try {
     token = await readToken(checker.include[0].service_token.token_id);
@@ -104,20 +104,17 @@ export async function checkCheckerKey(config, environment, policies, readToken) 
   return 'matches';
 }
 
-/** Relay's device keys: a machine policy of their own, holding only service tokens, beside the checker's. */
-export const RELAY_DEVICES = 'Relay devices';
-const tokensOnly = (policy, count) => Array.isArray(policy.include) && (count === undefined ? policy.include.length >= 1 : policy.include.length === count) &&
+const tokensOnly = (policy, count) => Array.isArray(policy.include) && policy.include.length === count &&
   policy.include.every(rule => Object.keys(rule).length === 1 && !!rule.service_token?.token_id);
 
-/** One human policy of exact reachable emails, one machine policy of one service token, and at most one Relay devices
- *  policy of service tokens alone, each attached to the app and with no exclude or require rule. */
+/** One human policy of exact reachable emails and one machine policy of one service token, each attached to the app
+ *  and with no exclude or require rule. */
 export function checkPolicies(policies, app) {
   const human = policies.filter(policy => policy.decision === 'allow');
-  const devices = policies.filter(policy => policy.decision === 'non_identity' && policy.name === RELAY_DEVICES);
-  const machine = policies.filter(policy => policy.decision === 'non_identity' && policy.name !== RELAY_DEVICES);
-  const reviewed = [...human, ...machine, ...devices];
-  if (policies.length !== reviewed.length || human.length !== 1 || machine.length !== 1 || devices.length > 1 || !reviewed.every(policy => app.policies?.some(attached => attached.id === policy.id))) throw new Error('the separate human and machine policies are missing or unreviewed');
-  if (human[0].include?.length < 1 || !Array.isArray(human[0].include) || human[0].include.some(rule => Object.keys(rule).length !== 1 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rule.email?.email ?? '') || /(?:\.invalid|@(?:[^@]*\.)?noreply\.github\.com)$/i.test(rule.email.email)) || !tokensOnly(machine[0], 1) || !devices.every(policy => tokensOnly(policy)) || policies.some(policy => (policy.exclude?.length ?? 0) || (policy.require?.length ?? 0))) throw new Error('workspace policies must use exact reachable emails and one separate service token');
+  const machine = policies.filter(policy => policy.decision === 'non_identity');
+  const reviewed = [...human, ...machine];
+  if (policies.length !== reviewed.length || human.length !== 1 || machine.length !== 1 || !reviewed.every(policy => app.policies?.some(attached => attached.id === policy.id))) throw new Error('the separate human and machine policies are missing or unreviewed');
+  if (human[0].include?.length < 1 || !Array.isArray(human[0].include) || human[0].include.some(rule => Object.keys(rule).length !== 1 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rule.email?.email ?? '') || /(?:\.invalid|@(?:[^@]*\.)?noreply\.github\.com)$/i.test(rule.email.email)) || !tokensOnly(machine[0], 1) || policies.some(policy => (policy.exclude?.length ?? 0) || (policy.require?.length ?? 0))) throw new Error('workspace policies must use exact reachable emails and one separate service token');
 }
 
 const OPEN_WARNING = 'this workspace is open without login: anyone with its link can see it. Add a card to Cloudflare and rerun provision to make it private: wiki/stack/cloudflare-access.md#open-until-the-card';

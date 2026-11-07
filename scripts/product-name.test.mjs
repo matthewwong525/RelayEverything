@@ -31,7 +31,6 @@ const PLACES = [
   'plugin/hooks/hooks.json',
   'plugin/lib/state.mjs',
   'plugin/skills',
-  'scripts/relay-device-key.mjs',
   'scripts/relay-mcp-trial.mjs',
   'self-host/SETUP.md',
   'wiki',

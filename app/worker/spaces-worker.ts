@@ -3,7 +3,7 @@
 import { DurableObject } from "cloudflare:workers";
 import relay from "../../schema/space-migrations/0001_relay.sql";
 import space from "../../schema/space-migrations/0002_space.sql";
-import { MOVED, type Moved, type Row, type Sql, type SqlValue } from "./apps/relay/space.ts";
+import type { Row, Sql, SqlValue } from "./apps/relay/space.ts";
 import { BEHIND } from "./apps/relay/webhooks/log.ts";
 
 /** The space's migrations, in order. A space runs each once, and keeps the name of each in `space_migrations`. */
@@ -47,25 +47,6 @@ export class Space extends DurableObject<SpacesEnv> {
   /** Several statements in one transaction: all of them, or none. */
   batch(statements: Sql[]): Row[][] {
     return this.ctx.storage.transactionSync(() => statements.map(statement => this.rows(statement)));
-  }
-
-  /** The move's write-only door: adds rows to one of the moved tables, keeping their ids, and skips a row already
-   *  there, so a second run adds nothing. Answers how many rows were new, never a row. */
-  import(table: Moved, rows: Row[]): number {
-    if (!MOVED.includes(table)) throw new Error(`${table} is not a table the move writes.`);
-    return this.ctx.storage.transactionSync(() => rows.reduce((added, row) => {
-      const names = Object.keys(row);
-      if (!names.every(name => /^[a-z_]+$/.test(name))) throw new Error("A column name is not one the move writes.");
-      // RETURNING answers only a row it added: rowsWritten would count trigger and index writes too.
-      const inserted = this.ctx.storage.sql.exec(`INSERT OR IGNORE INTO ${table} (${names.join(", ")}) VALUES (${names.map(() => "?").join(", ")})
-        RETURNING 1`, ...names.map(name => row[name])).toArray();
-      return added + inserted.length;
-    }, 0));
-  }
-
-  /** How many rows each moved table holds, for the move's check. */
-  counts(): Record<Moved, number> {
-    return Object.fromEntries(MOVED.map(table => [table, Number(this.query(`SELECT count(*) AS count FROM ${table}`)[0].count)])) as Record<Moved, number>;
   }
 
   /** The key that seals this person's recordings, made on first use. It never leaves the space but to space.ts. */

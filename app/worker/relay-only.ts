@@ -5,14 +5,13 @@ import { getAccessIdentity, type AccessEnv } from "./access.ts";
 import type { AppEnv } from "./apps/index.ts";
 import { queues, routes } from "./apps/relay/api.ts";
 import { relayGate } from "./apps/relay/caller.ts";
-import { move, type MoveEnv } from "./apps/relay/move.ts";
 import { signIn, type SignInEnv } from "./apps/relay/sign-in/index.ts";
 
 const PAGE = "/apps/relay/";
 const RELAY_API = /^\/apps\/relay\/api(?:\/(.*))?$/;
 
 /** `access` on a self-host, which keeps Cloudflare Access for its owner; the shared server signs people in itself. */
-type ServerEnv = AppEnv & AccessEnv & SignInEnv & MoveEnv & { RELAY_SIGN_IN?: string };
+type ServerEnv = AppEnv & AccessEnv & SignInEnv & { RELAY_SIGN_IN?: string };
 
 /** Relay Everything's API, or null for an address that is not its. Each route opens only its caller's space, so the
  *  company's sign-in policy has no part here: without the owner email it reads as an older install's, which admits. */
@@ -31,11 +30,10 @@ export default {
     const url = new URL(request.url);
     const access = env.RELAY_SIGN_IN === "access";
     const identity = access ? await getAccessIdentity(request, env) : null;
-    // Behind Access, only a key's or the move's own calls pass the sign-in wall without a person.
+    // Behind Access, only a key's own calls pass the sign-in wall without a person.
     if (access && !identity && !request.headers.has("Authorization")) {
       return new Response("Unauthorized", { status: 401, headers: { "Cache-Control": "no-store" } });
     }
-    if (url.pathname === "/apps/relay/move" && request.method === "POST") return move(request, env);
     const signedIn = await signIn(request, env, identity);
     if (signedIn) return signedIn;
     const gate = await relayGate(request, env, identity, url.pathname);

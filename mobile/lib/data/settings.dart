@@ -3,24 +3,31 @@ import 'dart:convert';
 /// The store key the settings live under.
 const settingsKey = 'settings';
 
+/// How the iPhone keeps places while the app is closed, after OwnTracks: [battery] at each move of about 500 m and each
+/// arrival and departure; [move] each 100 m, or each 5 minutes while still. Android keeps a point each 100 m.
+enum LocationMode { battery, move }
+
 /// What the person turned on. Each asks for its permission when turned on, and never before.
 ///
 /// Sending is off by default: notes stay on this phone. Health and location history exist only to send, so they are
 /// off whenever sending is off.
 class Settings {
-  const Settings({this.sending = false, this.pinNotes = false, bool history = false, bool health = false})
+  const Settings({this.sending = false, this.pinNotes = false, bool history = false, bool health = false,
+    this.mode = LocationMode.battery})
     : history = sending && history, health = sending && health;
 
   final bool sending;
   final bool pinNotes;
   final bool history;
   final bool health;
+  final LocationMode mode;
 
-  Settings copyWith({bool? sending, bool? pinNotes, bool? history, bool? health}) => Settings(
+  Settings copyWith({bool? sending, bool? pinNotes, bool? history, bool? health, LocationMode? mode}) => Settings(
     sending: sending ?? this.sending, pinNotes: pinNotes ?? this.pinNotes,
-    history: history ?? this.history, health: health ?? this.health);
+    history: history ?? this.history, health: health ?? this.health, mode: mode ?? this.mode);
 
-  String encode() => jsonEncode({'sending': sending, 'pinNotes': pinNotes, 'history': history, 'health': health});
+  String encode() =>
+    jsonEncode({'sending': sending, 'pinNotes': pinNotes, 'history': history, 'health': health, 'mode': mode.name});
 
   /// Reads saved settings. Settings from before sending was a switch, or none on a phone with a key, come from the
   /// first version, which sent everything: that install keeps sending on, so nothing it set up stops.
@@ -33,6 +40,7 @@ class Settings {
       pinNotes: json['pinNotes'] as bool? ?? firstVersion,
       history: json['history'] as bool? ?? false,
       health: json['health'] as bool? ?? false,
+      mode: LocationMode.values.asNameMap()[json['mode']] ?? LocationMode.battery,
     );
   }
 }

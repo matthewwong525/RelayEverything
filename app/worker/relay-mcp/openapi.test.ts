@@ -22,6 +22,11 @@ test("the website's OpenAPI file and reference page are the ones the routes make
 test("every route is in the document with its method, and both copies pass an OpenAPI 3.1 validator", async () => {
   const live = openApi("https://relay-mcp.example.com");
   for (const route of ROUTES) expect(live.paths[route.path], route.path).toHaveProperty(route.method.toLowerCase());
+  expect(Object.keys(live.paths["/v1/google/{service}/{path}"])).toEqual(["get", "post", "put", "patch", "delete"]);
+  const operationIds = (path: string) => Object.values(live.paths[path] as Record<string, { operationId: string }>).map(op => op.operationId);
+  expect(["/v1/google/gmail/messages", "/v1/google/gmail/messages/send", "/v1/google/calendar/calendars/primary/events", "/v1/google/drive/files",
+    "/v1/google/contacts/people:searchContacts"].flatMap(operationIds)).toEqual(["googleGmailListMessages", "googleGmailSendMessage",
+    "googleCalendarListEvents", "googleCalendarAddEvent", "googleDriveListFiles", "googleContactsSearch"]);
   expect(live.servers).toEqual([{ url: "https://relay-mcp.example.com" }]);
   expect(live.components.securitySchemes.oauth2.flows.authorizationCode.tokenUrl).toBe("https://relay-mcp.example.com/token");
   // An OAuth address must be a URI, and the site's placeholder is not, so its copy is checked with a host in it.
@@ -36,8 +41,8 @@ test("every route is in the document with its method, and both copies pass an Op
 
 test("no answer's oneOf holds two equal branches, which every answer would match and so fail", () => {
   const operations = Object.values(openApi("https://relay-mcp.example.com").paths).flatMap(methods => Object.values(methods as Record<string, {
-    responses: Record<string, { content: { "application/json": { schema: { oneOf?: unknown[] } } } }> }>));
-  const branches = operations.flatMap(op => Object.values(op.responses)).map(answer => answer.content["application/json"].schema.oneOf ?? []);
+    responses: Record<string, { content?: { "application/json"?: { schema: { oneOf?: unknown[] } } } }> }>));
+  const branches = operations.flatMap(op => Object.values(op.responses)).map(answer => answer.content?.["application/json"]?.schema.oneOf ?? []);
   for (const oneOf of branches) expect(new Set(oneOf.map(branch => JSON.stringify(branch))).size).toBe(oneOf.length);
   const notes = openApi("https://relay-mcp.example.com").paths["/v1/notes"] as { get: { responses: { 200: { content: { "application/json": {
     schema: Record<string, unknown> } } } } } };
@@ -56,4 +61,9 @@ test("the reference page shows each route's fields, with q for the query", () =>
   expect(page).toContain("| `source` | query | \"ring\" or \"typed\" | no |");
   expect(page).toContain("`GET /v1/me` · `getMe`\n\nThe caller's device name");
   expect(page).toContain("It takes no input.");
+  expect(page).toContain("`PATCH /v1/google/{service}/{path}` · `googlePatch`");
+  expect(page).toContain('| `service` | path | "gmail" or "calendar" or "drive" or "contacts" | yes |');
+  expect(page).toContain("not encoded: its slashes stay slashes");
+  expect(page).toContain("`POST /v1/google/gmail/messages/send` · `googleGmailSendMessage`");
+  expect(page).toContain("| `raw` | body | string | yes |");
 });

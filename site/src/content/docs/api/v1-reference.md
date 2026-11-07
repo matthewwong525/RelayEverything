@@ -125,3 +125,129 @@ Read one saved chat by its id: the AI's saved summaries, then its messages in or
 The caller's device name, as the phone's key check answers, and whether it may add notes. It reads no data.
 
 It takes no input.
+
+## Read from Google
+
+`GET /v1/google/{service}/{path}` · `googleGet`
+
+GET to the person's own Gmail, Calendar, Drive or Contacts, with their sign-in; Google's status, type and body come back as Google sent them. Contacts take GET only. Nothing deletes an email, a thread, a draft or a Drive file for ever: put it in the bin. An API key or an app connected after Google reaches it.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `service` | path | "gmail" or "calendar" or "drive" or "contacts" | yes | gmail, calendar, drive (with upload/ for an upload) or contacts. |
+| `path` | path | string | yes | Google's own path after the service's base: Gmail's after users/me/, Calendar's after calendar/v3/, Drive's after drive/v3/, People's after v1/. Send it as is, not encoded: its slashes stay slashes, and an encoded slash (%2F) is refused. Google's query goes as this request's own query string, not in `path`. A client that encodes path fields can use the fixed example routes, such as /v1/google/gmail/messages. |
+
+## Send to Google
+
+`POST /v1/google/{service}/{path}` · `googlePost`
+
+POST to the person's own Gmail, Calendar, Drive or Contacts, with their sign-in; Google's status, type and body come back as Google sent them. Contacts take GET only. Nothing deletes an email, a thread, a draft or a Drive file for ever: put it in the bin. An API key or an app connected after Google reaches it.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `service` | path | "gmail" or "calendar" or "drive" or "contacts" | yes | gmail, calendar, drive (with upload/ for an upload) or contacts. |
+| `path` | path | string | yes | Google's own path after the service's base: Gmail's after users/me/, Calendar's after calendar/v3/, Drive's after drive/v3/, People's after v1/. Send it as is, not encoded: its slashes stay slashes, and an encoded slash (%2F) is refused. Google's query goes as this request's own query string, not in `path`. A client that encodes path fields can use the fixed example routes, such as /v1/google/gmail/messages. |
+
+## Replace in Google
+
+`PUT /v1/google/{service}/{path}` · `googlePut`
+
+PUT to the person's own Gmail, Calendar, Drive or Contacts, with their sign-in; Google's status, type and body come back as Google sent them. Contacts take GET only. Nothing deletes an email, a thread, a draft or a Drive file for ever: put it in the bin. An API key or an app connected after Google reaches it.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `service` | path | "gmail" or "calendar" or "drive" or "contacts" | yes | gmail, calendar, drive (with upload/ for an upload) or contacts. |
+| `path` | path | string | yes | Google's own path after the service's base: Gmail's after users/me/, Calendar's after calendar/v3/, Drive's after drive/v3/, People's after v1/. Send it as is, not encoded: its slashes stay slashes, and an encoded slash (%2F) is refused. Google's query goes as this request's own query string, not in `path`. A client that encodes path fields can use the fixed example routes, such as /v1/google/gmail/messages. |
+
+## Change in Google
+
+`PATCH /v1/google/{service}/{path}` · `googlePatch`
+
+PATCH to the person's own Gmail, Calendar, Drive or Contacts, with their sign-in; Google's status, type and body come back as Google sent them. Contacts take GET only. Nothing deletes an email, a thread, a draft or a Drive file for ever: put it in the bin. An API key or an app connected after Google reaches it.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `service` | path | "gmail" or "calendar" or "drive" or "contacts" | yes | gmail, calendar, drive (with upload/ for an upload) or contacts. |
+| `path` | path | string | yes | Google's own path after the service's base: Gmail's after users/me/, Calendar's after calendar/v3/, Drive's after drive/v3/, People's after v1/. Send it as is, not encoded: its slashes stay slashes, and an encoded slash (%2F) is refused. Google's query goes as this request's own query string, not in `path`. A client that encodes path fields can use the fixed example routes, such as /v1/google/gmail/messages. |
+
+## Delete in Google
+
+`DELETE /v1/google/{service}/{path}` · `googleDelete`
+
+DELETE to the person's own Gmail, Calendar, Drive or Contacts, with their sign-in; Google's status, type and body come back as Google sent them. Contacts take GET only. Nothing deletes an email, a thread, a draft or a Drive file for ever: put it in the bin. An API key or an app connected after Google reaches it.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `service` | path | "gmail" or "calendar" or "drive" or "contacts" | yes | gmail, calendar, drive (with upload/ for an upload) or contacts. |
+| `path` | path | string | yes | Google's own path after the service's base: Gmail's after users/me/, Calendar's after calendar/v3/, Drive's after drive/v3/, People's after v1/. Send it as is, not encoded: its slashes stay slashes, and an encoded slash (%2F) is refused. Google's query goes as this request's own query string, not in `path`. A client that encodes path fields can use the fixed example routes, such as /v1/google/gmail/messages. |
+
+## Search Gmail
+
+`GET /v1/google/gmail/messages` · `googleGmailListMessages`
+
+Gmail's messages.list: the ids of the emails that match a Gmail search, newest first.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `q` | query | string | no | A Gmail search, as in Gmail's search box. |
+| `maxResults` | query | integer | no | How many, at most. |
+| `pageToken` | query | string | no | The last answer's `nextPageToken`, to read the next page. |
+
+## Send an email
+
+`POST /v1/google/gmail/messages/send` · `googleGmailSendMessage`
+
+Gmail's messages.send: sends an email from the person's own address. A sent email can't be undone.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `raw` | body | string | yes | The whole email, as RFC 2822 text in base64url. |
+| `threadId` | body | string | no | The thread a reply goes in. |
+
+## List calendar events
+
+`GET /v1/google/calendar/calendars/primary/events` · `googleCalendarListEvents`
+
+Calendar's events.list on the person's own calendar.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `timeMin` | query | string | no | The first time, as RFC 3339. |
+| `timeMax` | query | string | no | The time to stop before, as RFC 3339. |
+| `singleEvents` | query | boolean | no | true gives each repeat on its own. |
+| `pageToken` | query | string | no | The last answer's `nextPageToken`, to read the next page. |
+
+## Add a calendar event
+
+`POST /v1/google/calendar/calendars/primary/events` · `googleCalendarAddEvent`
+
+Calendar's events.insert on the person's own calendar.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `sendUpdates` | query | "all" or "externalOnly" or "none" | no | Who gets Google's invitation email. |
+
+## Search Drive files
+
+`GET /v1/google/drive/files` · `googleDriveListFiles`
+
+Drive's files.list: the person's files that match a Drive search.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `q` | query | string | no | A Drive search, such as name contains 'lease'. |
+| `pageSize` | query | integer | no | How many, at most. |
+| `fields` | query | string | no | The fields each answer gives, such as files(id, name, mimeType). |
+| `pageToken` | query | string | no | The last answer's `nextPageToken`, to read the next page. |
+
+## Search contacts
+
+`GET /v1/google/contacts/people:searchContacts` · `googleContactsSearch`
+
+People's people.searchContacts: the person's saved contacts that match a name, an email address or a phone number.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `query` | query | string | yes | A name, an email address or a phone number, or the start of one. |
+| `readMask` | query | string | yes | The fields to give, such as names,emailAddresses,phoneNumbers. |
+| `pageSize` | query | integer | no | How many, at most. |

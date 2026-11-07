@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ANA, BEN, ben, benPhone, bucket, call, checker, directoryDb, env, matthew, NOW, owner, phone, request, rows, spaces } from "../../../tests/relay";
 import { handleApp } from "../index";
+import { keep, REVOKE_URL } from "./google/token";
 import { hashToken } from "./people";
+import { spaceOf, vouch, type SpaceEnv } from "./space";
 
 const PEOPLE_TABLES = ["relay_keys", "relay_sessions", "relay_logins", "relay_connect_codes"];
 
@@ -83,6 +85,16 @@ it("deletes Ana's account whole, and leaves Ben's data, key and session as they 
   expect(await call(benPhone, "GET", "key")).toEqual({ status: 200, json: { device: "Ben's phone" } });
   expect(await call(ben, "GET", "account")).toEqual({ status: 200, json: { email: "ben@example.com" } });
   expect(await grants.list(BEN)).toEqual({ apps: [{ id: "grant-ben" }] });
+});
+
+it("ends a connected Google sign-in at Google when the account goes", async () => {
+  await keep(spaceOf({ SPACES: spaces.SPACES } as SpaceEnv, vouch("session", ANA)), { email: "ana@gmail.example", scopes: [], refreshToken: "1//r" });
+  const revoked = vi.fn(async (_url: string, _init: RequestInit) => new Response(null));
+  vi.stubGlobal("fetch", revoked);
+  expect((await call(matthew, "POST", "account-delete", { email: "ana@example.com" })).json).toEqual({ deleted: true });
+  vi.unstubAllGlobals();
+  expect(revoked.mock.calls.map(([url, init]) => [url, String(init.body)])).toEqual([[REVOKE_URL, "token=1%2F%2Fr"]]);
+  expect(spaces.objects.has(ANA)).toBe(false);
 });
 
 it("deletes an account with no recordings, on a server with no AI connector", async () => {

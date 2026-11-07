@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import test from 'node:test';
 import { parseConfig, repoRoot } from './lib-wrangler-config.mjs';
-import { NEEDED, parseArgs, permissionLines, reportLine, setup, target } from './relay-mcp-setup.mjs';
+import { googleLine, NEEDED, parseArgs, permissionLines, reportLine, setup, target } from './relay-mcp-setup.mjs';
 
 const config = parseConfig(join(repoRoot, 'app', 'wrangler.relay-mcp.jsonc'));
 
@@ -45,19 +45,19 @@ function fakeCloudflare() {
     if (result === undefined) throw new Error(`unexpected ${key}`);
     return result === null ? Response.json({ success: false, errors: [] }, { status: 404 }) : Response.json({ success: true, result });
   };
-  const wrangler = args => {
-    calls.push(args);
+  const wrangler = (args, input) => {
+    calls.push(input === undefined ? args : [...args, `<stdin ${input.length}>`]);
     if (args[0] === 'deploy') state.workers.add(args.includes('staging') ? 'relay-everything-mcp-staging' : 'relay-everything-mcp');
   };
   const calls = [];
   return { request, wrangler, calls, state };
 }
 
-test('a setup run deploys the Worker once, puts no secret and prints no token; a second run changes nothing', async () => {
+test('a setup run deploys the Worker once and prints no token; a second run changes nothing; a Google secret is put from .env', async () => {
   const cloudflare = fakeCloudflare();
-  const run = async (args = ['--staging']) => {
+  const run = async (args = ['--staging'], more = {}) => {
     const printed = [];
-    await setup({ args, env: { CLOUDFLARE_API_TOKEN: 'cf-user-token-value', CLOUDFLARE_ACCOUNT_ID: ACCOUNT },
+    await setup({ args, env: { CLOUDFLARE_API_TOKEN: 'cf-user-token-value', CLOUDFLARE_ACCOUNT_ID: ACCOUNT, ...more },
       request: cloudflare.request, wrangler: cloudflare.wrangler, log: line => printed.push(line) });
     return printed.join('\n');
   };
@@ -70,6 +70,15 @@ test('a setup run deploys the Worker once, puts no secret and prints no token; a
   const second = await run();
   assert.equal(cloudflare.calls.length, 1);
   assert.match(second, /^ok worker relay-everything-mcp-staging$/m);
-  await run(['--check']);
+  assert.match(await run(['--check']), /^skip Google: add RELAY_GOOGLE_SIGN_IN_SECRET to \.env/m);
   assert.equal(cloudflare.calls.length, 1);
+
+  const google = { RELAY_GOOGLE_SIGN_IN_SECRET: 'google-secret-value' };
+  assert.match(await run(['--staging', '--check'], google), /^ok Google secret RELAY_GOOGLE_SIGN_IN_SECRET$/m);
+  assert.equal(cloudflare.calls.length, 1);
+  const third = await run(['--staging'], google);
+  assert.deepEqual(cloudflare.calls.at(-1), ['secret', 'put', 'RELAY_GOOGLE_SIGN_IN_SECRET', '--env', 'staging', '<stdin 19>']);
+  assert.match(third, /^ok secret RELAY_GOOGLE_SIGN_IN_SECRET \(put\)$/m);
+  assert.ok(!third.includes('google-secret-value'));
+  assert.equal(googleLine({}), 'skip Google: add RELAY_GOOGLE_SIGN_IN_SECRET to .env to let the connector reach a person\'s Google');
 });

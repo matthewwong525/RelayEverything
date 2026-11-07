@@ -1,9 +1,9 @@
 ---
 title: Connect your AI
-description: Let the Claude app, ChatGPT or Claude Code read your Relay Everything notes, health, places and chats, and add notes, with one connector address and your own sign-in.
+description: Let the Claude app, ChatGPT or Claude Code read your Relay Everything notes, health, places and chats, add notes, and reach your Google, with one connector address and your own sign-in.
 ---
 
-Relay Everything's AI connector lets an AI chat app read your Relay Everything data when you ask it a question, and add a note when you ask it to save one. It can't change or delete anything. Each person with a Relay Everything account can connect their own apps, and each app reads only that person's own space.
+Relay Everything's AI connector lets an AI chat app read your Relay Everything data when you ask it a question, and add a note when you ask it to save one. It can't change or delete your notes. When you [connect Google](../google/), it also reaches your Gmail, Calendar, Drive and Contacts. Each person with a Relay Everything account can connect their own apps, and each app reads only that person's own space.
 
 The connector's address is on the **AI apps** card at the bottom of the Relay Everything page, with a **Copy** button. It looks like `https://<your-relay-server>/mcp`.
 
@@ -19,7 +19,7 @@ Then ask, for example: *What did I note on 4 November?* or *What did I decide ab
 
 ## What the AI can read and add
 
-The connector has nine tools. Eight only read, and one adds a note. Each tool reaches only the space of the person who connected the app. Each answer has a limit, so one question can't copy all of your space.
+The connector has nine tools for your Relay Everything data. Eight only read, and one adds a note. Each tool reaches only the space of the person who connected the app. Each answer has a limit, so one question can't copy all of your space.
 
 - **search**: notes that hold every word you give, newest first.
 - **fetch**: one note, the places near it in time, and its day's health totals.
@@ -31,7 +31,9 @@ The connector has nine tools. Eight only read, and one adds a note. Each tool re
 - **read_chat**: one saved chat, a part at a time, with the AI's saved summary.
 - **add_note**: adds a typed note, with the app's name as its device. It goes to your [webhooks](../your-database/) that take notes, as a phone's note does. The app sends its own id with each note, so a resend is kept once.
 
-An app you connected before the connector could add notes still reads. To let it add, disconnect it and connect it again.
+With Google connected, fourteen more tools read and send your email, change your calendar and Drive files, and find your contacts: [Connect Google](../google/#what-the-ai-can-do).
+
+An app you connected before the connector could add notes still reads. To let it add, disconnect it and connect it again. The same is true for an app connected before Google: it can't reach Google until you connect it again.
 
 The same sign-in opens the web API, for your own scripts and services: [Connect a service](../../api/connect-a-service/).
 
@@ -39,7 +41,7 @@ The same sign-in opens the web API, for your own scripts and services: [Connect 
 
 When an app uses a tool, the answer goes to that app's company: Anthropic for Claude, OpenAI for ChatGPT. Their own terms then apply to it. An answer can hold a note's words, its time, the place name and coordinates, the device name, health totals, and a chat's messages.
 
-An answer never holds a recording, a device key, or a device's or delivery's id. The app gets only what a tool answers for one question, not a copy of your data.
+With Google connected, an answer can also hold an email, an event, a file's words or a contact. An answer never holds a recording, a device key, or a device's or delivery's id. The app gets only what a tool answers for one question, not a copy of your data.
 
 ## Disconnect an app
 

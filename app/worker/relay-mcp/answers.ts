@@ -11,6 +11,7 @@ import { dayOf, HOUR, instant, local, nextDay, startOfDay, ZONE } from "./time.t
 const NEAR = HOUR / 2;
 const LINE_CHARACTERS = 300;
 export const RECONNECT = "Connect this app to Relay Everything again to let it add notes. Its reads still work.";
+export const GOOGLE_AGAIN = "Connect this app to Relay Everything again to let it reach your Google. Its other tools still work.";
 
 /** A question the caller can fix: the tool answers it as an error the AI reads, the web API with this status. */
 export class Refusal extends Error {
@@ -22,7 +23,7 @@ export class Refusal extends Error {
 }
 
 /** A range from the caller's text, refused unless both ends read as times and `from` comes first. */
-function range(from: string, to: string, timezone: string): Span {
+export function range(from: string, to: string, timezone: string): Span {
   const [start, end] = [instant(from, timezone), instant(to, timezone)];
   if (Number.isNaN(start) || Number.isNaN(end)) throw new Refusal("Give `from` and `to` as a day or an ISO time.");
   if (start >= end) throw new Refusal("`from` must come before `to`.");
@@ -102,8 +103,10 @@ function partAfter(text: string | undefined): number {
  *  before the consent page said it can add. */
 type Adder = { deviceId: string; name: string; kind: "api" | "app" } | null;
 
-/** The caller's own space and what it may do: every caller reads; `adder` says whether and as whom it adds. */
-export type Asker = { space: PersonSpace; adder: Adder; env: Pick<McpEnv, "RELAY_WEBHOOKS"> };
+/** The caller's own space and what it may do: every caller reads; `adder` says whether and as whom it adds, and
+ *  `google` whether it reaches the person's Google. */
+export type Asker = { space: PersonSpace; adder: Adder; google: boolean;
+  env: Pick<McpEnv, "RELAY_WEBHOOKS" | "RELAY_GOOGLE_CLIENT_ID" | "RELAY_GOOGLE_SIGN_IN_SECRET"> };
 
 const READS = {
   search: async (db, { query, from = "2001-01-01", to = "2286-01-01", source, limit, cursor: text, timezone = ZONE }) => {

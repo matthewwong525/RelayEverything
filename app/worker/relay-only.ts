@@ -5,6 +5,7 @@ import { getAccessIdentity, type AccessEnv } from "./access.ts";
 import type { AppEnv } from "./apps/index.ts";
 import { queues, routes } from "./apps/relay/api.ts";
 import { relayGate } from "./apps/relay/caller.ts";
+import { googleConnect } from "./apps/relay/google/connect.ts";
 import { signIn, type SignInEnv } from "./apps/relay/sign-in/index.ts";
 
 const PAGE = "/apps/relay/";
@@ -39,6 +40,8 @@ export default {
     if (signedIn) return signedIn;
     const gate = await relayGate(request, env, identity, url.pathname);
     if (gate) return gate;
+    const google = await googleConnect(request, env, identity);
+    if (google) return google;
     const api = relayRoute(request, env, url, identity);
     if (api) return api;
     if (/^\/(?:apps\/[^/]+\/)?api(?:\/|$)/.test(url.pathname)) return Response.json({ error: "Not found" }, { status: 404 });

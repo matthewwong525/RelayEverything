@@ -57,6 +57,11 @@ it("answers its own sign-in without Access", async () => {
   expect((await send(null, "GET", "/apps/relay/sign-in/nothing")).status).toBe(404);
 });
 
+it("answers Connect Google's own pages, and none on a server with no Google client", async () => {
+  expect(await send(matthew, "GET", "/apps/relay/google/connect")).toMatchObject({ status: 503,
+    json: { error: { message: "This server does not connect Google." } } });
+});
+
 it("hands every queue batch to the webhooks, which drop a message from before spaces and a webhook that is gone", async () => {
   const messages = [{ webhook: "w-old" }, { webhook: "w-gone", person: ANA }].map(body => ({ body, ack: vi.fn(), retry: vi.fn() }));
   const batch = { queue: "relay-everything-webhooks", messages, ackAll: vi.fn() } as unknown as MessageBatch;

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Relay Everything's AI connector setup: its Worker and sign-in store, made by the first deploy. A person signs in on
-// the server it names, so it has no secret. Each step is skipped when done. wiki/stack/relay-ai-connector.md
+// Relay Everything's AI connector setup: its Worker and sign-in store, made by the first deploy, and the Google client
+// secret from .env. Each step but the secret is skipped when done. wiki/stack/relay-ai-connector.md
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -35,6 +35,12 @@ export function target(config, staging) {
   return { worker: workerName(config, staging ? 'staging' : undefined), address: address.href, callback: new URL('/callback', address).href,
     server: vars.RELAY_SERVER_URL };
 }
+
+const GOOGLE_SECRET = 'RELAY_GOOGLE_SIGN_IN_SECRET';
+
+/** Whether .env holds the Google client secret, by name: with none, the connector reaches no one's Google. */
+export const googleLine = env => env[GOOGLE_SECRET] ? `ok Google secret ${GOOGLE_SECRET}`
+  : `skip Google: add ${GOOGLE_SECRET} to .env to let the connector reach a person's Google`;
 
 /** What a run says: names and steps, never a value. */
 export const reportLine = (step, done) => `ok ${step}${done ? ` (${done})` : ''}`;
@@ -72,7 +78,7 @@ export async function setup({ args, env, request = fetch, wrangler = runWrangler
   if (!token || !/^[a-f0-9]{32}$/i.test(account ?? '')) throw new Error('CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is missing from .env');
   const cf = cloudflare(token, request);
   const lines = permissionLines(await grantedGroups(cf));
-  log(lines.join('\n'));
+  log([...lines, googleLine(env)].join('\n'));
   if (lines.some(line => !line.startsWith('ok'))) throw new Error('the token lacks a permission above; widen it, then run again');
   if (check) return;
 
@@ -83,6 +89,11 @@ export async function setup({ args, env, request = fetch, wrangler = runWrangler
   const exists = await cf(`${root}/workers/scripts/${goal.worker}/settings`).then(() => true, error => error.status === 404 ? false : Promise.reject(error));
   if (!exists) wrangler(['deploy', ...environment]);
   log(reportLine(`worker ${goal.worker}`, exists ? '' : 'deployed'));
+  // Cloudflare never shows a secret back, so a changed one in .env is put again on each run.
+  if (env[GOOGLE_SECRET]) {
+    wrangler(['secret', 'put', GOOGLE_SECRET, ...environment], env[GOOGLE_SECRET]);
+    log(reportLine(`secret ${GOOGLE_SECRET}`, 'put'));
+  }
 
   log(`Sign-in: ${goal.server}, back to ${goal.callback}`);
   log(`Connect address: ${goal.address}`);

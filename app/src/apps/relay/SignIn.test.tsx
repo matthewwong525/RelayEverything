@@ -33,6 +33,7 @@ function api(route: string): Response {
   if (route === "timeline" || route === "chats") return Response.json({ notes: [], chats: [], next: null, nextId: null });
   if (route === "webhooks") return Response.json({ webhooks: [] });
   if (route === "ai-apps") return Response.json({ address: "https://relay-mcp.example.com/mcp", apps: [] });
+  if (route === "google") return Response.json({ available: false, connected: null });
   throw new Error(`Unexpected route: ${route}`);
 }
 

@@ -9,7 +9,7 @@ const folder = new URL("../../../../schema/migrations/", import.meta.url);
 const DIRECTORY = ["relay_people", "relay_logins", "relay_sessions", "relay_sign_in_codes", "relay_keys", "relay_connect_codes",
   "relay_phone_codes"];
 const PERSON = ["relay_devices", "relay_notes", "relay_health", "relay_locations", "relay_chats", "relay_chat_messages",
-  "relay_chat_saves", "relay_outbox", "relay_webhooks", "relay_webhook_attempts", "relay_attachments"];
+  "relay_chat_saves", "relay_outbox", "relay_webhooks", "relay_webhook_attempts", "relay_attachments", "relay_google"];
 
 const tables = (sql: DatabaseSync) => (sql.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'relay\\_%' ESCAPE '\\'")
   .all() as { name: string }[]).map(row => row.name).sort();
@@ -73,12 +73,13 @@ it("widens a space's devices to API keys and connected apps, keeping every devic
     INSERT INTO relay_locations (device_id, at, lat, lon, accuracy, created_at) VALUES ('d-phone', 1, 43, -79, 5, 1);
     INSERT INTO relay_chats (id, device_id, session_id, project, title, started_at, last_at, created_at) VALUES ('c-1', 'd-laptop', 's-1', 'ring', 'Ring', 1, 2, 2);`);
   const before = KEEP.map(query => all(space, query));
+  expect(at).toBeGreaterThan(0);
   expect(() => space.exec("INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('x', 'X', 'rek:x', '', 1, 'api')"))
     .toThrow(/CHECK/);
   inTransaction(space, last[1]);
   expect(KEEP.map(query => all(space, query))).toEqual(before);
   expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
-  expect(tables(space)).toEqual([...PERSON.filter(name => name !== "relay_attachments"), "relay_device_secrets"].sort());
+  expect(tables(space)).toEqual([...PERSON.filter(name => name !== "relay_attachments" && name !== "relay_google"), "relay_device_secrets"].sort());
   space.exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-api', 'Script', 'rek:d-api', '', 1, 'api'),
     ('d-app', 'Claude', 'app:d-app', '', 1, 'app')`);
   // The table still guards its notes: a note from no device, or a made-up reach, is refused.
@@ -105,4 +106,14 @@ it("widens the directory's keys to API keys, keeping every key", () => {
   // A person's keys still go with the person.
   d1.exec("DELETE FROM relay_people WHERE id = 'p-1'");
   expect(all(d1, "SELECT * FROM relay_keys")).toEqual([]);
+});
+
+it("keeps one Google connection per space, with no room for a second", () => {
+  const space = new DatabaseSync(":memory:");
+  for (const [, text] of MIGRATIONS) space.exec(text);
+  const add = (id: number) => space.prepare("INSERT INTO relay_google (id, email, scopes, token, connected_at) VALUES (?, 'ana@gmail.com', 'x', ?, 1)")
+    .run(id, new Uint8Array([1]));
+  add(1);
+  expect(() => add(1)).toThrow(/UNIQUE|PRIMARY/);
+  expect(() => add(2)).toThrow(/CHECK/);
 });

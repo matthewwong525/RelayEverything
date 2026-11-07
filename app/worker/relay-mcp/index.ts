@@ -3,6 +3,7 @@
 import { getOAuthApi, OAuthProvider, type OAuthProviderOptions } from "@cloudflare/workers-oauth-provider";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { apiKeyCaller, KEY } from "../apps/relay/caller.ts";
+import { METHODS } from "../apps/relay/google/proxy.ts";
 import { problem, v1, type Status } from "./api.ts";
 import type { Asker } from "./answers.ts";
 import { appDeviceOff, grantAsker, keyAsker } from "./asker.ts";
@@ -25,9 +26,11 @@ const options = (env: McpEnv): OAuthProviderOptions<McpEnv> => ({
   refreshTokenTTL: IDLE, refreshTokenIdleTTL: IDLE,
 });
 
-// The API takes a bearer token and never a cookie, so any web page may call it, such as Swagger in a browser.
-const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Authorization, Content-Type",
-  "Access-Control-Allow-Methods": "GET, POST", "Access-Control-Max-Age": "86400" };
+// The API takes a bearer token and never a cookie, so any web page may call it, such as Swagger in a browser. Google's
+// paths take each method Google's own APIs take.
+const CORS = { "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type, Content-Range, X-Upload-Content-Type, X-Upload-Content-Length, If-Match",
+  "Access-Control-Expose-Headers": "Location, Range, ETag", "Access-Control-Allow-Methods": METHODS.join(", "), "Access-Control-Max-Age": "86400" };
 
 /** Tells a caller with no valid token where to read how to get one, as /mcp's own refusal does. */
 const challenge = (env: McpEnv) => {

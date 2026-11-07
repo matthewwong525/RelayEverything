@@ -29,7 +29,7 @@ Each run ends with one verdict:
 |---|---|
 | `works` | Each scenario Claude could check showed its THEN. |
 | `broken` | The app did not build or open, a tour step failed, or a scenario showed a different result. |
-| `could-not-check` | No scenario could be checked, Claude had no key, or the branch was not at the saved commit. The report says why. |
+| `could-not-check` | No scenario could be checked, Claude had no key, or the branch was not at the saved commit. The report says why. When the job runs out of time, the run on GitHub shows *cancelled* and the report says *Claude gave no report*: the pictures in `claude/` still show what it reached, so grade them. |
 
 A *works* is evidence, not a gate. The pictures and the video are always there to look at.
 

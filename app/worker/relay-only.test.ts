@@ -44,6 +44,10 @@ it("behind Access, refuses a call with no person and no key, and lets a key and 
   }
   expect((await send(phone, "GET", "/apps/relay/api/key", undefined, behindAccess)).json).toEqual({ device: "Android phone" });
   expect((await send(owner, "GET", "/apps/relay/api/timeline", undefined, behindAccess)).status).toBe(200);
+  // A phone trades its sign-in code with no person and no key: its secret, checked by the route, protects it.
+  const trade = await send(null, "POST", "/apps/relay/sign-in/phone/key", { code: "c", verifier: "v".repeat(43) }, behindAccess);
+  expect([trade.status, trade.json.error.code]).toEqual([400, "invalid_input"]);
+  expect((await send(null, "GET", "/apps/relay/sign-in/phone/key", undefined, behindAccess)).status).toBe(401);
 });
 
 it("answers its own sign-in without Access", async () => {

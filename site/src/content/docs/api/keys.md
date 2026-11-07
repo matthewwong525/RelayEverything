@@ -43,6 +43,16 @@ You make and turn off your keys on your Relay Everything page, signed in:
 | The list of devices | Shows each key: its name, its kind, when it was made, and whether it is off. |
 | **Turn off** | Turns the key off at once. The other keys go on. |
 
+A phone can also get its key with no QR code: in the Relay Everything app, tap **Sign in to connect**. The app opens your sign-in, the page asks **Connect this phone?**, and **Connect** makes the phone's key. The key goes straight to the phone and never shows. It works like a key from **Add a device**, and the phone shows in your list of devices.
+
+The app and the server use these addresses for it. You don't call them yourself:
+
+| Address | What it does |
+|---|---|
+| `GET /apps/relay/sign-in/phone?challenge=…&name=…` | Signs you in if you aren't, then asks **Connect this phone?** |
+| `POST /apps/relay/sign-in/phone` | **Connect** sends the app a code that works once, for 5 minutes. **Cancel** tells the app. |
+| `POST /apps/relay/sign-in/phone/key` | The app trades the code, with a secret only it holds, for its key: `{ "server": "…", "key": "rek_…" }`. A code used twice, too old, or with the wrong secret answers `400`. |
+
 Relay Everything keeps only a fingerprint of each key, never the key itself, so a lost key can't be shown again: add the device again for a new key. A preview of Relay Everything's own server has its own accounts and keys. A preview's key doesn't open the live server, and a live key doesn't open a preview.
 
 A server you run yourself makes its keys on the page too. An older server gets this with its next update: [Run your own server](../../start/run-your-own/#update-it).

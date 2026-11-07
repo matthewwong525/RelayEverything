@@ -9,9 +9,9 @@ export type Row = Record<string, SqlValue>;
 
 const checked = Symbol("checked caller");
 
-/** How the caller proved who they are: a signed-in browser, a device key, an AI app's grant, Access on a self-host,
- *  the preview checker, or a queue message the server itself sent. */
-export type CallerKind = "session" | "key" | "grant" | "access" | "checker" | "queue";
+/** How the caller proved who they are: a signed-in browser, a device key, an AI app's grant, a phone's one-time sign-in
+ *  code, Access on a self-host, the preview checker, or a queue message the server itself sent. */
+export type CallerKind = "session" | "key" | "grant" | "code" | "access" | "checker" | "queue";
 /** A key's reach: a phone, a chat sender, or an API key, which reaches only the web API. */
 export type Reach = "phone" | "chats" | "api";
 export type Caller = {

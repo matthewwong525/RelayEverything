@@ -15,7 +15,7 @@ Revoking a device's key SHALL stop that device at its next request and leave oth
 
 ### Requirement: A device key adds only to its own person's space
 
-A person SHALL make each device's key on their Relay Everything page, which SHALL show it once. A phone key or a chat key SHALL reach only the routes that add data, and a key check that answers only that key's own device name. It SHALL add data only to the space of the person who made it, and SHALL NOT list, read or delete any note, recording, sample, point or chat. This SHALL hold on every Relay Everything server.
+A person SHALL make each device's key on their Relay Everything page, which SHALL show it once, or, for a phone, by signing in from the Relay Everything app and confirming that phone on the page. A key made from the app SHALL go to that phone only, through a code that works once and only for a few minutes, and SHALL never show. A phone key or a chat key SHALL reach only the routes that add data, and a key check that answers only that key's own device name. It SHALL add data only to the space of the person who made it, and SHALL NOT list, read or delete any note, recording, sample, point or chat. This SHALL hold on every Relay Everything server.
 
 #### Scenario: A phone key tries to read notes
 - **WHEN** a request with a phone's key asks for the timeline or a recording
@@ -28,6 +28,14 @@ A person SHALL make each device's key on their Relay Everything page, which SHAL
 #### Scenario: A key shown once
 - **WHEN** a person closes the page that showed a new key
 - **THEN** the page never shows that key again
+
+#### Scenario: Connect by signing in from the app
+- **WHEN** a person taps *Sign in to connect*, signs in, and taps *Connect* on *Connect this phone?*
+- **THEN** the phone keeps its own new key, the page lists the phone among the devices, and no screen shows the key
+
+#### Scenario: A connect code used twice or by another app
+- **WHEN** a connect code is traded for a key a second time, after a few minutes, or without the secret the phone made when it started
+- **THEN** the server refuses it and makes no key
 
 ### Requirement: Only live device keys and the checker pass as machines
 

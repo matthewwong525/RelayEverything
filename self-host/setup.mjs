@@ -98,10 +98,10 @@ export const accessApp = (app, host, workerId) => ({ name: app, type: 'self_host
 /** The login's one policy: the owner's email and no one else. */
 export const ownerPolicy = owner => ({ name: 'Relay owner', decision: 'allow', include: [{ email: { email: owner } }], precedence: 1 });
 
-/** Device keys skip the login: the server checks each key itself. A browser still sends its login cookie on this
- *  address, which the server checks too. */
+/** Device keys, and a phone's trade of its sign-in code for its key, skip the login: the server checks each itself. A
+ *  browser still sends its login cookie on these addresses, which the server checks too. */
 export const keysApp = (app, host) => ({ name: app, type: 'self_hosted', domain: `${host}/apps/relay/api`,
-  destinations: [{ type: 'public', uri: `${host}/apps/relay/api` }],
+  destinations: [{ type: 'public', uri: `${host}/apps/relay/api` }, { type: 'public', uri: `${host}/apps/relay/sign-in/phone/key` }],
   session_duration: '24h', app_launcher_visible: false });
 export const bypassPolicy = { name: 'Relay Everything keys check themselves', decision: 'bypass', include: [{ everyone: {} }], precedence: 1 };
 
@@ -130,9 +130,13 @@ function deploy({ wrangler, build, files }, database) {
 const templates = () => ({ app: readTemplate('wrangler.template.jsonc'), mcp: readTemplate('mcp.template.jsonc'), spaces: readTemplate('spaces.template.jsonc') });
 const writeConfigs = (files, written) => { for (const kind of ['config', 'mcp', 'spaces']) writeJson(files[kind], written[kind === 'config' ? 'app' : kind]); };
 
-/** The device keys' way past the login, made once. */
+/** The device keys' way past the login, made once; an older one gets each address it lacks. */
 async function ensureKeysApp(cf, root, apps, part, host) {
-  const app = apps.find(item => item.name === part.keysApp) ?? await cf(`${root}/access/apps`, 'POST', keysApp(part.keysApp, host));
+  const wanted = keysApp(part.keysApp, host);
+  const found = apps.find(item => item.name === part.keysApp);
+  const lacks = found && wanted.destinations.some(want => !found.destinations?.some(item => item.uri === want.uri));
+  if (lacks) await cf(`${root}/access/apps/${found.id}`, 'PUT', wanted);
+  const app = found ?? await cf(`${root}/access/apps`, 'POST', wanted);
   if (!(await cf(`${root}/access/apps/${app.id}/policies`)).length) await cf(`${root}/access/apps/${app.id}/policies`, 'POST', bypassPolicy);
 }
 

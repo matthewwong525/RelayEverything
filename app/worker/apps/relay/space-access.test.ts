@@ -9,7 +9,8 @@ import { spaceOf, vouch, type Caller, type SpaceEnv } from "./space";
 // caller, each after its own check. wiki/relay-spaces.md
 const app = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const DOOR = "worker/apps/relay/space.ts";
-const VOUCHERS = new Set(["worker/apps/relay/caller.ts", "worker/apps/relay/webhooks/send.ts", "worker/relay-mcp/asker.ts"]);
+const VOUCHERS = new Set(["worker/apps/relay/caller.ts", "worker/apps/relay/webhooks/send.ts", "worker/relay-mcp/asker.ts",
+  "worker/apps/relay/sign-in/phone.ts"]);
 const OPENS = /SPACES\.|idFromName|RELAY_BUCKET/g;
 const VOUCH = /\bvouch\(/g;
 /** The inbox's live line is another Durable Object, which holds no person's space. */

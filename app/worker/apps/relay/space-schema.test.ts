@@ -6,7 +6,8 @@ import { MIGRATIONS } from "../../spaces-worker";
 
 // D1 keeps only the directory; each person's data lives in their own space. wiki/relay-spaces.md
 const folder = new URL("../../../../schema/migrations/", import.meta.url);
-const DIRECTORY = ["relay_people", "relay_logins", "relay_sessions", "relay_sign_in_codes", "relay_keys", "relay_connect_codes"];
+const DIRECTORY = ["relay_people", "relay_logins", "relay_sessions", "relay_sign_in_codes", "relay_keys", "relay_connect_codes",
+  "relay_phone_codes"];
 const PERSON = ["relay_devices", "relay_notes", "relay_health", "relay_locations", "relay_chats", "relay_chat_messages",
   "relay_chat_saves", "relay_outbox", "relay_webhooks", "relay_webhook_attempts"];
 
@@ -69,7 +70,7 @@ it("widens the directory's keys to API keys, keeping every key", () => {
   const d1 = new DatabaseSync(":memory:");
   d1.exec("PRAGMA foreign_keys = ON");
   const files = readdirSync(folder).filter(file => file.endsWith(".sql")).sort();
-  const last = files.indexOf("20261107200000_relay_api_keys.sql");
+  const last = files.indexOf("20261107210000_relay_api_keys.sql");
   for (const file of files.slice(0, last)) d1.exec(readFileSync(new URL(file, folder), "utf8"));
   d1.exec(`INSERT INTO relay_people (id, email, created_at) VALUES ('p-1', 'ana@example.com', 1);
     INSERT INTO relay_keys (key_sha256, person_id, device_id, reaches, created_at, revoked_at) VALUES ('k-1', 'p-1', 'd-1', 'phone', 1, NULL),

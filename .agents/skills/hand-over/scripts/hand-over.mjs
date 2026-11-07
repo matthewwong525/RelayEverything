@@ -44,13 +44,16 @@ const USAGE = `usage: hand-over.mjs open --view <finish> --note <line> [--sessio
           --keep-open, in place of a finish: the turn ends only on Hand back, close, or the time
           limit; it reads no finish
           HANDOVER_VIEW=window, with no link, where the browser shows in its own window: the
-          page is brought to the front, the person does the step there and says done in the
-          chat, and close ends the turn; HANDOVER_VIEW=unsupported where the browser has no
+          task's tab is brought to the front and held there, the person does the step there
+          and says done in the chat, and close ends the turn; while a turn is open, no other
+          task's tab comes to the front; HANDOVER_VIEW=unsupported where the browser has no
           screen to show, and HANDOVER_NEEDS=live-view (exit 3) with a line per missing tool
           --watch: a live view the agent drives while the person watches, as one
           for connecting tools: the person's taps reach the browser only after they
           tap Take over, or on their turn; it reads no finish and ends at close;
-          open for 480 minutes, the one live view as --view is
+          open for 480 minutes, the one live view as --view is; where the browser
+          shows in its own window, HANDOVER_VIEW=window with no link: the person
+          watches that window, and a turn is theirs there until its finish or close
           --keys: one box per declared name; it ends on cancellation or
           once every key is saved (exit 2 with KEYS_UNDECLARED= or KEYS_AMBIGUOUS=);
           an unopened one gives way to a new open from the same chat
@@ -182,12 +185,19 @@ export function startTurn(finish, note) {
 /** Ends a link whose watcher can not: puts a view's page back and stops its screen source, kills the
  * tunnel, records the result, and clears the rest. The watcher closes its page first. */
 async function teardown(result, { tunnelPid, view, session, completionId } = {}, cause = 'error') {
+  // The page gets its size back while the turn still shows its tab, then lets go.
   if (view && !view.window) await endView(view, pageOf(session));
+  if (session) await endTurn(pageOf(session));
   await killTunnel(tunnelPid);
   if (completionId) time(completionId, { ended: result, cause });
   writeFileSync(FILES.result, `${JSON.stringify({ result })}\n`);
   clearLink();
 }
+
+const BUSY = /the person is using the browser/;
+/** Lets go of the person's turn on the page's tab, so other tasks can show their own tabs again. Every end of a turn
+ * calls it: done, closed, handed-back, timeout, and an error. */
+const endTurn = page => page.front({ turn: false }).catch(() => {});
 
 /** Result-only completion message; routing and private input are never taken from the page. */
 export function completionMessage(state, result) {
@@ -456,8 +466,8 @@ function startWatcher(env = process.env) {
 
 const writeState = state => writeFileSync(FILES.state, `${JSON.stringify(state)}\n`, { mode: 0o600 });
 
-/** Opens this chat's link once no other blocks it; resolves to the exit code. A view where the browser has its own
- * window opens no link: the person's turn happens in that window. */
+/** Opens this chat's link once no other blocks it; resolves to the exit code. A view or watch where the browser has its
+ * own window opens no link: the person's turn happens in that window. */
 async function startLink(values, keys) {
   const live = watcherPid();
   if (alive(live) && !(await givesWay(live))) {
@@ -486,12 +496,14 @@ async function startLink(values, keys) {
   };
   const fault = session && (await pageFault(pageOf(session), finish, MET));
   if (fault) return fail(fault);
+  // The task's tab comes to the front first; a turn holds it there, so no other task's tab takes its place.
+  const busy = session && (await pageOf(session).front(values.watch ? {} : { turn: true }).then(() => null, error => (BUSY.test(error.message) ? error : null)));
+  if (busy) return fail('The person is using the browser in another chat\'s tab; open this view once their turn ends.');
   const completionId = randomBytes(16).toString('hex');
   if (window) {
-    view = { note: values.note, ...(values['keep-open'] && { keepOpen: true }), window: true };
+    view = { note: values.note, ...(values['keep-open'] && { keepOpen: true }), ...(values.watch && { watch: true }), window: true };
     writeState({ completionId, ...chatTarget(), session, view, ...finish, deadline });
     watcher = startWatcher();
-    await pageOf(session).front().catch(() => {});
     console.log('HANDOVER_VIEW=window');
     console.log(`HANDOVER_SEND=${WINDOW_REMINDER}`);
     return 0;
@@ -580,6 +592,7 @@ async function watch() {
     finishingPromise = (async () => {
       await closePage?.stopInput();
       await live?.end();
+      if (state.view) await endTurn(page);
       const appKeys = state.keys && saved.filter(name => state.keys.keys.some(key => key.name === name && key.file === APP_FILE));
       const outcome = await publish({ result, ready, ...(saved && { saved }), ...(appKeys && { appKeys }), ...(state.keys && { opened: existsSync(FILES.opened) }), completionId: state.completionId }, ready);
       closePage?.setReceipt(outcome);
@@ -608,8 +621,17 @@ async function watch() {
   } catch {
     return finish('error', { cause: 'error' });
   }
-  /** One poll of a view: a screen source that exited is started again and recorded, the finish is read unless the
-   * view stays open, and the page's window is raised. Resolves to the result that ends the view, or null. */
+  let holding = !watchSide;
+  /** Holds the turn on the page's tab while the person has it: a live view selects it again unless the person or the
+   * site opened a tab in the turn, or a browser pop-up shows; a window is the person's own, so its tab is only kept. */
+  const holdTurn = async (person, popup = false) => {
+    // An ended view has let go of its turn; a late poll never takes it again.
+    if (done || (!person && !holding)) return;
+    holding = person;
+    await page.front(person ? { turn: true, ...(window || popup ? { raise: false } : { reselect: true }) } : { turn: false }).catch(() => {});
+  };
+  /** One poll of a view: a stopped screen source starts again, the finish is read unless the view stays open, the turn
+   * is renewed, and the tab and window come to the front unless a pop-up shows. Resolves to what ends it, or null. */
   const pollView = async () => {
     try {
       if (await live?.revive()) saveState();
@@ -618,11 +640,13 @@ async function watch() {
     }
     if (watchSide) await watchSide.poll();
     else if (!state.view.keepOpen && finished(state, await seen(page, state))) return 'done';
+    await holdTurn(!watchSide || watchSide.personHolds(), live?.popupOpen());
     live?.front();
     return null;
   };
-  /** The call the server counts as use, which keeps the link's page open: a view's fit again, else a constant. */
-  const keepOpen = () => (live ? live.fit() : page.keepAlive());
+  /** The call the server counts as use, which keeps the link's page open: a view's fit again, else a constant. A fit
+   * brings the tab to the front, which would cover a shown pop-up. */
+  const keepOpen = () => (live && !live.popupOpen() ? live.fit() : page.keepAlive());
   let keepAt = Date.now() + KEEP_MS;
   while (!done) {
     if (!listed && listing && existsSync(FILES.shown)) listed = list(listing);
@@ -668,6 +692,8 @@ function watchLink(state, page) {
       const turn = readJson(FILES.turn);
       if (now() === 'turn' && finished(turn, await seen(page, turn))) endTurn('signed-in');
     },
+    /** Whether the person holds the browser: they took over, or it is their turn. */
+    personHolds: () => now() !== 'assistant',
     /** How a close ends the watch: stopped when the chat stopped it, else done. */
     ending: () => (readText(FILES.closing).trim() === 'stopped' ? 'stopped' : 'done'),
   };

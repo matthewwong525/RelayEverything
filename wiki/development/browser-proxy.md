@@ -2,7 +2,7 @@
 
 The browser routes send the shared browser's traffic through saved proxies, so sites see your home address, not this server's data-centre address. [Browsing](browsing.md) owns the browser itself; this page owns its routes.
 
-WongStack does not ship these routes: this repo copied them from WongOS. A [WongStack update](../../.agents/skills/wong-sync/SKILL.md) must keep them.
+WongStack does not ship these routes: this repo copied them from WongOS. A [WongStack update](../../.agents/skills/wong-sync/SKILL.md) must keep them. Since WongStack 50.5.0, an update also brings a `proxy on|off` setting that is off by default: leave it out, so the routes stay on. Use `network off` to go direct.
 
 ## The order of routes
 

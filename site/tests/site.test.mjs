@@ -42,13 +42,51 @@ test('every menu entry opens a built page', () => {
   assert.deepEqual(problems, []);
 });
 
+// The Markdown a person edits, by the slug of the page it builds.
+const docs = join(site, 'src/content/docs');
+const sources = new Map(walk(docs).filter(file => /\.mdx?$/.test(file))
+  .map(file => [relative(docs, file).replace(/\.mdx?$/, '').replace(/(^|\/)index$/, ''), readFileSync(file, 'utf8')]));
+const GAP = '[LEGAL-TODO';
+const DRAFT = ':::caution[Draft: not in force]';
+const opensAsDraft = text => text.replace(/^---\n[\s\S]*?\n---\n/, '').trimStart().startsWith(DRAFT);
+const drafts = new Set([...sources].filter(([, text]) => opensAsDraft(text)).map(([slug]) => join(dist, slug, 'index.html')));
+const slugOf = address => new URL(address, 'https://site/').pathname.replace(/^\/|\/$/g, '');
+
+// Addresses that the change texting-toll-free-pages adds. terms-draft.md copies its Texting terms word for word, links
+// and all, so a draft may link to them until they are built. A test below fails once they are, and this list goes then.
+const coming = ['/terms/', '/texting/', '/texting/#the-replies', '/privacy/#texting'];
+
 test('every link inside the site opens a page', () => {
   const problems = [...html].flatMap(([file, text]) => [...text.matchAll(/href="([^"]*)"/g)]
     .map(([, href]) => href.replaceAll('&amp;', '&'))
     .filter(href => !/^[a-z]+:|^\/\//i.test(href))
+    .filter(href => !(drafts.has(file) && coming.includes(decodeURI(new URL(href, `https://site/${relative(dist, file)}`).href.slice('https://site'.length)))))
     .map(href => broken(href, file) && `${relative(dist, file)}: ${href} (${broken(href, file)})`))
     .filter(Boolean);
   assert.deepEqual(problems, []);
+});
+
+test('a draft links only to addresses still to come, so the list of them stays short', () => {
+  assert.deepEqual(coming.filter(address => !broken(address, join(dist, 'index.html'))), [],
+    'these are built now: take them out of `coming` in site/tests/site.test.mjs');
+});
+
+// A legal page with a gap is a draft: it opens with the draft box, and no menu entry or home page link reaches it.
+test('no page with a [LEGAL-TODO gap is in the menu or linked from the home page, and each one opens as a draft', () => {
+  const home = [...html.get(join(dist, 'index.html')).matchAll(/href="([^"]*)"/g)].map(([, href]) => href)
+    .filter(href => !/^[a-z]+:|^\/\//i.test(href)).map(slugOf);
+  const shown = new Set([...entries(sidebar).map(entry => slugOf(addressOf(entry))), ...home]);
+  const withGaps = [...sources].filter(([, text]) => text.includes(GAP));
+  assert.ok(withGaps.length, 'no page holds a gap: the draft check reads no draft');
+  assert.deepEqual(withGaps.filter(([slug]) => shown.has(slug)).map(([slug]) => `${slug}: has a gap, and the menu or the home page links it`), []);
+  assert.deepEqual(withGaps.filter(([, text]) => !opensAsDraft(text)).map(([slug]) => `${slug}: has a gap, and does not open with ${DRAFT}`), []);
+});
+
+test('the fuller terms keep the Terms page\'s Texting terms word for word', t => {
+  const part = text => /^## Texting terms\n[\s\S]*?(?=^## )/m.exec(text)?.[0];
+  assert.ok(part(sources.get('terms-draft')), 'terms-draft.md has no ## Texting terms part');
+  if (!sources.has('terms')) return t.skip('no terms.md yet: it comes with the change texting-toll-free-pages');
+  assert.equal(part(sources.get('terms-draft')), part(sources.get('terms')));
 });
 
 test('no page names a private address', () => {

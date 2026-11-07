@@ -91,7 +91,7 @@ export function publish({ root, ref, staging, dryRun }) {
   if (!run('git', ['-C', root, 'ls-tree', '--name-only', sha, `${FOLDER}/`])) return `result=empty ${commit}`;
   const work = mkdtempSync(join(tmpdir(), 'relay-site-'));
   try {
-    execFileSync('tar', ['-x', '-C', work, '--strip-components=1'], { input: execFileSync('git', ['-C', root, 'archive', sha, `${FOLDER}/`]) });
+    execFileSync('tar', ['-x', '-C', work, '--strip-components=1'], { input: execFileSync('git', ['-C', root, 'archive', sha, `${FOLDER}/`], { maxBuffer: 256 * 1024 * 1024 }) });
     const envFile = join(primaryRoot(root).primary, '.env');
     const env = existsSync(envFile) ? readFileSync(envFile, 'utf8') : '';
     const secrets = envSecrets(env);

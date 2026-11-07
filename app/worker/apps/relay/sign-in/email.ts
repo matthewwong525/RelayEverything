@@ -14,9 +14,11 @@ const address = z.string().trim().pipe(z.email().max(254));
 /** The email sender, when the server has both the binding and its from address. */
 const senderOf = (env: SignInEnv) => env.RELAY_EMAIL && env.RELAY_SIGN_IN_FROM ? { email: env.RELAY_EMAIL, from: env.RELAY_SIGN_IN_FROM } : null;
 
-/** GET methods: the ways in that this server has set up, so the page shows only those. */
+/** GET methods: the ways in this server has set up, so the page shows only those, and its contact address when set. */
 export async function methods(_request: Request, env: SignInEnv): Promise<Response> {
-  return Response.json({ email: !!senderOf(env), apple: ready("apple", env), google: ready("google", env), signUp: env.RELAY_SIGN_UP === "open" }, { headers: NO_STORE });
+  const contact = env.RELAY_CONTACT_EMAIL?.trim();
+  return Response.json({ email: !!senderOf(env), apple: ready("apple", env), google: ready("google", env), signUp: env.RELAY_SIGN_UP === "open",
+    ...contact ? { contact } : {} }, { headers: NO_STORE });
 }
 
 /** The JSON body in this shape, or null. */

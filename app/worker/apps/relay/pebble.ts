@@ -76,7 +76,7 @@ async function store(env: Env, space: PersonSpace, device: string, delivery: str
   if (!results.length) return ok({ duplicate: true });
   if (audio) {
     try {
-      await space.files.put(id, await audio.arrayBuffer());
+      await space.files.put(space.files.nameOf(id), await audio.arrayBuffer());
     } catch {
       await db.prepare("DELETE FROM relay_notes WHERE id = ?").bind(id).run();
       return refused(503, "The recording could not be saved. Pebble sends it again.");

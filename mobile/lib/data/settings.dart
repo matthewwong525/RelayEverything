@@ -9,28 +9,37 @@ enum LocationMode { battery, move }
 
 /// What the person turned on. Each asks for its permission when turned on, and never before.
 ///
-/// Sending is off by default: notes stay on this phone. Health and location history exist only to send, so they are
-/// off whenever sending is off.
+/// Sending is off by default: notes stay on this phone. Health, location history and photos exist only to send, so
+/// they are off whenever sending is off. Photos on mobile data is off whenever photos is off.
 class Settings {
   const Settings({this.sending = false, this.pinNotes = false, bool history = false, bool health = false,
-    this.mode = LocationMode.battery})
-    : history = sending && history, health = sending && health;
+    this.mode = LocationMode.battery, bool photos = false, bool photosOnMobileData = false})
+    : history = sending && history, health = sending && health, photos = sending && photos,
+      photosOnMobileData = sending && photos && photosOnMobileData;
 
   final bool sending;
   final bool pinNotes;
   final bool history;
   final bool health;
   final LocationMode mode;
+  /// Sends new photos, taken since it turned on.
+  final bool photos;
+  /// Off: photos wait for Wi-Fi.
+  final bool photosOnMobileData;
 
-  Settings copyWith({bool? sending, bool? pinNotes, bool? history, bool? health, LocationMode? mode}) => Settings(
-    sending: sending ?? this.sending, pinNotes: pinNotes ?? this.pinNotes,
-    history: history ?? this.history, health: health ?? this.health, mode: mode ?? this.mode);
+  Settings copyWith({bool? sending, bool? pinNotes, bool? history, bool? health, LocationMode? mode, bool? photos,
+    bool? photosOnMobileData}) =>
+    Settings(
+      sending: sending ?? this.sending, pinNotes: pinNotes ?? this.pinNotes,
+      history: history ?? this.history, health: health ?? this.health, mode: mode ?? this.mode,
+      photos: photos ?? this.photos, photosOnMobileData: photosOnMobileData ?? this.photosOnMobileData);
 
-  String encode() =>
-    jsonEncode({'sending': sending, 'pinNotes': pinNotes, 'history': history, 'health': health, 'mode': mode.name});
+  String encode() => jsonEncode({'sending': sending, 'pinNotes': pinNotes, 'history': history, 'health': health,
+    'mode': mode.name, 'photos': photos, 'photosOnMobileData': photosOnMobileData});
 
   /// Reads saved settings. Settings from before sending was a switch, or none on a phone with a key, come from the
-  /// first version, which sent everything: that install keeps sending on, so nothing it set up stops.
+  /// first version, which sent everything: that install keeps sending on, so nothing it set up stops. Settings from
+  /// before photos have photos off.
   factory Settings.decode(String? saved, {required bool hasKey}) {
     final json = saved == null ? null : jsonDecode(saved) as Map<String, dynamic>;
     final firstVersion = json == null ? hasKey : !json.containsKey('sending');
@@ -41,6 +50,8 @@ class Settings {
       history: json['history'] as bool? ?? false,
       health: json['health'] as bool? ?? false,
       mode: LocationMode.values.asNameMap()[json['mode']] ?? LocationMode.battery,
+      photos: json['photos'] as bool? ?? false,
+      photosOnMobileData: json['photosOnMobileData'] as bool? ?? false,
     );
   }
 }

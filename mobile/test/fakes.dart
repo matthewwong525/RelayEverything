@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:drift/native.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -17,6 +18,7 @@ import 'package:relay_app/data/store.dart';
 import 'package:relay_app/sync/health.dart';
 import 'package:relay_app/sync/location.dart';
 import 'package:relay_app/sync/native.dart';
+import 'package:relay_app/sync/photos.dart';
 import 'package:relay_app/voice/model.dart';
 import 'package:relay_app/voice/recorder.dart';
 import 'package:relay_app/voice/transcriber.dart';
@@ -28,7 +30,11 @@ const pageKey = 'rek_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE';
 const bearer = Connection.bearer(server: 'https://relay.example.com', key: pageKey);
 final pageCode = jsonEncode({'relay': 1, 'server': bearer.server, 'key': pageKey});
 
-Store memoryStore() => Store(NativeDatabase.memory());
+/// A store in memory, with a folder of its own for photo copies, deleted after the test.
+Store memoryStore() {
+  final folder = tempFolder();
+  return Store(NativeDatabase.memory(), folder: () async => folder);
+}
 
 /// A server answering each route with [answer]; every request it saw is kept.
 class FakeServer {
@@ -192,6 +198,92 @@ HealthDataPoint reading(HealthDataType type, DateTime from, DateTime to, {num va
       : NumericHealthValue(numericValue: value),
     sourcePlatform: HealthPlatformType.appleHealth, sourceDeviceId: 'device', sourceId: sourceId, sourceName: 'Health',
   );
+
+/// The phone's photo library: [take] adds a photo, and each look, ask and copy is kept.
+class FakePhotos implements PhotoSource {
+  bool allowed = true;
+  int asked = 0;
+  final library = <LibraryPhoto>[];
+  /// A photo's JPEG copy, when it is not the usual 1,600 by 1,200 one; null for a photo the phone can not copy.
+  final jpegs = <String, Uint8List?>{};
+  /// Photos kept only in iCloud.
+  final cloudOnly = <String>{};
+  /// When a photo came into the library, when not when it was taken: Android looks by this time, so a photo saved
+  /// today from an old trip is found as new.
+  final added = <String, DateTime>{};
+  /// Each look at the library: from when, and how many at most.
+  final finds = <(DateTime, int)>[];
+  final copied = <String>[];
+  /// Runs while each copy is made: it can throw, such as for an iCloud download that failed, or act meanwhile.
+  Future<void> Function(LibraryPhoto photo)? whileCopying;
+
+  LibraryPhoto take(String id, DateTime at, {double? lat, double? lon, DateTime? addedAt}) {
+    final photo = LibraryPhoto(id: id, takenAt: at, lat: lat, lon: lon);
+    library.add(photo);
+    if (addedAt != null) added[id] = addedAt;
+    return photo;
+  }
+
+  DateTime _addedOf(LibraryPhoto photo) => added[photo.id] ?? photo.takenAt;
+
+  @override
+  Future<bool> allow() async {
+    asked++;
+    return allowed;
+  }
+
+  @override
+  Future<List<LibraryPhoto>> find(DateTime from, {required int limit}) async {
+    finds.add((from, limit));
+    final found = [for (final photo in library) if (!_addedOf(photo).isBefore(from)) photo]
+      ..sort((a, b) => _addedOf(a).compareTo(_addedOf(b)));
+    return found.take(limit).toList();
+  }
+
+  @override
+  Future<bool> onPhone(LibraryPhoto photo) async => !cloudOnly.contains(photo.id);
+
+  @override
+  Future<Uint8List?> jpeg(LibraryPhoto photo) async {
+    copied.add(photo.id);
+    await whileCopying?.call(photo);
+    return jpegs.containsKey(photo.id) ? jpegs[photo.id] : jpegOf(1600, 1200);
+  }
+}
+
+/// The network the phone is on; Wi-Fi unless a test says otherwise.
+class FakeNetwork implements Network {
+  Link current = Link.wifi;
+
+  @override
+  Future<Link> link() async => current;
+}
+
+/// The start of a JPEG of [width] by [height]: enough for its frame header to be read.
+Uint8List jpegOf(int width, int height) => Uint8List.fromList([
+  0xFF, 0xD8, // start of image
+  0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, // JFIF
+  0xFF, 0xC0, 0x00, 0x11, 0x08, height >> 8, height & 0xFF, width >> 8, width & 0xFF, 0x03, // frame header
+  0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01,
+  0xFF, 0xD9, // end of image
+]);
+
+/// The parts of a multipart body, by name: each part's content type, when it has one, and its value.
+Map<String, (String?, String)> formParts(http.Request request) {
+  final boundary = RegExp(r'boundary=(.+)$').firstMatch(request.headers['content-type']!)!.group(1)!;
+  final parts = <String, (String?, String)>{};
+  for (final part in latin1.decode(request.bodyBytes).split('--$boundary')) {
+    final split = part.indexOf('\r\n\r\n');
+    if (split < 0) continue;
+    final head = part.substring(0, split);
+    final name = RegExp(r'name="([^"]+)"').firstMatch(head)?.group(1);
+    if (name == null) continue;
+    var value = part.substring(split + 4);
+    if (value.endsWith('\r\n')) value = value.substring(0, value.length - 2);
+    parts[name] = (RegExp(r'content-type: *(.+)', caseSensitive: false).firstMatch(head)?.group(1)?.trim(), value);
+  }
+  return parts;
+}
 
 /// A folder of its own for one test's recordings and model, deleted after it.
 Directory tempFolder() {

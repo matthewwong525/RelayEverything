@@ -1,10 +1,10 @@
-// The connector's bindings, from app/wrangler.relay-mcp.jsonc: the directory's database, each person's space, the
-// sign-in store and the server whose sign-in it uses. Nothing else.
+// The connector's bindings, from app/wrangler.relay-mcp.jsonc: the directory's database, each person's space and the
+// file store its photos are sealed in, the sign-in store and the server whose sign-in it uses. Nothing else.
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+import type { SpaceEnv } from "../apps/relay/space.ts";
 
-export type McpEnv = {
+export type McpEnv = SpaceEnv & {
   DB: D1Database;
-  SPACES: DurableObjectNamespace;
   OAUTH_KV: KVNamespace;
   RELAY_MCP_ADDRESS: string;
   /** The Relay Everything server that signs a person in, then sends them back to /callback. */

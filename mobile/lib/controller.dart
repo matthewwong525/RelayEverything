@@ -16,6 +16,7 @@ import 'relay.dart';
 import 'sync/health.dart';
 import 'sync/location.dart';
 import 'sync/native.dart';
+import 'sync/photos.dart';
 import 'voice/model.dart';
 import 'voice/recorder.dart';
 import 'voice/transcriber.dart';
@@ -44,7 +45,7 @@ String newClientId([Random? random]) {
 class RelayController extends Relay {
   RelayController({required this.store, required this.vault, required this.places, required this.health,
     RelayApi Function(Connection)? apiFor, http.Client Function()? signInClient, WebAuth? webAuth, DateTime Function()? clock,
-    this.schedule, this.voice, this.native})
+    this.schedule, this.voice, this.native, this.photos, this.network})
     : _sender = Sender(apiFor, signInClient), _webAuth = webAuth ?? phoneWebAuth, _clock = clock ?? DateTime.now {
     voice?.model.addListener(notifyListeners);
     // A recording at its longest ends as if the person let go.
@@ -65,6 +66,9 @@ class RelayController extends Relay {
   final VoiceParts? voice;
   /// The iPhone's Swift side, which keeps places and wakes the app while it is closed; null on Android.
   final NativeBackground? native;
+  /// The photo library and the network kind; with either missing, *Photos* can not turn on.
+  final PhotoSource? photos;
+  final Network? network;
   final Sender _sender;
   final WebAuth _webAuth;
   final DateTime Function() _clock;
@@ -210,6 +214,7 @@ class RelayController extends Relay {
     // A round already sending finishes first, so nothing it read lands after the drop.
     await _syncing;
     await store.dropReadings();
+    await dropPhotoQueue(store);
     _status = SyncStatus.idle;
     await _refreshLocal();
   }
@@ -225,7 +230,7 @@ class RelayController extends Relay {
   Future<void> _saveSettings(Settings settings) async {
     _settings = settings;
     await store.set(settingsKey, settings.encode());
-    await schedule?.call(settings.history || settings.health);
+    await schedule?.call(settings.history || settings.health || settings.photos);
     await _tellNative();
     notifyListeners();
   }
@@ -308,6 +313,39 @@ class RelayController extends Relay {
     return null;
   }
 
+  static const _noPhotos = 'Photo access is off. Turn it on in the phone\'s Settings.';
+
+  @override
+  Future<String?> setPhotos(bool on) async {
+    if (on == _settings.photos) return null;
+    if (!on) {
+      await _saveSettings(_settings.copyWith(photos: false, photosOnMobileData: false));
+      // A round already reading or sending finishes first, so nothing it queued stays after the drop.
+      await _syncing;
+      await dropPhotoQueue(store);
+      return null;
+    }
+    if (!_settings.sending) return _sendFirst;
+    final source = photos;
+    if (source == null || network == null || !await source.allow()) return _noPhotos;
+    // Photos start from now: the library from before never goes.
+    await dropPhotoQueue(store);
+    final since = '${_clock().millisecondsSinceEpoch}';
+    await store.set(photosSince, since);
+    await store.set(photosAfter, since);
+    await _saveSettings(_settings.copyWith(photos: true));
+    unawaited(sync());
+    return null;
+  }
+
+  @override
+  Future<String?> setPhotosOnMobileData(bool on) async {
+    if (on && !_settings.photos) return 'Turn on Photos first.';
+    await _saveSettings(_settings.copyWith(photosOnMobileData: on));
+    if (on) unawaited(sync());
+    return null;
+  }
+
   /// Keeps and shows the note at once; Save never waits for a fix. With pins on, the note settles only when the phone
   /// has a fix or gives up (up to 10 s), so a sync meanwhile sends the rest and leaves this note waiting.
   @override
@@ -351,7 +389,17 @@ class RelayController extends Relay {
     if (_settings.history) await _drain();
     if (_settings.sending) await store.queuePoints();
     final result = await flush(store, api, clock: _clock, keepGoing: () => _settings.sending);
-    _status = switch (result.failure) { Failure.refused => SyncStatus.refused, null => SyncStatus.synced, _ => SyncStatus.offline };
+    // New photos, as in the background round: after the outbox, so a photo waiting for Wi-Fi holds back no note.
+    // A refused photo with a key that still answers, such as on an older server with no photos, comes back as null.
+    Failure? photoFailure;
+    final source = photos;
+    final kind = network;
+    if (_settings.photos && source != null && kind != null) {
+      photoFailure = await syncPhotos(store, api, source, kind, settings: _settings, send: result.failure == null, now: _clock(),
+        keepGoing: () async => _settings.photos);
+    }
+    _status = switch (result.failure ?? photoFailure) {
+      Failure.refused => SyncStatus.refused, null => SyncStatus.synced, _ => SyncStatus.offline };
     // The stop's own state wins.
     if (!_settings.sending) _status = SyncStatus.idle;
     await _refreshLocal();

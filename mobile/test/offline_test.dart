@@ -23,10 +23,11 @@ Future<void> until(WidgetTester tester, bool Function() done) async {
 }
 
 // With sending off, the app's promise is that nothing leaves the phone. This drives every screen and job, with a key
-// kept, against a server that fails on any call, a phone that would name places over the network, and health that would read.
+// kept, against a server that fails on any call, a phone that would name places over the network, health that would
+// read, and a photo library that would send.
 // The one request allowed is the speech model's download, and only after the person's *Get it*.
 void main() {
-  testWidgets('with sending off, no screen or job calls the network, names a place, or reads health', (tester) async {
+  testWidgets('with sending off, no screen or job calls the network, names a place, reads health, or reads photos', (tester) async {
     final store = memoryStore();
     final storage = MemoryStorage();
     final server = noNetwork();
@@ -36,12 +37,14 @@ void main() {
     final folder = tempFolder();
     final models = ModelServer();
     var clock = DateTime(2026, 11, 5, 9, 41);
+    final photos = FakePhotos()..take('IMG_0001', DateTime(2026, 11, 5, 9, 50), lat: 43.65, lon: -79.38);
+    final network = FakeNetwork();
     // The iPhone's Swift side, with a point it would hand over, and a sign-in sheet that would open the network.
     final swift = FakeBackground()..lines = [swiftPoint(DateTime(2026, 11, 5, 9), 43.65, -79.38)];
     final webAuth = FakeWebAuth();
     final relay = RelayController(store: store, vault: KeyVault(storage), places: places, health: health, apiFor: server.api,
       signInClient: server.client, webAuth: webAuth.call, schedule: (on) async => scheduled.add(on),
-      voice: fakeVoice(folder, models, clock: () => clock), native: swift);
+      voice: fakeVoice(folder, models, clock: () => clock), native: swift, photos: photos, network: network);
     // A key is kept, sending is off, and a note written while it was on still waits to send: only the Sender gate
     // keeps that upload on the phone.
     await tester.runAsync(() async {
@@ -63,6 +66,12 @@ void main() {
     await tester.tap(find.text('Location history'));
     await tester.tap(find.text('Health: steps, heart rate, sleep, workouts'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Photos'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Photos'));
+    await tester.tap(find.text('Send photos on mobile data'));
+    await tester.pumpAndSettle();
+    expect(find.text('Stop sending photos?'), findsNothing);
     await tester.pageBack();
     await tester.pumpAndSettle();
 
@@ -86,7 +95,7 @@ void main() {
     await tester.runAsync(() async {
       await relay.sync();
       expect(await backgroundRound(store, connection: await KeyVault(storage).read(), health: health, sender: Sender(server.api),
-        native: swift, places: places), isTrue);
+        native: swift, places: places, photos: photos, network: network), isTrue);
       expect(await relay.earlierNotes(), 1);
       expect([for (final item in await store.outbox()) item.body['clientId']], ['waiting']);
       expect(Settings.decode(await store.get(settingsKey), hasKey: true).sending, isFalse);
@@ -127,6 +136,7 @@ void main() {
     expect(places.named, [false]);
     expect(places.asked, [false]);
     expect(health.reads, isEmpty);
+    expect([photos.asked, photos.finds, photos.copied], [0, isEmpty, isEmpty]);
     expect(scheduled, [false]);
     await tester.runAsync(store.close);
   });

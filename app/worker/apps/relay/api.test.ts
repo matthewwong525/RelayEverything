@@ -14,7 +14,10 @@ const ringNote = (id: string, recordedAt: number) => db.sql.prepare(`INSERT INTO
   recorded_at, created_at) VALUES (?, 'd-pebble', 'ring', ?, 'Ring note', ?, ?, 0)`).run(id, `delivery-${id}`, `people/${ANA}/${id}`, recordedAt);
 const RING = "aaaaaaaa-0000-4000-8000-000000000001";
 /** Seals a recording into Ana's folder, as the Pebble route stores one. */
-const seal = (id: string, bytes: number[]) => spaceOf(env() as never, vouch("session", ANA)).files.put(id, new Uint8Array(bytes).buffer);
+const seal = (id: string, bytes: number[]) => {
+  const { files } = spaceOf(env() as never, vouch("session", ANA));
+  return files.put(files.nameOf(id), new Uint8Array(bytes).buffer);
+};
 /** The audio route as `who` plays it, with a Range header when one is given. */
 const play = (who: Who, id: string, range?: string) => handleApp(request(who, "GET", `https://relay.example.com/apps/relay/api/audio?id=${id}`,
   range ? { headers: { Range: range } } : {}), env(), null);

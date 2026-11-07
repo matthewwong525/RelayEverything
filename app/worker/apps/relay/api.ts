@@ -1,5 +1,5 @@
-// Relay Everything's server: notes, health and location from the phones, sent on to webhooks, and Claude Code chats,
-// each in the caller's own space. A device key only adds data, and checks itself with GET key: caller.ts.
+// Relay Everything's server: notes, health, location and photos from the phones, sent on to webhooks, and Claude Code
+// chats, each in the caller's own space. A device key only adds data, and checks itself with GET key: caller.ts.
 import type { Route } from "../../api/contract.ts";
 import { account, accountDelete } from "./account.ts";
 import { aiAppDisconnect, aiApps } from "./ai-apps.ts";
@@ -10,6 +10,7 @@ import { deviceAdd, deviceOff, devices } from "./device.ts";
 import { key } from "./key.ts";
 import { notes } from "./notes.ts";
 import { pebble } from "./pebble.ts";
+import { photoAdd, photoCount, photoDelete } from "./photos.ts";
 import { health, locations } from "./samples.ts";
 import { summary } from "./summary.ts";
 import { timeline } from "./timeline.ts";
@@ -21,6 +22,9 @@ export const routes = new Map<string, Route>([
   ["POST notes", notes],
   ["POST health", health],
   ["POST locations", locations],
+  ["POST photos", photoAdd],
+  ["GET photos", photoCount],
+  ["POST photos/delete", photoDelete],
   ["GET key", key],
   ["GET timeline", timeline],
   ["GET summary", summary],

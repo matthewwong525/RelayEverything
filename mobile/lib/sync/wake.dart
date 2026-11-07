@@ -9,9 +9,11 @@ import 'background.dart';
 import 'health.dart';
 import 'location.dart';
 import 'native.dart';
+import 'photos.dart';
 
 /// One round when the iPhone wakes the closed app, for new Health readings or a new place. Swift runs it in its own
-/// engine, ends it when it answers `done` on `relay/wake`, and stops waiting after 25 s.
+/// engine, ends it when it answers `done` on `relay/wake`, and stops waiting after 25 s. New photos go last in the
+/// round, so a wake cut off at the cap has sent the readings and points first; a photo it did not send waits for the next.
 @pragma('vm:entry-point')
 Future<void> wakeRound() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,7 +22,7 @@ Future<void> wakeRound() async {
     final store = openStore();
     try {
       done = await backgroundRound(store, connection: await KeyVault().read(), health: PhoneHealth(), sender: Sender(),
-        native: Platform.isIOS ? PhoneBackground() : null, places: PhonePlaces());
+        native: Platform.isIOS ? PhoneBackground() : null, places: PhonePlaces(), photos: PhonePhotos(), network: PhoneNetwork());
     } finally {
       await store.close();
     }

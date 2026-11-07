@@ -9,7 +9,7 @@ import { hashToken } from "./people";
 // The fingerprint of checker.id, "checker.access".
 const CHECKER_SHA256 = "6a6814c5281a7635cb9d9f881d7feae9b0d6159c868666fad3ffa0a164f4d999";
 const ORIGIN = "https://relay.example.com";
-const ROUTES = ["pebble", "notes", "health", "locations"].map(route => `/apps/relay/api/${route}`);
+const ROUTES = ["pebble", "notes", "health", "locations", "photos"].map(route => `/apps/relay/api/${route}`);
 const KEY = "/apps/relay/api/key";
 const CHATS = "/apps/relay/api/chats";
 const SAVES = "/apps/relay/api/chat-saves";
@@ -24,13 +24,13 @@ async function gate(who: Who, method: string, path: string, { bindings = {}, hea
   return response && [response.status, (await body(response)).error.message];
 }
 
-it("lets a phone key only send notes, health and places, and check itself, and nothing else", async () => {
+it("lets a phone key only send notes, health, places and photos, and check itself, and nothing else", async () => {
   for (const path of ROUTES) expect(await gate(phone, "POST", path), path).toBeNull();
   expect(await gate(phone, "GET", KEY)).toBeNull();
   // A phone can't read notes, recordings, health or chats, even on an address it sends to.
   for (const [method, path] of [...ROUTES.map(route => ["GET", route]), ["POST", KEY], ["GET", "/apps/relay/api/timeline"],
     ["GET", "/apps/relay/api/audio"], ["GET", "/apps/relay/api/summary"], ["GET", "/apps/relay/api/devices"], ["POST", "/apps/relay/api/devices"],
-    ["POST", "/apps/relay/api/account-delete"], ["GET", "/apps/relay/"], ["GET", "/apps/hello/api/greeting"], ["GET", "/api/health"], ["GET", "/"],
+    ["POST", "/apps/relay/api/account-delete"], ["POST", "/apps/relay/api/photos/delete"], ["GET", "/apps/relay/"], ["GET", "/apps/hello/api/greeting"], ["GET", "/api/health"], ["GET", "/"],
     ["POST", "/apps/relay/api/notes/x"], ["POST", CHATS], ["POST", SAVES], ["GET", CHATS], ["DELETE", ROUTES[1]], ["HEAD", KEY]]) {
     expect(await gate(phone, method, path), `${method} ${path}`).toEqual([403, SEND_ONLY]);
   }

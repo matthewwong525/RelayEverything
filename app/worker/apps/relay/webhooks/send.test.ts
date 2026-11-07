@@ -219,7 +219,7 @@ it("waits for a ring note's recording, sends it when it comes, and skips a note 
   const [early] = await deliver(wakeUp("hook-1"));
   expect(early.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
   expect(sent).toEqual([]);
-  await anaSpace().files.put("aaaaaaaa-0000-4000-8000-000000000001", new Uint8Array([0, 0, 0, 24]).buffer);
+  await anaSpace().files.put(anaSpace().files.nameOf("aaaaaaaa-0000-4000-8000-000000000001"), new Uint8Array([0, 0, 0, 24]).buffer);
   ringNote("aaaaaaaa-0000-4000-8000-000000000002", { audio: true, createdAt: NOW - 3 * MINUTE });
   ringNote("aaaaaaaa-0000-4000-8000-000000000003");
   db.sql.prepare("DELETE FROM relay_notes WHERE id = 'aaaaaaaa-0000-4000-8000-000000000003'").run();

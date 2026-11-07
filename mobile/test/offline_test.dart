@@ -32,12 +32,17 @@ void main() {
     final server = noNetwork();
     final places = FakePlaces()..pin = Pin(at: DateTime(2026, 11, 5, 9), lat: 43.65, lon: -79.38, accuracy: 10, place: 'King St W');
     final health = FakeHealth()..readings = [reading(HealthDataType.STEPS, DateTime(2026, 11, 5, 8), DateTime(2026, 11, 5, 9), value: 10)];
+    final calendar = FakeCalendar()..items = [meeting('a', DateTime(2026, 11, 5, 10))];
     final scheduled = <bool>[];
     final folder = tempFolder();
     final models = ModelServer();
     var clock = DateTime(2026, 11, 5, 9, 41);
+    // The iPhone's Swift side, with a point it would hand over, and a sign-in sheet that would open the network.
+    final swift = FakeBackground()..lines = [swiftPoint(DateTime(2026, 11, 5, 9), 43.65, -79.38)];
+    final webAuth = FakeWebAuth();
     final relay = RelayController(store: store, vault: KeyVault(storage), places: places, health: health, apiFor: server.api,
-      schedule: (on) async => scheduled.add(on), voice: fakeVoice(folder, models, clock: () => clock));
+      signInClient: server.client, webAuth: webAuth.call, schedule: (on) async => scheduled.add(on),
+      voice: fakeVoice(folder, models, clock: () => clock), native: swift, calendar: calendar);
     // A key is kept, sending is off, and a note written while it was on still waits to send: only the Sender gate
     // keeps that upload on the phone.
     await tester.runAsync(() async {
@@ -56,8 +61,10 @@ void main() {
     await tester.tap(find.text('Pin notes to where I am'));
     await tester.runAsync(pumpEventQueue);
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Location history'), 100);
     await tester.tap(find.text('Location history'));
-    await tester.tap(find.text('Health: steps, heart rate, sleep, workouts'));
+    await tester.tap(find.text('Health: steps, heart rate, sleep and more'));
+    await tester.tap(find.text('Calendar'));
     await tester.pumpAndSettle();
     await tester.pageBack();
     await tester.pumpAndSettle();
@@ -69,6 +76,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.runAsync(pumpEventQueue);
+    await tester.runAsync(relay.settled);
     await tester.pumpAndSettle();
     expect(find.text('Call the PCB fab about the flex stiffener'), findsOneWidget);
     expect(find.textContaining('Pinned'), findsOneWidget);
@@ -81,7 +89,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.runAsync(() async {
       await relay.sync();
-      expect(await backgroundRound(store, connection: await KeyVault(storage).read(), health: health, sender: Sender(server.api)), isTrue);
+      expect(await backgroundRound(store, connection: await KeyVault(storage).read(), health: health, sender: Sender(server.api),
+        native: swift, places: places, calendar: calendar), isTrue);
       expect(await relay.earlierNotes(), 1);
       expect([for (final item in await store.outbox()) item.body['clientId']], ['waiting']);
       expect(Settings.decode(await store.get(settingsKey), hasKey: true).sending, isFalse);
@@ -117,9 +126,12 @@ void main() {
     expect(models.requests, hasLength(1));
 
     expect(server.requests, isEmpty);
+    expect([webAuth.opened, swift.drains, places.lookups], [isEmpty, 0, isEmpty]);
+    expect(swift.flags.every((flag) => !flag.health && !flag.history), isTrue);
     expect(places.named, [false]);
     expect(places.asked, [false]);
     expect(health.reads, isEmpty);
+    expect([calendar.asked, calendar.listed, calendar.reads], [0, 0, isEmpty]);
     expect(scheduled, [false]);
     await tester.runAsync(store.close);
   });
@@ -153,5 +165,27 @@ void main() {
     });
     expect([server.requests, models.requests], [isEmpty, isEmpty]);
     await tester.runAsync(store.close);
+  });
+
+  test('turning sending off deletes waiting calendar uploads, stops reading the calendar, and keeps notes', () async {
+    final store = memoryStore();
+    addTearDown(store.close);
+    final storage = MemoryStorage();
+    final server = FakeServer((_) => FakeServer.json({}, 503));
+    final calendar = FakeCalendar()..items = [meeting('a', DateTime(2026, 11, 5, 10))];
+    final relay = RelayController(store: store, vault: KeyVault(storage), places: FakePlaces(), health: FakeHealth(),
+      apiFor: server.api, calendar: calendar, clock: () => DateTime(2026, 11, 5, 9));
+    await KeyVault(storage).save(connection);
+    await store.set(settingsKey, const Settings(sending: true, calendar: true).encode());
+    await relay.load();
+    await relay.addNote('Kept');
+    await relay.settled();
+    expect(await store.waitingEvents(), 1);
+    await relay.stopSending();
+    final reads = calendar.reads.length;
+    await relay.sync();
+    expect([relay.settings.calendar, await store.waitingEvents(), await store.calendarSent(), calendar.reads.length],
+      [false, 0, isEmpty, reads]);
+    expect([for (final item in await store.outbox()) item.route], ['notes']);
   });
 }

@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../brand.dart';
 import '../relay.dart';
 import 'compose.dart';
 import 'connect.dart' show Scanner;
@@ -29,13 +31,17 @@ Future<bool> _openInBrowser(Uri address) async {
 
 /// This phone's notes, newest first, with the one primary action, a new note, and *Hold to talk* beside it.
 class TimelineScreen extends StatefulWidget {
-  const TimelineScreen({super.key, required this.relay, this.scanner, this.opener});
+  const TimelineScreen({super.key, required this.relay, this.scanner, this.opener, this.picker, this.voiceRequests});
 
   final Relay relay;
   /// The QR scanner the connect screen uses; a test passes its own.
   final Scanner? scanner;
   /// Opens the Relay page; a test passes its own.
   final Opener? opener;
+  /// The paperclip's picker; a test passes its own.
+  final FilesPicker? picker;
+  /// *Start a voice note* from Shortcuts: each event opens the recording sheet.
+  final Stream<void>? voiceRequests;
 
   @override
   State<TimelineScreen> createState() => _TimelineScreenState();
@@ -43,6 +49,8 @@ class TimelineScreen extends StatefulWidget {
 
 class _TimelineScreenState extends State<TimelineScreen> {
   late final StreamSubscription<String> _notices;
+  StreamSubscription<void>? _voice;
+  bool _recording = false;
 
   Relay get relay => widget.relay;
   Scanner? get scanner => widget.scanner;
@@ -54,10 +62,23 @@ class _TimelineScreenState extends State<TimelineScreen> {
     _notices = relay.notices.listen((message) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     });
+    _voice = widget.voiceRequests?.listen((_) => _record());
+  }
+
+  /// Opens the recording sheet once, however many times the shortcut ran.
+  Future<void> _record() async {
+    if (!mounted || _recording) return;
+    _recording = true;
+    try {
+      await recordFromShortcut(context, relay);
+    } finally {
+      _recording = false;
+    }
   }
 
   @override
   void dispose() {
+    _voice?.cancel();
     _notices.cancel();
     super.dispose();
   }
@@ -71,13 +92,17 @@ class _TimelineScreenState extends State<TimelineScreen> {
         final model = relay.speechModel == ModelState.downloading || relay.speechModel == ModelState.failed;
         final server = relay.server;
         final top = <Widget>[
-          // Ring notes and recordings are on the Relay page: a device key can not read them.
-          if (relay.settings.sending && server != null) _PageCard(server: server, opener: widget.opener ?? _openInBrowser),
+          // Ring notes and recordings are on the Relay page: a device key can not read them. Nothing of this phone's
+          // goes there while it sends to the person's own webhook.
+          if (relay.settings.sending && relay.settings.place == SendPlace.server && server != null) _PageCard(server: server, opener: widget.opener ?? _openInBrowser),
           if (model) ModelCard(relay: relay),
         ];
         final listening = relay.listening;
         return Scaffold(
-          appBar: AppBar(title: const Text('Relay Everything'), actions: [
+          appBar: AppBar(titleSpacing: 12, title: const Row(mainAxisSize: MainAxisSize.min, spacing: 8, children: [
+            RelayMark(size: 24),
+            Flexible(child: Text('Relay Everything', overflow: TextOverflow.ellipsis)),
+          ]), actions: [
             relay.settings.sending ? _SyncChip(relay: relay) : const _LocalChip(),
             IconButton(
               tooltip: 'Settings',
@@ -89,11 +114,11 @@ class _TimelineScreenState extends State<TimelineScreen> {
             if (listening != null) ListeningCard(since: listening),
             Row(mainAxisSize: MainAxisSize.min, spacing: 12, children: [
               HoldToTalkButton(relay: relay),
-              FloatingActionButton.extended(
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ComposeScreen(relay: relay))),
+              AccentGlow(child: FloatingActionButton.extended(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ComposeScreen(relay: relay, picker: widget.picker))),
                 icon: const Icon(Icons.edit_outlined),
                 label: const Text('New note'),
-              ),
+              )),
             ]),
           ]),
           body: RefreshIndicator(
@@ -136,7 +161,7 @@ class _NoteCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 6, children: [
           Row(spacing: 8, children: [
-            Chip(label: Text(entry.voice ? 'Voice' : 'Typed'), visualDensity: VisualDensity.compact),
+            _KindChip(voice: entry.voice),
             if (recording != null) ...[
               const Spacer(),
               TextButton.icon(onPressed: () => relay.play(recording), icon: const Icon(Icons.play_arrow), label: const Text('Play')),
@@ -145,9 +170,83 @@ class _NoteCard extends StatelessWidget {
           if (entry.writing) ...[
             Text('Writing the words…', style: muted),
             const LinearProgressIndicator(),
-          ] else
+          ] else if (entry.text.isNotEmpty || entry.files.isEmpty)
             Text(entry.text.isEmpty ? 'No words, only the recording.' : entry.text, style: theme.textTheme.bodyLarge),
+          if (entry.files.any((file) => file.picture))
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final file in entry.files) if (file.picture) _Thumbnail(file: file, relay: relay),
+            ]),
+          for (final file in entry.files) if (!file.picture) _FileRow(file: file, relay: relay),
           Text(line, style: muted),
+        ]),
+      ),
+    );
+  }
+}
+
+/// A note's kind: *Voice* in the spark color, a small live moment; *Typed* in accent text on accent soft.
+class _KindChip extends StatelessWidget {
+  const _KindChip({required this.voice});
+
+  final bool voice;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final brand = brandOf(context);
+    return Chip(
+      label: Text(voice ? 'Voice' : 'Typed'),
+      visualDensity: VisualDensity.compact,
+      backgroundColor: voice ? theme.colorScheme.tertiary : brand.accentSoft,
+      labelStyle: theme.chipTheme.labelStyle?.copyWith(color: voice ? theme.colorScheme.onTertiary : brand.accentText),
+    );
+  }
+}
+
+/// A picture on a note, small; a tap opens it.
+class _Thumbnail extends StatelessWidget {
+  const _Thumbnail({required this.file, required this.relay});
+
+  final EntryFile file;
+  final Relay relay;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Tooltip(
+      message: file.name,
+      child: InkWell(
+        onTap: () => relay.openFile(file),
+        borderRadius: BorderRadius.circular(8),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.file(File(file.path), width: 72, height: 72, fit: BoxFit.cover, cacheWidth: 216,
+            errorBuilder: (context, _, _) => Container(width: 72, height: 72, color: theme.colorScheme.surfaceContainerHighest,
+              child: const Icon(Icons.image_outlined))),
+        ),
+      ),
+    );
+  }
+}
+
+/// Any other file on a note: its name and size; a tap opens it.
+class _FileRow extends StatelessWidget {
+  const _FileRow({required this.file, required this.relay});
+
+  final EntryFile file;
+  final Relay relay;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: () => relay.openFile(file),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(spacing: 8, children: [
+          const Icon(Icons.insert_drive_file_outlined, size: 20),
+          Expanded(child: Text(file.name, overflow: TextOverflow.ellipsis)),
+          Text(sizeLabel(file.size), style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         ]),
       ),
     );

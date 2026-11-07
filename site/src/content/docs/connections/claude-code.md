@@ -7,15 +7,11 @@ The Relay Everything plugin for Claude Code saves each chat to your Relay Everyt
 
 ## Make a connect code
 
-The owner of the Relay Everything server makes one connect code for each computer, on the computer that holds the server's project:
+You make one connect code for each computer, on your Relay Everything page: click **Add a device**, name it, such as `Laptop`, and pick Claude Code as its kind.
 
-```sh
-node scripts/relay-device-key.mjs create --name "Laptop" --for claude-code
-```
+The code shows once. It is a [chat key](../../api/keys/#a-chat-key) that can only add chats to your own space. It can't read, change or delete anything.
 
-The code shows once: in that terminal, and on a private page on that computer. It is a [key](../../api/keys/) that can only add chats. It can't read, change or delete anything on your server, and it lasts one year.
-
-To keep chats in your own account, run your own Relay Everything server and make the code there. The plugin sends only to the server in the code: it has no address built in.
+To keep chats in your own Cloudflare account, [run your own Relay Everything server](../../start/run-your-own/) and make the code there. The plugin sends only to the server in the code: it has no address built in.
 
 ## Install the plugin
 
@@ -27,7 +23,7 @@ To keep chats in your own account, run your own Relay Everything server and make
    ```
 
 2. When Claude Code asks for the **Relay Everything connect code**, paste the code. Claude Code keeps it in your system's secure store.
-3. Delete the code's private page.
+3. Close the page that shows the code: it does not show again.
 
 Chats from then on are saved. Chats from before the install are not sent.
 
@@ -53,7 +49,7 @@ Your AI can search the chats too: the [AI connector](../connect-your-ai/) has th
 
 - **In one project:** type `/relay:saving off` in Claude Code. Type `/relay:saving on` to save again, or `/relay:saving` to see which it is and when the project last sent a chat.
 - **For one run:** start Claude Code with `RELAY_SAVE=0 claude`.
-- **On one computer:** turn the key off with `node scripts/relay-device-key.mjs revoke --name "Laptop"`, or remove the plugin with `/plugin uninstall relay@relay`.
+- **On one computer:** click **Turn off** beside its key on your Relay Everything page, or remove the plugin with `/plugin uninstall relay@relay`.
 
 ## Delete a chat
 
@@ -61,7 +57,7 @@ Open the chat on the Relay Everything page, click **Delete**, then confirm. Rela
 
 ## What the server receives
 
-The plugin calls two routes with the chat key, `CF-Access-Client-Id` and `CF-Access-Client-Secret`, as headers.
+The plugin calls two routes with the chat key in the header `Authorization: Bearer rek_…`.
 
 `POST https://<your-relay-server>/apps/relay/api/chats` adds a chat's new messages:
 

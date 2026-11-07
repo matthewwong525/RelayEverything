@@ -13,6 +13,9 @@ export type Forward = {
   /** An MCP server at `path` under `base`, the one path passed on; `reads` names the tools that only look things up.
    *  wiki/stack/company-api.md#use-an-mcp-server-through-the-app */
   mcp?: { path: string; reads: readonly string[] };
+  /** A token address on base's host: the app trades the ID (`<secret>_ID`) and the secret there for a short token,
+   *  by the client-credentials grant, and sends that. wiki/stack/connect-your-tools.md */
+  exchange?: { url: string };
 };
 type Key = {
   title: string;
@@ -42,9 +45,6 @@ export const keys = {
   // saves a change and saves knowledge, Write also publishes. ARTIFACTS stands in for the secrets on Cloudflare.
   code: { title: "Project code", purpose: "This project's own code and company knowledge, to install, read and save them", secrets: ["WONG_CODE_READ", "WONG_CODE_WRITE"], levels: ["read", "write"], alone: true, bindings: ["ARTIFACTS", "CODE_CHECKS"],
     liveOnly: true },
-  // The secret the Pebble app signs each ring note with: Relay's webhook route checks it. relay-app-first-version
-  "relay-pebble-signing": { title: "Pebble webhook signing", purpose: "Check that a ring note really came from your Pebble app",
-    secrets: ["RELAY_PEBBLE_SIGNING"], levels: ["read"] },
   // Add a key as: stripe: { title: "Stripe", purpose: "Payments and refunds", secrets: ["STRIPE_SECRET_KEY"] },
   // Direct use adds `forward` and `docs: "https://docs.stripe.com/api"`: wiki/stack/company-api.md#use-a-key-directly
 

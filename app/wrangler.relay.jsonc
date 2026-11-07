@@ -1,0 +1,57 @@
+// Relay Everything's shared server: worker/relay-only.ts on its own address, outside Access, where anyone can sign
+// up. It shares the app's database, bucket and queue; the app consumes the live queue. wiki/relay-spaces.md
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "relay-everything-server",
+  "main": "worker/relay-only.ts",
+  "compatibility_date": "2026-07-28",
+  "compatibility_flags": ["nodejs_compat", "disallow_importable_env"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": { "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": true },
+  // The sign-in's public IDs; its keys are secrets: app/.dev.vars.example. WONG_OWNER_EMAIL may always sign up.
+  "vars": {
+    "WONG_ENVIRONMENT": "production",
+    "WONG_OWNER_EMAIL": "matthewwong525@gmail.com",
+    "RELAY_SIGN_UP": "open",
+    "RELAY_SIGN_IN_FROM": "sign-in@relayeverything.com",
+    "RELAY_APPLE_SERVICES_ID": "com.matthewwong525.relayeverything.signin",
+    "RELAY_GOOGLE_CLIENT_ID": "20665982462-kf2e6v2vd3jofia52g0d9p5vn1gt4hfu.apps.googleusercontent.com",
+    "RELAY_MCP_CALLBACK": "https://relay-everything-mcp.matthewwong525.workers.dev/callback"
+  },
+  // Relay Everything's own address; the company app answers at admin.relayeverything.com: wiki/relay-spaces.md
+  "routes": [{ "pattern": "app.relayeverything.com", "custom_domain": true }],
+  "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db", "database_id": "9f8aa624-0d1c-4abf-902a-7b9430286378", "migrations_dir": "../schema/migrations" }],
+  "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes" }],
+  "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks" }] },
+  "send_email": [{ "name": "RELAY_EMAIL" }],
+  "ratelimits": [{ "name": "RELAY_SIGN_IN_LIMIT", "namespace_id": "2101", "simple": { "limit": 10, "period": 60 } }],
+  "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces" }] },
+  "services": [{ "binding": "RELAY_MCP", "service": "relay-everything-mcp", "entrypoint": "Grants" }],
+  "env": {
+    "staging": {
+      "name": "relay-everything-server-staging",
+      "vars": {
+        "WONG_ENVIRONMENT": "staging",
+        "WONG_OWNER_EMAIL": "matthewwong525@gmail.com",
+        "RELAY_SIGN_UP": "open",
+        "RELAY_SIGN_IN_FROM": "sign-in@relayeverything.com",
+        "RELAY_APPLE_SERVICES_ID": "com.matthewwong525.relayeverything.signin",
+        "RELAY_GOOGLE_CLIENT_ID": "20665982462-kf2e6v2vd3jofia52g0d9p5vn1gt4hfu.apps.googleusercontent.com",
+        "RELAY_MCP_CALLBACK": "https://relay-everything-mcp-staging.matthewwong525.workers.dev/callback"
+      },
+      "routes": [{ "pattern": "app-staging.relayeverything.com", "custom_domain": true }],
+      "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db-staging", "database_id": "4f8edf18-ad51-4325-bb98-ec3ca6cc80b0", "migrations_dir": "../schema/migrations" }],
+      "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes-staging" }],
+      // On staging this server has its own queue, because the company app's staging Worker has no SPACES.
+      "queues": {
+        "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-server-webhooks-staging" }],
+        "consumers": [{ "queue": "relay-everything-server-webhooks-staging", "max_batch_size": 10, "max_retries": 10 }]
+      },
+      "send_email": [{ "name": "RELAY_EMAIL" }],
+      "ratelimits": [{ "name": "RELAY_SIGN_IN_LIMIT", "namespace_id": "2102", "simple": { "limit": 10, "period": 60 } }],
+      "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces-staging" }] },
+      "services": [{ "binding": "RELAY_MCP", "service": "relay-everything-mcp-staging", "entrypoint": "Grants" }]
+    }
+  }
+}

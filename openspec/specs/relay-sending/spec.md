@@ -23,15 +23,15 @@ A newly installed Relay phone app SHALL let the person write and read notes with
 
 ### Requirement: Health and location history only while sending
 
-The app SHALL read health samples and record location history only while sending is on, and SHALL keep no copy of either while sending is off.
+The app SHALL read health samples, calendar events for sending, and record location history only while sending is on, and SHALL keep no copy of any of them while sending is off.
 
 #### Scenario: Sending is off
 - **WHEN** the person has never turned sending on
-- **THEN** the app asks for no health or background-location permission and stores no samples or points
+- **THEN** the app asks for no health, calendar or background-location permission, and stores no samples, events or points
 
 #### Scenario: Sending turned off with uploads waiting
-- **WHEN** the person turns sending off while health samples or location points are still waiting to go
-- **THEN** the app deletes them, stops reading health and recording location, and keeps every note
+- **WHEN** the person turns sending off while health samples, calendar events or location points are still waiting to go
+- **THEN** the app deletes them, stops reading health and the calendar and recording location, and keeps every note
 
 ### Requirement: Earlier notes go only when the person says so
 
@@ -52,3 +52,19 @@ Turning sending off SHALL stop all sending, keep every note on the phone, and le
 #### Scenario: Off and on again
 - **WHEN** the person turns sending off and later back on
 - **THEN** the server still holds the notes sent before, and the phone sends again without a new key
+
+### Requirement: Sending goes to one place the person picks
+
+When the person turns sending on, the app SHALL ask where to send: their Relay Everything server or their own webhook. It SHALL send to that one place only, never both. The offline default, the earlier-notes question, health and location only while sending, and turning sending off SHALL work the same for both places.
+
+#### Scenario: Switching from the server to a webhook
+- **WHEN** the person sends to the server, then picks their own webhook with items still waiting
+- **THEN** the waiting items go to the webhook, and nothing more goes to the server
+
+#### Scenario: Earlier notes with a webhook
+- **WHEN** the person picks their own webhook with 12 notes that never left the phone
+- **THEN** the app asks whether to send the 12, and sends them to the webhook only on a yes
+
+#### Scenario: Settings names the place
+- **WHEN** the person opens Settings with sending on
+- **THEN** Settings shows where the phone sends, and in webhook mode says that nothing goes to Relay Everything

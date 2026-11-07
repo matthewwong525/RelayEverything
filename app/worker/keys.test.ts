@@ -4,7 +4,9 @@ import { keyProblems, undescribed } from "./key-rules";
 import { keys } from "./keys";
 
 // The core's own key for the sign-in list is no business key: no route lists it and Access shows no level for it.
-const CORE = ["WONG_ACCESS_LOGIN_MANAGEMENT"];
+// So are Relay Everything's own sign-in secrets: only its server's sign-in reads them (apps/relay/sign-in/oidc.ts).
+const CORE = ["WONG_ACCESS_LOGIN_MANAGEMENT", "RELAY_APPLE_SIGN_IN_KEY", "RELAY_APPLE_SIGN_IN_KEY_ID", "RELAY_GOOGLE_SIGN_IN_SECRET",
+  "RELAY_APPLE_TEAM_ID"];
 type Registry = Record<string, { secrets: readonly string[] }>;
 /** The names a file declares, and the setup-made `WONG_` names it keeps commented out. */
 const names = (text: string) => [...text.matchAll(/^(?:# (?=WONG_)|export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/gm)]
@@ -49,4 +51,16 @@ it("every key says what it is for, and a key used directly links its service's A
   expect(undescribed({ notion: { purpose: "Team notes", forward: {} } })).toEqual(["notion: a key used directly needs docs, the service's API guide"]);
   expect(undescribed({ notion: { purpose: "Team notes", forward: {}, docs: "http://developers.notion.com" } })).toEqual(["notion: docs must be an HTTPS address"]);
   expect(undescribed({ notion: { purpose: "Team notes", forward: {}, docs: "https://developers.notion.com/reference" } })).toEqual([]);
+});
+
+it("a key that trades an ID and a secret for a token names both, on its own HTTPS host, and never with an MCP server", () => {
+  const shop = (forward: object, secrets = ["SHOP_KEY", "SHOP_KEY_ID"]) => keyProblems({ shop: { purpose: "Store orders", docs: "https://shop.example/docs", secrets,
+    forward: { base: "https://shop.example/admin/", secret: "SHOP_KEY", header: "X-Shop-Token", ...forward } } });
+  const token = "https://shop.example/admin/oauth/access_token";
+  expect(shop({ exchange: { url: token } })).toEqual([]);
+  expect(shop({ exchange: { url: token } }, ["SHOP_KEY"])).toEqual(["shop: a token address needs the ID's secret too: the secret's name and _ID"]);
+  expect(shop({ exchange: { url: token }, mcp: { path: "mcp", reads: [] } })).toEqual(["shop: a token address goes with an API, not an MCP server"]);
+  for (const url of ["http://shop.example/token", "https://other.example/token", "https://user:pass@shop.example/token", "not an address"]) {
+    expect(shop({ exchange: { url } })).toEqual([`shop: the token address ${url} must be HTTPS on base's own host`]);
+  }
 });

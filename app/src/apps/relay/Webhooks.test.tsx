@@ -2,7 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { Webhook } from "./read";
+import type { Webhook, WebhookKind } from "./read";
 import { Webhooks } from "./Webhooks";
 
 const NOW = Date.now();
@@ -10,14 +10,21 @@ const DAY = 86_400_000;
 const hook = (id: string, more: Partial<Webhook> = {}): Webhook => ({ id, name: `Database ${id}`, url: `https://db${id}.example.com/relay`,
   kinds: ["notes"], state: "working", waiting: 0, lastStatus: null, lastError: null, lastSentAt: null, nextTryAt: null, failingSince: null,
   createdAt: NOW, attempts: [], ...more });
-const WORKING = hook("1", { kinds: ["notes", "health", "locations"], waiting: 3, lastStatus: 200, lastSentAt: NOW });
+const WORKING = hook("1", { kinds: ["notes", "health", "locations", "calendar"], waiting: 3, lastStatus: 200, lastSentAt: NOW });
 const FAILING = hook("2", { state: "failing", waiting: 12, lastStatus: 503, lastError: "Answered 503.", failingSince: NOW, nextTryAt: NOW + DAY });
 const PAUSED = hook("3", { state: "paused" });
 
 type Call = { route: string; input: Record<string, unknown> | null };
 let calls: Call[];
 let answer: (call: Call) => Response | Promise<Response>;
-const list = (webhooks: Webhook[]) => (call: Call) => call.route === "webhooks" && !call.input ? Response.json({ webhooks }) : refuse(call);
+/** The kinds as the server lists them today. */
+const KINDS: WebhookKind[] = [
+  { id: "notes", label: "Notes", detail: "with their words, recording and place", always: true, sensitive: false },
+  { id: "health", label: "Health", detail: "steps, heart rate, sleep, weight and more", always: false, sensitive: true },
+  { id: "locations", label: "Location history", detail: "", always: false, sensitive: true },
+  { id: "calendar", label: "Calendar", detail: "new, changed and removed events", always: false, sensitive: true }];
+const list = (webhooks: Webhook[], kinds = KINDS) => (call: Call) =>
+  call.route === "webhooks" && !call.input ? Response.json({ webhooks, kinds }) : refuse(call);
 const refuse = (call: Call): Response => { throw new Error(`Unexpected route: ${call.route}`); };
 beforeEach(() => {
   calls = [];
@@ -58,7 +65,7 @@ it("shows each webhook's state, what it takes, what waits and its last answer", 
   await open();
   const working = card("Database 1");
   expect(working.getByText("Working")).toBeTruthy();
-  expect(working.getByText(/^db1\.example\.com · notes, health, location history · 3 waiting · last sent .+ · last answer: answered 200$/)).toBeTruthy();
+  expect(working.getByText(/^db1\.example\.com · notes, health, location history, calendar · 3 waiting · last sent .+ · last answer: answered 200$/)).toBeTruthy();
   expect(card("Database 2").getByText(/12 waiting · next try .+ · failing since .+ · last answer: Answered 503\.$/)).toBeTruthy();
   expect(card("Database 2").getByText("Failing")).toBeTruthy();
   expect(card("Database 3").getByText(/· nothing sent yet$/)).toBeTruthy();
@@ -66,8 +73,9 @@ it("shows each webhook's state, what it takes, what waits and its last answer", 
 });
 
 it("adds a webhook with the kinds ticked, shows its secret once, and starts fresh the next time", async () => {
-  answer = () => Promise.reject(new TypeError("offline"));
+  answer = list([]);
   await open();
+  answer = () => Promise.reject(new TypeError("offline"));
   await press("Add a webhook");
   const dialog = within(screen.getByRole("dialog", { name: "Add a webhook" }));
   fireEvent.change(dialog.getByLabelText("Address"), { target: { value: "https://db.example.com/relay" } });
@@ -89,13 +97,43 @@ it("adds a webhook with the kinds ticked, shows its secret once, and starts fres
   expect((again.getByLabelText("Address") as HTMLInputElement).value).toBe("https://");
   fireEvent.change(again.getByLabelText("Name"), { target: { value: "  Archive " } });
   fireEvent.click(again.getByRole("checkbox", { name: "Location history" }));
+  fireEvent.click(again.getByRole("checkbox", { name: /Calendar/ }));
   answer = () => Response.json({ webhook: hook("10", { name: "Archive" }), secret: "whsec_second" });
   await press("Add", again);
-  expect(posts().at(-1)?.input).toMatchObject({ name: "Archive", kinds: ["locations"] });
+  expect(posts().at(-1)?.input).toMatchObject({ name: "Archive", kinds: ["locations", "calendar"] });
   await press("Done");
   await press("Add a webhook");
   await press("Cancel");
   expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("draws the ticks and the card's names from the kinds the server lists, and offers no form before it has them", async () => {
+  answer = () => Promise.reject(new TypeError("offline"));
+  await open();
+  expect(screen.queryByRole("button", { name: "Add a webhook" })).toBeNull();
+  const texts = { id: "texts", label: "Texts", detail: "each message you send and get", always: false, sensitive: true };
+  answer = list([hook("4", { kinds: ["notes", "texts"] })], [KINDS[0], KINDS[3], texts]);
+  await press("Try again");
+  expect(card("Database 4").getByText(/^db4\.example\.com · notes, texts · /)).toBeTruthy();
+  await press("Add a webhook");
+  const dialog = within(screen.getByRole("dialog", { name: "Add a webhook" }));
+  expect(dialog.getByText("Notes always go, with their words, recording and place.")).toBeTruthy();
+  expect(dialog.getAllByRole("checkbox").map(box => box.parentElement?.textContent)).toEqual(
+    ["Calendar: new, changed and removed events", "Texts: each message you send and get"]);
+  expect(dialog.getByText("Calendar and texts are sensitive. Tick each only for a database you control.")).toBeTruthy();
+  fireEvent.change(dialog.getByLabelText("Address"), { target: { value: "https://db.example.com/relay" } });
+  fireEvent.click(dialog.getByRole("checkbox", { name: /Texts/ }));
+  answer = () => Response.json({ webhook: hook("9", { kinds: ["notes", "texts"] }), secret: "whsec_example" });
+  await press("Add", dialog);
+  expect(posts().at(-1)?.input).toMatchObject({ kinds: ["texts"] });
+});
+
+it("names a kind the server did not list by its id, and says one sensitive kind is sensitive", async () => {
+  answer = list([hook("5", { kinds: ["notes", "texts"] })], [KINDS[0], KINDS[3]]);
+  await open();
+  expect(card("Database 5").getByText(/^db5\.example\.com · notes, texts · /)).toBeTruthy();
+  await press("Add a webhook");
+  expect(screen.getByText("Calendar is sensitive. Tick each only for a database you control.")).toBeTruthy();
 });
 
 it("sends a test and says what came back, or why nothing did", async () => {

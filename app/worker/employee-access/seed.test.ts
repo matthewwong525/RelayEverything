@@ -25,7 +25,7 @@ it('staging starts with practice people, the Admin role and two more, one Admin 
     const helpers = { apps: ['hello'], keys: { cloudflare: 'read', code: 'read' } };
     const nothing = { apps: [], keys: {} };
     const dana = ['hello'];
-    const everything = { apps: built, keys: { cloudflare: 'read', code: 'write', 'relay-pebble-signing': 'read' } };
+    const everything = { apps: built, keys: { cloudflare: 'read', code: 'write' } };
     const sets = Object.fromEntries([...opened.roles, ...opened.people].map(({ name, email, apps, keys }) => [name ?? email, { apps, keys }]));
     expect(sets).toEqual({ Admin: everything, 'fay@example.invalid': everything, Helpers: helpers, Trainees: nothing, 'ada@example.invalid': helpers, 'bo@example.invalid': helpers, 'casey@example.invalid': nothing,
       'dana@example.invalid': { apps: dana, keys: { cloudflare: 'read', code: 'write' } }, 'eli@example.invalid': nothing });
@@ -47,10 +47,9 @@ it('staging starts with practice people, the Admin role and two more, one Admin 
     // The old manager switch is seeded with nobody, and nothing is stored for what Admin gives.
     expect(sql.prepare('SELECT email FROM wong_access_managers').all()).toEqual([]);
     expect(sql.prepare("SELECT COUNT(*) count FROM wong_access_role_apps WHERE role_id = 'admin'").get()).toEqual({ count: 0 });
-    // The Cloudflare key and Project code work alone; Relay's Pebble key belongs to Relay.
+    // The Cloudflare key and Project code work alone.
     expect(opened.keys).toMatchObject([{ id: 'cloudflare', title: 'Cloudflare', levels: ['read'], saved: false, setup: true, alone: true },
-      { id: 'code', title: 'Project code', levels: ['read', 'write'], saved: false, setup: false, alone: true },
-      { id: 'relay-pebble-signing', title: 'Pebble webhook signing', levels: ['read'], saved: false, setup: false, alone: false }]);
+      { id: 'code', title: 'Project code', levels: ['read', 'write'], saved: false, setup: false, alone: true }]);
     expect(await currentPolicy(env, practice('ada@example.invalid'))).toMatchObject({ state: 'current', role: 'employee', apps: new Set(['hello']), keys: new Map([['cloudflare', 'read'], ['code', 'read']]) });
     expect(await currentPolicy(env, practice('casey@example.invalid'))).toEqual({ state: 'denied' });
     // Dana has her own apps and levels and manages nothing.
@@ -58,7 +57,7 @@ it('staging starts with practice people, the Admin role and two more, one Admin 
     expect(await currentPolicy(env, practice('dana@example.invalid'))).toMatchObject({ state: 'current', role: 'employee', manages: false,
       apps: new Set(dana), keys: new Map([['cloudflare', 'read'], ['code', 'write']]) });
     expect(await currentPolicy(env, practice('fay@example.invalid'))).toMatchObject({ state: 'current', role: 'employee', manages: true,
-      apps: new Set(catalogue()), keys: new Map([['cloudflare', 'read'], ['code', 'write'], ['relay-pebble-signing', 'read']]) });
+      apps: new Set(catalogue()), keys: new Map([['cloudflare', 'read'], ['code', 'write']]) });
     expect((await management(req('status', 'GET'), env, practice('dana@example.invalid'))).status).toBe(403);
     // Eli holds no app: Hello is refused whole, a look-up too. Dana's Hello is whole.
     for (const [email, allowed] of [['eli@example.invalid', false], ['dana@example.invalid', true]] as const) {
@@ -87,7 +86,7 @@ it('on a preview, a signed-in person the practice list does not name gets every 
     const pusher = practice('pusher@example.invalid');
     const opened = await currentPolicy(env, pusher);
     expect(opened).toMatchObject({ state: 'current', role: 'employee', manages: false, apps: new Set(catalogue()), keysStarted: true,
-      keys: new Map([['cloudflare', 'read'], ['code', 'write'], ['relay-pebble-signing', 'read']]) });
+      keys: new Map([['cloudflare', 'read'], ['code', 'write']]) });
     expect([policyAllows(opened, { apps: ['hello'] }), policyAllows(opened, { kind: 'owner' })]).toEqual([true, false]);
     expect((await management(req('status', 'GET'), env, pusher)).status).toBe(403);
     // The live app refuses them, and a service token is no person.

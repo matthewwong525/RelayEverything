@@ -5,22 +5,22 @@ Receive every note Matthew captures, from the Pebble ring or typed on a phone, e
 
 ## Requirements
 
-### Requirement: Signed ring notes are received once
+### Requirement: A note keeps the place it came with
 
-Relay SHALL accept a Pebble Index webhook (version 1) only when its HMAC-SHA256 signature matches the saved signing secret and its timestamp is within five minutes, and SHALL store each `X-Index-Delivery` at most once.
+A note SHALL keep the location its phone sent with it, or none. The server SHALL NOT give a note a place later from location history, and SHALL NOT change the place of a note it already holds.
 
-#### Scenario: A ring note arrives twice
-- **WHEN** Pebble's app sends the same signed delivery again after a timeout
-- **THEN** Relay answers success both times and keeps one note with its transcript and audio
+#### Scenario: A typed note with a place
+- **WHEN** a phone sends a typed note with its location
+- **THEN** the timeline shows the note at that place
 
-#### Scenario: A forged or stale request
-- **WHEN** a request has a wrong signature, an unsupported version, or a timestamp over five minutes old
-- **THEN** Relay refuses it and stores nothing
+#### Scenario: A location batch after an old ring note
+- **WHEN** a location batch arrives with points near the time of a stored ring note that has no place
+- **THEN** the ring note still has no place, and no webhook gets a message about it
 
-### Requirement: Every note carries a place when one is known
+### Requirement: The server takes no Pebble webhook
 
-A typed note SHALL keep the location the phone sent with it; a ring note SHALL take the nearest location-history point within 10 minutes of its recording time, or none.
+The server SHALL have no route for the Pebble app's Index webhook, and SHALL make and keep no Pebble signing secret.
 
-#### Scenario: A ring note during a walk
-- **WHEN** a ring note is recorded 3 minutes after a stored location point
-- **THEN** the timeline shows it at that point's place
+#### Scenario: A Pebble app still sends
+- **WHEN** a Pebble app posts a signed ring note to the old Pebble address with a live device key
+- **THEN** the server refuses it, as it refuses a phone key at any address the key does not reach, and stores nothing

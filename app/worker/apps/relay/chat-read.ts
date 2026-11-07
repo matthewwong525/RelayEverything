@@ -1,10 +1,10 @@
-// GET chats, GET chat and DELETE chat: the owner's saved chats on the Relay page. No device key reaches them: the
-// gate in device.ts lets a chat key only send, and each handler refuses every device key too.
+// GET chats, GET chat and DELETE chat: a person's saved chats on the Relay Everything page, from their own space. No
+// device key reaches them: the gate in caller.ts lets a chat key only send, and each handler refuses one too.
 import { z } from "zod";
-import { defineAction, type Action } from "../../api/contract.ts";
-import { deviceOf } from "./device.ts";
+import { defineAction, type Action, type ActionCall } from "../../api/contract.ts";
+import { asPerson } from "./caller.ts";
 import { chatById, chatMessages, chatPage } from "./queries.ts";
-import { refused, session, time, type Db } from "./store.ts";
+import { time, type Db } from "./store.ts";
 
 const PAGE = 30;
 const PART = 200;
@@ -19,9 +19,9 @@ const save = z.strictObject({ id: z.string(), title: z.string(), text: z.string(
 const message = z.strictObject({ seq: z.number(), role: z.enum(["you", "ai", "step"]).describe("Yours, the AI's, or one step the AI took."),
   text: z.string(), at: z.number() });
 
-/** An owner's route: any device key is refused before `run`. */
-const owners = (run: (db: Db, input: never) => Promise<Response>): Action["handler"] => async (_request, env, { identity, input }) =>
-  await deviceOf(env, identity) ? refused(403, "A device key can't read or delete chats.") : run(session(env), input as never);
+/** A person's route in their own space: any device key is refused before `run`. */
+const owners = (run: (db: Db, input: never) => Promise<Response>): Action["handler"] =>
+  asPerson<ActionCall>(({ space, call }) => run(space.db, call.input as never));
 
 export const chatList = defineAction({
   operationId: "relay.chats", summary: "List the chats",
@@ -33,7 +33,7 @@ export const chatList = defineAction({
     limit: z.number().int().min(1).max(100).optional().describe(`How many chats, ${PAGE} when left out.`),
   }),
   output: z.strictObject({ chats: z.array(chat), next: z.number().nullable(), nextId: z.string().nullable() }),
-  encoding: "query", effect: "read", agentAvailable: false, errors: {}, examples: [],
+  encoding: "query", effect: "read", agentAvailable: false, requiresIdentity: false, errors: {}, examples: [],
   handler: owners(async (db, { q = "", before, beforeId, limit = PAGE }: { q?: string; before?: number; beforeId?: string; limit?: number }) =>
     Response.json(await chatPage(db, { before, beforeId, words: q.split(/\s+/).filter(Boolean).slice(0, 10), limit }))),
 });
@@ -46,7 +46,7 @@ export const chatRead = defineAction({
     limit: z.number().int().min(1).max(PART).optional().describe(`How many messages, ${PART} when left out.`),
   }),
   output: z.strictObject({ chat, saves: z.array(save), messages: z.array(message), next: z.number().nullable() }),
-  encoding: "query", effect: "read", agentAvailable: false, errors: ERRORS, examples: [],
+  encoding: "query", effect: "read", agentAvailable: false, requiresIdentity: false, errors: ERRORS, examples: [],
   limits: { inputBytes: 4096, outputBytes: 4_194_304, timeoutMs: 15_000 },
   handler: owners(async (db, { id: chatId, after = -1, limit = PART }: { id: string; after?: number; limit?: number }) => {
     const found = await chatById(db, chatId);
@@ -60,7 +60,7 @@ export const chatDelete = defineAction({
   operationId: "relay.chat-delete", summary: "Delete a chat",
   description: "Delete one chat with its messages and AI saves. It can't be brought back.",
   input: z.strictObject({ id }), output: z.strictObject({ id: z.string() }), encoding: "query", effect: "write", agentAvailable: false,
-  confirmWith: "relay.chat", errors: ERRORS, examples: [],
+  requiresIdentity: false, confirmWith: "relay.chat", errors: ERRORS, examples: [],
   handler: owners(async (db, { id: chatId }: { id: string }) => {
     if (!await db.prepare("SELECT id FROM relay_chats WHERE id = ?").bind(chatId).first()) return notFound();
     // D1 deletes the children by their foreign keys too; the batch deletes them by name, so no row depends on that.

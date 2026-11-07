@@ -1,0 +1,28 @@
+// Relay Everything's spaces Worker: one Durable Object per person, which the app and the AI connector bind by name.
+// It deploys before both (scripts/cf-deploy.sh) and has no web address. wiki/relay-spaces.md
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "relay-everything-spaces",
+  "main": "worker/spaces-worker.ts",
+  "compatibility_date": "2026-07-28",
+  "compatibility_flags": ["nodejs_compat", "disallow_importable_env"],
+  "workers_dev": false,
+  "preview_urls": false,
+  // Each space runs schema/space-migrations/*.sql, which the Worker takes in as text.
+  "rules": [{ "type": "Text", "globs": ["**/*.sql"], "fallthrough": true }],
+  "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Space"] }],
+  "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks" }] },
+  "env": {
+    "staging": {
+      "name": "relay-everything-spaces-staging",
+      "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space" }] },
+      "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks-staging" }] }
+    },
+    "local": {
+      "name": "relay-everything-spaces-local",
+      "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space" }] },
+      "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks-local" }] }
+    }
+  }
+}

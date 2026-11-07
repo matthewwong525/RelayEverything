@@ -5,13 +5,21 @@ Let each phone and the Pebble app reach Relay with a key of its own, reaching no
 
 ## Requirements
 
-### Requirement: A device key reaches only Relay
+### Requirement: One device key can be turned off alone
 
-A device key SHALL pass the site's login only to Relay's routes that add data, and to a key check that answers only that key's own device name. It SHALL NOT list, read or delete any note, recording, sample, point or chat; every other page and route SHALL refuse it. This SHALL hold on every Relay server, Matthew's and each install.
+Turning off a device's key SHALL stop that device at its next request and leave other devices working. Making a key SHALL give only the key and its QR code text, and no signing secret.
 
-#### Scenario: A phone key tries another app
-- **WHEN** a request with a phone's key asks for another app's route
-- **THEN** it is refused
+#### Scenario: A lost phone
+- **WHEN** Matthew turns off the Android phone's key
+- **THEN** that phone's next sync is refused and the iPhone and Claude Code keep working
+
+#### Scenario: A new phone key
+- **WHEN** a person makes a phone key on the Relay Everything page
+- **THEN** the page shows the key and its QR code once, and no signing secret
+
+### Requirement: A device key adds only to its own person's space
+
+A person SHALL make each device's key on their Relay Everything page, which SHALL show it once, or, for a phone, by signing in from the Relay Everything app and confirming that phone on the page. A key made from the app SHALL go to that phone only, through a code that works once and only for a few minutes, and SHALL never show. A phone key or a chat key SHALL reach only the routes that add data, and a key check that answers only that key's own device name. It SHALL add data only to the space of the person who made it, and SHALL NOT list, read or delete any note, recording, sample, point or chat. This SHALL hold on every Relay Everything server.
 
 #### Scenario: A phone key tries to read notes
 - **WHEN** a request with a phone's key asks for the timeline or a recording
@@ -21,22 +29,38 @@ A device key SHALL pass the site's login only to Relay's routes that add data, a
 - **WHEN** a phone connects and checks its key
 - **THEN** the server answers with that key's device name and no data
 
-### Requirement: One key can be revoked alone
+#### Scenario: A key shown once
+- **WHEN** a person closes the page that showed a new key
+- **THEN** the page never shows that key again
 
-Revoking a device's key SHALL stop that device at its next request and leave other devices working.
+#### Scenario: Connect by signing in from the app
+- **WHEN** a person taps *Sign in to connect*, signs in, and taps *Connect* on *Connect this phone?*
+- **THEN** the phone keeps its own new key, the page lists the phone among the devices, and no screen shows the key
 
-#### Scenario: A lost phone
-- **WHEN** Matthew revokes the Android phone's key
-- **THEN** that phone's next sync is refused and the iPhone and Pebble app keep working
+#### Scenario: A connect code used twice or by another app
+- **WHEN** a connect code is traded for a key a second time, after a few minutes, or without the secret the phone made when it started
+- **THEN** the server refuses it and makes no key
 
-### Requirement: Only devices and the checker pass as machines
+### Requirement: Only live device keys and the checker pass as machines
 
-The site SHALL refuse every service token that is neither an unrevoked device key nor its environment's checker, and the checker SHALL keep its usual access.
+The server SHALL refuse every machine key that is neither a device key still turned on nor its environment's checker. A key from a deleted account SHALL be refused.
 
-#### Scenario: A staging phone key after a staging reset
-- **WHEN** a staging reset empties the list of devices and a staging phone sends with its old key
-- **THEN** the site refuses it, and it does not count as the preview checker
+#### Scenario: A key after its account is deleted
+- **WHEN** a phone sends with a key whose account was deleted
+- **THEN** the server refuses it and stores nothing
 
 #### Scenario: The preview check
 - **WHEN** the preview checker opens a preview
 - **THEN** it reaches the site as before
+
+### Requirement: An API key reads and adds notes through the API
+
+A person SHALL be able to make an API key on their page, shown once like the other keys. An API key SHALL reach only the web API: it SHALL read the person's notes, health, places and saved chats there, and add notes, in that person's space only. It SHALL NOT reach the page's own routes, a phone's or a chat's send, or the AI connector's tools. Turning it off SHALL stop it at its next request.
+
+#### Scenario: A home server reads with its key
+- **WHEN** a script on a home server sends its API key to the web API and asks for today's notes
+- **THEN** it gets the person's notes for today
+
+#### Scenario: An API key on the page's routes
+- **WHEN** a request with an API key asks the page's own timeline or recording route
+- **THEN** it is refused

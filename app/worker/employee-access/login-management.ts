@@ -12,8 +12,10 @@ const authoritySchema = z.object({ version: z.literal([2, 3]), token: z.string()
   .strict().refine(authority => (authority.version === 3) === (authority.staging !== undefined));
 type Authority = z.infer<typeof authoritySchema>;
 const emailRule = z.object({ email: z.object({ email: z.email() }).strict() }).strict();
+// Cloudflare's app-scoped policy list can leave `session_duration` out: an absent field stays absent on the write, so
+// Cloudflare keeps its own default. Never send null or an empty string in its place.
 const policySchema = z.object({ id: z.string(), name: z.string(), decision: z.literal("allow"),
-  include: z.array(emailRule), exclude: z.array(z.unknown()), require: z.array(z.unknown()), session_duration: z.string(), app_count: z.number().optional(), reusable: z.boolean().optional() }).passthrough();
+  include: z.array(emailRule), exclude: z.array(z.unknown()), require: z.array(z.unknown()), session_duration: z.string().optional(), app_count: z.number().optional(), reusable: z.boolean().optional() }).passthrough();
 type Policy = z.infer<typeof policySchema>;
 /** One application and its human policy, as read and reviewed. */
 type Reviewed = { path: string; policy: Policy };
@@ -27,9 +29,6 @@ const emails = (policy: Policy) => policy.include.map(rule => rule.email.email.t
 const readOnly = ["id", "created_at", "updated_at", "uid", "app_count"];
 // The lease (120 s) and the provider timeout (30 s) bound how long a lost write could still land.
 const SETTLED_MS = 150_000;
-
-/** The machine policy scripts/relay-device-key.mjs keeps; scripts/check-private-access.mjs knows it too. */
-const RELAY_DEVICES = "Relay devices";
 
 /** The key, read from the environment on each use; null until setup has supplied it. */
 export function loginAuthority(env: ConnectionEnv): Authority | null {
@@ -55,10 +54,8 @@ async function review(authority: Authority, appId: string, policyId: string, own
   if (app.id !== appId || !owned(app)) throw new AccessError("login_resource_mismatch");
   const policies = z.array(z.object({ id: z.string(), decision: z.string(), include: z.array(z.unknown()) }).passthrough())
     .parse(envelope(await provider(cf, `${path}/policies?per_page=1000`, authority.token)));
-  // An unreviewed allow/bypass policy must never become an alternate employee admission. Relay's device keys keep one
-  // machine policy of their own beside the checker's, held to the same service-token-only rule.
-  const devices = policies.filter(policy => policy.name === RELAY_DEVICES).length;
-  if (policies.length - Math.min(devices, 1) > 2 || policies.some(policy => policy.id !== policyId &&
+  // An unreviewed allow/bypass policy must never become an alternate employee admission.
+  if (policies.length > 2 || policies.some(policy => policy.id !== policyId &&
     (policy.decision !== "non_identity" || !policy.include.length || !policy.include.every(rule =>
       z.object({ service_token: z.object({ token_id: z.string().min(1) }).strict() }).strict().safeParse(rule).success)))) {
     throw new AccessError("login_policy_review_required");

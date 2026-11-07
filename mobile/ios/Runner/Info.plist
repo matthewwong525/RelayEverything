@@ -24,6 +24,17 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.matthewwong525.relayApp.connect</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>relayeverything</string>
+			</array>
+		</dict>
+	</array>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.matthewwong525.relay.sync</string>
@@ -32,14 +43,20 @@
 	<false/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Relay Everything records a voice note while you hold Hold to talk. The phone writes its words, and the recording never leaves the phone.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Relay Everything adds the photos you pick to a note.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Relay Everything uses the camera only to scan the QR code of your device key.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>With the calendar on, Relay Everything reads your events and sends them to your own Relay Everything server. It never changes an event.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>With the calendar on, Relay Everything reads your events and sends them to your own Relay Everything server. It never changes an event.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Relay Everything reads your steps, heart rate, sleep and workouts and sends them to your own Relay Everything server.</string>
+	<string>Relay Everything reads your steps, heart rate, sleep, workouts, weight, resting heart rate, heart rate variability, blood oxygen, blood pressure, cycle, mindful minutes and water, and sends them to your own Relay Everything server. You can leave any type off.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Relay Everything does not write to Health. iOS asks each app that reads Health for this text.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>With location history on, Relay Everything keeps a point each 100 m you move, so ring notes get a place. Turn it off in Relay Everything settings.</string>
+	<string>With location history on, Relay Everything keeps where you go, also while the app is closed, so ring notes get a place. Turn it off in Relay Everything settings.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Relay Everything adds where you are to each note you type.</string>
 	<key>UIBackgroundModes</key>

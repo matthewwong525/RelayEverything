@@ -12,6 +12,8 @@ const bootstrap = fileURLToPath(new URL('../scripts/employee-bootstrap.mjs', imp
 const relayOnly: Plugin = { name: 'relay-only', transformIndexHtml: { order: 'pre',
   handler: html => html.replace('/src/main.tsx', '/src/relay-only.tsx').replace('<title>Your apps</title>', '<title>Relay Everything</title>') } }
 const relayConfig = process.env.RELAY_CONFIG ?? '../self-host/wrangler.template.jsonc'
+// The spaces Worker bundles its migrations as text, as Wrangler's Text rule does on a deploy.
+const sqlText: Plugin = { name: 'sql-text', transform: (code, id) => id.endsWith('.sql') ? `export default ${JSON.stringify(code)};` : undefined }
 
 // https://vite.dev/config/
 export default defineConfig(({ command, mode }) => mode === 'relay-only' ? {
@@ -19,8 +21,9 @@ export default defineConfig(({ command, mode }) => mode === 'relay-only' ? {
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   build: { outDir: 'dist-relay' },
 } : {
-  // Local dev runs the live line's Worker beside the app; a build leaves it out, and cf-build.sh bundles it.
-  plugins: [react(), tailwindcss(), cloudflare(command === 'serve' ? { auxiliaryWorkers: [{ configPath: './wrangler.line.jsonc' }] } : {})],
+  // Local dev runs the live line's and the spaces' Workers beside the app; a build leaves them out.
+  plugins: [react(), tailwindcss(), sqlText, cloudflare(command === 'serve'
+    ? { auxiliaryWorkers: [{ configPath: './wrangler.line.jsonc' }, { configPath: './wrangler.spaces.jsonc' }] } : {})],
   // `@/` is app/src/, the address the ready-made parts import each other by.
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   // The dev server reads one file outside app/: the setup script setup-file.ts imports, which a build bundles anyway.

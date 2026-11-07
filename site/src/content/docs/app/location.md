@@ -3,7 +3,7 @@ title: Location
 description: Pin each note to a place, and keep a history of where you went.
 ---
 
-Relay Everything uses your location two ways: it pins each typed note to where you are, and, with sending on, it keeps a history of where you went, so ring notes get a place too.
+Relay Everything uses your location two ways: it pins each typed note to where you are, and, with sending on, it keeps a history of where you went.
 
 ## Pin notes to where I am
 
@@ -12,14 +12,21 @@ Relay Everything uses your location two ways: it pins each typed note to where y
 ## Location history
 
 1. Open **Settings**.
-2. Turn on **Send to Relay Everything**, if it is off: [Connect a phone](../../start/connect-a-phone/). Location history works only with sending on.
+2. Turn on **Send my notes**, if it is off: [Connect a phone](../../start/connect-a-phone/). Location history works only with sending on.
 3. Turn on **Location history**.
 4. Allow your location. An iPhone asks a second time: choose **Always Allow**, so the app can record when it is closed.
 
-The app keeps a point each 100 m you move, not a constant fix, so it uses little battery. On Android, the notification *Relay Everything is keeping your places* stays while it records: Android asks for this.
+On Android, the app keeps a point each 100 m you move, not a constant fix, so it uses little battery. The notification *Relay Everything is keeping your places* stays while it records: Android asks for this.
 
-A ring note takes the history point nearest in time, up to 10 minutes before or after you spoke.
+On an iPhone, the phone keeps the points while the app is closed, and the app sends them when it next runs. Under **Location history**, choose how often:
+
+- **Save battery** (the default): a point at each move of about 500 m, and when you arrive at a place or leave it. It uses almost no battery.
+- **Every 100 m**: a point each 100 m you move, or each 5 minutes while you stay. It uses more battery.
+
+If you close the app with a swipe up, the iPhone stops keeping points until you open the app again.
+
+Under **Location history**, **Settings** shows when the points last went, and how many wait, such as *Sent 14:05 · 12 points waiting*.
 
 ## Turn it off
 
-Turn off **Pin notes to where I am** or **Location history** in **Settings**. The phone stops at once. Turning off **Send to Relay Everything** also stops the history, and deletes the points that did not go yet. [Privacy](../../privacy/) says what the server keeps.
+Turn off **Pin notes to where I am** or **Location history** in **Settings**. The phone stops at once. Turning off **Send my notes** also stops the history, and deletes the points that did not go yet. [Privacy](../../privacy/) says what the server keeps.

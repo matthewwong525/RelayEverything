@@ -1,7 +1,8 @@
-// The connector's sign-in pages. /authorize asks the owner to approve the AI app by name, then sends them to the
-// Access for SaaS sign-in; /callback checks Access's ID token and admits only WONG_OWNER_EMAIL.
+// The connector's sign-in pages. /authorize asks the person to approve the AI app by name, then sends them to the
+// server's own sign-in; /callback trades the server's one-time code for the person whose space the app may use.
 import { AuthorizationError, type AuthRequest } from "@cloudflare/workers-oauth-provider";
-import { owner, type McpEnv } from "./env.ts";
+import { hashToken } from "../apps/relay/people.ts";
+import type { GrantProps, McpEnv } from "./env.ts";
 
 const html = (body: string, status = 200, headers = new Headers()) => {
   headers.set("Content-Type", "text/html; charset=utf-8");
@@ -23,13 +24,13 @@ async function consent(request: Request, env: McpEnv): Promise<Response> {
   const about = await env.OAUTH_PROVIDER.describeConsent(authRequest);
   const { handle, headers } = await env.OAUTH_PROVIDER.beginConsent(authRequest);
   return html(`<h1>Connect ${escape(about.clientName)} to Relay Everything?</h1>
-<p>It can then read your Relay Everything notes, health and places when you ask it. It can't change them.</p>
+<p>It can then read your Relay Everything notes, health, places and saved chats, and add notes, when you ask it. It can't change or delete them.</p>
 <p>Its answers go to <b>${escape(about.redirectHost)}</b>.${about.redirectIsLoopback ? " That is an app on this computer." : ""}</p>
 <form method="post"><input type="hidden" name="handle" value="${escape(handle)}">
 <button name="choice" value="approve">Connect</button> <button name="choice" value="deny">Cancel</button></form>`, 200, headers);
 }
 
-/** The approve or cancel button: cancel goes back to the app, approve on to the Access sign-in. */
+/** The approve or cancel button: cancel goes back to the app, approve on to the server's own sign-in. */
 async function chosen(request: Request, env: McpEnv): Promise<Response> {
   const form = await request.formData();
   const handle = String(form.get("handle") ?? "");
@@ -39,51 +40,33 @@ async function chosen(request: Request, env: McpEnv): Promise<Response> {
   }
   const approved = await env.OAUTH_PROVIDER.approveConsent(request, handle);
   const { state, headers } = await env.OAUTH_PROVIDER.beginUpstream(approved.request, { headers: approved.headers });
-  const signIn = new URL(env.ACCESS_AUTHORIZATION_URL);
-  signIn.search = new URLSearchParams({ client_id: env.ACCESS_CLIENT_ID, redirect_uri: new URL("/callback", request.url).href,
-    response_type: "code", scope: "openid email", state }).toString();
+  const signIn = new URL("/apps/relay/sign-in/connect", env.RELAY_SERVER_URL);
+  signIn.searchParams.set("state", state);
   headers.set("Location", signIn.href);
   return new Response(null, { status: 302, headers });
 }
 
-type Claims = { aud?: string | string[]; exp?: number; email?: string };
-const decode = (segment: string) => Uint8Array.from(atob(segment.replace(/-/g, "+").replace(/_/g, "/")), char => char.charCodeAt(0));
-const json = <T>(segment: string) => JSON.parse(new TextDecoder().decode(decode(segment))) as T;
-
-/** The ID token's claims when Access signed it for this connector and it has not expired; null otherwise. */
-export async function verifyIdToken(token: string, env: Pick<McpEnv, "ACCESS_JWKS_URL" | "ACCESS_CLIENT_ID">): Promise<Claims | null> {
-  try {
-    const [head, body, signature] = token.split(".");
-    const { kid, alg } = json<{ kid?: string; alg?: string }>(head);
-    if (alg !== "RS256") return null;
-    const { keys } = await (await fetch(env.ACCESS_JWKS_URL)).json<{ keys: (JsonWebKey & { kid?: string })[] }>();
-    const jwk = keys.find(key => key.kid === kid);
-    if (!jwk) return null;
-    const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
-    if (!await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, decode(signature), new TextEncoder().encode(`${head}.${body}`))) return null;
-    const claims = json<Claims>(body);
-    const audiences = [claims.aud].flat();
-    return audiences.includes(env.ACCESS_CLIENT_ID) && typeof claims.exp === "number" && claims.exp > Date.now() / 1000 ? claims : null;
-  } catch {
-    return null;
-  }
+/** Trades the server's code for its person, once: the code is gone after this, and after 5 minutes. */
+async function personOf(env: McpEnv, code: string): Promise<string | null> {
+  const found = await env.DB.withSession("first-primary").prepare("DELETE FROM relay_connect_codes WHERE code_sha256 = ? AND expires_at > ? RETURNING person_id")
+    .bind(await hashToken(code), Date.now()).first<{ person_id: string }>();
+  return found?.person_id ?? null;
 }
 
-/** Access sends the owner back here: trade the code for an ID token, check it, then let the AI app in. */
+/** The server sends the signed-in person back here with a code: trade it for the person, then let the app in. Its
+ *  grant may add notes, as the consent page said, under a device of its own, made on its first note. */
 async function callback(request: Request, env: McpEnv): Promise<Response> {
   const { request: authRequest, headers } = await env.OAUTH_PROVIDER.finishUpstream(request);
   const code = new URL(request.url).searchParams.get("code");
   if (!code) return refused("The sign-in did not finish. Start again from your AI app.");
-  const answer = await fetch(env.ACCESS_TOKEN_URL, { method: "POST", body: new URLSearchParams({ grant_type: "authorization_code", code,
-    redirect_uri: new URL("/callback", request.url).href, client_id: env.ACCESS_CLIENT_ID, client_secret: env.ACCESS_CLIENT_SECRET }) });
-  const { id_token: idToken } = answer.ok ? await answer.json<{ id_token?: string }>() : {};
-  const claims = idToken ? await verifyIdToken(idToken, env) : null;
-  if (!claims) return refused("The sign-in could not be checked. Start again from your AI app.", 403);
-  // The second lock: a wider Access policy still admits no one else.
-  if (claims.email?.toLowerCase() !== owner(env)) return refused("Only Relay Everything's owner can connect an AI app.", 403);
+  const personId = await personOf(env, code);
+  if (!personId) return refused("This sign-in was used already, or is too old. Start again from your AI app.");
   const client = await env.OAUTH_PROVIDER.lookupClient(authRequest.clientId);
-  const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({ request: authRequest, userId: owner(env),
-    metadata: { name: client?.clientName?.trim() || authRequest.clientId }, scope: authRequest.scope, props: { email: owner(env) } });
+  const name = client?.clientName?.trim() || authRequest.clientId;
+  const deviceId = crypto.randomUUID();
+  const props: GrantProps = { personId, adds: true, deviceId, name };
+  const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({ request: authRequest, userId: personId,
+    metadata: { name, deviceId }, scope: authRequest.scope, props });
   headers.set("Location", redirectTo);
   return new Response(null, { status: 302, headers });
 }

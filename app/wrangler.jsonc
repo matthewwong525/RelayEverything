@@ -9,6 +9,7 @@
   // Signed Access identity is checked before every page, asset, API, and mini app.
   "assets": { "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": true },
   "vars": {
+    "WONG_KEY_SEAL_PUBLIC": "MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAo++m1NzXeaJyVditsjA70sPLHYBjiFcpVHR0m7izq1vnfwxVLLxufujdyHZ+0UnhpHnu6b2aLV8bFBihHzj3G4ufIySu36JGgYClcbiesnscfEjfuCYPT1tDYZMhIVbreF3ZLtQtbR/iXN4XklTAF61/a3/jFQIeV7qpiW9PZ+d2ITw9ZnlomUToW2xlGWV4XzUD6KA/Qx6uOw9zrOfwW3mIpdCSnIp7NWUGyPwmvPq6/ydusfuSnKSrpzTVtbIra5myuELbS9j0I8gbmwpDWvl2C3xxOclbOq93EC1zVKRh6IRyNFaUnJDogiI/DSwaCnCsaQFZQwHtuT7XyslMoEBbi1383FFBPFWUAUhaBOSCCdGGjvPm8e3m9xQX2Lqc9sfpGH7Z8/WnZm+46TRuFhFLSJJe9I5lL+K+zfDbvQahs0A1bKTEkjtC7iAKaXDL92q6IPl9Kamvec1nydgD9hCf1eqNNyfE/oJ126cPeOBGNHRbHwrgXTAtN+X/dqgTAgMBAAE=",
     "WONG_ENVIRONMENT": "production",
     "WONG_KNOWLEDGE_REPOSITORY": "relay-everything-knowledge",
     "WONG_CODE_REPOSITORY": "matthewwong525/RelayEverything",
@@ -17,8 +18,8 @@
     "CF_ACCESS_AUD": "76b579e034cfc7891c67bff9c593e31d2d8dc0b4b5548427d5257a5893ba9879",
     "CF_ACCESS_APP_ID": "f938f676-4c71-445d-bacb-3649b4897276",
     "CF_ACCESS_WORKER_ID": "3994b8ff29ac409dbfe1783049f21864",
-    // The live checker's Client ID, which names its service token and opens nothing alone. Relay refuses every
-    // other service token that is no device: app/worker/apps/relay/device.ts
+    // The live checker's Client ID, which names its service token and opens nothing alone. Relay Everything
+    // refuses every other service token: app/worker/apps/relay/caller.ts
     "RELAY_CHECKER_SHA256": "cc48186f16567a1acbcdabbbdce1446b905f77fd265a4e9f79865d1adb9930a1"
   },
   "d1_databases": [
@@ -31,19 +32,22 @@
     { "binding": "MEMORY_BUCKET", "bucket_name": "relay-everything-memory" },
     { "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes" }
   ],
-  // Relay's webhooks: a message only says "look now" for one webhook; the cursor in D1 holds what was sent.
+  // Relay Everything's webhooks: a message says "look now" for one person's webhook; the space holds what was sent.
   // app/worker/apps/relay/webhooks/send.ts
   "queues": {
     "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks" }],
     "consumers": [{ "queue": "relay-everything-webhooks", "max_batch_size": 10, "max_retries": 10 }]
   },
-  // Rereads who can push on GitHub, for previews' sign-in, and wakes each Relay webhook left behind.
+  // Rereads who can push on GitHub, for previews' sign-in.
   "triggers": { "crons": ["*/15 * * * *"] },
   // The private site's own address; the workers.dev address stays on for Access. Staging has none.
-  "routes": [{ "pattern": "app.relayeverything.com", "custom_domain": true }],
+  // app.relayeverything.com is the shared server's: wrangler.relay.jsonc.
+  "routes": [{ "pattern": "admin.relayeverything.com", "custom_domain": true }],
   // With routes, Wrangler turns workers.dev off unless this says true, and Access returns each sign-in there.
   "workers_dev": true,
-  "durable_objects": { "bindings": [{ "name": "LIVE_LINE", "class_name": "Line", "script_name": "relay-everything-line" }] },
+  // SPACES: each Relay Everything person's own space, in its own Worker (wrangler.spaces.jsonc), which deploys first.
+  "durable_objects": { "bindings": [{ "name": "LIVE_LINE", "class_name": "Line", "script_name": "relay-everything-line" },
+    { "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces" }] },
   "migrations": [{ "tag": "line-1", "new_sqlite_classes": ["Line"] }, { "tag": "line-2", "deleted_classes": ["Line"] }],
   // The project's own repository, which Connect your assistant hands out. wiki/stack/employee-project.md
   "artifacts": [{ "binding": "ARTIFACTS", "namespace": "wongstack" }],
@@ -54,6 +58,7 @@
     "staging": {
       "name": "relay-everything-staging",
       "vars": {
+        "WONG_KEY_SEAL_PUBLIC": "MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAo++m1NzXeaJyVditsjA70sPLHYBjiFcpVHR0m7izq1vnfwxVLLxufujdyHZ+0UnhpHnu6b2aLV8bFBihHzj3G4ufIySu36JGgYClcbiesnscfEjfuCYPT1tDYZMhIVbreF3ZLtQtbR/iXN4XklTAF61/a3/jFQIeV7qpiW9PZ+d2ITw9ZnlomUToW2xlGWV4XzUD6KA/Qx6uOw9zrOfwW3mIpdCSnIp7NWUGyPwmvPq6/ydusfuSnKSrpzTVtbIra5myuELbS9j0I8gbmwpDWvl2C3xxOclbOq93EC1zVKRh6IRyNFaUnJDogiI/DSwaCnCsaQFZQwHtuT7XyslMoEBbi1383FFBPFWUAUhaBOSCCdGGjvPm8e3m9xQX2Lqc9sfpGH7Z8/WnZm+46TRuFhFLSJJe9I5lL+K+zfDbvQahs0A1bKTEkjtC7iAKaXDL92q6IPl9Kamvec1nydgD9hCf1eqNNyfE/oJ126cPeOBGNHRbHwrgXTAtN+X/dqgTAgMBAAE=",
         "WONG_ENVIRONMENT": "staging",
         "WONG_KNOWLEDGE_REPOSITORY": "relay-everything-knowledge",
         "WONG_CODE_REPOSITORY": "matthewwong525/RelayEverything",
@@ -67,6 +72,8 @@
       },
       "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db-staging", "database_id": "4f8edf18-ad51-4325-bb98-ec3ca6cc80b0", "migrations_dir": "../schema/migrations" }],
       "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes-staging" }],
+      // Previews reach no other Worker's objects (wiki/stack/live-line.md), so staging has no SPACES: the staging
+      // shared server, wrangler.relay.jsonc, holds the spaces and its own queue.
       "queues": {
         "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks-staging" }],
         "consumers": [{ "queue": "relay-everything-webhooks-staging", "max_batch_size": 10, "max_retries": 10 }]
@@ -77,14 +84,15 @@
     },
     "local": {
       "name": "relay-everything-local",
-      "vars": { "WONG_ENVIRONMENT": "local", "SKIP_AUTH": "true" },
+      "vars": { "WONG_KEY_SEAL_PUBLIC": "MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAo++m1NzXeaJyVditsjA70sPLHYBjiFcpVHR0m7izq1vnfwxVLLxufujdyHZ+0UnhpHnu6b2aLV8bFBihHzj3G4ufIySu36JGgYClcbiesnscfEjfuCYPT1tDYZMhIVbreF3ZLtQtbR/iXN4XklTAF61/a3/jFQIeV7qpiW9PZ+d2ITw9ZnlomUToW2xlGWV4XzUD6KA/Qx6uOw9zrOfwW3mIpdCSnIp7NWUGyPwmvPq6/ydusfuSnKSrpzTVtbIra5myuELbS9j0I8gbmwpDWvl2C3xxOclbOq93EC1zVKRh6IRyNFaUnJDogiI/DSwaCnCsaQFZQwHtuT7XyslMoEBbi1383FFBPFWUAUhaBOSCCdGGjvPm8e3m9xQX2Lqc9sfpGH7Z8/WnZm+46TRuFhFLSJJe9I5lL+K+zfDbvQahs0A1bKTEkjtC7iAKaXDL92q6IPl9Kamvec1nydgD9hCf1eqNNyfE/oJ126cPeOBGNHRbHwrgXTAtN+X/dqgTAgMBAAE=", "WONG_ENVIRONMENT": "local", "SKIP_AUTH": "true" },
       "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db-local", "database_id": "9f8aa624-0d1c-4abf-902a-7b9430286378", "remote": false, "migrations_dir": "../schema/migrations" }],
       "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes-local", "remote": false }],
       "queues": {
         "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks-local" }],
         "consumers": [{ "queue": "relay-everything-webhooks-local", "max_batch_size": 10, "max_retries": 10 }]
       },
-      "durable_objects": { "bindings": [{ "name": "LIVE_LINE", "class_name": "Line", "script_name": "relay-everything-line-local" }] }
+      "durable_objects": { "bindings": [{ "name": "LIVE_LINE", "class_name": "Line", "script_name": "relay-everything-line-local" },
+        { "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces-local" }] }
     }
   }
 }

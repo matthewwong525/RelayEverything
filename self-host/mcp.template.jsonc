@@ -8,7 +8,10 @@
   "compatibility_flags": ["nodejs_compat", "disallow_importable_env"],
   "workers_dev": true,
   "preview_urls": false,
-  "vars": { "WONG_OWNER_EMAIL": "owner@example.com", "RELAY_MCP_ADDRESS": "https://relay-mcp.your-subdomain.workers.dev/mcp" },
+  // A person signs in on the install's own server, which sends a one-time code back to /callback.
+  "vars": { "RELAY_MCP_ADDRESS": "https://relay-mcp.your-subdomain.workers.dev/mcp", "RELAY_SERVER_URL": "https://relay.your-subdomain.workers.dev" },
   "d1_databases": [{ "binding": "DB", "database_name": "relay-db", "database_id": "00000000-0000-0000-0000-000000000000" }],
+  "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-spaces" }] },
+  "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-webhooks" }] },
   "kv_namespaces": [{ "binding": "OAUTH_KV" }]
 }

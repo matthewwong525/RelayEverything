@@ -4,14 +4,14 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { accessApp, configs, names, PARTS, parseCommand, setup } from './setup.mjs';
+import { accessApp, bypassPolicy, configs, keysApp, names, PARTS, parseCommand, settingsOf, setup } from './setup.mjs';
 
 const TOKEN = 'test-token-never-printed-0123456789';
 const ACCOUNT = 'a'.repeat(32);
 const template = file => readFileSync(join(import.meta.dirname, file), 'utf8');
 const files = () => {
   const dir = mkdtempSync(join(tmpdir(), 'relay-self-host-'));
-  return { config: join(dir, 'wrangler.jsonc'), mcp: join(dir, 'wrangler.mcp.jsonc') };
+  return { config: join(dir, 'wrangler.jsonc'), mcp: join(dir, 'wrangler.mcp.jsonc'), spaces: join(dir, 'wrangler.spaces.jsonc') };
 };
 
 /** Cloudflare's API as a test answers it: `answers` maps "METHOD path" to a result, or to a status to fail with. */
@@ -57,9 +57,12 @@ test('check names each missing permission and part, makes nothing, and never pri
   assert.equal((await run(['check'], everyPart)).result, 'ok');
 });
 
+const templates = { app: template('wrangler.template.jsonc'), mcp: template('mcp.template.jsonc'), spaces: template('spaces.template.jsonc') };
+const SETTINGS = { name: 'relay-test', email: 'you@example.com', account: ACCOUNT, database: 'db-id', subdomain: 'you', team: 'you.cloudflareaccess.com',
+  access: { id: 'app-id', aud: 'aud' } };
+
 test('the install\'s configs carry its own names, IDs and owner, and no secret', () => {
-  const { app, mcp } = configs(template('wrangler.template.jsonc'), template('mcp.template.jsonc'), { name: 'relay-test', email: 'you@example.com',
-    account: ACCOUNT, database: 'db-id', subdomain: 'you', team: 'you.cloudflareaccess.com', access: { id: 'app-id', aud: 'aud' } });
+  const { app, mcp, spaces } = configs(templates, SETTINGS);
   assert.equal(app.name, 'relay-test');
   assert.equal(app.d1_databases[0].database_name, 'relay-test-db');
   assert.deepEqual([app.queues.producers[0].queue, app.queues.consumers[0].queue], ['relay-test-webhooks', 'relay-test-webhooks']);
@@ -67,19 +70,71 @@ test('the install\'s configs carry its own names, IDs and owner, and no secret',
   assert.equal(app.vars.CF_ACCESS_APP_ID, 'app-id');
   assert.equal(mcp.vars.RELAY_MCP_ADDRESS, 'https://relay-test-mcp.you.workers.dev/mcp');
   assert.equal(mcp.d1_databases[0].database_id, 'db-id');
+  assert.equal(mcp.queues.producers[0].queue, 'relay-test-webhooks');
+  assert.deepEqual([app.vars.RELAY_SIGN_IN, app.vars.RELAY_MCP_CALLBACK], ['access', 'https://relay-test-mcp.you.workers.dev/callback']);
+  assert.equal(mcp.vars.RELAY_SERVER_URL, 'https://relay-test.you.workers.dev');
+  assert.equal(mcp.vars.WONG_OWNER_EMAIL, undefined);
+  assert.deepEqual([spaces.name, spaces.account_id, spaces.queues.producers[0].queue], ['relay-test-spaces', ACCOUNT, 'relay-test-webhooks']);
+  for (const config of [app, mcp]) assert.equal(config.durable_objects.bindings[0].script_name, 'relay-test-spaces');
+  assert.equal(app.triggers, undefined);
+  assert.deepEqual(keysApp('Keys', 'h.example.com').destinations.map(item => item.uri), ['h.example.com/apps/relay/api',
+    'h.example.com/apps/relay/sign-in/phone/key']);
+  assert.equal(bypassPolicy.decision, 'bypass');
   assert.deepEqual(accessApp(names('relay-test').app, 'relay-test.you.workers.dev').destinations, [{ type: 'public', uri: 'relay-test.you.workers.dev' }]);
   assert.deepEqual(accessApp(names('relay-test').app, 'relay-test.you.workers.dev', 'w1').destinations[0], { type: 'worker', worker_id: 'w1' });
 });
 
-test('a failed database change stops update before anything goes live', async () => {
+/** An install as install leaves it, and the answers update reads. */
+function installed() {
   const place = files();
-  writeFileSync(place.config, JSON.stringify({ name: 'relay', d1_databases: [{ database_name: 'relay-db' }] }));
+  const { app } = configs(templates, { ...SETTINGS, name: 'relay', workerId: 'w1' });
+  writeFileSync(place.config, JSON.stringify(app));
+  const answers = { [`GET /accounts/${ACCOUNT}/workers/subdomain`]: { subdomain: 'you' },
+    [`GET /accounts/${ACCOUNT}/access/apps`]: [{ id: 'sso', name: names('relay').mcpApp }],
+    [`POST /accounts/${ACCOUNT}/access/apps`]: { id: 'keys' }, [`GET /accounts/${ACCOUNT}/access/apps/keys/policies`]: [],
+    [`POST /accounts/${ACCOUNT}/access/apps/keys/policies`]: {}, [`DELETE /accounts/${ACCOUNT}/access/apps/sso`]: {} };
+  return { place, answers };
+}
+test('update writes each config again, opens the keys\' way past the login, and puts it live in order', async () => {
+  const { place, answers } = installed();
+  const ran = [];
+  const lines = [];
+  const { request, calls } = fakeCloudflare(answers);
+  const result = await setup({ args: ['update'], env: { CLOUDFLARE_API_TOKEN: TOKEN, CLOUDFLARE_ACCOUNT_ID: ACCOUNT }, request,
+    wrangler: args => ran.push(args.join(' ')), build: () => ran.push('build'), log: line => lines.push(line), files: place });
+  assert.equal(result, 'ok');
+  assert.deepEqual(ran.map(line => line.replace(place.config.replace(/wrangler\.jsonc$/, ''), '')), ['d1 migrations apply relay-db --remote -c wrangler.jsonc',
+    'deploy -c wrangler.spaces.jsonc', 'deploy -c wrangler.mcp.jsonc', 'build', ran.at(-1)]);
+  assert.match(ran.at(-1), /^deploy -c /);
+  const spaces = JSON.parse(readFileSync(place.spaces, 'utf8'));
+  assert.equal(spaces.name, 'relay-spaces');
+  assert.deepEqual(settingsOf(JSON.parse(readFileSync(place.config, 'utf8')), 'you'), { ...SETTINGS, name: 'relay', workerId: 'w1' });
+  assert.ok(calls.includes(`POST /accounts/${ACCOUNT}/access/apps/keys/policies`), 'the keys app gets its bypass policy');
+  assert.ok(calls.includes(`DELETE /accounts/${ACCOUNT}/access/apps/sso`), 'the old connector sign-in app goes');
+  assert.ok(lines.includes('ok database changes applied, then the newest Relay Everything put live'));
+});
+
+test('update gives an older keys app the phone\'s sign-in trade, and leaves a current one', async () => {
+  const keys = names('relay').keysApp;
+  const host = 'relay.you.workers.dev';
+  for (const [uris, puts] of [[[`${host}/apps/relay/api`], true], [keysApp(keys, host).destinations.map(item => item.uri), false]]) {
+    const { place, answers } = installed();
+    answers[`GET /accounts/${ACCOUNT}/access/apps`] = [{ id: 'keys', name: keys, destinations: uris.map(uri => ({ type: 'public', uri })) }];
+    answers[`GET /accounts/${ACCOUNT}/access/apps/keys/policies`] = [{}];
+    answers[`PUT /accounts/${ACCOUNT}/access/apps/keys`] = {};
+    const { calls } = await run(['update'], answers, { files: place });
+    assert.equal(calls.includes(`PUT /accounts/${ACCOUNT}/access/apps/keys`), puts);
+  }
+});
+
+test('a failed database change stops update before anything goes live', async () => {
+  const { place, answers } = installed();
   const ran = [];
   const wrangler = args => {
     ran.push(args.slice(0, 2).join(' '));
     if (args[0] === 'd1') throw new Error('migration 0042 failed');
   };
-  await assert.rejects(run(['update'], {}, { files: place, wrangler }), /migration 0042 failed/);
+  await assert.rejects(run(['update'], answers, { files: place, wrangler }), /migration 0042 failed/);
   assert.deepEqual(ran, ['d1 migrations']);
 });
 

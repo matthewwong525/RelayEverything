@@ -1,19 +1,20 @@
-// The connector's bindings, from app/wrangler.relay-mcp.jsonc: Relay's database, the sign-in store, the owner and
-// the Access for SaaS sign-in's values, which scripts/relay-mcp-setup.mjs puts as secrets. Nothing else.
+// The connector's bindings, from app/wrangler.relay-mcp.jsonc: the directory's database, each person's space, the
+// webhooks' queue, the sign-in store and the server whose sign-in it uses. Nothing else.
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 
 export type McpEnv = {
   DB: D1Database;
+  SPACES: DurableObjectNamespace;
+  /** Wakes the person's webhooks after an added note. */
+  RELAY_WEBHOOKS: Queue;
   OAUTH_KV: KVNamespace;
-  WONG_OWNER_EMAIL: string;
   RELAY_MCP_ADDRESS: string;
-  ACCESS_CLIENT_ID: string;
-  ACCESS_CLIENT_SECRET: string;
-  ACCESS_AUTHORIZATION_URL: string;
-  ACCESS_TOKEN_URL: string;
-  ACCESS_JWKS_URL: string;
+  /** The Relay Everything server that signs a person in, then sends them back to /callback. */
+  RELAY_SERVER_URL: string;
   /** Set by the OAuth provider before it calls the sign-in pages. */
   OAUTH_PROVIDER: OAuthHelpers;
 };
 
-export const owner = (env: Pick<McpEnv, "WONG_OWNER_EMAIL">) => env.WONG_OWNER_EMAIL.trim().toLowerCase();
+/** A grant's person, and for an app whose consent page said it adds notes, `adds` with its device and name. A grant
+ *  from before spaces has no person; one from before adding has no `adds`, so it only reads. */
+export type GrantProps = { personId?: string; adds?: true; deviceId?: string; name?: string };

@@ -28,4 +28,4 @@ The iPhone build is not in TestFlight yet. Until it is, you can build the app yo
 
 ## Next
 
-[Connect the phone](../connect-a-phone/) to your Relay Everything server.
+[Connect the phone](../connect-a-phone/) to your Relay Everything account. To make an account, [sign up](../sign-up/) first.

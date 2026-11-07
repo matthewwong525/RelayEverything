@@ -53,10 +53,19 @@ dependencies:
   crypto: ^3.0.8
   # Opens your Relay page in the phone's browser.
   url_launcher: ^6.3.2
+  # Files on a note: the paperclip picks photos and files, and a tap opens one in an app on the phone.
+  file_picker: ^13.3.2
+  open_filex: ^5.0.0
+  # Sign in to connect: your Relay Everything sign-in inside the app, and back with a one-time code.
+  flutter_web_auth_2: ^5.1.0
+  # Your calendar: reads the phone's calendars and their events (EventKit, CalendarContract). It never writes.
+  device_calendar_plus: ^0.12.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # Drives the open app's one-minute points drain in a test, with no real wait.
+  fake_async: ^1.3.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -75,6 +84,15 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Inter, the brand's one font (wiki/brand.md), inside the app so it shows with no network call. OFL.txt is its
+  # license, shown on the licenses page.
+  assets:
+    - assets/fonts/inter/OFL.txt
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/inter/InterVariable.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

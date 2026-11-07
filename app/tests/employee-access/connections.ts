@@ -18,12 +18,13 @@ export const key = JSON.stringify({ version: 2, token: "private-access-token", a
 export function database() {
   const sql = new DatabaseSync(":memory:");
   sql.exec("PRAGMA foreign_keys = ON");
-  for (const file of ["0001_employee_access.sql", "0002_employee_connections.sql", "0003_key_levels.sql", "20261005142459_access_managers.sql", "20261006031500_area_levels.sql", "20261007220000_key_direct_use.sql", "20261013205049_admin_role.sql", "20261022120000_inbox.sql", "20261023120000_inbox_link_items.sql", "20261024120000_inbox_agent_items.sql", "20261025120000_access_pushers.sql", "20261026120000_schedules.sql", "20261028120000_task_board.sql", "20261101120000_inbox_hidden_items.sql", "20261103120000_inbox_kept_reviews.sql", "20261104120000_inbox_files.sql", "20261105120000_tools.sql", "20261106120000_schedule_definitions.sql"]) {
+  for (const file of ["0001_employee_access.sql", "0002_employee_connections.sql", "0003_key_levels.sql", "20261005142459_access_managers.sql", "20261006031500_area_levels.sql", "20261007220000_key_direct_use.sql", "20261013205049_admin_role.sql", "20261022120000_inbox.sql", "20261023120000_inbox_link_items.sql", "20261024120000_inbox_agent_items.sql", "20261025120000_access_pushers.sql", "20261026120000_schedules.sql", "20261028120000_task_board.sql", "20261101120000_inbox_hidden_items.sql", "20261103120000_inbox_kept_reviews.sql", "20261104120000_inbox_files.sql", "20261105120000_tools.sql", "20261106120000_schedule_definitions.sql", "20261106130000_sealed_keys.sql"]) {
     sql.exec(readFileSync(new URL(`../../../schema/migrations/${file}`, import.meta.url), "utf8"));
   }
-  // Relay's own migrations, in their order, after the core's: they only add, so the core's order does not matter.
+  // Relay's own migrations, in their order, after the core's: none touches a core table, so the core's order is free.
   // wiki/stack/d1-pipeline.md#timestamp-migrations-additive-and-order-independent
-  for (const file of ["20261105120000_relay.sql", "20261105180000_relay_chats.sql", "20261106120000_relay_webhooks.sql"]) {
+  for (const file of ["20261105120000_relay.sql", "20261105180000_relay_chats.sql", "20261106120000_relay_webhooks.sql", "20261107120000_relay_people.sql",
+    "20261107180000_relay_drop_old_tables.sql", "20261107200000_relay_phone_codes.sql", "20261107210000_relay_api_keys.sql"]) {
     sql.exec(readFileSync(new URL(`../../../schema/migrations/${file}`, import.meta.url), "utf8"));
   }
   const statement = (query: string, values: SQLInputValue[] = []) => ({

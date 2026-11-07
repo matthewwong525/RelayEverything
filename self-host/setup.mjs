@@ -1,15 +1,13 @@
 #!/usr/bin/env node
-// Relay in a person's own Cloudflare account: the Relay-only Worker and page, its database, bucket and queue, the AI
-// connector, and the Access login for the owner's email. Each step is skipped when done. self-host/SETUP.md
+// Relay Everything in a person's own Cloudflare account: the server, page and spaces, the database, bucket and queue,
+// the AI connector, and the Access login for the owner's email. Each step is skipped when done. self-host/SETUP.md
 import { execFileSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMain, parseCli, usageError } from '../scripts/lib-cli.mjs';
 import { redirectedConfig, stripJsonc } from '../scripts/lib-wrangler-config.mjs';
-import { cloudflare, ownerPolicy, saasApp, signInValues } from '../scripts/relay-mcp-setup.mjs';
+import { cloudflare } from '../scripts/relay-mcp-setup.mjs';
 
 const USAGE = `usage: node self-host/setup.mjs <check|install|update|status|remove> [--email <you>] [--name <name>] [--yes]
   check                       check the Cloudflare key and account; make nothing
@@ -21,13 +19,12 @@ const USAGE = `usage: node self-host/setup.mjs <check|install|update|status|remo
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP = join(HERE, '..', 'app');
-export const FILES = { config: join(HERE, 'wrangler.jsonc'), mcp: join(HERE, 'wrangler.mcp.jsonc'), env: join(HERE, '.env') };
-// The Pebble signing secret's page stays on this computer, outside the repository, readable only by you.
-const PRIVATE = join(homedir(), '.relay-everything', 'self-host');
+export const FILES = { config: join(HERE, 'wrangler.jsonc'), mcp: join(HERE, 'wrangler.mcp.jsonc'), spaces: join(HERE, 'wrangler.spaces.jsonc'),
+  env: join(HERE, '.env') };
 
 /** What each part's name is, from the install's name. */
 export const names = name => ({ worker: name, database: `${name}-db`, bucket: `${name}-notes`, queue: `${name}-webhooks`, mcp: `${name}-mcp`,
-  app: `Relay (${name})`, mcpApp: `Relay AI connector (${name})` });
+  spaces: `${name}-spaces`, app: `Relay (${name})`, mcpApp: `Relay AI connector (${name})`, keysApp: `Relay Everything device keys (${name})` });
 
 /** Each part `check` reads, the Cloudflare permission that reads it, and what to do when it is off. */
 export const PARTS = [
@@ -65,32 +62,48 @@ export async function checkLines(cf, root) {
   return lines;
 }
 
-/** The install's two configs, from the committed templates: names, IDs and the owner, and nothing secret. */
-export function configs(template, mcpTemplate, { name, email, account, database, subdomain, team, access, workerId = '' }) {
+/** The install's three configs, from the committed templates: names, IDs and the owner, and nothing secret. */
+export function configs(templates, { name, email, account, database, subdomain, team, access, workerId = '' }) {
   const part = names(name);
-  const app = JSON.parse(stripJsonc(template));
+  const [app, mcp, spaces] = ['app', 'mcp', 'spaces'].map(kind => JSON.parse(stripJsonc(templates[kind])));
+  const server = `https://${part.worker}.${subdomain}.workers.dev`;
+  const connector = `https://${part.mcp}.${subdomain}.workers.dev`;
   Object.assign(app, { name: part.worker, account_id: account });
-  Object.assign(app.vars, { WONG_OWNER_EMAIL: email, CF_ACCESS_TEAM_DOMAIN: team, CF_ACCESS_AUD: access.aud, CF_ACCESS_APP_ID: access.id, CF_ACCESS_WORKER_ID: workerId });
+  Object.assign(app.vars, { WONG_OWNER_EMAIL: email, CF_ACCESS_TEAM_DOMAIN: team, CF_ACCESS_AUD: access.aud, CF_ACCESS_APP_ID: access.id,
+    CF_ACCESS_WORKER_ID: workerId, RELAY_MCP_CALLBACK: `${connector}/callback` });
   Object.assign(app.d1_databases[0], { database_name: part.database, database_id: database });
   app.r2_buckets[0].bucket_name = part.bucket;
   app.queues.producers[0].queue = app.queues.consumers[0].queue = part.queue;
   app.services[0].service = part.mcp;
-  const mcp = JSON.parse(stripJsonc(mcpTemplate));
   Object.assign(mcp, { name: part.mcp, account_id: account });
-  Object.assign(mcp.vars, { WONG_OWNER_EMAIL: email, RELAY_MCP_ADDRESS: `https://${part.mcp}.${subdomain}.workers.dev/mcp` });
+  Object.assign(mcp.vars, { RELAY_MCP_ADDRESS: `${connector}/mcp`, RELAY_SERVER_URL: server });
   Object.assign(mcp.d1_databases[0], { database_name: part.database, database_id: database });
-  return { app, mcp };
+  Object.assign(spaces, { name: part.spaces, account_id: account });
+  spaces.queues.producers[0].queue = mcp.queues.producers[0].queue = part.queue;
+  for (const config of [app, mcp]) config.durable_objects.bindings[0].script_name = part.spaces;
+  return { app, mcp, spaces };
 }
 
+/** An install's settings, read back from its own config, so update can write each config again from the templates. */
+export const settingsOf = (installed, subdomain) => ({ name: installed.name, email: installed.vars.WONG_OWNER_EMAIL, account: installed.account_id,
+  database: installed.d1_databases[0].database_id, subdomain, team: installed.vars.CF_ACCESS_TEAM_DOMAIN,
+  access: { id: installed.vars.CF_ACCESS_APP_ID, aud: installed.vars.CF_ACCESS_AUD }, workerId: installed.vars.CF_ACCESS_WORKER_ID });
+
 /** The login: a self-hosted Access app on the server's address and, once it is live, the Worker itself, with the owner's
- *  email as its one person. Device keys join its "Relay devices" policy when relay-device-key.mjs makes them. */
+ *  email as its one person. */
 export const accessApp = (app, host, workerId) => ({ name: app, type: 'self_hosted', domain: host,
   destinations: [...(workerId ? [{ type: 'worker', worker_id: workerId }] : []), { type: 'public', uri: host }],
   session_duration: '730h', app_launcher_visible: false });
 
-/** The private page that holds the Pebble signing secret, for the Pebble app's Sign requests setting. */
-export const signingPage = (server, secret) => `<!doctype html><meta charset="utf-8"><title>Relay Everything: Pebble signing secret</title>
-<h1>Pebble signing secret</h1><p>For ${server}. In the Pebble app's webhook, turn on Sign requests and enter:</p><p><code>${secret}</code></p>`;
+/** The login's one policy: the owner's email and no one else. */
+export const ownerPolicy = owner => ({ name: 'Relay owner', decision: 'allow', include: [{ email: { email: owner } }], precedence: 1 });
+
+/** Device keys, and a phone's trade of its sign-in code for its key, skip the login: the server checks each itself. A
+ *  browser still sends its login cookie on these addresses, which the server checks too. */
+export const keysApp = (app, host) => ({ name: app, type: 'self_hosted', domain: `${host}/apps/relay/api`,
+  destinations: [{ type: 'public', uri: `${host}/apps/relay/api` }, { type: 'public', uri: `${host}/apps/relay/sign-in/phone/key` }],
+  session_duration: '24h', app_launcher_visible: false });
+export const bypassPolicy = { name: 'Relay Everything keys check themselves', decision: 'bypass', include: [{ everyone: {} }], precedence: 1 };
 
 const readTemplate = file => readFileSync(join(HERE, file), 'utf8');
 const writeJson = (file, value) => writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
@@ -103,14 +116,28 @@ async function ensure(list, find, make) {
   return (await list()).find(find) ?? await make();
 }
 
-/** Put the server live: migrations first, so a failed one leaves the old server running; then the connector, which the
- *  server binds; then the server. */
+/** Put the server live: migrations first, so a failed one leaves the old server running; then the spaces and the
+ *  connector, which the server binds; then the server. */
 function deploy({ wrangler, build, files }, database) {
   wrangler(['d1', 'migrations', 'apply', database, '--remote', '-c', files.config]);
+  wrangler(['deploy', '-c', files.spaces]);
   wrangler(['deploy', '-c', files.mcp]);
   build();
   // The build writes the server's config where its redirect file says, beside app/'s own.
   wrangler(['deploy', '-c', redirectedConfig(join(APP, 'wrangler.jsonc'))]);
+}
+
+const templates = () => ({ app: readTemplate('wrangler.template.jsonc'), mcp: readTemplate('mcp.template.jsonc'), spaces: readTemplate('spaces.template.jsonc') });
+const writeConfigs = (files, written) => { for (const kind of ['config', 'mcp', 'spaces']) writeJson(files[kind], written[kind === 'config' ? 'app' : kind]); };
+
+/** The device keys' way past the login, made once; an older one gets each address it lacks. */
+async function ensureKeysApp(cf, root, apps, part, host) {
+  const wanted = keysApp(part.keysApp, host);
+  const found = apps.find(item => item.name === part.keysApp);
+  const lacks = found && wanted.destinations.some(want => !found.destinations?.some(item => item.uri === want.uri));
+  if (lacks) await cf(`${root}/access/apps/${found.id}`, 'PUT', wanted);
+  const app = found ?? await cf(`${root}/access/apps`, 'POST', wanted);
+  if (!(await cf(`${root}/access/apps/${app.id}/policies`)).length) await cf(`${root}/access/apps/${app.id}/policies`, 'POST', bypassPolicy);
 }
 
 async function install(io, cf, root, { name, email, account }) {
@@ -126,45 +153,44 @@ async function install(io, cf, root, { name, email, account }) {
   const apps = await cf(`${root}/access/apps?per_page=1000`);
   const access = apps.find(item => item.name === part.app) ?? await cf(`${root}/access/apps`, 'POST', accessApp(part.app, host));
   if (!(await cf(`${root}/access/apps/${access.id}/policies`)).length) await cf(`${root}/access/apps/${access.id}/policies`, 'POST', ownerPolicy(email));
+  await ensureKeysApp(cf, root, apps, part, host);
   io.log('ok database, bucket, queue and login');
 
   const settings = { name, email, account, database: database.uuid, subdomain, team, access };
-  const filled = more => configs(readTemplate('wrangler.template.jsonc'), readTemplate('mcp.template.jsonc'), { ...settings, ...more });
-  const { app, mcp } = filled();
-  writeJson(io.files.config, app);
-  writeJson(io.files.mcp, mcp);
+  const filled = more => configs(templates(), { ...settings, ...more });
+  const written = filled();
+  writeConfigs(io.files, written);
   deploy(io, part.database);
-  // The Worker's ID exists only once it is live; the login covers it, and the key command checks it.
+  // The Worker's ID exists only once it is live; the login covers it.
   const workerId = (await cf(`${root}/workers/workers/${part.worker}`)).id;
   if (!access.destinations?.some(item => item.type === 'worker')) await cf(`${root}/access/apps/${access.id}`, 'PUT', accessApp(part.app, host, workerId));
   writeJson(io.files.config, filled({ workerId }).app);
-  io.log('ok server and AI connector live');
+  io.log('ok server, spaces and AI connector live');
 
-  const secrets = async worker => (await cf(`${root}/workers/scripts/${worker}/secrets`)).map(secret => secret.name);
-  if (!(await secrets(part.worker)).includes('RELAY_PEBBLE_SIGNING')) {
-    const secret = randomBytes(32).toString('hex');
-    io.wrangler(['secret', 'put', 'RELAY_PEBBLE_SIGNING', '-c', io.files.config], secret);
-    mkdirSync(PRIVATE, { recursive: true, mode: 0o700 });
-    writeFileSync(join(PRIVATE, `${name}-pebble-signing.html`), signingPage(`https://${host}`, secret), { mode: 0o600 });
-    io.log(`ok Pebble signing secret, on your private page: ${join(PRIVATE, `${name}-pebble-signing.html`)}`);
-  }
-  if (!(await secrets(part.mcp)).includes('ACCESS_CLIENT_ID')) {
-    const callback = `https://${part.mcp}.${subdomain}.workers.dev/callback`;
-    const old = apps.find(item => item.name === part.mcpApp);
-    if (old) await cf(`${root}/access/apps/${old.id}`, 'DELETE');
-    const sso = await cf(`${root}/access/apps`, 'POST', saasApp({ app: part.mcpApp, callback }));
-    await cf(`${root}/access/apps/${sso.id}/policies`, 'POST', ownerPolicy(email));
-    io.wrangler(['secret', 'bulk', '-c', io.files.mcp], JSON.stringify(signInValues(team, sso.saas_app)));
-    io.log('ok AI connector sign-in');
-  }
   io.log(`server=https://${host}`);
-  io.log(`connector=${mcp.vars.RELAY_MCP_ADDRESS}`);
+  io.log(`connector=${written.mcp.vars.RELAY_MCP_ADDRESS}`);
+}
+
+/** Update: each config written again from the templates, the keys' way past the login, then the newest code live. */
+async function update(io, cf, root, installed) {
+  const part = names(installed.name);
+  const { subdomain } = await cf(`${root}/workers/subdomain`);
+  const host = `${part.worker}.${subdomain}.workers.dev`;
+  const apps = await cf(`${root}/access/apps?per_page=1000`);
+  await ensureKeysApp(cf, root, apps, part, host);
+  // The AI connector now signs in through the server: its own Access sign-in app guards nothing.
+  const old = apps.find(item => item.name === part.mcpApp);
+  if (old) await cf(`${root}/access/apps/${old.id}`, 'DELETE');
+  writeConfigs(io.files, configs(templates(), settingsOf(installed, subdomain)));
+  deploy(io, part.database);
+  io.log('ok database changes applied, then the newest Relay Everything put live');
 }
 
 async function status(io, cf, root, name, request) {
   const part = names(name);
   const exists = path => cf(`${root}${path}`).then(() => true, () => false);
-  const checks = { server: `/workers/scripts/${part.worker}/settings`, connector: `/workers/scripts/${part.mcp}/settings`,
+  const checks = { server: `/workers/scripts/${part.worker}/settings`, spaces: `/workers/scripts/${part.spaces}/settings`,
+    connector: `/workers/scripts/${part.mcp}/settings`,
     database: `/d1/database?name=${part.database}`, bucket: `/r2/buckets/${part.bucket}`, queue: `/queues?name=${part.queue}` };
   const found = {};
   for (const [label, path] of Object.entries(checks)) found[label] = await exists(path);
@@ -182,8 +208,9 @@ async function status(io, cf, root, name, request) {
 
 async function remove(io, cf, root, name, yes) {
   const part = names(name);
-  const plan = [`Workers ${part.worker} and ${part.mcp}`, `D1 database ${part.database} (every note, health sample and place)`,
-    `R2 bucket ${part.bucket} (every recording)`, `queue ${part.queue}`, `Access apps "${part.app}" and "${part.mcpApp}", and their device keys`];
+  const plan = [`Workers ${part.worker} and ${part.mcp}`, `Worker ${part.spaces} (every person's space: notes, health samples and places)`,
+    `D1 database ${part.database} (the accounts and sign-ins)`, `R2 bucket ${part.bucket} (every recording)`, `queue ${part.queue}`,
+    `Access apps "${part.app}", "${part.keysApp}" and "${part.mcpApp}", and their old device keys`];
   if (!yes) {
     io.log(`remove would delete, and this can't be undone:\n${plan.map(line => `- ${line}`).join('\n')}`);
     io.log('Run it again with --yes to delete.');
@@ -191,7 +218,7 @@ async function remove(io, cf, root, name, yes) {
   }
   const quiet = promise => promise.catch(error => (error.status === 404 ? null : Promise.reject(error)));
   const apps = await cf(`${root}/access/apps?per_page=1000`);
-  for (const app of apps.filter(item => [part.app, part.mcpApp].includes(item.name))) {
+  for (const app of apps.filter(item => [part.app, part.keysApp, part.mcpApp].includes(item.name))) {
     const tokens = (await cf(`${root}/access/apps/${app.id}/policies`)).flatMap(policy => policy.include ?? []).map(rule => rule.service_token?.token_id).filter(Boolean);
     await cf(`${root}/access/apps/${app.id}`, 'DELETE');
     for (const token of tokens) await quiet(cf(`${root}/access/service_tokens/${token}`, 'DELETE'));
@@ -200,7 +227,7 @@ async function remove(io, cf, root, name, yes) {
   // Cloudflare keeps a Worker that reads a queue, and a queue a Worker sends to: detach the reader, then the Worker.
   const queue = (await cf(`${root}/queues`)).find(item => item.queue_name === part.queue);
   if (queue) for (const reader of await cf(`${root}/queues/${queue.queue_id}/consumers`)) await cf(`${root}/queues/${queue.queue_id}/consumers/${reader.consumer_id}`, 'DELETE');
-  for (const worker of [part.worker, part.mcp]) await quiet(cf(`${root}/workers/scripts/${worker}?force=true`, 'DELETE'));
+  for (const worker of [part.worker, part.mcp, part.spaces]) await quiet(cf(`${root}/workers/scripts/${worker}?force=true`, 'DELETE'));
   for (const binding of kv) await quiet(cf(`${root}/storage/kv/namespaces/${binding.namespace_id}`, 'DELETE'));
   if (queue) await cf(`${root}/queues/${queue.queue_id}`, 'DELETE');
   for (const item of (await cf(`${root}/d1/database?name=${part.database}`)).filter(item => item.name === part.database)) await cf(`${root}/d1/database/${item.uuid}`, 'DELETE');
@@ -209,7 +236,7 @@ async function remove(io, cf, root, name, yes) {
     for (const object of await cf(`${root}/r2/buckets/${part.bucket}/objects`).catch(() => [])) io.wrangler(['r2', 'object', 'delete', `${part.bucket}/${object.key}`, '--remote']);
     await cf(`${root}/r2/buckets/${part.bucket}`, 'DELETE');
   }
-  for (const file of [io.files.config, io.files.mcp]) rmSync(file, { force: true });
+  for (const file of [io.files.config, io.files.mcp, io.files.spaces]) rmSync(file, { force: true });
   io.log(`deleted:\n${plan.map(line => `- ${line}`).join('\n')}`);
   return true;
 }
@@ -244,8 +271,7 @@ export async function setup({ args, env, request = fetch, wrangler = runWrangler
   }
   if (parsed.command === 'update') {
     if (!installed) throw new Error('no install here: run install first, or copy self-host/wrangler.jsonc and wrangler.mcp.jsonc back');
-    deploy(io, installed.d1_databases[0].database_name);
-    log('ok database changes applied, then the newest Relay Everything put live');
+    await update(io, cf, root, installed);
     return 'ok';
   }
   if (parsed.command === 'status') return await status(io, cf, root, name, request) ? 'ok' : 'none';

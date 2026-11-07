@@ -6,7 +6,7 @@ import { API_PREFIX, handleApi } from "./api/router.ts";
 import { services } from "./api/services.ts";
 import { APP_API, handleApp, handleAppQueue, handleAppSchedule } from "./apps/index.ts";
 import { PUBLIC_KNOWLEDGE, publicKnowledge } from "./apps/knowledge/public.ts";
-import { deviceGate } from "./apps/relay/device.ts";
+import { relayGate } from "./apps/relay/caller.ts";
 import { getAccessIdentity, type AccessEnv, type AccessIdentity } from "./access.ts";
 import { memoryCaller } from "./memory-caller.ts";
 import type { ConnectionEnv } from "./employee-access/core.ts";
@@ -63,10 +63,9 @@ export default {
     const open = env.WORKSPACE_LOGIN === "off" && !env.CF_ACCESS_TEAM_DOMAIN && !env.CF_ACCESS_AUD;
     if (!identity && !open) return signInRefused(env, url);
 
-    // A Relay device key passes the sign-in wall like the checker, so it is held to Relay's device routes here, and a
-    // service token that is neither is refused.
-    const device = await deviceGate(env, identity, request.method, url.pathname);
-    if (device) return device;
+    // A service token that is not the checker is refused here; Relay Everything checks its own callers.
+    const relay = await relayGate(request, env, identity, url.pathname);
+    if (relay) return relay;
 
     // People management answers only the signed-in owner; setup readback answers each person.
     if (url.pathname.startsWith("/api/access/")) {

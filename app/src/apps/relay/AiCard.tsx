@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Failed } from './Failed'
 import { send, useGet, when } from './read'
+import { API_DOCS } from './Setup'
 
 // The AI connector on Relay's page: the address to add to Claude or ChatGPT, and the apps connected to it, each one
 // disconnected with a confirm. app/worker/apps/relay/ai-apps.ts answers; wiki/stack/relay-ai-connector.md tells how.
@@ -28,11 +29,13 @@ function Connected({ value, changed }: { value: AiApps; changed: () => void }) {
     else setError(`${app.name} could not be disconnected. Try again.`)
   }
   return <Card className="grid gap-4 p-4">
-    <p>Ask Claude or ChatGPT about your notes, health and places. In the app, add a custom connector with this address, then sign in.</p>
+    <p>Ask Claude or ChatGPT about your notes, health and places, or tell it to add a note. In the app, add a custom connector with this address, then sign in.</p>
     <div className="flex flex-wrap items-start gap-2">
       <Input readOnly value={value.address} aria-label="The connector's address" className="min-w-0 grow basis-64" />
       <div><CopyText text={value.address} label="Copy" shown /></div>
     </div>
+    <p className="text-sm text-muted-foreground">The same sign-in opens the web API, for your own scripts and services.{' '}
+      <a className="underline" href={API_DOCS}>Connect a service</a>.</p>
     <div className="flex items-center gap-2"><h3>Connected apps</h3><Badge variant="secondary">{value.apps.length} connected</Badge></div>
     {value.apps.length === 0 ? <p className="text-muted-foreground">No AI app connected yet.</p> :
       <ul className="grid gap-2">{value.apps.map((app) => <li key={app.id} className="flex flex-wrap items-center justify-between gap-2">
@@ -46,7 +49,7 @@ function Connected({ value, changed }: { value: AiApps; changed: () => void }) {
       <AlertDialogContent className="wrap-anywhere">
         <AlertDialogHeader>
           <AlertDialogTitle>Disconnect {leaving?.name}?</AlertDialogTitle>
-          <AlertDialogDescription>It can't read Relay Everything any more. To use it again, connect it again from the app.</AlertDialogDescription>
+          <AlertDialogDescription>It can't read or add to Relay Everything any more. To use it again, connect it again from the app.</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>

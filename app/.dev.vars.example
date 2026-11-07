@@ -63,7 +63,18 @@ WONG_CODE_READ=
 
 # --- Relay ---
 
-# The signing secret the Pebble app's Index webhook signs each ring note with: 32 random bytes as hex, made by
-# `openssl rand -hex 32`, never a password. Enter the same text under Sign requests in the Pebble app. Staging
-# gets its own value in .dev.vars.staging. The relay app lists it as the saved key relay-pebble-signing.
-RELAY_PEBBLE_SIGNING=
+# Sign in with Apple's key for Relay Everything's own sign-in: the .p8 file's whole text, from Apple Developer →
+# Keys → a key with Sign in with Apple, grouped with the App ID com.matthewwong525.relayeverything.web. Apple
+# shows the file once. The Services ID and team ID are not secret and sit in app/wrangler.jsonc.
+RELAY_APPLE_SIGN_IN_KEY=
+
+# The Key ID Apple shows beside that key, 10 letters and digits.
+RELAY_APPLE_SIGN_IN_KEY_ID=
+
+# Sign in with Google's client secret, from Google Cloud project relay-everything → Google Auth Platform →
+# Clients → Relay Everything web → Add secret. The client ID is not secret and sits in app/wrangler.jsonc.
+RELAY_GOOGLE_SIGN_IN_SECRET=
+
+# Sign in with Apple's team ID, 10 letters and digits, from Apple Developer → Membership. It is not secret, but .env
+# holds it as APPLE_TEAM_ID, so the public-repo check keeps it out of committed files: set it here as a secret.
+RELAY_APPLE_TEAM_ID=

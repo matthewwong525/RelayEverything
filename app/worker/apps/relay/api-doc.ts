@@ -2,7 +2,7 @@
 // fails api-doc.test.ts. `npm run relay:api-doc` writes it to site/src/content/docs/api/reference.md.
 import { registrations, schemas, type Action, type Route } from "../../api/contract.ts";
 import { routes as relayRoutes } from "./api.ts";
-import { reaches } from "./device.ts";
+import { reaches } from "./caller.ts";
 
 type Schema = { type?: string; enum?: unknown[]; items?: Schema; anyOf?: Schema[]; properties?: Record<string, Schema>;
   required?: string[]; description?: string };
@@ -10,8 +10,9 @@ type Schema = { type?: string; enum?: unknown[]; items?: Schema; anyOf?: Schema[
 type HandPage = { summary: string; page: string };
 
 const HAND_PAGES: Record<string, HandPage> = {
-  "POST pebble": { summary: "Take a ring note from the Pebble app", page: "../pebble-webhook/" },
   "GET audio": { summary: "Play a note's recording", page: "../recordings/" },
+  "POST attachments": { summary: "Send a note's file, after its note", page: "../files/#send-a-file" },
+  "GET attachment": { summary: "Open a note's file", page: "../files/#open-a-file" },
   "POST chats": { summary: "Send a Claude Code chat's new messages, with a chat key", page: "../../connections/claude-code/#what-the-server-receives" },
 };
 const ENCODING: Record<Action["encoding"], string> = {
@@ -48,7 +49,7 @@ const table = (lines: string[]) => [HEAD, ...lines].join("\n");
 const json = (value: unknown) => `\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\``;
 const caller = (method: string, path: string) => reaches("chats", method, path)
   ? reaches("phone", method, path) ? "any device key" : "a Claude Code chat key only"
-  : reaches("phone", method, path) ? "a phone or Pebble key" : "a signed-in person only, not a device key";
+  : reaches("phone", method, path) ? "a phone key" : "a signed-in person only, not a device key";
 
 function described({ method, path, action }: { method: string; path: string; action: Action }): string {
   const { inputSchema, outputSchema } = schemas(action) as { inputSchema: Schema; outputSchema: Schema };
@@ -81,8 +82,8 @@ description: Every route of the Relay Everything server, with its fields, made f
 
 <!-- Made by \`npm run relay:api-doc\` in app/ from app/worker/apps/relay/. Do not edit it by hand. -->
 
-Each route sits under \`https://<your-relay-server>/apps/relay/api/\`. Send your key's two headers with each call, as
-[Keys](../keys/) shows. A refused call answers \`{ "error": { "code": "...", "message": "..." } }\`; [Keys](../keys/#errors)
+Each route sits under \`https://<your-relay-server>/apps/relay/api/\`. A device sends its key as
+\`Authorization: Bearer rek_…\`, as [Keys](../keys/) shows; a person signs in on the page. A refused call answers \`{ "error": { "code": "...", "message": "..." } }\`; [Keys](../keys/#errors)
 lists the codes.
 
 ${registrations(routes, "relay").map(described).join("\n\n")}

@@ -2,19 +2,38 @@ import { readdirSync, readFileSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { beforeAll, expect, it } from "vitest";
-import { seeded } from "../../tests/employee-access/connections";
+import { ANA, BEN, fakeSpaces, NOW, queue } from "../../tests/relay";
+import { APP_DEVICE, RECONNECT } from "./answers";
+import { APP_DEVICE_OFF } from "./asker";
+import type { GrantProps } from "./env";
 import { mcpHandler } from "./tools";
 
-/** An MCP client that reaches the connector over this database. */
-async function connect(DB: D1Database) {
+const spaceRows = readFileSync(new URL("../../tests/relay-space-rows.sql", import.meta.url), "utf8");
+
+/** Ana's space with the made-up rows, and Ben's with a note of his own that holds the same words. */
+function seeded() {
+  const made = fakeSpaces();
+  const sql = made.sql(ANA);
+  sql.exec(spaceRows);
+  made.sql(BEN).exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-ben', 'Phone', 'rek:d-ben', '', 0, 'phone');
+    INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at)
+    VALUES ('${ID(7)}', 'd-ben', 'typed', 'ben-1', 'Ben: buy milk and the ring.', 1793811000000, 0)`);
+  return { sql, SPACES: made.SPACES };
+}
+
+/** A grant as /callback makes it now: Ana's space, and adding notes as the app's own device. */
+const GRANT: GrantProps = { personId: ANA, adds: true, deviceId: "e0000000-0000-4000-8000-000000000001", name: "Claude" };
+
+/** An MCP client that reaches the connector with this grant. */
+async function connect(SPACES: DurableObjectNamespace, props: GrantProps = GRANT) {
   const connected = new Client({ name: "test", version: "1.0.0" });
   await connected.connect(new StreamableHTTPClientTransport(new URL("https://relay-mcp.example.com/mcp"),
-    { fetch: (url, init) => mcpHandler.fetch(new Request(url, init), { DB }) }));
+    { fetch: (url, init) => mcpHandler.fetch(new Request(url, init), { SPACES, RELAY_WEBHOOKS: queue as never }, { props }) }));
   return connected;
 }
 
 let client: Client;
-beforeAll(async () => { client = await connect(seeded().env.DB); });
+beforeAll(async () => { client = await connect(seeded().SPACES); });
 
 /** A tool's answer as JSON, or its refusal's text. */
 async function ask(name: string, args: Record<string, unknown>) {
@@ -32,16 +51,18 @@ it("names itself Relay Everything to the AI app", () => {
   expect(client.getInstructions()).toMatch(/^Relay Everything /);
 });
 
-it("lists eight tools, each marked read-only", async () => {
+it("lists ten tools, each read-only but add_note, which changes and deletes nothing", async () => {
   const { tools } = await client.listTools();
-  expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "places", "search_chats", "read_chat"]);
-  for (const tool of tools) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+  expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "places", "calendar", "search_chats",
+    "read_chat", "add_note"]);
+  for (const tool of tools.slice(0, 9)) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+  expect(tools[9].annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
 });
 
 it("finds notes holding every word, in any case, with a title and the time in the zone", async () => {
   expect(await ask("search", { query: "milk" })).toEqual({ nextCursor: null, notes: [{ id: ID(3), source: "ring",
-    text: "Buy milk and batteries.", title: "Buy milk and batteries.", recordedAt: "2026-11-04T16:58:20-05:00", device: "Pebble app",
-    audio: false, place: null }] });
+    text: "Buy milk and batteries.", title: "Buy milk and batteries.", recordedAt: "2026-11-04T16:58:20-05:00", device: "iPad",
+    audio: false, place: null, attachments: [] }] });
   expect(ids(await ask("search", { query: "the" }))).toEqual([ID(2), ID(1)]);
   expect(ids(await ask("search", { query: "THE ring" }))).toEqual([ID(2)]);
   expect(ids(await ask("search", { query: "the", source: "ring" }))).toEqual([ID(1)]);
@@ -83,7 +104,10 @@ it("sums up a day, and an empty one", async () => {
   expect(await ask("day_summary", { day: "2026-11-04" })).toEqual({ day: "2026-11-04", timezone: "America/Toronto", notes: 3, ...day, places: [
     { name: "Harbord St", lat: 43.6629, lon: -79.3957, from: "2026-11-04T08:00:00-05:00", to: "2026-11-04T08:00:00-05:00" },
     { name: "King St W", lat: 43.6487, lon: -79.3817, from: "2026-11-04T12:00:00-05:00", to: "2026-11-04T12:00:00-05:00" },
-    { name: "Kensington Ave", lat: 43.6544, lon: -79.4006, from: "2026-11-04T17:00:00-05:00", to: "2026-11-04T17:30:00-05:00" }] });
+    { name: "Kensington Ave", lat: 43.6544, lon: -79.4006, from: "2026-11-04T17:00:00-05:00", to: "2026-11-04T17:30:00-05:00" }],
+    weightKg: 71.4, bloodPressure: [{ at: "2026-11-04T08:30:00-05:00", upper: 118, lower: 76 }], events: [
+      { title: "Board meeting", start: "2026-11-04T10:00:00-05:00", end: "2026-11-04T11:00:00-05:00", allDay: false, people: ["Sam Lee", "Ana"] },
+      { title: "Lunch with Sam", start: "2026-11-04T12:00:00-05:00", end: "2026-11-04T13:00:00-05:00", allDay: false, people: ["Sam Lee"] }] });
   expect(await ask("day_summary", { day: "2026-11-05" })).toMatchObject({ notes: 0, steps: 0, sleepMinutes: 0, heartRate: null,
     workouts: { count: 0, minutes: 0 }, places: [] });
   expect((await ask("day_summary", { day: "2026-13-45" })).refused).toContain("Not a day.");
@@ -104,6 +128,32 @@ it("reads health by the hour or the day, and refuses too many values", async () 
     .toEqual(["2026-10-31T00:00:00-04:00", "2026-11-01T00:00:00-04:00", "2026-11-02T00:00:00-05:00"]);
   expect(await ask("health", { type: "steps", from: "2026-01-01", to: "2026-03-01", bucket: "hour" }))
     .toEqual({ refused: "That is more than 400 hours: ask for a shorter range or a larger bucket." });
+});
+
+it("reads the new health types: the day's latest weight and blood pressure's range", async () => {
+  expect((await ask("health", { type: "weight", from: "2026-11-03", to: "2026-11-05" })).values.map((value: { latest: number | null }) => value.latest))
+    .toEqual([null, 71.4]);
+  expect((await ask("health", { type: "blood_pressure_systolic", from: "2026-11-04", to: "2026-11-05" })).values[0])
+    .toMatchObject({ min: 118, max: 118, average: 118 });
+  expect((await ask("health", { type: "water", from: "2026-11-04", to: "2026-11-05" })).values[0].total).toBe(0);
+});
+
+it("reads calendar events by time or words, never a removed one, a page at a time", async () => {
+  const titles = (answer: { events: { title: string }[] }) => answer.events.map(event => event.title);
+  const day = await ask("calendar", { from: "2026-11-04", to: "2026-11-05" });
+  expect(titles(day)).toEqual(["Board meeting", "Lunch with Sam"]);
+  expect(day.events[0]).toEqual({ id: expect.any(String), title: "Board meeting", calendar: "Work", start: "2026-11-04T10:00:00-05:00",
+    end: "2026-11-04T11:00:00-05:00", allDay: false, location: "Office, room 2", notes: "Bring the ring samples.", url: null,
+    people: [{ name: "Sam Lee", email: "sam@example.com", organizer: true }, { name: "Ana" }], device: "Android phone" });
+  expect(titles(await ask("calendar", { from: "2026-11-01", to: "2026-12-01", query: "sam" }))).toEqual(["Design review with Sam", "Lunch with Sam", "Board meeting"]);
+  expect(titles(await ask("calendar", { from: "2026-11-04T10:30", to: "2026-11-04T10:45" }))).toEqual(["Board meeting"]);
+  const newest = await ask("calendar", { from: "2026-11-01", to: "2026-12-01", query: "sam", limit: 2 });
+  expect(titles(await ask("calendar", { from: "2026-11-01", to: "2026-12-01", query: "sam", cursor: newest.nextCursor }))).toEqual(["Board meeting"]);
+  const first = await ask("calendar", { from: "2026-11-01", to: "2026-12-01", limit: 1 });
+  expect(titles(first)).toEqual(["Board meeting"]);
+  expect(titles(await ask("calendar", { from: "2026-11-01", to: "2026-12-01", cursor: first.nextCursor }))).toEqual(["Lunch with Sam", "Design review with Sam"]);
+  expect((await ask("calendar", { from: "2026-11-01", to: "2026-12-01", limit: 101 })).refused).toBeDefined();
+  expect(await ask("calendar", { from: "2026-11-01", to: "2026-12-01", cursor: "page-2" })).toEqual({ refused: "That cursor is not one this connector gave." });
 });
 
 it("lists visits in order, one per stay at a place, and says where to read on", async () => {
@@ -132,13 +182,13 @@ it("finds saved chats holding every word, with the matching lines and no device 
 });
 
 it("cuts a long matching line around the word", async () => {
-  const { sql, env: { DB } } = seeded();
+  const { sql, SPACES } = seeded();
   sql.exec(`INSERT INTO relay_chat_messages (chat_id, seq, role, text, at) VALUES ('${CHAT(2)}', 3, 'ai', '${"a".repeat(500)} needle ${"b".repeat(500)}', 1793816200000)`);
-  client = await connect(DB);
+  client = await connect(SPACES);
   const [{ lines }] = (await ask("search_chats", { query: "needle" })).chats;
   expect(lines[0].text).toMatch(/^…a+ needle b+…$/);
   expect(lines[0].text.length).toBe(302);
-  client = await connect(seeded().env.DB);
+  client = await connect(seeded().SPACES);
 });
 
 it("reads one chat with its saves and messages, a part at a time", async () => {
@@ -149,31 +199,75 @@ it("reads one chat with its saves and messages, a part at a time", async () => {
     ["you", "How thick should the stiffener be?"], ["step", "Read pcb/relay.kicad_pcb"],
     ["ai", "0.2 mm steel is enough for a ring this size. Glue it under the battery."], ["you", "Save the plan for the stiffener to Relay"]]);
   expect(JSON.stringify(chat)).not.toMatch(/seed-session|d0000000/);
-  const { sql, env: { DB } } = seeded();
+  const { sql, SPACES } = seeded();
   const insert = sql.prepare(`INSERT INTO relay_chat_messages (chat_id, seq, role, text, at) VALUES ('${CHAT(2)}', ?, 'you', 'More', 1793816200000)`);
   for (let seq = 3; seq < 250; seq++) insert.run(seq);
-  client = await connect(DB);
+  client = await connect(SPACES);
   const first = await ask("read_chat", { id: CHAT(2) });
   expect([first.messages.length, first.nextCursor]).toEqual([200, "199"]);
   const rest = await ask("read_chat", { id: CHAT(2), cursor: first.nextCursor });
   expect([rest.messages.length, rest.messages[0].text, rest.nextCursor]).toEqual([50, "More", null]);
   expect(await ask("read_chat", { id: CHAT(2), cursor: "page-2" })).toEqual({ refused: "That cursor is not one this connector gave." });
   expect(await ask("read_chat", { id: CHAT(9) })).toEqual({ refused: "No chat has this id." });
-  client = await connect(seeded().env.DB);
+  client = await connect(seeded().SPACES);
 });
 
 it("titles a note with no words, and lets a database fault through as an error, not as an answer", async () => {
-  const { sql, env: { DB } } = seeded();
+  const { sql, SPACES } = seeded();
   sql.exec(`INSERT INTO relay_notes (id, device_id, source, delivery_id, text, recorded_at, created_at) VALUES
     ('${ID(8)}', 'd0000000-0000-4000-8000-000000000002', 'ring', 'empty-delivery', '', 1793900000000, 0)`);
-  client = await connect(DB);
+  client = await connect(SPACES);
   expect((await ask("fetch", { id: ID(8) })).title).toBe("A ring note with no words");
-  client = await connect({ withSession: () => ({ prepare: () => { throw new Error("D1 is down"); } }) } as unknown as D1Database);
+  client = await connect({ idFromName: () => ({}), get: () => ({ query: async () => { throw new Error("The space is down"); } }) } as never);
   const { content, isError } = await client.callTool({ name: "fetch", arguments: { id: ID(1) } }) as { content: { text: string }[]; isError?: boolean };
-  expect([isError, content[0].text]).toEqual([true, expect.stringContaining("D1 is down")]);
+  expect([isError, content[0].text]).toEqual([true, expect.stringContaining("The space is down")]);
+  client = await connect(seeded().SPACES);
 });
 
-// The connector reads with every note's rights: only SELECT reaches the database from its code.
+it("reads only the grant's own person's space, and asks an app from before spaces to connect again", async () => {
+  const { SPACES } = seeded();
+  const ben = await connect(SPACES, { personId: BEN });
+  const found = JSON.parse((await ben.callTool({ name: "search", arguments: { query: "milk" } }) as { content: { text: string }[] }).content[0].text);
+  expect(found.notes.map((note: { id: string }) => note.id)).toEqual([ID(7)]);
+  expect(ids(await ask("search", { query: "ring" }))).not.toContain(ID(7));
+  const old = await mcpHandler.fetch(new Request("https://relay-mcp.example.com/mcp", { method: "POST" }), { SPACES, RELAY_WEBHOOKS: queue as never }, { props: {} });
+  expect([old.status, await old.json()]).toEqual([401, { error: "invalid_token", error_description: "Connect this AI app again." }]);
+});
+
+it("adds a note as the app's own device, once on a resend, and wakes the webhooks that take notes", async () => {
+  const { sql, SPACES } = seeded();
+  sql.exec(`INSERT INTO relay_webhooks (id, name, url, secret, kinds, sent_seq, created_at)
+    VALUES ('w-notes', 'Example database', 'https://db.example.com/relay', 'whsec_AAAA', '["notes"]', 0, 0)`);
+  client = await connect(SPACES);
+  const note = { clientId: "claude-note-0001", text: "Order the second PCB batch.", createdAt: "2026-11-04T18:00" };
+  const first = await ask("add_note", note);
+  expect(first).toEqual({ id: expect.stringMatching(/^[0-9a-f-]{36}$/), added: true });
+  expect(await ask("add_note", { ...note, text: "Changed on the resend." })).toEqual({ id: first.id, added: false });
+  expect(queue.sent).toEqual([{ webhook: "w-notes", person: ANA }]);
+  expect(sql.prepare("SELECT name, token_client_id, reaches, created_at, revoked_at FROM relay_devices WHERE id = ?").get(GRANT.deviceId!))
+    .toEqual({ name: "Claude", token_client_id: `app:${GRANT.deviceId}`, reaches: "app", created_at: NOW, revoked_at: null });
+  expect(await ask("fetch", { id: first.id })).toMatchObject({ text: "Order the second PCB batch.", source: "typed", device: "Claude",
+    recordedAt: "2026-11-04T18:00:00-05:00", place: null });
+  const placed = await ask("add_note", { clientId: "claude-note-0002", text: "At the fab.", lat: 43.65, lon: -79.38, place: "King St W" });
+  expect(await ask("fetch", { id: placed.id })).toMatchObject({ recordedAt: "2026-11-05T09:00:00-05:00", place: { name: "King St W", from: "phone" } });
+  expect(await ask("add_note", { clientId: "claude-note-0003", text: "Where?", lat: 43.65 })).toEqual({ refused: "Send lat and lon together." });
+  expect(await ask("add_note", { clientId: "claude-note-0003", text: "When?", createdAt: "yesterday" }))
+    .toEqual({ refused: "Give `createdAt` as a day or an ISO time." });
+  expect((await ask("add_note", { clientId: "short", text: "Hi" })).refused).toContain("clientId");
+  client = await connect(seeded().SPACES);
+});
+
+it("lets an app connected before adding read, but asks it to connect again to add", async () => {
+  const { sql, SPACES } = seeded();
+  client = await connect(SPACES, { personId: ANA });
+  expect(ids(await ask("search", { query: "milk" }))).toEqual([ID(3)]);
+  expect(await ask("add_note", { clientId: "claude-note-0001", text: "Hi" })).toEqual({ refused: RECONNECT });
+  expect(sql.prepare("SELECT count(*) AS count FROM relay_notes").get()).toEqual({ count: 3 });
+  client = await connect(seeded().SPACES);
+});
+
+// Only SELECT reaches a space from the connector, but for these writes: a used sign-in code, an app's device row and
+// its turning off. A note is added only through apps/relay/add-note.ts, as a phone's.
 const WRITES = /\b(?:INSERT|UPDATE|DELETE|REPLACE|UPSERT|CREATE|DROP|ALTER|PRAGMA|ATTACH|VACUUM)\b|\b(?:db|DB)\.exec\(|\.(?:batch|run)\(/;
 const writes = (source: string) => WRITES.test(source);
 
@@ -182,6 +276,17 @@ it("holds no statement but SELECT in the connector or its queries", () => {
   const files = [...readdirSync(folder).filter(name => name.endsWith(".ts") && !name.endsWith(".test.ts")).map(name => new URL(name, folder)),
     new URL("../apps/relay/queries.ts", import.meta.url)];
   expect(files.length).toBeGreaterThan(5);
-  for (const file of files) expect(writes(readFileSync(file, "utf8")), file.pathname).toBe(false);
+  const CODE_TAKEN = "DELETE FROM relay_connect_codes WHERE code_sha256 = ? AND expires_at > ? RETURNING person_id";
+  const ALLOWED: Record<string, string[]> = { "auth.ts": [CODE_TAKEN],
+    "answers.ts": [APP_DEVICE.slice(0, APP_DEVICE.indexOf("VALUES")), ".bind(adder.deviceId, adder.name, `app:${adder.deviceId}`, Date.now()).run()"],
+    "asker.ts": [JSON.stringify(APP_DEVICE_OFF), "db.prepare(APP_DEVICE_OFF).bind(Date.now(), deviceId).run()"] };
+  for (const file of files) {
+    let source = readFileSync(file, "utf8");
+    for (const allowed of ALLOWED[file.pathname.split("/").pop()!] ?? []) {
+      expect(source, file.pathname).toContain(allowed);
+      source = source.replace(allowed, "");
+    }
+    expect(writes(source), file.pathname).toBe(false);
+  }
   for (const bad of ["INSERT INTO relay_notes", "db.exec('x')", "db.batch([])", "statement.run()"]) expect(writes(bad), bad).toBe(true);
 });

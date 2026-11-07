@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { loginAuthority, reconcileLogin } from "./login-management";
+import { admittedEmails, loginAuthority, reconcileLogin } from "./login-management";
 import { accessStatus, changeMember } from "./members";
 import { cloudflare, fixture, site, employee, key } from "../../tests/employee-access/connections";
 import { lease } from "./core";
@@ -51,6 +51,18 @@ it("sends the live policy back with only its email list changed, to the recorded
   expect(f.sql.prepare("SELECT generation FROM wong_access_connections").get()).toEqual({ generation: 9 });
 });
 
+it("reads, imports and writes a policy that Cloudflare sends with no session time, and adds none", async () => {
+  delete cf.policy.session_duration;
+  cf.policy.include = [...owners, { email: { email: "ana@example.com" } }];
+  expect(await admittedEmails(f.core, loginAuthority(f.env)!)).toEqual([site.ownerEmail, "ana@example.com"]);
+  await hold(); await add();
+  await reconcileLogin(f.core, "policy");
+  expect(cf.writes).toHaveLength(1);
+  expect(Object.keys(cf.writes[0])).not.toContain("session_duration");
+  expect(cf.writes[0]).toMatchObject({ name: "Business people", approval_required: true, require: cf.policy.require });
+  expect(work()).toEqual({ generation: 2, status: "ready", outcome: "policy_readback_matches", error_code: null });
+});
+
 it("makes no provider call on a preview, without the key, or before permissions start", async () => {
   await hold(); await add();
   expect(loginAuthority(f.env)).toEqual(JSON.parse(key));
@@ -96,14 +108,12 @@ it("refuses mismatched ownership, shared or unreviewed policies without writing"
   cf.extras = [{ id: "another", decision: "non_identity", include: [{ service_token: { token_id: "one" } }] },
     { id: "third", decision: "non_identity", include: [{ service_token: { token_id: "two" } }] }];
   expect(await failure()).toMatchObject({ error_code: "login_policy_review_required" });
-  // Relay's device keys may keep one more machine policy, of service tokens alone; a second is refused.
+  // An old Relay devices policy beside the checker's is one machine policy too many.
   const devices = { id: "devices", name: "Relay devices", decision: "non_identity", include: [{ service_token: { token_id: "phone" } }] };
-  for (const extras of [[cf.extras[0], devices, { ...devices, id: "devices-2" }], [cf.extras[0], { ...devices, include: [{ everyone: {} }] }]]) {
-    cf.extras = extras; expect(await failure()).toMatchObject({ error_code: "login_policy_review_required" });
-  }
+  cf.extras = [cf.extras[0], devices]; expect(await failure()).toMatchObject({ error_code: "login_policy_review_required" });
   expect(cf.writes).toEqual([]);
-  // The verification machine's own policy, and Relay's devices', are preserved beside the human one.
-  cf.extras = [{ id: "machine", decision: "non_identity", include: [{ service_token: { token_id: "verification" } }] }, devices];
+  // The verification machine's own policy is preserved beside the human one.
+  cf.extras = [{ id: "machine", decision: "non_identity", include: [{ service_token: { token_id: "verification" } }] }];
   expect(await failure()).toMatchObject({ status: "ready" });
   expect(cf.writes).toHaveLength(1);
 });

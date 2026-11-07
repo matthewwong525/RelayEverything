@@ -1,13 +1,11 @@
 // The sender: each webhook reads the send log from its own place, one group at a time, and moves its place only after a
 // 2xx. A queue message only says "look now" for one webhook; the lease keeps one sender per webhook at a time.
-import { MINUTE, session, type Db, type Env } from "../store.ts";
+import { spaceOf, vouch, type Files, type PersonSpace, type SpaceEnv } from "../space.ts";
+import { MINUTE, type Db, type Env } from "../store.ts";
+import { ownerOf, type Entry, type KindId } from "../kinds.ts";
 import { checkAddress } from "./address.ts";
-import { healthSamples, locationPoints, noteCreated, noteUpdated, type HealthRow, type LocationRow, type NoteRow } from "./format.ts";
-import { base64, signedHeaders } from "./sign.ts";
-
-/** What a webhook takes, as the owner ticks it; notes always. */
-export type Kind = "notes" | "health" | "locations";
-type Entry = { seq: number; kind: "note.created" | "note.updated" | "health" | "location"; ref: string; logged_at: number };
+import { BEHIND, TAKES } from "./log.ts";
+import { signedHeaders } from "./sign.ts";
 export type Hook = { id: string; name: string; url: string; secret: string; kinds: string; active: number; sent_seq: number;
   pending_seq: number | null; backfill_seq: number | null; lease_until: number | null; tries: number; next_try_at: number | null;
   failing_since: number | null; last_status: number | null; last_error: string | null; last_sent_at: number | null; created_at: number };
@@ -20,34 +18,26 @@ const PER_RUN = 20;
 const LEASE = 2 * MINUTE;
 const TIMEOUT = 15_000;
 const SLACK = 5_000;
-const AUDIO_WAIT = 2 * MINUTE;
 const AUDIO_RETRY = 30;
 /** Seconds before each retry after a failed send, about 22 hours in all; then the webhook shows as failing. */
 export const DELAYS = [30, 120, 600, 1800, 3600, 7200, 14_400, 21_600, 28_800];
 
-/** True when the log entry `o` is of a kind the webhook `w` takes. */
-export const TAKES = `(CASE o.kind WHEN 'health' THEN 'health' WHEN 'location' THEN 'locations' ELSE 'notes' END)
-  IN (SELECT value FROM json_each(w.kinds))`;
-/** True when webhook `w` should send now: active, not failing, not waiting for a retry, and behind the log. */
-export const BEHIND = `w.active = 1 AND w.failing_since IS NULL AND (w.next_try_at IS NULL OR w.next_try_at <= ?)
-  AND EXISTS (SELECT 1 FROM relay_outbox o WHERE o.seq > w.sent_seq AND ${TAKES})`;
-
-/** Asks the queue to run each webhook now. */
-export async function wakeEach(env: Pick<Env, "RELAY_WEBHOOKS">, ids: string[]) {
-  if (ids.length) await env.RELAY_WEBHOOKS.sendBatch(ids.map(webhook => ({ body: { webhook } })));
+/** Asks the queue to run each of a person's webhooks now. The message names the person, whose space is opened. */
+export async function wakeEach(env: Pick<Env, "RELAY_WEBHOOKS">, person: string, ids: string[]) {
+  if (ids.length) await env.RELAY_WEBHOOKS.sendBatch(ids.map(webhook => ({ body: { webhook, person } })));
 }
 
 /** After a store: runs every active webhook that takes one of `kinds`. It never fails a route, as the sweep catches a
  *  lost wake-up. */
-export async function wake(env: Env, kinds: Kind[]) {
+export async function wake(env: Pick<Env, "RELAY_WEBHOOKS">, space: PersonSpace, kinds: KindId[]) {
   if (!kinds.length) return;
   try {
-    const { results } = await session(env).prepare(`SELECT id FROM relay_webhooks w WHERE active = 1 AND failing_since IS NULL
+    const { results } = await space.db.prepare(`SELECT id FROM relay_webhooks w WHERE active = 1 AND failing_since IS NULL
       AND EXISTS (SELECT 1 FROM json_each(w.kinds) WHERE value IN (SELECT value FROM json_each(?)))`)
       .bind(JSON.stringify(kinds)).all<{ id: string }>();
-    await wakeEach(env, results.map(({ id }) => id));
+    await wakeEach(env, space.personId, results.map(({ id }) => id));
   } catch (error) {
-    console.error("Relay webhooks: the wake-up was lost", error);
+    console.error("Relay Everything webhooks: the wake-up was lost", error);
   }
 }
 
@@ -69,8 +59,8 @@ const release = (db: Db, id: string, lease: number) =>
 const behind = async (db: Db, id: string) =>
   !!await db.prepare(`SELECT 1 FROM relay_webhooks w WHERE w.id = ? AND ${BEHIND}`).bind(id, Date.now()).first();
 
-/** The next group: a note alone, or up to 500 health samples or location points in a row. A frozen group ends at
- *  `pending_seq`, so every retry sends the same one. */
+/** The next group: a note alone, or up to 500 health samples, location points or calendar events in a row. A frozen
+ *  group ends at `pending_seq`, so every retry sends the same one. */
 async function groupOf(db: Db, hook: Hook): Promise<Entry[]> {
   const { results } = await db.prepare(`SELECT o.seq, o.kind, o.ref, o.logged_at FROM relay_outbox o, relay_webhooks w
     WHERE w.id = ? AND o.seq > w.sent_seq AND (w.pending_seq IS NULL OR o.seq <= w.pending_seq) AND ${TAKES}
@@ -81,38 +71,8 @@ async function groupOf(db: Db, hook: Hook): Promise<Entry[]> {
   return other === -1 ? results : results.slice(0, other);
 }
 
-const NOTE = `SELECT n.*, d.name AS device_name FROM relay_notes n JOIN relay_devices d ON d.id = n.device_id WHERE n.id = ?`;
-const ids = (group: Entry[]) => JSON.stringify(group.map(entry => Number(entry.ref)));
-const inOrder = `IN (SELECT value FROM json_each(?)) ORDER BY 1`;
-
-/** A ring note's recording in base64: "wait" while Pebble's handler may still be saving it, null when it never came. */
-async function audioOf(env: Env, row: NoteRow): Promise<string | null | "wait"> {
-  if (!row.audio_key) return null;
-  const object = await env.RELAY_BUCKET.get(row.audio_key);
-  if (object) return base64(new Uint8Array(await new Response(object.body).arrayBuffer()));
-  return Date.now() - row.created_at < AUDIO_WAIT ? "wait" : null;
-}
-
-/** The message body for a group; "skip" for a note deleted since, as Pebble's handler does when its recording fails. */
-async function bodyOf(env: Env, db: Db, group: Entry[]): Promise<{ type: string } | "skip" | "wait"> {
-  const [first] = group;
-  const at = group.at(-1)!.logged_at;
-  if (first.kind === "health") {
-    const { results } = await db.prepare(`SELECT h.*, d.name AS device_name FROM relay_health h JOIN relay_devices d ON d.id = h.device_id
-      WHERE h.id ${inOrder}`).bind(ids(group)).all<HealthRow>();
-    return healthSamples(results, at);
-  }
-  if (first.kind === "location") {
-    const { results } = await db.prepare(`SELECT l.*, d.name AS device_name FROM relay_locations l JOIN relay_devices d ON d.id = l.device_id
-      WHERE l.id ${inOrder}`).bind(ids(group)).all<LocationRow>();
-    return locationPoints(results, at);
-  }
-  const row = await db.prepare(NOTE).bind(first.ref).first<NoteRow>();
-  if (!row) return "skip";
-  if (first.kind === "note.updated") return noteUpdated(row, at);
-  const audio = await audioOf(env, row);
-  return audio === "wait" ? "wait" : noteCreated(row, audio, at);
-}
+/** The message body for a group, built by the kind that owns its log rows. */
+const bodyOf = (files: Files, db: Db, group: Entry[]) => ownerOf(group[0].kind)!.build!(files, db, group);
 
 /** One POST, with no redirects followed and 15 seconds to answer. */
 export async function post(url: string, secret: string, id: string, body: string): Promise<Answer> {
@@ -155,13 +115,13 @@ async function failed(db: Db, hook: Hook, lease: number, error: string, status: 
 }
 
 /** Sends the next group and says what follows: "next" for another, "done" when caught up, or how the run ends. */
-async function step(env: Env, db: Db, hook: Hook, lease: number): Promise<"next" | "done" | { wait: Wait }> {
+async function step(files: Files, db: Db, hook: Hook, lease: number): Promise<"next" | "done" | { wait: Wait }> {
   const refusal = checkAddress(hook.url);
   if (refusal) return { wait: await failed(db, { ...hook, tries: DELAYS.length }, lease, `Relay Everything no longer sends to this address: ${refusal}.`) };
   const group = await groupOf(db, hook);
   if (!group.length) return "done";
   const last = group.at(-1)!.seq;
-  const body = await bodyOf(env, db, group);
+  const body = await bodyOf(files, db, group);
   if (body === "skip") {
     await advance(db, hook, lease, last);
     return "next";
@@ -176,7 +136,7 @@ async function step(env: Env, db: Db, hook: Hook, lease: number): Promise<"next"
 }
 
 /** Sends groups while it holds the lease, up to `budget`, then gives the lease up. */
-async function drain(env: Env, db: Db, id: string, lease: number, budget: number): Promise<{ sent: number; wait?: Wait }> {
+async function drain(files: Files, db: Db, id: string, lease: number, budget: number): Promise<{ sent: number; wait?: Wait }> {
   try {
     for (let sent = 0; sent < budget; sent++) {
       const hook = await renew(db, id, lease);
@@ -185,7 +145,7 @@ async function drain(env: Env, db: Db, id: string, lease: number, budget: number
       lease = hook.lease_until!;
       // Paused, failing, or waiting for a retry that another message carries.
       if (!hook.active || hook.failing_since !== null || (hook.next_try_at ?? 0) > Date.now() + SLACK) return { sent, wait: null };
-      const next = await step(env, db, hook, lease);
+      const next = await step(files, db, hook, lease);
       if (next === "done") return { sent };
       if (next !== "next") return { sent, ...next };
     }
@@ -197,34 +157,35 @@ async function drain(env: Env, db: Db, id: string, lease: number, budget: number
 
 /** One webhook's run. Before it ends, it looks at the log once more after giving up its lease, so a row stored during
  *  the run never waits for the sweep. After 20 messages it queues itself again, so one run stays short. */
-export async function run(env: Env, id: string): Promise<Wait> {
-  const db = session(env);
+export async function run(env: Env, space: PersonSpace, id: string): Promise<Wait> {
+  const { db, files } = space;
   let sent = 0;
   // A new round only follows a row stored during the last one, so the loop ends once the stores stop.
   for (;;) {
     const lease = await take(db, id);
     if (lease === null) return null;
-    const result = await drain(env, db, id, lease, PER_RUN - sent);
+    const result = await drain(files, db, id, lease, PER_RUN - sent);
     sent += result.sent;
     if (result.wait !== undefined) return result.wait;
     if (!await behind(db, id)) return null;
     if (sent >= PER_RUN) {
-      await wakeEach(env, [id]);
+      await wakeEach(env, space.personId, [id]);
       return null;
     }
   }
 }
 
-/** The queue's consumer: each message names a webhook to run. A run that fails on Relay's side tries again in 30 s. */
+/** The queue's consumer, only on a Worker with SPACES: each message names a webhook and its person, whose space it
+ *  opens. A message from before spaces names no person and is dropped. A run that fails on our side tries again. */
 export async function consume(batch: MessageBatch, env: Env) {
   for (const message of batch.messages) {
-    const id = (message.body as { webhook?: unknown } | null)?.webhook;
+    const { webhook, person } = (message.body ?? {}) as { webhook?: unknown; person?: unknown };
     try {
-      const wait = typeof id === "string" ? await run(env, id) : null;
+      const wait = typeof webhook === "string" && typeof person === "string" ? await run(env, spaceOf(env as SpaceEnv, vouch("queue", person)), webhook) : null;
       if (wait === null) message.ack();
       else message.retry({ delaySeconds: wait });
     } catch (error) {
-      console.error("Relay webhooks: a run failed", error);
+      console.error("Relay Everything webhooks: a run failed", error);
       message.retry({ delaySeconds: AUDIO_RETRY });
     }
   }

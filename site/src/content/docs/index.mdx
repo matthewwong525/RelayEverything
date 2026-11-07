@@ -9,15 +9,15 @@ hero:
     alt: Data goes from your phone to your own database, and your AI reads it there
     html: |
       <svg viewBox="0 0 240 200" width="320" role="img" aria-label="Data goes from your phone to your own database, and your AI reads it there">
-        <rect x="14" y="40" width="58" height="104" rx="12" fill="none" stroke="#6b7486" stroke-width="6"/>
-        <circle cx="43" cy="128" r="4" fill="#6b7486"/>
-        <path d="M84 92h40" stroke="#3b5bdb" stroke-width="6" stroke-linecap="round" stroke-dasharray="2 12"/>
-        <path d="M120 82l12 10-12 10" fill="none" stroke="#3b5bdb" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-        <ellipse cx="176" cy="62" rx="40" ry="13" fill="none" stroke="#6b7486" stroke-width="6"/>
-        <path d="M136 62v64c0 7 18 13 40 13s40-6 40-13V62" fill="none" stroke="#6b7486" stroke-width="6"/>
-        <path d="M136 94c0 7 18 13 40 13s40-6 40-13" fill="none" stroke="#6b7486" stroke-width="6"/>
-        <path d="M176 148v10" stroke="#3b5bdb" stroke-width="5" stroke-linecap="round"/>
-        <path d="M176 166l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#3b5bdb"/>
+        <rect class="relay-hero-line" x="14" y="40" width="58" height="104" rx="12" fill="none" stroke="#5E6660" stroke-width="6"/>
+        <circle cx="43" cy="128" r="4" fill="#5E6660" class="relay-hero-dot"/>
+        <path class="relay-hero-path" d="M84 92h40" stroke="#0E7A5A" stroke-width="6" stroke-linecap="round" stroke-dasharray="2 12"/>
+        <path class="relay-hero-path" d="M120 82l12 10-12 10" fill="none" stroke="#0E7A5A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+        <ellipse class="relay-hero-line" cx="176" cy="62" rx="40" ry="13" fill="none" stroke="#5E6660" stroke-width="6"/>
+        <path class="relay-hero-line" d="M136 62v64c0 7 18 13 40 13s40-6 40-13V62" fill="none" stroke="#5E6660" stroke-width="6"/>
+        <path class="relay-hero-line" d="M136 94c0 7 18 13 40 13s40-6 40-13" fill="none" stroke="#5E6660" stroke-width="6"/>
+        <path class="relay-hero-spark" d="M176 148v10" stroke="#F5A524" stroke-width="5" stroke-linecap="round"/>
+        <path class="relay-hero-spark" d="M176 166l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#F5A524"/>
       </svg>
   actions:
     - text: Get started
@@ -59,15 +59,15 @@ import { Badge, Card, CardGrid } from '@astrojs/starlight/components';
 
 <ol class="relay-flow">
   <li><strong>Collect</strong>Your phone keeps each note. Nothing leaves it until you turn on sending.</li>
-  <li><strong>Send</strong>With sending on, the Relay Everything app sends notes, health and location to your Relay Everything server. Its key only adds data.</li>
+  <li><strong>Send</strong>With sending on, the Relay Everything app sends notes, health and location to your own space on a Relay Everything server. Its key only adds data.</li>
   <li><strong>Send on</strong>Webhooks copy each new item to your own database.</li>
   <li><strong>Read with AI</strong>Your AI reads it through MCP. Coming.</li>
 </ol>
 
 ## A ring to take notes
 
-A ring is one way to take a note: hold the band, talk, and let go. A Pebble Index ring works today: its notes come through the Pebble app to your Relay Everything server, so they need sending on. The Relay Everything ring is in design: see [the ring](ring/how-it-works/).
+A ring is one way to take a note: hold the band, talk, and let go. The Relay Everything ring is in design. When it is ready, its notes will come through the phone app, so they will need sending on: see [the ring](ring/how-it-works/).
 
-Your Relay Everything server is your own: you [run it in your own Cloudflare account](start/run-your-own/), with one request to your AI, on Cloudflare's free plan.
+Your data is in your own space, which only you open. [Sign up](start/sign-up/) on a Relay Everything server, or [run your own in your own Cloudflare account](start/run-your-own/), with one request to your AI, on Cloudflare's free plan.
 
 Relay Everything is built in the open. All of its code is [on GitHub](https://github.com/matthewwong525/RelayEverything), under the MIT license: the phone app, the server, this website, and the ring's models and board.

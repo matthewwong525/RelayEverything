@@ -2,16 +2,20 @@ import 'package:flutter/foundation.dart';
 
 import 'dart:async';
 
+import 'data/attachments.dart';
 import 'data/settings.dart';
+import 'sync/calendar.dart';
 import 'voice/model.dart';
 
-export 'data/settings.dart' show Settings;
+export 'data/attachments.dart' show NewFile, sizeLabel;
+export 'data/settings.dart' show LocationMode, SendPlace, Settings;
+export 'sync/calendar.dart' show PhoneCalendar;
 export 'voice/model.dart' show ModelState, ModelProblem;
 
 /// One row of the timeline: a note typed or said on this phone.
 class Entry {
   const Entry({required this.text, required this.at, this.place, this.sent = false, this.waiting = false, this.voice = false,
-    this.writing = false, this.recording, this.length});
+    this.writing = false, this.recording, this.length, this.files = const []});
 
   final String text;
   final DateTime at;
@@ -28,9 +32,45 @@ class Entry {
   /// The recording on this phone, to play: [Relay.play] takes it.
   final String? recording;
   final Duration? length;
+
+  /// The note's files on this phone, in the order they were added.
+  final List<EntryFile> files;
+}
+
+/// One file on a note, kept on this phone.
+class EntryFile {
+  const EntryFile({required this.name, required this.type, required this.size, required this.path});
+
+  final String name;
+  final String type;
+  final int size;
+  /// The app's copy, as a full path.
+  final String path;
+
+  /// A picture shows small in the note; any other file shows as a row with its name and size.
+  bool get picture => type.startsWith('image/');
 }
 
 enum SyncStatus { idle, syncing, synced, offline, refused }
+
+/// When one kind of data, health, places or the calendar, last reached the server, and how many of it wait to send.
+class SendState {
+  const SendState({this.at, this.waiting = 0});
+
+  /// Null when none went yet.
+  final DateTime? at;
+  final int waiting;
+}
+
+/// The last time the person's own webhook did not take an upload: its answer's [status], or null for no answer. A
+/// [file] is a file it refused as too large, which the phone dropped.
+class WebhookProblem {
+  const WebhookProblem({required this.at, this.status, this.file});
+
+  final DateTime at;
+  final int? status;
+  final String? file;
+}
 
 /// What the screens read and do. The app's controller is one; a test's fake is another.
 abstract class Relay extends ChangeNotifier {
@@ -41,24 +81,60 @@ abstract class Relay extends ChangeNotifier {
   int get waiting;
   Settings get settings;
 
+  /// Health readings and location points: when each last went, and how many wait. Settings shows them.
+  SendState get healthSent;
+  SendState get pointsSent;
+  /// Calendar events and removals: when they last went, and how many wait.
+  SendState get calendarSent;
+  /// The phone's calendars, while the calendar is on; each has its own switch in Settings.
+  List<PhoneCalendar> get calendars;
+  /// True on iPhone, where *Location history* has two ways to keep places.
+  bool get locationModes;
+
   /// Each returns null on success, or the words to show when it failed.
   Future<String?> connect(String code);
+  /// *Sign in to connect*: the person signs in on [server] inside the app and confirms, and this phone gets its own
+  /// key. Null also when the person closed the sign-in: then [connected] stays false.
+  Future<String?> signIn(String server);
+  Future<String?> setLocationMode(LocationMode mode);
   Future<String?> setServer(String server);
   Future<String?> setPinNotes(bool on);
   Future<String?> setHistory(bool on);
   Future<String?> setHealth(bool on);
+  /// Turns the calendar on, after the phone's permission, or off, which drops what of it did not go.
+  Future<String?> setCalendar(bool on);
+  /// Turns one of the phone's calendars on or off. Its events leave the space at the next send.
+  Future<void> setCalendarShown(String id, bool on);
 
   /// How many notes never went to the server: the earlier-notes prompt asks about them when sending turns on.
   Future<int> earlierNotes();
-  /// Turns sending on, with a key already kept; [sendEarlier] queues the earlier notes too, oldest first.
-  Future<String?> startSending({required bool sendEarlier});
-  /// Turns sending off: stops health and location history and drops what of them did not go. Keeps notes and the key.
+  /// Turns sending on to [place], or to the place set before, with its key or webhook already kept. What waits moves
+  /// there too. [sendEarlier] queues the earlier notes too, oldest first.
+  Future<String?> startSending({required bool sendEarlier, SendPlace? place});
+
+  /// The person's own webhook, when one is kept: its address and secret.
+  String? get webhookAddress;
+  String? get webhookSecret;
+  /// The last answer from the webhook that was not 2xx, or null.
+  WebhookProblem? get webhookProblem;
+  /// A new `whsec_` secret to show, copy and save.
+  String newWebhookSecret();
+  /// Keeps the webhook's address and secret; returns why it could not.
+  Future<String?> saveWebhook(String address, String secret);
+  /// *Send a test*: a signed test message to [address]. Returns the words to show: the receiver's answer, or why not.
+  Future<String> testWebhook(String address, String secret);
+  /// Turns sending off: stops health, the calendar and location history and drops what of them did not go. Keeps notes
+  /// and the key.
   Future<void> stopSending();
 
   /// Forgets the key and turns sending off.
   Future<void> disconnect();
   Future<void> sync();
-  Future<void> addNote(String text);
+  /// Keeps a note with words, files, or both. Returns the words to show for files left out, such as one over 25 MB,
+  /// or for a note with nothing in it; null when all of it was kept.
+  Future<String?> addNote(String text, {List<NewFile> files = const []});
+  /// Opens a note's file in an app on the phone.
+  Future<void> openFile(EntryFile file);
 
   /// The speech model voice notes need, and its download's progress from 0 to 1.
   ModelState get speechModel;

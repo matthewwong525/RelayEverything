@@ -38,8 +38,8 @@ it("hands an app's handlers the saved keys its api.ts lists, and still no memory
 
 it("judges every route of the app by the keys it lists, bare handlers and described actions alike", () => {
   expect(appKeyUse.filter(({ apps }) => apps.includes("hello"))).toEqual([{ apps: ["hello"], keys: ["cloudflare"], need: "read" }, { apps: ["hello"], keys: ["cloudflare"], need: "read" }]);
-  // A bare handler may list its own key: Relay's Pebble route alone needs the signing secret.
-  expect(appKeyUse.filter(({ apps }) => apps.includes("relay"))).toEqual([{ apps: ["relay"], keys: ["relay-pebble-signing"], need: "write" }]);
+  // Relay Everything's routes list no key: each device key's SHA-256 is in the directory, and its data in its space.
+  expect(appKeyUse.filter(({ apps }) => apps.includes("relay"))).toEqual([]);
   // The supplied example alone: a build may hold other folders.
   expect(appActions.filter(({ app }) => app === "hello").map(({ action, access }) => [action.operationId, access])).toEqual([["hello.greeting", { apps: ["hello"], keys: ["cloudflare"] }]]);
 });

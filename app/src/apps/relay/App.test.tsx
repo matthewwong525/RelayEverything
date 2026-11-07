@@ -10,23 +10,26 @@ const NOW = Date.now();
 const DAY = 86_400_000;
 const place = { lat: 43.6532, lon: -79.3832, accuracy: 12, name: "Queen St W", from: "phone" as const };
 const note = (id: string, more: object = {}) =>
-  ({ id, source: "typed", text: `Note ${id}`, recordedAt: NOW, device: "Android phone", audio: false, place: null, ...more });
+  ({ id, source: "typed", text: `Note ${id}`, recordedAt: NOW, device: "Android phone", audio: false, place: null, attachments: [], ...more });
 const FIRST = { notes: [
-  note("00000000-0000-4000-8000-000000000001", { source: "ring", audio: true, text: "", device: "Pebble app",
+  note("00000000-0000-4000-8000-000000000001", { source: "ring", audio: true, text: "", device: "iPad",
     place: { ...place, name: null, from: "history" } }),
   note("00000000-0000-4000-8000-000000000002", { place }),
 ], next: NOW, nextId: "00000000-0000-4000-8000-000000000002" };
 const OLDER = { notes: [note("00000000-0000-4000-8000-000000000003", { recordedAt: NOW - 2 * DAY })], next: null, nextId: null };
 const SUMMARY = { day: "2026-11-05", notes: 2, steps: 8432, sleepMinutes: 455,
   heartRate: { min: 52, max: 131, average: 74 }, workouts: { count: 1, minutes: 40 },
-  places: [{ name: "Queen St W", lat: 43.65, lon: -79.38, from: NOW - 3_600_000, to: NOW }, { name: "Home", lat: 43.66, lon: -79.4, from: NOW, to: NOW }] };
-const EMPTY = { day: "2026-11-05", notes: 0, steps: 0, sleepMinutes: 0, heartRate: null, workouts: { count: 0, minutes: 0 }, places: [] };
+  weightKg: 71.2, hrvSdnn: 48, bloodPressure: [{ at: NOW, upper: 118, lower: 76 }], waterMl: 1500,
+  places: [{ name: "Queen St W", lat: 43.65, lon: -79.38, from: NOW - 3_600_000, to: NOW }, { name: "Home", lat: 43.66, lon: -79.4, from: NOW, to: NOW }],
+  events: [{ title: "Board meeting", start: NOW, end: NOW + 3_600_000, allDay: false, people: ["Sam Lee", "Ana"] },
+    { title: "US Holiday", start: NOW, end: NOW + DAY, allDay: true, people: [] }] };
+const EMPTY = { day: "2026-11-05", notes: 0, steps: 0, sleepMinutes: 0, heartRate: null, workouts: { count: 0, minutes: 0 }, places: [], events: [] };
 
 const CHAT_1 = "c0000000-0000-4000-8000-000000000001";
 const CHAT_2 = "c0000000-0000-4000-8000-000000000002";
 const listed = (id: string, title: string, more: object = {}) =>
   ({ id, title, project: "relay-ring", app: "claude-code", startedAt: NOW, lastAt: NOW, messages: 4, savedByAi: false, ...more });
-const CHATS = { chats: [listed(CHAT_1, "Stiffener plan", { savedByAi: true }), listed(CHAT_2, "Fix the Pebble webhook", { messages: 1 })], next: null, nextId: null };
+const CHATS = { chats: [listed(CHAT_1, "Stiffener plan", { savedByAi: true }), listed(CHAT_2, "Fix the webhook signature", { messages: 1 })], next: null, nextId: null };
 const ONE_CHAT = { chat: CHATS.chats[0], next: 2, saves: [{ id: "e1", title: "Stiffener plan", text: "Use a 0.2 mm steel stiffener.", createdAt: NOW }],
   messages: [{ seq: 0, role: "you", text: "How thick should the stiffener be?", at: NOW }, { seq: 1, role: "step", text: "Read pcb/relay.kicad_pcb", at: NOW },
     { seq: 2, role: "ai", text: "0.2 mm is enough.", at: NOW }] };
@@ -53,6 +56,9 @@ beforeEach(() => {
     if (path === "/api/access/apps") return Response.json({ state: "current", role: "owner", revision: 1, apps: ["access", "relay"] });
     // The AI apps card has its own test: AiCard.test.tsx.
     if (path === "/apps/relay/api/ai-apps") return Response.json({ address: "https://relay-mcp.example.com/mcp", apps: [] });
+    // The sign-in, devices and account have their own test: SignIn.test.tsx.
+    if (path === "/apps/relay/api/account") return Response.json({ email: "ana@example.com" });
+    if (path === "/apps/relay/api/devices") return Response.json({ devices: [] });
     if (path.startsWith("/apps/relay/api/")) return answer(path.slice("/apps/relay/api/".length), init);
     throw new Error(`Unexpected request: ${path}`);
   });
@@ -75,7 +81,12 @@ it("shows today's summary, every note with its place and recording, and the plac
   const tiles = await screen.findByRole("region", { name: "Today" });
   expect(within(tiles).getByText("8,432")).toBeTruthy();
   expect(within(tiles).getByText("7 h 35 min")).toBeTruthy();
-  expect(screen.getByText(/Heart rate 52 to 131 bpm, 74 on average\. 1 workout, 40 min\./)).toBeTruthy();
+  expect(screen.getByText(/Heart rate 52 to 131 bpm, 74 on average\. 1 workout, 40 min\. Weight 71\.2 kg\. Heart rate variability 48 ms\. Blood pressure 118\/76 mmHg\. Water 1,500 ml\./))
+    .toBeTruthy();
+  const calendar = screen.getByRole("region", { name: "Calendar" });
+  expect(within(calendar).getByText("Board meeting")).toBeTruthy();
+  expect(within(calendar).getByText(/Sam Lee, Ana/)).toBeTruthy();
+  expect(within(calendar).getByText("All day")).toBeTruthy();
   const places = screen.getByRole("region", { name: "Places" });
   expect(within(places).getByText("Home")).toBeTruthy();
   expect(within(places).getByText(/ to /)).toBeTruthy();
@@ -83,7 +94,7 @@ it("shows today's summary, every note with its place and recording, and the plac
   const notes = await screen.findByRole("region", { name: "Notes" });
   const ring = within(notes).getByLabelText("Ring note");
   expect(within(ring).getByText("No words, only the recording.")).toBeTruthy();
-  expect(within(ring).getByText(/43\.6532, -79\.3832 · Pebble app/)).toBeTruthy();
+  expect(within(ring).getByText(/43\.6532, -79\.3832 · iPad/)).toBeTruthy();
   expect(within(ring).getByLabelText("The recording").getAttribute("src")).toBe("/apps/relay/api/audio?id=00000000-0000-4000-8000-000000000001");
   const typed = within(notes).getByLabelText("Typed note");
   expect(within(typed).getByText("Note 00000000-0000-4000-8000-000000000002")).toBeTruthy();
@@ -91,8 +102,8 @@ it("shows today's summary, every note with its place and recording, and the plac
   expect(within(typed).queryByLabelText("The recording")).toBeNull();
 
   const { day, offset } = today();
-  expect(reads()).toEqual(["/apps/relay/api/chats", "/apps/relay/api/webhooks", "/apps/relay/api/ai-apps", `/apps/relay/api/summary?day=${day}&offset=${offset}`,
-    "/apps/relay/api/timeline"]);
+  expect(reads()).toEqual(["/apps/relay/api/account", "/apps/relay/api/chats", "/apps/relay/api/webhooks", "/apps/relay/api/ai-apps",
+    "/apps/relay/api/devices", `/apps/relay/api/summary?day=${day}&offset=${offset}`, "/apps/relay/api/timeline"]);
   expect(await screen.findByText("No AI app connected yet.")).toBeTruthy();
 });
 
@@ -117,6 +128,7 @@ it("shows an empty day and an empty timeline in words", async () => {
   expect(await screen.findByText("None yet")).toBeTruthy();
   expect(screen.getByText("No heart rate yet today. No workouts yet today.")).toBeTruthy();
   expect(screen.getByText(/No places yet today/)).toBeTruthy();
+  expect(screen.getByText(/No events today/)).toBeTruthy();
   expect(await screen.findByText(/No notes yet/)).toBeTruthy();
   expect(await screen.findByText(/No chats yet/)).toBeTruthy();
   answer = route => route === "timeline" ? Response.json({ notes: [], next: null, nextId: null }) : Response.json({ ...EMPTY, workouts: { count: 3, minutes: 95 } });
@@ -129,10 +141,14 @@ it("says when the summary or the notes fail, and tries each again", async () => 
   await screen.findByText("Today's summary could not be loaded.");
   expect(screen.getByText("Notes could not be loaded.")).toBeTruthy();
   failing = false;
-  answer = route => route.startsWith("summary?") ? Response.json({ ...SUMMARY, workouts: { count: 3, minutes: 95 } }) : ordinary(route);
+  const other = { workouts: { count: 3, minutes: 95 }, hrvSdnn: undefined, hrvRmssd: 40, restingHeartRate: 55, bloodOxygen: { min: 94, average: 97 },
+    cycleFlow: 2, mindfulMinutes: 10, events: [{ title: "", start: NOW, end: NOW + 60_000, allDay: false, people: [] }] };
+  answer = route => route.startsWith("summary?") ? Response.json({ ...SUMMARY, ...other }) : ordinary(route);
   const [summary, notes] = screen.getAllByRole("button", { name: "Try again" });
   fireEvent.click(summary);
-  expect(await screen.findByText(/3 workouts, 95 min\./)).toBeTruthy();
+  expect(await screen.findByText(/3 workouts, 95 min\. Weight 71\.2 kg\. Resting heart rate 55 bpm\. Heart rate variability 40 ms\. Blood oxygen 94% lowest, 97% on average\..* Cycle flow medium\. 10 mindful min\./))
+    .toBeTruthy();
+  expect(screen.getByText("No title")).toBeTruthy();
   fireEvent.click(notes);
   expect(await screen.findByLabelText("Ring note")).toBeTruthy();
 });
@@ -146,24 +162,6 @@ it("drops an answer that comes after the page closed", async () => {
   await act(async () => { late(Response.json(FIRST)); });
 });
 
-it("tells how to set up a phone and the Pebble app", async () => {
-  await open();
-  fireEvent.click(await screen.findByRole("button", { name: "Set up a phone" }));
-  const phone = await screen.findByRole("dialog", { name: "Set up a phone" });
-  expect(within(phone).getByText(/relay-device-key\.mjs create --name "Android phone"/)).toBeTruthy();
-  expect(within(phone).getByRole("link", { name: "Relay Everything's releases" }).getAttribute("href")).toBe("https://github.com/matthewwong525/RelayEverything/releases/latest");
-  expect(within(phone).getByLabelText("The message to copy")).toHaveProperty("value", window.location.origin);
-  // The app keeps notes on the phone by default, so the steps name the Settings switch first.
-  expect(within(phone).getByText(/keeps notes on the phone until you turn on sending/)).toBeTruthy();
-  expect(within(phone).getByText("Send to Relay Everything").tagName).toBe("B");
-  expect(within(phone).getByText("Scan the QR code").tagName).toBe("B");
-  fireEvent.keyDown(phone, { key: "Escape" });
-  fireEvent.click(await screen.findByRole("button", { name: "Pebble webhook" }));
-  const pebble = await screen.findByRole("dialog", { name: "Pebble webhook" });
-  expect(within(pebble).getByLabelText("The message to copy")).toHaveProperty("value", `${window.location.origin}/apps/relay/api/pebble`);
-  expect(within(pebble).getByText("CF-Access-Client-Secret")).toBeTruthy();
-});
-
 it("lists saved chats, finds them by a word, and says when none match", async () => {
   await open();
   const chats = await screen.findByRole("region", { name: "Chats" });
@@ -174,7 +172,7 @@ it("lists saved chats, finds them by a word, and says when none match", async ()
   fireEvent.change(search, { target: { value: " webhook " } });
   fireEvent.submit(search);
   await waitFor(() => expect(within(chats).queryByText("Stiffener plan")).toBeNull());
-  expect(within(chats).getByText("Fix the Pebble webhook")).toBeTruthy();
+  expect(within(chats).getByText("Fix the webhook signature")).toBeTruthy();
   fireEvent.change(search, { target: { value: "nothing" } });
   fireEvent.submit(search);
   expect(await within(chats).findByText("No chat holds those words.")).toBeTruthy();
@@ -194,7 +192,7 @@ it("opens a chat with the AI's summary above its messages, steps muted, and read
   expect(await within(chats).findByText("Save the plan to Relay")).toBeTruthy();
   expect(within(chats).queryByRole("button", { name: "Show more messages" })).toBeNull();
   fireEvent.click(within(chats).getByRole("button", { name: "Back" }));
-  expect(await within(chats).findByRole("button", { name: "Fix the Pebble webhook" })).toBeTruthy();
+  expect(await within(chats).findByRole("button", { name: "Fix the webhook signature" })).toBeTruthy();
 });
 
 it("loads older chats and more messages, and says when a part could not load", async () => {
@@ -226,11 +224,11 @@ it("loads older chats and more messages, and says when a part could not load", a
   // A chat that can't be read offers to try again.
   failing = true;
   fireEvent.click(within(chats).getByRole("button", { name: "Back" }));
-  fireEvent.click(await within(chats).findByRole("button", { name: "Fix the Pebble webhook" }));
+  fireEvent.click(await within(chats).findByRole("button", { name: "Fix the webhook signature" }));
   expect((await within(chats).findByRole("alert")).textContent).toContain("The chat could not be loaded.");
   failing = false;
   fireEvent.click(within(chats).getByRole("button", { name: "Try again" }));
-  expect(await within(chats).findByRole("heading", { level: 3, name: "Fix the Pebble webhook" })).toBeTruthy();
+  expect(await within(chats).findByRole("heading", { level: 3, name: "Fix the webhook signature" })).toBeTruthy();
 });
 
 it("deletes a chat after a confirm that says it can't be undone, and reads the list again", async () => {
@@ -258,7 +256,7 @@ it("tells how to connect Claude Code, that its key only adds chats, and that you
   fireEvent.click(await screen.findByRole("button", { name: "Connect Claude Code" }));
   const dialog = await screen.findByRole("dialog", { name: "Connect Claude Code" });
   expect(within(dialog).getByText(/can only add chats/)).toBeTruthy();
-  expect(within(dialog).getByText('node scripts/relay-device-key.mjs create --name "Laptop" --for claude-code')).toBeTruthy();
+  expect(within(dialog).getByText(/tap/).textContent).toContain("Add a device and choose Claude Code");
   expect(within(dialog).getByText("/plugin marketplace add matthewwong525/RelayEverything")).toBeTruthy();
   expect(within(dialog).getByText("/plugin install relay@relay")).toBeTruthy();
   expect(within(dialog).getByText(/run your own Relay Everything server/)).toBeTruthy();

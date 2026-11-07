@@ -15,6 +15,7 @@
 #   - production branch (CF_PRODUCTION_BRANCH, else the remote's default
 #     branch, else `main`: wong_production_branch)
 #       → the live line's Worker, when the app has one (wong_deploy_line)
+#       → Relay Everything's spaces Worker, when app/wrangler.spaces.jsonc exists
 #       → Relay's AI connector, when app/wrangler.relay-mcp.jsonc exists
 #       → `wrangler deploy`  — the production Worker.
 #   - any other branch (previews have no line: wiki/stack/live-line.md)
@@ -129,6 +130,11 @@ if [ "$BRANCH" = "$PRODUCTION_BRANCH" ]; then
   fi
   node "$SCRIPT_DIR/check-private-access.mjs" --environment production
   wong_deploy_line cf-deploy
+  # Relay Everything's spaces, before the connector and the app, which bind SPACES: wiki/relay-spaces.md
+  if [ -f "$APP_DIR/wrangler.spaces.jsonc" ]; then
+    echo "cf-deploy: deploying Relay Everything's spaces Worker first"
+    (cd "$APP_DIR" && "${WRANGLER[@]}" deploy --config wrangler.spaces.jsonc)
+  fi
   # Relay's AI connector, before the app whose RELAY_MCP binding needs it: wiki/stack/relay-ai-connector.md
   if [ -f "$APP_DIR/wrangler.relay-mcp.jsonc" ]; then
     echo "cf-deploy: deploying Relay Everything's AI connector first"

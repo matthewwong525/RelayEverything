@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Relay's AI connector trial: drives the sign-in an AI app runs against the connector, then prints one line per check.
-// It needs no person, except --sign-in, which asks the owner to sign in once. wiki/stack/relay-ai-connector.md#try-it
-import { createHash, randomBytes } from 'node:crypto';
+// Relay Everything's AI connector trial: drives the sign-in an AI app runs, then prints one line per check. It needs
+// no person, except --sign-in, which asks a person to sign in once. wiki/stack/relay-ai-connector.md#try-it
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
@@ -14,13 +14,12 @@ import { target } from './relay-mcp-setup.mjs';
 
 const USAGE = `usage: node scripts/relay-mcp-trial.mjs [--live | --sign-in]
   (none)     the staging connector, with no sign-in: metadata, an app's registration, the consent page, the hand-off
-             to the Access sign-in, and each refusal
-  --sign-in  the same, then the owner signs in once in a browser on this computer; the app's token reads a made-up note
-  --live     the live connector: it answers its metadata and refuses /mcp with no token`;
+             to the server's sign-in, and each refusal
+  --sign-in  the same, then a person signs in once in a browser on this computer; the app's token reads their notes
+             and adds a made-up note, through /mcp and through the web API
+  --live     the live connector: it answers its metadata and refuses /mcp and /v1/ with no token`;
 
 const APP_NAME = 'Relay Everything trial';
-// A note in schema/seed.sql, which staging's made-up data holds.
-const SEED_NOTE = 'Buy milk and batteries.';
 const WAIT = 10 * 60 * 1000;
 
 export function parseArgs(args) {
@@ -75,17 +74,26 @@ export async function trial({ live, signIn, env, request = fetch, log = console.
     headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', ...headers },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, ...body }) });
   const json = async response => response.ok ? response.json() : {};
+  const api = (path, headers = {}, init = {}) => request(`${origin}/v1/${path}`, { ...init, headers: { ...headers, ...init.headers } });
 
   log(`Trying ${goal.worker} at ${origin}`);
   const metadata = await request(`${origin}/.well-known/oauth-authorization-server`);
   check('answers its OAuth metadata', (await json(metadata)).registration_endpoint === `${origin}/register`, `${metadata.status}`);
   const bare = await mcp();
   check('refuses /mcp with no token', bare.status === 401, `${bare.status}`);
+  const anonymous = await api('me');
+  check('refuses the web API with no token', anonymous.status === 401, `${anonymous.status}`);
   if (live) return passed;
+
+  const described = await api('openapi.json');
+  check('describes the web API with no sign-in', (await json(described)).openapi === '3.1.0', `${described.status}`);
+  // A well-formed key the server never made: the web API refuses it before it reads anything.
+  const unknownKey = await api('me', { Authorization: `Bearer rek_${'x'.repeat(43)}` });
+  check("refuses an unknown key on the web API", unknownKey.status === 403, `${unknownKey.status}`);
 
   const resource = await request(`${origin}/.well-known/oauth-protected-resource/mcp`);
   check('names its /mcp as the resource', (await json(resource)).resource === goal.address, `${resource.status}`);
-  const wrong = await mcp({ Authorization: `Bearer ${goal.owner}:made-up-grant:made-up-token` });
+  const wrong = await mcp({ Authorization: 'Bearer made-up-person:made-up-grant:made-up-token' });
   check('refuses a wrong token', wrong.status === 401, `${wrong.status}`);
   const checker = env.CF_ACCESS_STAGING_CLIENT_ID && { 'CF-Access-Client-Id': env.CF_ACCESS_STAGING_CLIENT_ID,
     'CF-Access-Client-Secret': env.CF_ACCESS_STAGING_CLIENT_SECRET ?? '' };
@@ -116,18 +124,14 @@ export async function trial({ live, signIn, env, request = fetch, log = console.
       `${consent.status}`);
     const approved = await request(`${origin}/authorize`, { method: 'POST', redirect: 'manual', headers: { Cookie: jar.header() },
       body: new URLSearchParams({ handle: handle ?? '', choice: 'approve' }) });
-    const access = new URL(approved.headers.get('Location') ?? 'about:blank');
-    check('sends an approved app on to the Access sign-in', approved.status === 302 && access.hostname.endsWith('.cloudflareaccess.com')
-      && access.searchParams.get('redirect_uri') === `${origin}/callback`, `${approved.status} ${access.hostname}`);
-    if (access.protocol === 'https:') {
-      // Access answers its sign-in page, or sends on to it; an unknown app or callback gets an error status.
-      const signInPage = await request(access.href, { redirect: 'manual' });
-      check('Access knows the sign-in app and its callback', signInPage.status < 400, `${signInPage.status}`);
-      if (checker) {
-        const viaKey = await request(access.href, { redirect: 'manual', headers: checker });
-        check('a service token does not get through the Access sign-in',
-          !(viaKey.headers.get('Location') ?? '').startsWith(`${origin}/callback`), `${viaKey.status}`);
-      }
+    const signInPage = new URL(approved.headers.get('Location') ?? 'about:blank');
+    check("sends an approved app on to the server's sign-in", approved.status === 302 && !!signInPage.searchParams.get('state')
+      && `${signInPage.origin}${signInPage.pathname}` === `${goal.server}/apps/relay/sign-in/connect`, `${approved.status} ${signInPage.hostname}`);
+    if (signInPage.protocol === 'https:') {
+      // No one is signed in here, so the server must not send a code back to the connector.
+      const stranger = await request(signInPage.href, { redirect: 'manual' });
+      check('the server sends no code to someone not signed in', !(stranger.headers.get('Location') ?? '').startsWith(`${origin}/callback`),
+        `${stranger.status}`);
     }
     const forged = await request(`${origin}/callback?${new URLSearchParams({ code: 'made-up', state: 'made-up' })}`, { redirect: 'manual' });
     check('refuses a made-up sign-in answer', [400, 403].includes(forged.status), `${forged.status}`);
@@ -137,15 +141,26 @@ export async function trial({ live, signIn, env, request = fetch, log = console.
     check('gives no token for a made-up code', madeUp.status === 400, `${madeUp.status}`);
     if (!server) return passed;
 
-    log(`Open this link in a browser on this computer, click Connect, and sign in as ${goal.owner}.`);
+    log('Open this link in a browser on this computer, click Connect, and sign in to Relay Everything.');
     log('If the browser is on another computer, paste the address it ends on here.');
     log(authorize);
     const { access_token: token } = await json(await exchange(await waitForCode(server)));
-    check("the owner's sign-in gives the app a token", !!token);
+    check("the person's sign-in gives the app a token", !!token);
     if (!token) return false;
     const found = await mcp({ Authorization: `Bearer ${token}` }, { method: 'tools/call', params: { name: 'search', arguments: { query: 'milk' } } });
-    check('the token reads a made-up note', JSON.stringify(await json(found)).includes(SEED_NOTE), `${found.status}`);
-    log(`Disconnect "${APP_NAME}" on the preview's AI apps card when you are done.`);
+    check("the token reads the person's notes", !!(await json(found)).result?.content, `${found.status}`);
+    const bearer = { Authorization: `Bearer ${token}` };
+    const listed = await api('notes?q=milk', bearer);
+    check("the token reads the person's notes on the web API", Array.isArray((await json(listed)).notes), `${listed.status}`);
+    const note = text => ({ clientId: `trial-${randomUUID()}`, text });
+    const added = await api('notes', bearer, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(note('A made-up note from the Relay Everything trial, through the web API.')) });
+    check('the token adds a note on the web API', added.status === 201, `${added.status}`);
+    const tool = await mcp(bearer, { method: 'tools/call', params: { name: 'add_note',
+      arguments: note('A made-up note from the Relay Everything trial, through add_note.') } });
+    const toolAnswer = (await json(tool)).result;
+    check('the token adds a note with add_note', !!toolAnswer?.content && !toolAnswer.isError, `${tool.status}`);
+    log(`Disconnect "${APP_NAME}" on the preview's AI apps card when you are done. Its two made-up notes stay.`);
     return passed;
   } finally {
     server?.close();

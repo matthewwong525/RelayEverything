@@ -1,8 +1,6 @@
 import { Webhook } from "standardwebhooks";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { handleApp } from "../../index";
-import { call, db, env, matthew, NOW, phone, queue, rows } from "../../../../tests/relay";
-import { scheduled } from "../api.ts";
+import { ANA, call, db, matthew, NOW, phone, queue, rows, spaces } from "../../../../tests/relay";
 
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
@@ -11,23 +9,22 @@ beforeEach(() => {
   fetch.mockClear();
   vi.stubGlobal("fetch", fetch);
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 const add = (more: Record<string, unknown> = {}) =>
   call(matthew, "POST", "webhooks", { name: "Example database", url: "https://db.example.com/relay", kinds: [], ...more });
 const note = (clientId: string, createdAt: number) => call(phone, "POST", "notes", { clientId, text: "Order more switches", createdAt });
 const sample = (start: number) => ({ type: "steps", start, end: start + MINUTE, value: 100, unit: "count", source: "Health Connect" });
 const list = async () => (await call(matthew, "GET", "webhooks")).json.webhooks;
-const sweepAs = async (environment: string) => {
-  const response = await handleApp(new Request("https://relay.example.com/apps/relay/api/webhooks/sweep", { method: "POST" }),
-    env({ WONG_ENVIRONMENT: environment }), matthew);
-  return { status: response.status, json: await response.json() };
-};
+const sweepAs = (environment: string) => call(matthew, "POST", "webhooks/sweep", undefined, { WONG_ENVIRONMENT: environment });
+const wakeUp = (webhook: unknown) => ({ webhook, person: ANA });
+const SWEEP = 15 * MINUTE;
 
 it("lets only a signed-in person reach the webhooks, never a device key", async () => {
-  for (const [route, method] of [["webhooks", "GET"], ["webhooks", "POST"], ["webhooks/test", "POST"], ["webhooks/sweep", "POST"]]) {
-    expect((await call(phone, method, route, method === "POST" ? { id: "x" } : undefined)).status, route).toBe(403);
-    expect((await call(null, method, route)).status, route).toBe(401);
+  const inputs = { webhooks: { name: "x", url: "https://db.example.com/", kinds: [] }, "webhooks/test": { id: "x" }, "webhooks/sweep": undefined };
+  for (const [route, method] of [["webhooks", "GET"], ["webhooks", "POST"], ["webhooks/test", "POST"], ["webhooks/sweep", "POST"]] as const) {
+    expect((await call(phone, method, route, method === "POST" ? inputs[route] : undefined)).status, route).toBe(403);
+    expect((await call(null, method, route, method === "POST" ? inputs[route] : undefined)).status, route).toBe(401);
   }
 });
 
@@ -44,6 +41,16 @@ it("adds a webhook from now on, with notes always, and shows its secret only in 
   expect(await list()).toEqual([{ ...added.json.webhook, waiting: 1 }]);
   expect(JSON.stringify(await list())).not.toContain(added.json.secret);
   expect((await add({ name: " " })).status).toBe(400);
+});
+
+it("answers the kinds a webhook can take, notes always, and refuses one it can't take yet", async () => {
+  const { json } = await call(matthew, "GET", "webhooks");
+  expect(json.kinds.map(({ id, always, sensitive }: Record<string, unknown>) => ({ id, always, sensitive }))).toEqual([
+    { id: "notes", always: true, sensitive: false }, { id: "health", always: false, sensitive: true },
+    { id: "locations", always: false, sensitive: true }, { id: "calendar", always: false, sensitive: true }]);
+  expect(json.kinds[2]).toMatchObject({ label: "Location history", detail: "" });
+  expect((await add({ kinds: ["calendar", "health"] })).json.webhook.kinds).toEqual(["notes", "health", "calendar"]);
+  expect((await add({ kinds: ["files"] })).status).toBe(400);
 });
 
 it("refuses an address it must not send to, and says why", async () => {
@@ -67,7 +74,7 @@ it("renames, pauses and resumes a webhook, and a new address clears its failure"
   expect((await update({ name: "Archive", active: false })).json.webhook).toMatchObject({ name: "Archive", state: "paused" });
   expect(queue.sent).toEqual([]);
   expect((await update({ active: true })).json.webhook.state).toBe("working");
-  expect(queue.sent).toEqual([{ webhook: webhook.id }]);
+  expect(queue.sent).toEqual([wakeUp(webhook.id)]);
   db.sql.prepare("UPDATE relay_webhooks SET failing_since = ?, tries = 10, pending_seq = 3").run(NOW);
   expect((await update({ name: "Still failing" })).json.webhook.state).toBe("failing");
   expect((await update({ url: "https://db2.example.com/relay", kinds: ["health"] })).json.webhook).toMatchObject({ state: "working",
@@ -127,7 +134,7 @@ it("sends past data from a date, only of the kinds it takes, then carries on", a
   queue.sent = [];
   const resend = (since: number) => call(matthew, "POST", "webhooks/resend", { id: webhook.id, since });
   expect((await resend(NOW - 2 * DAY - MINUTE)).json.webhook).toMatchObject({ state: "backfilling", waiting: 1 });
-  expect(queue.sent).toEqual([{ webhook: webhook.id }]);
+  expect(queue.sent).toEqual([wakeUp(webhook.id)]);
   expect(rows("relay_webhooks")[0]).toMatchObject({ sent_seq: 1, backfill_seq: 3 });
   expect((await resend(NOW - 4 * DAY)).json.webhook).toMatchObject({ state: "backfilling", waiting: 2 });
   expect((await resend(NOW)).json.webhook).toMatchObject({ state: "working", waiting: 0 });
@@ -140,7 +147,7 @@ it("clears a failure when asked to try again", async () => {
   queue.sent = [];
   expect((await call(matthew, "POST", "webhooks/retry", { id: webhook.id })).json.webhook.state).toBe("working");
   expect(rows("relay_webhooks")[0]).toMatchObject({ failing_since: null, tries: 0, lease_until: null });
-  expect(queue.sent).toEqual([{ webhook: webhook.id }]);
+  expect(queue.sent).toEqual([wakeUp(webhook.id)]);
 });
 
 it("runs the sweep by hand off production, and every 15 minutes there: it wakes each webhook behind and drops old tries", async () => {
@@ -153,14 +160,42 @@ it("runs the sweep by hand off production, and every 15 minutes there: it wakes 
   queue.failing = true;
   const lost = vi.spyOn(console, "error").mockImplementation(() => undefined);
   await note("note-0001", NOW);
-  expect(lost).toHaveBeenCalledWith("Relay webhooks: the wake-up was lost", expect.any(Error));
+  expect(lost).toHaveBeenCalledWith("Relay Everything webhooks: the wake-up was lost", expect.any(Error));
   queue.failing = false;
   expect(await sweepAs("production")).toMatchObject({ status: 403 });
   expect(queue.sent).toEqual([]);
   expect(await sweepAs("staging")).toEqual({ status: 200, json: { woken: 1 } });
-  expect(queue.sent).toEqual([{ webhook: webhook.id }]);
+  expect(queue.sent).toEqual([wakeUp(webhook.id)]);
   expect(rows("relay_webhook_attempts").map(row => row.at)).toEqual([NOW - 29 * DAY]);
-  await scheduled(env());
-  expect(queue.sent).toEqual([{ webhook: webhook.id }, { webhook: webhook.id }]);
   lost.mockRestore();
+});
+
+it("sets the space's alarm when a webhook is added, and none for a space with no webhook", async () => {
+  await note("note-0001", NOW);
+  expect(spaces.alarmOf(ANA)).toBeNull();
+  await add();
+  expect(spaces.alarmOf(ANA)).toBe(NOW + SWEEP);
+  // A second webhook keeps the alarm already set.
+  vi.setSystemTime(NOW + MINUTE);
+  await add({ name: "Second" });
+  expect(spaces.alarmOf(ANA)).toBe(NOW + SWEEP);
+});
+
+it("wakes each webhook behind when the alarm rings, sets it again, and stops once no webhook is left", async () => {
+  const { json: { webhook } } = await add();
+  const { json: { webhook: paused } } = await add({ name: "Paused" });
+  await call(matthew, "POST", "webhooks/update", { id: paused.id, active: false });
+  queue.failing = true;
+  vi.spyOn(console, "error").mockImplementation(() => undefined);
+  await note("note-0001", NOW);
+  queue.failing = false;
+  vi.setSystemTime(NOW + SWEEP);
+  await spaces.alarm(ANA);
+  expect(queue.sent).toEqual([wakeUp(webhook.id)]);
+  expect(spaces.alarmOf(ANA)).toBe(NOW + 2 * SWEEP);
+  for (const { id } of await list()) await call(matthew, "POST", "webhooks/remove", { id });
+  // The runtime clears an alarm as it rings.
+  spaces.open(ANA).state.alarm = null;
+  await spaces.alarm(ANA);
+  expect([queue.sent, spaces.alarmOf(ANA)]).toEqual([[wakeUp(webhook.id)], null]);
 });

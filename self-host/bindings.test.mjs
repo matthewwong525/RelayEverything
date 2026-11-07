@@ -10,8 +10,11 @@ const app = parseConfig(join(repoRoot, 'app', 'wrangler.jsonc'));
 const install = parseConfig(join(repoRoot, 'self-host', 'wrangler.template.jsonc'));
 const connector = parseConfig(join(repoRoot, 'app', 'wrangler.relay-mcp.jsonc'));
 const installConnector = parseConfig(join(repoRoot, 'self-host', 'mcp.template.jsonc'));
-// WongStack's own parts, which an install leaves out: the memory store, the live line and the code store.
-const WONGSTACK = /^(MEMORY_|LIVE_LINE$|ARTIFACTS$)/;
+const spaces = parseConfig(join(repoRoot, 'app', 'wrangler.spaces.jsonc'));
+const installSpaces = parseConfig(join(repoRoot, 'self-host', 'spaces.template.jsonc'));
+// WongStack's own parts, which an install leaves out: the memory store, the live line, the code store and the app's
+// schedule. Relay Everything has no schedule: each space's alarm wakes its own webhooks.
+const WONGSTACK = /^(MEMORY_|LIVE_LINE$|ARTIFACTS$|cron )/;
 
 /** Every binding a config names, as `kind BINDING`. */
 const bindings = config => [
@@ -21,7 +24,8 @@ const bindings = config => [
   ...(config.durable_objects?.bindings ?? []).map(item => `durable object ${item.name}`), ...(config.artifacts ?? []).map(item => `artifacts ${item.binding}`),
   ...(config.triggers?.crons ?? []).map(cron => `cron ${cron}`), ...(config.assets ? ['assets'] : []),
 ];
-const relayOnly = config => bindings(config).filter(binding => !WONGSTACK.test(binding.split(' ').at(-1)));
+const wongstack = binding => WONGSTACK.test(binding) || WONGSTACK.test(binding.split(' ').at(-1));
+const relayOnly = config => bindings(config).filter(binding => !wongstack(binding));
 
 test('the install has every Relay binding of the full app', () => {
   assert.deepEqual(relayOnly(app).filter(binding => !bindings(install).includes(binding)), []);
@@ -30,9 +34,19 @@ test('the install has every Relay binding of the full app', () => {
 });
 
 test('the install has no WongStack binding, and its connector matches Relay\'s', () => {
-  assert.deepEqual(bindings(install).filter(binding => WONGSTACK.test(binding.split(' ').at(-1))), []);
+  assert.deepEqual(bindings(install).filter(wongstack), []);
   assert.deepEqual(bindings(installConnector), bindings(connector));
   assert.equal(installConnector.compatibility_date, connector.compatibility_date);
+});
+
+test('the server and the connector reach the install\'s own spaces Worker, as the full app reaches its own', () => {
+  const spacesOf = config => config.durable_objects?.bindings?.find(item => item.name === 'SPACES');
+  for (const config of [app, connector]) assert.deepEqual(spacesOf(config), { name: 'SPACES', class_name: 'Space', script_name: spaces.name });
+  for (const config of [install, installConnector]) assert.deepEqual(spacesOf(config), { name: 'SPACES', class_name: 'Space', script_name: installSpaces.name });
+  for (const part of ['main', 'compatibility_date', 'compatibility_flags', 'rules', 'durable_objects', 'migrations']) {
+    assert.deepEqual(installSpaces[part], part === 'main' ? '../app/worker/spaces-worker.ts' : spaces[part], part);
+  }
+  assert.deepEqual(bindings(installSpaces), bindings(spaces));
 });
 
 test('no Relay migration reads a WongStack table', () => {

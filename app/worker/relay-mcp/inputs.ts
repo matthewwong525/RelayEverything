@@ -8,9 +8,9 @@ export const MAX_BUCKETS = 400;
 export const LINES = 3;
 export const PART = 200;
 
-const zone = z.string().refine(knownZone, "Not a time zone.").optional()
+export const zone = z.string().refine(knownZone, "Not a time zone.").optional()
   .describe(`An IANA time zone, such as Europe/London, for days and the times in the answer; ${ZONE} when left out.`);
-const when = (what: string) => z.string().max(40)
+export const when = (what: string) => z.string().max(40)
   .describe(`${what}: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset.`);
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(text => !Number.isNaN(Date.parse(text)), "Not a day.")
   .describe("The day, as YYYY-MM-DD.");

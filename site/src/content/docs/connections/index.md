@@ -13,7 +13,7 @@ A webhook sends each new note, and the health and location you tick, to an addre
 
 ## AI assistants (MCP)
 
-Your AI assistant reads your notes, health, places and chats through MCP, the Model Context Protocol: [Connect your AI](connect-your-ai/).
+Your AI assistant reads your notes, health, places and chats through MCP, the Model Context Protocol: [Connect your AI](connect-your-ai/). Connect Google too, and it reaches your Gmail, Calendar, Drive and Contacts: [Connect Google](google/).
 
 ## Claude Code chats
 

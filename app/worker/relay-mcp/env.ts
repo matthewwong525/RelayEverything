@@ -1,5 +1,5 @@
 // The connector's bindings, from app/wrangler.relay-mcp.jsonc: the directory's database, each person's space, the
-// webhooks' queue, the sign-in store and the server whose sign-in it uses. Nothing else.
+// webhooks' queue, the sign-in store, the server whose sign-in it uses, and the Google client. Nothing else.
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 
 export type McpEnv = {
@@ -11,10 +11,13 @@ export type McpEnv = {
   RELAY_MCP_ADDRESS: string;
   /** The Relay Everything server that signs a person in, then sends them back to /callback. */
   RELAY_SERVER_URL: string;
+  /** The Google client the server signs in with, to refresh a person's Google sign-in. Unset: no Google here. */
+  RELAY_GOOGLE_CLIENT_ID?: string;
+  RELAY_GOOGLE_SIGN_IN_SECRET?: string;
   /** Set by the OAuth provider before it calls the sign-in pages. */
   OAUTH_PROVIDER: OAuthHelpers;
 };
 
-/** A grant's person, and for an app whose consent page said it adds notes, `adds` with its device and name. A grant
- *  from before spaces has no person; one from before adding has no `adds`, so it only reads. */
-export type GrantProps = { personId?: string; adds?: true; deviceId?: string; name?: string };
+/** A grant's person, its `adds` with its device and name, and `google`, as its consent page said. An older grant
+ *  lacks what came later: a person (before spaces), `adds` (it only reads), `google` (it never reaches Google). */
+export type GrantProps = { personId?: string; adds?: true; google?: true; deviceId?: string; name?: string };

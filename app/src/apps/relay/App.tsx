@@ -7,6 +7,7 @@ import { AiCard } from './AiCard'
 import { Chats } from './Chats'
 import { Devices } from './Devices'
 import { Failed } from './Failed'
+import { GoogleCard } from './GoogleCard'
 import { Notes } from './Notes'
 import { SIGNED_OUT, today, useGet, when, type Summary, type Timeline } from './read'
 import { SignIn } from './SignIn'
@@ -65,6 +66,7 @@ function Home({ email, onSignedOut }: { email: string; onSignedOut: () => void }
     <Chats />
     <Webhooks />
     <AiCard />
+    <GoogleCard />
     <Devices />
     <Account email={email} onSignedOut={onSignedOut} />
   </div>

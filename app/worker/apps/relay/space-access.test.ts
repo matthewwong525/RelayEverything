@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
+import { ANA, BEN, fakeSpaces } from "../../../tests/relay";
 import { spaceOf, vouch, type Caller, type SpaceEnv } from "./space";
 
 // The one door into a person's space: only space.ts opens a space or the file store, and only these files vouch for a
@@ -64,4 +65,15 @@ it("opens a space only for a caller that vouch made, never for one written by ha
   expect(opened).toEqual([]);
   expect(spaceOf(env, vouch("session", "ana")).personId).toBe("ana");
   expect(opened).toEqual(["ana"]);
+});
+
+it("opens a sealed secret only in its own space and under its own name", async () => {
+  const { SPACES } = fakeSpaces();
+  const open = (person: string) => spaceOf({ SPACES } as SpaceEnv, vouch("session", person));
+  const secret = new TextEncoder().encode("1//google-refresh-token");
+  const sealed = await open(ANA).seal("google", secret);
+  expect(new TextDecoder().decode(sealed)).not.toContain("google-refresh-token");
+  expect(await open(ANA).open("google", sealed)).toEqual(secret);
+  expect(await open(BEN).open("google", sealed)).toBeNull();
+  expect(await open(ANA).open("files", sealed)).toBeNull();
 });

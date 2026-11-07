@@ -53,6 +53,8 @@ beforeEach(() => {
     if (path === "/api/access/apps") return Response.json({ state: "current", role: "owner", revision: 1, apps: ["access", "relay"] });
     // The AI apps card has its own test: AiCard.test.tsx.
     if (path === "/apps/relay/api/ai-apps") return Response.json({ address: "https://relay-mcp.example.com/mcp", apps: [] });
+    // The Google card has its own test: GoogleCard.test.tsx.
+    if (path === "/apps/relay/api/google") return Response.json({ available: false, connected: null });
     // The sign-in, devices and account have their own test: SignIn.test.tsx.
     if (path === "/apps/relay/api/account") return Response.json({ email: "ana@example.com" });
     if (path === "/apps/relay/api/devices") return Response.json({ devices: [] });
@@ -95,7 +97,7 @@ it("shows today's summary, every note with its place and recording, and the plac
 
   const { day, offset } = today();
   expect(reads()).toEqual(["/apps/relay/api/account", "/apps/relay/api/chats", "/apps/relay/api/webhooks", "/apps/relay/api/ai-apps",
-    "/apps/relay/api/devices", `/apps/relay/api/summary?day=${day}&offset=${offset}`, "/apps/relay/api/timeline"]);
+    "/apps/relay/api/google", "/apps/relay/api/devices", `/apps/relay/api/summary?day=${day}&offset=${offset}`, "/apps/relay/api/timeline"]);
   expect(await screen.findByText("No AI app connected yet.")).toBeTruthy();
 });
 

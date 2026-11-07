@@ -34,5 +34,5 @@
 ## 6. Checks
 
 - [x] 6.1 Run the app tests, `scripts/product-name.test.mjs` and `node scripts/public-check.mjs`
-- [ ] 6.2 Deploy the branch's spaces Worker and connector to staging by hand; run `node scripts/relay-mcp-trial.mjs --sign-in`; make an API key on `app-staging.relayeverything.com`, load `/v1/openapi.json` into a client (Swagger or Postman) and make one call from it, read and add a note with `curl`, then turn the key off and see it refused
-- [ ] 6.3 `/save`, then check the preview: *Add a device* shows *API key*, and the AI apps card shows the API line
+- [x] 6.2 Deploy the branch's spaces Worker and connector to staging by hand; run `node scripts/relay-mcp-trial.mjs --sign-in`; make an API key on `app-staging.relayeverything.com`, load `/v1/openapi.json` into a client (Swagger or Postman) and make one call from it, read and add a note with `curl`, then turn the key off and see it refused
+- [x] 6.3 `/save`, then check the preview: *Add a device* shows *API key*, and the AI apps card shows the API line

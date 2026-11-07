@@ -1,6 +1,6 @@
 # Let your own scripts and other apps read and add to Relay Everything
 
-**Status:** building
+**Status:** ready-to-ship
 **Branch:** durable-object-mcp-api-auth
 **Open questions:** none
 
@@ -119,3 +119,6 @@ Non-goals: changing or deleting data from outside the page; picking health or lo
 **2026-11-07** — Assumed: the space migration `0003` turns on `PRAGMA defer_foreign_keys` inside the migration's transaction to rebuild `relay_devices` under its own name; the staging check (6.2) must show a space at `0002` moves to `0003`, because node:sqlite stands in for the Durable Object's SQL in the tests.
 **2026-11-07** — Assumed: the space step `0003_api_devices.sql` turns the deferred foreign-key check off at its end, because a run on the local Durable Object runtime showed the check otherwise stays deferred for the rest of that transaction.
 **2026-11-07** — Checkpoint: built and reviewed (4 review findings fixed); the space step ran on the local Durable Object runtime with rows kept; the branch's spaces Worker and connector are on staging and the no-sign-in trial passes. Left: the signed-in trial and an API key on the staging server (6.2), and the preview check (6.3).
+**2026-11-07** — Assumed: the D1 API keys migration runs after main's phone codes migration (`20261107210000`), because both had the same time stamp and the API keys step rebuilds a table the phone codes step does not touch.
+**2026-11-07** — Assumed: 6.3 counts as seen on the staging server running this branch (the *API key* kind, the *API: reads and adds notes* line and the AI apps card's API line), because the preview runs the same build; `/verify` checks the preview again.
+**2026-11-07** — Archive checkpoint: built, merged with main, and checked on staging: the signed-in trial passes, an API key read and added a note, a ready-made client read the OpenAPI file and called it, and the key was refused once turned off.

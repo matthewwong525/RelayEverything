@@ -5,21 +5,25 @@ Send the Relay data the server holds to addresses the owner adds, in one version
 
 ## Requirements
 
-### Requirement: Stored data goes to every active webhook
+### Requirement: Stored data goes to each active webhook
 
-After Relay's server stores a note, a health batch or a location batch, it SHALL send one message for it to each active webhook that takes that kind of data. Notes SHALL go to every active webhook. Health and location SHALL go only to webhooks the owner ticked for them. Only data that reached the server SHALL be sent: a note kept offline on a phone never goes out.
+After Relay Everything's server stores a note, a health batch, a location batch or calendar events, it SHALL send one message for it to each active webhook that takes that kind of data. Notes SHALL go to every active webhook. Health, location and calendar SHALL go only to webhooks the owner ticked for them. A changed or removed calendar event SHALL be sent again, marked as changed or removed. Only data that reached the server SHALL be sent: a note kept offline on a phone never goes out. The server SHALL send no `note.updated` message; format version 1 SHALL still describe it, as no longer sent, so a receiver that handles it keeps working.
 
-#### Scenario: A ring note with one webhook
-- **WHEN** a ring note is stored and one active webhook exists
-- **THEN** that address gets a `note.created` message with the note's words, recording, time and place within a minute
+#### Scenario: A note with one webhook
+- **WHEN** a phone's note is stored and one active webhook exists
+- **THEN** that address gets a `note.created` message with the note's words, files, time and place within a minute
 
 #### Scenario: Health not ticked
 - **WHEN** a health batch is stored and the webhook takes notes only
 - **THEN** that webhook gets no message for the batch
 
+#### Scenario: A cancelled meeting
+- **WHEN** a webhook takes the calendar and an event is deleted on the phone
+- **THEN** after the phone's next send the webhook gets the event again, marked removed
+
 ### Requirement: One versioned, signed format
 
-Every message SHALL be a JSON body with `version`, `type`, `timestamp` and `data`, signed by the Standard Webhooks scheme with the webhook's own secret. Every note, sample and point SHALL carry a stable id, so a resent message updates the same row. The format SHALL be published on the public Relay website with a machine-readable schema and an example receiver, and a change that breaks a receiver SHALL raise `version`.
+Every message SHALL be a JSON body with `version`, `type`, `timestamp` and `data`, signed by the Standard Webhooks scheme with the webhook's own secret. Every note, sample and point SHALL carry a stable id, so a resent message updates the same row. The format SHALL be published on the public Relay Everything website with a machine-readable schema and an example receiver. The published schema SHALL accept fields it does not list. Until the public release, version 1 MAY change in any way, and the website SHALL say so; after it, a change that breaks a receiver SHALL raise `version`.
 
 #### Scenario: A receiver checks a message
 - **WHEN** a receiver checks the signature with the secret it was shown and a Standard Webhooks library
@@ -28,6 +32,10 @@ Every message SHALL be a JSON body with `version`, `type`, `timestamp` and `data
 #### Scenario: The same note sent twice
 - **WHEN** a retry sends a note the receiver already stored
 - **THEN** both messages have the same `webhook-id`, body and note id
+
+#### Scenario: A field the schema does not list
+- **WHEN** a receiver checks a message that holds a field added after it saved the schema
+- **THEN** the message still passes the published schema
 
 ### Requirement: Nothing is skipped, and failures are retried, then shown
 
@@ -72,3 +80,43 @@ Only the signed-in person whose space holds a webhook SHALL add, change, test, p
 #### Scenario: An address on a private network
 - **WHEN** a person adds `https://192.168.1.10/hook` or `http://db.example.com`
 - **THEN** the server refuses it and says why
+
+### Requirement: A note's file can go as its own message
+
+Format v1 SHALL include a `note.file` message that holds one file of a note: the note's id, the file's id, name, type and size, and its contents in base64. Only the phone's own webhook mode SHALL send it, always after the note's `note.created`. The server's webhooks SHALL keep sending a list of file names only. The published schema and the example receiver SHALL include `note.file`.
+
+#### Scenario: A server webhook receiver is unchanged
+- **WHEN** a receiver built before `note.file` takes messages from a server webhook
+- **THEN** it never gets a `note.file` message
+
+#### Scenario: The example receiver saves a file
+- **WHEN** the example receiver gets a `note.created` and then a `note.file` for that note
+- **THEN** it saves the file beside the note
+
+### Requirement: Every kind of data is listed once, with all its parts
+
+Each kind of data a person's space holds SHALL have one entry that names its webhook tick, its message types, its web API routes, its AI connector tools and its docs page. The repository's checks SHALL fail when a kind lacks one of these parts and its entry does not list that part as missing, and SHALL fail when a part listed as missing exists. The webhook form and card SHALL show the ticks from this list.
+
+#### Scenario: A new kind without docs
+- **WHEN** a kind is added with a tick, messages, a route and a tool, but no docs page
+- **THEN** the checks fail and name the kind and the missing page
+
+#### Scenario: Known gaps
+- **WHEN** files, photos and chats have no webhook messages and their entries list webhooks as missing
+- **THEN** the checks pass, and the list shows what a later change must add
+
+### Requirement: A new kind reaches a webhook only when ticked
+
+A kind added after a webhook was made SHALL NOT go to that webhook until the owner ticks it. Notes SHALL keep going to every webhook.
+
+#### Scenario: A webhook made for notes only
+- **WHEN** a webhook takes notes only and calendar events are stored
+- **THEN** that webhook gets no calendar message until the owner ticks Calendar
+
+### Requirement: Receivers can ignore what they do not know
+
+The published docs SHALL tell a receiver to answer 2xx to a message type it does not know, to keep fields it does not know, and to accept a new value in a list. The example receiver SHALL answer 2xx to an unknown message type and keep its body as a raw row.
+
+#### Scenario: The example receiver gets a new type
+- **WHEN** the example receiver gets a correctly signed message of a type it does not know
+- **THEN** it answers 2xx and stores the message's type and body as one raw row

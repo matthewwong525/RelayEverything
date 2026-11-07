@@ -25,7 +25,7 @@ On [your own server](../run-your-own/), you sign in with your server's own login
 2. Give it a name, such as `Android phone`.
 3. The page shows the device's key once, as a QR code. Scan it with the Relay Everything app: [Connect a phone](../connect-a-phone/).
 
-Each phone, the Pebble app and each Claude Code computer gets its own key. A key only adds data to your space: [Keys](../../api/keys/).
+Each phone and each Claude Code computer gets its own key. A key only adds data to your space: [Keys](../../api/keys/).
 
 ## Delete your account
 

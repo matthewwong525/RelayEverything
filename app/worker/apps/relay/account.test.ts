@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { ANA, BEN, ben, benPhone, bucket, call, checker, directoryDb, matthew, NOW, owner, phone, rows, sendPhoto, spaces } from "../../../tests/relay";
+import { ANA, BEN, ben, benPhone, bucket, call, checker, directoryDb, env, matthew, NOW, owner, phone, request, rows, sendPhoto, spaces } from "../../../tests/relay";
+import { handleApp } from "../index";
 import { hashToken } from "./people";
 
 const PEOPLE_TABLES = ["relay_keys", "relay_sessions", "relay_logins", "relay_connect_codes"];
@@ -119,4 +120,15 @@ it("deletes Ana's photos with her account, and leaves Ben's", async () => {
   expect([...bucket.objects.keys()].filter(key => key.startsWith(`people/${ANA}/`))).toEqual([]);
   expect([...bucket.objects.keys()].filter(key => key.startsWith(`people/${BEN}/photos/`))).toHaveLength(1);
   expect(rows("relay_photos", BEN)).toHaveLength(1);
+});
+
+it("deletes a note's files with the account", async () => {
+  await call(phone, "POST", "notes", { clientId: "note-files-01", text: "Receipt", createdAt: NOW - 60_000,
+    attachments: [{ id: "file-pdf-0001", name: "warranty.pdf", type: "application/pdf", size: 3 }] });
+  const sent = await handleApp(request(phone, "POST", "https://relay.example.com/apps/relay/api/attachments", { body: new Uint8Array(3),
+    headers: { "X-Note-Client-Id": "note-files-01", "X-Attachment-Id": "file-pdf-0001" } }), env(), null);
+  expect(sent.status).toBe(200);
+  expect(bucket.objects.has(`people/${ANA}/attachments/file-pdf-0001`)).toBe(true);
+  expect((await call(matthew, "POST", "account-delete", { email: "ana@example.com" })).status).toBe(200);
+  expect([...bucket.objects.keys()]).toEqual([`people/${BEN}/d`]);
 });

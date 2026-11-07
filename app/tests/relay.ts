@@ -11,13 +11,12 @@ import { fakeEnv } from "./env";
 import { database } from "./employee-access/connections";
 
 export const NOW = Date.UTC(2026, 10, 5, 14, 0);
-export const SECRET = "relay-test-signing-secret-0123456789";
 export const ANA = "aaaaaaaa-0000-4000-8000-00000000000a";
 export const BEN = "bbbbbbbb-0000-4000-8000-00000000000b";
 
 /** A device key: `rek_` and 43 base64url letters, as the page makes them. */
 export const makeKey = (name: string) => `rek_${name.padEnd(43, "x")}`;
-export const KEYS = { phone: makeKey("phone"), pebble: makeKey("pebble"), lost: makeKey("lost"), laptop: makeKey("laptop"), ben: makeKey("ben") };
+export const KEYS = { phone: makeKey("phone"), ipad: makeKey("ipad"), lost: makeKey("lost"), laptop: makeKey("laptop"), ben: makeKey("ben") };
 export const SESSIONS = { ana: "ana-session-token", ben: "ben-session-token" };
 
 /** Who calls: a device key, a signed-in browser, or an identity Access checked. */
@@ -25,7 +24,7 @@ export type Who = { bearer: string } | { cookie: string } | AccessIdentity | nul
 const claims = { iss: "https://relay.cloudflareaccess.com", aud: "relay-app", exp: 9999999999 };
 export const deviceKey = (clientId: string): AccessIdentity => ({ kind: "service", id: clientId, claims: { ...claims, common_name: clientId } });
 export const phone: Who = { bearer: KEYS.phone };
-export const pebbleApp: Who = { bearer: KEYS.pebble };
+export const ipad: Who = { bearer: KEYS.ipad };
 export const lost: Who = { bearer: KEYS.lost };
 /** A Claude Code computer's key: it only sends chats. */
 export const laptop: Who = { bearer: KEYS.laptop };
@@ -72,7 +71,7 @@ function fakeStorage() {
   const storage = {
     sql: { exec(query: string, ...params: unknown[]) {
       // A migration holds several statements, as the runtime's exec takes them; node:sqlite takes those only by exec.
-      if (!params.length && /\bCREATE\b/.test(query)) { sql.exec(query); return { toArray: () => [], rowsWritten: 0 }; }
+      if (!params.length && /\b(?:CREATE|DROP)\b/.test(query)) { sql.exec(query); return { toArray: () => [], rowsWritten: 0 }; }
       // As on the runtime, rowsWritten counts a trigger's writes too.
       const total = () => Number((sql.prepare("SELECT total_changes() AS count").get() as { count: number }).count);
       const before = total();
@@ -145,13 +144,12 @@ beforeEach(async () => {
   const device = (sql: DatabaseSync) => sql.prepare(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at,
     reaches) VALUES (?, ?, ?, '', ?, ?, ?)`);
   device(db.sql).run("d-phone", "Android phone", "rek:d-phone", NOW, null, "phone");
-  device(db.sql).run("d-pebble", "Pebble app", "rek:d-pebble", NOW, null, "phone");
+  device(db.sql).run("d-ipad", "iPad", "rek:d-ipad", NOW, null, "phone");
   device(db.sql).run("d-lost", "Old phone", "rek:d-lost", NOW, NOW, "phone");
   device(db.sql).run("d-laptop", "Laptop", "rek:d-laptop", NOW, null, "chats");
   device(spaces.sql(BEN)).run("d-ben", "Ben's phone", "rek:d-ben", NOW, null, "phone");
-  db.sql.prepare("INSERT INTO relay_device_secrets (device_id, pebble_secret) VALUES ('d-pebble', ?)").run(SECRET);
   await key(KEYS.phone, ANA, "d-phone", "phone");
-  await key(KEYS.pebble, ANA, "d-pebble", "phone");
+  await key(KEYS.ipad, ANA, "d-ipad", "phone");
   await key(KEYS.lost, ANA, "d-lost", "phone", NOW);
   await key(KEYS.laptop, ANA, "d-laptop", "chats");
   await key(KEYS.ben, BEN, "d-ben", "phone");

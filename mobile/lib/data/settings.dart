@@ -7,35 +7,47 @@ const settingsKey = 'settings';
 /// arrival and departure; [move] each 100 m, or each 5 minutes while still. Android keeps a point each 100 m.
 enum LocationMode { battery, move }
 
+/// Where sending goes: the person's Relay Everything [server], or their own [webhook]. Never both.
+enum SendPlace { server, webhook }
+
 /// What the person turned on. Each asks for its permission when turned on, and never before.
 ///
-/// Sending is off by default: notes stay on this phone. Health, location history and photos exist only to send, so
-/// they are off whenever sending is off. Photos on mobile data is off whenever photos is off.
+/// Sending is off by default: notes stay on this phone. Health, location history, the calendar and photos exist only to
+/// send, so they are off whenever sending is off. [calendarsOff] holds the ids of the phone's calendars the person turned
+/// off. Photos go only to Relay Everything, never to a webhook, so they are also off while [place] is the webhook.
+/// Photos on mobile data is off whenever photos is off.
 class Settings {
   const Settings({this.sending = false, this.pinNotes = false, bool history = false, bool health = false,
-    this.mode = LocationMode.battery, bool photos = false, bool photosOnMobileData = false})
-    : history = sending && history, health = sending && health, photos = sending && photos,
-      photosOnMobileData = sending && photos && photosOnMobileData;
+    bool calendar = false, this.calendarsOff = const {}, this.mode = LocationMode.battery, this.place = SendPlace.server,
+    bool photos = false, bool photosOnMobileData = false})
+    : history = sending && history, health = sending && health, calendar = sending && calendar,
+      photos = sending && place == SendPlace.server && photos,
+      photosOnMobileData = sending && place == SendPlace.server && photos && photosOnMobileData;
 
   final bool sending;
   final bool pinNotes;
   final bool history;
   final bool health;
+  final bool calendar;
+  final Set<String> calendarsOff;
   final LocationMode mode;
+  /// Where sending goes. Settings from before there was a choice read as [SendPlace.server].
+  final SendPlace place;
   /// Sends new photos, taken since it turned on.
   final bool photos;
   /// Off: photos wait for Wi-Fi.
   final bool photosOnMobileData;
 
-  Settings copyWith({bool? sending, bool? pinNotes, bool? history, bool? health, LocationMode? mode, bool? photos,
-    bool? photosOnMobileData}) =>
-    Settings(
-      sending: sending ?? this.sending, pinNotes: pinNotes ?? this.pinNotes,
-      history: history ?? this.history, health: health ?? this.health, mode: mode ?? this.mode,
-      photos: photos ?? this.photos, photosOnMobileData: photosOnMobileData ?? this.photosOnMobileData);
+  Settings copyWith({bool? sending, bool? pinNotes, bool? history, bool? health, bool? calendar, Set<String>? calendarsOff,
+    LocationMode? mode, SendPlace? place, bool? photos, bool? photosOnMobileData}) => Settings(
+    sending: sending ?? this.sending, pinNotes: pinNotes ?? this.pinNotes,
+    history: history ?? this.history, health: health ?? this.health, calendar: calendar ?? this.calendar,
+    calendarsOff: calendarsOff ?? this.calendarsOff, mode: mode ?? this.mode, place: place ?? this.place,
+    photos: photos ?? this.photos, photosOnMobileData: photosOnMobileData ?? this.photosOnMobileData);
 
   String encode() => jsonEncode({'sending': sending, 'pinNotes': pinNotes, 'history': history, 'health': health,
-    'mode': mode.name, 'photos': photos, 'photosOnMobileData': photosOnMobileData});
+    'calendar': calendar, 'calendarsOff': (calendarsOff.toList()..sort()), 'mode': mode.name, 'place': place.name,
+    'photos': photos, 'photosOnMobileData': photosOnMobileData});
 
   /// Reads saved settings. Settings from before sending was a switch, or none on a phone with a key, come from the
   /// first version, which sent everything: that install keeps sending on, so nothing it set up stops. Settings from
@@ -49,7 +61,10 @@ class Settings {
       pinNotes: json['pinNotes'] as bool? ?? firstVersion,
       history: json['history'] as bool? ?? false,
       health: json['health'] as bool? ?? false,
+      calendar: json['calendar'] as bool? ?? false,
+      calendarsOff: {for (final id in json['calendarsOff'] as List? ?? const []) if (id is String) id},
       mode: LocationMode.values.asNameMap()[json['mode']] ?? LocationMode.battery,
+      place: SendPlace.values.asNameMap()[json['place']] ?? SendPlace.server,
       photos: json['photos'] as bool? ?? false,
       photosOnMobileData: json['photosOnMobileData'] as bool? ?? false,
     );

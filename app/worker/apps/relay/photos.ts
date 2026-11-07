@@ -79,14 +79,15 @@ export const photoAdd = asDevice<Pick<ActionCall, "identity">>("Only a Relay Eve
   if (Math.max(size.width, size.height) > LONG_SIDE) return refused(400, `The photo is larger than ${LONG_SIDE} pixels on its long side.`);
   const { db, files } = space;
   const id = crypto.randomUUID();
-  const name = files.photoName(id);
+  const item = `photos/${id}`;
+  const name = files.nameOf(item);
   const { results } = await db.prepare(`INSERT INTO relay_photos (id, device_id, client_id, taken_at, lat, lon, width, height, bytes, file_key,
       created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (device_id, client_id) DO NOTHING RETURNING id`)
     .bind(id, device.id, fields.clientId, fields.takenAt, fields.lat, fields.lon, size.width, size.height, fields.photo.byteLength, name, Date.now())
     .all();
   if (!results.length) return Response.json({ ok: true, added: 0 });
   try {
-    await files.put(name, fields.photo.slice().buffer);
+    await files.put(item, fields.photo.slice().buffer);
   } catch {
     await db.prepare("DELETE FROM relay_photos WHERE id = ?").bind(id).run();
     return refused(503, "The photo could not be saved. The phone sends it again.");

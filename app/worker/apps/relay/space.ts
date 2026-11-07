@@ -12,10 +12,11 @@ const checked = Symbol("checked caller");
 /** How the caller proved who they are: a signed-in browser, a device key, an AI app's grant, a phone's one-time sign-in
  *  code, Access on a self-host, the preview checker, or a queue message the server itself sent. */
 export type CallerKind = "session" | "key" | "grant" | "code" | "access" | "checker" | "queue";
-export type Reach = "phone" | "chats";
+/** A key's reach: a phone, a chat sender, or an API key, which reaches only the web API. */
+export type Reach = "phone" | "chats" | "api";
 export type Caller = {
   readonly kind: CallerKind; readonly personId: string; readonly email?: string;
-  /** A device key's own device, which only adds data. */
+  /** A device key's own device: a phone or chat key only adds data; an API key reads and adds through the web API. */
   readonly device?: { readonly id: string; readonly reaches: Reach };
   readonly [checked]: true;
 };
@@ -64,8 +65,8 @@ function dbOf(stub: Pick<Stub, "query" | "batch">): Db {
 const encoder = new TextEncoder();
 const IV = 12;
 
-/** A person's recordings and photos in the file store: each under their own folder, sealed with their space's file key
- *  and its own name, so the store alone, or a copy under another name, never opens. */
+/** A person's recordings, note files and photos in the file store: each under their own folder, sealed with their
+ *  space's file key and its own name, so the store alone, or a copy under another name, never opens. */
 function filesOf(bucket: R2Bucket, stub: Pick<Stub, "fileKey">, personId: string) {
   const prefix = `people/${personId}/`;
   let key: Promise<CryptoKey> | undefined;
@@ -79,13 +80,12 @@ function filesOf(bucket: R2Bucket, stub: Pick<Stub, "fileKey">, personId: string
     return out;
   };
   const files = {
-    /** The file store's name for a note's recording. */
-    nameOf: (noteId: string) => `${prefix}${noteId}`,
-    /** The file store's name for a photo, in the folder's own photos/ folder. */
-    photoName: (photoId: string) => `${prefix}photos/${photoId}`,
-    /** Seals a file under its name, from nameOf or photoName, and stores it; answers the name for its row. */
-    async put(name: string, bytes: ArrayBuffer): Promise<string> {
-      if (!name.startsWith(prefix)) throw new Error("A file goes only in its own person's folder.");
+    /** The file store's name for a note's recording (its note id), a note's file (`attachments/<id>`), or a photo
+     *  (`photos/<id>`). */
+    nameOf: (item: string) => `${prefix}${item}`,
+    /** Seals a recording, a file or a photo and stores it under the person's folder; answers its name for the row. */
+    async put(item: string, bytes: ArrayBuffer): Promise<string> {
+      const name = files.nameOf(item);
       await bucket.put(name, await seal(name, bytes), { httpMetadata: { contentType: "application/octet-stream" } });
       return name;
     },

@@ -29,7 +29,7 @@ const webhook = (id = "hook-1") => rows("relay_webhooks").find(row => row.id ===
 const note = (clientId: string, text = "Order more switches") => call(phone, "POST", "notes", { clientId, text, createdAt: NOW - MINUTE });
 const anaSpace = () => spaceOf(env(), vouch("queue", ANA));
 const ringNote = (id: string, more: { audio?: boolean; createdAt?: number } = {}) => db.sql.prepare(`INSERT INTO relay_notes (id, device_id, source,
-  delivery_id, text, audio_key, recorded_at, created_at) VALUES (?, 'd-pebble', 'ring', ?, 'Ring note', ?, ?, ?)`)
+  delivery_id, text, audio_key, recorded_at, created_at) VALUES (?, 'd-ipad', 'ring', ?, 'Ring note', ?, ?, ?)`)
   .run(id, `delivery-${id}`, more.audio ? anaSpace().files.nameOf(id) : null, NOW - 2 * MINUTE, more.createdAt ?? NOW);
 /** Ana's space's SQL: `spy` sees each statement before it runs. */
 const watchSql = (spy: (sql: string) => void) => {
@@ -219,7 +219,7 @@ it("waits for a ring note's recording, sends it when it comes, and skips a note 
   const [early] = await deliver(wakeUp("hook-1"));
   expect(early.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
   expect(sent).toEqual([]);
-  await anaSpace().files.put(anaSpace().files.nameOf("aaaaaaaa-0000-4000-8000-000000000001"), new Uint8Array([0, 0, 0, 24]).buffer);
+  await anaSpace().files.put("aaaaaaaa-0000-4000-8000-000000000001", new Uint8Array([0, 0, 0, 24]).buffer);
   ringNote("aaaaaaaa-0000-4000-8000-000000000002", { audio: true, createdAt: NOW - 3 * MINUTE });
   ringNote("aaaaaaaa-0000-4000-8000-000000000003");
   db.sql.prepare("DELETE FROM relay_notes WHERE id = 'aaaaaaaa-0000-4000-8000-000000000003'").run();
@@ -238,16 +238,62 @@ it("sends health and location only to a webhook that takes them, in groups of on
   await call(phone, "POST", "health", { samples: [sample, { ...sample, start: NOW - 30 * MINUTE, end: NOW - 10 * MINUTE }] });
   await call(phone, "POST", "locations", { points: [{ at: NOW - 2 * MINUTE, lat: 43.65, lon: -79.38, accuracy: 10 }] });
   await call(phone, "POST", "health", { samples: [{ ...sample, type: "heart_rate", unit: "bpm", value: 70 }] });
-  expect(queue.sent).toEqual([wakeUp("all"), wakeUp("all"), wakeUp("notes"), wakeUp("all")]);
+  // The point near the ring note gives it no place, so the notes-only webhook is not woken for it.
+  expect(queue.sent).toEqual([wakeUp("all"), wakeUp("all"), wakeUp("all")]);
   await deliver(wakeUp("all"));
-  expect(types()).toEqual(["note.created", "health.samples", "location.points", "note.updated", "health.samples"]);
+  expect(types()).toEqual(["note.created", "health.samples", "location.points", "health.samples"]);
   expect(bodies()[1].data.samples.map((item: { value: number }) => item.value)).toEqual([1200, 1200]);
   expect(bodies()[2].data.points[0]).toMatchObject({ lat: 43.65, device: { id: "d-phone", name: "Android phone" } });
-  expect(bodies()[3].data.note).toMatchObject({ place: { lat: 43.65, from: "history" } });
-  expect(sent.map(item => item.headers["webhook-id"])).toEqual(["msg_all_1_1", "msg_all_2_3", "msg_all_4_4", "msg_all_5_5", "msg_all_6_6"]);
+  expect(sent.map(item => item.headers["webhook-id"])).toEqual(["msg_all_1_1", "msg_all_2_3", "msg_all_4_4", "msg_all_5_5"]);
   sent.length = 0;
   await deliver(wakeUp("notes"));
+  expect(types()).toEqual(["note.created"]);
+  expect(rows("relay_outbox").map(row => row.kind)).not.toContain("note.updated");
+});
+
+it("still sends a note.updated row already waiting from before the server stopped placing ring notes", async () => {
+  hook();
+  ringNote("aaaaaaaa-0000-4000-8000-000000000001");
+  db.sql.prepare(`UPDATE relay_notes SET lat = 43.65, lon = -79.38, accuracy = 10, place_from = 'history'
+    WHERE id = 'aaaaaaaa-0000-4000-8000-000000000001'`).run();
+  db.sql.prepare("INSERT INTO relay_outbox (kind, ref, at, logged_at) VALUES ('note.updated', 'aaaaaaaa-0000-4000-8000-000000000001', ?, ?)")
+    .run(NOW - 2 * MINUTE, NOW);
+  await deliver(wakeUp("hook-1"));
   expect(types()).toEqual(["note.created", "note.updated"]);
+  expect(bodies()[1].data.note).toMatchObject({ source: "ring", place: { lat: 43.65, from: "history" } });
+  expect(webhook()).toMatchObject({ sent_seq: 2 });
+});
+
+it("sends changed and removed calendar events only to a webhook that takes the calendar", async () => {
+  hook("cal", { kinds: '["notes","calendar"]' });
+  hook("health", { kinds: '["notes","health"]' });
+  const event = { key: "work:1:1", calendar: "Work", title: "Board meeting", start: NOW, end: NOW + 60 * MINUTE, allDay: false, people: [] };
+  await call(phone, "POST", "calendar", { events: [event, { ...event, key: "work:2:2", title: "Sync" }], removed: [] });
+  await call(phone, "POST", "calendar", { events: [{ ...event, title: "Board meeting, moved", start: NOW + 60 * MINUTE, end: NOW + 120 * MINUTE }],
+    removed: ["work:2:2"] });
+  expect(queue.sent).toEqual([wakeUp("cal"), wakeUp("cal")]);
+  await deliver(wakeUp("cal"), wakeUp("health"));
+  expect(types()).toEqual(["calendar.events"]);
+  expect(bodies()[0].data.events.map((item: { title: string; status: string }) => [item.title, item.status]))
+    .toEqual([["Board meeting, moved", "changed"], ["Sync", "removed"]]);
+  expect(webhook("health").sent_seq).toBe(0);
+});
+
+it("sends a webhook made for notes only no health or calendar stored later, until its owner ticks them", async () => {
+  const { json } = await call(matthew, "POST", "webhooks", { name: "Notes only", url: "https://db.example.com/relay", kinds: [] });
+  const made = { id: String(json.webhook.id) };
+  const sample = { type: "steps", start: NOW - 60 * MINUTE, end: NOW - 30 * MINUTE, value: 1200, unit: "count", source: "Health Connect" };
+  await call(phone, "POST", "health", { samples: [sample] });
+  const event = { key: "work:1:1", calendar: "Work", title: "Board meeting", start: NOW, end: NOW + 60 * MINUTE, allDay: false, people: [] };
+  await call(phone, "POST", "calendar", { events: [event], removed: [] });
+  await note("note-0001");
+  await deliver(wakeUp(made.id));
+  expect(types()).toEqual(["note.created"]);
+  sent.length = 0;
+  await call(matthew, "POST", "webhooks/update", { id: made.id, kinds: ["calendar"] });
+  await call(phone, "POST", "calendar", { events: [{ ...event, title: "Board meeting, moved" }], removed: [] });
+  await deliver(wakeUp(made.id));
+  expect(types()).toEqual(["calendar.events"]);
 });
 
 it("sends 20 messages in a run, then queues the webhook again for the rest", async () => {
@@ -285,4 +331,12 @@ it("sends Ben's note only to Ben's webhook, never to Ana's", async () => {
   expect(sent.map(item => [item.url, JSON.parse(item.body).data.note.text])).toEqual([["https://ben.example.com/relay", "Ben's errand"]]);
   expect([webhook("ana-hook").sent_seq, rows("relay_webhooks", BEN)[0].sent_seq]).toEqual([0, 1]);
   expect(rows("relay_notes")).toEqual([]);
+});
+
+it("names a note's files in its message at once, without waiting for their bytes", async () => {
+  hook();
+  await call(phone, "POST", "notes", { clientId: "note-files-01", text: "Receipt", createdAt: NOW - MINUTE,
+    attachments: [{ id: "file-pdf-0001", name: "warranty.pdf", type: "application/pdf", size: 245_760 }] });
+  await deliver(wakeUp("hook-1"));
+  expect(bodies()[0].data.note.attachments).toEqual([{ id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 245_760 }]);
 });

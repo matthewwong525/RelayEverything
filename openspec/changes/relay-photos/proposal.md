@@ -63,7 +63,7 @@ Non-goals: sending the old library, videos, sending photos to webhooks, captions
 ## Impact
 
 - `mobile/`: `pubspec.yaml` adds `photo_manager` and `connectivity_plus`; `lib/data/settings.dart` (`photos`, `photosOnMobileData`); `lib/data/store.dart` (schema version 5, a `photos` queue table); new `lib/sync/photos.dart`; `lib/sync/background.dart`, `lib/controller.dart`, `lib/relay.dart` and `lib/screens/settings.dart`; `lib/data/api.dart` gains a multipart upload. `ios/Runner/Info.plist` adds `NSPhotoLibraryUsageDescription`; `android/app/src/main/AndroidManifest.xml` adds `READ_MEDIA_IMAGES`, `READ_EXTERNAL_STORAGE` (API ≤ 32) and `ACCESS_MEDIA_LOCATION`.
-- `schema/space-migrations/0003_photos.sql`: a new `relay_photos` table in each space.
+- `schema/space-migrations/0007_photos.sql`: a new `relay_photos` table in each space.
 - `app/worker/apps/relay/`: new `photos.ts` (`POST photos`, `GET photos`, `POST photos/delete`); `api.ts` routes; `caller.ts` phone reach adds `photos`; `space.ts` file names for photos; `queries.ts` photo reads; `account.ts` delete text.
 - `app/worker/relay-mcp/tools.ts`: `photos` and `read_photo` tools; `index.ts`/`tools.ts` pass the file store; `app/wrangler.relay-mcp.jsonc` and `self-host/mcp.template.jsonc` bind `RELAY_BUCKET`.
 - `app/src/apps/relay/`: new `Photos.tsx` card; `Account.tsx` delete text.
@@ -100,3 +100,14 @@ Non-goals: sending the old library, videos, sending photos to webhooks, captions
 - **2026-11-07** — Assumed: when a photo's copy fails, as with an iCloud download cut short, the round stops at that photo and the next round tries it again; after 3 failed rounds the phone skips it, so one broken photo can't stop the rest.
 - **2026-11-07** — Assumed: after Apple Health and location began to wake the closed iPhone app, the photo step runs in each wake's round too, last, because a wake runs the same round as the hourly task; a wake that iOS ends at 25 s has sent the readings and points first, and a photo it did not send waits for the next round.
 - **2026-11-07** — Saved for final acceptance: built, reviewed twice, merged with the iPhone health, places and connect change (#27), and the local checks pass; the staging check (6.2) and the phone build check (6.3) remain.
+- **2026-11-07** — Asked: Matthew said build and ship, after a recap that named bringing in main, adding photos to the data kinds list, hiding *Photos* in phone-webhook mode, and keeping shared photos and photo sending apart in the docs; these are tasks 6.1–6.4, and the checks move to 7.
+- **2026-11-07** — Assumed: when the phone sends straight to one webhook, *Photos* hides and sends nothing, because photos carry their place and go to no webhook.
+- **2026-11-07** — Assumed: the photo migration is `0007_photos.sql`, after main's `0003_api_devices` to `0006_phone_data`, because the second change to publish renumbers.
+- **2026-11-07** — Assumed: a photo's file name comes from main's `nameOf("photos/<id>")`, as a note's file does, so `photoName` goes and `put` takes an item, not a full name.
+- **2026-11-07** — Assumed: the `photos` and `read_photo` tools move into main's `inputs.ts` and `answers.ts`, and the web API gets no photo route: `read_photo` answers an image, which the web API does not send, and `near` is no query field. The data kinds list names the two tools and `app/photos`, and lists the API part as missing with that reason.
+- **2026-11-07** — Assumed: the data kinds list keeps photos' webhook part missing for good, because each photo carries its place; a photo shared into a note goes as one of the note's files.
+- **2026-11-07** — Assumed: when the phone sends to a webhook, Settings reads photos as off. A move to the webhook drops the photos still waiting on the phone, as turning photos off does, and turning photos on there gives *Photos go only to Relay Everything. They do not go to a webhook.*
+- **2026-11-07** — Assumed: the phone's photo queue is store schema version 7, after main's files table (5) and calendar table (6).
+- **2026-11-07** — Assumed: Android keeps `READ_MEDIA_IMAGES` and `READ_EXTERNAL_STORAGE` up to Android 12, which main's file opener had removed, because *Photos* needs them. Video and audio stay removed.
+- **2026-11-07** — Assumed: iOS has one `NSPhotoLibraryUsageDescription` that covers both photos picked for a note and *Photos* sending.
+- **2026-11-07** — Assumed: the photo upload call on the phone is `RelayApi.multipart`, because main's `RelayApi.upload` already sends note files.

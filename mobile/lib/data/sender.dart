@@ -3,23 +3,36 @@ import 'package:http/http.dart' as http;
 import 'api.dart';
 import 'connection.dart';
 import 'settings.dart';
+import 'webhook.dart';
 
-/// The one way to the Relay server. It gives no API client while sending is off, so no screen or job can call the
-/// network on its own.
+/// The one way out of the phone: to the Relay Everything server, or to the person's own webhook. It gives no client
+/// while sending is off, so no screen or job can call the network on its own.
 class Sender {
-  Sender([RelayApi Function(Connection)? apiFor, http.Client Function()? clientFor])
-    : _apiFor = apiFor ?? RelayApi.new, _clientFor = clientFor ?? http.Client.new;
+  Sender([RelayApi Function(Connection)? apiFor, http.Client Function()? clientFor,
+    WebhookClient Function(Webhook webhook, String installId)? webhookFor])
+    : _apiFor = apiFor ?? RelayApi.new, _clientFor = clientFor ?? http.Client.new,
+      _webhookFor = webhookFor ?? ((webhook, installId) => WebhookClient(webhook, installId: installId));
 
   final RelayApi Function(Connection) _apiFor;
   final http.Client Function() _clientFor;
+  final WebhookClient Function(Webhook, String) _webhookFor;
 
-  /// The client for [connection], or null while sending is off or no key is kept.
-  RelayApi? api(Settings settings, Connection? connection) =>
-    settings.sending && connection != null ? _apiFor(connection) : null;
+  /// The client for the place [settings] names, or null while sending is off or that place is not set up: no key for
+  /// the server, or no webhook. Webhook mode needs no key.
+  Outbound? api(Settings settings, {Connection? connection, Webhook? webhook, String? installId}) {
+    if (!settings.sending) return null;
+    return switch (settings.place) {
+      SendPlace.server => connection == null ? null : _apiFor(connection),
+      SendPlace.webhook => webhook == null || installId == null ? null : _webhookFor(webhook, installId),
+    };
+  }
 
   /// Tries a key the person scanned or pasted. Only the connect screen calls it, and only the sending switch opens
   /// that screen.
   RelayApi check(Connection connection) => _apiFor(connection);
+
+  /// *Send a test* to a webhook. Only the person's tap calls it.
+  WebhookClient tryWebhook(Webhook webhook, String installId) => _webhookFor(webhook, installId);
 
   /// Trades a sign-in's code for this phone's key. Only the connect screen's *Sign in to connect* calls it.
   Future<Connection> trade(String server, String code, String verifier) =>

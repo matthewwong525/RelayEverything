@@ -16,7 +16,7 @@
           "type": "string",
           "format": "date-time",
           "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
-          "description": "When Relay Everything stored what this message holds."
+          "description": "When Relay Everything, or the phone that sends to its own webhook, stored what this message holds."
         },
         "data": {
           "type": "object",
@@ -26,7 +26,7 @@
               "properties": {
                 "id": {
                   "type": "string",
-                  "description": "The note's id: a UUID, the same in every message about this note."
+                  "description": "The note's id, the same in every message about this note: a UUID, or the phone's own note id when the phone sends to its own webhook."
                 },
                 "source": {
                   "type": "string",
@@ -56,7 +56,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "description": "The device key's id in Relay Everything."
+                      "description": "The device key's id in Relay Everything, or the phone's own install id when the phone sends to its own webhook."
                     },
                     "name": {
                       "type": "string"
@@ -66,8 +66,7 @@
                     "id",
                     "name"
                   ],
-                  "additionalProperties": false,
-                  "description": "The phone or Pebble app that sent the item."
+                  "description": "The phone or other device that sent the item."
                 },
                 "place": {
                   "anyOf": [
@@ -117,8 +116,7 @@
                         "accuracy",
                         "name",
                         "from"
-                      ],
-                      "additionalProperties": false
+                      ]
                     },
                     {
                       "type": "null"
@@ -141,14 +139,48 @@
                       "required": [
                         "content_type",
                         "base64"
-                      ],
-                      "additionalProperties": false
+                      ]
                     },
                     {
                       "type": "null"
                     }
                   ],
                   "description": "A ring note's recording, or null for a typed note or a ring note with words only."
+                },
+                "attachments": {
+                  "description": "The note's files: each one's name, type and size, never its bytes. Only a note with files has this list.",
+                  "minItems": 1,
+                  "maxItems": 10,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "description": "The file's id, from the phone that sent it."
+                      },
+                      "name": {
+                        "type": "string",
+                        "description": "The file's name, such as warranty.pdf."
+                      },
+                      "content_type": {
+                        "type": "string",
+                        "description": "Such as application/pdf."
+                      },
+                      "size": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991,
+                        "description": "In bytes."
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "content_type",
+                      "size"
+                    ]
+                  }
                 }
               },
               "required": [
@@ -160,14 +192,12 @@
                 "device",
                 "place",
                 "audio"
-              ],
-              "additionalProperties": false
+              ]
             }
           },
           "required": [
             "note"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
       "required": [
@@ -176,7 +206,6 @@
         "timestamp",
         "data"
       ],
-      "additionalProperties": false,
       "description": "A note reached Relay Everything."
     },
     {
@@ -194,7 +223,7 @@
           "type": "string",
           "format": "date-time",
           "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
-          "description": "When Relay Everything stored what this message holds."
+          "description": "When Relay Everything, or the phone that sends to its own webhook, stored what this message holds."
         },
         "data": {
           "type": "object",
@@ -204,7 +233,7 @@
               "properties": {
                 "id": {
                   "type": "string",
-                  "description": "The note's id: a UUID, the same in every message about this note."
+                  "description": "The note's id, the same in every message about this note: a UUID, or the phone's own note id when the phone sends to its own webhook."
                 },
                 "source": {
                   "type": "string",
@@ -234,7 +263,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "description": "The device key's id in Relay Everything."
+                      "description": "The device key's id in Relay Everything, or the phone's own install id when the phone sends to its own webhook."
                     },
                     "name": {
                       "type": "string"
@@ -244,8 +273,7 @@
                     "id",
                     "name"
                   ],
-                  "additionalProperties": false,
-                  "description": "The phone or Pebble app that sent the item."
+                  "description": "The phone or other device that sent the item."
                 },
                 "place": {
                   "anyOf": [
@@ -295,8 +323,7 @@
                         "accuracy",
                         "name",
                         "from"
-                      ],
-                      "additionalProperties": false
+                      ]
                     },
                     {
                       "type": "null"
@@ -312,14 +339,12 @@
                 "created_at",
                 "device",
                 "place"
-              ],
-              "additionalProperties": false
+              ]
             }
           },
           "required": [
             "note"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
       "required": [
@@ -328,8 +353,7 @@
         "timestamp",
         "data"
       ],
-      "additionalProperties": false,
-      "description": "A ring note got its place from a later location batch. It has no audio."
+      "description": "No longer sent: the server gives no note a place later. It once said a ring note got its place from a later location batch. It has no audio."
     },
     {
       "type": "object",
@@ -346,7 +370,7 @@
           "type": "string",
           "format": "date-time",
           "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
-          "description": "When Relay Everything stored what this message holds."
+          "description": "When Relay Everything, or the phone that sends to its own webhook, stored what this message holds."
         },
         "data": {
           "type": "object",
@@ -362,14 +386,14 @@
                     "type": "integer",
                     "minimum": -9007199254740991,
                     "maximum": 9007199254740991,
-                    "description": "Unique in this Relay Everything server."
+                    "description": "Unique in this Relay Everything server, or on the phone when the phone sends to its own webhook."
                   },
                   "device": {
                     "type": "object",
                     "properties": {
                       "id": {
                         "type": "string",
-                        "description": "The device key's id in Relay Everything."
+                        "description": "The device key's id in Relay Everything, or the phone's own install id when the phone sends to its own webhook."
                       },
                       "name": {
                         "type": "string"
@@ -379,16 +403,25 @@
                       "id",
                       "name"
                     ],
-                    "additionalProperties": false,
-                    "description": "The phone or Pebble app that sent the item."
+                    "description": "The phone or other device that sent the item."
                   },
                   "type": {
                     "type": "string",
-                    "enum": [
+                    "examples": [
                       "steps",
                       "heart_rate",
                       "sleep",
-                      "workout"
+                      "workout",
+                      "weight",
+                      "resting_heart_rate",
+                      "hrv_sdnn",
+                      "hrv_rmssd",
+                      "blood_oxygen",
+                      "blood_pressure_systolic",
+                      "blood_pressure_diastolic",
+                      "cycle_flow",
+                      "mindful",
+                      "water"
                     ]
                   },
                   "start": {
@@ -423,15 +456,13 @@
                   "value",
                   "unit",
                   "source"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           },
           "required": [
             "samples"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
       "required": [
@@ -440,7 +471,6 @@
         "timestamp",
         "data"
       ],
-      "additionalProperties": false,
       "description": "Health samples, in the order Relay Everything stored them."
     },
     {
@@ -458,7 +488,7 @@
           "type": "string",
           "format": "date-time",
           "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
-          "description": "When Relay Everything stored what this message holds."
+          "description": "When Relay Everything, or the phone that sends to its own webhook, stored what this message holds."
         },
         "data": {
           "type": "object",
@@ -474,14 +504,14 @@
                     "type": "integer",
                     "minimum": -9007199254740991,
                     "maximum": 9007199254740991,
-                    "description": "Unique in this Relay Everything server."
+                    "description": "Unique in this Relay Everything server, or on the phone when the phone sends to its own webhook."
                   },
                   "device": {
                     "type": "object",
                     "properties": {
                       "id": {
                         "type": "string",
-                        "description": "The device key's id in Relay Everything."
+                        "description": "The device key's id in Relay Everything, or the phone's own install id when the phone sends to its own webhook."
                       },
                       "name": {
                         "type": "string"
@@ -491,8 +521,7 @@
                       "id",
                       "name"
                     ],
-                    "additionalProperties": false,
-                    "description": "The phone or Pebble app that sent the item."
+                    "description": "The phone or other device that sent the item."
                   },
                   "at": {
                     "type": "string",
@@ -529,15 +558,13 @@
                   "lon",
                   "accuracy",
                   "place"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           },
           "required": [
             "points"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
       "required": [
@@ -546,8 +573,257 @@
         "timestamp",
         "data"
       ],
-      "additionalProperties": false,
       "description": "Location points, in the order Relay Everything stored them."
+    },
+    {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "type": {
+          "type": "string",
+          "const": "note.file"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+          "description": "When Relay Everything, or the phone that sends to its own webhook, stored what this message holds."
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "note_id": {
+              "type": "string",
+              "description": "The id of the note this file is on."
+            },
+            "file": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "The file's id, from the phone that sent it."
+                },
+                "name": {
+                  "type": "string",
+                  "description": "The file's name, such as warranty.pdf."
+                },
+                "content_type": {
+                  "type": "string",
+                  "description": "Such as application/pdf."
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991,
+                  "description": "In bytes."
+                },
+                "base64": {
+                  "type": "string",
+                  "description": "The file's bytes in base64."
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "content_type",
+                "size",
+                "base64"
+              ]
+            }
+          },
+          "required": [
+            "note_id",
+            "file"
+          ]
+        }
+      },
+      "required": [
+        "version",
+        "type",
+        "timestamp",
+        "data"
+      ],
+      "description": "One file of a note, with its bytes. Only a phone that sends to its own webhook sends it, after the note's note.created."
+    },
+    {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "type": {
+          "type": "string",
+          "const": "calendar.events"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+          "description": "When Relay Everything, or the phone that sends to its own webhook, stored what this message holds."
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "events": {
+              "minItems": 1,
+              "maxItems": 500,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "Unique in this Relay Everything server, or made from the phone's install id and the key when the phone sends to its own webhook: upsert by it."
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "changed: new or changed. removed: deleted on the phone, or its calendar turned off.",
+                    "examples": [
+                      "changed",
+                      "removed"
+                    ]
+                  },
+                  "device": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "description": "The device key's id in Relay Everything, or the phone's own install id when the phone sends to its own webhook."
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name"
+                    ],
+                    "description": "The phone or other device that sent the item."
+                  },
+                  "key": {
+                    "type": "string",
+                    "description": "The phone's key for this occurrence: each time of a repeating event has its own."
+                  },
+                  "calendar": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The calendar's name."
+                  },
+                  "title": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "start": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                    "description": "A time in ISO 8601, UTC."
+                  },
+                  "end": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                    "description": "A time in ISO 8601, UTC."
+                  },
+                  "all_day": {
+                    "type": "boolean"
+                  },
+                  "location": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "notes": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "url": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "people": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "organizer": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "status",
+                  "device",
+                  "key",
+                  "calendar",
+                  "title",
+                  "start",
+                  "end",
+                  "all_day",
+                  "location",
+                  "notes",
+                  "url",
+                  "people"
+                ]
+              }
+            }
+          },
+          "required": [
+            "events"
+          ]
+        }
+      },
+      "required": [
+        "version",
+        "type",
+        "timestamp",
+        "data"
+      ],
+      "description": "Calendar events that are new, changed or removed, in the order Relay Everything stored them. A removed event from a phone that sends to its own webhook has only its key, id and start."
     },
     {
       "type": "object",
@@ -564,7 +840,7 @@
           "type": "string",
           "format": "date-time",
           "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
-          "description": "When Relay Everything stored what this message holds."
+          "description": "When Relay Everything, or the phone that sends to its own webhook, stored what this message holds."
         },
         "data": {
           "type": "object",
@@ -582,14 +858,12 @@
               "required": [
                 "id",
                 "name"
-              ],
-              "additionalProperties": false
+              ]
             }
           },
           "required": [
             "webhook"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
       "required": [
@@ -598,8 +872,7 @@
         "timestamp",
         "data"
       ],
-      "additionalProperties": false,
-      "description": "Send a test, from the Relay Everything page."
+      "description": "Send a test, from the Relay Everything page or the phone."
     }
   ],
   "title": "Relay Everything webhook message, version 1",

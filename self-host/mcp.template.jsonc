@@ -14,5 +14,6 @@
   "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-spaces" }] },
   // The install's file store, for read_photo.
   "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-notes" }],
+  "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-webhooks" }] },
   "kv_namespaces": [{ "binding": "OAUTH_KV" }]
 }

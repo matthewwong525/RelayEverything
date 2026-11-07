@@ -1,9 +1,9 @@
 -- Made-up rows for one person's space, which worker/relay-mcp/tools.test.ts reads. No real person, key or address.
--- Relay: a made-up phone and Pebble app key with no real token behind either, one turned-off phone, and a day in
+-- Relay: a made-up phone and iPad key with no real token behind either, one turned-off phone, and a day in
 -- Toronto (Wednesday 4 November 2026): ring and typed notes, health samples, and the location history that placed them.
 INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at) VALUES
   ('d0000000-0000-4000-8000-000000000001', 'Android phone', 'seed-phone.access', 'seed-token-phone', 1793700000000, NULL),
-  ('d0000000-0000-4000-8000-000000000002', 'Pebble app', 'seed-pebble.access', 'seed-token-pebble', 1793700000000, NULL),
+  ('d0000000-0000-4000-8000-000000000002', 'iPad', 'seed-ipad.access', 'seed-token-ipad', 1793700000000, NULL),
   ('d0000000-0000-4000-8000-000000000003', 'Old phone', 'seed-old.access', 'seed-token-old', 1793000000000, 1793600000000);
 INSERT INTO relay_locations (device_id, at, lat, lon, accuracy, place, created_at) VALUES
   ('d0000000-0000-4000-8000-000000000001', 1793797200000, 43.6629, -79.3957, 15, 'Harbord St', 1793833200000),
@@ -34,20 +34,41 @@ INSERT INTO relay_chats (id, device_id, session_id, app, project, title, started
   ('c0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000004', 'seed-session-0001', 'claude-code', 'relay-ring',
    'How thick should the stiffener be?', 1793800800000, 1793801400000, 4, 1793800810000),
   ('c0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000004', 'seed-session-0002', 'claude-code', 'relay-ring',
-   'Fix the Pebble webhook signature', 1793815200000, 1793816100000, 3, 1793815210000);
+   'Fix the webhook signature', 1793815200000, 1793816100000, 3, 1793815210000);
 INSERT INTO relay_chat_messages (chat_id, seq, role, text, at) VALUES
   ('c0000000-0000-4000-8000-000000000001', 0, 'you', 'How thick should the stiffener be?', 1793800800000),
   ('c0000000-0000-4000-8000-000000000001', 1, 'step', 'Read pcb/relay.kicad_pcb', 1793800860000),
   ('c0000000-0000-4000-8000-000000000001', 2, 'ai', '0.2 mm steel is enough for a ring this size. Glue it under the battery.', 1793801100000),
   ('c0000000-0000-4000-8000-000000000001', 3, 'you', 'Save the plan for the stiffener to Relay', 1793801400000),
-  ('c0000000-0000-4000-8000-000000000002', 0, 'you', 'Fix the Pebble webhook signature', 1793815200000),
+  ('c0000000-0000-4000-8000-000000000002', 0, 'you', 'Fix the webhook signature', 1793815200000),
   ('c0000000-0000-4000-8000-000000000002', 1, 'step', 'Ran: npm test', 1793815800000),
   ('c0000000-0000-4000-8000-000000000002', 2, 'ai', 'The signature now uses the raw body. The tests pass.', 1793816100000);
 INSERT INTO relay_chat_saves (id, chat_id, title, text, created_at) VALUES
   ('e0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', 'Stiffener plan',
    'Use a 0.2 mm steel stiffener under the battery, glued, not soldered.', 1793801460000);
+-- More health from the phone that day: two weights, of which the evening's is the latest, and one blood pressure reading.
+INSERT INTO relay_health (device_id, type, start_at, end_at, value, unit, source, created_at) VALUES
+  ('d0000000-0000-4000-8000-000000000001', 'weight', 1793793600000, 1793793600000, 71.8, 'kg', 'com.google.android.apps.fitness', 1793833200000),
+  ('d0000000-0000-4000-8000-000000000001', 'weight', 1793840400000, 1793840400000, 71.4, 'kg', 'com.google.android.apps.fitness', 1793840460000),
+  ('d0000000-0000-4000-8000-000000000001', 'blood_pressure_systolic', 1793799000000, 1793799000000, 118, 'mmHg', 'com.google.android.apps.fitness', 1793833200000),
+  ('d0000000-0000-4000-8000-000000000001', 'blood_pressure_diastolic', 1793799000000, 1793799000000, 76, 'mmHg', 'com.google.android.apps.fitness', 1793833200000);
+
+-- The phone's calendar: a board meeting and a lunch that day, one meeting removed on the phone, and one the next day.
+INSERT INTO relay_calendar_events (device_id, event_key, calendar, title, start_at, end_at, all_day, location, notes, url, people,
+  removed_at, updated_at, created_at) VALUES
+  ('d0000000-0000-4000-8000-000000000001', 'work:board-1:1793804400000', 'Work', 'Board meeting', 1793804400000, 1793808000000, 0,
+   'Office, room 2', 'Bring the ring samples.', NULL, '[{"name":"Sam Lee","email":"sam@example.com","organizer":true},{"name":"Ana"}]',
+   NULL, 1793700000000, 1793700000000),
+  ('d0000000-0000-4000-8000-000000000001', 'home:lunch-1:1793811600000', 'Home', 'Lunch with Sam', 1793811600000, 1793815200000, 0,
+   'King St W', NULL, NULL, '[{"name":"Sam Lee"}]', NULL, 1793700000000, 1793700000000),
+  ('d0000000-0000-4000-8000-000000000001', 'work:sync-1:1793818800000', 'Work', 'Cancelled sync', 1793818800000, 1793820600000, 0,
+   NULL, NULL, NULL, '[]', 1793750000000, 1793750000000, 1793700000000),
+  ('d0000000-0000-4000-8000-000000000001', 'work:review-1:1793887200000', 'Work', 'Design review with Sam', 1793887200000, 1793890800000, 0,
+   NULL, NULL, 'https://meet.example.com/review', '[]', NULL, 1793700000000, 1793700000000);
+
 -- Relay webhooks: one made-up address at example.com, paused so a preview never sends to it, with notes sent and the
--- health batch waiting. The rows above filled relay_outbox through its triggers: locations 1-3, notes 4-6, health 7-12.
+-- health batch waiting. The rows above filled relay_outbox through its triggers: locations 1-3, notes 4-6, health 7-16,
+-- calendar 17-20.
 INSERT INTO relay_webhooks (id, name, url, secret, kinds, active, sent_seq, last_status, last_sent_at, created_at) VALUES
   ('e0000000-0000-4000-8000-000000000001', 'Example database', 'https://example.com/relay',
    'whsec_c2VlZC1vbmx5LW5vdC1hLXJlYWwtc2VjcmV0LTAwMDA=', '["notes","health"]', 0, 6, 200, 1793829510000, 1793790000000);

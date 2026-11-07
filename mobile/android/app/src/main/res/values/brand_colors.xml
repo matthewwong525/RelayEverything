@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Written by brand/make-icons.mjs from the brand colors in wiki/brand.md. -->
+<resources>
+    <color name="ic_launcher_background">#0E7A5A</color>
+    <color name="launch_paper">#F7F8F4</color>
+</resources>

@@ -2,13 +2,23 @@ import { useCallback, useEffect, useState } from 'react'
 
 // Relay's own routes, read in the shapes app/worker/apps/relay/ writes.
 export type Place = { lat: number; lon: number; accuracy: number | null; name: string | null; from: 'phone' | 'history' }
-export type Note = { id: string; source: 'ring' | 'typed'; text: string; recordedAt: number; device: string; audio: boolean; place: Place | null }
+/** A note's file: `ready` once the phone has sent it. */
+export type NoteFile = { id: string; name: string; type: string; size: number; ready: boolean }
+export type Note = {
+  id: string; source: 'ring' | 'typed'; text: string; recordedAt: number; device: string; audio: boolean; place: Place | null
+  attachments: NoteFile[]
+}
 export type Timeline = { notes: Note[]; next: number | null; nextId: string | null }
 export type Summary = {
   day: string; notes: number; steps: number; sleepMinutes: number
   heartRate: { min: number; max: number; average: number } | null
   workouts: { count: number; minutes: number }
+  /** The other health values: each only when the day has some. */
+  weightKg?: number; restingHeartRate?: number; hrvSdnn?: number; hrvRmssd?: number
+  bloodOxygen?: { min: number; average: number }; bloodPressure?: { at: number; upper: number; lower: number }[]
+  cycleFlow?: number; mindfulMinutes?: number; waterMl?: number
   places: { name: string; lat: number; lon: number; from: number; to: number }[]
+  events: { title: string; start: number; end: number; allDay: boolean; people: string[] }[]
 }
 
 export type ChatSummary = { id: string; title: string; project: string; app: 'claude-code'; startedAt: number; lastAt: number; messages: number; savedByAi: boolean }
@@ -17,8 +27,10 @@ type ChatSave = { id: string; title: string; text: string; createdAt: number }
 export type ChatMessage = { seq: number; role: 'you' | 'ai' | 'step'; text: string; at: number }
 export type ChatPart = { chat: ChatSummary; saves: ChatSave[]; messages: ChatMessage[]; next: number | null }
 type Attempt = { at: number; type: string; status: number | null; ms: number; error: string | null; first: number | null; last: number | null }
+/** A kind of data a webhook can take, as the server lists it for the form's ticks and the card. */
+export type WebhookKind = { id: string; label: string; detail: string; always: boolean; sensitive: boolean }
 export type Webhook = {
-  id: string; name: string; url: string; kinds: ('notes' | 'health' | 'locations')[]
+  id: string; name: string; url: string; kinds: string[]
   state: 'working' | 'paused' | 'failing' | 'backfilling'; waiting: number
   lastStatus: number | null; lastError: string | null; lastSentAt: number | null; nextTryAt: number | null; failingSince: number | null
   createdAt: number; attempts: Attempt[]
@@ -106,3 +118,10 @@ export function when(ms: number, now = Date.now()) {
 /** Where a note was taken: the phone's place name, or its coordinates. */
 export const where = (place: Place | null) =>
   place === null ? null : place.name ?? `${place.lat.toFixed(4)}, ${place.lon.toFixed(4)}`
+
+/** A file's size as the page shows it, such as 240 KB or 1.2 MB. */
+export function sizeOf(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}

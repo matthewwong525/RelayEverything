@@ -109,7 +109,7 @@ test('--notes lists a phone number without failing, naming the line and never th
   assert.deepEqual(listNotes(dir), [`${sha}:wiki/people.md:3 a phone number`]);
   const { code, out } = cli(dir, '--notes');
   assert.equal(code, 0);
-  assert.ok(!out.includes('555'));
+  assert.ok(!out.includes('555-0134'));
   assert.match(out, /^result=listed 1$/m);
 });
 

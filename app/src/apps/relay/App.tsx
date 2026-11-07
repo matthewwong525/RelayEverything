@@ -22,6 +22,30 @@ function Tile({ label, value }: { label: string; value: string }) {
 }
 
 const hours = (minutes: number) => `${Math.floor(minutes / 60)} h ${minutes % 60} min`
+const FLOW = ['none', 'light', 'medium', 'heavy']
+
+/** The day's other health values as short lines, each only when the day has it. */
+function moreHealth(summary: Summary): string[] {
+  const { weightKg, restingHeartRate, hrvSdnn, hrvRmssd, bloodOxygen, bloodPressure, cycleFlow, mindfulMinutes, waterMl } = summary
+  const hrv = hrvSdnn ?? hrvRmssd
+  return [weightKg !== undefined && `Weight ${weightKg} kg.`, restingHeartRate !== undefined && `Resting heart rate ${restingHeartRate} bpm.`,
+    hrv !== undefined && `Heart rate variability ${hrv} ms.`,
+    bloodOxygen && `Blood oxygen ${bloodOxygen.min}% lowest, ${bloodOxygen.average}% on average.`,
+    bloodPressure && `Blood pressure ${bloodPressure.map((reading) => `${reading.upper}/${reading.lower}`).join(', ')} mmHg.`,
+    cycleFlow !== undefined && `Cycle flow ${FLOW[cycleFlow]}.`, mindfulMinutes !== undefined && `${mindfulMinutes} mindful min.`,
+    waterMl !== undefined && `Water ${number.format(waterMl)} ml.`].filter((line): line is string => typeof line === 'string')
+}
+
+function Events({ events }: { events: Summary['events'] }) {
+  return <section className="grid gap-3" aria-label="Calendar">
+    <h2>Calendar today</h2>
+    {events.length === 0 ? <p className="text-muted-foreground">No events today. Turn on the calendar in the Relay Everything app.</p> :
+      <Card className="grid gap-2 p-4">{events.map((event) => <div key={`${event.start}-${event.title}`} className="flex flex-wrap justify-between gap-2">
+        <span className="wrap-anywhere">{event.title || 'No title'}{event.people.length > 0 && <span className="text-muted-foreground"> · {event.people.join(', ')}</span>}</span>
+        <span className="text-sm text-muted-foreground">{event.allDay ? 'All day' : `${when(event.start)} to ${when(event.end)}`}</span>
+      </div>)}</Card>}
+  </section>
+}
 
 function Day({ summary }: { summary: Summary }) {
   const { heartRate, workouts, places } = summary
@@ -35,7 +59,9 @@ function Day({ summary }: { summary: Summary }) {
     <p className="text-sm text-muted-foreground">
       {heartRate ? `Heart rate ${heartRate.min} to ${heartRate.max} bpm, ${heartRate.average} on average.` : 'No heart rate yet today.'}{' '}
       {workouts.count ? `${workouts.count} workout${workouts.count === 1 ? '' : 's'}, ${workouts.minutes} min.` : 'No workouts yet today.'}
+      {moreHealth(summary).map((line) => ` ${line}`).join('')}
     </p>
+    <Events events={summary.events} />
     <section className="grid gap-3" aria-label="Places">
       <h2>Places today</h2>
       {places.length === 0 ? <p className="text-muted-foreground">No places yet today. Turn on location history in the Relay Everything app.</p> :

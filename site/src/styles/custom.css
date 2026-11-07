@@ -1,14 +1,49 @@
-/* Relay's accent on Starlight's own theme, and the home page's four steps. */
+/* Relay Everything's brand on Starlight's own theme (wiki/brand.md): the Emerald set and Inter, then the home
+   page's four steps. Inter is served from this site, with its license in /fonts/OFL.txt. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/InterVariable.woff2') format('woff2');
+}
 :root {
-  --sl-color-accent-low: #232b45;
-  --sl-color-accent: #8ea6ff;
-  --sl-color-accent-high: #d6deff;
+  --sl-font: 'Inter';
+  --relay-spark: #FFC24D;
+  /* Dark: paper behind, card for the top bar and menu, ink for text. */
+  --sl-color-white: #ECF3EE;
+  --sl-color-gray-1: #D5DED8;
+  --sl-color-gray-2: #B7C2BB;
+  --sl-color-gray-3: #9AA8A0;
+  --sl-color-gray-4: #5B6760;
+  --sl-color-gray-5: #2E3833;
+  --sl-color-gray-6: #161D1A;
+  --sl-color-black: #0C110F;
+  --sl-color-accent-low: #133328;
+  --sl-color-accent: #4CC79A;
+  --sl-color-accent-high: #4CC79A;
 }
 :root[data-theme='light'] {
-  --sl-color-accent-low: #e8edff;
-  --sl-color-accent: #3b5bdb;
-  --sl-color-accent-high: #1e3192;
+  --relay-spark: #F5A524;
+  --sl-color-white: #121614;
+  --sl-color-gray-1: #1E2420;
+  --sl-color-gray-2: #2B322D;
+  --sl-color-gray-3: #5E6660;
+  --sl-color-gray-4: #8E978F;
+  --sl-color-gray-5: #C9CEC6;
+  --sl-color-gray-6: #E3E6DF;
+  --sl-color-gray-7: #EEF0EA;
+  --sl-color-black: #F7F8F4;
+  --sl-color-accent-low: #E1F2EA;
+  --sl-color-accent: #0E7A5A;
+  --sl-color-accent-high: #121614;
 }
+h1, h2, h3, .site-title { letter-spacing: -0.02em; }
+/* The home page's picture: the path and the AI's spark in the brand colors. */
+.relay-hero-line { stroke: var(--sl-color-gray-3); }
+.relay-hero-dot { fill: var(--sl-color-gray-3); }
+.relay-hero-path { stroke: var(--sl-color-accent); }
+.relay-hero-spark { fill: var(--relay-spark); stroke: var(--relay-spark); }
 .relay-flow {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));

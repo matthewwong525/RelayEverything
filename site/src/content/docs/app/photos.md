@@ -5,14 +5,20 @@ description: Send the new photos you take to your Relay Everything server, so yo
 
 Relay Everything can send the photos you take on your phone to your own space, with when and where you took them. Your AI then finds them and looks at them through the [AI connector](../../connections/connect-your-ai/), for example: *show me the photos from the trip to Lisbon*. Relay Everything adds no captions or tags.
 
+**Photos** sends each new photo by itself, with no note. To keep a photo as a note, with your own words, add it to a note: [Add photos and files](../your-notes/#add-photos-and-files), or share it from another app: [Share from any app](../share/). A photo on a note is one of the note's files, and goes where your notes go.
+
 ## Turn it on
 
 1. Open **Settings**.
-2. Turn on **Send to Relay Everything**, if it is off: [Connect a phone](../../start/connect-a-phone/). Photos work only with sending on, and the app reads no photo while it is off.
+2. Turn on **Send my notes**, if it is off, and pick **Relay Everything**: [Connect a phone](../../start/connect-a-phone/). Photos work only with sending on, and the app reads no photo while it is off.
 3. Turn on **Photos**.
 4. Allow the app to read your photos. On Android, also allow it to read the place in your photos.
 
 The phone asks for photo access only when you turn on **Photos**. If you say no, the switch stays off: allow photos for Relay Everything in the phone's own Settings, then try again.
+
+## Photos go only to Relay Everything
+
+Photos go only to your Relay Everything server, never to a webhook, because each photo carries where you took it. When the phone sends to [your own webhook](../../connections/your-database/#send-from-the-phone) instead, **Photos** and **Send photos on mobile data** are not in **Settings**, and the app reads and sends no photo. If you move sending to your webhook, the copies that did not go yet are deleted. Photos on a note still go to your webhook, as the note's files.
 
 ## Only new photos
 
@@ -44,7 +50,7 @@ Each copy is at most 3 MB. The original stays on your phone, and the app never d
 
 ## Turn it off
 
-Turn off **Photos** in **Settings**. The phone stops sending, and deletes the copies that did not go yet. Turning off **Send to Relay Everything** also stops photos. The photos already sent stay on your server.
+Turn off **Photos** in **Settings**. The phone stops sending, and deletes the copies that did not go yet. Turning off **Send my notes** also stops photos. The photos already sent stay on your server.
 
 ## Delete all photos
 

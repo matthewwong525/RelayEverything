@@ -5,10 +5,12 @@ description: Turn on sending, and sign in from the app to give the phone its own
 
 The Relay Everything app keeps your notes on the phone, with no key. To send them to your Relay Everything account, you turn on sending and connect the phone with its own key. The easy way is to sign in from the app. You need an account first: [Sign up](../sign-up/).
 
+To send straight to your own database, with no account and nothing on Relay Everything, pick **My own webhook** instead: [Send from the phone](../../connections/your-database/#send-from-the-phone).
+
 ## Connect by signing in
 
 1. Open the Relay Everything app, then open **Settings** from the gear at the top.
-2. Turn on **Send to Relay Everything**. The app shows **Connect Relay Everything**.
+2. Turn on **Send my notes**. The app shows **Where should the phone send?**, with **Relay Everything** picked.
 3. Tap **Sign in to connect**. A sign-in page opens in the app. Sign in, if you are not signed in on the phone already.
 4. The page asks **Connect this phone?**, with a name for the phone. Change the name if you want, and tap **Connect**.
 5. The app comes back with its own key, and checks it with the server. If you wrote notes before, the app asks **Send your earlier notes too?**: see step 4 of [Connect with a QR code](#connect-with-a-qr-code).
@@ -30,7 +32,7 @@ The key starts with `rek_`. It adds data only to your own space. [Keys](../../ap
 ## Connect with a QR code
 
 1. Open the Relay Everything app, then open **Settings** from the gear at the top.
-2. Turn on **Send to Relay Everything**. The app shows **Connect Relay Everything**.
+2. Turn on **Send my notes**. The app shows **Where should the phone send?**, with **Relay Everything** picked.
 3. Under **Or use a key from Add a device**, tap **Scan the QR code**, and point the camera at the key's QR code. The key holds the server's address, so you type no address.
    Or tap **Or paste the key**, paste it, and tap **Connect**.
 4. If you wrote notes before, the app asks **Send your earlier notes too?** Tap **Send them** to send them, or **Only new notes** to keep them only on the phone. The app asks again each time you turn sending on.
@@ -39,7 +41,7 @@ To connect, the phone checks its key with the server, and reads no data. Then yo
 
 ## Stop sending
 
-Turn off **Send to Relay Everything** in **Settings**, and tap **Stop sending**. New notes stay on the phone. Notes already on your server stay there. Health, location and photos stop, and what of them did not go yet is deleted. The key stays on the phone, so you can turn sending on again with no new key.
+Turn off **Send my notes** in **Settings**, and tap **Stop sending**. New notes stay on the phone. Notes already on your server stay there. Health, location and photos stop, and what of them did not go yet is deleted. The key stays on the phone, so you can turn sending on again with no new key: tap **Send to Relay Everything** on **Where should the phone send?**.
 
 ## Turn a phone off
 
@@ -52,4 +54,4 @@ A preview of a change to Relay Everything's own server has its own address, its 
 
 ## Next
 
-[Set up the Pebble webhook](../pebble-webhook/), so the ring's notes reach Relay Everything.
+[Your notes](../../app/your-notes/) shows what you can do with each note.

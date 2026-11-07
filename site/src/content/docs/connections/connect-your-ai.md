@@ -1,9 +1,9 @@
 ---
 title: Connect your AI
-description: Let the Claude app, ChatGPT or Claude Code read your Relay Everything notes, health, places, chats and photos, with one connector address and your own sign-in.
+description: Let the Claude app, ChatGPT or Claude Code read your Relay Everything notes, health, calendar, places, chats and photos, and add notes, with one connector address and your own sign-in.
 ---
 
-Relay Everything's AI connector lets an AI chat app read your Relay Everything data when you ask it a question. It only reads: it can't add, change or delete anything. Each person with a Relay Everything account can connect their own apps, and each app reads only that person's own space.
+Relay Everything's AI connector lets an AI chat app read your Relay Everything data when you ask it a question, and add a note when you ask it to save one. It can't change or delete anything. Each person with a Relay Everything account can connect their own apps, and each app reads only that person's own space.
 
 The connector's address is on the **AI apps** card at the bottom of the Relay Everything page, with a **Copy** button. It looks like `https://<your-relay-server>/mcp`.
 
@@ -15,29 +15,35 @@ You connect each app one time. Each app opens a sign-in page: click **Connect**,
 - **ChatGPT**: open **Settings → Apps & Connectors → Advanced settings** and turn on **Developer mode**. Then click **Create**, type `Relay Everything`, paste the address and pick **OAuth** for the sign-in. Click **Create**, then sign in. In a chat, pick Relay Everything from the developer-mode tools.
 - **Claude Code**: run `claude mcp add --transport http relay <address>`, then type `/mcp` in Claude Code and pick `relay` to sign in. With the [Relay Everything plugin](../claude-code/), type `/relay:connect-ai <address>` instead.
 
-Then ask, for example: *What did I note on 4 November?*, *What did I decide about the stiffener last week?* or *Show me the photos from the trip to Lisbon.*
+Then ask, for example: *What did I note on 4 November?*, *What is on my day?*, *When did I last meet Sam?* or *Show me the photos from the trip to Lisbon.*
 
-## What the AI can read
+## What the AI can read and add
 
-The connector has ten tools. Each tool reads only the space of the person who connected the app. Each answer has a limit, so one question can't copy all of your space.
+The connector has twelve tools. Eleven only read, and one adds a note. Each tool reaches only the space of the person who connected the app. Each answer has a limit, so one question can't copy all of your space.
 
 - **search**: notes that hold every word you give, newest first.
 - **fetch**: one note, the places near it in time, and its day's health totals.
 - **timeline**: every note from one time to another, a page at a time.
-- **day_summary**: one day's notes count, steps, sleep, heart rate, workouts and places.
-- **health**: steps, sleep, heart rate or workouts, one value per hour or per day.
+- **day_summary**: one day's notes count, health totals, places and events, with each event's title, times and people.
+- **health**: one health type, such as steps, sleep, weight or blood pressure, one value per hour or per day. [Health](../../app/health/#what-it-reads) lists the types.
+- **calendar**: the events from one time to another, with title, times, place, notes and people. Give words to find events that hold them, newest first, such as a person's name. [Calendar](../../app/calendar/)
 - **places**: each stay at a place, with when you arrived and left.
 - **search_chats**: [saved Claude Code chats](../claude-code/) that hold every word you give, with the lines that match.
 - **read_chat**: one saved chat, a part at a time, with the AI's saved summary.
 - **photos**: the [photos your phones sent](../../app/photos/) from one time to another, newest first, with when and where you took each one. It can show only the photos near a place, up to 500 km. It lists at most 50 photos a page.
 - **read_photo**: one photo, as an image the AI can look at, with when and where you took it.
+- **add_note**: adds a typed note, with the app's name as its device. It goes to your [webhooks](../your-database/) that take notes, as a phone's note does. The app sends its own id with each note, so a resend is kept once.
+
+An app you connected before the connector could add notes still reads. To let it add, disconnect it and connect it again.
+
+The same sign-in opens the web API, for your own scripts and services: [Connect a service](../../api/connect-a-service/).
 
 ## What leaves Relay Everything
 
-When an app uses a tool, the answer goes to that app's company: Anthropic for Claude, OpenAI for ChatGPT. Their own terms then apply to it. An answer can hold a note's words, its time, the place name and coordinates, the device name, health totals, a chat's messages, and a photo with its time and place.
+When an app uses a tool, the answer goes to that app's company: Anthropic for Claude, OpenAI for ChatGPT. Their own terms then apply to it. An answer can hold a note's words, its time, the place name and coordinates, the device name, health totals, calendar events with their people, a chat's messages, and a photo with its time and place.
 
 An answer never holds a recording, a device key, or a device's or delivery's id. The app gets only what a tool answers for one question, not a copy of your data.
 
 ## Disconnect an app
 
-On the Relay Everything page, find the app in the **AI apps** card and click **Disconnect**, then confirm. The card lists only the apps you connected. Its sign-in stops at once: its next question gets a refusal. To use it again, connect it again from the app. Removing Relay Everything in the app's own settings does not end the sign-in on Relay Everything's side.
+On the Relay Everything page, find the app in the **AI apps** card and click **Disconnect**, then confirm. The card lists only the apps you connected. Its sign-in stops at once: its next question gets a refusal. The notes it added stay. To use it again, connect it again from the app. Removing Relay Everything in the app's own settings does not end the sign-in on Relay Everything's side.

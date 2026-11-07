@@ -9,21 +9,23 @@ import { Label } from '@/components/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Failed } from './Failed'
 import { post, useGet, when } from './read'
-import { ClaudeSteps, PebbleSteps, PhoneSteps, type Made } from './Setup'
+import { ApiSteps, ClaudeSteps, PhoneSteps, type Made } from './Setup'
 
-// Each device's own key: a phone, the Pebble app or Claude Code. A key only adds data, shows once, and turns off
-// alone. app/worker/apps/relay/ answers.
-type Device = { id: string; name: string; reaches: 'phone' | 'chats'; createdAt: number; revokedAt: number | null }
-type Kind = 'phone' | 'pebble' | 'claude'
+// Each device's own key: a phone, Claude Code or a script. A key shows once and turns off alone; only
+// an API key reads, through the web API. app/worker/apps/relay/ answers.
+type Device = { id: string; name: string; reaches: Made['reaches']; createdAt: number; revokedAt: number | null }
+type Kind = 'phone' | 'claude' | 'api'
 
 const KINDS: Record<Kind, { label: string; name: string; reaches: Made['reaches'] }> = {
   phone: { label: 'Phone', name: 'Phone', reaches: 'phone' },
-  pebble: { label: 'Pebble app', name: 'Pebble app', reaches: 'phone' },
   claude: { label: 'Claude Code', name: 'Laptop', reaches: 'chats' },
+  api: { label: 'API key', name: 'Script', reaches: 'api' },
 }
 
+const REACHES: Record<Made['reaches'], string> = { phone: 'Notes, health, places and calendar', chats: 'Chats', api: 'API: reads and adds notes' }
+
 function Steps({ kind, made }: { kind: Kind; made: Made }) {
-  if (kind === 'pebble') return <PebbleSteps made={made} origin={window.location.origin} />
+  if (kind === 'api') return <ApiSteps made={made} />
   return kind === 'claude' ? <ClaudeSteps made={made} /> : <PhoneSteps made={made} />
 }
 
@@ -51,7 +53,7 @@ function AddDevice({ onAdded }: { onAdded: () => void }) {
       {made === null ? <>
         <DialogHeader>
           <DialogTitle>Add a device</DialogTitle>
-          <DialogDescription>Each device gets its own key. A key can only add data, and you can turn it off alone.</DialogDescription>
+          <DialogDescription>Each device gets its own key, and you can turn it off alone. A device key only adds data; an API key also reads notes.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
           <div className="grid gap-2"><Label htmlFor="device-kind">Device</Label>
@@ -99,10 +101,10 @@ export function Devices() {
     {devices.status === 'loading' && <p className="text-muted-foreground">Loading devices…</p>}
     {devices.status === 'failed' && <Failed what="Devices" retry={retry} />}
     {devices.status === 'ready' && (devices.value.devices.length === 0
-      ? <p className="text-muted-foreground">No devices yet. Add a phone, the Pebble app or Claude Code to start sending.</p>
+      ? <p className="text-muted-foreground">No devices yet. Add a phone or Claude Code to start sending.</p>
       : <Card className="grid gap-2 p-4">{devices.value.devices.map((device) => <div key={device.id} className="flex flex-wrap items-center gap-2">
         <span className="grow wrap-anywhere">{device.name}</span>
-        <span className="text-sm text-muted-foreground">{device.reaches === 'chats' ? 'Chats' : 'Notes, health and places'} · added {when(device.createdAt)}</span>
+        <span className="text-sm text-muted-foreground">{REACHES[device.reaches]} · added {when(device.createdAt)}</span>
         {device.revokedAt === null ? <TurnOff device={device} onOff={changed} /> : <Badge variant="outline">Off</Badge>}
       </div>)}</Card>)}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

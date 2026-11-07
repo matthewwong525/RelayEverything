@@ -5,17 +5,21 @@ Let each phone and the Pebble app reach Relay with a key of its own, reaching no
 
 ## Requirements
 
-### Requirement: One key can be revoked alone
+### Requirement: One device key can be turned off alone
 
-Revoking a device's key SHALL stop that device at its next request and leave other devices working.
+Turning off a device's key SHALL stop that device at its next request and leave other devices working. Making a key SHALL give only the key and its QR code text, and no signing secret.
 
 #### Scenario: A lost phone
-- **WHEN** Matthew revokes the Android phone's key
-- **THEN** that phone's next sync is refused and the iPhone and Pebble app keep working
+- **WHEN** Matthew turns off the Android phone's key
+- **THEN** that phone's next sync is refused and the iPhone and Claude Code keep working
+
+#### Scenario: A new phone key
+- **WHEN** a person makes a phone key on the Relay Everything page
+- **THEN** the page shows the key and its QR code once, and no signing secret
 
 ### Requirement: A device key adds only to its own person's space
 
-A person SHALL make each device's key on their Relay Everything page, which SHALL show it once, or, for a phone, by signing in from the Relay Everything app and confirming that phone on the page. A key made from the app SHALL go to that phone only, through a code that works once and only for a few minutes, and SHALL never show. A device key SHALL reach only the routes that add data, and a key check that answers only that key's own device name. It SHALL add data only to the space of the person who made it, and SHALL NOT list, read or delete any note, recording, sample, point, chat or photo. This SHALL hold on every Relay Everything server.
+A person SHALL make each device's key on their Relay Everything page, which SHALL show it once, or, for a phone, by signing in from the Relay Everything app and confirming that phone on the page. A key made from the app SHALL go to that phone only, through a code that works once and only for a few minutes, and SHALL never show. A phone key or a chat key SHALL reach only the routes that add data, and a key check that answers only that key's own device name. It SHALL add data only to the space of the person who made it, and SHALL NOT list, read or delete any note, recording, sample, point, chat or photo. This SHALL hold on every Relay Everything server.
 
 #### Scenario: A phone key tries to read notes
 - **WHEN** a request with a phone's key asks for the timeline or a recording
@@ -52,3 +56,15 @@ The server SHALL refuse every machine key that is neither a device key still tur
 #### Scenario: The preview check
 - **WHEN** the preview checker opens a preview
 - **THEN** it reaches the site as before
+
+### Requirement: An API key reads and adds notes through the API
+
+A person SHALL be able to make an API key on their page, shown once like the other keys. An API key SHALL reach only the web API: it SHALL read the person's notes, health, places and saved chats there, and add notes, in that person's space only. It SHALL NOT reach the page's own routes, a phone's or a chat's send, or the AI connector's tools. Turning it off SHALL stop it at its next request.
+
+#### Scenario: A home server reads with its key
+- **WHEN** a script on a home server sends its API key to the web API and asks for today's notes
+- **THEN** it gets the person's notes for today
+
+#### Scenario: An API key on the page's routes
+- **WHEN** a request with an API key asks the page's own timeline or recording route
+- **THEN** it is refused

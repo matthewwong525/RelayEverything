@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { ANA, BEN, ben, benPhone, bucket, call, env, jpeg, request, laptop, matthew, NOW, owner, pebbleApp, phone, rows, sendPhoto } from "../../../tests/relay";
+import { ANA, BEN, ben, benPhone, bucket, call, env, ipad, jpeg, laptop, matthew, NOW, owner, phone, request, rows, sendPhoto } from "../../../tests/relay";
 import { handleApp } from "../index";
 import { jpegSize } from "./photos";
 import { spaceOf, vouch } from "./space";
@@ -20,7 +20,7 @@ it("stores a photo once per phone and clientId, sealed under the person's photos
   expect(bucket.objects.get(String(row.file_key))).not.toEqual(jpeg(1600, 1200));
   expect(await spaceOf(env() as never, vouch("session", ANA)).files.open(String(row.file_key))).toEqual(jpeg(1600, 1200));
   // Another of Ana's devices with the same clientId is another photo; Ben's goes to his own space.
-  expect((await sendPhoto(pebbleApp)).json).toEqual({ ok: true, added: 1 });
+  expect((await sendPhoto(ipad)).json).toEqual({ ok: true, added: 1 });
   expect((await sendPhoto(benPhone)).json).toEqual({ ok: true, added: 1 });
   expect(rows("relay_photos")).toHaveLength(2);
   expect(rows("relay_photos", BEN)).toHaveLength(1);

@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:drift/native.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:health/health.dart';
@@ -15,6 +15,8 @@ import 'package:relay_app/data/api.dart';
 import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/settings.dart';
 import 'package:relay_app/data/store.dart';
+import 'package:relay_app/data/webhook.dart';
+import 'package:relay_app/sync/calendar.dart';
 import 'package:relay_app/sync/health.dart';
 import 'package:relay_app/sync/location.dart';
 import 'package:relay_app/sync/native.dart';
@@ -29,6 +31,11 @@ final code = jsonEncode({'relay': 1, 'server': connection.server, 'clientId': co
 const pageKey = 'rek_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE';
 const bearer = Connection.bearer(server: 'https://relay.example.com', key: pageKey);
 final pageCode = jsonEncode({'relay': 1, 'server': bearer.server, 'key': pageKey});
+
+/// A made-up secret, fixed so the webhook fixtures stay the same: the worker's test checks them with it.
+const fixtureSecret = 'whsec_cmVsYXktZXZlcnl0aGluZy13ZWJob29rLWZpeHR1cmU=';
+const hook = Webhook(address: 'https://db.example.com/relay', secret: fixtureSecret);
+const installId = '0f5c2a64-1d6e-4b7a-9c3e-2a8d5b7f6e10';
 
 /// A store in memory, with a folder of its own for photo copies, deleted after the test.
 Store memoryStore() {
@@ -55,6 +62,9 @@ class FakeServer {
 
   RelayApi api(Connection connection) => RelayApi(connection, client());
 
+  /// The person's own receiver, at [Webhook.address].
+  WebhookClient webhook(Webhook webhook, String installId) => WebhookClient(webhook, installId: installId, client: client());
+
   /// The plain client the sign-in's trade uses, with no key.
   http.Client client() => MockClient((request) async {
     requests.add(request);
@@ -70,33 +80,49 @@ class FakeServer {
 FakeServer noNetwork() => FakeServer((_) => FakeServer.json({'error': 'no call may reach the network'}, 500));
 
 class MemoryStorage extends Fake implements FlutterSecureStorage {
+  /// The app's own Keychain group, or Android's one home.
   final values = <String, String>{};
   /// Each item's iPhone Keychain access, as last written; null for the plugin's default, open only while unlocked.
   final access = <String, KeychainAccessibility?>{};
+  /// The App Group's Keychain group: items written with a `groupId`.
+  final shared = <String, String>{};
   /// The iPhone options of each read, write and delete.
   final options = <AppleOptions?>[];
+  /// When true, the App Group's group answers as in a build with no App Group.
+  bool noGroup = false;
+  /// When set, the write after this many writes throws, as when the app stops part way.
+  int? stopAfterWrites;
+  var _writes = 0;
+
+  Map<String, String> _home(AppleOptions? iOptions) {
+    if (iOptions?.groupId == null) return values;
+    if (noGroup) throw PlatformException(code: 'Unexpected security result code', message: 'Code: -34018');
+    return shared;
+  }
 
   @override
   Future<Map<String, String>> readAll({AppleOptions? iOptions, AndroidOptions? aOptions, LinuxOptions? lOptions,
     WebOptions? webOptions, AppleOptions? mOptions, WindowsOptions? wOptions}) async {
     options.add(iOptions);
-    return Map.of(values);
+    return Map.of(_home(iOptions));
   }
 
   @override
   Future<void> write({required String key, required String? value, AppleOptions? iOptions, AndroidOptions? aOptions,
     LinuxOptions? lOptions, WebOptions? webOptions, AppleOptions? mOptions, WindowsOptions? wOptions}) async {
     options.add(iOptions);
-    values[key] = value!;
-    access[key] = iOptions?.accessibility;
+    if (stopAfterWrites != null && _writes >= stopAfterWrites!) throw StateError('stopped');
+    _writes++;
+    _home(iOptions)[key] = value!;
+    if (iOptions?.groupId == null) access[key] = iOptions?.accessibility;
   }
 
   @override
   Future<void> delete({required String key, AppleOptions? iOptions, AndroidOptions? aOptions, LinuxOptions? lOptions,
     WebOptions? webOptions, AppleOptions? mOptions, WindowsOptions? wOptions}) async {
     options.add(iOptions);
-    values.remove(key);
-    access.remove(key);
+    _home(iOptions).remove(key);
+    if (iOptions?.groupId == null) access.remove(key);
   }
 }
 
@@ -190,12 +216,13 @@ class FakeHealth implements HealthSource {
   }
 }
 
-HealthDataPoint reading(HealthDataType type, DateTime from, DateTime to, {num value = 0, String sourceId = 'com.apple.health'}) =>
+HealthDataPoint reading(HealthDataType type, DateTime from, DateTime to, {num value = 0, String sourceId = 'com.apple.health',
+  HealthValue? as}) =>
   HealthDataPoint(
     uuid: '${type.name}-${from.millisecondsSinceEpoch}', type: type, unit: HealthDataUnit.COUNT, dateFrom: from, dateTo: to,
-    value: type == HealthDataType.WORKOUT
+    value: as ?? (type == HealthDataType.WORKOUT
       ? WorkoutHealthValue(workoutActivityType: HealthWorkoutActivityType.RUNNING)
-      : NumericHealthValue(numericValue: value),
+      : NumericHealthValue(numericValue: value)),
     sourcePlatform: HealthPlatformType.appleHealth, sourceDeviceId: 'device', sourceId: sourceId, sourceName: 'Health',
   );
 
@@ -284,6 +311,43 @@ Map<String, (String?, String)> formParts(http.Request request) {
   }
   return parts;
 }
+
+/// The phone's calendars: [list] and [items], read only through the [CalendarSource] calls, each kept.
+class FakeCalendar implements CalendarSource {
+  bool allowed = true;
+  int asked = 0;
+  List<PhoneCalendar> list = const [PhoneCalendar(id: 'work', name: 'Work', account: 'sam@example.com'),
+    PhoneCalendar(id: 'holidays', name: 'US Holidays')];
+  List<PhoneEvent> items = [];
+  Object? error;
+  final reads = <(DateTime, DateTime, Set<String>)>[];
+  int listed = 0;
+
+  @override
+  Future<bool> allow() async {
+    asked++;
+    return allowed;
+  }
+
+  @override
+  Future<List<PhoneCalendar>> calendars() async {
+    listed++;
+    if (error != null) throw error!;
+    return list;
+  }
+
+  @override
+  Future<List<PhoneEvent>> events(DateTime from, DateTime to, Set<String> calendarIds) async {
+    reads.add((from, to, calendarIds));
+    if (error != null) throw error!;
+    return [for (final event in items) if (calendarIds.contains(event.calendarId)) event];
+  }
+}
+
+/// An event on the work calendar, one hour long.
+PhoneEvent meeting(String id, DateTime start, {String title = 'Board meeting', String calendar = 'work'}) =>
+  PhoneEvent(calendarId: calendar, eventId: id, title: title, start: start, end: start.add(const Duration(hours: 1)),
+    people: const [EventPerson(name: 'Sam', email: 'sam@example.com', organizer: true)]);
 
 /// A folder of its own for one test's recordings and model, deleted after it.
 Directory tempFolder() {

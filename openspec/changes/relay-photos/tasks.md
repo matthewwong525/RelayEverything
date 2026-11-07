@@ -2,7 +2,7 @@
 
 ## 1. Space and server
 
-- [x] 1.1 Add `schema/space-migrations/0003_photos.sql` with `relay_photos` and its index, by the design; extend `space-schema.test.ts` so a new space holds `relay_photos` and D1 does not
+- [x] 1.1 Add `schema/space-migrations/0007_photos.sql` with `relay_photos` and its index, by the design; extend `space-schema.test.ts` so a new space holds `relay_photos` and D1 does not
 - [x] 1.2 In `app/worker/apps/relay/space.ts`, add `photoName(id)` under `people/<person id>/photos/` and let `put` take a name; `space-access.test.ts` and the recording tests still pass, and a new test shows a photo sealed under one name fails to open under another
 - [x] 1.3 Add `photos.ts` with `POST photos` (multipart, `asDevice`, JPEG only, at most 3 MB and 1,600 px long side, once per device and `clientId`), `GET photos` (`{ count }`) and `POST photos/delete` (`asPerson`, deletes photo files and rows, keeps recordings); register them in `api.ts`, add `photos` to `REACH.phone` in `caller.ts`; tests in `photos.test.ts`: a resend adds 0, a PNG or 2,000 px JPEG gets 400, a phone key gets 403 on `GET photos` and `POST photos/delete`, Ana's session never counts or deletes Ben's photos, and delete keeps a ring recording
 - [x] 1.4 Add the photo reads to `queries.ts` (page by `taken_at` and id, optional bounding box) with tests for paging and the place filter; extend `isolation.test.ts` so Ana's queries never return Ben's photos
@@ -36,8 +36,15 @@
 - [x] 5.3 Add a `HAND_PAGES` entry for `POST photos` in `api-doc.ts`, run `npm run relay:api-doc` in `app/`, and check `api-doc.test.ts` passes
 - [x] 5.4 Rename `wiki/relay-spaces.md` *Recordings* to *Recordings and photos* and add the photo file names and the delete route; `memory.mjs areas wiki/relay-spaces.md` finds no link to the old heading left broken
 
-## 6. Checks
+## 6. Bring in the latest version
 
-- [x] 6.1 Run the app tests, the self-host tests, `flutter test` and `flutter analyze` in `mobile/`, `node scripts/product-name.test.mjs` and `node scripts/public-check.mjs`
-- [ ] 6.2 `/save`, then on the preview: deploy the branch's spaces Worker and connector to staging by hand, send a test photo with a phone key on `app-staging.relayeverything.com`, see the count, read it with `read_photo`, delete all photos, and turn the key off
-- [ ] 6.3 Check the phone build from the pull request: the Android file installs, *Photos* asks for access, and a new photo shows in the page's count
+- [x] 6.1 Resolve each file `git merge origin/main` left in conflict as the union of intent: keep main's spaces design (Durable Objects), data kinds list, share, calendar, phone webhook and brand work, and move the photo work onto them; leave no conflict marker
+- [x] 6.2 Add photos to `app/worker/apps/relay/kinds.ts` as a kind with its API route, AI tools and docs page and no webhook tick, so the kinds test passes and photos go to no webhook
+- [x] 6.3 When Settings sends straight to one webhook instead of Relay Everything, hide *Photos* and *Send photos on mobile data*, and send no photo; widget and sync tests cover it
+- [x] 6.4 Keep shared photos (a note's files, from the share window) and photo sending (the *Photos* switch) apart in `site/src/content/docs/app/photos.md` and the share page: each says what the other does and links to it
+
+## 7. Checks
+
+- [x] 7.1 Run the app tests, the self-host tests, `flutter test` and `flutter analyze` in `mobile/`, `node scripts/product-name.test.mjs` and `node scripts/public-check.mjs`
+- [ ] 7.2 `/save`, then on the preview: deploy the branch's spaces Worker and connector to staging by hand, send a test photo with a phone key on `app-staging.relayeverything.com`, see the count, read it with `read_photo`, delete all photos, and turn the key off
+- [ ] 7.3 Check the phone build from the pull request: the Android file installs, *Photos* asks for access, and a new photo shows in the page's count

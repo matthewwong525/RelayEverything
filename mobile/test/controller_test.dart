@@ -7,7 +7,9 @@ import 'package:fake_async/fake_async.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart' show KeychainAccessibility;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:health/health.dart';
+import 'package:http/http.dart' as http;
 import 'package:relay_app/controller.dart';
+import 'package:relay_app/data/attachments.dart';
 import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/sign_in.dart';
 import 'package:relay_app/data/store.dart';
@@ -29,11 +31,13 @@ void main() {
   late FakeHealth health;
   late List<bool> scheduled;
   late FakeWebAuth webAuth;
+  late FakeCalendar calendar;
   var clock = now;
 
   RelayController controller({NativeBackground? native, PhotoSource? photos, Network? network}) => RelayController(store: store,
     vault: KeyVault(storage), places: places, health: health, apiFor: server.api, signInClient: server.client, webAuth: webAuth.call,
-    clock: () => clock, schedule: (on) async => scheduled.add(on), native: native, photos: photos, network: network);
+    clock: () => clock, schedule: (on) async => scheduled.add(on), native: native, webhookFor: server.webhook, calendar: calendar,
+    photos: photos, network: network);
 
   List<Map<String, dynamic>> sentNotes() => [
     for (final request in server.requests) if (request.url.path.endsWith('notes')) jsonDecode(request.body) as Map<String, dynamic>,
@@ -47,6 +51,7 @@ void main() {
     health = FakeHealth();
     scheduled = [];
     webAuth = FakeWebAuth();
+    calendar = FakeCalendar();
     clock = now;
   });
   tearDown(() => store.close());
@@ -70,8 +75,8 @@ void main() {
       expect([relay.status, relay.waiting], [SyncStatus.idle, 0]);
       expect(await store.outbox(), isEmpty);
       expect(await relay.earlierNotes(), 2);
-      expect(await relay.setHealth(true), contains('Send to Relay Everything'));
-      expect(await relay.setHistory(true), contains('Send to Relay Everything'));
+      expect(await relay.setHealth(true), contains('Send my notes'));
+      expect(await relay.setHistory(true), contains('Send my notes'));
       expect([places.asked, health.reads, scheduled], [[false], isEmpty, [false]]);
       expect(server.requests, isEmpty);
     });
@@ -149,6 +154,73 @@ void main() {
       expect(server.routes, ['key', 'notes']);
       await relay.stopSending();
       expect(relay.entries, hasLength(2));
+    });
+  });
+
+  group('sending to your own webhook', () {
+    List<String> hookTypes() => [
+      for (final request in server.requests) if (request.url.toString() == hook.address) jsonDecode(request.body)['type'] as String,
+    ];
+
+    test('needs no key: set the webhook, test it, and each note goes there signed, and nothing to the server', () async {
+      final relay = controller();
+      await relay.load();
+      expect(await relay.startSending(sendEarlier: false, place: SendPlace.webhook), 'Set your webhook first.');
+      expect(await relay.saveWebhook('http://db.example.com/relay', fixtureSecret), 'The address must start with https://.');
+      expect(await relay.testWebhook(hook.address, 'whsec_short'), startsWith('The secret must be'));
+      expect(server.requests, isEmpty);
+      server.answer = (_) => http.Response('', 204);
+      expect(await relay.testWebhook(hook.address, fixtureSecret), 'Your receiver answered 204. It works.');
+      server.answer = (_) => http.Response('', 401);
+      expect(await relay.testWebhook(hook.address, fixtureSecret), 'Your receiver answered 401. Check that it has this secret.');
+      server.answer = (_) => throw const SocketException('none');
+      expect(await relay.testWebhook(hook.address, fixtureSecret),
+        'No answer from db.example.com. Check the address, and that your receiver is running.');
+      server.answer = FakeServer.ok;
+      await relay.addNote('Before');
+      expect(await relay.saveWebhook(hook.address, fixtureSecret), isNull);
+      expect([relay.webhookAddress, relay.webhookSecret, relay.connected], [hook.address, fixtureSecret, false]);
+      expect(await relay.startSending(sendEarlier: true, place: SendPlace.webhook), isNull);
+      await relay.settled();
+      await relay.addNote('After');
+      await relay.settled();
+      expect([relay.settings.sending, relay.settings.place, relay.status], [true, SendPlace.webhook, SyncStatus.synced]);
+      expect(hookTypes(), ['webhook.test', 'webhook.test', 'webhook.test', 'note.created', 'note.created']);
+      expect(server.requests.where((request) => request.url.host != 'db.example.com'), isEmpty);
+      expect(server.requests.every((request) => request.headers['webhook-signature']!.startsWith('v1,')), isTrue);
+      relay.dispose();
+    });
+
+    test('a switch moves what waits to the new place, and a failing receiver keeps it and shows why', () async {
+      await KeyVault(storage).save(bearer);
+      final relay = controller();
+      await relay.load();
+      expect(await relay.startSending(sendEarlier: false, place: SendPlace.server), isNull);
+      await relay.settled();
+      server.answer = (request) => FakeServer.json({}, 503);
+      await relay.addNote('Waits');
+      await relay.settled();
+      expect(relay.waiting, 1);
+      await relay.saveWebhook(hook.address, fixtureSecret);
+      server.requests.clear();
+      expect(await relay.startSending(sendEarlier: false, place: SendPlace.webhook), isNull);
+      await relay.settled();
+      expect([hookTypes(), relay.waiting, relay.webhookProblem?.status], [['note.created'], 1, 503]);
+      expect({for (final item in await store.outbox()) item.destination}, {ownWebhook});
+      server.answer = FakeServer.ok;
+      await relay.sync();
+      expect([relay.waiting, relay.webhookProblem, (await store.notes()).single.sentAt], [0, isNull, isNotNull]);
+      expect(server.requests.where((request) => request.url.path.endsWith('/notes')), isEmpty);
+      relay.dispose();
+    });
+
+    test('a phone that lost its webhook reads sending as off, and the key stays for the server', () async {
+      await store.set('settings', const Settings(sending: true, place: SendPlace.webhook).encode());
+      await KeyVault(storage).save(bearer);
+      final relay = controller();
+      await relay.load();
+      expect([relay.settings.sending, relay.connected], [false, true]);
+      relay.dispose();
     });
   });
 
@@ -230,15 +302,123 @@ void main() {
       expect([for (final item in await store.outbox()) item.route], ['notes']);
     });
 
-    test('health starts from the moment it turns on, with no earlier backfill', () async {
+    test('a note kept while a round sends goes in a round after it, before settled ends', () async {
       await KeyVault(storage).save(connection);
       final relay = controller();
       await relay.load();
-      expect(await relay.setHealth(true), isNull);
+      await relay.setPinNotes(false);
+      await relay.settled();
+      server.requests.clear();
+      server.hold = Completer();
+      await relay.keepNote('First');
       await pumpEventQueue();
-      expect(health.reads.first.$2, now);
-      expect(health.reads.first.$1, now.subtract(const Duration(hours: 2)));
-      expect(await store.get(healthSince), '${now.millisecondsSinceEpoch}');
+      // The round read the outbox before the second note, and holds open its upload.
+      expect(server.routes, ['notes']);
+      await relay.keepNote('Second');
+      final done = relay.settled();
+      server.hold!.complete();
+      await done;
+      expect([for (final note in sentNotes()) note['text']], ['First', 'Second']);
+      expect(await store.waiting(), 0);
+    });
+
+    test('health starts from the moment it turns on, then reads the last 90 days a week at a time', () async {
+      await KeyVault(storage).save(connection);
+      final relay = controller();
+      await relay.load();
+      expect(await relay.startSending(sendEarlier: false), isNull);
+      await relay.settled();
+      expect(await relay.setHealth(true), isNull);
+      await relay.settled();
+      expect(health.reads, [(now.subtract(const Duration(hours: 2)), now), (now.subtract(const Duration(days: 7)), now)]);
+      expect([await store.get(healthSince), await store.get(healthTypes)], ['${now.millisecondsSinceEpoch}', askedTypes]);
+    });
+
+    test('a phone that allowed health before the new types is asked once more, at open', () async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', const Settings(sending: true, health: true).encode());
+      var asked = 0;
+      health = _CountingHealth(() => asked++);
+      final relay = controller();
+      await relay.load();
+      await relay.askNewHealthTypes();
+      await relay.askNewHealthTypes();
+      expect([asked, await store.get(healthTypes)], [1, askedTypes]);
+      // A phone with health off is not asked.
+      await store.remove(healthTypes);
+      await relay.stopSending();
+      await relay.askNewHealthTypes();
+      expect(asked, 1);
+    });
+
+    test('a background round while the new types are asked does not start the history read', () async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', const Settings(sending: true, health: true).encode());
+      await store.set(healthSince, '${now.subtract(const Duration(hours: 1)).millisecondsSinceEpoch}');
+      final held = _HeldHealth();
+      health = held;
+      final relay = controller();
+      await relay.load();
+      final asking = relay.askNewHealthTypes();
+      await pumpEventQueue();
+      // The permission screen is open: a round reads only the new readings, and the history mark stays unset.
+      await syncHealth(store, held, now: now);
+      expect([await store.get(healthTypes), await store.get(healthBackfill), held.reads.length], [isNull, isNull, 1]);
+      held.answer.complete(true);
+      await asking;
+      expect(await store.get(healthTypes), askedTypes);
+    });
+
+    test('a failed question for the new types still counts as asked', () async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', const Settings(sending: true, health: true).encode());
+      final held = _HeldHealth();
+      health = held;
+      final relay = controller();
+      await relay.load();
+      final asking = relay.askNewHealthTypes();
+      await pumpEventQueue();
+      held.answer.completeError(Exception('refused'));
+      await asking;
+      expect(await store.get(healthTypes), askedTypes);
+    });
+
+    test('the calendar turns on only with sending and its permission, lists the calendars, and sends', () async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', const Settings().encode());
+      calendar.items = [meeting('a', now.add(const Duration(hours: 1))), meeting('h', now.add(const Duration(days: 3)), calendar: 'holidays')];
+      final relay = controller();
+      await relay.load();
+      expect(await relay.setCalendar(true), contains('Send my notes'));
+      expect(await relay.startSending(sendEarlier: false), isNull);
+      await relay.settled();
+      calendar.allowed = false;
+      expect(await relay.setCalendar(true), contains('calendar'));
+      expect([relay.settings.calendar, calendar.reads], [false, isEmpty]);
+      calendar.allowed = true;
+      expect(await relay.setCalendar(true), isNull);
+      await relay.settled();
+      expect([relay.settings.calendar, [for (final c in relay.calendars) c.name], scheduled.last], [true, ['Work', 'US Holidays'], true]);
+      expect(server.routes.last, 'calendar');
+      expect(relay.calendarSent.at, now);
+      // Turning holidays off sends its removal.
+      await relay.setCalendarShown('holidays', false);
+      await relay.settled();
+      expect(jsonDecode(server.requests.last.body)['removed'], ['holidays:h:${now.add(const Duration(days: 3)).millisecondsSinceEpoch}']);
+      expect(relay.settings.calendarsOff, {'holidays'});
+    });
+
+    test('turning the calendar off drops its waiting uploads and what was sent', () async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', const Settings(sending: true, calendar: true).encode());
+      server = FakeServer((_) => FakeServer.json({}, 503));
+      calendar.items = [meeting('a', now.add(const Duration(hours: 1)))];
+      final relay = controller();
+      await relay.load();
+      await relay.sync();
+      expect([relay.calendarSent.waiting, (await store.calendarSent()).length], [1, 1]);
+      expect(await relay.setCalendar(false), isNull);
+      expect([relay.calendarSent.waiting, await store.calendarSent(), relay.calendars], [0, isEmpty, isEmpty]);
     });
   });
 
@@ -249,7 +429,8 @@ void main() {
       expect([const Settings(history: true, health: true).history, const Settings(history: true, health: true).health], [false, false]);
       const on = Settings(sending: true, history: true, health: true);
       expect([on.copyWith(sending: false).history, on.copyWith(sending: false).health], [false, false]);
-      expect(jsonDecode(on.encode()), {'sending': true, 'pinNotes': false, 'history': true, 'health': true, 'mode': 'battery',
+      expect(jsonDecode(on.encode()), {'sending': true, 'pinNotes': false, 'history': true, 'health': true, 'calendar': false,
+        'calendarsOff': [], 'mode': 'battery', 'place': 'server',
         'photos': false, 'photosOnMobileData': false});
       final back = Settings.decode(on.encode(), hasKey: false);
       expect([back.sending, back.health], [true, true]);
@@ -269,6 +450,21 @@ void main() {
       final old = Settings.decode(jsonEncode({'sending': true, 'pinNotes': true, 'history': true, 'health': true}), hasKey: true);
       expect([old.sending, old.history, old.health, old.photos, old.photosOnMobileData], [true, true, true, false, false]);
       expect(Settings.decode(jsonEncode({'pinNotes': true}), hasKey: true).photos, isFalse);
+      // Photos go only to Relay Everything: with the webhook they read as off, and come back with the server.
+      final hooked = on.copyWith(place: SendPlace.webhook);
+      expect([hooked.photos, hooked.photosOnMobileData], [false, false]);
+      expect(const Settings(sending: true, place: SendPlace.webhook, photos: true).photos, isFalse);
+    });
+
+    test('keep the calendar and the calendars turned off, and sending off forces the calendar off', () {
+      const on = Settings(sending: true, calendar: true, calendarsOff: {'holidays', 'birthdays'});
+      final back = Settings.decode(on.encode(), hasKey: true);
+      expect([back.calendar, back.calendarsOff], [true, {'holidays', 'birthdays'}]);
+      expect([const Settings(calendar: true).calendar, on.copyWith(sending: false).calendar], [false, false]);
+      expect(on.copyWith(sending: false).calendarsOff, {'holidays', 'birthdays'});
+      // Saved by a version from before the calendar.
+      final before = Settings.decode(jsonEncode({'sending': true, 'health': true}), hasKey: true);
+      expect([before.calendar, before.calendarsOff], [false, isEmpty]);
     });
 
     test('an upgrade from the first version keeps sending on for a phone with a key', () {
@@ -288,7 +484,8 @@ void main() {
       await relay.load();
       expect([relay.settings.sending, relay.settings.pinNotes], [false, true]);
       expect(jsonDecode((await store.get('settings'))!), {'sending': false, 'pinNotes': true, 'history': false, 'health': false,
-        'mode': 'battery', 'photos': false, 'photosOnMobileData': false});
+        'calendar': false, 'calendarsOff': [], 'mode': 'battery', 'place': 'server',
+        'photos': false, 'photosOnMobileData': false});
     });
 
     test('turn each on only with its permission, and schedule the hourly sync only while sending', () async {
@@ -311,8 +508,11 @@ void main() {
       expect(await relay.setPinNotes(true), isNull);
       expect(scheduled, [false, true, true, true, true]);
       expect(jsonDecode((await store.get('settings'))!), {'sending': true, 'pinNotes': true, 'history': false, 'health': true,
-        'mode': 'battery', 'photos': false, 'photosOnMobileData': false});
+        'calendar': false, 'calendarsOff': [], 'mode': 'battery', 'place': 'server',
+        'photos': false, 'photosOnMobileData': false});
       expect(places.asked, [false, true, true, false]);
+      // Each change started a sync; the last round ends before the store closes.
+      await relay.settled();
     });
   });
 
@@ -466,6 +666,7 @@ void main() {
     test('sends health on each sync, and goes on when the health store is closed', () async {
       await KeyVault(storage).save(connection);
       await store.set('settings', jsonEncode({'pinNotes': true, 'history': false, 'health': true}));
+      await store.set(healthTypes, askedTypes);
       final relay = controller();
       await relay.load();
       health.readings = [reading(HealthDataType.STEPS, now.subtract(const Duration(hours: 1)), now, value: 100)];
@@ -550,7 +751,7 @@ void main() {
       await store.set('settings', const Settings().encode());
       final relay = photoController();
       await relay.load();
-      expect(await relay.setPhotos(true), contains('Send to Relay Everything'));
+      expect(await relay.setPhotos(true), contains('Send my notes'));
       expect(photos.asked, 0);
       await relay.startSending(sendEarlier: false);
       photos.allowed = false;
@@ -624,8 +825,9 @@ void main() {
       server.answer = (request) => request.url.path.endsWith('photos') ? FakeServer.json({}, 403) : FakeServer.ok(request);
       await relay.addNote('Lunch idea');
       await relay.sync();
-      expect([sentNotes().single['text'], photoUploads(), (await store.waitingPhotos()).length, relay.status],
-        ['Lunch idea', ['photos'], 1, SyncStatus.synced]);
+      // The note's own sync and this one each try the photo once.
+      expect([sentNotes().single['text'], photoUploads().isNotEmpty, (await store.waitingPhotos()).length, relay.status],
+        ['Lunch idea', true, 1, SyncStatus.synced]);
       // The phone asks about its key, which answers: the server only has no photos.
       expect(server.routes.last, 'key');
       server.answer = (request) => request.url.path.endsWith('photos') ? FakeServer.json({}, 403) : FakeServer.json({}, 502);
@@ -665,6 +867,33 @@ void main() {
       await relay.startSending(sendEarlier: false);
       await relay.sync();
       expect([relay.settings.photos, photos.finds.length], [false, looks]);
+    });
+
+    test('a move to your own webhook turns photos off, drops the photos waiting, and sends no photo there', () async {
+      final relay = await sending();
+      network.current = Link.mobile;
+      expect(await relay.setPhotos(true), isNull);
+      await relay.sync();
+      clock = now.add(const Duration(minutes: 5));
+      photos.take('IMG_0001', later);
+      await relay.sync();
+      final copy = await store.photoFile((await store.waitingPhotos()).single.path);
+      expect(copy.existsSync(), isTrue);
+      await relay.saveWebhook(hook.address, fixtureSecret);
+      expect(await relay.startSending(sendEarlier: false, place: SendPlace.webhook), isNull);
+      await relay.settled();
+      expect([relay.settings.place, relay.settings.photos, relay.settings.photosOnMobileData], [SendPlace.webhook, false, false]);
+      expect([await store.waitingPhotos(), copy.existsSync(), await store.get(photosSince)], [isEmpty, false, null]);
+      // With the webhook, photos can not turn on, and a round reads no library.
+      expect(await relay.setPhotos(true), contains('only to Relay Everything'));
+      final looks = photos.finds.length;
+      network.current = Link.wifi;
+      photos.take('IMG_0002', later.add(const Duration(minutes: 1)));
+      await relay.addNote('To my database');
+      await relay.settled();
+      expect([relay.settings.photos, photos.finds.length, photoUploads(), photos.asked], [false, looks, isEmpty, 1]);
+      expect(server.requests.where((request) => request.url.path.endsWith('/photos')), isEmpty);
+      relay.dispose();
     });
   });
 
@@ -1050,8 +1279,119 @@ void main() {
     });
   });
 
+  group('files', () {
+    late Directory folder;
+    setUp(() => folder = tempFolder());
+
+    RelayController withFiles({FileOpener? opener}) => RelayController(store: store, vault: KeyVault(storage), places: places,
+      health: health, apiFor: server.api, clock: () => clock, folder: () async => folder, opener: opener);
+
+    NewFile picked(String name, List<int> bytes, {int? size}) {
+      final source = File('${folder.path}/picked/$name')..createSync(recursive: true)..writeAsBytesSync(bytes);
+      return NewFile(path: source.path, name: name, size: size ?? bytes.length);
+    }
+
+    test('a note can be files alone: the phone keeps its own copy, and sending off makes no request', () async {
+      server = noNetwork();
+      final relay = withFiles();
+      await relay.load();
+      expect(await relay.addNote('  ', files: [picked('receipt.jpg', [1, 2, 3]), picked('warranty.pdf', [4, 5])]), isNull);
+      final entry = relay.entries.single;
+      expect(entry.text, '');
+      expect([for (final file in entry.files) (file.name, file.type, file.size, file.picture)],
+        [('receipt.jpg', 'image/jpeg', 3, true), ('warranty.pdf', 'application/pdf', 2, false)]);
+      for (final file in entry.files) {
+        expect(file.path, startsWith('${folder.path}/attachments/'));
+      }
+      expect(File(entry.files.first.path).readAsBytesSync(), [1, 2, 3]);
+      expect(entry.files.last.path, endsWith('.pdf'));
+      // The app copied the picked file and left it where it was.
+      expect(File('${folder.path}/picked/receipt.jpg').existsSync(), isTrue);
+      await relay.sync();
+      expect([server.requests, await store.outbox()], [isEmpty, isEmpty]);
+    });
+
+    test('a file over 25 MB, or an eleventh file, is left out with a message, and the rest are kept', () async {
+      final relay = withFiles();
+      await relay.load();
+      final big = picked('video.mov', [0], size: maxFileBytes + 1);
+      final problem = await relay.addNote('Lots', files: [big, for (var i = 0; i < 11; i++) picked('p$i.png', [i])]);
+      expect(problem, contains('video.mov is over 25 MB'));
+      expect(problem, contains('1 file was not added'));
+      expect(relay.entries.single.files, hasLength(10));
+      // Nothing to keep: no note at all.
+      expect(await relay.addNote('', files: [big]), endsWith('Give the note words or a file.'));
+      expect(await relay.addNote(' '), 'Give the note words or a file.');
+      expect(relay.entries, hasLength(1));
+    });
+
+    test('with sending on, each note goes first, then its files; Send them sends an earlier note\'s files too', () async {
+      final relay = withFiles();
+      await relay.load();
+      await relay.addNote('Earlier', files: [picked('old.pdf', [9])]);
+      expect(await relay.connect(pageCode), isNull);
+      await relay.startSending(sendEarlier: true);
+      await relay.sync();
+      clock = now.add(const Duration(minutes: 1));
+      await relay.addNote('New', files: [picked('new.jpg', [1, 2])]);
+      await relay.sync();
+      expect(server.routes, ['key', 'notes', 'attachments', 'notes', 'attachments']);
+      final uploads = [for (final request in server.requests) if (request.url.path.endsWith('attachments')) request];
+      expect([for (final upload in uploads) upload.bodyBytes], [[9], [1, 2]]);
+      final notes = sentNotes();
+      expect(notes.first['attachments'],
+        [{'id': uploads.first.headers['X-Attachment-Id'], 'name': 'old.pdf', 'type': 'application/pdf', 'size': 1}]);
+      expect([for (final upload in uploads) upload.headers['X-Note-Client-Id']], [for (final note in notes) note['clientId']]);
+      expect(relay.waiting, 0);
+    });
+
+    test('opens a file with the phone, and says when it is gone or no app opens it', () async {
+      final opened = <(String, String)>[];
+      var opens = true;
+      final relay = withFiles(opener: (file, type) async {
+        opened.add((file.path, type));
+        return opens;
+      });
+      await relay.load();
+      final notices = <String>[];
+      relay.notices.listen(notices.add);
+      await relay.addNote('', files: [picked('warranty.pdf', [1])]);
+      final file = relay.entries.single.files.single;
+      await relay.openFile(file);
+      expect(opened, [(file.path, 'application/pdf')]);
+      opens = false;
+      await relay.openFile(file);
+      File(file.path).deleteSync();
+      await relay.openFile(file);
+      await pumpEventQueue();
+      expect(notices, ['No app on this phone opens this file.', 'This file is not on this phone.']);
+      expect(opened, hasLength(2));
+    });
+  });
+
   test('makes a note id the server takes', () {
     expect(newClientId(Random(1)), matches(RegExp(r'^[0-9a-f]{32}$')));
     expect(newClientId(), isNot(newClientId()));
   });
+}
+
+/// Health that counts each ask for its permission.
+class _CountingHealth extends FakeHealth {
+  _CountingHealth(this.onAsk);
+
+  final void Function() onAsk;
+
+  @override
+  Future<bool> allow() async {
+    onAsk();
+    return true;
+  }
+}
+
+/// Holds the health question open until the test completes [answer].
+class _HeldHealth extends FakeHealth {
+  final answer = Completer<bool>();
+
+  @override
+  Future<bool> allow() => answer.future;
 }

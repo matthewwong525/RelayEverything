@@ -1,6 +1,6 @@
 {
-  "version": "50.1.0",
-  "commit": "0f492d5d543a22190e3b075ab49757a63dbe8808",
+  "version": "50.12.0",
+  "commit": "2acdf24b018a3596186316cc29a91ccfb40384b7",
   "upstream": {
     "repo": "https://github.com/matthewwong525/WongStack",
     "clone": "/root/.cache/wong-stack/WongStack"
@@ -23,6 +23,7 @@
       "schedule",
       "daily",
       "connect",
+      "services",
       "lesson",
       "memory",
       "wong-sync",

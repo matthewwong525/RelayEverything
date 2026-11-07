@@ -5,8 +5,8 @@
 See [proposal.md](proposal.md), *Why*. The pieces this change builds on:
 
 - **Phone.** `mobile/lib/sync/background.dart` runs one periodic `workmanager` task (`syncTask`, one hour, network required) and `main.dart` calls `relay.sync` on resume. Each round reads health, queues location points, then `flush`es the `outbox`. `flush` sends oldest first and stops at the first upload that can't land, so order holds. `Settings` keeps `history` and `health` true only while `sending` is true. `stopSending` calls `store.dropReadings()`. `RelayApi` only posts JSON.
-- **Server.** `POST pebble` is a raw `Route` that reads a multipart body with `boundedBytes` and stores the recording with `space.files.put(noteId, bytes)`, sealed with AES-256-GCM under `people/<person id>/<note id>`. `caller.ts` `REACH.phone` lists the POST routes a phone key may call. `account-delete` calls `space.files.removeAll()`, which deletes the whole `people/<person id>/` prefix.
-- **Connector.** `app/worker/relay-mcp/tools.ts` registers eight read-only tools over `space.db` only. `mcpHandler` builds the space with `{ SPACES }` alone: *the tools read no recording, so the connector binds no file store*. `app/wrangler.relay-mcp.jsonc` and `self-host/mcp.template.jsonc` bind no R2 bucket.
+- **Server.** `POST attachments` is a raw `Route` that reads a note's file with `boundedBytes` and stores it with `space.files.put("attachments/<id>", bytes)`, sealed with AES-256-GCM under `people/<person id>/`. `caller.ts` `REACH.phone` lists the POST routes a phone key may call. `account-delete` calls `space.files.removeAll()`, which deletes the whole `people/<person id>/` prefix.
+- **Connector.** `app/worker/relay-mcp/tools.ts` registers ten tools from `inputs.ts`: nine read `space.db` and `add_note` adds a note, each answered by `answers.ts`. `asker.ts` opens the space with `{ SPACES }` alone: *the tools read no recording, so the connector binds no file store*. `app/wrangler.relay-mcp.jsonc` and `self-host/mcp.template.jsonc` bind no R2 bucket.
 - **API page.** `api-doc.ts` makes the website's route reference from each `defineAction`; a raw route gets a `HAND_PAGES` entry that points at its own page.
 
 ## Goals / Non-Goals
@@ -38,11 +38,11 @@ Turning *Photos* off, or `stopSending`, deletes the queue rows and their files a
 
 Fields: `clientId`, `takenAt` (ms), optional `lat`, `lon`, and `photo` (`image/jpeg`, at most 3 MB, checked with `boundedBytes`; the JPEG's own size is read from its SOF marker, and a long side over 1,600 px or a non-JPEG is refused with 400). The route is `asDevice` and joins `REACH.phone`. It inserts into `relay_photos` with `ON CONFLICT (device_id, client_id) DO NOTHING`; only a new row seals and puts the file, under `people/<person id>/photos/<photo id>`. It answers `{ ok: true, added: 0|1 }`. *Alternative:* base64 inside JSON costs a third more bytes and the 256 KB JSON limit.
 
-`space.ts` `filesOf` gets `photoName(id)`; `put` and `open` take a name, so photos and recordings share the seal and the prefix check. `removeAll` already covers both.
+A photo's item is `photos/<id>`: `space.ts` `filesOf` names it with `nameOf`, as a note's file is `attachments/<id>`, so photos, files and recordings share the seal and the prefix check. `removeAll` already covers all three.
 
 ### The space table
 
-`schema/space-migrations/0003_photos.sql`:
+`schema/space-migrations/0007_photos.sql`:
 
 ```sql
 CREATE TABLE relay_photos (
@@ -63,7 +63,7 @@ Both are `defineAction`s behind `asPerson`, so a key is refused by `reaches` (it
 - `photos`: `from`, `to`, optional `near: { lat, lon, km ≤ 500 }`, `limit ≤ 50`, `cursor`, `timezone`. It answers `{ id, takenAt, lat, lon, width, height }` rows, newest first, and `nextCursor` in the same `<ms>.<id>` shape as notes. *Near* filters by a bounding box in SQL, then by haversine distance in code.
 - `read_photo`: `id` → `{ content: [{ type: "image", data: <base64>, mimeType: "image/jpeg" }, { type: "text", text: <time and place> }] }`. A missing id is a tool error.
 
-`mcpHandler` builds the space with `{ SPACES, RELAY_BUCKET }`, and `relayServer` takes the space, not only its `db`, so `read_photo` reads through `space.files.open`. `app/wrangler.relay-mcp.jsonc` (each env) and `self-host/mcp.template.jsonc` bind the same bucket as the app. The `tool` wrapper learns to pass an image answer through. The read-only test keeps checking that every tool is `readOnlyHint` and that the connector runs no write SQL.
+The connector's `asker.ts` opens the space with `{ SPACES, RELAY_BUCKET }`, and `answers.ts` answers `read_photo` from the asker's whole space, not only its `db`, so it reads through `space.files.open`. Both tools sit in `inputs.ts` beside the other tools; the web API has no photo route, because `read_photo` answers an image and `near` is no query field. `app/wrangler.relay-mcp.jsonc` (each env) and `self-host/mcp.template.jsonc` bind the same bucket as the app. The `tool` wrapper learns to pass an image answer through. The read-only test keeps checking that every tool is `readOnlyHint` and that the connector runs no write SQL.
 
 ### Docs and wiki
 

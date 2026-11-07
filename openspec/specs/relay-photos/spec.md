@@ -7,11 +7,15 @@ Lets a person send the photos they take on their phone to their own Relay Everyt
 
 ### Requirement: Photos go only while the person has them on
 
-The phone app SHALL read the photo library and send photos only while both *Send to Relay Everything* and *Photos* are on. *Photos* SHALL be off by default and SHALL ask for photo access only when turned on. Turning either switch off SHALL stop reading the library and delete the photos still waiting on the phone.
+The phone app SHALL read the photo library and send photos only while *Photos* is on and the phone sends to Relay Everything. When the phone sends straight to the person's own webhook instead, *Photos* SHALL hide and no photo SHALL be read or sent. *Photos* SHALL be off by default and SHALL ask for photo access only when turned on. Turning either switch off SHALL stop reading the library and delete the photos still waiting on the phone.
 
 #### Scenario: Photos never turned on
 - **WHEN** a person sends notes, health and location but never turns *Photos* on
 - **THEN** the app asks for no photo access and no photo leaves the phone
+
+#### Scenario: The phone sends to its own webhook
+- **WHEN** a person picks their own webhook as the place the phone sends
+- **THEN** *Photos* is not in Settings, the photos waiting on the phone are deleted, and no photo leaves the phone
 
 #### Scenario: Photos turned off with uploads waiting
 - **WHEN** the person turns *Photos* off while photos are still waiting to go

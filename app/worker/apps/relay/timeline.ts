@@ -9,8 +9,10 @@ const PAGE = 50;
 
 const place = z.strictObject({ lat: z.number(), lon: z.number(), accuracy: z.number().nullable(), name: z.string().nullable(),
   from: z.enum(["phone", "history"]) });
+const file = z.strictObject({ id: z.string(), name: z.string(), type: z.string(), size: z.number(),
+  ready: z.boolean().describe("True once the phone has sent the file: then GET attachment opens it.") });
 const timelineNote = z.strictObject({ id: z.string(), source: z.enum(["ring", "typed"]), text: z.string(), recordedAt: z.number(),
-  device: z.string(), audio: z.boolean(), place: place.nullable() });
+  device: z.string(), audio: z.boolean(), place: place.nullable(), attachments: z.array(file).describe("The note's files, oldest first.") });
 
 export const timeline = defineAction({
   operationId: "relay.timeline", summary: "Read the notes", description: "Read Relay Everything's notes, newest first, with each one's place.",

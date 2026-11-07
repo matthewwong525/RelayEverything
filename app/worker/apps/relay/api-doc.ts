@@ -10,8 +10,9 @@ type Schema = { type?: string; enum?: unknown[]; items?: Schema; anyOf?: Schema[
 type HandPage = { summary: string; page: string };
 
 const HAND_PAGES: Record<string, HandPage> = {
-  "POST pebble": { summary: "Take a ring note from the Pebble app", page: "../pebble-webhook/" },
   "GET audio": { summary: "Play a note's recording", page: "../recordings/" },
+  "POST attachments": { summary: "Send a note's file, after its note", page: "../files/#send-a-file" },
+  "GET attachment": { summary: "Open a note's file", page: "../files/#open-a-file" },
   "POST photos": { summary: "Send a photo from the phone, with a phone key", page: "../../app/photos/#what-the-phone-sends" },
   "POST chats": { summary: "Send a Claude Code chat's new messages, with a chat key", page: "../../connections/claude-code/#what-the-server-receives" },
 };
@@ -49,7 +50,7 @@ const table = (lines: string[]) => [HEAD, ...lines].join("\n");
 const json = (value: unknown) => `\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\``;
 const caller = (method: string, path: string) => reaches("chats", method, path)
   ? reaches("phone", method, path) ? "any device key" : "a Claude Code chat key only"
-  : reaches("phone", method, path) ? "a phone or Pebble key" : "a signed-in person only, not a device key";
+  : reaches("phone", method, path) ? "a phone key" : "a signed-in person only, not a device key";
 
 function described({ method, path, action }: { method: string; path: string; action: Action }): string {
   const { inputSchema, outputSchema } = schemas(action) as { inputSchema: Schema; outputSchema: Schema };

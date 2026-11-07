@@ -1,8 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'dart:math';
+
 import 'package:drift/drift.dart';
 import 'package:path_provider/path_provider.dart';
+
+import 'settings.dart';
 
 /// How a note on this phone was made.
 enum NoteKind { typed, voice }
@@ -11,7 +15,7 @@ enum NoteKind { typed, voice }
 class LocalNote {
   const LocalNote({required this.clientId, required this.text, required this.createdAt, this.pin, this.sentAt,
     this.queued = false, this.pinning = false, this.kind = NoteKind.typed, this.audioPath, this.durationMs,
-    this.wordsPending = false});
+    this.wordsPending = false, this.attachments = const []});
 
   final String clientId;
   final String text;
@@ -36,11 +40,43 @@ class LocalNote {
   /// True while the phone writes a voice note's words. The note gets no upload until it has them.
   final bool wordsPending;
 
-  /// The body the server's `notes` route takes: a voice note goes as its words, the same as a typed note.
+  /// The note's files, in the order they were added.
+  final List<Attachment> attachments;
+
+  /// The body the server's `notes` route takes: a voice note goes as its words, the same as a typed note. A note with
+  /// files lists them; their bytes go later, one `attachment` upload each.
   Map<String, dynamic> toJson() => {
     'clientId': clientId, 'text': text, 'createdAt': createdAt.millisecondsSinceEpoch,
     if (pin != null) ...{'lat': pin!.lat, 'lon': pin!.lon, 'accuracy': pin!.accuracy, if (pin!.place != null) 'place': pin!.place},
+    if (attachments.isNotEmpty) 'attachments': [for (final file in attachments) file.toJson()],
   };
+}
+
+/// One file on a note. The app keeps its own copy at [path], from the app's support folder.
+class Attachment {
+  const Attachment({required this.id, required this.name, required this.type, required this.size, required this.path,
+    this.sentAt});
+
+  final String id;
+  final String name;
+  final String type;
+  final int size;
+
+  /// `attachments/<id><.ext>`, from the app's support folder. The folder's full path can change when the app updates,
+  /// so the store keeps this part only.
+  final String path;
+
+  /// When the server took the file, or null.
+  final DateTime? sentAt;
+
+  bool get picture => type.startsWith('image/');
+
+  /// What the note's upload lists for the file: never its bytes.
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'type': type, 'size': size};
+
+  /// The body of the file's own upload, queued after its note's.
+  Map<String, dynamic> upload(String noteClientId) =>
+    {'noteClientId': noteClientId, 'id': id, 'path': path, 'name': name, 'type': type};
 }
 
 /// Where the phone was: for a note's pin, or one point of location history.
@@ -57,19 +93,27 @@ class Pin {
     {'at': at.millisecondsSinceEpoch, 'lat': lat, 'lon': lon, 'accuracy': accuracy, if (place != null) 'place': place};
 }
 
-/// Where an upload goes. Only the Relay server today; a later change can add another, such as a webhook.
-const relayServer = 'relay-server';
+/// Where an upload goes: the person's Relay Everything server, or their own webhook. Each waiting upload keeps one.
+const relayServer = 'relay-server', ownWebhook = 'webhook';
 
-/// When an upload of health, or of location points, last reached the server, in the store's `state`.
-const sentHealth = 'sent.health', sentPoints = 'sent.points';
+/// The outbox destination for [place].
+String destinationOf(SendPlace place) => place == SendPlace.webhook ? ownWebhook : relayServer;
 
-/// One waiting upload: a route and the JSON body to send it.
+/// The `state` keys: the destination new uploads take, this install's own id, and the next health or point id.
+const _destination = 'outbox.destination', _installId = 'install.id', _nextId = 'ids.next';
+
+/// When an upload of health, of location points, or of calendar events last reached the server, in the store's `state`.
+const sentHealth = 'sent.health', sentPoints = 'sent.points', sentCalendar = 'sent.calendar';
+
+/// One waiting upload: a route and the JSON body to send it, where it goes, and when the phone queued it.
 class OutboxItem {
-  const OutboxItem(this.id, this.route, this.body);
+  const OutboxItem(this.id, this.route, this.body, {required this.destination, required this.createdAt});
 
   final int id;
   final String route;
   final Map<String, dynamic> body;
+  final String destination;
+  final DateTime createdAt;
 }
 
 /// A photo waiting to go: its JPEG copy in the app's support folder, and what the server's `photos` route takes with it.
@@ -112,8 +156,17 @@ const _schema = [
     'queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0, $_voiceColumns)',
   'CREATE TABLE points (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
   'CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+  _attachmentsTable,
+  _calendarSentTable,
   _photosTable,
 ];
+
+// A note's files: one row each, in the order they were added. sent_at: when the server took the file.
+const _attachmentsTable = 'CREATE TABLE attachments (id TEXT PRIMARY KEY, note_client_id TEXT NOT NULL, name TEXT, type TEXT, '
+  'size INTEGER, path TEXT, sent_at INTEGER)';
+
+// Each calendar event sent, by its key, with the SHA-256 of what was sent: a round sends only what changed.
+const _calendarSentTable = 'CREATE TABLE calendar_sent (key TEXT PRIMARY KEY, hash TEXT NOT NULL)';
 
 // Photos wait here, not in the outbox: the outbox stops at the first upload that can not go, so a photo waiting for
 // Wi-Fi would hold back every note.
@@ -132,7 +185,7 @@ class Store extends GeneratedDatabase {
   Iterable<TableInfo<Table, dynamic>> get allTables => const [];
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(onCreate: (_) async {
@@ -161,8 +214,12 @@ class Store extends GeneratedDatabase {
         await customStatement('ALTER TABLE notes ADD COLUMN $column');
       }
     }
-    // Version 4 had no photos.
-    if (from < 5) await customStatement(_photosTable);
+    // Version 4 had notes with no files.
+    if (from < 5) await customStatement(_attachmentsTable);
+    // Version 5 had no calendar.
+    if (from < 6) await customStatement(_calendarSentTable);
+    // Version 6 had no photos.
+    if (from < 7) await customStatement(_photosTable);
   });
 
   Future<List<QueryRow>> _rows(String sql, [List<Object?> values = const []]) =>
@@ -170,15 +227,76 @@ class Store extends GeneratedDatabase {
 
   Future<void> _run(String sql, [List<Object?> values = const []]) => customStatement(sql, values);
 
-  Future<void> enqueue(String route, Map<String, dynamic> body, {String destination = relayServer}) =>
-    _run('INSERT INTO outbox (destination, route, body, created_at) VALUES (?, ?, ?, ?)',
-      [destination, route, jsonEncode(body), DateTime.now().millisecondsSinceEpoch]);
+  /// Queues one upload. With no [destination] it takes the current one, read in the same statement, so an upload never
+  /// lands on the place the person just left.
+  Future<void> enqueue(String route, Map<String, dynamic> body, {String? destination}) =>
+    _run("INSERT INTO outbox (destination, route, body, created_at) VALUES (coalesce(?, (SELECT value FROM state WHERE key = "
+      "'$_destination'), '$relayServer'), ?, ?, ?)", [destination, route, jsonEncode(body), DateTime.now().millisecondsSinceEpoch]);
 
-  /// Every waiting upload for [destination], oldest first.
-  Future<List<OutboxItem>> outbox({String destination = relayServer}) async => [
-    for (final row in await _rows('SELECT id, route, body FROM outbox WHERE destination = ? ORDER BY id', [destination]))
-      OutboxItem(row.read<int>('id'), row.read<String>('route'), jsonDecode(row.read<String>('body')) as Map<String, dynamic>),
+  /// Every waiting upload, or those for [destination], oldest first.
+  Future<List<OutboxItem>> outbox({String? destination}) async => [
+    for (final row in await _rows('SELECT id, destination, route, body, created_at FROM outbox '
+        '${destination == null ? '' : 'WHERE destination = ? '}ORDER BY id', [?destination])) _outboxItem(row),
   ];
+
+  /// The waiting upload [id] as it is now, or null when it is gone.
+  Future<OutboxItem?> outboxItem(int id) async {
+    final rows = await _rows('SELECT id, destination, route, body, created_at FROM outbox WHERE id = ?', [id]);
+    return rows.isEmpty ? null : _outboxItem(rows.single);
+  }
+
+  static OutboxItem _outboxItem(QueryRow row) => OutboxItem(row.read<int>('id'), row.read<String>('route'),
+    jsonDecode(row.read<String>('body')) as Map<String, dynamic>, destination: row.read<String>('destination'),
+    createdAt: DateTime.fromMillisecondsSinceEpoch(row.read<int>('created_at')));
+
+  /// The destination new uploads take.
+  Future<String> destination() async => await get(_destination) ?? relayServer;
+
+  /// Sends every waiting upload, and each new one, to [destination], in one step. Health and points queued before they
+  /// had ids get them here, as a webhook message needs them. A new place has none of the calendar, so the phone forgets
+  /// what went and the next read sends the whole window there.
+  Future<void> moveOutbox(String destination) => transaction(() async {
+    if (await this.destination() != destination) await _dropCalendar();
+    await set(_destination, destination);
+    for (final row in await _rows("SELECT id, body FROM outbox WHERE route IN ('health', 'locations')")) {
+      final body = jsonDecode(row.read<String>('body')) as Map<String, dynamic>;
+      final items = [for (final item in (body['samples'] ?? body['points']) as List) item as Map<String, dynamic>];
+      final missing = items.where((item) => item['id'] == null).toList();
+      if (missing.isEmpty) continue;
+      var id = await _takeIds(missing.length);
+      for (final item in missing) {
+        item['id'] = id++;
+      }
+      await _run('UPDATE outbox SET body = ? WHERE id = ?', [jsonEncode(body), row.read<int>('id')]);
+    }
+    await _run('UPDATE outbox SET destination = ?', [destination]);
+  });
+
+  /// This install's own id, a UUID made once: a webhook message names the phone by it.
+  Future<String> installId() => transaction(() async {
+    final kept = await get(_installId);
+    if (kept != null) return kept;
+    final made = newUuid();
+    await set(_installId, made);
+    return made;
+  });
+
+  /// The first of [count] new ids for health readings or points, unique on this phone. Run it inside a transaction.
+  Future<int> _takeIds(int count) async {
+    final first = int.tryParse(await get(_nextId) ?? '') ?? 1;
+    await set(_nextId, '${first + count}');
+    return first;
+  }
+
+  /// Queues health readings, 500 to a batch, each with its own id, so a message sent again keeps the same ids.
+  Future<void> queueSamples(List<Map<String, dynamic>> samples) => transaction(() async {
+    var id = await _takeIds(samples.length);
+    for (var at = 0; at < samples.length; at += 500) {
+      await enqueue('health', {'samples': [
+        for (final sample in samples.sublist(at, min(at + 500, samples.length))) {...sample, 'id': id++},
+      ]});
+    }
+  });
 
   /// Waiting uploads, and notes that wait for their pin.
   Future<int> waiting() async => (await _rows(
@@ -193,8 +311,70 @@ class Store extends GeneratedDatabase {
     final queue = send && !waitForPin;
     await _run('INSERT INTO notes (client_id, body, created_at, queued, pinning) VALUES (?, ?, ?, ?, ?)',
       [note.clientId, jsonEncode(body), note.createdAt.millisecondsSinceEpoch, queue ? 1 : 0, waitForPin ? 1 : 0]);
-    if (queue) await enqueue('notes', body);
+    for (final file in note.attachments) {
+      await _run('INSERT INTO attachments (id, note_client_id, name, type, size, path) VALUES (?, ?, ?, ?, ?, ?)',
+        [file.id, note.clientId, file.name, file.type, file.size, file.path]);
+    }
+    if (queue) await _queue(body);
   });
+
+  /// Keeps a note the iPhone's share card made, with no place. [sentAt] is set when the card sent the note already,
+  /// and [sentFiles] names the files it sent. With [send], what the card did not send is queued: the note, unless sent,
+  /// then each file not sent. False when this phone keeps the note already.
+  Future<bool> addSharedNote(LocalNote note, {DateTime? sentAt, Set<String> sentFiles = const {}, required bool send}) =>
+    transaction(() async {
+      if (await hasNote(note.clientId)) return false;
+      final body = note.toJson();
+      await _run('INSERT INTO notes (client_id, body, created_at, sent_at, queued) VALUES (?, ?, ?, ?, ?)',
+        [note.clientId, jsonEncode(body), note.createdAt.millisecondsSinceEpoch, sentAt?.millisecondsSinceEpoch,
+          sentAt != null || send ? 1 : 0]);
+      for (final file in note.attachments) {
+        final sent = sentFiles.contains(file.id) ? sentAt ?? DateTime.now() : null;
+        await _run('INSERT INTO attachments (id, note_client_id, name, type, size, path, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [file.id, note.clientId, file.name, file.type, file.size, file.path, sent?.millisecondsSinceEpoch]);
+      }
+      if (!send) return true;
+      if (sentAt == null) {
+        await _queue(body);
+      } else {
+        for (final file in note.attachments) {
+          if (!sentFiles.contains(file.id)) await enqueue('attachment', file.upload(note.clientId));
+        }
+      }
+      return true;
+    });
+
+  /// Queues a note's upload, then one upload for each of its files not sent yet, so a file never reaches the server
+  /// before its note.
+  Future<void> _queue(Map<String, dynamic> body) async {
+    final clientId = body['clientId'] as String;
+    await enqueue('notes', body);
+    for (final file in await attachmentsOf(clientId)) {
+      if (file.sentAt == null) await enqueue('attachment', file.upload(clientId));
+    }
+  }
+
+  /// True when this phone keeps a note with [clientId].
+  Future<bool> hasNote(String clientId) async =>
+    (await _rows('SELECT 1 FROM notes WHERE client_id = ?', [clientId])).isNotEmpty;
+
+  /// A note's files, in the order they were added.
+  Future<List<Attachment>> attachmentsOf(String clientId) async => [
+    for (final row in await _rows('SELECT id, name, type, size, path, sent_at FROM attachments WHERE note_client_id = ? '
+        'ORDER BY rowid', [clientId]))
+      _attachmentOf(row),
+  ];
+
+  static Attachment _attachmentOf(QueryRow row) {
+    final sentAt = row.read<int?>('sent_at');
+    return Attachment(id: row.read<String>('id'), name: row.read<String?>('name') ?? '', type: row.read<String?>('type') ?? '',
+      size: row.read<int?>('size') ?? 0, path: row.read<String?>('path') ?? '',
+      sentAt: sentAt == null ? null : DateTime.fromMillisecondsSinceEpoch(sentAt));
+  }
+
+  /// The server took a file, or turned it down for good: either way it goes no more.
+  Future<void> attachmentSent(String id, DateTime at) =>
+    _run('UPDATE attachments SET sent_at = ? WHERE id = ?', [at.millisecondsSinceEpoch, id]);
 
   /// Ends a note's wait for its pin, with the pin when the phone found one. With [send] the note and its upload get the
   /// same body in one step. False when the note is not waiting, such as one settled already.
@@ -202,9 +382,10 @@ class Store extends GeneratedDatabase {
     final notes = await _rows('SELECT body FROM notes WHERE client_id = ? AND pinning = 1', [clientId]);
     if (notes.isEmpty) return false;
     final note = _noteOf(jsonDecode(notes.single.read<String>('body')) as Map<String, dynamic>);
-    final body = LocalNote(clientId: clientId, text: note.text, createdAt: note.createdAt, pin: pin).toJson();
+    final body = LocalNote(clientId: clientId, text: note.text, createdAt: note.createdAt, pin: pin,
+      attachments: note.attachments).toJson();
     await _run('UPDATE notes SET body = ?, pinning = 0, queued = ? WHERE client_id = ?', [jsonEncode(body), send ? 1 : 0, clientId]);
-    if (send) await enqueue('notes', body);
+    if (send) await _queue(body);
     return true;
   });
 
@@ -227,14 +408,18 @@ class Store extends GeneratedDatabase {
     final notes = await _rows('SELECT body FROM notes WHERE client_id = ? AND words_pending = 1', [clientId]);
     if (notes.isEmpty) return false;
     final note = _noteOf(jsonDecode(notes.single.read<String>('body')) as Map<String, dynamic>);
-    final body = LocalNote(clientId: clientId, text: text, createdAt: note.createdAt, pin: note.pin).toJson();
+    final body = LocalNote(clientId: clientId, text: text, createdAt: note.createdAt, pin: note.pin,
+      attachments: note.attachments).toJson();
     await _run('UPDATE notes SET body = ?, words_pending = 0, queued = ? WHERE client_id = ?', [jsonEncode(body), send ? 1 : 0, clientId]);
-    if (send) await enqueue('notes', body);
+    if (send) await _queue(body);
     return true;
   });
 
   /// Deletes a note that never had words, such as a recording with no speech.
-  Future<void> dropNote(String clientId) => _run('DELETE FROM notes WHERE client_id = ? AND sent_at IS NULL', [clientId]);
+  Future<void> dropNote(String clientId) => transaction(() async {
+    await _run('DELETE FROM notes WHERE client_id = ? AND sent_at IS NULL', [clientId]);
+    await _run('DELETE FROM attachments WHERE note_client_id = ? AND note_client_id NOT IN (SELECT client_id FROM notes)', [clientId]);
+  });
 
   /// Voice notes still waiting for their words, oldest first.
   Future<List<LocalNote>> pendingWords() async =>
@@ -245,10 +430,10 @@ class Store extends GeneratedDatabase {
   /// How many notes never went to the server and have no upload: the notes the earlier-notes prompt asks about.
   Future<int> earlierCount() async => (await _rows('SELECT count(*) AS n $_earlier')).single.read<int>('n');
 
-  /// Queues every earlier note, oldest first.
+  /// Queues every earlier note, oldest first, each with its files.
   Future<void> queueEarlier() => transaction(() async {
     for (final row in await _rows('SELECT client_id, body $_earlier ORDER BY created_at, client_id')) {
-      await enqueue('notes', jsonDecode(row.read<String>('body')) as Map<String, dynamic>);
+      await _queue(jsonDecode(row.read<String>('body')) as Map<String, dynamic>);
       await _run('UPDATE notes SET queued = 1 WHERE client_id = ?', [row.read<String>('client_id')]);
     }
   });
@@ -256,18 +441,27 @@ class Store extends GeneratedDatabase {
   Future<void> noteSent(String clientId, DateTime at) =>
     _run('UPDATE notes SET sent_at = ? WHERE client_id = ?', [at.millisecondsSinceEpoch, clientId]);
 
-  /// Every note made on this phone, newest first.
-  Future<List<LocalNote>> notes() async => [
-    for (final row in await _rows('SELECT body, sent_at, queued, pinning, kind, audio_path, duration_ms, words_pending FROM notes '
-        'ORDER BY created_at DESC, client_id DESC'))
-      _noteOf(jsonDecode(row.read<String>('body')) as Map<String, dynamic>, sentAt: row.read<int?>('sent_at'),
-        queued: row.read<int>('queued') == 1, pinning: row.read<int>('pinning') == 1,
-        kind: NoteKind.values.byName(row.read<String>('kind')), audioPath: row.read<String?>('audio_path'),
-        durationMs: row.read<int?>('duration_ms'), wordsPending: row.read<int>('words_pending') == 1),
-  ];
+  /// Every note made on this phone, newest first, each with its files.
+  Future<List<LocalNote>> notes() async {
+    final files = <String, List<Attachment>>{};
+    for (final row in await _rows('SELECT note_client_id, id, name, type, size, path, sent_at FROM attachments ORDER BY rowid')) {
+      files.putIfAbsent(row.read<String>('note_client_id'), () => []).add(_attachmentOf(row));
+    }
+    return [
+      for (final row in await _rows('SELECT client_id, body, sent_at, queued, pinning, kind, audio_path, duration_ms, words_pending '
+          'FROM notes ORDER BY created_at DESC, client_id DESC'))
+        _noteOf(jsonDecode(row.read<String>('body')) as Map<String, dynamic>, sentAt: row.read<int?>('sent_at'),
+          queued: row.read<int>('queued') == 1, pinning: row.read<int>('pinning') == 1,
+          kind: NoteKind.values.byName(row.read<String>('kind')), audioPath: row.read<String?>('audio_path'),
+          durationMs: row.read<int?>('duration_ms'), wordsPending: row.read<int>('words_pending') == 1,
+          attachments: files[row.read<String>('client_id')]),
+    ];
+  }
 
+  /// A note's body, with its files listed by the body when the table's rows are not given.
   static LocalNote _noteOf(Map<String, dynamic> body, {int? sentAt, bool queued = false, bool pinning = false,
-    NoteKind kind = NoteKind.typed, String? audioPath, int? durationMs, bool wordsPending = false}) => LocalNote(
+    NoteKind kind = NoteKind.typed, String? audioPath, int? durationMs, bool wordsPending = false,
+    List<Attachment>? attachments}) => LocalNote(
     clientId: body['clientId'] as String, text: body['text'] as String,
     createdAt: DateTime.fromMillisecondsSinceEpoch(body['createdAt'] as int),
     pin: body['lat'] == null ? null : Pin(at: DateTime.fromMillisecondsSinceEpoch(body['createdAt'] as int),
@@ -275,14 +469,48 @@ class Store extends GeneratedDatabase {
       accuracy: (body['accuracy'] as num).toDouble(), place: body['place'] as String?),
     sentAt: sentAt == null ? null : DateTime.fromMillisecondsSinceEpoch(sentAt), queued: queued, pinning: pinning,
     kind: kind, audioPath: audioPath, durationMs: durationMs, wordsPending: wordsPending,
+    attachments: attachments ?? [
+      for (final file in (body['attachments'] as List?) ?? const [])
+        Attachment(id: (file as Map)['id'] as String, name: file['name'] as String, type: file['type'] as String,
+          size: file['size'] as int, path: ''),
+    ],
   );
 
-  /// Drops the health and location that did not go yet, for when sending turns off. Note uploads stay, so a later
-  /// turn-on sends them with no second prompt.
+  /// Drops the health, location and calendar events that did not go yet, for when sending turns off. Note uploads
+  /// stay, so a later turn-on sends them with no second prompt.
   Future<void> dropReadings() => transaction(() async {
     await _run("DELETE FROM outbox WHERE route IN ('health', 'locations')");
     await _run('DELETE FROM points');
+    await _dropCalendar();
   });
+
+  /// Drops waiting calendar uploads and forgets what was sent, so the calendar turned on again sends its whole window.
+  Future<void> dropCalendar() => transaction(_dropCalendar);
+
+  Future<void> _dropCalendar() async {
+    await _run("DELETE FROM outbox WHERE route = 'calendar'");
+    await _run('DELETE FROM calendar_sent');
+  }
+
+  /// Each calendar event sent, by key, with the hash of what was sent.
+  Future<Map<String, String>> calendarSent() async => {
+    for (final row in await _rows('SELECT key, hash FROM calendar_sent')) row.read<String>('key'): row.read<String>('hash'),
+  };
+
+  /// Queues calendar [uploads] and, in the same step, marks [sent] keys with their hashes and forgets [forget] keys, so a
+  /// crash never marks an event sent that has no upload.
+  Future<void> queueCalendar(List<Map<String, dynamic>> uploads, Map<String, String> sent, Iterable<String> forget) =>
+    transaction(() async {
+      for (final upload in uploads) {
+        await enqueue('calendar', upload);
+      }
+      for (final entry in sent.entries) {
+        await _run('INSERT OR REPLACE INTO calendar_sent (key, hash) VALUES (?, ?)', [entry.key, entry.value]);
+      }
+      for (final key in forget) {
+        await _run('DELETE FROM calendar_sent WHERE key = ?', [key]);
+      }
+    });
 
   /// One point of location history; a second at the same moment is the same point.
   Future<void> addPoint(Pin point) =>
@@ -297,7 +525,10 @@ class Store extends GeneratedDatabase {
     while (true) {
       final rows = await _rows('SELECT at, body FROM points ORDER BY at LIMIT ?', [batch]);
       if (rows.isEmpty) return;
-      await enqueue('locations', {'points': [for (final row in rows) jsonDecode(row.read<String>('body'))]});
+      var id = await _takeIds(rows.length);
+      await enqueue('locations', {'points': [
+        for (final row in rows) {...jsonDecode(row.read<String>('body')) as Map<String, dynamic>, 'id': id++},
+      ]});
       await _run('DELETE FROM points WHERE at <= ?', [rows.last.read<int>('at')]);
     }
   });
@@ -353,12 +584,17 @@ class Store extends GeneratedDatabase {
   Future<int> waitingReadings() async => (await _rows(
     "SELECT coalesce(sum(json_array_length(body, '\$.samples')), 0) AS n FROM outbox WHERE route = 'health'")).single.read<int>('n');
 
+  /// Calendar events waiting to send, changed or removed, in the outbox.
+  Future<int> waitingEvents() async => (await _rows(
+    "SELECT coalesce(sum(json_array_length(body, '\$.events') + json_array_length(body, '\$.removed')), 0) AS n "
+    "FROM outbox WHERE route = 'calendar'")).single.read<int>('n');
+
   /// Location points waiting to send: in the outbox, and kept but not yet queued.
   Future<int> waitingPoints() async => (await _rows(
     "SELECT coalesce((SELECT sum(json_array_length(body, '\$.points')) FROM outbox WHERE route = 'locations'), 0) "
     '+ (SELECT count(*) FROM points) AS n')).single.read<int>('n');
 
-  /// When [key], [sentHealth] or [sentPoints], was last written, or null for never.
+  /// When [key], [sentHealth], [sentPoints] or [sentCalendar], was last written, or null for never.
   Future<DateTime?> sentAt(String key) async {
     final value = int.tryParse(await get(key) ?? '');
     return value == null ? null : DateTime.fromMillisecondsSinceEpoch(value);
@@ -372,4 +608,14 @@ class Store extends GeneratedDatabase {
   Future<void> set(String key, String value) => _run('INSERT OR REPLACE INTO state (key, value) VALUES (?, ?)', [key, value]);
 
   Future<void> remove(String key) => _run('DELETE FROM state WHERE key = ?', [key]);
+}
+
+/// A random UUID, version 4.
+String newUuid([Random? random]) {
+  final source = random ?? Random.secure();
+  final bytes = List.generate(16, (_) => source.nextInt(256));
+  bytes[6] = bytes[6] & 0x0f | 0x40;
+  bytes[8] = bytes[8] & 0x3f | 0x80;
+  final hex = [for (final byte in bytes) byte.toRadixString(16).padLeft(2, '0')].join();
+  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
 }

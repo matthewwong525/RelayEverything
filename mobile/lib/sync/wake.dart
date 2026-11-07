@@ -2,10 +2,13 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../data/connection.dart';
 import '../data/sender.dart';
+import '../share/inbox.dart';
 import 'background.dart';
+import 'calendar.dart';
 import 'health.dart';
 import 'location.dart';
 import 'native.dart';
@@ -21,8 +24,10 @@ Future<void> wakeRound() async {
   try {
     final store = openStore();
     try {
-      done = await backgroundRound(store, connection: await KeyVault().read(), health: PhoneHealth(), sender: Sender(),
-        native: Platform.isIOS ? PhoneBackground() : null, places: PhonePlaces(), photos: PhonePhotos(), network: PhoneNetwork());
+      done = await savedRound(store, KeyVault(), health: PhoneHealth(), sender: Sender(),
+        native: Platform.isIOS ? PhoneBackground() : null, places: PhonePlaces(), folder: getApplicationSupportDirectory,
+        share: Platform.isIOS ? PhoneShareGroup() : null, calendar: PhoneCalendarSource(), photos: PhonePhotos(),
+        network: PhoneNetwork());
     } finally {
       await store.close();
     }

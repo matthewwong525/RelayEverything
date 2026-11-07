@@ -9,7 +9,8 @@ export default defineConfig({
   integrations: [starlight({
     title: 'Relay Everything',
     description: 'Relay Everything gets your notes, health and location off your phone, into a place you choose, where your own AI can read them.',
-    logo: { src: './src/assets/ring-mark.svg' },
+    // The Relay Everything mark, brand/mark.svg in the light and dark accent: wiki/brand.md.
+    logo: { light: './src/assets/relay-mark.svg', dark: './src/assets/relay-mark-dark.svg' },
     customCss: ['./src/styles/custom.css'],
     social: [{ icon: 'github', label: 'Relay Everything on GitHub', href: 'https://github.com/matthewwong525/RelayEverything' }],
     sidebar,

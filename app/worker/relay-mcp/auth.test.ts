@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { database } from "../../tests/employee-access/connections";
-import { ANA, BEN, fakeSpaces } from "../../tests/relay";
+import { ANA, BEN, fakeSpaces, makeKey, queue } from "../../tests/relay";
 import { hashToken } from "../apps/relay/people";
 import type { McpEnv } from "./env";
 import provider, { Grants } from "./index";
@@ -39,7 +39,8 @@ beforeEach(() => {
   person.run(ANA, "ana@example.com");
   person.run(BEN, "ben@example.com");
   spaces = fakeSpaces();
-  env = { DB: directory.DB, SPACES: spaces.SPACES, OAUTH_KV: fakeKv(), RELAY_MCP_ADDRESS: `${ORIGIN}/mcp`, RELAY_SERVER_URL: SERVER } as unknown as McpEnv;
+  env = { DB: directory.DB, SPACES: spaces.SPACES, RELAY_WEBHOOKS: queue, OAUTH_KV: fakeKv(), RELAY_MCP_ADDRESS: `${ORIGIN}/mcp`,
+    RELAY_SERVER_URL: SERVER } as unknown as McpEnv;
 });
 afterEach(() => { vi.useRealTimers(); });
 
@@ -118,6 +119,7 @@ const grants = () => new Grants(ctx, env);
 it("connects a person's AI app after they approve it by name and sign in on the server", async () => {
   const { html, approved, server, back } = await signIn();
   expect(html).toContain("Connect Claude to Relay Everything?");
+  expect(html).toContain("and add notes, when you ask it. It can't change or delete them.");
   expect(html).toContain("<b>claude.ai</b>");
   expect(approved.status).toBe(302);
   expect(`${server.origin}${server.pathname}`).toBe(`${SERVER}/apps/relay/sign-in/connect`);
@@ -127,7 +129,7 @@ it("connects a person's AI app after they approve it by name and sign in on the 
   const token = await connect();
   const answer = await listTools(token);
   expect(answer.status).toBe(200);
-  expect((await answer.json() as { result: { tools: unknown[] } }).result.tools).toHaveLength(10);
+  expect((await answer.json() as { result: { tools: unknown[] } }).result.tools).toHaveLength(12);
 });
 
 it("reads only the space of the person who signed in", async () => {
@@ -246,4 +248,74 @@ it("answers a bad connect link, an unknown page, and /mcp with no token or a dev
   expect(await metadata.json()).toMatchObject({ authorization_endpoint: `${ORIGIN}/authorize`, registration_endpoint: `${ORIGIN}/register` });
   const resource = await provider.fetch(new Request(`${ORIGIN}/.well-known/oauth-protected-resource/mcp`), env, ctx);
   expect(await resource.json()).toMatchObject({ resource: `${ORIGIN}/mcp`, resource_name: "Relay Everything" });
+});
+
+/** A /v1/ call to the connector, with this bearer token or key. */
+const v1 = (path: string, token?: string, init: RequestInit = {}) => provider.fetch(new Request(`${ORIGIN}/v1/${path}`, { ...init,
+  headers: { ...token && { Authorization: `Bearer ${token}` }, ...init.headers as Record<string, string> } }), env, ctx);
+const addNote = (token: string, clientId: string) => v1("notes", token, { method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ clientId, text: "Order the second PCB batch." }) });
+
+it("opens the web API to a connected app's token, which adds notes as the app and stops when it is disconnected", async () => {
+  const token = await connect();
+  const added = await addNote(token, "claude-note-0001");
+  expect([added.status, added.headers.get("Access-Control-Allow-Origin")]).toEqual([201, "*"]);
+  const { id } = await added.json() as { id: string };
+  expect((await addNote(token, "claude-note-0001")).status).toBe(200);
+  const found = await (await v1("notes?q=PCB", token)).json() as { notes: { id: string; device: string }[] };
+  expect(found.notes.map(note => [note.id, note.device])).toEqual([[id, "Claude"]]);
+  expect(await (await v1("me", token)).json()).toEqual({ device: "Claude", adds: true });
+  const [app] = (await grants().list(ANA)).apps;
+  expect(await grants().revoke(app.id, ANA)).toBe(true);
+  expect(spaces.sql(ANA).prepare("SELECT reaches, revoked_at FROM relay_devices").all()).toEqual([{ reaches: "app", revoked_at: expect.any(Number) }]);
+  const after = await v1("me", token);
+  expect([after.status, await after.json()]).toEqual([401, { error: "invalid_token", error_description: expect.stringContaining("Connect the app again") }]);
+  // An app disconnected before it added a note has no device row to turn off.
+  const unused = await connect({ client_name: "ChatGPT" });
+  expect((await v1("me", unused)).status).toBe(200);
+  expect(await grants().revoke((await grants().list(ANA)).apps[0].id, ANA)).toBe(true);
+  expect(spaces.sql(ANA).prepare("SELECT count(*) AS count FROM relay_devices").get()).toEqual({ count: 1 });
+});
+
+it("opens the web API to a live API key, for its own person, and refuses every other key, cookie or token", async () => {
+  const keys = { api: makeKey("api"), phone: makeKey("phone"), chats: makeKey("chats"), off: makeKey("off") };
+  for (const [reach, key] of Object.entries(keys)) {
+    const off = reach === "off" ? 1 : null;
+    spaces.sql(ANA).prepare(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at, reaches)
+      VALUES (?, ?, ?, '', 0, ?, ?)`).run(`d-${reach}`, `Ana's ${reach}`, `rek:d-${reach}`, off, off ? "api" : reach);
+    directory.sql.prepare("INSERT INTO relay_keys (key_sha256, person_id, device_id, reaches, created_at, revoked_at) VALUES (?, ?, ?, ?, 0, ?)")
+      .run(await hashToken(key), ANA, `d-${reach}`, off ? "api" : reach, off);
+  }
+  expect(await (await v1("me", keys.api)).json()).toEqual({ device: "Ana's api", adds: true });
+  expect((await addNote(keys.api, "script-note-0001")).status).toBe(201);
+  expect(spaces.sql(ANA).prepare("SELECT device_id FROM relay_notes").all()).toEqual([{ device_id: "d-api" }]);
+  const refusal = async (response: Response) => [response.status, (await response.json() as { error_description: string }).error_description];
+  expect(await refusal(await v1("me", keys.phone))).toEqual([403, "A phone or chat key only sends. Make an API key on your Relay Everything page."]);
+  expect(await refusal(await v1("me", keys.chats))).toEqual([403, "A phone or chat key only sends. Make an API key on your Relay Everything page."]);
+  expect(await refusal(await v1("me", keys.off))).toEqual([403, "This device key is turned off."]);
+  expect(await refusal(await v1("me", makeKey("unknown")))).toEqual([403, "This key is on no list of devices."]);
+  expect((await v1("me", "rek_short")).status).toBe(401);
+  const none = await v1("me");
+  expect([none.status, none.headers.get("WWW-Authenticate")])
+    .toEqual([401, `Bearer resource_metadata="${ORIGIN}/.well-known/oauth-protected-resource/mcp"`]);
+  expect((await v1("me", undefined, { headers: { Cookie: "__Host-relay_session=ana-session-token" } })).status).toBe(401);
+  expect((await v1("me", undefined, { headers: { "CF-Access-Client-Id": "phone.access", "CF-Access-Client-Secret": "secret" } })).status).toBe(401);
+  expect((await v1("me", `${ANA}:grant:forged`)).status).toBe(401);
+  // /mcp takes only its own tokens, never an API key.
+  expect((await listTools(keys.api)).status).toBe(401);
+});
+
+it("refuses a token bound to another resource", async () => {
+  const token = await connect();
+  env.RELAY_MCP_ADDRESS = "https://relay-mcp-staging.example.com/mcp";
+  expect((await v1("me", token)).status).toBe(401);
+});
+
+it("answers a browser's preflight and the API's description with no sign-in", async () => {
+  const preflight = await v1("notes", undefined, { method: "OPTIONS" });
+  expect([preflight.status, preflight.headers.get("Access-Control-Allow-Headers"), preflight.headers.get("Access-Control-Allow-Methods")])
+    .toEqual([204, "Authorization, Content-Type", "GET, POST"]);
+  const described = await v1("openapi.json");
+  expect([described.status, described.headers.get("Access-Control-Allow-Origin")]).toEqual([200, "*"]);
+  expect(await described.json()).toMatchObject({ openapi: "3.1.0", servers: [{ url: ORIGIN }] });
 });

@@ -315,7 +315,7 @@ Future<Failure?> sendPhotos(Store store, RelayApi api, {Future<bool> Function()?
     final file = await store.photoFile(photo.path);
     if (await file.exists()) {
       try {
-        await api.upload('photos', photo.fields, file: 'photo', bytes: await file.readAsBytes(),
+        await api.multipart('photos', photo.fields, file: 'photo', bytes: await file.readAsBytes(),
           filename: '${photo.clientId}.jpg', contentType: 'image/jpeg');
       } on ApiException catch (error) {
         if (error.failure == Failure.refused) return _keyFailure(api);

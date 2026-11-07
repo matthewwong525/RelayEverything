@@ -2,8 +2,11 @@ import { readdirSync, readFileSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { beforeAll, expect, it } from "vitest";
-import { ANA, BEN, bucket, fakeSpaces, jpeg } from "../../tests/relay";
-import { spaceOf, vouch, type SpaceEnv } from "../apps/relay/space";
+import { ANA, BEN, bucket, fakeSpaces, jpeg, NOW, queue } from "../../tests/relay";
+import { spaceOf, vouch } from "../apps/relay/space";
+import { APP_DEVICE, RECONNECT } from "./answers";
+import { APP_DEVICE_OFF } from "./asker";
+import type { GrantProps, McpEnv } from "./env";
 import { mcpHandler } from "./tools";
 
 const spaceRows = readFileSync(new URL("../../tests/relay-space-rows.sql", import.meta.url), "utf8");
@@ -19,14 +22,17 @@ function seeded() {
   return { sql, SPACES: made.SPACES };
 }
 
-/** The connector's spaces and the file store, as its Worker binds them. */
-const bindings = (SPACES: DurableObjectNamespace) => ({ SPACES, RELAY_BUCKET: bucket } as unknown as SpaceEnv);
+/** The connector's spaces, file store and webhooks' queue, as its Worker binds them. */
+const bindings = (SPACES: DurableObjectNamespace) => ({ SPACES, RELAY_BUCKET: bucket, RELAY_WEBHOOKS: queue } as unknown as McpEnv);
 
-/** An MCP client that reaches the connector with a grant for this person's space. */
-async function connect(SPACES: DurableObjectNamespace, personId = ANA) {
+/** A grant as /callback makes it now: Ana's space, and adding notes as the app's own device. */
+const GRANT: GrantProps = { personId: ANA, adds: true, deviceId: "e0000000-0000-4000-8000-000000000001", name: "Claude" };
+
+/** An MCP client that reaches the connector with this grant. */
+async function connect(SPACES: DurableObjectNamespace, props: GrantProps = GRANT) {
   const connected = new Client({ name: "test", version: "1.0.0" });
   await connected.connect(new StreamableHTTPClientTransport(new URL("https://relay-mcp.example.com/mcp"),
-    { fetch: (url, init) => mcpHandler.fetch(new Request(url, init), bindings(SPACES), { props: { personId } }) }));
+    { fetch: (url, init) => mcpHandler.fetch(new Request(url, init), bindings(SPACES), { props }) }));
   return connected;
 }
 
@@ -49,17 +55,18 @@ it("names itself Relay Everything to the AI app", () => {
   expect(client.getInstructions()).toMatch(/^Relay Everything /);
 });
 
-it("lists ten tools, each marked read-only", async () => {
+it("lists twelve tools, each read-only but add_note, which changes and deletes nothing", async () => {
   const { tools } = await client.listTools();
-  expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "places", "search_chats", "read_chat",
-    "photos", "read_photo"]);
-  for (const tool of tools) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+  expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "places", "calendar", "search_chats",
+    "read_chat", "photos", "read_photo", "add_note"]);
+  for (const tool of tools.slice(0, 11)) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+  expect(tools[11].annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
 });
 
 it("finds notes holding every word, in any case, with a title and the time in the zone", async () => {
   expect(await ask("search", { query: "milk" })).toEqual({ nextCursor: null, notes: [{ id: ID(3), source: "ring",
-    text: "Buy milk and batteries.", title: "Buy milk and batteries.", recordedAt: "2026-11-04T16:58:20-05:00", device: "Pebble app",
-    audio: false, place: null }] });
+    text: "Buy milk and batteries.", title: "Buy milk and batteries.", recordedAt: "2026-11-04T16:58:20-05:00", device: "iPad",
+    audio: false, place: null, attachments: [] }] });
   expect(ids(await ask("search", { query: "the" }))).toEqual([ID(2), ID(1)]);
   expect(ids(await ask("search", { query: "THE ring" }))).toEqual([ID(2)]);
   expect(ids(await ask("search", { query: "the", source: "ring" }))).toEqual([ID(1)]);
@@ -101,7 +108,10 @@ it("sums up a day, and an empty one", async () => {
   expect(await ask("day_summary", { day: "2026-11-04" })).toEqual({ day: "2026-11-04", timezone: "America/Toronto", notes: 3, ...day, places: [
     { name: "Harbord St", lat: 43.6629, lon: -79.3957, from: "2026-11-04T08:00:00-05:00", to: "2026-11-04T08:00:00-05:00" },
     { name: "King St W", lat: 43.6487, lon: -79.3817, from: "2026-11-04T12:00:00-05:00", to: "2026-11-04T12:00:00-05:00" },
-    { name: "Kensington Ave", lat: 43.6544, lon: -79.4006, from: "2026-11-04T17:00:00-05:00", to: "2026-11-04T17:30:00-05:00" }] });
+    { name: "Kensington Ave", lat: 43.6544, lon: -79.4006, from: "2026-11-04T17:00:00-05:00", to: "2026-11-04T17:30:00-05:00" }],
+    weightKg: 71.4, bloodPressure: [{ at: "2026-11-04T08:30:00-05:00", upper: 118, lower: 76 }], events: [
+      { title: "Board meeting", start: "2026-11-04T10:00:00-05:00", end: "2026-11-04T11:00:00-05:00", allDay: false, people: ["Sam Lee", "Ana"] },
+      { title: "Lunch with Sam", start: "2026-11-04T12:00:00-05:00", end: "2026-11-04T13:00:00-05:00", allDay: false, people: ["Sam Lee"] }] });
   expect(await ask("day_summary", { day: "2026-11-05" })).toMatchObject({ notes: 0, steps: 0, sleepMinutes: 0, heartRate: null,
     workouts: { count: 0, minutes: 0 }, places: [] });
   expect((await ask("day_summary", { day: "2026-13-45" })).refused).toContain("Not a day.");
@@ -122,6 +132,32 @@ it("reads health by the hour or the day, and refuses too many values", async () 
     .toEqual(["2026-10-31T00:00:00-04:00", "2026-11-01T00:00:00-04:00", "2026-11-02T00:00:00-05:00"]);
   expect(await ask("health", { type: "steps", from: "2026-01-01", to: "2026-03-01", bucket: "hour" }))
     .toEqual({ refused: "That is more than 400 hours: ask for a shorter range or a larger bucket." });
+});
+
+it("reads the new health types: the day's latest weight and blood pressure's range", async () => {
+  expect((await ask("health", { type: "weight", from: "2026-11-03", to: "2026-11-05" })).values.map((value: { latest: number | null }) => value.latest))
+    .toEqual([null, 71.4]);
+  expect((await ask("health", { type: "blood_pressure_systolic", from: "2026-11-04", to: "2026-11-05" })).values[0])
+    .toMatchObject({ min: 118, max: 118, average: 118 });
+  expect((await ask("health", { type: "water", from: "2026-11-04", to: "2026-11-05" })).values[0].total).toBe(0);
+});
+
+it("reads calendar events by time or words, never a removed one, a page at a time", async () => {
+  const titles = (answer: { events: { title: string }[] }) => answer.events.map(event => event.title);
+  const day = await ask("calendar", { from: "2026-11-04", to: "2026-11-05" });
+  expect(titles(day)).toEqual(["Board meeting", "Lunch with Sam"]);
+  expect(day.events[0]).toEqual({ id: expect.any(String), title: "Board meeting", calendar: "Work", start: "2026-11-04T10:00:00-05:00",
+    end: "2026-11-04T11:00:00-05:00", allDay: false, location: "Office, room 2", notes: "Bring the ring samples.", url: null,
+    people: [{ name: "Sam Lee", email: "sam@example.com", organizer: true }, { name: "Ana" }], device: "Android phone" });
+  expect(titles(await ask("calendar", { from: "2026-11-01", to: "2026-12-01", query: "sam" }))).toEqual(["Design review with Sam", "Lunch with Sam", "Board meeting"]);
+  expect(titles(await ask("calendar", { from: "2026-11-04T10:30", to: "2026-11-04T10:45" }))).toEqual(["Board meeting"]);
+  const newest = await ask("calendar", { from: "2026-11-01", to: "2026-12-01", query: "sam", limit: 2 });
+  expect(titles(await ask("calendar", { from: "2026-11-01", to: "2026-12-01", query: "sam", cursor: newest.nextCursor }))).toEqual(["Board meeting"]);
+  const first = await ask("calendar", { from: "2026-11-01", to: "2026-12-01", limit: 1 });
+  expect(titles(first)).toEqual(["Board meeting"]);
+  expect(titles(await ask("calendar", { from: "2026-11-01", to: "2026-12-01", cursor: first.nextCursor }))).toEqual(["Lunch with Sam", "Design review with Sam"]);
+  expect((await ask("calendar", { from: "2026-11-01", to: "2026-12-01", limit: 101 })).refused).toBeDefined();
+  expect(await ask("calendar", { from: "2026-11-01", to: "2026-12-01", cursor: "page-2" })).toEqual({ refused: "That cursor is not one this connector gave." });
 });
 
 it("lists visits in order, one per stay at a place, and says where to read on", async () => {
@@ -194,13 +230,46 @@ it("titles a note with no words, and lets a database fault through as an error, 
 
 it("reads only the grant's own person's space, and asks an app from before spaces to connect again", async () => {
   const { SPACES } = seeded();
-  const ben = await connect(SPACES, BEN);
+  const ben = await connect(SPACES, { personId: BEN });
   const found = JSON.parse((await ben.callTool({ name: "search", arguments: { query: "milk" } }) as { content: { text: string }[] }).content[0].text);
   expect(found.notes.map((note: { id: string }) => note.id)).toEqual([ID(7)]);
   expect(ids(await ask("search", { query: "ring" }))).not.toContain(ID(7));
   const old = await mcpHandler.fetch(new Request("https://relay-mcp.example.com/mcp", { method: "POST" }), bindings(SPACES), { props: {} });
   expect([old.status, await old.json()]).toEqual([401, { error: "invalid_token", error_description: "Connect this AI app again." }]);
 });
+
+it("adds a note as the app's own device, once on a resend, and wakes the webhooks that take notes", async () => {
+  const { sql, SPACES } = seeded();
+  sql.exec(`INSERT INTO relay_webhooks (id, name, url, secret, kinds, sent_seq, created_at)
+    VALUES ('w-notes', 'Example database', 'https://db.example.com/relay', 'whsec_AAAA', '["notes"]', 0, 0)`);
+  client = await connect(SPACES);
+  const note = { clientId: "claude-note-0001", text: "Order the second PCB batch.", createdAt: "2026-11-04T18:00" };
+  const first = await ask("add_note", note);
+  expect(first).toEqual({ id: expect.stringMatching(/^[0-9a-f-]{36}$/), added: true });
+  expect(await ask("add_note", { ...note, text: "Changed on the resend." })).toEqual({ id: first.id, added: false });
+  expect(queue.sent).toEqual([{ webhook: "w-notes", person: ANA }]);
+  expect(sql.prepare("SELECT name, token_client_id, reaches, created_at, revoked_at FROM relay_devices WHERE id = ?").get(GRANT.deviceId!))
+    .toEqual({ name: "Claude", token_client_id: `app:${GRANT.deviceId}`, reaches: "app", created_at: NOW, revoked_at: null });
+  expect(await ask("fetch", { id: first.id })).toMatchObject({ text: "Order the second PCB batch.", source: "typed", device: "Claude",
+    recordedAt: "2026-11-04T18:00:00-05:00", place: null });
+  const placed = await ask("add_note", { clientId: "claude-note-0002", text: "At the fab.", lat: 43.65, lon: -79.38, place: "King St W" });
+  expect(await ask("fetch", { id: placed.id })).toMatchObject({ recordedAt: "2026-11-05T09:00:00-05:00", place: { name: "King St W", from: "phone" } });
+  expect(await ask("add_note", { clientId: "claude-note-0003", text: "Where?", lat: 43.65 })).toEqual({ refused: "Send lat and lon together." });
+  expect(await ask("add_note", { clientId: "claude-note-0003", text: "When?", createdAt: "yesterday" }))
+    .toEqual({ refused: "Give `createdAt` as a day or an ISO time." });
+  expect((await ask("add_note", { clientId: "short", text: "Hi" })).refused).toContain("clientId");
+  client = await connect(seeded().SPACES);
+});
+
+it("lets an app connected before adding read, but asks it to connect again to add", async () => {
+  const { sql, SPACES } = seeded();
+  client = await connect(SPACES, { personId: ANA });
+  expect(ids(await ask("search", { query: "milk" }))).toEqual([ID(3)]);
+  expect(await ask("add_note", { clientId: "claude-note-0001", text: "Hi" })).toEqual({ refused: RECONNECT });
+  expect(sql.prepare("SELECT count(*) AS count FROM relay_notes").get()).toEqual({ count: 3 });
+  client = await connect(seeded().SPACES);
+});
+
 
 const PHOTO = (n: number) => `f0000000-0000-4000-8000-00000000000${n}`;
 const photoIds = (answer: { photos: { id: string }[] }) => answer.photos.map(photo => photo.id);
@@ -227,8 +296,8 @@ it("lists photos newest first, a page at a time, and only those near a place whe
 it("shows one photo as an image with a line of its time and place, and refuses an id it lacks", async () => {
   const { SPACES } = seeded();
   const { files } = spaceOf(bindings(SPACES), vouch("grant", ANA));
-  await files.put(files.photoName(PHOTO(1)), jpeg(1600, 1200).buffer);
-  await files.put(files.photoName(PHOTO(2)), jpeg(1200, 1600).buffer);
+  await files.put(`photos/${PHOTO(1)}`, jpeg(1600, 1200).buffer);
+  await files.put(`photos/${PHOTO(2)}`, jpeg(1200, 1600).buffer);
   client = await connect(SPACES);
   const { content, isError } = await client.callTool({ name: "read_photo", arguments: { id: PHOTO(1) } }) as
     { content: { type: string; data?: string; mimeType?: string; text?: string }[]; isError?: boolean };
@@ -240,14 +309,14 @@ it("shows one photo as an image with a line of its time and place, and refuses a
   // A row whose file is gone, an id it lacks, and Ben's grant on Ana's photo all get no photo.
   expect(await ask("read_photo", { id: PHOTO(3) })).toEqual({ refused: "No photo has this id." });
   expect(await ask("read_photo", { id: PHOTO(9) })).toEqual({ refused: "No photo has this id." });
-  const ben = await connect(SPACES, BEN);
+  const ben = await connect(SPACES, { personId: BEN });
   const refused = await ben.callTool({ name: "read_photo", arguments: { id: PHOTO(1) } }) as { content: { text: string }[]; isError?: boolean };
   expect([refused.isError, refused.content[0].text]).toEqual([true, "No photo has this id."]);
   client = await connect(seeded().SPACES);
 });
 
-// The connector reads with every note's rights: only SELECT reaches a space from its code. Its one write takes a
-// used sign-in code out of the directory.
+// Only SELECT reaches a space from the connector, but for these writes: a used sign-in code, an app's device row and
+// its turning off. A note is added only through apps/relay/add-note.ts, as a phone's.
 const WRITES = /\b(?:INSERT|UPDATE|DELETE|REPLACE|UPSERT|CREATE|DROP|ALTER|PRAGMA|ATTACH|VACUUM)\b|\b(?:db|DB)\.exec\(|\.(?:batch|run)\(/;
 const writes = (source: string) => WRITES.test(source);
 
@@ -257,7 +326,16 @@ it("holds no statement but SELECT in the connector or its queries", () => {
     new URL("../apps/relay/queries.ts", import.meta.url)];
   expect(files.length).toBeGreaterThan(5);
   const CODE_TAKEN = "DELETE FROM relay_connect_codes WHERE code_sha256 = ? AND expires_at > ? RETURNING person_id";
-  expect(readFileSync(new URL("auth.ts", folder), "utf8")).toContain(CODE_TAKEN);
-  for (const file of files) expect(writes(readFileSync(file, "utf8").replace(CODE_TAKEN, "")), file.pathname).toBe(false);
+  const ALLOWED: Record<string, string[]> = { "auth.ts": [CODE_TAKEN],
+    "answers.ts": [APP_DEVICE.slice(0, APP_DEVICE.indexOf("VALUES")), ".bind(adder.deviceId, adder.name, `app:${adder.deviceId}`, Date.now()).run()"],
+    "asker.ts": [JSON.stringify(APP_DEVICE_OFF), "db.prepare(APP_DEVICE_OFF).bind(Date.now(), deviceId).run()"] };
+  for (const file of files) {
+    let source = readFileSync(file, "utf8");
+    for (const allowed of ALLOWED[file.pathname.split("/").pop()!] ?? []) {
+      expect(source, file.pathname).toContain(allowed);
+      source = source.replace(allowed, "");
+    }
+    expect(writes(source), file.pathname).toBe(false);
+  }
   for (const bad of ["INSERT INTO relay_notes", "db.exec('x')", "db.batch([])", "statement.run()"]) expect(writes(bad), bad).toBe(true);
 });

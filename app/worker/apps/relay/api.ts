@@ -1,15 +1,16 @@
-// Relay Everything's server: notes, health, location and photos from the phones, sent on to webhooks, and Claude Code
-// chats, each in the caller's own space. A device key only adds data, and checks itself with GET key: caller.ts.
+// Relay Everything's server: notes, health, location, calendar and photos from the phones, all but photos sent on to
+// webhooks, and Claude Code chats, each in the caller's own space. A device key only adds data: caller.ts.
 import type { Route } from "../../api/contract.ts";
 import { account, accountDelete } from "./account.ts";
 import { aiAppDisconnect, aiApps } from "./ai-apps.ts";
+import { attachment, attachmentAdd } from "./attachments.ts";
 import { audio } from "./audio.ts";
+import { calendar } from "./calendar.ts";
 import { chatDelete, chatList, chatRead } from "./chat-read.ts";
 import { chats, chatSaves } from "./chats.ts";
 import { deviceAdd, deviceOff, devices } from "./device.ts";
 import { key } from "./key.ts";
 import { notes } from "./notes.ts";
-import { pebble } from "./pebble.ts";
 import { photoAdd, photoCount, photoDelete } from "./photos.ts";
 import { health, locations } from "./samples.ts";
 import { summary } from "./summary.ts";
@@ -18,10 +19,11 @@ import { add, list, remove, resend, retry, secret, sweepNow, test, update } from
 import { consume } from "./webhooks/send.ts";
 
 export const routes = new Map<string, Route>([
-  ["POST pebble", pebble],
   ["POST notes", notes],
+  ["POST attachments", attachmentAdd],
   ["POST health", health],
   ["POST locations", locations],
+  ["POST calendar", calendar],
   ["POST photos", photoAdd],
   ["GET photos", photoCount],
   ["POST photos/delete", photoDelete],
@@ -29,6 +31,7 @@ export const routes = new Map<string, Route>([
   ["GET timeline", timeline],
   ["GET summary", summary],
   ["GET audio", audio],
+  ["GET attachment", attachment],
   ["GET webhooks", list],
   ["POST webhooks", add],
   ["POST webhooks/update", update],

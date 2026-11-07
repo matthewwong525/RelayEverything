@@ -2,7 +2,18 @@ import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { API, get, when, where, type Note, type Timeline } from './read'
+import { API, get, sizeOf, when, where, type Note, type NoteFile, type Timeline } from './read'
+
+/** One file: a picture in the note, any other file as a link that downloads it, or its name while it is on its way. */
+function FileItem({ file }: { file: NoteFile }) {
+  const label = `${file.name} · ${sizeOf(file.size)}`
+  const src = `${API}attachment?id=${encodeURIComponent(file.id)}`
+  if (!file.ready) return <Badge variant="outline">{label} · Waiting for the file</Badge>
+  if (file.type.startsWith('image/')) {
+    return <a href={src} target="_blank" rel="noreferrer"><img src={src} alt={file.name} loading="lazy" className="h-24 rounded-md border object-cover" /></a>
+  }
+  return <a href={src} download={file.name} className="text-sm underline underline-offset-4">{label} · Download</a>
+}
 
 function NoteCard({ note }: { note: Note }) {
   const place = where(note.place)
@@ -11,8 +22,11 @@ function NoteCard({ note }: { note: Note }) {
       <Badge variant={note.source === 'ring' ? 'default' : 'outline'}>{note.source === 'ring' ? 'Ring' : 'Typed'}</Badge>
       <span className="text-sm text-muted-foreground">{[when(note.recordedAt), place, note.device].filter(Boolean).join(' · ')}</span>
     </div>
-    <p className="wrap-anywhere">{note.text || <span className="text-muted-foreground">No words, only the recording.</span>}</p>
+    {(note.text || !note.attachments.length) && <p className="wrap-anywhere">{note.text || <span className="text-muted-foreground">No words, only the recording.</span>}</p>}
     {note.audio && <audio controls preload="none" className="w-full" src={`${API}audio?id=${note.id}`} aria-label="The recording" />}
+    {note.attachments.length > 0 && <ul className="flex flex-wrap items-center gap-2" aria-label="Files">
+      {note.attachments.map((file) => <li key={file.id}><FileItem file={file} /></li>)}
+    </ul>}
   </Card>
 }
 

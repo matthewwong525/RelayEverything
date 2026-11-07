@@ -2,6 +2,7 @@
 # Writes out/report.md and out/verdict.txt from the build, the tour and Claude. A failed tour step makes it broken.
 set -uo pipefail
 mkdir -p "$OUT/claude"
+[ -n "${DEVICE_UDID:-}" ] && bash "$(dirname "$0")/phone-log.sh"
 cd "$OUT" || exit 1
 stopped=$(cat verdict.txt 2>/dev/null)
 verdict=$stopped

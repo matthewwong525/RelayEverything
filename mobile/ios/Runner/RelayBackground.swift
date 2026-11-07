@@ -131,8 +131,11 @@ final class HealthWake {
   private var queries: [HKObserverQuery] = []
 
   private var types: [HKSampleType] {
-    [HKQuantityType.quantityType(forIdentifier: .stepCount), HKQuantityType.quantityType(forIdentifier: .heartRate),
-     HKCategoryType.categoryType(forIdentifier: .sleepAnalysis), HKObjectType.workoutType()].compactMap { $0 }
+    let quantities: [HKQuantityTypeIdentifier] = [.stepCount, .heartRate, .bodyMass, .restingHeartRate, .heartRateVariabilitySDNN,
+      .oxygenSaturation, .bloodPressureSystolic, .bloodPressureDiastolic, .dietaryWater]
+    let categories: [HKCategoryTypeIdentifier] = [.sleepAnalysis, .menstrualFlow, .mindfulSession]
+    return quantities.compactMap { HKQuantityType.quantityType(forIdentifier: $0) }
+      + categories.compactMap { HKCategoryType.categoryType(forIdentifier: $0) } + [HKObjectType.workoutType()]
   }
 
   func apply() {
@@ -235,6 +238,19 @@ final class PlacesWake: NSObject, CLLocationManagerDelegate {
 enum RelayChannels {
   static func register(_ messenger: FlutterBinaryMessenger) {
     FlutterMethodChannel(name: "relay/files", binaryMessenger: messenger).setMethodCallHandler { call, result in
+      // The App Group the share card (ios/ShareExtension/) shares: its folder, and whether the card may send.
+      let group = "group.com.matthewwong525.relayApp"
+      switch call.method {
+      case "appGroupPath":
+        return result(FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)?.path)
+      case "setShareSettings":
+        let arguments = call.arguments as? [String: Any]
+        UserDefaults(suiteName: group)?.set(arguments?["sending"] as? Bool ?? false, forKey: "sending")
+        UserDefaults(suiteName: group)?.set(arguments?["later"] as? Bool ?? false, forKey: "later")
+        return result(nil)
+      default:
+        break
+      }
       guard call.method == "excludeFromBackup", let path = call.arguments as? String else {
         result(FlutterMethodNotImplemented)
         return

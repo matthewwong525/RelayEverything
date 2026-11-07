@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../brand.dart';
 import '../controller.dart';
 import '../data/attachments.dart';
 import '../data/connection.dart';
@@ -25,6 +26,7 @@ const shareWait = Duration(seconds: 20);
 @pragma('vm:entry-point')
 Future<void> shareMain() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerBrandLicenses();
   final relay = RelayController(store: openStore(), vault: KeyVault(), places: PhonePlaces(), health: PhoneHealth(),
     folder: getApplicationSupportDirectory);
   await relay.load(watch: false);
@@ -32,8 +34,8 @@ Future<void> shareMain() async {
   runApp(MaterialApp(
     title: 'Relay Everything',
     debugShowCheckedModeBanner: false,
-    theme: ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true),
-    darkTheme: ThemeData(colorSchemeSeed: Colors.indigo, brightness: Brightness.dark, useMaterial3: true),
+    theme: brandTheme(Brightness.light),
+    darkTheme: brandTheme(Brightness.dark),
     home: ShareCard(draft: draft, sending: relay.settings.sending,
       save: (words) => saveShare(relay, draft, words), close: () => unawaited(SystemNavigator.pop())),
   ));

@@ -1,0 +1,1877 @@
+<!-- wong-review:3 -->
+<!doctype html>
+<!--
+  WongStack review kit. build-review.mjs writes the proposal as static HTML at the
+  review:content marker, puts the app's look (look.mjs) at the look marker, the light and dark switch (theme.js) at the
+  theme marker, and the change name in place of its token. The one script adds Note buttons, drawing fit and full screen, notes, drafts, and copy. It loads nothing from the network;
+  opened through a reply link (reply-link.mjs), it sends the saved notes to the chat, and its footer
+  asks the chat to build, or to build and publish, with saved unsent notes: each button shows when the link offers it.
+  A preview page (data-kind="preview", from apply's preview-review.mjs) names the finished build and offers Publish.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Review · relay-everything-brand</title>
+<style>
+  /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
+   look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
+   shadcn's neutral light and dark colours stays only for a colour it can't find. Every page starts light, even on a
+   dark device; theme.js adds `.dark` to the root element when the person switches, and draws the switch (.theme-toggle).
+   The parts below draw app/src/components/ui/ (button, input, card, badge, skeleton) in plain CSS. Each sits in
+   :where(), so a page's own rule always wins.
+   Nothing here loads a file: these pages fetch nothing from the network. */
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+}
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+}
+
+/* Tailwind's shadow-xs, shadow-sm and shadow-lg; Radix's popover shadow, and its upward twin for a box docked at the
+   bottom, so a layer reads as above the page; and the 3px focus ring at half strength. */
+:root {
+  color-scheme: light;
+  --look-shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --look-shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --look-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --look-shadow-overlay: 0 10px 38px -10px rgb(0 0 0 / 0.35), 0 10px 20px -15px rgb(0 0 0 / 0.2);
+  --look-shadow-up: 0 -8px 24px rgb(0 0 0 / 0.12);
+  --look-ring: color-mix(in oklab, var(--ring) 50%, transparent);
+}
+.dark { color-scheme: dark; }
+
+:where(body) {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-feature-settings: "rlig" 1, "calt" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+:where(h1, h2, h3) { font-weight: 600; letter-spacing: -0.025em; }
+:where(a) { color: inherit; text-underline-offset: 0.25rem; }
+::selection { background: var(--primary); color: var(--primary-foreground); }
+:where(:focus-visible) { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+/* Button (button.tsx): outline by default; .btn-primary, and the pages' button.primary and button.main, filled. */
+:where(button, .btn) {
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: var(--look-shadow-xs);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+:where(button, .btn):where(:hover:not(:disabled)) { background: var(--accent); color: var(--accent-foreground); }
+:where(button.primary, button.main, .btn-primary) { border-color: var(--primary); background: var(--primary); color: var(--primary-foreground); box-shadow: none; }
+:where(button.primary, button.main, .btn-primary):where(:hover:not(:disabled)) { background: color-mix(in oklab, var(--primary) 90%, transparent); color: var(--primary-foreground); }
+:where(.btn-ghost) { border-color: transparent; background: transparent; box-shadow: none; }
+:where(button, .btn):where(:disabled) { opacity: 0.5; cursor: default; }
+
+/* Field (input.tsx): a thin border, a soft shadow, and the ring on focus. */
+:where(input:not([type=checkbox], [type=radio], [type=file], [type=range], [type=button], [type=submit]), select, textarea, .field) {
+  border: 1px solid var(--input);
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: var(--foreground);
+  box-shadow: var(--look-shadow-xs);
+  font: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+:where(input, textarea)::placeholder { color: var(--muted-foreground); }
+:where(input, select, textarea, .field):where(:focus-visible) { outline: none; border-color: var(--ring); box-shadow: 0 0 0 3px var(--look-ring); }
+:where(input, select, textarea, .field):where([aria-invalid=true]) { border-color: var(--destructive); }
+:where(input[type=checkbox], input[type=radio]) { accent-color: var(--primary); }
+
+/* Card (card.tsx) and tag (badge.tsx, secondary). */
+:where(.card) {
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 4px);
+  box-shadow: var(--look-shadow-sm);
+}
+:where(.tag) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.33;
+  white-space: nowrap;
+}
+:where(.tag-outline) { border-color: var(--border); background: transparent; color: var(--foreground); }
+
+/* Skeleton (skeleton.tsx): a grey block that pulses while what it stands for loads, and holds still when motion is
+   off. .sr-only keeps the words of a loading state for a screen reader alone. */
+:where(.skeleton) { display: block; border-radius: calc(var(--radius) - 2px); background: var(--accent); animation: look-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+@keyframes look-pulse { 50% { opacity: 0.5; } }
+@media (prefers-reduced-motion: reduce) { :where(.skeleton) { animation: none; } }
+:where(.sr-only) { position: absolute; max-width: 1px; max-height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* The light and dark switch (theme.js): a ghost icon button, 44px, in the page's top right corner, above the page and
+   below a note box or full-screen view. It scrolls away with the page's top, so it never sits over text read later.
+   In a page's [data-theme-toggle] slot it sits in line. The icon shows the look it switches to: moon on light. */
+.theme-toggle {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  right: calc(12px + env(safe-area-inset-right));
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  min-width: 2.75rem;
+  height: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--foreground);
+}
+@media (hover: hover) { .theme-toggle:hover { background: var(--accent); color: var(--accent-foreground); } }
+[data-theme-toggle] .theme-toggle { position: static; flex: none; }
+.theme-toggle svg { width: 1.25rem; height: 1.25rem; pointer-events: none; }
+
+  * { box-sizing:border-box; }
+  html { -webkit-text-size-adjust:100%; }
+  body { --pad:12px; margin:0; padding-bottom:var(--bar, 76px); font:16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow-wrap:anywhere; }
+  main { max-width:700px; margin:0 auto; padding:0 12px; }
+  code, pre, .ln { font-family:ui-monospace, Menlo, Consolas, monospace; }
+  code { background:var(--muted); border-radius:4px; padding:.1em .3em; font-size:.88em; }
+  [hidden] { display:none !important; }
+  header { padding:20px 48px 4px 0; }
+  .back { display:flex; align-items:center; gap:8px; min-width:0; margin:0 0 8px; }
+  .back .muted { margin:0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .eyebrow { margin:0; color:var(--muted-foreground); font-size:14px; font-weight:500; }
+  h1 { margin:2px 0 4px; font-size:22px; line-height:1.25; }
+  .jump { display:flex; flex-wrap:wrap; gap:0 18px; margin:4px 0 0; padding:0; list-style:none; }
+  .jump a { display:inline-block; padding:8px 0; }
+  .hint, .muted { color:var(--muted-foreground); font-size:14px; margin:4px 0 0; }
+  #script-error { color:var(--destructive); font-weight:600; }
+  section { margin:24px 0; scroll-margin-top:8px; }
+  h2 { margin:0 0 8px; color:var(--muted-foreground); font-size:14px; font-weight:500; letter-spacing:0; }
+  .card { padding:var(--pad); margin:0 0 10px; }
+  .card p { margin:0 0 10px; } .card p:last-child { margin-bottom:0; }
+  .items, .decisions, .note-list { list-style:none; margin:0; padding:0; }
+  .item { display:grid; grid-template-columns:26px minmax(0,1fr); gap:0 10px; overflow:hidden; }
+  .item, .decision { scroll-margin-top:8px; }
+  .num { flex:0 0 26px; height:26px; border-radius:50%; background:var(--secondary); color:var(--secondary-foreground); font-size:13px; font-weight:600; display:flex; align-items:center; justify-content:center; }
+  .body { flex:1; min-width:0; }
+  [data-note] { border-radius:4px; }
+  [data-note]:hover, .noting { background:var(--accent); }
+  .item > .drawing { position:relative; grid-column:1 / -1; margin:10px calc(-1 * var(--pad)) 0; }
+  .item > .drawing:last-child { margin-bottom:calc(-1 * var(--pad)); }
+  .drawing summary { display:flex; align-items:center; gap:6px; min-height:44px; padding:0 var(--pad); border-top:1px solid var(--border); color:var(--muted-foreground); font-size:14px; cursor:pointer; list-style:none; }
+  .drawing summary::-webkit-details-marker { display:none; }
+  .drawing summary::before { content:'\25B8'; display:inline-block; width:1em; }
+  .drawing[open] summary::before { transform:rotate(90deg); }
+  .drawing[open] .show, .drawing:not([open]) .hide { display:none; }
+  .drawing .count { color:var(--foreground); font-weight:600; }
+  .frame { overflow:auto; border-top:1px solid var(--border); background:var(--muted); touch-action:pan-y; }
+  .js .frame { overflow:hidden; cursor:zoom-in; }
+  .art { display:block; width:max-content; margin:0; padding:.6em .8em; font-size:13px; line-height:1.2; white-space:pre; overflow-wrap:normal; }
+  .art.pic { box-sizing:content-box; white-space:normal; --pele-bg:transparent; --pele-fg:var(--foreground); --pele-muted:var(--muted-foreground); --pele-line:var(--foreground); --pele-border:var(--ring); --pele-surface:var(--card); --pele-surface-alt:var(--muted); --pele-accent:var(--foreground); --pele-error:var(--destructive); --pele-critical:var(--destructive); }
+  .art.pic svg { display:block; width:100%; height:auto; }
+  /* A hand-drawn sketch: named colours become classes painted from the look; text inherits the page's ink and font at a fixed size. */
+  .art.sketch svg { fill:var(--foreground); font-family:system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size:13px; }
+  .art.sketch .f-bg { fill:var(--background); } .art.sketch .f-fg { fill:var(--foreground); } .art.sketch .f-muted { fill:var(--muted); } .art.sketch .f-subtle { fill:var(--muted-foreground); }
+  .art.sketch .f-line { fill:var(--border); } .art.sketch .f-card { fill:var(--card); } .art.sketch .f-danger { fill:var(--destructive); }
+  .art.sketch .s-bg { stroke:var(--background); } .art.sketch .s-fg { stroke:var(--foreground); } .art.sketch .s-muted { stroke:var(--muted); } .art.sketch .s-subtle { stroke:var(--muted-foreground); }
+  .art.sketch .s-line { stroke:var(--border); } .art.sketch .s-card { stroke:var(--card); } .art.sketch .s-danger { stroke:var(--destructive); }
+  /* A screen: the look's parts in em, so the kit's fit and zoom scale it; its controls sit in an inert box and never take a tap. */
+  .art.screen { line-height:1.4; } .art.screen:not([style]) { width:auto; max-width:49.2em; margin-right:1px; }
+  .art.screen .sk { pointer-events:none; user-select:none; } .art.screen .sk > * + * { margin-top:.6em; }
+  .art.screen :is(h3, h4, p, ul, ol) { margin:0; } .art.screen h3 { font-size:1.15em; } .art.screen h4, .art.screen small { font-size:.9em; }
+  .art.screen .card { margin:0; padding:1em; } .art.screen :is(button, .btn) { min-width:0; min-height:0; padding:.45em 1em; font-size:1em; } .art.screen .tag { margin:0; font-size:.85em; }
+  .art.screen :is(input:not([type=checkbox], [type=radio]), textarea, select, .field) { display:block; box-sizing:border-box; width:100%; padding:.45em .7em; }
+  .art.screen .skeleton { animation:none; min-height:1em; } .art.screen hr, .art.screen .sep { border:0; border-top:1px solid var(--border); margin:.6em 0; }
+  .art.screen .row { display:flex; align-items:center; flex-wrap:wrap; } .art.screen .col { display:flex; flex-direction:column; }
+  .art.screen .gap { gap:.6em; } .art.screen .grow { flex:1 1 0; min-width:0; } .art.screen .muted { margin:0; color:var(--muted-foreground); font-size:inherit; } .art.screen .danger { color:var(--destructive); }
+  .art.screen .sk-bar { display:block; height:.75em; border-radius:.375em; background:color-mix(in oklab, var(--muted-foreground) 25%, transparent); }
+  .art.screen .tbl, .art.screen table { width:100%; border-collapse:collapse; } .art.screen :is(th, td) { padding:.35em .6em; text-align:left; border-bottom:1px solid var(--border); }
+  /* Picture files: a wrapping row of labelled figures in em, so the fit and zoom scale them like a drawing; two sit side by side when they fit. */
+  .art.photo { width:49.2em; display:flex; flex-wrap:wrap; align-items:flex-start; gap:.8em; white-space:normal; line-height:1.3; }
+  .art.photo figure { flex:1 1 18em; min-width:0; margin:0; text-align:center; }
+  .art.photo img { display:block; width:100%; height:auto; max-height:40em; object-fit:contain; border:1px solid var(--border); border-radius:.4em; background:var(--background); }
+  .art.photo figcaption { margin-top:.3em; color:var(--muted-foreground); font-size:.95em; }
+  .shot { position:relative; display:block; } .art .pin.spot { position:absolute; margin:0; transform:translate(-50%, -50%); }
+  /* An ad: the card a feed or a story shows, in em like a picture; several sit side by side when they fit. */
+  .art.ads { width:auto; max-width:49.2em; margin-right:1px; }
+  .ad { flex:1 1 15em; max-width:20em; min-width:0; overflow:hidden; border:1px solid var(--border); border-radius:.6em; background:var(--card); color:var(--card-foreground); text-align:left; }
+  .ad .ad-account { margin:0; padding:.5em .7em; } .ad .ad-account span { color:var(--muted-foreground); font-size:.85em; }
+  .art.photo .ad img { max-height:none; aspect-ratio:4 / 5; object-fit:cover; border:0; border-radius:0; }
+  .ad-words { display:flex; flex-wrap:wrap; align-items:center; gap:.3em .6em; padding:.6em .7em; }
+  .ad-words .ad-text { flex:1 1 100%; margin:0; } .ad-words .ad-headline { flex:1 1 0; min-width:0; }
+  .ad-button { padding:.3em .8em; border-radius:.4em; background:var(--primary); color:var(--primary-foreground); font-size:.9em; }
+  .ad.story { position:relative; } .art.photo .ad.story img { aspect-ratio:9 / 16; }
+  .ad.story .ad-account { position:absolute; top:0; left:0; right:0; z-index:1; background:color-mix(in oklab, var(--background) 70%, transparent); }
+  .ad.story .ad-words { position:absolute; left:0; right:0; bottom:0; background:color-mix(in oklab, var(--background) 80%, transparent); }
+  .try { margin:8px 0 0; padding:0 var(--pad); }
+  .item > .verdict { grid-column:1 / -1; display:flex; align-items:center; gap:8px; margin-top:10px; }
+  .verdict button { min-width:64px; }
+  .note-list .group { margin:12px 0 6px; color:var(--muted-foreground); font-size:14px; font-weight:500; }
+  .item > .table { grid-column:1 / -1; margin:10px calc(-1 * var(--pad)) 0; overflow-x:auto; border-top:1px solid var(--border); }
+  .item > .table:last-child { margin-bottom:calc(-1 * var(--pad)); }
+  .tbl { width:100%; border-collapse:collapse; font-size:14px; }
+  .tbl th, .tbl td { padding:6px var(--pad); text-align:left; vertical-align:top; border-bottom:1px solid var(--border); }
+  .tbl th { color:var(--muted-foreground); font-weight:500; background:var(--muted); }
+  .tbl tbody tr:last-child td { border-bottom:0; }
+  .art .pin { min-width:1.8em; min-height:1.6em; margin-left:.4em; padding:0 .5em; border-radius:.8em; font-size:.85em; line-height:1.5em; }
+  .enlarge { position:absolute; top:6px; right:var(--pad); min-height:32px; padding:2px 10px; font-size:13px; }
+  .add { min-width:0; min-height:34px; margin-left:6px; padding:0 12px; border-radius:17px; box-shadow:none; color:var(--muted-foreground); font-size:13px; vertical-align:middle; }
+  .zoom { display:flex; align-items:center; gap:6px; }
+  .zoom .level { margin-right:auto; color:var(--muted-foreground); font-size:13px; }
+  #viewer { position:fixed; top:0; left:0; right:0; bottom:0; z-index:8; display:flex; flex-direction:column; background:var(--background); }
+  #viewer .zoom { flex:none; padding:calc(6px + env(safe-area-inset-top)) 12px 6px; border-bottom:1px solid var(--border); }
+  #viewer .vframe { flex:1; min-height:0; overflow:auto; background:var(--muted); touch-action:pan-x pan-y; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+  #viewer .vhint { flex:none; margin:0; padding:6px 12px calc(6px + env(safe-area-inset-bottom)); border-top:1px solid var(--border); color:var(--muted-foreground); font-size:13px; }
+  body.viewing { overflow:hidden; }
+  .meta { margin:0 0 4px !important; color:var(--muted-foreground); font-size:13px; }
+  .tag { margin-right:8px; vertical-align:1px; }
+  .tag.assumed { border-color:var(--border); border-style:dashed; background:transparent; color:var(--foreground); }
+  .tag.check { border-color:var(--foreground); border-style:dotted; background:transparent; color:var(--foreground); }
+  .hit { outline:3px solid var(--ring); outline-offset:3px; }
+  button { font-size:14px; min-width:40px; min-height:40px; padding:4px 12px; }
+  .pin { min-width:24px; min-height:24px; margin-left:6px; padding:0 7px; border-radius:12px; border-color:var(--primary); background:var(--primary); box-shadow:none; color:var(--primary-foreground); font:600 12px/22px system-ui, sans-serif; vertical-align:middle; }
+  .pin.draft { border-color:var(--foreground); border-style:dashed; background:var(--background); color:var(--foreground); }
+  .entry { display:block; width:100%; margin:0 0 8px; padding:8px 10px; text-align:left; font-weight:400; }
+  .entry .where { display:block; color:var(--muted-foreground); font-size:13px; }
+  .entry .tag { margin:0 0 0 6px; }
+  #chip { position:absolute; z-index:9; border-color:var(--input); box-shadow:var(--look-shadow-overlay); }
+  #editor { position:absolute; z-index:6; width:260px; padding:10px; background:var(--popover); color:var(--popover-foreground); border:1px solid var(--input); border-radius:calc(var(--radius) + 4px); box-shadow:var(--look-shadow-overlay); }
+  #editor.docked { position:fixed; left:0; right:0; bottom:0; width:auto; display:flex; flex-direction:column; overflow:auto; border-width:1px 0 0; border-radius:0; box-shadow:var(--look-shadow-up); padding:8px 12px max(8px, env(safe-area-inset-bottom)); }
+  #editor.docked .where { flex:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #editor.docked textarea { flex:1 1 auto; min-height:44px; }
+  #editor.docked .row { flex:none; }
+  #editor .where { margin:0 0 6px; color:var(--muted-foreground); font-size:13px; }
+  #editor .moved { margin:0 0 6px; font-size:13px; font-weight:600; }
+  #editor textarea { display:block; width:100%; min-height:76px; padding:6px 8px; font:16px/1.4 system-ui, sans-serif; resize:vertical; }
+  #editor .row { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .bar { position:fixed; left:0; right:0; bottom:0; z-index:4; display:grid; grid-template-columns:repeat(var(--cols, 1), minmax(0, 1fr)); align-items:stretch; gap:8px; padding:8px 12px calc(8px + env(safe-area-inset-bottom)); background:var(--background); border-top:1px solid var(--border); }
+  .bar > button, #ready > button { min-width:0; height:64px; padding:6px; white-space:normal; line-height:1.3; }
+  body.docked .bar, body.viewing .bar { display:none; }
+  body.read-only .bar, body.read-only .add, body.read-only .verdict, body.read-only .hint, body.read-only .vhint .note-it, body.read-only #chip, body.read-only .drop, body.read-only .files button { display:none; }
+  #ready { display:contents; }
+  #ready-confirm { position:absolute; right:12px; bottom:calc(100% + 8px); width:272px; max-width:calc(100vw - 24px); max-height:calc(100dvh - var(--bar, 76px) - 24px); overflow:auto; padding:12px; background:var(--popover); color:var(--popover-foreground); border:1px solid var(--border); border-radius:calc(var(--radius) + 4px); box-shadow:var(--look-shadow-lg); }
+  #ready-confirm .row { display:flex; gap:8px; margin-top:10px; }
+  #ready-confirm button { flex:1; min-height:44px; }
+  #ready-confirm p { margin:0; font-size:14px; }
+  #ready-says { position:absolute; right:12px; bottom:calc(100% + 8px); max-width:calc(100vw - 24px); margin:0; padding:8px 12px; background:var(--popover); color:var(--popover-foreground); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--look-shadow-lg); font-size:14px; font-weight:500; pointer-events:none; }
+  .bar:has(#ready-confirm:not([hidden])) #ready-says { bottom:calc(100% + 16px + var(--choices, 0px)); }
+  .spinner { display:inline-block; width:14px; height:14px; margin-right:6px; vertical-align:-2px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @media (prefers-reduced-motion:reduce) { .spinner { animation:none; } }
+  .session, #editor .copies { color:var(--muted-foreground); font-size:13px; }
+  #editor .copies { flex:none; margin:6px 0 0; }
+  .pin.sent { background:var(--background); color:var(--foreground); }
+  #toast { position:fixed; left:50%; bottom:calc(var(--bar, 76px) - 4px); z-index:7; max-width:90vw; transform:translateX(-50%); padding:8px 14px; border-radius:var(--radius); background:var(--primary); color:var(--primary-foreground); box-shadow:var(--look-shadow-lg); font-size:14px; opacity:0; pointer-events:none; transition:opacity .2s; }
+  #toast.show { opacity:1; }
+  #copybuf { position:fixed; left:0; top:0; width:1px; height:1px; opacity:0; pointer-events:none; }
+  /* Live cards, forms, files, and the needs list: the look's parts, with inputs at 16px so a phone never zooms. */
+  .item > .live, .item > .form { grid-column:1 / -1; margin-top:10px; min-width:0; }
+  .live-tools { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 6px; }
+  .live-tools [aria-pressed="true"] { background:var(--secondary); color:var(--secondary-foreground); }
+  .live-box { overflow:hidden; border:1px solid var(--border); border-radius:var(--radius); background:var(--muted); }
+  .live iframe { display:block; border:0; transform-origin:0 0; background:var(--background); }
+  .live.full { position:fixed; top:0; left:0; right:0; bottom:0; z-index:8; display:flex; flex-direction:column; margin:0; padding:calc(6px + env(safe-area-inset-top)) 12px 6px; background:var(--background); }
+  .live.full .live-box { flex:1; min-height:0; overflow:auto; }
+  .live.full iframe { margin:0 auto; }
+  .live-said { margin:6px 0 0; }
+  .form { display:grid; gap:14px; }
+  .need .form { margin-top:10px; }
+  .q { min-width:0; margin:0; padding:0; border:0; }
+  .q-label { display:block; margin:0 0 4px !important; font-weight:500; }
+  .q :is(input:not([type=checkbox], [type=radio], [type=file]), textarea) { display:block; width:100%; padding:8px 10px; font:inherit; font-size:16px; }
+  .opt { display:flex; align-items:center; gap:8px; min-height:40px; }
+  .opt input { width:20px; height:20px; margin:0; }
+  .drop { position:relative; display:flex; align-items:center; justify-content:center; min-height:64px; padding:12px; border:1px dashed var(--input); border-radius:var(--radius); text-align:center; cursor:pointer; }
+  .drop.over, .drop:focus-within { border-color:var(--ring); background:var(--accent); }
+  .drop input { position:absolute; width:1px; height:1px; opacity:0; }
+  .files { list-style:none; margin:6px 0 0; padding:0; }
+  .files li { display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size:14px; }
+  .files .why { color:var(--destructive); }
+  .needs { list-style:none; margin:0; padding:0; }
+  .need { scroll-margin-top:8px; }
+  @media (min-width:701px) {
+    body { --pad:16px; font-size:20px; }
+    h1 { font-size:30px; }
+    .eyebrow, h2, .hint, .muted, .num, .drawing summary, .add, .meta, .entry .where, #editor .where, #editor .moved, .session, #editor .copies, #ready-confirm p, #ready-says { font-size:16px; }
+    button { font-size:18px; }
+    .entry { font-size:20px; }
+    .bar { padding-left:max(12px, calc((100vw - 700px) / 2 + 12px)); padding-right:max(12px, calc((100vw - 700px) / 2 + 12px)); }
+    .bar > button, #ready > button { height:44px; }
+    #ready-confirm, #ready-says { right:max(12px, calc((100vw - 700px) / 2 + 12px)); }
+    #ready-confirm { width:320px; }
+  }
+</style>
+<script>
+// The light and dark switch outside the app: inlined in the review page's <head>, served to private pages as /theme.js.
+// It applies the saved choice before paint, then adds the button; storage that is off still switches, unremembered.
+(function () {
+  var KEY = 'wongstack-theme';
+  var SVG = 'http://www.w3.org/2000/svg';
+  // lucide's moon and sun. The icon shows the look a tap switches to.
+  var ICONS = {
+    moon: [['path', { d: 'M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z' }]],
+    sun: [['circle', { cx: '12', cy: '12', r: '4' }]].concat(['M12 2v2', 'M12 20v2', 'm4.93 4.93 1.41 1.41', 'm17.66 17.66 1.41 1.41', 'M2 12h2', 'M20 12h2', 'm6.34 17.66-1.41 1.41', 'm19.07 4.93-1.41 1.41'].map(function (d) { return ['path', { d: d }]; })),
+  };
+  var root = document.documentElement;
+  var saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) { saved = null; }
+  root.classList.toggle('dark', saved === 'dark');
+
+  function icon(name) {
+    var svg = document.createElementNS(SVG, 'svg');
+    var attrs = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' };
+    Object.keys(attrs).forEach(function (k) { svg.setAttribute(k, attrs[k]); });
+    ICONS[name].forEach(function (part) {
+      var el = document.createElementNS(SVG, part[0]);
+      Object.keys(part[1]).forEach(function (k) { el.setAttribute(k, part[1][k]); });
+      svg.appendChild(el);
+    });
+    return svg;
+  }
+
+  function draw(button) {
+    var dark = root.classList.contains('dark');
+    button.setAttribute('aria-label', dark ? 'Switch to light' : 'Switch to dark');
+    button.setAttribute('aria-pressed', dark ? 'true' : 'false');
+    button.textContent = '';
+    button.appendChild(icon(dark ? 'sun' : 'moon'));
+  }
+
+  function mount() {
+    if (!document.body || document.querySelector('.theme-toggle')) return;
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'theme-toggle';
+    draw(button);
+    button.addEventListener('click', function () {
+      var dark = !root.classList.contains('dark');
+      root.classList.toggle('dark', dark);
+      try { localStorage.setItem(KEY, dark ? 'dark' : 'light'); } catch (e) { /* switched, not remembered */ }
+      draw(button);
+    });
+    var slot = document.querySelector('[data-theme-toggle]');
+    if (slot) slot.appendChild(button);
+    else document.body.insertBefore(button, document.body.firstChild);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
+  else mount();
+})();
+</script>
+</head>
+<body data-change="relay-everything-brand" data-own-back>
+<main>
+<header>
+  <p class="eyebrow">Review</p>
+  <h1>relay-everything-brand</h1>
+  <p class="muted"><span class="note-count">0 notes</span></p>
+  <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
+  <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
+  <p id="script-error" role="alert" hidden></p>
+</header>
+<section id="why" aria-labelledby="why-h"><h2 id="why-h">Why</h2>
+<div class="card">
+<p data-note="why-1" tabindex="0">The phone app wears Flutter's stock purple-blue, and the website's logo is a ring, which no longer fits: the app comes first, not the ring. Before we clean up the notes screen and the other screens, Relay Everything needs one look to clean them up toward: a logo, colors, type and a few rules that every screen follows.</p>
+</div></section>
+<section id="changes" aria-labelledby="changes-h"><h2 id="changes-h">What Changes</h2>
+<ol class="items">
+<li class="item card" id="item-1"><span class="num">1</span><div class="body"><div class="text" data-note="item-1" tabindex="0"><b>A brand board you can tap through.</b> It shows five takes on a capital R, each with a relay or a circuit in it: <i>Relay R</i> (the leg is a relay switch), <i>Trace R</i> (routed like a circuit board), <i>Rooted R</i> (three pins join into the stem), <i>Signal R</i> (the bowl sends out waves) and <i>Bolt R</i> (the leg is a bolt of current). Small spark pulses run along the wires. It also shows three color sets (<i>Emerald</i>, a deep green; <i>Signal</i>; <i>Volt</i>), the app icon, the type and the rules for every screen. Tap a logo and a color set: the whole board changes, and your pick comes back with your notes. Tap <i>Dark</i> to see the dark colors.</div></div><div class="live" data-live="item-1-live-1" data-height="1600"><div class="live-box"><iframe sandbox="allow-scripts" title="Live card 1" srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+&lt;head&gt;&lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'; form-action 'none'; frame-src 'none'; base-uri 'none'&quot;&gt;&lt;script&gt;(function(){var port=null,last=null;addEventListener(&quot;message&quot;,function(e){var m=e.data;if(e.source!==parent||!m||m.type!==&quot;review:hello&quot;||!e.ports||!e.ports[0])return;port=e.ports[0];if(last!==null)port.postMessage({type:&quot;review:answer&quot;,text:last});});window.review={answer:function(text){last=String(text);if(port)port.postMessage({type:&quot;review:answer&quot;,text:last});}};}());&lt;/script&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
+&lt;title&gt;Relay Everything brand&lt;/title&gt;
+&lt;style&gt;
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Inter, -apple-system, &quot;Segoe UI&quot;, system-ui, sans-serif; background: var(--paper); color: var(--ink); }
+  main { max-width: 960px; margin: 0 auto; padding: 0 16px 48px; }
+  .hero { position: relative; overflow: hidden; border-radius: 0 0 28px 28px; padding: 28px 20px 32px; margin: 0 -16px;
+    background: radial-gradient(120% 90% at 85% 0%, var(--accent-soft) 0%, transparent 60%), radial-gradient(80% 80% at 0% 100%, var(--spark-soft) 0%, transparent 55%), var(--paper); }
+  .hero .lockup { font-size: 30px; gap: 14px; }
+  .tagline { font-size: 17px; margin-top: 12px; max-width: 30em; }
+  h2 { font-size: 13px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 40px 0 12px; }
+  p { margin: 0 0 8px; line-height: 1.5; }
+  .muted { color: var(--muted); }
+  .bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .grow { flex: 1; }
+  button { font: inherit; border: 0; border-radius: 12px; padding: 10px 16px; cursor: pointer; }
+  .primary { background: var(--accent); color: var(--on-accent); font-weight: 650; }
+  .quiet { background: var(--card); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .tile { background: var(--card); border-radius: 16px; padding: 18px; }
+  .logo { display: flex; flex-direction: column; gap: 14px; align-items: flex-start; box-shadow: inset 0 0 0 2px transparent; }
+  .logo.picked, .pal.picked { box-shadow: inset 0 0 0 2px var(--accent-text); }
+  .lockup { display: flex; align-items: center; gap: 10px; font-size: 19px; font-weight: 700; letter-spacing: -0.02em; }
+  .mark { color: var(--accent-text); display: inline-flex; }
+  .pulse { stroke: var(--spark); }
+  .sparkfill { fill: var(--spark); }
+  .sparkline { stroke: var(--spark); }
+  .icons { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
+  .icon { width: 72px; height: 72px; border-radius: 17px; background: var(--icon-bg); color: var(--icon-fg); display: grid; place-items: center; }
+  .icon.small { width: 44px; height: 44px; border-radius: 10px; }
+  .pal { display: flex; flex-direction: column; gap: 10px; cursor: pointer; }
+  .chips { display: flex; gap: 6px; }
+  .chips span { width: 28px; height: 28px; border-radius: 8px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+  .swatch { border-radius: 12px; padding: 14px; min-height: 76px; display: flex; flex-direction: column; justify-content: flex-end; font-size: 13px; }
+  .swatch b { font-weight: 650; }
+  .phone { width: 360px; max-width: 100%; background: var(--paper); border-radius: 30px; box-shadow: 0 0 0 1px var(--line), 0 20px 40px -20px rgba(0,0,0,.25); overflow: hidden; }
+  .appbar { display: flex; align-items: center; gap: 8px; padding: 18px 16px 8px; }
+  .appbar .title { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+  .chip { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; font-weight: 550; color: var(--ink); padding: 6px 10px; border-radius: 999px; background: var(--card); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 var(--accent); animation: beat 2s infinite; }
+  @keyframes beat { 0% { box-shadow: 0 0 0 0 var(--accent); } 70% { box-shadow: 0 0 0 6px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+  .list { padding: 8px 12px 0; display: flex; flex-direction: column; gap: 8px; }
+  .note { background: var(--card); border-radius: 16px; padding: 14px; }
+  .note p { font-size: 16px; margin-bottom: 6px; }
+  .meta { font-size: 13px; color: var(--muted); }
+  .kind { font-size: 12px; font-weight: 650; color: var(--accent-text); background: var(--accent-soft); padding: 3px 9px; border-radius: 999px; }
+  .kind.voice { color: var(--on-spark); background: var(--spark); }
+  .fabs { display: flex; justify-content: flex-end; gap: 10px; padding: 24px 16px 20px; }
+  .fabs .quiet { border-radius: 999px; }
+  .fabs .primary { border-radius: 999px; box-shadow: 0 6px 16px -4px var(--accent); }
+  .answer { margin-top: 12px; font-size: 14px; }
+  .rule { background: var(--card); border-radius: 12px; padding: 12px 14px; }
+  .rule b { display: block; margin-bottom: 2px; }
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;main&gt;
+  &lt;div class=&quot;hero&quot;&gt;
+    &lt;div class=&quot;bar&quot;&gt;
+      &lt;span class=&quot;grow&quot;&gt;&lt;/span&gt;
+      &lt;button class=&quot;quiet&quot; id=&quot;mode&quot;&gt;Dark&lt;/button&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;lockup&quot; style=&quot;margin-top:8px&quot;&gt;&lt;span class=&quot;mark&quot; id=&quot;heromark&quot;&gt;&lt;/span&gt;Relay Everything&lt;/div&gt;
+    &lt;p class=&quot;tagline&quot;&gt;Everything you have, passed on to your AI. Small pulses run along the R's wires.&lt;/p&gt;
+  &lt;/div&gt;
+
+  &lt;h2&gt;1 · Pick a logo&lt;/h2&gt;
+  &lt;p class=&quot;muted&quot;&gt;Five takes on a capital R, each with a relay or a circuit in it. Tap a logo to pick it.&lt;/p&gt;
+  &lt;div class=&quot;grid&quot; id=&quot;logos&quot;&gt;&lt;/div&gt;
+
+  &lt;h2&gt;2 · Pick the colors&lt;/h2&gt;
+  &lt;p class=&quot;muted&quot;&gt;Each set has one bright main color and one small spark color. Tap a set; the whole board changes.&lt;/p&gt;
+  &lt;div class=&quot;grid&quot; id=&quot;palettes&quot;&gt;&lt;/div&gt;
+  &lt;p class=&quot;answer muted&quot; id=&quot;picked&quot;&gt;&lt;/p&gt;
+
+  &lt;h2&gt;3 · App icon&lt;/h2&gt;
+  &lt;div class=&quot;tile&quot;&gt;
+    &lt;div class=&quot;icons&quot; id=&quot;icons&quot;&gt;&lt;/div&gt;
+    &lt;p class=&quot;muted&quot; style=&quot;margin-top:12px&quot;&gt;The same icon on iPhone, Android and the website tab. The icon stays still; the pulse is for the board and, later, the app's &lt;i&gt;Syncing&lt;/i&gt; state.&lt;/p&gt;
+  &lt;/div&gt;
+
+  &lt;h2&gt;4 · Colors in this set&lt;/h2&gt;
+  &lt;div class=&quot;grid&quot;&gt;
+    &lt;div class=&quot;swatch&quot; style=&quot;background:var(--accent);color:var(--on-accent)&quot;&gt;&lt;b&gt;Main color&lt;/b&gt;&lt;span data-hex=&quot;accent&quot;&gt;&lt;/span&gt;&lt;/div&gt;
+    &lt;div class=&quot;swatch&quot; style=&quot;background:var(--spark);color:var(--on-spark)&quot;&gt;&lt;b&gt;Spark&lt;/b&gt;&lt;span data-hex=&quot;spark&quot;&gt;&lt;/span&gt;&lt;/div&gt;
+    &lt;div class=&quot;swatch&quot; style=&quot;background:var(--accent-soft);color:var(--accent-text)&quot;&gt;&lt;b&gt;Soft&lt;/b&gt;&lt;span data-hex=&quot;accent-soft&quot;&gt;&lt;/span&gt;&lt;/div&gt;
+    &lt;div class=&quot;swatch&quot; style=&quot;background:var(--ink);color:var(--paper)&quot;&gt;&lt;b&gt;Ink&lt;/b&gt;&lt;span data-hex=&quot;ink&quot;&gt;&lt;/span&gt;&lt;/div&gt;
+    &lt;div class=&quot;swatch&quot; style=&quot;background:var(--paper);box-shadow:inset 0 0 0 1px var(--line)&quot;&gt;&lt;b&gt;Paper&lt;/b&gt;&lt;span class=&quot;muted&quot; data-hex=&quot;paper&quot;&gt;&lt;/span&gt;&lt;/div&gt;
+    &lt;div class=&quot;swatch&quot; style=&quot;background:var(--card);box-shadow:inset 0 0 0 1px var(--line)&quot;&gt;&lt;b&gt;Card&lt;/b&gt;&lt;span class=&quot;muted&quot; data-hex=&quot;card&quot;&gt;&lt;/span&gt;&lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;h2&gt;5 · Type&lt;/h2&gt;
+  &lt;div class=&quot;tile&quot;&gt;
+    &lt;div style=&quot;font-size:28px;font-weight:700;letter-spacing:-0.02em;margin-bottom:10px&quot;&gt;Title 28 · Your notes&lt;/div&gt;
+    &lt;div style=&quot;font-size:20px;font-weight:650;margin-bottom:10px&quot;&gt;Heading 20 · Today&lt;/div&gt;
+    &lt;div style=&quot;font-size:16px;margin-bottom:10px&quot;&gt;Body 16 · Call the dentist about Thursday.&lt;/div&gt;
+    &lt;div style=&quot;font-size:13px&quot; class=&quot;muted&quot;&gt;Small 13 · 9:41 · Sent&lt;/div&gt;
+    &lt;p class=&quot;muted&quot; style=&quot;margin-top:12px&quot;&gt;Inter, one family, set a little tighter and bolder in titles.&lt;/p&gt;
+  &lt;/div&gt;
+
+  &lt;h2&gt;6 · Today's notes screen, in the new look&lt;/h2&gt;
+  &lt;p class=&quot;muted&quot;&gt;Only colors, type and the logo change here. The second plan cleans up the layout.&lt;/p&gt;
+  &lt;div class=&quot;phone&quot;&gt;
+    &lt;div class=&quot;appbar&quot;&gt;
+      &lt;span class=&quot;mark&quot; id=&quot;appmark&quot;&gt;&lt;/span&gt;
+      &lt;span class=&quot;title grow&quot;&gt;Relay Everything&lt;/span&gt;
+      &lt;span class=&quot;chip&quot;&gt;&lt;span class=&quot;dot&quot;&gt;&lt;/span&gt;Synced&lt;/span&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;list&quot;&gt;
+      &lt;div class=&quot;note&quot;&gt;
+        &lt;div class=&quot;bar&quot; style=&quot;margin-bottom:8px&quot;&gt;&lt;span class=&quot;kind voice&quot;&gt;Voice&lt;/span&gt;&lt;/div&gt;
+        &lt;p&gt;Ask Sam if the trip moves to the 14th, and book the train after.&lt;/p&gt;
+        &lt;div class=&quot;meta&quot;&gt;9:41 · 0:12 · Sent&lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;note&quot;&gt;
+        &lt;div class=&quot;bar&quot; style=&quot;margin-bottom:8px&quot;&gt;&lt;span class=&quot;kind&quot;&gt;Typed&lt;/span&gt;&lt;/div&gt;
+        &lt;p&gt;Paint colours for the hall: the warm grey, not the blue.&lt;/p&gt;
+        &lt;div class=&quot;meta&quot;&gt;Yesterday, 18:05 · Waiting to send&lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;fabs&quot;&gt;
+      &lt;button class=&quot;quiet&quot;&gt;Hold to talk&lt;/button&gt;
+      &lt;button class=&quot;primary&quot;&gt;New note&lt;/button&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;h2&gt;7 · Rules for every screen&lt;/h2&gt;
+  &lt;div class=&quot;grid&quot;&gt;
+    &lt;div class=&quot;rule&quot;&gt;&lt;b&gt;One bright thing&lt;/b&gt;&lt;span class=&quot;muted&quot;&gt;The main color marks the one main action. The spark is for small live moments: recording, a new item.&lt;/span&gt;&lt;/div&gt;
+    &lt;div class=&quot;rule&quot;&gt;&lt;b&gt;Cards, no borders&lt;/b&gt;&lt;span class=&quot;muted&quot;&gt;A card is a lighter shape on paper. No box inside a box.&lt;/span&gt;&lt;/div&gt;
+    &lt;div class=&quot;rule&quot;&gt;&lt;b&gt;Words with every color&lt;/b&gt;&lt;span class=&quot;muted&quot;&gt;A state says its name: Synced, Waiting, Off. Color alone never.&lt;/span&gt;&lt;/div&gt;
+    &lt;div class=&quot;rule&quot;&gt;&lt;b&gt;Soft corners&lt;/b&gt;&lt;span class=&quot;muted&quot;&gt;12 px on buttons and fields, 16 on cards.&lt;/span&gt;&lt;/div&gt;
+  &lt;/div&gt;
+&lt;/main&gt;
+&lt;script&gt;
+  // Each mark: its wires (where the spark pulses run) and the rest of its drawing.
+  const converge = (end) =&gt; ['M4 11c9 0 12 13 ' + (end - 4) + ' 13', 'M4 24h' + (end - 4), 'M4 37c9 0 12-13 ' + (end - 4) + '-13'];
+  const dot = (x, y, r) =&gt; '&lt;circle cx=&quot;' + x + '&quot; cy=&quot;' + y + '&quot; r=&quot;' + r + '&quot; fill=&quot;currentColor&quot; stroke=&quot;none&quot;/&gt;';
+  const spark = (x, y) =&gt; '&lt;path class=&quot;sparkfill&quot; stroke=&quot;none&quot; d=&quot;M' + x + ' ' + (y - 4.5) + 'l1.2 3 3 1.2-3 1.2-1.2 3-1.2-3-3-1.2 3-1.2z&quot;/&gt;';
+  const stem = 'M13 42V7';
+  const bowl = 'M13 7h11a8.5 8.5 0 0 1 0 17H13';
+  const leg = 'M22 24l11 17';
+  const marks = {
+    'Relay R': {
+      note: 'The leg is a relay switch: its arm swings toward the contact, with a spark.',
+      wires: [stem, bowl],
+      body: dot(23, 24, 3.2) + '&lt;path d=&quot;M23 24 31 36&quot;/&gt;' + dot(36, 41, 4) + spark(38, 31),
+    },
+    'Trace R': {
+      note: 'An R routed like a circuit board: straight traces, 45-degree corners, a pad at each end.',
+      wires: ['M13 40V7', 'M13 7h10l7 7v3l-7 7H13', 'M21 24l10 10v5'],
+      body: dot(13, 41, 3.6) + dot(31, 40, 3.6),
+    },
+    'Rooted R': {
+      note: 'Three pins join into the stem: everything flows into one R.',
+      wires: ['M6 44v-2l7-7', 'M13 44V7', 'M20 44v-2l-7-7', bowl, leg],
+      body: dot(6, 44, 2.6) + dot(13, 44, 2.6) + dot(20, 44, 2.6),
+    },
+    'Signal R': {
+      note: 'The bowl of the R sends out signal waves, like a relay tower.',
+      wires: [stem, bowl, leg],
+      body: '&lt;path class=&quot;sparkline&quot; d=&quot;M35.1 6.2a14.5 14.5 0 0 1 0 18.6&quot;/&gt;&lt;path class=&quot;sparkline&quot; d=&quot;M39.7 2.3a20.5 20.5 0 0 1 0 26.4&quot;/&gt;',
+    },
+    'Bolt R': {
+      note: 'The leg is a bolt of current.',
+      wires: [stem, bowl],
+      body: '&lt;path class=&quot;sparkline&quot; d=&quot;M22 24l6 9h-4l8 9&quot;/&gt;',
+    },
+  };
+  const markSvg = (name, live) =&gt; {
+    const m = marks[name];
+    const pulses = live ? m.wires.map((d, i) =&gt; '&lt;path class=&quot;pulse&quot; d=&quot;' + d + '&quot; stroke-dasharray=&quot;3 44&quot; stroke-width=&quot;4.5&quot;&gt;&lt;animate attributeName=&quot;stroke-dashoffset&quot; from=&quot;47&quot; to=&quot;0&quot; dur=&quot;1.8s&quot; begin=&quot;' + (i * 0.6) + 's&quot; repeatCount=&quot;indefinite&quot;/&gt;&lt;/path&gt;').join('') : '';
+    return '&lt;svg viewBox=&quot;0 0 48 48&quot; width=&quot;SIZE&quot; height=&quot;SIZE&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;4&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot;&gt;' +
+      m.wires.map((d) =&gt; '&lt;path d=&quot;' + d + '&quot;/&gt;').join('') + m.body + pulses + '&lt;/svg&gt;';
+  };
+  const palettes = {
+    Emerald: {
+      note: 'A deep, rich green with an amber spark. Alive, not loud.',
+      light: { paper: '#F7F8F4', card: '#FFFFFF', line: '#E3E6DF', ink: '#121614', muted: '#5E6660', accent: '#0E7A5A', 'on-accent': '#FFFFFF', 'accent-text': '#0E7A5A', 'accent-soft': '#E1F2EA', spark: '#F5A524', 'on-spark': '#121614', 'spark-soft': '#FDF0D6' },
+      dark: { paper: '#0C110F', card: '#161D1A', line: '#26302B', ink: '#ECF3EE', muted: '#9AA8A0', accent: '#4CC79A', 'on-accent': '#06281A', 'accent-text': '#4CC79A', 'accent-soft': '#133328', spark: '#FFC24D', 'on-spark': '#121614', 'spark-soft': '#33280F' },
+    },
+    Signal: {
+      note: 'Bright cyan, coral spark.',
+      light: { paper: '#F6F8FA', card: '#FFFFFF', line: '#E1E6EB', ink: '#0F1720', muted: '#5A6573', accent: '#00B8D9', 'on-accent': '#042B33', 'accent-text': '#00728A', 'accent-soft': '#D9F6FC', spark: '#FF6B3D', 'on-spark': '#0F1720', 'spark-soft': '#FFE4DA' },
+      dark: { paper: '#0A1016', card: '#131B23', line: '#233041', ink: '#EAF2F8', muted: '#96A4B3', accent: '#22D3EE', 'on-accent': '#04242B', 'accent-text': '#5BE3F5', 'accent-soft': '#0E3442', spark: '#FF8A5C', 'on-spark': '#0F1720', 'spark-soft': '#3A1D12' },
+    },
+    Volt: {
+      note: 'Electric violet, lime spark.',
+      light: { paper: '#F7F6FB', card: '#FFFFFF', line: '#E4E1EE', ink: '#15121F', muted: '#625D70', accent: '#6D4AFF', 'on-accent': '#FFFFFF', 'accent-text': '#5634E0', 'accent-soft': '#ECE7FF', spark: '#C6F432', 'on-spark': '#15121F', 'spark-soft': '#F1FCCB' },
+      dark: { paper: '#0E0C15', card: '#18151F', line: '#2B2638', ink: '#EFEDF6', muted: '#A29DB3', accent: '#8C72FF', 'on-accent': '#0E0C15', 'accent-text': '#B4A3FF', 'accent-soft': '#2A2150', spark: '#D4FF4F', 'on-spark': '#15121F', 'spark-soft': '#2A3310' },
+    },
+  };
+  let logo = 'Signal R';
+  let palette = 'Emerald';
+  let dark = false;
+  const svg = (name, size, live) =&gt; markSvg(name, live).replace(/SIZE/g, size);
+
+  function send() {
+    document.getElementById('picked').textContent = 'Picked: ' + logo + ' logo, ' + palette + ' colors.';
+    if (window.review) window.review.answer('Logo: ' + logo + '; Colors: ' + palette);
+  }
+
+  function draw() {
+    const set = palettes[palette][dark ? 'dark' : 'light'];
+    for (const [key, value] of Object.entries(set)) document.body.style.setProperty('--' + key, value);
+    document.body.style.setProperty('--icon-bg', palettes[palette].light.accent);
+    document.body.style.setProperty('--icon-fg', palettes[palette].light['on-accent']);
+
+    const logos = document.getElementById('logos');
+    logos.innerHTML = '';
+    for (const name of Object.keys(marks)) {
+      const tile = document.createElement('div');
+      tile.className = 'tile logo' + (name === logo ? ' picked' : '');
+      tile.innerHTML = '&lt;span class=&quot;mark&quot;&gt;' + svg(name, 72, true) + '&lt;/span&gt;&lt;div class=&quot;lockup&quot;&gt;&lt;span class=&quot;mark&quot;&gt;' + svg(name, 24, false) + '&lt;/span&gt;Relay Everything&lt;/div&gt;' +
+        '&lt;div&gt;&lt;b&gt;' + name + (name === logo ? ' · picked' : '') + '&lt;/b&gt;&lt;div class=&quot;muted&quot;&gt;' + marks[name].note + '&lt;/div&gt;&lt;/div&gt;';
+      tile.onclick = () =&gt; { logo = name; send(); draw(); };
+      logos.appendChild(tile);
+    }
+
+    const pals = document.getElementById('palettes');
+    pals.innerHTML = '';
+    for (const name of Object.keys(palettes)) {
+      const p = palettes[name][dark ? 'dark' : 'light'];
+      const tile = document.createElement('div');
+      tile.className = 'tile pal' + (name === palette ? ' picked' : '');
+      tile.innerHTML = '&lt;div class=&quot;chips&quot;&gt;&lt;span style=&quot;background:' + p.accent + '&quot;&gt;&lt;/span&gt;&lt;span style=&quot;background:' + p.spark + '&quot;&gt;&lt;/span&gt;&lt;span style=&quot;background:' + p.ink + '&quot;&gt;&lt;/span&gt;&lt;span style=&quot;background:' + p.paper + '&quot;&gt;&lt;/span&gt;&lt;/div&gt;' +
+        '&lt;div&gt;&lt;b&gt;' + name + (name === palette ? ' · picked' : '') + '&lt;/b&gt;&lt;div class=&quot;muted&quot;&gt;' + palettes[name].note + '&lt;/div&gt;&lt;/div&gt;';
+      tile.onclick = () =&gt; { palette = name; send(); draw(); };
+      pals.appendChild(tile);
+    }
+
+    document.getElementById('heromark').innerHTML = svg(logo, 56, true);
+    document.getElementById('appmark').innerHTML = svg(logo, 28, false);
+    document.getElementById('icons').innerHTML = '&lt;div class=&quot;icon&quot;&gt;' + svg(logo, 46, false) + '&lt;/div&gt;&lt;div class=&quot;icon small&quot;&gt;' + svg(logo, 28, false) + '&lt;/div&gt;';
+    for (const el of document.querySelectorAll('[data-hex]')) el.textContent = set[el.dataset.hex];
+  }
+
+  document.getElementById('mode').onclick = (event) =&gt; {
+    dark = !dark;
+    event.target.textContent = dark ? 'Light' : 'Dark';
+    draw();
+  };
+  send();
+  draw();
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+"></iframe></div></div></li>
+<li class="item card" id="item-2"><span class="num">2</span><div class="body"><div class="text" data-note="item-2" tabindex="0"><b>The app wears the brand.</b> Clean paper white and ink in place of the purple tint. The main color goes on the one main action, such as <i>New note</i>, with a soft glow. The spark color marks small live moments, such as a voice note or recording. The app gets the Inter font and the logo beside the name at the top. Dark mode gets its own deep colors, where the main color glows. The Android share card uses the same look; the iPhone share sheet keeps the phone's own look for now. The layout of each screen stays as it is: the next plan cleans it up. Section 6 of the board shows the notes screen after. These are today's screens from the last iPhone check. The <i>After</i> is the board's section 6, because the phone app does not run in the plan's preview.</div></div><details class="drawing" open><summary><span class="show">Show picture</span><span class="hide">Hide picture</span><span class="count"></span></summary><div class="frame"><div class="art photo" data-note="item-2-picture-1" tabindex="0"><figure><img src="data:image/webp;base64,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4xa7dfzRukFVq1oOYMeU7H+Whe+Ldd5j13xT5qQvCuWYgYsHggFr44Sbxlt/LawvvCcFvm6og+eVPemLLWC26zK/r0XZ9nqOeDWzndlEuoW+3bJ35BGXzML3BYMbeRkG40eYX7Wa1Vfjs7TXJWxddwzai78dkkHbDSZgrYPuFKRY1PG7teNfAVquEzwMHv9CmsDge2AM5bApEuWovrvVpX6NwzQfmMQfcFQP4pbhHUeDueMRwT5pYqgmo9thAAOrIqmEh8H37ZaBAiMF9c/0CY3NScKQ6FPLgqu05Mm7Oa/jR/dW+IVosXKGN17S6sV6l58ileqTHMr3QBDWHk3utykH48JrjacGRz0oJoG1NlWz1IDujq4Wn8anoaSKw7iKH2C50b0hziIDDnqjgL0Ne7RX1p7mdPPQwx4xZbyO3SpHWL6TQQSflGVq8OpwKwUKd5ia9nNFLhZotKzDiBg1M9wPsiw0WjzS00blp9zCXoXJ3QnPSYWJ8vqm5l75CMQlvy3L5jEpyy223gcRVLTyZzVxBUbNSfI/Dne10I2tg5k+edq9LEobAXL3+5A6Sm4PwWYD87D44zMQAztU3cRogWAqKrg4nb36i1aGPiRYv457guGc8eR+X4kaYabKyskIMNEgAAAAAABFWElGegAAAE1NACoAAAAIAAMBDgACAAAACwAAADIBEgADAAAAAQABAACHaQAEAAAAAQAAAD4AAAAAU2NyZWVuc2hvdAAAAAOShgAHAAAAEgAAAGigAgAEAAAAAQAABLagAwAEAAAAAQAACj4AAAAAQVNDSUkAAABTY3JlZW5zaG90WE1QII0CAAA8eDp4bXBtZXRhIHhtbG5zOng9ImFkb2JlOm5zOm1ldGEvIiB4OnhtcHRrPSJYTVAgQ29yZSA2LjAuMCI+CiAgIDxyZGY6UkRGIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyI+CiAgICAgIDxyZGY6RGVzY3JpcHRpb24gcmRmOmFib3V0PSIiCiAgICAgICAgICAgIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIKICAgICAgICAgICAgeG1sbnM6dGlmZj0iaHR0cDovL25zLmFkb2JlLmNvbS90aWZmLzEuMC8iCiAgICAgICAgICAgIHhtbG5zOmV4aWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vZXhpZi8xLjAvIj4KICAgICAgICAgPGRjOmRlc2NyaXB0aW9uPgogICAgICAgICAgICA8cmRmOkFsdD4KICAgICAgICAgICAgICAgPHJkZjpsaSB4bWw6bGFuZz0ieC1kZWZhdWx0Ij5TY3JlZW5zaG90PC9yZGY6bGk+CiAgICAgICAgICAgIDwvcmRmOkFsdD4KICAgICAgICAgPC9kYzpkZXNjcmlwdGlvbj4KICAgICAgICAgPHRpZmY6T3JpZW50YXRpb24+MTwvdGlmZjpPcmllbnRhdGlvbj4KICAgICAgICAgPGV4aWY6VXNlckNvbW1lbnQ+U2NyZWVuc2hvdDwvZXhpZjpVc2VyQ29tbWVudD4KICAgICAgPC9yZGY6RGVzY3JpcHRpb24+CiAgIDwvcmRmOlJERj4KPC94OnhtcG1ldGE+CgA=" alt="Before"><figcaption>Before</figcaption></figure><figure><img src="data:image/webp;base64,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aW9uIHJkZjphYm91dD0iIgogICAgICAgICAgICB4bWxuczpkYz0iaHR0cDovL3B1cmwub3JnL2RjL2VsZW1lbnRzLzEuMS8iCiAgICAgICAgICAgIHhtbG5zOnRpZmY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vdGlmZi8xLjAvIgogICAgICAgICAgICB4bWxuczpleGlmPSJodHRwOi8vbnMuYWRvYmUuY29tL2V4aWYvMS4wLyI+CiAgICAgICAgIDxkYzpkZXNjcmlwdGlvbj4KICAgICAgICAgICAgPHJkZjpBbHQ+CiAgICAgICAgICAgICAgIDxyZGY6bGkgeG1sOmxhbmc9IngtZGVmYXVsdCI+U2NyZWVuc2hvdDwvcmRmOmxpPgogICAgICAgICAgICA8L3JkZjpBbHQ+CiAgICAgICAgIDwvZGM6ZGVzY3JpcHRpb24+CiAgICAgICAgIDx0aWZmOk9yaWVudGF0aW9uPjE8L3RpZmY6T3JpZW50YXRpb24+CiAgICAgICAgIDxleGlmOlVzZXJDb21tZW50PlNjcmVlbnNob3Q8L2V4aWY6VXNlckNvbW1lbnQ+CiAgICAgIDwvcmRmOkRlc2NyaXB0aW9uPgogICA8L3JkZjpSREY+CjwveDp4bXBtZXRhPgoA" alt="Before, new note"><figcaption>Before, new note</figcaption></figure></div></div></details></li>
+<li class="item card" id="item-3"><span class="num">3</span><div class="body"><div class="text" data-note="item-3" tabindex="0"><b>A new app icon.</b> The R in white on the main color, on iPhone and Android (dark ink on <i>Signal</i>'s cyan). The launch screen turns paper white, with the logo in the center. The icon stays still; the moving pulse is only for the board now, and later for the app's <i>Syncing</i> state.</div></div><details class="drawing"><summary><span class="show">Show drawing</span><span class="hide">Hide drawing</span><span class="count"></span></summary><div class="frame"><div class="art pic screen" data-note="item-3-picture-1" tabindex="0"><div class="sk" inert><div class="row gap">
+  <div class="card col gap"><span class="tag">Icon</span><span class="muted">Main color, white R</span></div>
+  <div class="card col gap"><span class="tag-outline">Launch screen</span><span class="muted">Paper white, logo in the center</span></div>
+</div></div></div></div></details></li>
+<li class="item card" id="item-4"><span class="num">4</span><div class="body"><div class="text" data-note="item-4" tabindex="0"><b>The website wears the brand.</b> relayeverything.com gets the new logo in the top bar and the browser tab, the main color in place of the blue, and Inter. The home page's phone-to-database picture takes the main color and the spark. The words and pages stay the same.</div></div><details class="drawing"><summary><span class="show">Show drawing</span><span class="hide">Hide drawing</span><span class="count"></span></summary><div class="frame"><div class="art pic screen" data-note="item-4-picture-1" tabindex="0"><div class="sk" inert><div class="card col gap">
+  <div class="row gap"><span class="tag">Logo</span><h3>Relay Everything</h3><span class="grow"></span><span class="muted">Search</span></div>
+  <div class="sep"></div>
+  <h3>Your data, in a place you choose.</h3>
+  <span class="muted">Relay Everything keeps your notes on your phone. When you choose, it sends them to your own server, where your own AI can read them.</span>
+  <div class="row gap"><button class="btn-primary">Get started</button></div>
+</div></div></div></div></details></li>
+<li class="item card" id="item-5"><span class="num">5</span><div class="body"><div class="text" data-note="item-5" tabindex="0"><b>One brand page that every later change follows.</b> A short page in the wiki says the colors, the type, how to use the logo, and the four rules for every screen. The next plan, <i>clean up the notes screen and the app</i>, starts from it. A check makes sure every text color stays easy to read on its background, in light and in dark.</div></div><div class="table"><table class="tbl"><thead><tr><th>Rule</th><th>What it means</th></tr></thead><tbody><tr data-note="item-5-row-1" tabindex="0"><td>One bright thing</td><td>The main color marks the one main action on a screen. The spark is for small live moments. Everything else is ink or muted.</td></tr><tr data-note="item-5-row-2" tabindex="0"><td>Cards, no borders</td><td>A card is a lighter shape on paper. No box inside a box.</td></tr><tr data-note="item-5-row-3" tabindex="0"><td>Words with every color</td><td>A state says its name: <i>Synced</i>, <i>Waiting</i>, <i>Off</i>. Never color alone.</td></tr><tr data-note="item-5-row-4" tabindex="0"><td>Soft corners</td><td>12 px on buttons and fields, 16 px on cards.</td></tr></tbody></table></div></li>
+</ol>
+<p class="aside">Non-goals: moving or removing anything on a screen (the next plan); the Relay Everything page on your server, which keeps the app's shared look for now; the ring's own pictures and pages on the website; a new name.</p>
+
+</section>
+<section id="needs" aria-labelledby="needs-h"><h2 id="needs-h">What the build needs</h2>
+<ol class="needs">
+<li class="need card" id="need-1" data-need="ready"><p><span class="tag">Ready</span> <b>Your logo and color pick</b>: You picked <i>Signal R</i> and <i>Emerald</i> on the board.</p></li>
+<li class="need card" id="need-2" data-need="ready"><p><span class="tag">Ready</span> <b>The Inter font</b>: It is free under the SIL Open Font License; the build copies it into the app and the website with its license, so the app stays offline.</p></li>
+<li class="need card" id="need-3" data-need="ready"><p><span class="tag">Ready</span> <b>App Store Connect key for TestFlight builds</b>: in <code>.env</code> and the repository's secrets. The new icon goes out with the next TestFlight build.</p></li>
+</ol>
+</section>
+<section id="decisions" aria-labelledby="decisions-h"><h2 id="decisions-h">Decisions</h2>
+<ol class="decisions">
+<li class="decision card" id="decision-1" data-note="decision-1" tabindex="0"><p class="meta"><span class="tag asked">asked</span>2026-11-07</p>Asked what Relay Everything should feel like → chose <i>Calm and private</i>: warm paper, ink, one deep green accent, quiet type.</li>
+<li class="decision card" id="decision-2" data-note="decision-2" tabindex="0"><p class="meta"><span class="tag asked">asked</span>2026-11-07</p>Asked what idea the logo should carry → chose <i>Many into one</i>; the board shows three marks of that idea to pick from.</li>
+<li class="decision card" id="decision-3" data-note="decision-3" tabindex="0"><p class="meta"><span class="tag asked">asked</span>2026-11-07</p>Asked how to split the work → chose <i>Brand first, then UI</i>: this plan is the brand; a second plan cleans up the notes screen and the other screens with it.</li>
+<li class="decision card" id="decision-4" data-note="decision-4" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: the ring circle logo goes everywhere it stands for the product, because Matthew said on 2026-11-05 that branding should not depend on the ring.</li>
+<li class="decision card" id="decision-5" data-note="decision-5" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: this plan changes colors, type, logo and icon only, not layout, because the layout cleanup is the second plan and mixing them makes both harder to review.</li>
+<li class="decision card" id="decision-6" data-note="decision-6" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: Inter as the one font, bundled in the app, because the app makes no network call with sending off, so it can not fetch a font.</li>
+<li class="decision card" id="decision-7" data-note="decision-7" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: the server's Relay Everything page keeps the app's shared look, because it shares that look with the other mini apps and a WongStack update would undo a local restyle.</li>
+<li class="decision card" id="decision-8" data-note="decision-8" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: a deterministic script makes the icon PNGs from one SVG, because the icon comes in about 30 sizes and will change again.</li>
+<li class="decision card" id="decision-9" data-note="decision-9" tabindex="0"><p class="meta"><span class="tag asked">asked</span>2026-11-07</p>Asked, in notes on the plan, for livelier colors: <i>Calm and private</i> looked dull → changed to three bright color sets on the board (<i>Live wire</i>, <i>Signal</i>, <i>Volt</i>), each with one bright main color and a small spark color, contrast checked in light and dark; <i>Live wire</i> is the default.</li>
+<li class="decision card" id="decision-10" data-note="decision-10" tabindex="0"><p class="meta"><span class="tag asked">asked</span>2026-11-07</p>Asked, in notes on the plan, for a more creative <i>Converge</i> logo with real relays, circuit diagrams, or an R or r → replaced the three marks with five: <i>Switch</i>, <i>Traces</i>, <i>Relay R</i>, <i>Circuit r</i> and <i>Broadcast</i>; <i>Switch</i> is the default.</li>
+<li class="decision card" id="decision-11" data-note="decision-11" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: a bright main color (<i>Signal</i>'s cyan) fills buttons with dark ink text, and a deeper shade is used for text on paper, because white text on a bright cyan is hard to read.</li>
+<li class="decision card" id="decision-12" data-note="decision-12" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: the spark pulse moves only on the board for now, because a moving logo in the app is a layout and motion choice for the next plan.</li>
+<li class="decision card" id="decision-13" data-note="decision-13" tabindex="0"><p class="meta"><span class="tag asked">asked</span>2026-11-07</p>Asked, in notes on the plan, for more capital-R logos (<i>that's the play</i>) → the board now shows only capital Rs: <i>Relay R</i>, <i>Trace R</i>, <i>Rooted R</i>, <i>Signal R</i> and <i>Bolt R</i>; <i>Relay R</i> is the default.</li>
+<li class="decision card" id="decision-14" data-note="decision-14" tabindex="0"><p class="meta"><span class="tag asked">asked</span>2026-11-07</p>Asked, in notes on the plan: the green felt too bright and distracting → <i>Live wire</i> became <i>Emerald</i>, a deep green (<code>#0E7A5A</code>) with white button text and the amber spark; it is the default.</li>
+<li class="decision card" id="decision-15" data-note="decision-15" tabindex="0"><p class="meta"><span class="tag asked">asked</span>2026-11-07</p>Asked, on the review page, which logo and colors to ship → chose <i>Signal R</i> and <i>Emerald</i>.</li>
+<li class="decision card" id="decision-16" data-note="decision-16" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: headless Chromium draws the icons and ImageMagick only sizes them, because ImageMagick's own SVG renderer drops paths and stroke colors.</li>
+<li class="decision card" id="decision-17" data-note="decision-17" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: Android 12 and later get the paper launch color through <code>values-v31</code> styles, and the adaptive icon gets a one-color layer for themed icons, because without them Android 12 shows its own launch color.</li>
+<li class="decision card" id="decision-18" data-note="decision-18" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: the app bar title is 20 px at weight 650 beside a 24 px mark, because at weight 700 the name cut off on a 360 px phone.</li>
+<li class="decision card" id="decision-19" data-note="decision-19" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: Material's 14 px body and label sizes stay, and body text drops Material's added letter spacing, because 16 px everywhere moves screens, which is the next plan.</li>
+<li class="decision card" id="decision-20" data-note="decision-20" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: the website's dark accent for links and the main button is the dark accent text (<code>#4CC79A</code>), not ink, because Starlight uses that value as the dark link color.</li>
+<li class="decision card" id="decision-21" data-note="decision-21" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: the iPhone share sheet, which is native SwiftUI, keeps the phone's own look; the Android share card wears the brand, because restyling the native sheet needs its own font bundle and a build to check.</li>
+<li class="decision card" id="decision-22" data-note="decision-22" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-07</p>Checkpoint: built with <i>Signal R</i> and <i>Emerald</i>; local checks pass; saved for the iPhone check and the website preview (tasks 1.3 and 5.2).</li>
+</ol>
+</section>
+<section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>
+<p class="session" hidden>Storage is off. Notes and drafts last for this session only.</p>
+<ul class="note-list" id="note-list"></ul>
+</section>
+</main>
+<button type="button" id="chip" hidden>Add note</button>
+<div id="editor" role="dialog" aria-labelledby="editor-where" hidden>
+  <p class="where" id="editor-where"></p>
+  <p class="moved">Possibly moved: its text changed, so this note is not attached.</p>
+  <textarea aria-label="Note text" rows="3" placeholder="A question or a change"></textarea>
+  <div class="row"><button type="button" class="primary" data-act="save">Save</button><button type="button" data-act="discard">Discard</button><button type="button" data-act="delete">Delete note</button><button type="button" data-act="close">Close</button></div>
+  <p class="copies">Saving a note copies all your notes.</p>
+  <p class="session" hidden>Notes last for this session only.</p>
+</div>
+<div id="viewer" role="dialog" aria-modal="true" aria-label="Drawing, full screen" hidden>
+  <div class="zoom"><span class="level"></span><button type="button" aria-label="Zoom out">−</button><button type="button">Fit</button><button type="button" aria-label="Zoom in">+</button><button type="button" class="primary">Close</button></div>
+  <div class="vframe"></div>
+  <p class="vhint">Drag to move · pinch or + to zoom<span class="note-it"> · tap a line or picture to note it</span></p>
+</div>
+<div class="bar" data-busy="false"><button type="button" class="primary" id="copy"><span class="spinner" hidden aria-hidden="true"></span><span id="copy-label">Copy notes</span></button>
+  <div id="ready" data-actions="[{&quot;name&quot;:&quot;build&quot;,&quot;label&quot;:&quot;Build it&quot;,&quot;done&quot;:&quot;Asked the chat to build.&quot;},{&quot;name&quot;:&quot;publish&quot;,&quot;label&quot;:&quot;Build and publish&quot;,&quot;done&quot;:&quot;Asked the chat to build and publish.&quot;,&quot;confirm&quot;:{&quot;say&quot;:&quot;Goes live, can't be undone.&quot;,&quot;yes&quot;:&quot;Yes, publish&quot;,&quot;ask&quot;:&quot;Build and publish? This goes live and can't be undone.&quot;}}]" hidden>
+    <div id="ready-confirm" role="group" hidden><p></p><div class="row"><button type="button" class="primary" data-ready="yes"><span class="spinner" hidden aria-hidden="true"></span><span></span></button><button type="button" data-ready="cancel">Cancel</button></div></div>
+  </div>
+  <p id="ready-says" role="status" aria-live="polite" hidden><span class="spinner" hidden aria-hidden="true"></span><span id="ready-message"></span></p>
+</div>
+<div id="toast" role="status"></div>
+<textarea id="copybuf" aria-hidden="true" tabindex="-1" readonly></textarea>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  window.addEventListener('error', function (e) {
+    $('script-error').hidden = false;
+    $('script-error').textContent = 'Review script error: ' + e.message + ' (line ' + e.lineno + ')';
+  });
+  const root = document.documentElement;
+  root.classList.add('js');
+  const CHANGE = document.body.getAttribute('data-change');
+  const KEY = 'wong-review3:' + CHANGE;
+  // A preview page shows a finished build: its words name the preview. A review page of other work names its cards.
+  const PREVIEW = document.body.getAttribute('data-kind') === 'preview', NAME = PREVIEW ? CHANGE.replace(/-preview$/, '') : CHANGE;
+  const REVIEW = document.body.getAttribute('data-kind') === 'review', NOUN = REVIEW ? 'Card' : 'Change', PAGE = REVIEW ? 'page' : 'plan';
+  if (PREVIEW) {
+    document.title = 'Preview · ' + NAME;
+    document.querySelector('.eyebrow').textContent = NAME;
+    document.querySelector('h1').textContent = 'Built: look, then publish?';
+    document.querySelector('.hint .lead').textContent = 'Tap a picture to see it full screen, then tap it to note it.';
+    document.querySelector('.hint .tail').textContent = '';
+  }
+  if (REVIEW) document.querySelector('.hint .lead').textContent = 'Tap OK or Change on each card, or select words to note them.';
+  const phone = window.matchMedia ? window.matchMedia('(max-width: 700px)') : { matches: false };
+  const chip = $('chip'), editor = $('editor'), ta = editor.querySelector('textarea');
+  const viewer = $('viewer'), vframe = viewer.querySelector('.vframe'), vbar = viewer.querySelector('.zoom'), vb = vbar.querySelectorAll('button');
+  const all = function (sel, fn) { Array.prototype.forEach.call(document.querySelectorAll(sel), fn); };
+  const esc = function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+
+  // ── storage: a refused store keeps notes for this session ──
+  let store = null, data = { notes: [], drafts: {}, ok: {}, answers: {}, said: {}, files: {} };
+  // A note on words keeps its quote; a note on a picture spot keeps the picture, the spot in percent, and its name.
+  const EXTRA = { quote: 'string', k: 'number', x: 'number', y: 'number', on: 'string' };
+  const ok = function (r, id) {
+    return r && typeof r.label === 'string' && typeof r.text === 'string' && /^[\w-]+$/.test(id)
+      && Object.keys(EXTRA).every(function (f) { return r[f] === undefined || typeof r[f] === EXTRA[f]; });
+  };
+  function extraOf(rec) {
+    const x = {};
+    Object.keys(EXTRA).forEach(function (f) { if (rec && rec[f] !== undefined) x[f] = rec[f]; });
+    return x;
+  }
+  const QID = /^(?:item|need)-\d+-(?:q|live)-\d+$/;
+  try { store = window.localStorage; store.getItem(KEY); } catch (e) { store = null; }
+  function load(text) {
+    try {
+      const saved = JSON.parse(text || 'null');
+      if (saved && Array.isArray(saved.notes)) data.notes = saved.notes.filter(function (n) { return ok(n, n && n.id); });
+      if (saved && saved.drafts) Object.keys(saved.drafts).forEach(function (id) { if (ok(saved.drafts[id], id)) data.drafts[id] = saved.drafts[id]; });
+      if (saved && saved.ok && typeof saved.ok === 'object') {
+        data.ok = {};
+        Object.keys(saved.ok).forEach(function (id) { if (/^item-\d+$/.test(id) && (saved.ok[id] === true || saved.ok[id] === 'sent')) data.ok[id] = saved.ok[id]; });
+      }
+      const kept = function (name, fits) {
+        if (!saved || !saved[name] || typeof saved[name] !== 'object') return;
+        data[name] = {};
+        Object.keys(saved[name]).forEach(function (id) { if (QID.test(id) && fits(saved[name][id])) data[name][id] = saved[name][id]; });
+      };
+      const words = function (v) { return typeof v === 'string' && v.length <= 2000; };
+      kept('answers', function (v) { return words(v) || typeof v === 'boolean' || (Array.isArray(v) && v.every(words)); });
+      kept('said', function (v) { return typeof v === 'string'; });
+      kept('files', function (v) {
+        return Array.isArray(v) && v.every(function (f) { return f && /^[0-9a-f]{32}$/.test(f.id) && typeof f.name === 'string' && typeof f.size === 'number' && typeof f.sent === 'boolean'; });
+      });
+    } catch (e) { /* unreadable notes start empty */ }
+  }
+  load(store ? store.getItem(KEY) : null);
+  function persist() {
+    if (store) { try { store.setItem(KEY, JSON.stringify(data)); } catch (e) { store = null; } }
+    render();
+  }
+
+  // ── targets: a data-note id names its location; the label pins a note to its text ──
+  function where(id) {
+    const m = /^(why|item|decision)-(\d+)(?:-(line|picture|row)-(\d+))?(?:-(words|spot)-\d+)?$/.exec(id) || [];
+    if (m[5]) return Object.assign(where(id.replace(/-(words|spot)-\d+$/, '')), m[5] === 'words' ? { kind: 'words' } : {});
+    if (m[1] === 'why') return { at: '#/why', kind: 'paragraph ' + m[2], spot: 'Why, paragraph ' + m[2] };
+    const part = m[3] === 'line' ? 'drawing line ' + m[4] : m[3] ? m[3] + ' ' + m[4] : '';
+    if (m[1] === 'item') return { at: '#/' + m[2], kind: part || 'item', spot: NOUN + ' #' + m[2] + (part ? ', ' + part : '') };
+    return { at: '#/decisions/' + m[2], kind: 'decision', spot: 'Decision #' + m[2] };
+  }
+  function labelOf(el) {
+    const c = el.cloneNode(true);
+    Array.prototype.forEach.call(c.querySelectorAll('.pin, .meta, .add, title, desc'), function (n) { n.parentNode.removeChild(n); });
+    // A picture's labels are separate SVG text elements: join them with spaces so they read as words.
+    // A table row's cells read joined with a dot.
+    // A screen's words sit in many small boxes: join every piece of text with a space.
+    // Picture files read as their labels, joined with a dot.
+    const row = el.tagName === 'TR', photo = el.classList.contains('photo'), cells = row ? c.querySelectorAll('td') : photo ? c.querySelectorAll('img')
+      : el.classList.contains('screen') ? texts(c) : el.classList.contains('pic') ? c.querySelectorAll('text') : [c];
+    const text = Array.prototype.map.call(cells, function (n) { return (photo ? n.alt : n.textContent).replace(/\s+/g, ' ').trim(); }).join(row || photo ? ' · ' : ' ').replace(/\s+/g, ' ').trim();
+    return where(el.getAttribute('data-note')).kind + ' "' + (text.length > 60 ? text.slice(0, 59) + '…' : text) + '"';
+  }
+  function texts(c) {
+    const found = [], walk = document.createTreeWalker(c, NodeFilter.SHOW_TEXT);
+    while (walk.nextNode()) found.push(walk.currentNode);
+    return found;
+  }
+  // A note on words or a spot sits on its base target: words are found again by their quote, a spot by the base's label.
+  function find(id, rec) {
+    const m = /^(.*)-(words|spot)-\d+$/.exec(id), el = document.querySelector('[data-note="' + (m ? m[1] : id) + '"]');
+    if (!el) return null;
+    if (m && m[2] === 'words') return textOf(el).indexOf(rec.quote) >= 0 ? el : null;
+    if (m && !el.querySelectorAll('.shot')[rec.k]) return null;
+    return labelOf(el) === rec.label ? el : null;
+  }
+  function textOf(el) {
+    const c = el.cloneNode(true);
+    Array.prototype.forEach.call(c.querySelectorAll('.pin, .add'), function (n) { n.parentNode.removeChild(n); });
+    return c.textContent.replace(/\s+/g, ' ');
+  }
+  // A new note on words or a spot takes the next free number on its target.
+  function nextId(base, kind) {
+    const pre = base + '-' + kind + '-';
+    let k = 1;
+    data.notes.map(function (n) { return n.id; }).concat(Object.keys(data.drafts)).forEach(function (id) {
+      if (id.indexOf(pre) === 0) k = Math.max(k, +id.slice(pre.length) + 1);
+    });
+    return pre + k;
+  }
+  // The notes list groups notes by Why, each card, and Decisions.
+  function groupOf(id) {
+    const m = /^(why|item|decision)-(\d+)/.exec(id) || [];
+    return m[1] === 'why' ? [0, 'Why'] : m[1] === 'item' ? [+m[2], NOUN + ' ' + m[2]] : [1e6, 'Decisions'];
+  }
+  // A row's pin and Note button go in its last cell: a table row holds only cells.
+  function slot(el) { return el.tagName === 'TR' ? el.lastElementChild : el; }
+  function noteOf(id) { return data.notes.filter(function (n) { return n.id === id; })[0] || null; }
+
+  // ── render pins, Note buttons, counts, and the notes list ──
+  function render() {
+    all('.pin, .add', function (p) { p.parentNode.removeChild(p); });
+    const n = data.notes.length, d = Object.keys(data.drafts).length;
+    const count = plural(n) + (d ? ' · ' + d + (d === 1 ? ' draft' : ' drafts') : '');
+    all('.note-count', function (el) { el.textContent = count; });
+    all('.session', function (el) { el.hidden = !!store; });
+    const ids = data.notes.map(function (x) { return x.id; }).concat(Object.keys(data.drafts).filter(function (id) { return !noteOf(id); }))
+      .map(function (id, i) { return [groupOf(id)[0], i, id]; }).sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; })
+      .map(function (x) { return x[2]; });
+    $('note-list').innerHTML = ids.length ? '' : '<li class="muted">No notes yet.</li>';
+    let group = null;
+    ids.forEach(function (id) {
+      const note = noteOf(id), draft = data.drafts[id], rec = note || draft, num = note ? data.notes.indexOf(note) + 1 : 0, sent = !!(note && note.sent);
+      const el = find(id, rec);
+      if (groupOf(id)[1] !== group) {
+        group = groupOf(id)[1];
+        const head = document.createElement('li');
+        head.className = 'group'; head.textContent = group;
+        $('note-list').appendChild(head);
+      }
+      if (el) {
+        const pin = document.createElement('button');
+        pin.type = 'button'; pin.className = draft ? 'pin draft' : sent ? 'pin sent' : 'pin'; pin.setAttribute('data-open', id);
+        pin.textContent = (num || '') + (num && (draft || sent) ? ' · ' : '') + (draft ? 'Draft' : sent ? 'Sent' : '');
+        pin.setAttribute('aria-label', (num ? 'Open note ' + num : 'Open draft') + (num && draft ? ' and its draft' : ''));
+        if (rec.x !== undefined) {
+          pin.className += ' spot'; pin.style.left = rec.x + '%'; pin.style.top = rec.y + '%';
+          el.querySelectorAll('.shot')[rec.k].appendChild(pin);
+        } else slot(el).appendChild(pin);
+      }
+      const li = document.createElement('li');
+      li.innerHTML = '<button type="button" class="entry" data-open="' + id + '"><span class="where">' + (num ? num + '. ' : '')
+        + esc(where(id).at + ' · ' + rec.label) + (draft ? '<span class="tag">Draft</span>' : '') + (sent ? '<span class="tag">Sent</span>' : '') + (el ? '' : '<span class="tag">possibly moved</span>')
+        + '</span>' + esc(draft ? draft.text : note.text) + '</button>';
+      $('note-list').appendChild(li);
+    });
+    all('[data-note]', function (el) {
+      const id = el.getAttribute('data-note');
+      if (el.closest('.art') || el.querySelector('.pin[data-open="' + id + '"]')) return;
+      const add = document.createElement('button');
+      add.type = 'button'; add.className = 'add'; add.setAttribute('data-open', id);
+      add.textContent = '+ Note'; add.setAttribute('aria-label', 'Note on ' + where(id).kind);
+      slot(el).appendChild(add);
+    });
+    all('.verdict', function (v) {
+      const id = v.querySelector('[data-ok]').getAttribute('data-ok'), state = data.ok[id], n = id.slice(5);
+      v.querySelector('.tag').hidden = !state;
+      v.querySelector('.tag').textContent = state === 'sent' ? 'OK · Sent' : 'OK';
+      v.querySelector('[data-ok]').textContent = state ? 'Undo' : 'OK';
+      v.querySelector('[data-ok]').setAttribute('aria-label', (state ? 'Undo OK on ' : 'OK ') + NOUN.toLowerCase() + ' ' + n);
+      v.querySelector('[data-open]').hidden = !!state;
+    });
+    const answers = replies();
+    Object.keys(data.answers).forEach(function (id) {
+      const q = document.querySelector('[data-q="' + id + '"], [data-live="' + id + '"]');
+      if (!q || q.getAttribute('data-kind') === 'tick') return;
+      if (!$('note-list').querySelector('.group.answers')) $('note-list').insertAdjacentHTML('beforeend', '<li class="group answers">Answers</li>');
+      const line = q.hasAttribute('data-live') ? asker(id) + ' answer' : asker(id) + ', "' + q.getAttribute('data-label') + '"', v = data.answers[id];
+      const sent = !answers.some(function (a) { return a.id === id; });
+      $('note-list').insertAdjacentHTML('beforeend', '<li class="entry"><span class="where">' + esc(line) + (sent ? '<span class="tag">Sent</span>' : '') + '</span>'
+        + esc(Array.isArray(v) ? v.join(', ') : v) + '</li>');
+    });
+    if (ids.length || $('note-list').querySelector('.answers')) { const none = $('note-list').querySelector('li.muted'); if (none) none.remove(); }
+    fill(); drawFiles();
+    drawings.forEach(function (d) {
+      const k = d.art.querySelectorAll('.pin').length;
+      d.count.textContent = k ? ' · ' + k + (k === 1 ? ' note' : ' notes') : '';
+      fit(d);
+    });
+    bar();
+  }
+
+  // ── still-tap to note: a mouse on text, or any pointer on a full-screen drawing line, shows the chip ──
+  let chipFor = null, chipExtra = null, tap = null;
+  // True once the inbox opens this page closed, or a tap on it reaches the chat: it takes no note.
+  let readOnly = false;
+  const pointers = {};
+  // `extra` makes the chip start a new note on selected words or a picture spot.
+  function showChip(el, x, y, keyboard, extra) {
+    if (readOnly) return;
+    const id = el.getAttribute('data-note');
+    chipFor = el; chipExtra = extra || null;
+    chip.textContent = extra && extra.quote ? 'Note' : !extra && (noteOf(id) || data.drafts[id]) ? 'Edit note' : 'Add note';
+    chip.hidden = false;
+    const w = chip.offsetWidth, vw = root.clientWidth;
+    chip.style.left = Math.max(8, Math.min(x - w / 2, vw - w - 8)) + window.pageXOffset + 'px';
+    chip.style.top = y + 12 + window.pageYOffset + 'px';
+    if (keyboard) chip.focus({ preventScroll: true });
+  }
+  function hideChip() { chip.hidden = true; chipFor = null; chipExtra = null; }
+  document.addEventListener('pointerdown', function (e) {
+    if (e.isPrimary) Object.keys(pointers).forEach(function (k) { delete pointers[k]; });
+    pointers[e.pointerId] = true;
+    tap = Object.keys(pointers).length === 1 && e.button === 0 ? { id: e.pointerId, x: e.clientX, y: e.clientY, t: Date.now(), target: e.target } : null;
+  });
+  document.addEventListener('pointermove', function (e) {
+    if (tap && e.pointerId === tap.id && Math.abs(e.clientX - tap.x) + Math.abs(e.clientY - tap.y) > 8) tap = null;
+  });
+  document.addEventListener('pointercancel', function (e) { delete pointers[e.pointerId]; tap = null; });
+  document.addEventListener('pointerup', function (e) {
+    const t = tap;
+    delete pointers[e.pointerId]; tap = null;
+    if (!t || t.id !== e.pointerId || Date.now() - t.t > 500) return;
+    if (t.target.closest('a, button, input, textarea, select, label, summary, #editor')) return;
+    const el = t.target.closest('[data-note]');
+    const offer = el && (el.closest('#viewer') || (e.pointerType === 'mouse' && !el.closest('.frame')));
+    if (offer) showChip(el, e.clientX, e.clientY, false, spotAt(el, t.target, e)); else hideChip();
+  });
+  // A tap on a picture file in full screen notes that spot of it, kept in percent so it holds at any size.
+  function spotAt(el, target, e) {
+    if (!el.closest('#viewer') || !el.classList.contains('photo') || target.tagName !== 'IMG') return null;
+    const r = target.getBoundingClientRect(), pct = function (v, size) { return Math.max(0, Math.min(100, Math.round(v / Math.max(1, size) * 100))); };
+    return { k: Array.prototype.indexOf.call(el.querySelectorAll('img'), target), x: pct(e.clientX - r.left, r.width), y: pct(e.clientY - r.top, r.height), on: target.alt };
+  }
+  // Selected words in one note target offer a note on just those words.
+  let picking = 0;
+  document.addEventListener('selectionchange', function () {
+    clearTimeout(picking);
+    picking = setTimeout(function () {
+      const s = window.getSelection ? window.getSelection() : null;
+      if (!s || s.isCollapsed || !s.rangeCount || open) return;
+      const range = s.getRangeAt(0), at = range.commonAncestorContainer, host = (at.nodeType === 1 ? at : at.parentNode).closest('[data-note]');
+      const quote = s.toString().replace(/\s+/g, ' ').trim().slice(0, 200);
+      if (!host || !quote || host.closest('.art, #editor, #viewer') || textOf(host).indexOf(quote) < 0) return;
+      const r = range.getBoundingClientRect();
+      showChip(host, r.left + r.width / 2, r.bottom, false, { quote: quote });
+    }, 150);
+  });
+  chip.addEventListener('click', function () {
+    if (!chipFor) return;
+    const id = chipFor.getAttribute('data-note'), extra = chipExtra;
+    openEditor(extra ? nextId(id, extra.quote ? 'words' : 'spot') : id, chipFor, extra);
+  });
+  document.addEventListener('click', function (e) {
+    const t = e.target.closest ? e.target.closest('[data-open]') : null;
+    if (!t) return;
+    const id = t.getAttribute('data-open'), rec = data.drafts[id] || noteOf(id);
+    const el = rec ? find(id, rec) : t.closest('[data-note]') || document.querySelector('[data-note="' + id + '"]');
+    if (el && t.classList.contains('entry')) { reveal(el); el.scrollIntoView({ block: 'center' }); }
+    openEditor(id, el);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      if (open) closeEditor(true);
+      else if (chipFor) {
+        const el = chipFor, words = chipExtra && chipExtra.quote;
+        hideChip();
+        if (words && window.getSelection) window.getSelection().removeAllRanges();
+        el.focus();
+      }
+      else if (view) closeViewer(true);
+    } else if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[data-note]')) {
+      e.preventDefault();
+      const r = e.target.getBoundingClientRect();
+      showChip(e.target, r.left + 48, r.top + Math.min(r.height, 24), true);
+    }
+  });
+
+  // ── the editor: beside its target on a desktop, docked at the bottom of the visible screen on a phone ──
+  let open = null;
+  function openEditor(id, el, extra) {
+    if (readOnly) return;
+    closeViewer(false); closeEditor(false); hideChip();
+    if (el) reveal(el);
+    const note = noteOf(id), draft = data.drafts[id];
+    const quote = extra && extra.quote, clip = quote && quote.length > 60 ? quote.slice(0, 59) + '…' : quote;
+    const label = draft ? draft.label : note ? note.label : quote ? 'words "' + clip + '"' : labelOf(el);
+    open = { id: id, label: label, el: el, extra: extra || extraOf(draft || note) };
+    $('editor-where').textContent = where(id).at + ' · ' + label;
+    editor.querySelector('.moved').hidden = !!el;
+    editor.querySelector('[data-act="delete"]').hidden = !note;
+    ta.value = draft ? draft.text : note ? note.text : '';
+    editor.hidden = false;
+    if (el) el.classList.add('noting');
+    place();
+    ta.focus({ preventScroll: editor.classList.contains('docked') });
+  }
+  function closeEditor(restore) {
+    if (!open) return;
+    const el = open.el;
+    open = null; editor.hidden = true;
+    document.body.classList.remove('docked'); document.body.style.paddingBottom = '';
+    bar();
+    if (el) { el.classList.remove('noting'); if (restore) el.focus({ preventScroll: true }); }
+  }
+  function place() {
+    const docked = phone.matches || !open.el;
+    editor.classList.toggle('docked', docked);
+    document.body.classList.toggle('docked', docked);
+    editor.style.left = editor.style.top = editor.style.bottom = editor.style.maxHeight = '';
+    if (docked) {
+      dock();
+      document.body.style.paddingBottom = editor.offsetHeight + 24 + 'px';
+      keepVisible();
+      return;
+    }
+    const r = open.el.getBoundingClientRect(), w = editor.offsetWidth, vw = root.clientWidth;
+    let left = r.right + 12, top = r.top;
+    if (left + w > vw - 8) { left = Math.max(8, Math.min(r.left, vw - w - 8)); top = r.bottom + 8; }
+    editor.style.left = left + window.pageXOffset + 'px';
+    editor.style.top = top + window.pageYOffset + 'px';
+  }
+  // The visible screen: a phone keyboard shrinks it, and a host app may shrink the page too, so place from its top.
+  function screen() {
+    const vv = window.visualViewport;
+    return vv ? { top: vv.offsetTop, h: vv.height } : { top: 0, h: window.innerHeight };
+  }
+  function dock() {
+    if (!open || !editor.classList.contains('docked')) return;
+    const s = screen();
+    editor.style.maxHeight = s.h + 'px';
+    editor.style.bottom = 'auto';
+    editor.style.top = s.top + Math.max(0, s.h - editor.offsetHeight) + 'px';
+  }
+  function keepVisible() {
+    if (!open || !open.el) return;
+    const r = open.el.getBoundingClientRect(), s = screen(), limit = s.top + s.h - editor.offsetHeight - 8;
+    if (r.bottom > limit) window.scrollBy(0, Math.min(r.top - s.top - 8, r.bottom - limit));
+  }
+  let seen = screen().h;
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', function () {
+      const h = screen().h, keyboard = Math.abs(h - seen) > 100;
+      seen = h; dock();
+      if (keyboard) keepVisible();
+    });
+    window.visualViewport.addEventListener('scroll', dock);
+  }
+  ta.addEventListener('input', function () {
+    if (!open) return;
+    const note = noteOf(open.id), text = ta.value;
+    if (!text.trim() || (note && text === note.text)) delete data.drafts[open.id];
+    else data.drafts[open.id] = Object.assign({ label: open.label, text: text }, open.extra);
+    persist();
+  });
+  editor.addEventListener('click', function (e) {
+    const act = e.target.getAttribute('data-act');
+    if (!act || !open) return;
+    const id = open.id, note = noteOf(id), text = ta.value.trim();
+    if (act === 'save') {
+      if (!text) { ta.focus(); return; }
+      if (!note) data.notes.push(Object.assign({ id: id, label: open.label, text: text }, open.extra));
+      else if (note.text !== text) { note.text = text; delete note.sent; }
+    }
+    if (act === 'delete') data.notes = data.notes.filter(function (n) { return n.id !== id; });
+    if (act !== 'close') delete data.drafts[id];
+    closeEditor(true); persist();
+    if (act === 'save' && live) toast('Saved. Tap Send notes to send it to the chat.');
+    else if (act === 'save') {
+      const n = unsent().length, k = oks().length, a = replies().length;
+      copyNotes(function () { toast('Saved and copied ' + plural2(n, k, a) + '. Paste them into chat.'); },
+        function () { toast('Saved. Tap Copy notes to copy them.'); });
+    }
+  });
+
+  // ── drawings: fitted by font size on the page; a tap shows one full screen, where it zooms and scrolls natively ──
+  const BASE = 13, drawings = [];
+  let view = null;
+  const V = { f: BASE, lo: BASE, hi: BASE };
+  function size(art, f, max) {
+    art.style.fontSize = f + 'px';
+    for (let i = 0; i < 3 && art.offsetWidth > max; i += 1) { f *= max / art.offsetWidth; art.style.fontSize = f + 'px'; }
+    return f;
+  }
+  function fit(d) {
+    if (!d.fig.open || view === d) return;
+    d.art.style.fontSize = BASE + 'px';
+    const w = d.art.offsetWidth, fw = d.frame.clientWidth - 1;
+    if (w > 0 && fw > 0) size(d.art, BASE * Math.min(1.25, fw / w), fw);
+  }
+  function reveal(el) {
+    const fig = el.closest('details');
+    if (fig && !fig.open) { fig.open = true; drawings.forEach(fit); }
+  }
+  function scale(f, cx, cy) {
+    f = Math.max(V.lo, Math.min(V.hi, f));
+    const k = f / V.f, x = (vframe.scrollLeft + cx) * k - cx, y = (vframe.scrollTop + cy) * k - cy;
+    V.f = f; view.art.style.fontSize = f + 'px';
+    vframe.scrollLeft = x; vframe.scrollTop = y;
+    const atFit = f <= V.lo * 1.001;
+    vbar.firstChild.textContent = (atFit ? 'Fit · ' : '') + Math.round(f / BASE * 100) + '%';
+    vb[0].disabled = atFit; vb[2].disabled = f >= V.hi * 0.999;
+  }
+  function openViewer(d) {
+    hideChip();
+    view = d; viewer.hidden = false; document.body.classList.add('viewing');
+    vframe.appendChild(d.art);
+    d.art.style.fontSize = BASE + 'px';
+    const fw = vframe.clientWidth - 1;
+    V.lo = size(d.art, BASE * fw / Math.max(1, d.art.offsetWidth), fw);
+    V.hi = Math.max(V.lo * 4, 40); V.f = V.lo;
+    vframe.scrollLeft = vframe.scrollTop = 0;
+    scale(V.lo, 0, 0);
+    vb[3].focus({ preventScroll: true });
+  }
+  function closeViewer(restore) {
+    if (!view) return;
+    const d = view;
+    view = null;
+    d.frame.insertBefore(d.art, d.frame.firstChild);
+    viewer.hidden = true; document.body.classList.remove('viewing');
+    fit(d); bar();
+    if (restore) d.enlarge.focus({ preventScroll: true });
+  }
+  vbar.addEventListener('click', function (e) {
+    const i = Array.prototype.indexOf.call(vb, e.target);
+    if (i === 3) closeViewer(true);
+    else if (i >= 0) scale([V.f / 1.25, V.lo, V.f * 1.25][i], vframe.clientWidth / 2, vframe.clientHeight / 2);
+  });
+  vframe.addEventListener('wheel', function (e) {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    const r = vframe.getBoundingClientRect();
+    scale(V.f * (e.deltaY < 0 ? 1.1 : 1 / 1.1), e.clientX - r.left, e.clientY - r.top);
+  }, { passive: false });
+  // One finger scrolls natively; two fingers pinch around their midpoint.
+  let pinch = null;
+  const span = function (t) { return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY) || 1; };
+  vframe.addEventListener('touchstart', function (e) { if (e.touches.length === 2) pinch = { f: V.f, dist: span(e.touches) }; }, { passive: true });
+  vframe.addEventListener('touchmove', function (e) {
+    if (!pinch || e.touches.length !== 2) return;
+    if (e.cancelable) e.preventDefault();
+    const r = vframe.getBoundingClientRect(), t = e.touches;
+    scale(pinch.f * span(t) / pinch.dist, (t[0].clientX + t[1].clientX) / 2 - r.left, (t[0].clientY + t[1].clientY) / 2 - r.top);
+  }, { passive: false });
+  vframe.addEventListener('touchend', function (e) { if (e.touches.length < 2) pinch = null; });
+  document.addEventListener('gesturestart', function (e) { if (view) e.preventDefault(); });
+  all('.drawing', function (fig) {
+    const frame = fig.querySelector('.frame'), enlarge = document.createElement('button');
+    enlarge.type = 'button'; enlarge.className = 'enlarge'; enlarge.textContent = 'Full screen';
+    frame.appendChild(enlarge);
+    const d = { fig: fig, frame: frame, art: fig.querySelector('.art'), count: fig.querySelector('.count'), enlarge: enlarge };
+    drawings.push(d);
+    fig.addEventListener('toggle', function () { fit(d); });
+    frame.addEventListener('click', function (e) { if (!e.target.closest('[data-open]')) openViewer(d); });
+  });
+
+  // ── direct links: #/why, #/<n>, #/decisions/<n> ──
+  function jump(hash) {
+    const m = /^#\/(?:decisions\/(\d+)|(\d+)|(why|changes|decisions))$/.exec(typeof hash === 'string' ? hash : location.hash);
+    const el = m ? $(m[1] ? 'decision-' + m[1] : m[2] ? 'item-' + m[2] : m[3]) : null;
+    if (!el) return;
+    all('.hit', function (n) { n.classList.remove('hit'); });
+    el.classList.add('hit');
+    el.scrollIntoView({ block: 'start' });
+  }
+
+  // ── copy: saved notes only, as notes on the plan: each asks or changes something ──
+  // A note sent through a reply link is in the chat already, so it is never copied or sent again.
+  function unsent() { return data.notes.filter(function (n) { return !n.sent; }); }
+  function snapshot() { return unsent().map(function (n) { return Object.assign({ id: n.id, label: n.label, text: n.text }, extraOf(n)); }); }
+  // An OK not yet in the chat, as its card's id, in card order.
+  function oks() {
+    return Object.keys(data.ok).filter(function (id) { return data.ok[id] === true; }).sort(function (a, b) { return a.slice(5) - b.slice(5); });
+  }
+  function acknowledge(notes, okd, ans) {
+    ans.forEach(function (a) {
+      if (a.said) data.said[a.id] = a.said;
+      (data.files[a.id] || []).forEach(function (f) { if (a.files.indexOf(f.id) >= 0) f.sent = true; });
+    });
+    notes.forEach(function (submitted) {
+      data.notes.forEach(function (current) {
+        if (current.id === submitted.id && current.label === submitted.label && current.text === submitted.text) current.sent = true;
+      });
+    });
+    okd.forEach(function (id) { if (data.ok[id] === true) data.ok[id] = 'sent'; });
+    persist();
+  }
+  function bullets(notes) {
+    return notes.map(function (n) {
+      const w = where(n.id), spot = n.x === undefined ? '' : ', spot at ' + n.x + '% across and ' + n.y + '% down on "' + n.on + '"';
+      return '- ' + w.spot + spot + ' (' + n.label.slice(w.kind.length + 1) + '): ' + n.text.replace(/\s*\n\s*/g, ' ');
+    });
+  }
+  // What goes to the chat: each OK on its own line, then the notes.
+  function lines(notes, okd, ans) {
+    return okd.map(function (id) { return NOUN + ' #' + id.slice(5) + ': OK'; }).concat(ans.map(function (a) { return a.line; }), bullets(notes)).join('\n');
+  }
+  function notesText() {
+    const header = REVIEW ? document.body.getAttribute('data-header')
+      : PREVIEW ? 'Notes on the preview of ' + NAME + ' from its review page. Don\'t publish yet.'
+      : 'Notes on the plan ' + CHANGE + ' from the review page. Don\'t build yet.';
+    return header + '\n' + lines(unsent(), oks(), replies());
+  }
+  function toast(text) {
+    $('toast').textContent = text; $('toast').classList.add('show');
+    setTimeout(function () { $('toast').classList.remove('show'); }, 2000);
+  }
+  function plural(n) { return n + (n === 1 ? ' note' : ' notes'); }
+  function plural2(n, k, a) {
+    const parts = n || !(k || a) ? [plural(n)] : [];
+    if (k) parts.push(k + (k === 1 ? ' OK' : ' OKs'));
+    if (a) parts.push(a + (a === 1 ? ' answer' : ' answers'));
+    return parts.join(' and ');
+  }
+  // One routine for Copy notes and Save: the Clipboard API, else select #copybuf and execCommand, then hand focus back.
+  function copyNotes(done, failed) {
+    const buf = $('copybuf');
+    buf.value = notesText();
+    const fallback = function () {
+      const back = document.activeElement;
+      buf.select();
+      const ok = document.execCommand('copy');
+      if (back && back !== buf && back.focus) back.focus({ preventScroll: true });
+      if (ok) done(); else failed();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(buf.value).then(done, fallback); else fallback();
+  }
+  // Nothing to copy or send: say why. True when it spoke.
+  function nothing(verb) {
+    if (unsent().length || oks().length || replies().length) return false;
+    toast(data.notes.length ? 'Every note is already sent.' : 'No saved notes yet. Drafts are not ' + verb + '.');
+    return true;
+  }
+
+  // ── reply link: at a web address with #key=, the bar's button sends unsent notes to the chat that made the plan ──
+  // `live` is the link's key while the link is open. The key stays in memory and this tab's session, never in a link.
+  let live = null, connecting = false, pending = null;
+  function setLive(key) {
+    live = key;
+    if (!key) hideActions();
+    all('.copies', function (el) { el.textContent = key ? 'Send notes sends your saved notes to the chat.' : 'Saving a note copies all your notes.'; });
+    bar();
+  }
+  // One request owns every reply control until the response body has been read.
+  function busy(kind) {
+    pending = kind;
+    bar();
+  }
+  function linkKey() {
+    if (!/^https?:$/.test(location.protocol) || !window.fetch) return null;
+    const m = /(?:^#|&)key=([0-9a-f]{64})(?:&|$)/.exec(location.hash), at = 'wong-reply-key:' + location.pathname;
+    try {
+      if (m) window.sessionStorage.setItem(at, m[1]);
+      return m ? m[1] : window.sessionStorage.getItem(at);
+    } catch (e) { return m ? m[1] : null; }
+  }
+  function ask(path, key, body) {
+    if (hosted) return hostedAsk(path, body);
+    const headers = { 'x-reply-key': key };
+    if (body) headers['content-type'] = 'application/json';
+    return fetch(path, { method: body ? 'POST' : 'GET', cache: 'no-store', headers: headers, body: body ? JSON.stringify(body) : undefined });
+  }
+  async function sendNotes() {
+    const notes = snapshot(), okd = oks(), ans = replies(), n = notes.length, k = okd.length, a = ans.length;
+    if (pending || connecting || nothing('sent')) return;
+    busy('send'); says('Sending your notes…');
+    // A closed link or an unreachable chat: the same tap copies, and the page goes back to Copy notes.
+    const closed = function () {
+      setLive(null); says('This link has closed. Copy your notes into chat.');
+      copyNotes(function () { toast('This link has closed. Copied ' + plural2(n, k, a) + ': paste them into chat.'); },
+        function () { toast('This link has closed. Tap Copy notes to copy them.'); });
+    };
+    try {
+      const body = { text: lines(notes, okd, ans) };
+      if (fileIds(ans).length) body.files = fileIds(ans);
+      const r = await ask('send', live, body);
+      const changed = 'The ' + PAGE + ' changed. Reload to read it first.';
+      if (r.status === 429) { says('Wait a few seconds, then tap Send notes again.'); toast('Wait a few seconds, then tap Send notes again.'); return; }
+      if (r.status === 409) { const why = ((await r.json()) || {}).gone ? GONE : changed; says(why); toast(why); return; }
+      if (!r.ok) { closed(); return; }
+      const answer = await r.json();
+      if (!answer || answer.sent !== true) { closed(); return; }
+      acknowledge(notes, okd, ans);
+      says('Sent ' + plural2(n, k, a) + ' to the chat.');
+      toast('Sent ' + plural2(n, k, a) + ' to the chat.');
+    } catch (e) { closed(); }
+    finally { busy(null); }
+  }
+  $('copy').addEventListener('click', function () {
+    if (pending || connecting) return;
+    if (live) { sendNotes(); return; }
+    const n = unsent().length, k = oks().length, a = replies().length;
+    if (nothing('copied')) return;
+    copyNotes(function () { toast('Copied ' + plural2(n, k, a) + '. Paste them into chat.'); },
+      function () { toast('Copy failed. Copy the notes list by hand.'); });
+  });
+
+  // ── OK and Change on each card: an OK is kept with the notes until undone, and goes to the chat with them ──
+  all('.items > .item', function (item) {
+    const v = document.createElement('div');
+    v.className = 'verdict';
+    v.innerHTML = '<span class="tag" hidden>OK</span><button type="button" class="btn-ghost" data-ok="' + item.id + '">OK</button>'
+      + '<button type="button" class="btn-ghost" data-open="' + item.id + '" aria-label="Change ' + NOUN.toLowerCase() + ' ' + item.id.slice(5) + '">Change</button>';
+    item.appendChild(v);
+  });
+  document.addEventListener('click', function (e) {
+    const b = e.target.closest ? e.target.closest('[data-ok]') : null;
+    if (!b) return;
+    const id = b.getAttribute('data-ok');
+    if (data.ok[id]) delete data.ok[id]; else data.ok[id] = true;
+    persist();
+  });
+  // A picture file's spot pins sit over the picture itself.
+  all('.art.photo img', function (img) {
+    const shot = document.createElement('span');
+    shot.className = 'shot';
+    img.parentNode.insertBefore(shot, img);
+    shot.appendChild(img);
+  });
+
+  // ── the page's own buttons, from the builder; one that can't be undone asks once more above the footer ──
+  let version = null, confirming = null;
+  const ACTIONS = JSON.parse($('ready').getAttribute('data-actions') || '[]');
+  const actionOf = function (name) { return ACTIONS.filter(function (a) { return a.name === name; })[0] || null; };
+  const choice = function (name) { return $('ready').querySelector('[data-ready="' + name + '"]'); };
+  ACTIONS.forEach(function (a) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.setAttribute('data-ready', a.name); b.setAttribute('data-label', a.label);
+    if (a.confirm) { b.textContent = a.label; b.setAttribute('aria-expanded', 'false'); b.setAttribute('aria-controls', 'ready-confirm'); }
+    else b.innerHTML = '<span class="spinner" hidden aria-hidden="true"></span><span></span>';
+    $('ready').insertBefore(b, $('ready-confirm'));
+  });
+  function fillConfirm(a) {
+    confirming = a;
+    $('ready-confirm').querySelector('p').textContent = a.confirm.say;
+    $('ready-confirm').setAttribute('aria-label', a.confirm.ask);
+    choice('yes').setAttribute('data-label', a.confirm.yes);
+  }
+  if (ACTIONS.filter(function (a) { return a.confirm; }).length) fillConfirm(ACTIONS.filter(function (a) { return a.confirm; })[0]);
+  function says(text) { $('ready-message').textContent = text; $('ready-says').hidden = !text; }
+  function closeActions(focus) {
+    const wasOpen = !$('ready-confirm').hidden;
+    $('ready-confirm').hidden = true;
+    all('#ready > [aria-controls]', function (b) { b.setAttribute('aria-expanded', 'false'); });
+    if (focus && wasOpen && !$('ready').hidden && confirming) choice(confirming.name).focus({ preventScroll: true });
+    bar();
+  }
+  function hideActions() {
+    const focused = $('ready').contains(document.activeElement);
+    closeActions(false);
+    $('ready').hidden = true;
+    if (focused) $('copy').focus({ preventScroll: true });
+    bar();
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !$('ready-confirm').hidden) { e.preventDefault(); closeActions(true); }
+  });
+  document.addEventListener('pointerdown', function (e) {
+    if (!$('ready').contains(e.target)) closeActions(false);
+  });
+  $('ready').addEventListener('focusout', function (e) {
+    if (e.relatedTarget && !$('ready').contains(e.relatedTarget)) closeActions(false);
+  });
+  // Only the row contributes to page padding; popovers and status never increase its height.
+  function bar() {
+    const el = $('copy').parentNode, waiting = connecting || !!pending;
+    $('copy-label').textContent = connecting ? 'Connecting…' : pending === 'send' ? 'Sending…' : live ? 'Send notes' : 'Copy notes';
+    $('copy').disabled = waiting;
+    $('copy').querySelector('.spinner').hidden = !(connecting || pending === 'send');
+    el.setAttribute('data-busy', String(waiting));
+    $('copy').setAttribute('aria-busy', String(connecting || pending === 'send'));
+    root.style.setProperty('--choices', $('ready-confirm').offsetHeight + 'px');
+    $('ready-says').querySelector('.spinner').hidden = !waiting;
+    const gate = drawNeeds();
+    all('#ready > [data-ready]', function (b) {
+      if (!b.querySelector('.spinner')) b.textContent = gate || b.getAttribute('data-label');
+    });
+    all('[data-ready]', function (b) {
+      const step = b.getAttribute('data-ready'), spinner = b.querySelector('.spinner');
+      const active = !!spinner && pending === (step === 'yes' ? confirming && confirming.name : step);
+      b.disabled = waiting;
+      b.setAttribute('aria-busy', String(active));
+      if (spinner) {
+        spinner.hidden = !active;
+        b.querySelector('span:last-child').textContent = active ? 'Sending…' : (b.parentNode === $('ready') && gate) || b.getAttribute('data-label');
+      }
+    });
+    const shown = $('ready').hidden ? 0 : $('ready').querySelectorAll('#ready > button:not([hidden])').length;
+    el.style.setProperty('--cols', String(Math.min(3, 1 + shown)));
+    if (el.offsetHeight) root.style.setProperty('--bar', el.offsetHeight + 19 + 'px');
+  }
+  // Each button shows when the link offers it; the choices stay hidden when it offers none.
+  function offer(answer) {
+    const names = answer && answer.actions;
+    if (!Array.isArray(names) || typeof answer.version !== 'string') return;
+    const shown = ACTIONS.filter(function (a) {
+      choice(a.name).hidden = names.indexOf(a.name) < 0;
+      return names.indexOf(a.name) >= 0;
+    });
+    if (!shown.length) return;
+    version = answer.version;
+    $('ready').hidden = false;
+    bar();
+  }
+  async function act(name) {
+    if (pending || connecting || !live) return;
+    const notes = snapshot(), okd = oks(), ans = replies();
+    busy(name); says('Sending your request…');
+    const closed = function () { setLive(null); says('This link has closed. Copy your notes and choose in the chat.'); toast('This link has closed. Copy your notes and choose in the chat.'); };
+    try {
+      const body = { action: name, version: version };
+      if (notes.length || okd.length || ans.length) body.text = lines(notes, okd, ans);
+      if (fileIds(ans).length) body.files = fileIds(ans);
+      const r = await ask('act', live, body);
+      if (r.status === 429) { says('Wait a few seconds, then tap again.'); return; }
+      const a = await r.json() || {};
+      const line = r.status === 200 && a.sent === true ? actionOf(name).done
+        : r.status === 409 && a.changed === true ? 'The ' + PAGE + ' changed. Reload to read it first.'
+        : r.status === 409 && a.done === true ? 'The chat was already asked.' : r.status === 409 && a.gone === true ? GONE : '';
+      if (r.status === 410 || r.status === 403) { closed(); return; }
+      if (!line) { says('The request was not confirmed. Your notes are saved. Try again.'); return; }
+      if (r.status === 200 && a.sent === true) acknowledge(notes, okd, ans);
+      // A gone file keeps the buttons, as a 429 does: the person picks it again and taps once more.
+      if (line !== GONE) hideActions();
+      says(line);
+    } catch (e) { says('The request was not confirmed. Your notes are saved. Try again.'); }
+    finally { busy(null); }
+  }
+  $('ready').addEventListener('click', function (e) {
+    const button = e.target.closest('[data-ready]');
+    if (!button || pending || connecting) return;
+    const step = button.getAttribute('data-ready'), a = actionOf(step), gaps = needsOpen();
+    // While the build needs the person, a go button leads to the first thing it needs instead.
+    if (a && gaps.length) {
+      all('.hit', function (n) { n.classList.remove('hit'); });
+      gaps[0].classList.add('hit'); gaps[0].scrollIntoView({ block: 'center' });
+      return;
+    }
+    if (step === 'yes') act(confirming.name);
+    else if (step === 'cancel' || a.confirm) {
+      says('');
+      if (a) fillConfirm(a);
+      $('ready-confirm').hidden = step === 'cancel';
+      all('#ready > [aria-controls]', function (b) { b.setAttribute('aria-expanded', String(b === button)); });
+      bar();
+      choice(step === 'cancel' ? confirming.name : 'cancel').focus({ preventScroll: true });
+    } else act(step);
+  });
+
+  // ── answers: a form's inputs and a live card's answer, kept with the notes and sent with them under their card ──
+  // `said` holds each answer as the chat last got it, so a changed answer goes again and an unchanged one never does.
+  const asker = function (id) { const m = /^(item|need)-(\d+)/.exec(id); return (m[1] === 'item' ? NOUN : 'Need') + ' #' + m[2]; };
+  function inputValue(q) {
+    const kind = q.getAttribute('data-kind'), boxes = q.querySelectorAll('input:checked');
+    if (kind === 'tick') return !!boxes.length;
+    if (kind === 'choice') return boxes.length ? boxes[0].value : undefined;
+    if (kind === 'choices') return boxes.length ? Array.prototype.map.call(boxes, function (b) { return b.value; }) : undefined;
+    const v = q.querySelector('input, textarea').value.slice(0, 2000);
+    return v.trim() ? v : undefined;
+  }
+  function fill() {
+    all('.form [data-q]', function (q) {
+      const v = data.answers[q.getAttribute('data-q')], kind = q.getAttribute('data-kind');
+      if (kind === 'file') return;
+      Array.prototype.forEach.call(q.querySelectorAll('input, textarea'), function (el) {
+        if (el.type === 'radio' || el.type === 'checkbox') el.checked = kind === 'tick' ? v === true : kind === 'choice' ? v === el.value : Array.isArray(v) && v.indexOf(el.value) >= 0;
+        else if (el.value !== (v || '')) el.value = v || '';
+      });
+    });
+  }
+  function answered(q) {
+    const id = q.getAttribute('data-q'), v = data.answers[id];
+    if (q.getAttribute('data-kind') === 'file') return !!(data.files[id] && data.files[id].length);
+    return q.getAttribute('data-kind') === 'tick' ? v === true : v !== undefined;
+  }
+  // Each answer the chat has not got yet, in page order: its id, its line, and the files it names.
+  function replies() {
+    const out = [];
+    all('.form [data-q], .live[data-live]', function (q) {
+      const id = q.getAttribute('data-q') || q.getAttribute('data-live'), v = data.answers[id];
+      if (q.getAttribute('data-kind') === 'file') {
+        const fresh = (data.files[id] || []).filter(function (f) { return !f.sent; });
+        if (fresh.length) out.push({ id: id, files: fresh.map(function (f) { return f.id; }),
+          line: '- ' + asker(id) + ', "' + q.getAttribute('data-label') + '": ' + fresh.map(function (f) { return f.name; }).join(', ') });
+        return;
+      }
+      if (v === undefined || data.said[id] === JSON.stringify(v)) return;
+      const text = v === true ? 'Yes' : v === false ? 'No' : Array.isArray(v) ? v.join(', ') : v.replace(/\s*\n\s*/g, ' ');
+      out.push({ id: id, said: JSON.stringify(v), files: [],
+        line: '- ' + asker(id) + (q.hasAttribute('data-live') ? ' answer: ' : ', "' + q.getAttribute('data-label') + '": ') + text });
+    });
+    return out;
+  }
+  const fileIds = function (ans) { return ans.reduce(function (ids, a) { return ids.concat(a.files); }, []); };
+  function typed(e) {
+    const q = e.target.closest ? e.target.closest('.form [data-q]') : null;
+    if (!q || q.getAttribute('data-kind') === 'file') return;
+    const v = inputValue(q), id = q.getAttribute('data-q');
+    if (v === undefined) delete data.answers[id]; else data.answers[id] = v;
+    persist();
+  }
+  document.addEventListener('input', typed);
+  document.addEventListener('change', typed);
+
+  // ── files: checked here first, then sent at once through the link or the inbox; a send later names them by id ──
+  const MB = 1024 * 1024, uploads = {}, waiting = {};
+  let refs = 0;
+  function upload(file, question) {
+    if (hosted) {
+      return file.arrayBuffer().then(function (buf) {
+        return new Promise(function (resolve) {
+          const ref = 'f' + (refs += 1);
+          waiting[ref] = resolve;
+          port.postMessage({ type: 'inbox:file', ref: ref, name: file.name, question: question, data: buf }, [buf]);
+        });
+      });
+    }
+    return fetch('file', { method: 'POST', cache: 'no-store', body: file,
+      headers: { 'x-reply-key': live, 'x-file-name': encodeURIComponent(file.name), 'x-file-question': encodeURIComponent(question) } })
+      .then(function (r) { return r.json().then(function (a) { return r.ok && a && /^[0-9a-f]{32}$/.test(a.id) ? { id: a.id } : { error: (a && a.error) || 'it was not sent; try again' }; }); })
+      .catch(function () { return { error: 'it was not sent; try again' }; });
+  }
+  // The app deletes a file a day after it came, or with a tap that failed or was cancelled: one this page holds unsent
+  // and the app no longer does goes back to its question, to be picked again.
+  const GONE = 'A file is no longer held. Pick it again, then send.';
+  function keepHeld(held) {
+    let gone = 0;
+    Object.keys(data.files).forEach(function (id) {
+      data.files[id] = data.files[id].filter(function (f) {
+        if (f.sent || held.indexOf(f.id) >= 0) return true;
+        gone += 1;
+        (uploads[id] = uploads[id] || []).push({ name: f.name, size: f.size, state: 'refused', why: 'the app no longer holds it; pick it again' });
+        return false;
+      });
+    });
+    if (gone) persist();
+  }
+  function bytesHeld() {
+    return Object.keys(data.files).concat(Object.keys(uploads)).reduce(function (sum, id) {
+      return sum + (data.files[id] || []).concat(uploads[id] || []).reduce(function (s, f) { return s + (f.state === 'refused' ? 0 : f.size); }, 0);
+    }, 0);
+  }
+  function refusal(q, file) {
+    const id = q.getAttribute('data-q'), ext = (/\.([a-z0-9]+)$/i.exec(file.name) || [])[1];
+    const kept = (data.files[id] || []).length + (uploads[id] || []).filter(function (f) { return f.state === 'sending'; }).length;
+    if (!live) return 'open this page from the chat\'s link to send files';
+    if (!ext || q.getAttribute('data-types').split(',').indexOf(ext.toLowerCase()) < 0) return 'this question does not take this type of file';
+    if (file.size > 25 * MB) return 'too big: 25 MB at most';
+    if (kept >= +q.getAttribute('data-count')) return 'this question takes ' + q.getAttribute('data-count') + ' at most';
+    if (bytesHeld() + file.size > 100 * MB) return 'the files for this page pass 100 MB';
+    return '';
+  }
+  function send(q, entry) {
+    const id = q.getAttribute('data-q');
+    entry.state = 'sending'; entry.why = ''; render();
+    upload(entry.file, asker(id) + ', "' + q.getAttribute('data-label') + '"').then(function (a) {
+      if (a.id) {
+        uploads[id] = uploads[id].filter(function (f) { return f !== entry; });
+        (data.files[id] = data.files[id] || []).push({ id: a.id, name: entry.file.name, size: entry.file.size, sent: false });
+        persist();
+      } else { entry.state = 'refused'; entry.why = String(a.error); entry.retry = true; render(); }
+    });
+  }
+  function pick(q, list) {
+    const id = q.getAttribute('data-q');
+    Array.prototype.forEach.call(list, function (file) {
+      const why = refusal(q, file), entry = { file: file, name: file.name, size: file.size, state: why ? 'refused' : 'sending', why: why };
+      (uploads[id] = uploads[id] || []).push(entry);
+      if (!why) send(q, entry);
+    });
+    render();
+  }
+  const sizeText = function (n) { return n < MB ? Math.max(1, Math.ceil(n / 1024)) + ' KB' : (n / MB).toFixed(1) + ' MB'; };
+  function drawFiles() {
+    all('.form [data-kind="file"]', function (q) {
+      const id = q.getAttribute('data-q'), list = q.querySelector('.files');
+      list.innerHTML = (data.files[id] || []).map(function (f, i) {
+        return '<li>' + esc(f.name) + ' · ' + sizeText(f.size) + ' <span class="tag">Sent</span><button type="button" class="btn-ghost" data-file="' + i + '">Remove</button></li>';
+      }).concat((uploads[id] || []).map(function (f, i) {
+        return '<li>' + esc(f.name) + ' · ' + sizeText(f.size) + (f.state === 'sending' ? ' <span class="muted">Sending…</span>'
+          : ' <span class="why">Refused: ' + esc(f.why) + '</span>' + (f.retry ? '<button type="button" class="btn-ghost" data-retry="' + i + '">Retry</button>' : '')
+            + '<button type="button" class="btn-ghost" data-drop="' + i + '">Remove</button>') + '</li>';
+      })).join('');
+    });
+  }
+  all('.form [data-kind="file"]', function (q) {
+    const drop = q.querySelector('.drop'), input = drop.querySelector('input');
+    input.addEventListener('change', function () { pick(q, input.files); input.value = ''; });
+    drop.addEventListener('dragover', function (e) { e.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener('dragleave', function () { drop.classList.remove('over'); });
+    drop.addEventListener('drop', function (e) { e.preventDefault(); drop.classList.remove('over'); pick(q, e.dataTransfer.files); });
+    q.querySelector('.files').addEventListener('click', function (e) {
+      const b = e.target.closest('button'), id = q.getAttribute('data-q');
+      if (!b) return;
+      if (b.hasAttribute('data-file')) { data.files[id].splice(+b.getAttribute('data-file'), 1); persist(); return; }
+      const entry = uploads[id][+(b.getAttribute('data-retry') || b.getAttribute('data-drop'))];
+      if (b.hasAttribute('data-retry')) send(q, entry);
+      else { uploads[id] = uploads[id].filter(function (f) { return f !== entry; }); render(); }
+    });
+  });
+
+  // ── what the build needs: an item that needs you counts until each of its questions has an answer ──
+  function needsOpen() {
+    return Array.prototype.filter.call(document.querySelectorAll('.need[data-need="needs"]'), function (n) {
+      const qs = n.querySelectorAll('[data-q]');
+      return !qs.length || Array.prototype.some.call(qs, function (q) { return !answered(q); });
+    });
+  }
+  function drawNeeds() {
+    const gaps = needsOpen();
+    all('.need[data-need="needs"]', function (n) {
+      const done = gaps.indexOf(n) < 0, tag = n.querySelector('.tag-outline, .tag');
+      tag.className = done ? 'tag' : 'tag-outline';
+      tag.textContent = done ? 'Answered' : 'Needs you';
+    });
+    return gaps.length ? gaps.length + (gaps.length === 1 ? ' thing needs you' : ' things need you') : '';
+  }
+
+  // ── live cards: the chat's own page in a sealed frame, talking to this page only through the port it is handed ──
+  // A frame loads once; a second load means its page went somewhere else, so it starts again from its own copy.
+  const cards = [];
+  function mount(c) {
+    if (c.port) c.port.close();
+    c.port = null;
+    const f = document.createElement('iframe');
+    let loads = 0;
+    f.setAttribute('sandbox', 'allow-scripts'); f.title = c.title; f.setAttribute('srcdoc', c.doc);
+    f.addEventListener('load', function () {
+      loads += 1;
+      if (loads === 1) {
+        const ch = new MessageChannel();
+        c.port = ch.port1;
+        ch.port1.onmessage = function (e) { heardCard(c, e.data); };
+        f.contentWindow.postMessage({ type: 'review:hello' }, '*', [ch.port2]);
+        return;
+      }
+      c.resets += 1;
+      c.said.hidden = false;
+      c.said.textContent = 'This card tried to leave the page.' + (c.resets > 2 ? ' Reload the page to try it again.' : '');
+      if (c.resets > 2) { f.remove(); c.port.close(); c.port = null; } else mount(c);
+    });
+    c.stage.replaceChildren(f);
+    c.frame = f;
+    fitCard(c);
+  }
+  function heardCard(c, m) {
+    if (!m || m.type !== 'review:answer' || typeof m.text !== 'string') return;
+    const text = m.text.slice(0, 2000);
+    if (text.trim()) data.answers[c.id] = text; else delete data.answers[c.id];
+    persist();
+  }
+  // Phone and Computer draw the page at that width, scaled to the card; full screen shows it at true size.
+  function fitCard(c) {
+    if (!c.frame) return;
+    const full = c.box.classList.contains('full'), k = full ? 1 : Math.min(1, c.stage.clientWidth / c.width);
+    c.frame.style.width = c.width + 'px';
+    c.frame.style.height = full ? '100%' : c.height + 'px';
+    c.frame.style.transform = k < 1 ? 'scale(' + k + ')' : '';
+    c.stage.style.height = full ? '' : Math.ceil(c.height * k) + 'px';
+  }
+  function full(c, on) {
+    c.box.classList.toggle('full', on);
+    document.body.classList.toggle('viewing', on);
+    c.tools.querySelector('[data-full]').textContent = on ? 'Close' : 'Full screen';
+    fitCard(c);
+    if (!on) bar();
+  }
+  all('.live[data-live]', function (box) {
+    const old = box.querySelector('iframe'), tools = document.createElement('div'), said = document.createElement('p');
+    tools.className = 'live-tools';
+    tools.innerHTML = '<button type="button" class="btn-ghost" data-width="390" aria-pressed="true">Phone</button>'
+      + '<button type="button" class="btn-ghost" data-width="1280" aria-pressed="false">Computer</button><button type="button" class="btn-ghost" data-full>Full screen</button>';
+    said.className = 'muted live-said'; said.setAttribute('role', 'status'); said.hidden = true;
+    const c = { box: box, id: box.getAttribute('data-live'), height: +box.getAttribute('data-height') || 640, width: 390, doc: old.getAttribute('srcdoc'),
+      title: old.title, stage: box.querySelector('.live-box'), tools: tools, said: said, port: null, frame: null, resets: 0 };
+    box.insertBefore(tools, c.stage); box.appendChild(said);
+    tools.addEventListener('click', function (e) {
+      const b = e.target.closest('button');
+      if (!b) return;
+      if (b.hasAttribute('data-full')) { full(c, !box.classList.contains('full')); return; }
+      c.width = +b.getAttribute('data-width');
+      all('[data-live="' + c.id + '"] [data-width]', function (w) { w.setAttribute('aria-pressed', String(w === b)); });
+      fitCard(c);
+    });
+    cards.push(c);
+    mount(c);
+    // A stage first laid out at no width, as in an Inbox frame still opening, fits again once it gets its width.
+    if (window.ResizeObserver) new ResizeObserver(function () { if (c.stage.clientWidth !== c.seen) { c.seen = c.stage.clientWidth; fitCard(c); } }).observe(c.stage);
+  });
+  window.addEventListener('load', function () { cards.forEach(fitCard); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') cards.forEach(function (c) { if (c.box.classList.contains('full')) full(c, false); });
+  });
+
+  let width = root.clientWidth;
+  window.addEventListener('resize', function () {
+    if (root.clientWidth !== width) {
+      width = root.clientWidth; hideChip();
+      if (view) { const d = view; closeViewer(false); openViewer(d); }
+    }
+    drawings.forEach(fit);
+    cards.forEach(fitCard);
+    if (open) place();
+    bar();
+  });
+  // ── hosted: in the live app's inbox, a sealed frame that reaches the inbox only through the port its first greeting carries ──
+  let hosted = null, port = null;
+  const CODES = { sent: 200, changed: 409, done: 409, gone: 409, soon: 429, closed: 410, expired: 410 };
+  function post(message) { port.postMessage(message); }
+  // The inbox answers a tap only once the chat has it, or once it is refused, cancelled or failed.
+  function hostedAsk(path, body) {
+    return new Promise(function (resolve) {
+      hosted.reply = function (state) {
+        const status = Object.prototype.hasOwnProperty.call(CODES, state) ? CODES[state] : 502;
+        const answer = status === 200 ? { sent: true } : state === 'changed' || state === 'done' || state === 'gone' ? { [state]: true } : { sent: false };
+        resolve({ ok: status === 200, status: status, json: function () { return Promise.resolve(answer); } });
+      };
+      const tap = { type: 'inbox:tap', action: path === 'send' ? 'send' : body.action, text: body.text || '' };
+      if (body.files) tap.files = body.files;
+      post(tap);
+    });
+  }
+  // The inbox's switch owns the look: this frame can't remember a choice, so its own switch goes. Unknown looks change nothing.
+  function look(theme) { if (theme === 'light' || theme === 'dark') document.documentElement.classList.toggle('dark', theme === 'dark'); }
+  function heard(m) {
+    if (!m || typeof m !== 'object') return;
+    if (m.type === 'inbox:theme') look(m.theme);
+    else if (m.type === 'inbox:notes' && (typeof m.value === 'string' || m.value === null)) {
+      load(m.value);
+      if (hosted.held) keepHeld(hosted.held);
+      hosted.held = null; render();
+    } else if (hosted.reply && m.type === 'inbox:result') {
+      if (Array.isArray(m.files)) keepHeld(m.files);
+      const reply = hosted.reply; hosted.reply = null; reply(m.state);
+      // A tap that reached the chat closes the page in the inbox, so it reads as answered now, as its Archive shows it.
+      if (m.state === 'sent') closePage();
+    } else if (m.type === 'inbox:file-result' && waiting[m.ref]) {
+      const done = waiting[m.ref];
+      delete waiting[m.ref];
+      done(typeof m.id === 'string' && /^[0-9a-f]{32}$/.test(m.id) ? { id: m.id } : { error: typeof m.error === 'string' ? m.error : 'it was not sent; try again' });
+    }
+  }
+  // Back and the workspace sit first in the page, so they scroll away with its words; the inbox's own bar stays put.
+  function backRow(workspace) {
+    const row = document.createElement('div'), back = document.createElement('button');
+    row.className = 'back'; back.type = 'button'; back.className = 'btn-ghost'; back.textContent = 'Back';
+    back.addEventListener('click', function () { post({ type: 'inbox:back' }); });
+    row.appendChild(back);
+    if (typeof workspace === 'string' && workspace) {
+      const where = document.createElement('span');
+      where.className = 'muted'; where.textContent = workspace; row.appendChild(where);
+    }
+    document.querySelector('main > header').prepend(row);
+  }
+  // A closed or answered page in the inbox is read-only: no button, no note, no answer or file.
+  function closePage() {
+    readOnly = true; document.body.classList.add('read-only');
+    all('.form input, .form textarea', function (el) { el.disabled = true; });
+    render();
+  }
+  window.addEventListener('message', function (e) {
+    const m = e.data;
+    if (hosted || window.parent === window || e.source !== window.parent || !e.ports || !e.ports[0] || !m || m.type !== 'inbox:hello'
+      || typeof m.version !== 'string' || !Array.isArray(m.actions)) return;
+    // The files the app still holds for this page, checked once its notes arrive.
+    hosted = { reply: null, held: Array.isArray(m.files) ? m.files : null };
+    port = e.ports[0];
+    port.onmessage = function (ev) { heard(ev.data); };
+    document.querySelectorAll('.theme-toggle').forEach(function (button) { button.remove(); });
+    look(m.theme);
+    // Notes live with the inbox page: this frame has no storage of its own.
+    store = { setItem: function (key, value) { post({ type: 'inbox:notes-set', key: key, value: value }); } };
+    post({ type: 'inbox:notes-get', key: KEY });
+    backRow(m.workspace);
+    if (m.readOnly === true) { closePage(); return; }
+    setLive('inbox'); offer(m); render();
+  });
+  // In a frame, a link opens its own tab and a # link scrolls in place: the frame never leaves this page.
+  // A srcdoc page resolves #why against the inbox's address, so following it would load the inbox here.
+  document.addEventListener('click', function (e) {
+    const a = window.parent !== window && e.target.closest ? e.target.closest('a[href]') : null;
+    if (!a) return;
+    const href = a.getAttribute('href');
+    if (href.charAt(0) !== '#') { a.target = '_blank'; a.rel = 'noopener noreferrer'; return; }
+    e.preventDefault();
+    if (href.charAt(1) === '/') { jump(href); return; }
+    let el = null;
+    try { el = document.getElementById(decodeURIComponent(href.slice(1))); } catch (err) { /* a bad escape names nothing */ }
+    if (el) el.scrollIntoView({ block: 'start' });
+  }, true);
+  window.addEventListener('hashchange', jump);
+  render();
+  jump();
+  const key = linkKey();
+  if (key) {
+    connecting = true; says('Connecting to the chat…'); bar();
+    (async function () {
+      try {
+        const r = await ask('alive', key);
+        if (!r.ok) return;
+        const answer = await r.json();
+        if (!answer || typeof answer !== 'object') return;
+        setLive(key); offer(answer);
+      } catch (e) { /* not live: the page copies */ }
+      finally { connecting = false; says(''); bar(); }
+    }());
+  }
+}());
+</script>
+</body>
+</html>

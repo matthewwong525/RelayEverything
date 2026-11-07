@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../brand.dart';
 import '../relay.dart';
 import 'compose.dart';
 import 'connect.dart' show Scanner;
@@ -97,7 +98,10 @@ class _TimelineScreenState extends State<TimelineScreen> {
         ];
         final listening = relay.listening;
         return Scaffold(
-          appBar: AppBar(title: const Text('Relay Everything'), actions: [
+          appBar: AppBar(titleSpacing: 12, title: const Row(mainAxisSize: MainAxisSize.min, spacing: 8, children: [
+            RelayMark(size: 24),
+            Flexible(child: Text('Relay Everything', overflow: TextOverflow.ellipsis)),
+          ]), actions: [
             relay.settings.sending ? _SyncChip(relay: relay) : const _LocalChip(),
             IconButton(
               tooltip: 'Settings',
@@ -109,11 +113,11 @@ class _TimelineScreenState extends State<TimelineScreen> {
             if (listening != null) ListeningCard(since: listening),
             Row(mainAxisSize: MainAxisSize.min, spacing: 12, children: [
               HoldToTalkButton(relay: relay),
-              FloatingActionButton.extended(
+              AccentGlow(child: FloatingActionButton.extended(
                 onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ComposeScreen(relay: relay, picker: widget.picker))),
                 icon: const Icon(Icons.edit_outlined),
                 label: const Text('New note'),
-              ),
+              )),
             ]),
           ]),
           body: RefreshIndicator(

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/app.dart';
+import 'package:relay_app/brand.dart';
 import 'package:relay_app/relay.dart';
 import 'package:relay_app/screens/settings.dart' show sentLine;
 
@@ -181,6 +182,24 @@ void main() {
   }
 
   SwitchListTile switchOf(WidgetTester tester, String title) => tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, title));
+
+  testWidgets('shows the mark beside Relay Everything, in the brand colors that follow the phone', (tester) async {
+    await tester.pumpWidget(RelayApp(relay: relay));
+    final bar = find.byType(AppBar);
+    expect(find.descendant(of: bar, matching: find.byType(RelayMark)), findsOneWidget);
+    expect(find.descendant(of: bar, matching: find.text('Relay Everything')), findsOneWidget);
+    RelayMarkPainter painter() => tester.widget<CustomPaint>(
+      find.descendant(of: find.byType(RelayMark), matching: find.byType(CustomPaint))).painter! as RelayMarkPainter;
+    expect(painter().ink, BrandColors.light.accentText);
+    expect(painter().spark, BrandColors.light.spark);
+    expect(Theme.of(tester.element(bar)).scaffoldBackgroundColor, BrandColors.light.paper);
+
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    await tester.pumpAndSettle();
+    expect(painter().ink, BrandColors.dark.accentText);
+    expect(Theme.of(tester.element(bar)).scaffoldBackgroundColor, BrandColors.dark.paper);
+  });
 
   testWidgets('opens on the timeline with no key, and keeps a note on this phone', (tester) async {
     await tester.pumpWidget(RelayApp(relay: relay));

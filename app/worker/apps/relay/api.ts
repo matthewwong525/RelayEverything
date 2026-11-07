@@ -8,6 +8,7 @@ import { audio } from "./audio.ts";
 import { chatDelete, chatList, chatRead } from "./chat-read.ts";
 import { chats, chatSaves } from "./chats.ts";
 import { deviceAdd, deviceOff, devices } from "./device.ts";
+import { google, googleDisconnect } from "./google/connect.ts";
 import { key } from "./key.ts";
 import { notes } from "./notes.ts";
 import { pebble } from "./pebble.ts";
@@ -39,6 +40,8 @@ export const routes = new Map<string, Route>([
   ["POST webhooks/sweep", sweepNow],
   ["GET ai-apps", aiApps],
   ["POST ai-apps-disconnect", aiAppDisconnect],
+  ["GET google", google],
+  ["POST google-disconnect", googleDisconnect],
   ["POST chats", chats],
   ["POST chat-saves", chatSaves],
   ["GET chats", chatList],

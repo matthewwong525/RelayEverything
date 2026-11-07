@@ -1,7 +1,8 @@
-// The web API under /v1/: the connector's tools as plain HTTP, each route parsing its tool's own input, so a route and
-// its tool can't differ. It reads and adds notes; it changes and deletes nothing. wiki/stack/relay-ai-connector.md
+// The web API under /v1/: the connector's tools as plain HTTP, each route parsing its tool's own input, so they can't
+// differ. It changes nothing in the space but adding notes; /v1/google/ passes on: wiki/stack/relay-google.md
 import { z } from "zod";
-import { answer, Refusal, type Asker } from "./answers.ts";
+import { GoogleRefusal, pass, type Service } from "../apps/relay/google/proxy.ts";
+import { answer, GOOGLE_AGAIN, Refusal, type Asker } from "./answers.ts";
 import { TOOLS, type ToolName } from "./inputs.ts";
 
 /** One route: its tools, the path fields it fills, and whether `q` is the query. `GET /v1/notes` searches with `q`
@@ -27,7 +28,8 @@ export const ROUTES: readonly V1Route[] = [
     description: "The caller's device name, as the phone's key check answers, and whether it may add notes. It reads no data." },
 ];
 
-const CODES = { 400: "invalid_request", 401: "invalid_token", 403: "forbidden", 404: "not_found", 405: "method_not_allowed" } as const;
+export const CODES = { 400: "invalid_request", 401: "invalid_token", 403: "forbidden", 404: "not_found", 405: "method_not_allowed",
+  503: "temporarily_unavailable" } as const;
 export type Status = keyof typeof CODES;
 
 /** A refusal as OAuth's error shape, which every /v1/ refusal shares. */
@@ -67,13 +69,31 @@ async function me({ space, adder }: Asker) {
   return { device: row?.name ?? "", adds: true };
 }
 
+/** The four Google services' paths: `/v1/google/<service>/<Google's own path>`. */
+const GOOGLE = /^\/v1\/google\/(gmail|calendar|drive|contacts)\/(.*)$/;
+
+/** A /v1/google/ request, passed to the caller's own Google, or refused before anything reaches Google. */
+async function google(request: Request, asker: Asker, service: Service, path: string): Promise<Response> {
+  if (!asker.google) return problem(403, GOOGLE_AGAIN);
+  const url = new URL(request.url);
+  try {
+    return await pass(asker.env, asker.space, { service, path, method: request.method, search: url.search, headers: request.headers,
+      body: request.body, base: `${url.origin}/v1/google/` });
+  } catch (error) {
+    if (error instanceof GoogleRefusal) return problem(error.status, error.message);
+    throw error;
+  }
+}
+
 /** One /v1/ request from a caller the connector already checked. */
 export async function v1(request: Request, asker: Asker): Promise<Response> {
   const url = new URL(request.url);
+  const toGoogle = GOOGLE.exec(url.pathname);
+  if (toGoogle) return google(request, asker, toGoogle[1] as Service, toGoogle[2]);
   const found = ROUTES.map(route => ({ route, match: patterns.get(route)!.exec(url.pathname) })).filter(({ match }) => match);
   if (!found.length) return problem(404, "No such route. Every route is in /v1/openapi.json.");
   const chosen = found.find(({ route }) => route.method === request.method);
-  // The API never changes or deletes, so no other method has a route.
+  // The API changes nothing in the space, so no other method has a route.
   if (!chosen) return problem(405, "This route only reads or adds.", { Allow: found.map(({ route }) => route.method).join(", ") });
   const { route, match } = chosen;
   if (!route.tools.length) return Response.json(await me(asker), { headers: { "Cache-Control": "no-store" } });

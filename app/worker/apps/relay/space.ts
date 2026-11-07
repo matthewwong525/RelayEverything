@@ -65,20 +65,37 @@ function dbOf(stub: Pick<Stub, "query" | "batch">): Db {
 const encoder = new TextEncoder();
 const IV = 12;
 
-/** A person's recordings and note files in the file store: each under their own folder, sealed with their space's
- *  file key and its own name, so the store alone, or a copy under another name, never opens. */
-function filesOf(bucket: R2Bucket, stub: Pick<Stub, "fileKey">, personId: string) {
-  const prefix = `people/${personId}/`;
+/** Seals and opens bytes with the space's file key and a name, made on first use: bytes sealed under one name, or in
+ *  another space, never open. */
+function sealerOf(stub: Pick<Stub, "fileKey">) {
   let key: Promise<CryptoKey> | undefined;
   const sealing = () => key ??= stub.fileKey().then(raw => crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]));
-  const seal = async (name: string, bytes: ArrayBuffer) => {
-    const iv = crypto.getRandomValues(new Uint8Array(IV));
-    const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: encoder.encode(name) }, await sealing(), bytes));
-    const out = new Uint8Array(IV + sealed.length);
-    out.set(iv);
-    out.set(sealed, IV);
-    return out;
+  return {
+    async seal(name: string, bytes: ArrayBuffer | Uint8Array): Promise<Uint8Array> {
+      const iv = crypto.getRandomValues(new Uint8Array(IV));
+      const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: encoder.encode(name) }, await sealing(), bytes));
+      const out = new Uint8Array(IV + sealed.length);
+      out.set(iv);
+      out.set(sealed, IV);
+      return out;
+    },
+    /** The bytes, or null when they do not open under this name and key. */
+    async open(name: string, data: Uint8Array): Promise<Uint8Array | null> {
+      try {
+        return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: data.subarray(0, IV), additionalData: encoder.encode(name) },
+          await sealing(), data.subarray(IV)));
+      } catch {
+        return null;
+      }
+    },
   };
+}
+type Sealer = ReturnType<typeof sealerOf>;
+
+/** A person's recordings and note files in the file store: each under their own folder, sealed with their space's
+ *  file key and its own name, so the store alone, or a copy under another name, never opens. */
+function filesOf(bucket: R2Bucket, { seal, open }: Sealer, personId: string) {
+  const prefix = `people/${personId}/`;
   const files = {
     /** The file store's name for a note's recording (its note id), or a note's file (`attachments/<id>`). */
     nameOf: (item: string) => `${prefix}${item}`,
@@ -92,14 +109,7 @@ function filesOf(bucket: R2Bucket, stub: Pick<Stub, "fileKey">, personId: string
     async open(name: string): Promise<Uint8Array | null> {
       if (!name.startsWith(prefix)) return null;
       const object = await bucket.get(name);
-      if (!object) return null;
-      const data = new Uint8Array(await object.arrayBuffer());
-      try {
-        return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: data.subarray(0, IV), additionalData: encoder.encode(name) },
-          await sealing(), data.subarray(IV)));
-      } catch {
-        return null;
-      }
+      return object ? open(name, new Uint8Array(await object.arrayBuffer())) : null;
     },
     /** Deletes every object in the person's folder, a page at a time; answers how many. */
     async removeAll(): Promise<number> {
@@ -120,6 +130,8 @@ function filesOf(bucket: R2Bucket, stub: Pick<Stub, "fileKey">, personId: string
 export type Files = ReturnType<typeof filesOf>;
 export type PersonSpace = {
   personId: string; db: Db; files: Files;
+  /** Seals a small secret, such as a Google sign-in, with the space's file key under `name`, and opens it again. */
+  seal: Sealer["seal"]; open: Sealer["open"];
   /** Keeps the webhook alarm set while the space has a webhook. */
   watch(): Promise<void>;
   sweep(): Promise<number>;
@@ -130,8 +142,9 @@ export type PersonSpace = {
 export function spaceOf(env: SpaceEnv, caller: Caller): PersonSpace {
   if (caller[checked] !== true) throw new Error("A space opens only for a checked caller.");
   const stub = env.SPACES.get(env.SPACES.idFromName(caller.personId)) as unknown as Stub;
+  const sealer = sealerOf(stub);
   return {
-    personId: caller.personId, db: dbOf(stub), files: filesOf(env.RELAY_BUCKET, stub, caller.personId),
+    personId: caller.personId, db: dbOf(stub), files: filesOf(env.RELAY_BUCKET, sealer, caller.personId), seal: sealer.seal, open: sealer.open,
     watch: async () => stub.watch(caller.personId), sweep: async () => stub.sweep(caller.personId),
     deleteEverything: async () => stub.deleteEverything(),
   };

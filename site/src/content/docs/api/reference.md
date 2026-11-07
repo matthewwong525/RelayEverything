@@ -624,6 +624,42 @@ Send the input as a JSON body.
 | `unavailable` | The AI connector is not set up here. |
 | `not_found` | You have no connected AI app with this id. |
 
+## Read the Google connection
+
+`GET /apps/relay/api/google` · `relay.google` · reads · called by a signed-in person only, not a device key
+
+Whether this server connects Google, and the Google address you connected, with its permissions and when.
+
+### Input
+
+It takes no input.
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `available` | boolean | yes |  |
+| `connected` | object or null | yes |  |
+| `connected.email` | string | yes |  |
+| `connected.scopes` | array of string | yes |  |
+| `connected.connectedAt` | number | yes |  |
+
+## Disconnect Google
+
+`POST /apps/relay/api/google-disconnect` · `relay.google-disconnect` · calls another service · called by a signed-in person only, not a device key
+
+End your Google sign-in at Google and delete it from your space: no app or key reaches your Google after this.
+
+### Input
+
+Send the input as a JSON body.
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `disconnected` | boolean | yes | False when no Google was connected. |
+
 ## Save the AI's summary of a chat
 
 `POST /apps/relay/api/chat-saves` · `relay.chat-saves-add` · writes · called by a Claude Code chat key only
@@ -853,7 +889,7 @@ It takes no input.
 
 `POST /apps/relay/api/account-delete` · `relay.account-delete` · writes · called by a signed-in person only, not a device key
 
-Delete your account: your notes, recordings, health, places, chats, devices, webhooks and AI apps. It can't be undone.
+Delete your account: your notes, recordings, health, places, chats, devices, webhooks, AI apps and Google connection. It can't be undone.
 
 ### Input
 

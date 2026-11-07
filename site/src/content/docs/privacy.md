@@ -20,6 +20,7 @@ Relay Everything keeps your notes on your phone. When you turn on sending, it ke
 | The phone's key | The iPhone Keychain or the Android Keystore; the server keeps only its fingerprint | Never sent, except as the key's header |
 | Your email | The server's list of accounts, to sign you in | When you sign up |
 | Your sign-in | A cookie in your browser, for 30 days | With each visit to your Relay Everything page |
+| Your Google connection: your Google address, the permissions you gave, and Google's sign-in, sealed | Your space on your Relay Everything server | When you click **Connect Google** |
 | A copy of what your server stores | [Your own database](../connections/your-database/), through a webhook you add | Notes always, with each file's name, type and size but not the file; health and location only if you tick them for that webhook |
 
 With sending off, the app makes no network call, reads no health data, and keeps no location history. The one exception is the speech model for voice notes, and only after you tap **Get it**. The same is true when a shortcut adds a note: [Shortcuts](../app/shortcuts/#what-is-sent) follow your sending setting, and **Get notes** reads only the phone.
@@ -33,15 +34,29 @@ Each person's data is in their own space: a separate store that holds only that 
 - **Your AI apps** read only your space, and add notes to it, only after you connect them: [Connect your AI](../connections/connect-your-ai/).
 - **Your own scripts and services** read your space and add notes through the web API, only with an API key you made or after you connect them: [Connect a service](../api/connect-a-service/).
 - **Your webhooks** send only your data, to the addresses you add.
+- **Your Google** is reached only after you connect it, only by your AI apps connected after that and your API keys: [Google](#google).
 - **No one else.** The server opens a space only for the person who signed in, or for that person's own key or AI app. There is no screen, route or tool for the server's owner to open another person's space. [The code is public](https://github.com/matthewwong525/RelayEverything), and a test fails if such a way in is added.
 
 Each recording and each file on a note is in your own folder of the server's file store, sealed with a key that is kept in your space. The file store alone, as in the Cloudflare dashboard, shows only sealed bytes. Only your own sign-in opens a file on your Relay Everything page.
 
 **The limit:** the owner of the Cloudflare account that runs a server could change its code to read a space. Only encryption on the phone stops that, and Relay Everything does not have it yet. On [your own server](../start/run-your-own/), that owner is you.
 
+## Google
+
+When you [connect Google](../connections/google/), your space keeps your Google address, the permissions you gave, and Google's sign-in for Relay Everything, sealed with your space's own key. It keeps no email, event, file or contact. Each request from your AI app or API key goes to Google, and Google's answer goes back to that app or script only.
+
+Relay Everything's use and transfer of information received from Google APIs to any other app will adhere to the [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy), including the Limited Use requirements.
+
+- Relay Everything uses your Google data only to answer the requests you or your connected apps and keys make.
+- It does not use your Google data for ads, does not sell it, and does not use it to train AI models.
+- No person at Relay Everything reads your Google data.
+- Google's answer to an AI app goes to that app's company, under its own terms: [What leaves Relay Everything](../connections/connect-your-ai/#what-leaves-relay-everything).
+
+To stop it, click **Disconnect** on the **Google** card. Relay Everything ends its sign-in at Google and deletes it.
+
 ## Delete your account
 
-Click **Delete my account** on your Relay Everything page, and type your email to confirm. It deletes your space, your recordings, the files on your notes, your keys, your sign-ins and your connected AI apps. You can't undo it. Your notes stay on your phone.
+Click **Delete my account** on your Relay Everything page, and type your email to confirm. It deletes your space, your recordings, the files on your notes, your keys, your sign-ins and your connected AI apps, and ends your Google connection at Google. You can't undo it. Your notes stay on your phone.
 
 ## What is not kept
 
@@ -63,5 +78,6 @@ Click **Delete my account** on your Relay Everything page, and type your email t
 | One phone | Tap **Disconnect this phone** in Settings, or click **Turn off** beside it on your Relay Everything page: [Keys](../api/keys/#make-list-and-turn-off-keys). |
 | Ring notes | Turn off the webhook in the Pebble app, or turn off the Pebble app's key on your Relay Everything page. |
 | A webhook to your database | **Pause** or **Remove** it on the Relay Everything page: [Your own database](../connections/your-database/). |
+| Google | Click **Disconnect** on the **Google** card: [Connect Google](../connections/google/#disconnect). |
 
 Turning a part off stops new data. Data already in your space stays there until you [delete your account](#delete-your-account), and your notes stay on your phone.

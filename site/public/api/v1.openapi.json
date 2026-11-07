@@ -3,7 +3,7 @@
   "info": {
     "title": "Relay Everything API",
     "version": "1.0.0",
-    "description": "Read one person's Relay Everything notes, health, places and saved chats, and add notes. It changes and deletes nothing. Each caller reaches only the space of the person who connected it or made its key."
+    "description": "Read one person's Relay Everything notes, health, places and saved chats, and add notes: it changes and deletes none of them. /v1/google/ reaches the person's own Gmail, Calendar, Drive and Contacts, once they connect Google. Each caller reaches only the space of the person who connected it or made its key."
   },
   "servers": [
     {
@@ -288,7 +288,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
             "content": {
               "application/json": {
                 "schema": {
@@ -445,7 +445,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
             "content": {
               "application/json": {
                 "schema": {
@@ -756,7 +756,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
             "content": {
               "application/json": {
                 "schema": {
@@ -940,7 +940,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1112,7 +1112,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1266,7 +1266,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1479,7 +1479,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1681,7 +1681,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1756,7 +1756,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1767,6 +1767,1027 @@
           },
           "404": {
             "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/google/{service}/{path}": {
+      "get": {
+        "operationId": "googleGet",
+        "summary": "Read from Google",
+        "description": "GET to the person's own Gmail, Calendar, Drive or Contacts, with their sign-in; Google's status, type and body come back as Google sent them. Contacts take GET only. Nothing deletes an email, a thread, a draft or a Drive file for ever: put it in the bin. An API key or an app connected after Google reaches it.",
+        "parameters": [
+          {
+            "name": "service",
+            "in": "path",
+            "required": true,
+            "description": "gmail, calendar, drive (with upload/ for an upload) or contacts.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "gmail",
+                "calendar",
+                "drive",
+                "contacts"
+              ]
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Google's own path after the service's base: Gmail's after users/me/, Calendar's after calendar/v3/, Drive's after drive/v3/, People's after v1/. Send it as is, not encoded: its slashes stay slashes, and an encoded slash (%2F) is refused. Google's query goes as this request's own query string, not in `path`. A client that encodes path fields can use the fixed example routes, such as /v1/google/gmail/messages."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Google's own answer."
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "This server has no Google client, or Google's sign-in could not be renewed: try again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "googlePost",
+        "summary": "Send to Google",
+        "description": "POST to the person's own Gmail, Calendar, Drive or Contacts, with their sign-in; Google's status, type and body come back as Google sent them. Contacts take GET only. Nothing deletes an email, a thread, a draft or a Drive file for ever: put it in the bin. An API key or an app connected after Google reaches it.",
+        "parameters": [
+          {
+            "name": "service",
+            "in": "path",
+            "required": true,
+            "description": "gmail, calendar, drive (with upload/ for an upload) or contacts.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "gmail",
+                "calendar",
+                "drive",
+                "contacts"
+              ]
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Google's own path after the service's base: Gmail's after users/me/, Calendar's after calendar/v3/, Drive's after drive/v3/, People's after v1/. Send it as is, not encoded: its slashes stay slashes, and an encoded slash (%2F) is refused. Google's query goes as this request's own query string, not in `path`. A client that encodes path fields can use the fixed example routes, such as /v1/google/gmail/messages."
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "*/*": {
+              "schema": {}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Google's own answer."
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "This server has no Google client, or Google's sign-in could not be renewed: try again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "googlePut",
+        "summary": "Replace in Google",
+        "description": "PUT to the person's own Gmail, Calendar, Drive or Contacts, with their sign-in; Google's status, type and body come back as Google sent them. Contacts take GET only. Nothing deletes an email, a thread, a draft or a Drive file for ever: put it in the bin. An API key or an app connected after Google reaches it.",
+        "parameters": [
+          {
+            "name": "service",
+            "in": "path",
+            "required": true,
+            "description": "gmail, calendar, drive (with upload/ for an upload) or contacts.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "gmail",
+                "calendar",
+                "drive",
+                "contacts"
+              ]
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Google's own path after the service's base: Gmail's after users/me/, Calendar's after calendar/v3/, Drive's after drive/v3/, People's after v1/. Send it as is, not encoded: its slashes stay slashes, and an encoded slash (%2F) is refused. Google's query goes as this request's own query string, not in `path`. A client that encodes path fields can use the fixed example routes, such as /v1/google/gmail/messages."
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "*/*": {
+              "schema": {}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Google's own answer."
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "This server has no Google client, or Google's sign-in could not be renewed: try again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "googlePatch",
+        "summary": "Change in Google",
+        "description": "PATCH to the person's own Gmail, Calendar, Drive or Contacts, with their sign-in; Google's status, type and body come back as Google sent them. Contacts take GET only. Nothing deletes an email, a thread, a draft or a Drive file for ever: put it in the bin. An API key or an app connected after Google reaches it.",
+        "parameters": [
+          {
+            "name": "service",
+            "in": "path",
+            "required": true,
+            "description": "gmail, calendar, drive (with upload/ for an upload) or contacts.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "gmail",
+                "calendar",
+                "drive",
+                "contacts"
+              ]
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Google's own path after the service's base: Gmail's after users/me/, Calendar's after calendar/v3/, Drive's after drive/v3/, People's after v1/. Send it as is, not encoded: its slashes stay slashes, and an encoded slash (%2F) is refused. Google's query goes as this request's own query string, not in `path`. A client that encodes path fields can use the fixed example routes, such as /v1/google/gmail/messages."
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "*/*": {
+              "schema": {}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Google's own answer."
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "This server has no Google client, or Google's sign-in could not be renewed: try again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "googleDelete",
+        "summary": "Delete in Google",
+        "description": "DELETE to the person's own Gmail, Calendar, Drive or Contacts, with their sign-in; Google's status, type and body come back as Google sent them. Contacts take GET only. Nothing deletes an email, a thread, a draft or a Drive file for ever: put it in the bin. An API key or an app connected after Google reaches it.",
+        "parameters": [
+          {
+            "name": "service",
+            "in": "path",
+            "required": true,
+            "description": "gmail, calendar, drive (with upload/ for an upload) or contacts.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "gmail",
+                "calendar",
+                "drive",
+                "contacts"
+              ]
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Google's own path after the service's base: Gmail's after users/me/, Calendar's after calendar/v3/, Drive's after drive/v3/, People's after v1/. Send it as is, not encoded: its slashes stay slashes, and an encoded slash (%2F) is refused. Google's query goes as this request's own query string, not in `path`. A client that encodes path fields can use the fixed example routes, such as /v1/google/gmail/messages."
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "*/*": {
+              "schema": {}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Google's own answer."
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "This server has no Google client, or Google's sign-in could not be renewed: try again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/google/gmail/messages": {
+      "get": {
+        "operationId": "googleGmailListMessages",
+        "summary": "Search Gmail",
+        "description": "Gmail's messages.list: the ids of the emails that match a Gmail search, newest first.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "A Gmail search, as in Gmail's search box.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "maxResults",
+            "in": "query",
+            "required": false,
+            "description": "How many, at most.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pageToken",
+            "in": "query",
+            "required": false,
+            "description": "The last answer's `nextPageToken`, to read the next page.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Google's own answer."
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "This server has no Google client, or Google's sign-in could not be renewed: try again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/google/gmail/messages/send": {
+      "post": {
+        "operationId": "googleGmailSendMessage",
+        "summary": "Send an email",
+        "description": "Gmail's messages.send: sends an email from the person's own address. A sent email can't be undone.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "raw"
+                ],
+                "properties": {
+                  "raw": {
+                    "type": "string",
+                    "description": "The whole email, as RFC 2822 text in base64url."
+                  },
+                  "threadId": {
+                    "type": "string",
+                    "description": "The thread a reply goes in."
+                  }
+                },
+                "description": "The email."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Google's own answer."
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "This server has no Google client, or Google's sign-in could not be renewed: try again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/google/calendar/calendars/primary/events": {
+      "get": {
+        "operationId": "googleCalendarListEvents",
+        "summary": "List calendar events",
+        "description": "Calendar's events.list on the person's own calendar.",
+        "parameters": [
+          {
+            "name": "timeMin",
+            "in": "query",
+            "required": false,
+            "description": "The first time, as RFC 3339.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "timeMax",
+            "in": "query",
+            "required": false,
+            "description": "The time to stop before, as RFC 3339.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "singleEvents",
+            "in": "query",
+            "required": false,
+            "description": "true gives each repeat on its own.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "pageToken",
+            "in": "query",
+            "required": false,
+            "description": "The last answer's `nextPageToken`, to read the next page.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Google's own answer."
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "This server has no Google client, or Google's sign-in could not be renewed: try again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "googleCalendarAddEvent",
+        "summary": "Add a calendar event",
+        "description": "Calendar's events.insert on the person's own calendar.",
+        "parameters": [
+          {
+            "name": "sendUpdates",
+            "in": "query",
+            "required": false,
+            "description": "Who gets Google's invitation email.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "externalOnly",
+                "none"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "The event, as Calendar's events resource: at least `start` and `end`."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Google's own answer."
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "This server has no Google client, or Google's sign-in could not be renewed: try again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/google/drive/files": {
+      "get": {
+        "operationId": "googleDriveListFiles",
+        "summary": "Search Drive files",
+        "description": "Drive's files.list: the person's files that match a Drive search.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "A Drive search, such as name contains 'lease'.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "description": "How many, at most.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "required": false,
+            "description": "The fields each answer gives, such as files(id, name, mimeType).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageToken",
+            "in": "query",
+            "required": false,
+            "description": "The last answer's `nextPageToken`, to read the next page.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Google's own answer."
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "This server has no Google client, or Google's sign-in could not be renewed: try again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/google/contacts/people:searchContacts": {
+      "get": {
+        "operationId": "googleContactsSearch",
+        "summary": "Search contacts",
+        "description": "People's people.searchContacts: the person's saved contacts that match a name, an email address or a phone number.",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "description": "A name, an email address or a phone number, or the start of one.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "readMask",
+            "in": "query",
+            "required": true,
+            "description": "The fields to give, such as names,emailAddresses,phoneNumbers.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "description": "How many, at most.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Google's own answer."
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes or reach Google, no Google connected, or a delete for ever.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "This server has no Google client, or Google's sign-in could not be renewed: try again.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1816,7 +2837,8 @@
               "invalid_token",
               "forbidden",
               "not_found",
-              "method_not_allowed"
+              "method_not_allowed",
+              "temporarily_unavailable"
             ]
           },
           "error_description": {

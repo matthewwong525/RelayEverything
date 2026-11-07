@@ -121,6 +121,7 @@ it("connects a person's AI app after they approve it by name and sign in on the 
   expect(html).toContain("Connect Claude to Relay Everything?");
   expect(html).toContain("and add notes, when you ask it. It can't change or delete them.");
   expect(html).toContain("<b>claude.ai</b>");
+  expect(html).toContain("If you connected Google, it can also read and send your email");
   expect(approved.status).toBe(302);
   expect(`${server.origin}${server.pathname}`).toBe(`${SERVER}/apps/relay/sign-in/connect`);
   expect([...server.searchParams.keys()]).toEqual(["state"]);
@@ -129,7 +130,10 @@ it("connects a person's AI app after they approve it by name and sign in on the 
   const token = await connect();
   const answer = await listTools(token);
   expect(answer.status).toBe(200);
-  expect((await answer.json() as { result: { tools: unknown[] } }).result.tools).toHaveLength(9);
+  expect((await answer.json() as { result: { tools: unknown[] } }).result.tools).toHaveLength(23);
+  // A new grant reaches Google: this server has no Google client, so the proxy, not the grant, refuses.
+  const google = await mcp({ method: "tools/call", params: { name: "search_email", arguments: { query: "x" } } }, token);
+  expect((await google.json() as { result: { content: { text: string }[] } }).result.content[0].text).toBe("This server does not connect Google.");
 });
 
 it("reads only the space of the person who signed in", async () => {
@@ -314,7 +318,9 @@ it("refuses a token bound to another resource", async () => {
 it("answers a browser's preflight and the API's description with no sign-in", async () => {
   const preflight = await v1("notes", undefined, { method: "OPTIONS" });
   expect([preflight.status, preflight.headers.get("Access-Control-Allow-Headers"), preflight.headers.get("Access-Control-Allow-Methods")])
-    .toEqual([204, "Authorization, Content-Type", "GET, POST"]);
+    .toEqual([204, "Authorization, Content-Type, Content-Range, X-Upload-Content-Type, X-Upload-Content-Length, If-Match",
+      "GET, POST, PUT, PATCH, DELETE"]);
+  expect(preflight.headers.get("Access-Control-Expose-Headers")).toBe("Location, Range, ETag");
   const described = await v1("openapi.json");
   expect([described.status, described.headers.get("Access-Control-Allow-Origin")]).toEqual([200, "*"]);
   expect(await described.json()).toMatchObject({ openapi: "3.1.0", servers: [{ url: ORIGIN }] });

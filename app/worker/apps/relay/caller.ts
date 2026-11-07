@@ -110,7 +110,7 @@ export async function relayGate(request: Request, env: CallerEnv, identity: Iden
 type Call = { identity: Identity };
 
 // A preview reaches no other Worker's objects, so it has no spaces: wiki/stack/live-line.md
-const openSpace = (env: Env, caller: Caller) => env.SPACES ? spaceOf(env as SpaceEnv, caller)
+export const openSpace = (env: Env, caller: Caller) => env.SPACES ? spaceOf(env as SpaceEnv, caller)
   : refused(503, "This Relay Everything server has no spaces. Use the shared server.");
 type Context<C> = { space: PersonSpace; caller: Caller; request: Request; env: Env; call: C };
 

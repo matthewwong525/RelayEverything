@@ -8,10 +8,12 @@
   "compatibility_flags": ["nodejs_compat", "disallow_importable_env"],
   "workers_dev": true,
   "preview_urls": false,
-  // The connector has no secret: a person signs in on RELAY_SERVER_URL, which sends a one-time code to /callback.
+  // A person signs in on RELAY_SERVER_URL, which sends a one-time code to /callback. Its one secret,
+  // RELAY_GOOGLE_SIGN_IN_SECRET, renews a person's Google sign-in: scripts/relay-mcp-setup.mjs sets it.
   "vars": {
     "RELAY_MCP_ADDRESS": "https://relay-everything-mcp.matthewwong525.workers.dev/mcp",
-    "RELAY_SERVER_URL": "https://app.relayeverything.com"
+    "RELAY_SERVER_URL": "https://app.relayeverything.com",
+    "RELAY_GOOGLE_CLIENT_ID": "20665982462-kf2e6v2vd3jofia52g0d9p5vn1gt4hfu.apps.googleusercontent.com"
   },
   "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db", "database_id": "9f8aa624-0d1c-4abf-902a-7b9430286378" }],
   "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces" }] },
@@ -24,7 +26,8 @@
       "name": "relay-everything-mcp-staging",
       "vars": {
         "RELAY_MCP_ADDRESS": "https://relay-everything-mcp-staging.matthewwong525.workers.dev/mcp",
-        "RELAY_SERVER_URL": "https://app-staging.relayeverything.com"
+        "RELAY_SERVER_URL": "https://app-staging.relayeverything.com",
+        "RELAY_GOOGLE_CLIENT_ID": "20665982462-kf2e6v2vd3jofia52g0d9p5vn1gt4hfu.apps.googleusercontent.com"
       },
       "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db-staging", "database_id": "4f8edf18-ad51-4325-bb98-ec3ca6cc80b0" }],
       "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces-staging" }] },

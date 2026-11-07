@@ -51,11 +51,21 @@ it("names itself Relay Everything to the AI app", () => {
   expect(client.getInstructions()).toMatch(/^Relay Everything /);
 });
 
-it("lists nine tools, each read-only but add_note, which changes and deletes nothing", async () => {
+it("lists the nine Relay Everything tools, read-only but add_note, then the fourteen Google tools, marked by what they change", async () => {
   const { tools } = await client.listTools();
-  expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "places", "search_chats", "read_chat", "add_note"]);
-  for (const tool of tools.slice(0, 8)) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+  expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "places", "search_chats", "read_chat", "add_note",
+    "search_email", "read_email", "send_email", "draft_email", "change_email", "list_events", "add_event", "change_event", "delete_event",
+    "search_files", "read_file", "save_file", "change_file", "find_contact"]);
+  for (const tool of tools.slice(0, 8)) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });
   expect(tools[8].annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+  const google = Object.fromEntries(tools.slice(9).map(tool => [tool.name, tool.annotations]));
+  for (const name of ["search_email", "read_email", "list_events", "search_files", "read_file", "find_contact"]) {
+    expect(google[name], name).toEqual({ readOnlyHint: true, destructiveHint: false, openWorldHint: true });
+  }
+  for (const name of ["send_email", "delete_event"]) expect(google[name], name).toEqual({ readOnlyHint: false, destructiveHint: true, openWorldHint: true });
+  for (const name of ["draft_email", "change_email", "add_event", "change_event", "save_file", "change_file"]) {
+    expect(google[name], name).toEqual({ readOnlyHint: false, destructiveHint: false, openWorldHint: true });
+  }
 });
 
 it("finds notes holding every word, in any case, with a title and the time in the zone", async () => {
@@ -237,7 +247,7 @@ it("lets an app connected before adding read, but asks it to connect again to ad
 });
 
 // Only SELECT reaches a space from the connector, but for these writes: a used sign-in code, an app's device row and
-// its turning off. A note is added only through apps/relay/add-note.ts, as a phone's.
+// its turning off. A note is added only through add-note.ts; the one DELETE to Google takes an event off a calendar.
 const WRITES = /\b(?:INSERT|UPDATE|DELETE|REPLACE|UPSERT|CREATE|DROP|ALTER|PRAGMA|ATTACH|VACUUM)\b|\b(?:db|DB)\.exec\(|\.(?:batch|run)\(/;
 const writes = (source: string) => WRITES.test(source);
 
@@ -249,7 +259,8 @@ it("holds no statement but SELECT in the connector or its queries", () => {
   const CODE_TAKEN = "DELETE FROM relay_connect_codes WHERE code_sha256 = ? AND expires_at > ? RETURNING person_id";
   const ALLOWED: Record<string, string[]> = { "auth.ts": [CODE_TAKEN],
     "answers.ts": [APP_DEVICE.slice(0, APP_DEVICE.indexOf("VALUES")), ".bind(adder.deviceId, adder.name, `app:${adder.deviceId}`, Date.now()).run()"],
-    "asker.ts": [JSON.stringify(APP_DEVICE_OFF), "db.prepare(APP_DEVICE_OFF).bind(Date.now(), deviceId).run()"] };
+    "asker.ts": [JSON.stringify(APP_DEVICE_OFF), "db.prepare(APP_DEVICE_OFF).bind(Date.now(), deviceId).run()"],
+    "google-tools.ts": ['{ method: "DELETE", query: { sendUpdates: "all" } }'] };
   for (const file of files) {
     let source = readFileSync(file, "utf8");
     for (const allowed of ALLOWED[file.pathname.split("/").pop()!] ?? []) {

@@ -13,10 +13,13 @@ const OAUTH = "relay_oauth";
 const HOME = "/apps/relay/";
 const FAILED = `${HOME}?signIn=failed`;
 
+/** Google's sign-in addresses, which Connect Google shares: google/connect.ts. */
+export const GOOGLE = { authorize: "https://accounts.google.com/o/oauth2/v2/auth", token: "https://oauth2.googleapis.com/token",
+  jwks: "https://www.googleapis.com/oauth2/v3/certs", issuers: ["accounts.google.com", "https://accounts.google.com"] };
+
 const PROVIDERS = {
   google: {
-    authorize: "https://accounts.google.com/o/oauth2/v2/auth", token: "https://oauth2.googleapis.com/token",
-    jwks: "https://www.googleapis.com/oauth2/v3/certs", issuers: ["accounts.google.com", "https://accounts.google.com"],
+    ...GOOGLE,
     params: { scope: "openid email", response_type: "code" },
     client: (env: SignInEnv) => env.RELAY_GOOGLE_CLIENT_ID && env.RELAY_GOOGLE_SIGN_IN_SECRET
       ? { id: env.RELAY_GOOGLE_CLIENT_ID, secret: async () => env.RELAY_GOOGLE_SIGN_IN_SECRET! } : null,

@@ -25,6 +25,7 @@ async function consent(request: Request, env: McpEnv): Promise<Response> {
   const { handle, headers } = await env.OAUTH_PROVIDER.beginConsent(authRequest);
   return html(`<h1>Connect ${escape(about.clientName)} to Relay Everything?</h1>
 <p>It can then read your Relay Everything notes, health, places and saved chats, and add notes, when you ask it. It can't change or delete them.</p>
+<p>If you connected Google, it can also read and send your email, change your calendar and your Drive files, and read your contacts. A sent email can't be undone.</p>
 <p>Its answers go to <b>${escape(about.redirectHost)}</b>.${about.redirectIsLoopback ? " That is an app on this computer." : ""}</p>
 <form method="post"><input type="hidden" name="handle" value="${escape(handle)}">
 <button name="choice" value="approve">Connect</button> <button name="choice" value="deny">Cancel</button></form>`, 200, headers);
@@ -54,7 +55,7 @@ async function personOf(env: McpEnv, code: string): Promise<string | null> {
 }
 
 /** The server sends the signed-in person back here with a code: trade it for the person, then let the app in. Its
- *  grant may add notes, as the consent page said, under a device of its own, made on its first note. */
+ *  grant adds notes and reaches Google, as the consent page said, under a device of its own made on its first note. */
 async function callback(request: Request, env: McpEnv): Promise<Response> {
   const { request: authRequest, headers } = await env.OAUTH_PROVIDER.finishUpstream(request);
   const code = new URL(request.url).searchParams.get("code");
@@ -64,7 +65,7 @@ async function callback(request: Request, env: McpEnv): Promise<Response> {
   const client = await env.OAUTH_PROVIDER.lookupClient(authRequest.clientId);
   const name = client?.clientName?.trim() || authRequest.clientId;
   const deviceId = crypto.randomUUID();
-  const props: GrantProps = { personId, adds: true, deviceId, name };
+  const props: GrantProps = { personId, adds: true, google: true, deviceId, name };
   const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({ request: authRequest, userId: personId,
     metadata: { name, deviceId }, scope: authRequest.scope, props });
   headers.set("Location", redirectTo);

@@ -14,6 +14,7 @@ export const sidebar = [
   { label: 'Connections', items: [
     { label: 'Your own database', slug: 'connections/your-database' },
     'connections/connect-your-ai',
+    'connections/google',
     'connections/claude-code',
     { label: 'Example skill and tables', link: '/connections/#an-example-skill-and-tables', badge: soon },
   ] },

@@ -23,7 +23,7 @@ Then ask, for example: *What did I note on 4 November?* or *How many steps did I
 
 ## What the app can read and add
 
-The connector has nine tools: eight read, and `add_note` adds. Each answer has a limit, so one question can't copy all of Relay Everything.
+The connector has nine tools: eight read, and `add_note` adds. Each answer has a limit, so one question can't copy all of Relay Everything. With Google connected, 14 more reach the person's own Google: [the Google connection](relay-google.md).
 
 - **search**: notes that hold every word you give, newest first.
 - **fetch**: one note, the places near it in time, and its day's health totals.
@@ -65,7 +65,7 @@ A refusal answers `{ "error", "error_description" }`, and every answer is open t
 
 ## Set it up
 
-The setup script makes the connector's Worker and its sign-in store. The connector has no secret. Run it from the repository with the user token in `.env` ([Cloudflare credentials](cloudflare-credentials.md)):
+The setup script makes the connector's Worker and its sign-in store, and puts its one secret, `RELAY_GOOGLE_SIGN_IN_SECRET`, from `.env` ([the Google connection](relay-google.md#set-it-up)). Run it from the repository with the user token in `.env` ([Cloudflare credentials](cloudflare-credentials.md)):
 
 ```bash
 node scripts/relay-mcp-setup.mjs --check            # the token can do each step; changes nothing

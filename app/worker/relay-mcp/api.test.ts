@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
-import { beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { ANA, BEN, fakeSpaces, queue } from "../../tests/relay";
-import { answer, RECONNECT, type Asker } from "./answers";
+import { NOT_CONNECTED } from "../apps/relay/google/proxy";
+import { keep } from "../apps/relay/google/token";
+import { answer, GOOGLE_AGAIN, RECONNECT, type Asker } from "./answers";
 import { v1 } from "./api";
 import { vouch } from "../apps/relay/space";
 import { grantAsker, keyAsker } from "./asker";
@@ -114,4 +116,65 @@ it("tells the caller who it is, and reads no data to do it", async () => {
 it("lets a database fault through as an error, not as an answer", async () => {
   const broken = { ...script, space: { ...script.space, db: { prepare: () => { throw new Error("The space is down"); } } } } as unknown as Asker;
   await expect(call(`notes/${ID(1)}`, broken)).rejects.toThrow("The space is down");
+});
+
+const GOOGLE_ENV = { RELAY_GOOGLE_CLIENT_ID: "client.apps.googleusercontent.com", RELAY_GOOGLE_SIGN_IN_SECRET: "client-secret" };
+const toGoogle: Request[] = [];
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+/** Ana's Google connected, and Google answering each request with its own address. */
+async function googleUp() {
+  toGoogle.length = 0;
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
+    if (url === "https://oauth2.googleapis.com/token") return Response.json({ access_token: "ya29.ana", expires_in: 3600 });
+    toGoogle.push(new Request(url, init));
+    return Response.json({ url }, { status: url.includes("/nope") ? 404 : 200 });
+  }));
+  vi.spyOn(console, "log").mockImplementation(() => undefined);
+  const asker = keyAsker({ ...env(spaces.SPACES), ...GOOGLE_ENV }, vouch("key", ANA, { device: { id: "d-api", reaches: "api" } }) as never);
+  await keep(asker.space, { email: "ana@gmail.example", scopes: [], refreshToken: "1//refresh-ana" });
+  return asker;
+}
+
+it("passes /v1/google/ to the caller's own Google, and Google's answer back as it is", async () => {
+  const asker = await googleUp();
+  expect(await call("google/gmail/messages?q=from%3Asam", asker))
+    .toMatchObject({ status: 200, json: { url: "https://gmail.googleapis.com/gmail/v1/users/me/messages?q=from%3Asam" } });
+  expect(toGoogle[0].headers.get("Authorization")).toBe("Bearer ya29.ana");
+  expect(await call("google/drive/files/nope", asker)).toMatchObject({ status: 404 });
+  const moved = await call("google/calendar/calendars/primary/events/e1", asker, { method: "PATCH", body: '{"summary":"Lunch"}',
+    headers: { "Content-Type": "application/json" } });
+  expect(moved.status).toBe(200);
+  expect(await toGoogle.at(-1)!.text()).toBe('{"summary":"Lunch"}');
+});
+
+it("refuses /v1/google/ before Google for an old app, a person with no Google, a delete for ever, or another service", async () => {
+  const asker = await googleUp();
+  const old = { ...asker, google: false };
+  expect(await call("google/gmail/messages", old)).toMatchObject({ status: 403, json: { error: "forbidden", error_description: GOOGLE_AGAIN } });
+  const ben = keyAsker({ ...env(spaces.SPACES), ...GOOGLE_ENV }, vouch("key", BEN, { device: { id: "d-ben", reaches: "api" } }) as never);
+  expect(await call("google/gmail/messages", ben)).toMatchObject({ status: 403, json: { error_description: NOT_CONNECTED } });
+  expect(await call("google/gmail/messages/m1", asker, { method: "DELETE" })).toMatchObject({ status: 403, json: { error: "forbidden" } });
+  expect((await call("google/gmail/users/sam@example.com/messages", asker)).status).toBe(403);
+  expect((await call("google/gmail/messages", asker, { method: "HEAD" })).status).toBe(405);
+  expect((await call("google/youtube/videos", asker)).status).toBe(404);
+  expect(await call("google/gmail/messages")).toMatchObject({ status: 503, json: { error: "temporarily_unavailable" } });
+  expect(toGoogle).toEqual([]);
+});
+
+it("answers 503 when Google's sign-in can't be renewed, and lets a fault reaching Google through as an error", async () => {
+  const asker = await googleUp();
+  vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("offline"); }));
+  expect(await call("google/gmail/messages", asker)).toMatchObject({ status: 503,
+    json: { error: "temporarily_unavailable", error_description: "Google's sign-in could not be reached. Try again." } });
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ error: "invalid_client" }, { status: 401 })));
+  expect(await call("google/gmail/messages", asker)).toMatchObject({ status: 503,
+    json: { error: "temporarily_unavailable", error_description: "Google's sign-in answered 401. Try again." } });
+  await googleUp();
+  expect((await call("google/gmail/messages", asker)).status).toBe(200);
+  vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("offline"); }));
+  await expect(call("google/gmail/messages", asker)).rejects.toThrow("offline");
 });

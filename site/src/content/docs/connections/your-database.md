@@ -58,7 +58,7 @@ Every message is a `POST` with a JSON body in one envelope:
 }
 ```
 
-`timestamp` is when Relay Everything, or the phone that sends to your webhook, stored what the message holds. Times are ISO 8601, in UTC. [`v1.schema.json`](../../webhooks/v1.schema.json) is the JSON Schema of every message. A change that breaks a receiver gets a new `version`. Within a version, a message can get a new optional field, such as a note's `attachments`. So let your receiver keep a field it does not know, and not refuse the message.
+`timestamp` is when Relay Everything, or the phone that sends to your webhook, stored what the message holds. Times are ISO 8601, in UTC. [`v1.schema.json`](../../webhooks/v1.schema.json) is the JSON Schema of every message. It accepts a field it does not list, so a saved copy still passes a message with a new field. The format can still get new types, fields and values: see [when the format changes](#when-the-format-changes).
 
 | `type` | When | `data` holds |
 |---|---|---|
@@ -232,6 +232,18 @@ const payload = new Webhook(process.env.RELAY_WEBHOOK_SECRET).verify(body, heade
 - A retry can send a message you already saved, when your answer was lost. Its id and body are the same. So save each note, sample, point and event by its `id`, as an upsert.
 - From your server, accept bodies up to 16 MB. A ring note's recording is about 100 KB a minute, and base64 makes it a third larger.
 
+## When the format changes
+
+Relay Everything gets new kinds of data often. Each new kind comes with new messages, so build your receiver to accept what it does not know:
+
+- **Answer `2xx` to a `type` you do not know.** Keep its body, or ignore it. A refusal makes Relay Everything try the same message again for about a day, and the webhook then shows as **Failing**.
+- **Keep a field you do not know**, and do not refuse the message for it. A message can get a new field, such as a note's `attachments`.
+- **Accept a new value in a list**, such as a new health `type` or a new calendar event `status`. The schema gives these as text, with the values known today as examples.
+
+A new kind of data goes to a webhook only when you tick it. A webhook you added before gets nothing new by itself. Notes always go.
+
+Until the public release of Relay Everything, version 1 can still change in any way, such as a field that gets a new name. After the public release, version 1 only gets additions, and a change that breaks a receiver gets a new `version`.
+
 ## Tables in Postgres
 
 ```sql
@@ -305,7 +317,7 @@ Save a note with `INSERT ... ON CONFLICT (id) DO UPDATE`, and keep the stored `a
 
 ## An example receiver
 
-[`receiver.mjs`](../../webhooks/receiver.mjs) is about 60 lines of Node with no packages. It checks each signature and saves notes, their files from the phone, samples and points in a SQLite file, so it needs no database server. It needs Node 22.13 or later.
+[`receiver.mjs`](../../webhooks/receiver.mjs) is about 80 lines of Node with no packages. It checks each signature and saves notes, their files from the phone, samples, points and calendar events in a SQLite file, so it needs no database server. It keeps a message of a type it does not know in its `other_messages` table, by its `webhook-id`, and answers `204`. It needs Node 22.13 or later.
 
 ```bash
 curl -O https://relayeverything.com/webhooks/receiver.mjs

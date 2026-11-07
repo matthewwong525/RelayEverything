@@ -43,6 +43,16 @@ it("adds a webhook from now on, with notes always, and shows its secret only in 
   expect((await add({ name: " " })).status).toBe(400);
 });
 
+it("answers the kinds a webhook can take, notes always, and refuses one it can't take yet", async () => {
+  const { json } = await call(matthew, "GET", "webhooks");
+  expect(json.kinds.map(({ id, always, sensitive }: Record<string, unknown>) => ({ id, always, sensitive }))).toEqual([
+    { id: "notes", always: true, sensitive: false }, { id: "health", always: false, sensitive: true },
+    { id: "locations", always: false, sensitive: true }, { id: "calendar", always: false, sensitive: true }]);
+  expect(json.kinds[2]).toMatchObject({ label: "Location history", detail: "" });
+  expect((await add({ kinds: ["calendar", "health"] })).json.webhook.kinds).toEqual(["notes", "health", "calendar"]);
+  expect((await add({ kinds: ["files"] })).status).toBe(400);
+});
+
 it("refuses an address it must not send to, and says why", async () => {
   const cases = { "http://db.example.com/": "address_not_https", "https://10.0.0.8/": "address_private", "nowhere": "address_invalid",
     "https://a:b@db.example.com/": "address_has_login", "https://relay.example.com/apps/relay/api/notes": "address_own_site" };

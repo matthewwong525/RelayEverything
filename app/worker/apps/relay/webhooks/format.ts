@@ -1,8 +1,10 @@
 // Format v1 of what a webhook receives: one envelope, seven types; mobile/lib/data/webhook.dart builds it too. The
-// source of the public site/public/webhooks/v1.schema.json; a change that breaks a receiver raises `version`.
+// source of the public site/public/webhooks/v1.schema.json, which takes fields and values it does not list.
 import { z } from "zod";
 import { HEALTH_TYPES, type HealthType } from "../queries.ts";
 
+/** A list of values that can get a new one: the schema publishes it as text, with the values known today. */
+const GROWS = { grows: true };
 const iso = z.iso.datetime().describe("A time in ISO 8601, UTC.");
 const device = z.strictObject({
   id: z.string().describe("The device key's id in Relay Everything, or the phone's own install id when the phone sends to its own webhook."),
@@ -28,7 +30,7 @@ const attachments = z.array(attachment).min(1).max(10).optional()
   .describe("The note's files: each one's name, type and size, never its bytes. Only a note with files has this list.");
 const ownId = "Unique in this Relay Everything server, or on the phone when the phone sends to its own webhook.";
 const sample = z.strictObject({
-  id: z.number().int().describe(ownId), device, type: z.enum(HEALTH_TYPES),
+  id: z.number().int().describe(ownId), device, type: z.enum(HEALTH_TYPES).meta(GROWS),
   start: iso, end: iso, value: z.number(), unit: z.string(), source: z.string().describe("The app or watch that counted it."),
 });
 const point = z.strictObject({
@@ -37,7 +39,7 @@ const point = z.strictObject({
 });
 const event = z.strictObject({
   id: z.number().int().describe("Unique in this Relay Everything server, or made from the phone's install id and the key when the phone sends to its own webhook: upsert by it."),
-  status: z.enum(["changed", "removed"]).describe("changed: new or changed. removed: deleted on the phone, or its calendar turned off."),
+  status: z.enum(["changed", "removed"]).meta(GROWS).describe("changed: new or changed. removed: deleted on the phone, or its calendar turned off."),
   device, key: z.string().describe("The phone's key for this occurrence: each time of a repeating event has its own."),
   calendar: z.string().nullable().describe("The calendar's name."), title: z.string().nullable(), start: iso, end: iso, all_day: z.boolean(),
   location: z.string().nullable(), notes: z.string().nullable(), url: z.string().nullable(),
@@ -109,5 +111,14 @@ export const calendarEvents = (rows: EventRow[], at: number) => wrap("calendar.e
 
 export const webhookTest = (webhook: { id: string; name: string }, at: number) => wrap("webhook.test", { webhook }, at);
 
+/** Makes the published schema take a field or a value it does not list. The server's own parse stays strict. */
+function lenient({ jsonSchema: schema }: { jsonSchema: Record<string, unknown> }) {
+  if (schema.additionalProperties === false) delete schema.additionalProperties;
+  if (!schema.grows) return;
+  schema.examples = schema.enum;
+  delete schema.enum;
+  delete schema.grows;
+}
+
 /** The public JSON Schema, as site/public/webhooks/v1.schema.json holds it. */
-export const jsonSchema = () => `${JSON.stringify(z.toJSONSchema(message), null, 2)}\n`;
+export const jsonSchema = () => `${JSON.stringify(z.toJSONSchema(message, { override: lenient }), null, 2)}\n`;

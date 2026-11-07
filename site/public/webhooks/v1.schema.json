@@ -66,7 +66,6 @@
                     "id",
                     "name"
                   ],
-                  "additionalProperties": false,
                   "description": "The phone or other device that sent the item."
                 },
                 "place": {
@@ -117,8 +116,7 @@
                         "accuracy",
                         "name",
                         "from"
-                      ],
-                      "additionalProperties": false
+                      ]
                     },
                     {
                       "type": "null"
@@ -141,8 +139,7 @@
                       "required": [
                         "content_type",
                         "base64"
-                      ],
-                      "additionalProperties": false
+                      ]
                     },
                     {
                       "type": "null"
@@ -182,8 +179,7 @@
                       "name",
                       "content_type",
                       "size"
-                    ],
-                    "additionalProperties": false
+                    ]
                   }
                 }
               },
@@ -196,14 +192,12 @@
                 "device",
                 "place",
                 "audio"
-              ],
-              "additionalProperties": false
+              ]
             }
           },
           "required": [
             "note"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
       "required": [
@@ -212,7 +206,6 @@
         "timestamp",
         "data"
       ],
-      "additionalProperties": false,
       "description": "A note reached Relay Everything."
     },
     {
@@ -280,7 +273,6 @@
                     "id",
                     "name"
                   ],
-                  "additionalProperties": false,
                   "description": "The phone or other device that sent the item."
                 },
                 "place": {
@@ -331,8 +323,7 @@
                         "accuracy",
                         "name",
                         "from"
-                      ],
-                      "additionalProperties": false
+                      ]
                     },
                     {
                       "type": "null"
@@ -348,14 +339,12 @@
                 "created_at",
                 "device",
                 "place"
-              ],
-              "additionalProperties": false
+              ]
             }
           },
           "required": [
             "note"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
       "required": [
@@ -364,7 +353,6 @@
         "timestamp",
         "data"
       ],
-      "additionalProperties": false,
       "description": "No longer sent: the server gives no note a place later. It once said a ring note got its place from a later location batch. It has no audio."
     },
     {
@@ -415,12 +403,11 @@
                       "id",
                       "name"
                     ],
-                    "additionalProperties": false,
                     "description": "The phone or other device that sent the item."
                   },
                   "type": {
                     "type": "string",
-                    "enum": [
+                    "examples": [
                       "steps",
                       "heart_rate",
                       "sleep",
@@ -469,15 +456,13 @@
                   "value",
                   "unit",
                   "source"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           },
           "required": [
             "samples"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
       "required": [
@@ -486,7 +471,6 @@
         "timestamp",
         "data"
       ],
-      "additionalProperties": false,
       "description": "Health samples, in the order Relay Everything stored them."
     },
     {
@@ -537,7 +521,6 @@
                       "id",
                       "name"
                     ],
-                    "additionalProperties": false,
                     "description": "The phone or other device that sent the item."
                   },
                   "at": {
@@ -575,15 +558,13 @@
                   "lon",
                   "accuracy",
                   "place"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           },
           "required": [
             "points"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
       "required": [
@@ -592,7 +573,6 @@
         "timestamp",
         "data"
       ],
-      "additionalProperties": false,
       "description": "Location points, in the order Relay Everything stored them."
     },
     {
@@ -651,15 +631,13 @@
                 "content_type",
                 "size",
                 "base64"
-              ],
-              "additionalProperties": false
+              ]
             }
           },
           "required": [
             "note_id",
             "file"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
       "required": [
@@ -668,7 +646,6 @@
         "timestamp",
         "data"
       ],
-      "additionalProperties": false,
       "description": "One file of a note, with its bytes. Only a phone that sends to its own webhook sends it, after the note's note.created."
     },
     {
@@ -706,11 +683,11 @@
                   },
                   "status": {
                     "type": "string",
-                    "enum": [
+                    "description": "changed: new or changed. removed: deleted on the phone, or its calendar turned off.",
+                    "examples": [
                       "changed",
                       "removed"
-                    ],
-                    "description": "changed: new or changed. removed: deleted on the phone, or its calendar turned off."
+                    ]
                   },
                   "device": {
                     "type": "object",
@@ -727,7 +704,6 @@
                       "id",
                       "name"
                     ],
-                    "additionalProperties": false,
                     "description": "The phone or other device that sent the item."
                   },
                   "key": {
@@ -814,8 +790,7 @@
                         "organizer": {
                           "type": "boolean"
                         }
-                      },
-                      "additionalProperties": false
+                      }
                     }
                   }
                 },
@@ -833,15 +808,13 @@
                   "notes",
                   "url",
                   "people"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           },
           "required": [
             "events"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
       "required": [
@@ -850,7 +823,6 @@
         "timestamp",
         "data"
       ],
-      "additionalProperties": false,
       "description": "Calendar events that are new, changed or removed, in the order Relay Everything stored them. A removed event from a phone that sends to its own webhook has only its key, id and start."
     },
     {
@@ -886,14 +858,12 @@
               "required": [
                 "id",
                 "name"
-              ],
-              "additionalProperties": false
+              ]
             }
           },
           "required": [
             "webhook"
-          ],
-          "additionalProperties": false
+          ]
         }
       },
       "required": [
@@ -902,7 +872,6 @@
         "timestamp",
         "data"
       ],
-      "additionalProperties": false,
       "description": "Send a test, from the Relay Everything page or the phone."
     }
   ],

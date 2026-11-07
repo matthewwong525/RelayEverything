@@ -249,7 +249,7 @@ Send the input as query parameters.
 
 `GET /apps/relay/api/webhooks` · `relay.webhooks` · reads · called by a signed-in person only, not a device key
 
-List the webhooks Relay Everything sends to, each with its state, what waits, its last answer and its recent tries.
+List the webhooks Relay Everything sends to, each with its state, what waits, its last answer and its recent tries, and the kinds of data a webhook can take.
 
 ### Input
 
@@ -280,6 +280,12 @@ It takes no input.
 | `webhooks[].attempts[].error` | string or null | yes |  |
 | `webhooks[].attempts[].first` | number or null | yes |  |
 | `webhooks[].attempts[].last` | number or null | yes |  |
+| `kinds` | array of object | yes |  |
+| `kinds[].id` | "notes" or "health" or "locations" or "calendar" | yes |  |
+| `kinds[].label` | string | yes |  |
+| `kinds[].detail` | string | yes |  |
+| `kinds[].always` | boolean | yes |  |
+| `kinds[].sensitive` | boolean | yes |  |
 
 ### Errors
 
@@ -296,7 +302,7 @@ It takes no input.
 
 `POST /apps/relay/api/webhooks` · `relay.webhooks-add` · writes · called by a signed-in person only, not a device key
 
-Add an address that gets each new note, and the health, location and calendar ticked for it. The answer holds its secret, once.
+Add an address that gets each new note, and each kind of data ticked for it. The answer holds its secret, once.
 
 ### Input
 
@@ -306,7 +312,7 @@ Send the input as a JSON body.
 |---|---|---|---|
 | `name` | string | yes | A name for the webhook, such as the database's. |
 | `url` | string | yes | The https address Relay Everything sends to. |
-| `kinds` | array of "notes" or "health" or "locations" or "calendar" | yes | What it takes besides notes, which always go: any of health, locations and calendar. |
+| `kinds` | array of "notes" or "health" or "locations" or "calendar" | yes | What it takes besides notes, which always go: any of health, locations, calendar. |
 
 ### Output
 
@@ -361,7 +367,7 @@ Send the input as a JSON body.
 | `id` | string | yes | The webhook's id. |
 | `name` | string | no | A name for the webhook, such as the database's. |
 | `url` | string | no | The https address Relay Everything sends to. |
-| `kinds` | array of "notes" or "health" or "locations" or "calendar" | no | What it takes besides notes, which always go: any of health, locations and calendar. |
+| `kinds` | array of "notes" or "health" or "locations" or "calendar" | no | What it takes besides notes, which always go: any of health, locations, calendar. |
 | `active` | boolean | no | False pauses it; true sends again from where it stopped. |
 
 ### Output

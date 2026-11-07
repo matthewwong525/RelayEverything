@@ -2,15 +2,10 @@
 // 2xx. A queue message only says "look now" for one webhook; the lease keeps one sender per webhook at a time.
 import { spaceOf, vouch, type Files, type PersonSpace, type SpaceEnv } from "../space.ts";
 import { MINUTE, type Db, type Env } from "../store.ts";
+import { ownerOf, type Entry, type KindId } from "../kinds.ts";
 import { checkAddress } from "./address.ts";
-import { calendarEvents, healthSamples, locationPoints, noteCreated, noteUpdated, type AttachmentRow, type EventRow, type HealthRow, type LocationRow,
-  type NoteRow } from "./format.ts";
 import { BEHIND, TAKES } from "./log.ts";
-import { base64, signedHeaders } from "./sign.ts";
-
-/** What a webhook takes, as the owner ticks it; notes always. */
-export type Kind = "notes" | "health" | "locations" | "calendar";
-type Entry = { seq: number; kind: "note.created" | "note.updated" | "health" | "location" | "calendar"; ref: string; logged_at: number };
+import { signedHeaders } from "./sign.ts";
 export type Hook = { id: string; name: string; url: string; secret: string; kinds: string; active: number; sent_seq: number;
   pending_seq: number | null; backfill_seq: number | null; lease_until: number | null; tries: number; next_try_at: number | null;
   failing_since: number | null; last_status: number | null; last_error: string | null; last_sent_at: number | null; created_at: number };
@@ -23,7 +18,6 @@ const PER_RUN = 20;
 const LEASE = 2 * MINUTE;
 const TIMEOUT = 15_000;
 const SLACK = 5_000;
-const AUDIO_WAIT = 2 * MINUTE;
 const AUDIO_RETRY = 30;
 /** Seconds before each retry after a failed send, about 22 hours in all; then the webhook shows as failing. */
 export const DELAYS = [30, 120, 600, 1800, 3600, 7200, 14_400, 21_600, 28_800];
@@ -35,7 +29,7 @@ export async function wakeEach(env: Pick<Env, "RELAY_WEBHOOKS">, person: string,
 
 /** After a store: runs every active webhook that takes one of `kinds`. It never fails a route, as the sweep catches a
  *  lost wake-up. */
-export async function wake(env: Pick<Env, "RELAY_WEBHOOKS">, space: PersonSpace, kinds: Kind[]) {
+export async function wake(env: Pick<Env, "RELAY_WEBHOOKS">, space: PersonSpace, kinds: KindId[]) {
   if (!kinds.length) return;
   try {
     const { results } = await space.db.prepare(`SELECT id FROM relay_webhooks w WHERE active = 1 AND failing_since IS NULL
@@ -77,49 +71,8 @@ async function groupOf(db: Db, hook: Hook): Promise<Entry[]> {
   return other === -1 ? results : results.slice(0, other);
 }
 
-const NOTE = `SELECT n.*, d.name AS device_name FROM relay_notes n JOIN relay_devices d ON d.id = n.device_id WHERE n.id = ?`;
-const ids = (group: Entry[]) => JSON.stringify(group.map(entry => Number(entry.ref)));
-const inOrder = `IN (SELECT value FROM json_each(?)) ORDER BY 1`;
-
-/** A ring note's recording in base64: "wait" while it may still be saving, null when it never came. */
-async function audioOf(files: Files, row: NoteRow): Promise<string | null | "wait"> {
-  if (!row.audio_key) return null;
-  const bytes = await files.open(row.audio_key);
-  if (bytes) return base64(bytes);
-  return Date.now() - row.created_at < AUDIO_WAIT ? "wait" : null;
-}
-
-/** The message body for a group; "skip" for a note deleted since. A `note.updated` row logged before the server stopped
- *  placing ring notes still sends. */
-async function bodyOf(files: Files, db: Db, group: Entry[]): Promise<{ type: string } | "skip" | "wait"> {
-  const [first] = group;
-  const at = group.at(-1)!.logged_at;
-  if (first.kind === "health") {
-    const { results } = await db.prepare(`SELECT h.*, d.name AS device_name FROM relay_health h JOIN relay_devices d ON d.id = h.device_id
-      WHERE h.id ${inOrder}`).bind(ids(group)).all<HealthRow>();
-    return healthSamples(results, at);
-  }
-  if (first.kind === "location") {
-    const { results } = await db.prepare(`SELECT l.*, d.name AS device_name FROM relay_locations l JOIN relay_devices d ON d.id = l.device_id
-      WHERE l.id ${inOrder}`).bind(ids(group)).all<LocationRow>();
-    return locationPoints(results, at);
-  }
-  if (first.kind === "calendar") {
-    // An event changed twice in one group goes once, as it is now.
-    const { results } = await db.prepare(`SELECT e.*, d.name AS device_name FROM relay_calendar_events e
-      JOIN relay_devices d ON d.id = e.device_id WHERE e.id ${inOrder}`).bind(ids(group)).all<EventRow>();
-    return calendarEvents(results, at);
-  }
-  const row = await db.prepare(NOTE).bind(first.ref).first<NoteRow>();
-  if (!row) return "skip";
-  if (first.kind === "note.updated") return noteUpdated(row, at);
-  const audio = await audioOf(files, row);
-  if (audio === "wait") return "wait";
-  // The message names the files and never waits for their bytes, as it carries none.
-  const { results } = await db.prepare("SELECT id, name, content_type, size FROM relay_attachments WHERE note_id = ? ORDER BY rowid")
-    .bind(row.id).all<AttachmentRow>();
-  return noteCreated(row, audio, at, results);
-}
+/** The message body for a group, built by the kind that owns its log rows. */
+const bodyOf = (files: Files, db: Db, group: Entry[]) => ownerOf(group[0].kind)!.build!(files, db, group);
 
 /** One POST, with no redirects followed and 15 seconds to answer. */
 export async function post(url: string, secret: string, id: string, body: string): Promise<Answer> {

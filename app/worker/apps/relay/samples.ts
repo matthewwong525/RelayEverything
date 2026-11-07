@@ -3,9 +3,10 @@
 import { z } from "zod";
 import { defineAction, type Action, type ActionCall } from "../../api/contract.ts";
 import { asDevice } from "./caller.ts";
+import type { KindId } from "./kinds.ts";
 import { HEALTH_TYPES } from "./queries.ts";
 import { accuracy, BATCH, insertNew, latitude, longitude, placeName, time, type Db } from "./store.ts";
-import { wake, type Kind } from "./webhooks/send.ts";
+import { wake } from "./webhooks/send.ts";
 
 const sample = z.strictObject({
   type: z.enum(HEALTH_TYPES), start: time, end: time,
@@ -17,7 +18,7 @@ const limits = { inputBytes: 262_144, outputBytes: 1024, timeoutMs: 15_000 };
 
 /** One batch route: check the caller is a device, store the new rows, then wake the webhooks that take this kind
  *  when any row was new. */
-function batch<Item>(name: string, kind: Kind, items: z.ZodType<Item[]>, description: string,
+function batch<Item>(name: string, kind: KindId, items: z.ZodType<Item[]>, description: string,
   save: (db: Db, device: string, rows: Item[]) => Promise<number>): Action {
   return defineAction({
     operationId: `relay.${name}-add`, summary: `Store a phone's ${name}`, description,

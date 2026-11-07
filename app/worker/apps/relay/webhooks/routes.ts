@@ -3,18 +3,19 @@
 import { z } from "zod";
 import { defineAction, type Action, type ActionCall } from "../../../api/contract.ts";
 import { asPerson } from "../caller.ts";
+import { WEBHOOK_KINDS, type KindId } from "../kinds.ts";
 import type { PersonSpace } from "../space.ts";
 import { refused, time, type Db, type Env } from "../store.ts";
 import { checkAddress, REFUSALS } from "./address.ts";
 import { webhookTest } from "./format.ts";
 import { newSecret } from "./sign.ts";
 import { TAKES } from "./log.ts";
-import { post, record, wakeEach, type Hook, type Kind } from "./send.ts";
+import { post, record, wakeEach, type Hook } from "./send.ts";
 import { backfill } from "./sweep.ts";
 
 const RECENT = 20;
 
-const kind = z.enum(["notes", "health", "locations", "calendar"]);
+const kind = z.enum(WEBHOOK_KINDS.map(item => item.id) as [KindId, ...KindId[]]);
 const id = z.string().min(1).max(64).describe("The webhook's id.");
 const attempt = z.strictObject({ at: z.number(), type: z.string(), status: z.number().nullable(), ms: z.number(),
   error: z.string().nullable(), first: z.number().nullable(), last: z.number().nullable() });
@@ -29,7 +30,12 @@ const webhook = z.strictObject({
 const one = z.strictObject({ webhook });
 const name = z.string().trim().min(1).max(80).describe("A name for the webhook, such as the database's.");
 const url = z.string().max(2000).describe("The https address Relay Everything sends to.");
-const kinds = z.array(kind).max(4).describe("What it takes besides notes, which always go: any of health, locations and calendar.");
+const kinds = z.array(kind).max(WEBHOOK_KINDS.length)
+  .describe(`What it takes besides notes, which always go: any of ${WEBHOOK_KINDS.filter(item => !item.always).map(item => item.id).join(", ")}.`);
+/** Each kind a webhook can take, for the form's ticks and the card's names. */
+const kindView = z.strictObject({ id: kind, label: z.string(), detail: z.string(), always: z.boolean(), sensitive: z.boolean() });
+const KIND_VIEWS = WEBHOOK_KINDS.map(item => ({ id: item.id, label: item.label, detail: item.detail, always: !!item.always,
+  sensitive: !!item.sensitive }));
 
 type View = z.infer<typeof webhook>;
 type Row = Hook & { waiting: number };
@@ -57,8 +63,8 @@ const failure = (code: string, status: 400 | 404) => Response.json({ error: { co
 const notFound = () => failure("not_found", 404);
 /** The webhook as one answer, or not found when `row` is null: no webhook had the id. */
 const answer = async (db: Db, row: unknown, id: string) => row ? Response.json({ webhook: (await views(db, id))[0] }) : notFound();
-/** Notes always go; the ticks add health, location and calendar. */
-const kindsOf = (ticked: Kind[]) => JSON.stringify(["notes", ...(["health", "locations", "calendar"] as const).filter(item => ticked.includes(item))]);
+/** Notes always go; the ticks add the rest, in the list's order. */
+const kindsOf = (ticked: KindId[]) => JSON.stringify(WEBHOOK_KINDS.filter(item => item.always || ticked.includes(item.id)).map(item => item.id));
 const refusalOf = (address: string, { url: page }: Pick<ActionCall, "url">) => {
   const refusal = checkAddress(address, page.hostname);
   return refusal && failure(refusal, 400);
@@ -80,16 +86,17 @@ const wakeOne = async (env: Env, space: PersonSpace, id: string) => {
 
 export const list = owner({
   operationId: "relay.webhooks", summary: "List the webhooks", encoding: "none", effect: "read",
-  description: "List the webhooks Relay Everything sends to, each with its state, what waits, its last answer and its recent tries.",
-  input: z.strictObject({}), output: z.strictObject({ webhooks: z.array(webhook) }),
-  handler: async (_env, db) => Response.json({ webhooks: await views(db) }),
+  description: "List the webhooks Relay Everything sends to, each with its state, what waits, its last answer and its recent tries, " +
+    "and the kinds of data a webhook can take.",
+  input: z.strictObject({}), output: z.strictObject({ webhooks: z.array(webhook), kinds: z.array(kindView) }),
+  handler: async (_env, db) => Response.json({ webhooks: await views(db), kinds: KIND_VIEWS }),
 });
 
 export const add = owner({
   operationId: "relay.webhooks-add", summary: "Add a webhook",
-  description: "Add an address that gets each new note, and the health, location and calendar ticked for it. The answer holds its secret, once.",
+  description: "Add an address that gets each new note, and each kind of data ticked for it. The answer holds its secret, once.",
   input: z.strictObject({ name, url, kinds }), output: one.extend({ secret: z.string().describe("Shown this once.") }),
-  handler: async (_env, db, input: { name: string; url: string; kinds: Kind[] }, call, space) => {
+  handler: async (_env, db, input: { name: string; url: string; kinds: KindId[] }, call, space) => {
     const refusal = refusalOf(input.url, call);
     if (refusal) return refusal;
     const [made, secret] = [crypto.randomUUID(), newSecret()];
@@ -107,7 +114,7 @@ export const update = owner({
   input: z.strictObject({ id, name: name.optional(), url: url.optional(), kinds: kinds.optional(),
     active: z.boolean().optional().describe("False pauses it; true sends again from where it stopped.") }),
   output: one,
-  handler: async (env, db, input: { id: string; name?: string; url?: string; kinds?: Kind[]; active?: boolean }, call, space) => {
+  handler: async (env, db, input: { id: string; name?: string; url?: string; kinds?: KindId[]; active?: boolean }, call, space) => {
     const refusal = input.url === undefined ? null : refusalOf(input.url, call);
     if (refusal) return refusal;
     const changed = input.url !== undefined || input.kinds !== undefined ? 1 : 0;

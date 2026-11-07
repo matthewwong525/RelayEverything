@@ -1,6 +1,6 @@
 # Remove the Pebble app sending to your server
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** lovely-unicorn
 **Open questions:** none
 
@@ -95,3 +95,6 @@ None.
 - **2026-11-07** — Check: `app/worker/apps/relay/signature.test.ts` is deleted, because the Pebble signing check it tested is removed with its route.
 - **2026-11-07** — Assumed (review): `relay-chats` gets a delta so its chat-key rule stops naming a Pebble key, because the review found it would outlive the change; the Purpose lines of `relay-device-keys` and `relay-notes` keep their Pebble words, because a delta can't change a Purpose and they describe the history.
 - **2026-11-07** — Built inside `/ship`: the route, secret, late place and Pebble pages are gone, and the local suite passes; saved to check the website preview and the app preview.
+- **2026-11-07** — Asked whether to delete the old Apple test certificates after the iPhone build failed on *Choose a certificate to revoke* → chose delete the 9 older *Created via API* certificates, keeping the newest and the Developer ID one; the build then passed.
+- **2026-11-07** — Asked whether to publish when the app preview's sign-in blocked the checks in task 5.2 → chose publish now, relying on the passing tests for those checks; the website preview showed no Pebble page, and both Pebble pages answered 404.
+- **2026-11-07** — Archived for publishing; the specs already hold its rule changes.

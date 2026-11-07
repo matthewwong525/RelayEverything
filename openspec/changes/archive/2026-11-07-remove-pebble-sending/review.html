@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · remove-pebble-sending</title>
+<title>Review · 2026-11-07-remove-pebble-sending</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="remove-pebble-sending" data-own-back>
+<body data-change="2026-11-07-remove-pebble-sending" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>remove-pebble-sending</h1>
+  <h1>2026-11-07-remove-pebble-sending</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -475,6 +475,9 @@
 <li class="decision card" id="decision-12" data-note="decision-12" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-07</p>Check: <code>app/worker/apps/relay/signature.test.ts</code> is deleted, because the Pebble signing check it tested is removed with its route.</li>
 <li class="decision card" id="decision-13" data-note="decision-13" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed (review): <code>relay-chats</code> gets a delta so its chat-key rule stops naming a Pebble key, because the review found it would outlive the change; the Purpose lines of <code>relay-device-keys</code> and <code>relay-notes</code> keep their Pebble words, because a delta can't change a Purpose and they describe the history.</li>
 <li class="decision card" id="decision-14" data-note="decision-14" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-07</p>Built inside <code>/ship</code>: the route, secret, late place and Pebble pages are gone, and the local suite passes; saved to check the website preview and the app preview.</li>
+<li class="decision card" id="decision-15" data-note="decision-15" tabindex="0"><p class="meta"><span class="tag asked">asked</span>2026-11-07</p>Asked whether to delete the old Apple test certificates after the iPhone build failed on <i>Choose a certificate to revoke</i> → chose delete the 9 older <i>Created via API</i> certificates, keeping the newest and the Developer ID one; the build then passed.</li>
+<li class="decision card" id="decision-16" data-note="decision-16" tabindex="0"><p class="meta"><span class="tag asked">asked</span>2026-11-07</p>Asked whether to publish when the app preview's sign-in blocked the checks in task 5.2 → chose publish now, relying on the passing tests for those checks; the website preview showed no Pebble page, and both Pebble pages answered 404.</li>
+<li class="decision card" id="decision-17" data-note="decision-17" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-07</p>Archived for publishing; the specs already hold its rule changes.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

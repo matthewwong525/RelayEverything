@@ -25,9 +25,9 @@
 - [x] 4.2 Remove or reword every Pebble mention in `site/src/content/docs/`: `api/keys.md`, `start/what-you-need.md`, `start/connect-a-phone.md`, `start/run-your-own.md`, `start/sign-up.md`, `app/settings.md`, `app/your-notes.md` (ring notes keep a stored place; none is added later), `connections/your-database.md` (`note.updated` no longer sent; example device not *Pebble app*), `ring/how-it-works.md` (the Relay Everything ring will send through the phone app), `privacy.md` and `index.mdx`. `git grep -i pebble site/src` finds only the ring's size comparison, if any.
 - [x] 4.3 Run `npm run relay:api-doc` in `app/`; `api/reference.md` and `site/public/webhooks/v1.schema.json` have no Pebble route, `pebbleSecret` or "Pebble key".
 - [x] 4.4 Update `AGENTS.md` (device keys line), `README.md`, `self-host/SETUP.md` step 6, `wiki/relay-website.md` (the `HAND_PAGES` example) and `wiki/relay-spaces.md` (the secret table now dropped by `0005`). `node scripts/product-name.test.mjs` passes.
-- [ ] 4.5 Preview the website with `node scripts/publish-relay-site.mjs --ref HEAD --staging` and check the sidebar has no Pebble page and the ring page reads right.
+- [x] 4.5 Preview the website with `node scripts/publish-relay-site.mjs --ref HEAD --staging` and check the sidebar has no Pebble page and the ring page reads right.
 
 ## 5. Checks
 
 - [x] 5.1 Run `npm test` in `app/` and `node scripts/public-check.mjs`; both pass.
-- [ ] 5.2 `/save`, then on the preview: *Add a device* shows no *Pebble app*, a new phone key shows no signing secret, the timeline still shows the seed ring notes as *Ring* with their places, and `POST /apps/relay/api/pebble` with a phone key answers 403 (*A device key can only send to Relay Everything.*), as any address a phone key does not reach.
+- [x] 5.2 `/save`, then on the preview: *Add a device* shows no *Pebble app*, a new phone key shows no signing secret, the timeline still shows the seed ring notes as *Ring* with their places, and `POST /apps/relay/api/pebble` with a phone key answers 403 (*A device key can only send to Relay Everything.*), as any address a phone key does not reach.

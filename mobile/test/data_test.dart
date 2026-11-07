@@ -112,6 +112,62 @@ void main() {
       expect(await KeyVault(empty).upgrade(), isNull);
       expect(empty.values, isEmpty);
     });
+
+    test('on iPhone moves an old key to the App Group, so the share card sends with it', () async {
+      final storage = MemoryStorage()..values.addAll({'relay.server': bearer.server, 'relay.key': pageKey});
+      final vault = KeyVault(storage, true);
+      expect((await vault.upgrade())!.key, pageKey);
+      expect([storage.shared, storage.values], [{'relay.server': bearer.server, 'relay.key': pageKey}, isEmpty]);
+      expect((await vault.read())!.key, pageKey);
+      expect(storage.options.where((option) => option?.groupId != null).map((option) => option!.accountName).toSet(),
+        {KeyVault.sharedService});
+    });
+
+    test('a stop part way through the move loses no key, and the next open finishes it', () async {
+      final storage = MemoryStorage()..values.addAll({'relay.server': bearer.server, 'relay.key': pageKey});
+      storage.stopAfterWrites = 1;
+      await expectLater(KeyVault(storage, true).upgrade(), throwsStateError);
+      expect([storage.shared.keys, storage.values.length], [['relay.key'], 2]);
+      expect((await KeyVault(storage, true).read())!.key, pageKey);
+      storage.stopAfterWrites = null;
+      expect((await KeyVault(storage, true).upgrade())!.key, pageKey);
+      expect([storage.shared.length, storage.values], [2, isEmpty]);
+      // Written whole but stopped before the delete: the next open deletes the old items.
+      storage.values.addAll({'relay.server': bearer.server, 'relay.key': pageKey});
+      expect((await KeyVault(storage, true).upgrade())!.key, pageKey);
+      expect([storage.shared.length, storage.values], [2, isEmpty]);
+    });
+
+    test('on iPhone saves to the App Group and forgets both groups', () async {
+      final storage = MemoryStorage()..values.addAll({'relay.server': connection.server, 'relay.clientId': 'old'});
+      final vault = KeyVault(storage, true);
+      await vault.save(bearer);
+      expect([storage.shared, storage.values], [{'relay.server': bearer.server, 'relay.key': pageKey}, isEmpty]);
+      storage.values['relay.key'] = pageKey;
+      await vault.forget();
+      expect([storage.shared, storage.values], [isEmpty, isEmpty]);
+    });
+
+    test('a build with no App Group keeps the key in the app\'s own group', () async {
+      final storage = MemoryStorage()..noGroup = true;
+      final vault = KeyVault(storage, true);
+      await vault.save(bearer);
+      expect([storage.values.keys, storage.shared], [unorderedEquals(['relay.server', 'relay.key']), isEmpty]);
+      expect((await vault.read())!.key, pageKey);
+      expect((await vault.upgrade())!.key, pageKey);
+      await vault.forget();
+      expect(storage.values, isEmpty);
+    });
+
+    test('Android has one home and never moves the key', () async {
+      final storage = MemoryStorage()..values.addAll({'relay.server': bearer.server, 'relay.key': pageKey});
+      final vault = KeyVault(storage, false);
+      expect((await vault.upgrade())!.key, pageKey);
+      await vault.save(bearer);
+      await vault.read();
+      expect([storage.shared, storage.values.length], [isEmpty, 2]);
+      expect(storage.options.where((option) => option?.groupId != null), isEmpty);
+    });
   });
 
   group('the API', () {

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/native.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:health/health.dart';
@@ -65,33 +66,49 @@ class FakeServer {
 FakeServer noNetwork() => FakeServer((_) => FakeServer.json({'error': 'no call may reach the network'}, 500));
 
 class MemoryStorage extends Fake implements FlutterSecureStorage {
+  /// The app's own Keychain group, or Android's one home.
   final values = <String, String>{};
   /// Each item's iPhone Keychain access, as last written; null for the plugin's default, open only while unlocked.
   final access = <String, KeychainAccessibility?>{};
+  /// The App Group's Keychain group: items written with a `groupId`.
+  final shared = <String, String>{};
   /// The iPhone options of each read, write and delete.
   final options = <AppleOptions?>[];
+  /// When true, the App Group's group answers as in a build with no App Group.
+  bool noGroup = false;
+  /// When set, the write after this many writes throws, as when the app stops part way.
+  int? stopAfterWrites;
+  var _writes = 0;
+
+  Map<String, String> _home(AppleOptions? iOptions) {
+    if (iOptions?.groupId == null) return values;
+    if (noGroup) throw PlatformException(code: 'Unexpected security result code', message: 'Code: -34018');
+    return shared;
+  }
 
   @override
   Future<Map<String, String>> readAll({AppleOptions? iOptions, AndroidOptions? aOptions, LinuxOptions? lOptions,
     WebOptions? webOptions, AppleOptions? mOptions, WindowsOptions? wOptions}) async {
     options.add(iOptions);
-    return Map.of(values);
+    return Map.of(_home(iOptions));
   }
 
   @override
   Future<void> write({required String key, required String? value, AppleOptions? iOptions, AndroidOptions? aOptions,
     LinuxOptions? lOptions, WebOptions? webOptions, AppleOptions? mOptions, WindowsOptions? wOptions}) async {
     options.add(iOptions);
-    values[key] = value!;
-    access[key] = iOptions?.accessibility;
+    if (stopAfterWrites != null && _writes >= stopAfterWrites!) throw StateError('stopped');
+    _writes++;
+    _home(iOptions)[key] = value!;
+    if (iOptions?.groupId == null) access[key] = iOptions?.accessibility;
   }
 
   @override
   Future<void> delete({required String key, AppleOptions? iOptions, AndroidOptions? aOptions, LinuxOptions? lOptions,
     WebOptions? webOptions, AppleOptions? mOptions, WindowsOptions? wOptions}) async {
     options.add(iOptions);
-    values.remove(key);
-    access.remove(key);
+    _home(iOptions).remove(key);
+    if (iOptions?.groupId == null) access.remove(key);
   }
 }
 

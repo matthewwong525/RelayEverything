@@ -204,6 +204,32 @@ class Store extends GeneratedDatabase {
     if (queue) await _queue(body);
   });
 
+  /// Keeps a note the iPhone's share card made, with no place. [sentAt] is set when the card sent the note already,
+  /// and [sentFiles] names the files it sent. With [send], what the card did not send is queued: the note, unless sent,
+  /// then each file not sent. False when this phone keeps the note already.
+  Future<bool> addSharedNote(LocalNote note, {DateTime? sentAt, Set<String> sentFiles = const {}, required bool send}) =>
+    transaction(() async {
+      if (await hasNote(note.clientId)) return false;
+      final body = note.toJson();
+      await _run('INSERT INTO notes (client_id, body, created_at, sent_at, queued) VALUES (?, ?, ?, ?, ?)',
+        [note.clientId, jsonEncode(body), note.createdAt.millisecondsSinceEpoch, sentAt?.millisecondsSinceEpoch,
+          sentAt != null || send ? 1 : 0]);
+      for (final file in note.attachments) {
+        final sent = sentFiles.contains(file.id) ? sentAt ?? DateTime.now() : null;
+        await _run('INSERT INTO attachments (id, note_client_id, name, type, size, path, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [file.id, note.clientId, file.name, file.type, file.size, file.path, sent?.millisecondsSinceEpoch]);
+      }
+      if (!send) return true;
+      if (sentAt == null) {
+        await _queue(body);
+      } else {
+        for (final file in note.attachments) {
+          if (!sentFiles.contains(file.id)) await enqueue('attachment', file.upload(note.clientId));
+        }
+      }
+      return true;
+    });
+
   /// Queues a note's upload, then one upload for each of its files not sent yet, so a file never reaches the server
   /// before its note.
   Future<void> _queue(Map<String, dynamic> body) async {

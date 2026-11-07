@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/services.dart';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -59,20 +62,56 @@ class Connection {
   }
 }
 
+/// The App Group the iPhone app shares with its share extension: a folder, settings, and the Keychain items below.
+const appGroup = 'group.com.matthewwong525.relayApp';
+
 /// The key's home: the Keychain on iPhone and the Keystore on Android, never the app's database. On iPhone the key
 /// opens after the first unlock since the phone started, so a wake while the phone is locked can still send.
+///
+/// On iPhone the key lives in the App Group's Keychain group, under its own service name, so the share extension
+/// sends with the same key. Earlier versions kept it in the app's own group: [upgrade] moves it once, writing the new
+/// items and reading them back before it deletes the old ones. A build with no App Group, such as an unsigned
+/// simulator build, keeps using the app's own group.
 class KeyVault {
-  KeyVault([FlutterSecureStorage? storage]) : _storage = storage ?? const FlutterSecureStorage();
+  KeyVault([FlutterSecureStorage? storage, bool? shared])
+    : _storage = storage ?? const FlutterSecureStorage(), _shared = shared ?? Platform.isIOS;
 
   final FlutterSecureStorage _storage;
+  /// True on iPhone. Android has one home only, so it never moves anything.
+  final bool _shared;
   static const _server = 'relay.server', _id = 'relay.clientId', _secret = 'relay.clientSecret', _key = 'relay.key';
   static const _names = [_server, _id, _secret, _key];
 
-  /// Every read and write names this, as the Keychain's default opens an item only while the phone is unlocked.
+  /// The service name of the shared items: a different one from the old items', so a delete of an old item never
+  /// matches a new one. `ios/ShareExtension/ShareSender.swift` reads the same group and service.
+  static const sharedService = 'relay.shared';
+
+  /// The app's own group, where earlier versions kept the key. Every read and write names an accessibility, as the
+  /// Keychain's default opens an item only while the phone is unlocked.
   static const iOptions = IOSOptions(accessibility: KeychainAccessibility.first_unlock_this_device);
 
+  /// The App Group's Keychain group, which the share extension reads too.
+  static const sharedOptions = IOSOptions(accessibility: KeychainAccessibility.first_unlock_this_device,
+    groupId: appGroup, accountName: sharedService);
+
   Future<Connection?> read() async {
-    final values = await _storage.readAll(iOptions: iOptions);
+    if (_shared) {
+      final connection = _parse(await _readShared());
+      if (connection != null) return connection;
+    }
+    return _parse(await _storage.readAll(iOptions: iOptions));
+  }
+
+  /// The shared items, or none when this build has no App Group.
+  Future<Map<String, String>> _readShared() async {
+    try {
+      return await _storage.readAll(iOptions: sharedOptions);
+    } on PlatformException {
+      return const {};
+    }
+  }
+
+  static Connection? _parse(Map<String, String> values) {
     final server = values[_server], id = values[_id], secret = values[_secret], key = values[_key];
     if (server == null) return null;
     if (key != null) return Connection.bearer(server: server, key: key);
@@ -80,30 +119,88 @@ class KeyVault {
     return Connection(server: server, clientId: id, clientSecret: secret);
   }
 
-  /// Saves a key kept by an earlier version again, with [iOptions], so a locked-phone wake can read it. Run it only
-  /// with the app open: the phone is unlocked then, so the old items can be read. Returns the key, as [read] does.
+  /// Run it only with the app open, as the phone is unlocked then. On iPhone it moves a key kept in the app's own group
+  /// to the shared group: write, read back, then delete the old items. A stop between the steps loses nothing: the
+  /// next open finds the new items and deletes what is left of the old. Elsewhere, and with no App Group, it saves the
+  /// old items again with [iOptions], so a locked-phone wake can read them. Returns the key, as [read] does.
   Future<Connection?> upgrade() async {
-    final values = await _storage.readAll(iOptions: iOptions);
+    final old = await _storage.readAll(iOptions: iOptions);
+    if (_shared) {
+      // Whole shared items only: a stop part way through a move leaves a part, which is moved again.
+      final moved = _parse(await _readShared());
+      if (moved != null) {
+        await _deleteOld(old.keys);
+        return moved;
+      }
+      if (old[_server] != null && await _moveToShared(old)) {
+        await _deleteOld(old.keys);
+        return read();
+      }
+    }
     for (final name in _names) {
-      final value = values[name];
+      final value = old[name];
       if (value != null) await _storage.write(key: name, value: value, iOptions: iOptions);
     }
-    return read();
+    return _parse(old);
   }
 
-  /// Saves the key in its own form and removes the other form, so a new key replaces an old one whole.
+  /// Writes [values] to the shared group and reads them back. False when they did not all land there.
+  Future<bool> _moveToShared(Map<String, String> values) async {
+    try {
+      for (final name in _names.reversed) {
+        final value = values[name];
+        if (value != null) await _storage.write(key: name, value: value, iOptions: sharedOptions);
+      }
+    } on PlatformException {
+      return false;
+    }
+    final back = await _readShared();
+    return _names.every((name) => back[name] == values[name]);
+  }
+
+  Future<void> _deleteOld(Iterable<String> names) async {
+    for (final name in names.where(_names.contains)) {
+      await _storage.delete(key: name, iOptions: iOptions);
+    }
+  }
+
+  /// Saves the key in its own form and removes the other form, so a new key replaces an old one whole. On iPhone it
+  /// goes to the shared group, or to the app's own group when the build has none.
   Future<void> save(Connection connection) async {
-    await _storage.write(key: _server, value: connection.server, iOptions: iOptions);
+    if (_shared) {
+      try {
+        await _save(connection, sharedOptions);
+        await _deleteOld(_names);
+        return;
+      } on PlatformException {
+        // No App Group in this build: the app's own group, as before.
+      }
+    }
+    await _save(connection, iOptions);
+  }
+
+  Future<void> _save(Connection connection, IOSOptions options) async {
+    await _storage.write(key: _server, value: connection.server, iOptions: options);
     final kept = connection.key != null ? {_key: connection.key!} : {_id: connection.clientId!, _secret: connection.clientSecret!};
     for (final name in [_id, _secret, _key]) {
       final value = kept[name];
-      value == null ? await _storage.delete(key: name, iOptions: iOptions) : await _storage.write(key: name, value: value, iOptions: iOptions);
+      value == null ? await _storage.delete(key: name, iOptions: options) : await _storage.write(key: name, value: value, iOptions: options);
     }
   }
 
+  /// Deletes the key from both groups.
   Future<void> forget() async {
-    for (final key in _names) {
-      await _storage.delete(key: key, iOptions: iOptions);
+    if (_shared) {
+      try {
+        for (final name in _names) {
+          await _storage.delete(key: name, iOptions: sharedOptions);
+        }
+      } on PlatformException {
+        // No App Group in this build: nothing is there.
+      }
+    }
+    for (final name in _names) {
+      await _storage.delete(key: name, iOptions: iOptions);
     }
   }
 }

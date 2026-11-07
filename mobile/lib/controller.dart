@@ -14,6 +14,7 @@ import 'data/settings.dart';
 import 'data/sign_in.dart';
 import 'data/store.dart';
 import 'relay.dart';
+import 'share/inbox.dart';
 import 'shortcuts/inbox.dart';
 import 'sync/calendar.dart';
 import 'sync/health.dart';
@@ -59,7 +60,7 @@ String newClientId([Random? random]) {
 class RelayController extends Relay {
   RelayController({required this.store, required this.vault, required this.places, required this.health,
     RelayApi Function(Connection)? apiFor, http.Client Function()? signInClient, WebAuth? webAuth, DateTime Function()? clock,
-    this.schedule, this.voice, this.native, this.folder, this.opener, this.calendar})
+    this.schedule, this.voice, this.native, this.folder, this.opener, this.share, this.calendar})
     : _sender = Sender(apiFor, signInClient), _webAuth = webAuth ?? phoneWebAuth, _clock = clock ?? DateTime.now {
     voice?.model.addListener(notifyListeners);
     // A recording at its longest ends as if the person let go.
@@ -86,6 +87,8 @@ class RelayController extends Relay {
   final Future<Directory> Function()? folder;
   /// Opens a note's file; with none, the app says it can not.
   final FileOpener? opener;
+  /// The App Group the iPhone's share card writes to; null on Android, where the share card is this app's own window.
+  final ShareGroup? share;
   final Sender _sender;
   final WebAuth _webAuth;
   final DateTime Function() _clock;
@@ -121,8 +124,9 @@ class RelayController extends Relay {
 
   RelayApi? get _api => _sender.api(_settings, _connection);
 
-  /// Reads the key, the settings and the notes, so the app opens with no network.
-  Future<void> load() async {
+  /// Reads the key, the settings and the notes, so the app opens with no network. With [watch] false, as in the
+  /// Android share card's window, it starts no location history: the app's own engine keeps it.
+  Future<void> load({bool watch = true}) async {
     // The app is open, so the phone is unlocked: a key kept by an earlier version is saved again for locked-phone wakes.
     _connection = await vault.upgrade();
     final saved = await store.get(settingsKey);
@@ -133,7 +137,8 @@ class RelayController extends Relay {
     if (_settings.encode() != saved) await store.set(settingsKey, _settings.encode());
     await store.remove(_oldTimeline);
     await _tellNative();
-    if (_settings.history) _startHistory();
+    await _tellShare();
+    if (watch && _settings.history) _startHistory();
     // Nothing waits for a fix yet at start, so a note still waiting lost its wait when the app closed.
     await store.settleWaiting(send: _settings.sending);
     _root = (await folder?.call())?.path;
@@ -144,11 +149,36 @@ class RelayController extends Relay {
         await keepNote(request.text, files: request.files, clientId: request.id, createdAt: request.createdAt, pin: false);
       });
     }
+    await _drainShare(refresh: false);
     await voice?.model.load();
     if (_settings.calendar) await _readCalendars();
     await _refreshLocal();
     // A voice note whose words the app's close cut short gets them now, from its kept recording.
     _track(_writePending(dropStray: true));
+  }
+
+  /// Keeps each note the iPhone's share card left, with no place. Load, each return to the app, and the hourly round
+  /// run it before they send.
+  Future<void> _drainShare({bool refresh = true}) async {
+    final root = _root, group = share;
+    if (root == null || group == null) return;
+    try {
+      final folder = await group.folder();
+      if (folder == null) return;
+      if (await drainShareInbox(folder, root, store, send: _settings.sending, clock: _clock) > 0 && refresh) {
+        await _refreshLocal();
+      }
+    } on Exception {
+      // A build with no App Group, or an engine with no Swift side: nothing to keep.
+    }
+  }
+
+  /// Each return to the app: keeps what the share card left, shows what another engine added to the store, such as
+  /// Android's share window, then sends what waits.
+  Future<void> resume() async {
+    await _drainShare(refresh: false);
+    await _refreshLocal();
+    await sync();
   }
 
   Entry _entryOfLocal(LocalNote note) => Entry(text: note.text, at: note.createdAt,
@@ -189,6 +219,7 @@ class RelayController extends Relay {
     }
     await vault.save(connection);
     _connection = connection;
+    await _tellShare();
     notifyListeners();
     return null;
   }
@@ -220,6 +251,7 @@ class RelayController extends Relay {
     }
     await vault.save(connection);
     _connection = connection;
+    await _tellShare();
     notifyListeners();
     return null;
   }
@@ -231,6 +263,7 @@ class RelayController extends Relay {
     if (_connection == null) return 'Connect a key first.';
     _connection = _connection!.withServer(server);
     await vault.save(_connection!);
+    await _tellShare();
     notifyListeners();
     return null;
   }
@@ -265,6 +298,7 @@ class RelayController extends Relay {
     await stopSending();
     await vault.forget();
     _connection = null;
+    await _tellShare();
     notifyListeners();
   }
 
@@ -273,7 +307,17 @@ class RelayController extends Relay {
     await store.set(settingsKey, settings.encode());
     await schedule?.call(settings.history || settings.health || settings.calendar);
     await _tellNative();
+    await _tellShare();
     notifyListeners();
+  }
+
+  /// Tells the iPhone's share card whether it may send: only while sending is on and a key is kept.
+  Future<void> _tellShare() async {
+    try {
+      await share?.setSending(_settings.sending && _connection != null);
+    } on Exception {
+      // An engine with no Swift side; the next start tells it again.
+    }
   }
 
   /// Tells Swift what it may read and keep while the app is closed: nothing while sending is off.
@@ -461,31 +505,7 @@ class RelayController extends Relay {
   Future<Attachment?> _keepFile(NewFile file) async {
     final root = _root ?? (await folder?.call())?.path;
     if (root == null) return null;
-    final id = newClientId();
-    final path = 'attachments/$id${extensionOf(file.name)}';
-    final target = File('$root/$path');
-    final source = File(file.path.startsWith('/') ? file.path : '$root/${file.path}');
-    try {
-      await target.parent.create(recursive: true);
-      if (file.move) {
-        try {
-          await source.rename(target.path);
-        } on FileSystemException {
-          await source.copy(target.path);
-          await source.delete();
-        }
-      } else {
-        await source.copy(target.path);
-      }
-      final size = await target.length();
-      if (size > maxFileBytes) {
-        await target.delete();
-        return null;
-      }
-      return Attachment(id: id, name: file.name, type: file.type, size: size, path: path);
-    } on FileSystemException {
-      return null;
-    }
+    return keepFile(root, file, newClientId());
   }
 
   /// Ends when each new note has its pin, and the sync after it is done. Shortcuts waits on it, so a note goes before the

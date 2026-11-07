@@ -62,15 +62,18 @@ export async function checkLines(cf, root) {
   return lines;
 }
 
+// The settings the owner sets by hand in self-host/wrangler.jsonc, which update keeps when it writes the configs again.
+const OWNER_VARS = ['RELAY_SIGN_UP', 'RELAY_CONTACT_EMAIL'];
+
 /** The install's three configs, from the committed templates: names, IDs and the owner, and nothing secret. */
-export function configs(templates, { name, email, account, database, subdomain, team, access, workerId = '' }) {
+export function configs(templates, { name, email, account, database, subdomain, team, access, workerId = '', kept = {} }) {
   const part = names(name);
   const [app, mcp, spaces] = ['app', 'mcp', 'spaces'].map(kind => JSON.parse(stripJsonc(templates[kind])));
   const server = `https://${part.worker}.${subdomain}.workers.dev`;
   const connector = `https://${part.mcp}.${subdomain}.workers.dev`;
   Object.assign(app, { name: part.worker, account_id: account });
   Object.assign(app.vars, { WONG_OWNER_EMAIL: email, CF_ACCESS_TEAM_DOMAIN: team, CF_ACCESS_AUD: access.aud, CF_ACCESS_APP_ID: access.id,
-    CF_ACCESS_WORKER_ID: workerId, RELAY_MCP_CALLBACK: `${connector}/callback` });
+    CF_ACCESS_WORKER_ID: workerId, RELAY_MCP_CALLBACK: `${connector}/callback`, ...kept });
   Object.assign(app.d1_databases[0], { database_name: part.database, database_id: database });
   app.r2_buckets[0].bucket_name = part.bucket;
   app.queues.producers[0].queue = app.queues.consumers[0].queue = part.queue;
@@ -85,9 +88,13 @@ export function configs(templates, { name, email, account, database, subdomain, 
 }
 
 /** An install's settings, read back from its own config, so update can write each config again from the templates. */
-export const settingsOf = (installed, subdomain) => ({ name: installed.name, email: installed.vars.WONG_OWNER_EMAIL, account: installed.account_id,
-  database: installed.d1_databases[0].database_id, subdomain, team: installed.vars.CF_ACCESS_TEAM_DOMAIN,
-  access: { id: installed.vars.CF_ACCESS_APP_ID, aud: installed.vars.CF_ACCESS_AUD }, workerId: installed.vars.CF_ACCESS_WORKER_ID });
+export function settingsOf(installed, subdomain) {
+  const kept = Object.fromEntries(OWNER_VARS.filter(key => typeof installed.vars[key] === 'string').map(key => [key, installed.vars[key]]));
+  return { name: installed.name, email: installed.vars.WONG_OWNER_EMAIL, account: installed.account_id,
+    database: installed.d1_databases[0].database_id, subdomain, team: installed.vars.CF_ACCESS_TEAM_DOMAIN,
+    access: { id: installed.vars.CF_ACCESS_APP_ID, aud: installed.vars.CF_ACCESS_AUD }, workerId: installed.vars.CF_ACCESS_WORKER_ID,
+    ...Object.keys(kept).length ? { kept } : {} };
+}
 
 /** The login: a self-hosted Access app on the server's address and, once it is live, the Worker itself, with the owner's
  *  email as its one person. */

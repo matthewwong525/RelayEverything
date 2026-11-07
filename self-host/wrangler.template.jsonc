@@ -17,7 +17,8 @@
     "CF_ACCESS_APP_ID": "",
     "CF_ACCESS_WORKER_ID": "",
     "RELAY_CHECKER_SHA256": "",
-    // Access signs the owner in; no one else gets an account until the owner sets RELAY_SIGN_UP to "open".
+    // Access signs the owner in; no one else gets an account until the owner sets RELAY_SIGN_UP to "open". The owner
+    // may set RELAY_CONTACT_EMAIL, the address the page shows for questions and privacy requests. update keeps both.
     "RELAY_SIGN_IN": "access",
     "RELAY_MCP_CALLBACK": "https://relay-mcp.your-subdomain.workers.dev/callback"
   },

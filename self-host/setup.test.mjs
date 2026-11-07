@@ -114,6 +114,15 @@ test('update writes each config again, opens the keys\' way past the login, and 
   assert.ok(lines.includes('ok database changes applied, then the newest Relay Everything put live'));
 });
 
+test('update keeps the sign-up and contact settings the owner set, and adds neither when unset', () => {
+  const kept = { RELAY_SIGN_UP: 'open', RELAY_CONTACT_EMAIL: 'help@example.com' };
+  const { app } = configs(templates, { ...SETTINGS, kept });
+  assert.deepEqual([app.vars.RELAY_SIGN_UP, app.vars.RELAY_CONTACT_EMAIL], ['open', 'help@example.com']);
+  assert.deepEqual(settingsOf(app, 'you').kept, kept);
+  const { app: plain } = configs(templates, SETTINGS);
+  assert.deepEqual([plain.vars.RELAY_SIGN_UP, plain.vars.RELAY_CONTACT_EMAIL, settingsOf(plain, 'you').kept], [undefined, undefined, undefined]);
+});
+
 test('update gives an older keys app the phone\'s sign-in trade, and leaves a current one', async () => {
   const keys = names('relay').keysApp;
   const host = 'relay.you.workers.dev';

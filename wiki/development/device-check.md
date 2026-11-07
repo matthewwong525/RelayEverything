@@ -33,6 +33,9 @@ Each run ends with one verdict:
 
 A *works* is evidence, not a gate. The pictures and the video are always there to look at.
 
+- **To see the launch screen, read the first seconds of `run.mp4`**: the video starts before the app opens, and no picture shows it. Take frames with `ffmpeg -i run.mp4 -t 12 -vf fps=4 f%03d.png`.
+- **The home-screen icon is never shown**: the tour and Claude stay inside the app. Check a new icon on a real phone after the next TestFlight build.
+
 ## Start it
 
 The check never runs on a push. Start it in one of three ways:

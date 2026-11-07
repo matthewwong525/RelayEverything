@@ -12,7 +12,7 @@ const place = { lat: 43.6532, lon: -79.3832, accuracy: 12, name: "Queen St W", f
 const note = (id: string, more: object = {}) =>
   ({ id, source: "typed", text: `Note ${id}`, recordedAt: NOW, device: "Android phone", audio: false, place: null, attachments: [], ...more });
 const FIRST = { notes: [
-  note("00000000-0000-4000-8000-000000000001", { source: "ring", audio: true, text: "", device: "Pebble app",
+  note("00000000-0000-4000-8000-000000000001", { source: "ring", audio: true, text: "", device: "iPad",
     place: { ...place, name: null, from: "history" } }),
   note("00000000-0000-4000-8000-000000000002", { place }),
 ], next: NOW, nextId: "00000000-0000-4000-8000-000000000002" };
@@ -26,7 +26,7 @@ const CHAT_1 = "c0000000-0000-4000-8000-000000000001";
 const CHAT_2 = "c0000000-0000-4000-8000-000000000002";
 const listed = (id: string, title: string, more: object = {}) =>
   ({ id, title, project: "relay-ring", app: "claude-code", startedAt: NOW, lastAt: NOW, messages: 4, savedByAi: false, ...more });
-const CHATS = { chats: [listed(CHAT_1, "Stiffener plan", { savedByAi: true }), listed(CHAT_2, "Fix the Pebble webhook", { messages: 1 })], next: null, nextId: null };
+const CHATS = { chats: [listed(CHAT_1, "Stiffener plan", { savedByAi: true }), listed(CHAT_2, "Fix the webhook signature", { messages: 1 })], next: null, nextId: null };
 const ONE_CHAT = { chat: CHATS.chats[0], next: 2, saves: [{ id: "e1", title: "Stiffener plan", text: "Use a 0.2 mm steel stiffener.", createdAt: NOW }],
   messages: [{ seq: 0, role: "you", text: "How thick should the stiffener be?", at: NOW }, { seq: 1, role: "step", text: "Read pcb/relay.kicad_pcb", at: NOW },
     { seq: 2, role: "ai", text: "0.2 mm is enough.", at: NOW }] };
@@ -86,7 +86,7 @@ it("shows today's summary, every note with its place and recording, and the plac
   const notes = await screen.findByRole("region", { name: "Notes" });
   const ring = within(notes).getByLabelText("Ring note");
   expect(within(ring).getByText("No words, only the recording.")).toBeTruthy();
-  expect(within(ring).getByText(/43\.6532, -79\.3832 · Pebble app/)).toBeTruthy();
+  expect(within(ring).getByText(/43\.6532, -79\.3832 · iPad/)).toBeTruthy();
   expect(within(ring).getByLabelText("The recording").getAttribute("src")).toBe("/apps/relay/api/audio?id=00000000-0000-4000-8000-000000000001");
   const typed = within(notes).getByLabelText("Typed note");
   expect(within(typed).getByText("Note 00000000-0000-4000-8000-000000000002")).toBeTruthy();
@@ -159,7 +159,7 @@ it("lists saved chats, finds them by a word, and says when none match", async ()
   fireEvent.change(search, { target: { value: " webhook " } });
   fireEvent.submit(search);
   await waitFor(() => expect(within(chats).queryByText("Stiffener plan")).toBeNull());
-  expect(within(chats).getByText("Fix the Pebble webhook")).toBeTruthy();
+  expect(within(chats).getByText("Fix the webhook signature")).toBeTruthy();
   fireEvent.change(search, { target: { value: "nothing" } });
   fireEvent.submit(search);
   expect(await within(chats).findByText("No chat holds those words.")).toBeTruthy();
@@ -179,7 +179,7 @@ it("opens a chat with the AI's summary above its messages, steps muted, and read
   expect(await within(chats).findByText("Save the plan to Relay")).toBeTruthy();
   expect(within(chats).queryByRole("button", { name: "Show more messages" })).toBeNull();
   fireEvent.click(within(chats).getByRole("button", { name: "Back" }));
-  expect(await within(chats).findByRole("button", { name: "Fix the Pebble webhook" })).toBeTruthy();
+  expect(await within(chats).findByRole("button", { name: "Fix the webhook signature" })).toBeTruthy();
 });
 
 it("loads older chats and more messages, and says when a part could not load", async () => {
@@ -211,11 +211,11 @@ it("loads older chats and more messages, and says when a part could not load", a
   // A chat that can't be read offers to try again.
   failing = true;
   fireEvent.click(within(chats).getByRole("button", { name: "Back" }));
-  fireEvent.click(await within(chats).findByRole("button", { name: "Fix the Pebble webhook" }));
+  fireEvent.click(await within(chats).findByRole("button", { name: "Fix the webhook signature" }));
   expect((await within(chats).findByRole("alert")).textContent).toContain("The chat could not be loaded.");
   failing = false;
   fireEvent.click(within(chats).getByRole("button", { name: "Try again" }));
-  expect(await within(chats).findByRole("heading", { level: 3, name: "Fix the Pebble webhook" })).toBeTruthy();
+  expect(await within(chats).findByRole("heading", { level: 3, name: "Fix the webhook signature" })).toBeTruthy();
 });
 
 it("deletes a chat after a confirm that says it can't be undone, and reads the list again", async () => {

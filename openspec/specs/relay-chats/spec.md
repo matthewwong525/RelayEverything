@@ -6,7 +6,7 @@ Relay's server keeps the owner's AI chats beside their notes: it takes chats fro
 ## Requirements
 
 ### Requirement: A chat key reaches only the chat routes
-Relay SHALL accept saved chats only from an unrevoked device key made for chats. A chat key SHALL be send-only: it SHALL reach only the routes that add chat messages and saves, and SHALL NOT list, read, change or delete notes, health, places, recordings or chats. A phone or Pebble key SHALL NOT add chats.
+Relay SHALL accept saved chats only from an unrevoked device key made for chats. A chat key SHALL be send-only: it SHALL reach only the routes that add chat messages and saves, and SHALL NOT list, read, change or delete notes, health, places, recordings or chats. A phone key SHALL NOT add chats.
 
 #### Scenario: A chat key sends a chat
 - **WHEN** an unrevoked chat key sends new messages for a chat

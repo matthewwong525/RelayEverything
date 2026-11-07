@@ -8,7 +8,6 @@ export const sidebar = [
     { label: 'Sign up', slug: 'start/sign-up' },
     { label: 'Install the app', slug: 'start/install' },
     { label: 'Connect a phone', slug: 'start/connect-a-phone' },
-    { label: 'Set up the Pebble webhook', slug: 'start/pebble-webhook' },
   ] },
   { label: 'Use the app', items: ['app/your-notes', 'app/voice-notes', 'app/shortcuts', 'app/health', 'app/location', 'app/settings'] },
   { label: 'Connections', items: [
@@ -17,7 +16,7 @@ export const sidebar = [
     'connections/claude-code',
     { label: 'Example skill and tables', link: '/connections/#an-example-skill-and-tables', badge: soon },
   ] },
-  { label: 'Server API', items: ['api/keys', 'api/reference', 'api/pebble-webhook', 'api/recordings', 'api/files'] },
+  { label: 'Server API', items: ['api/keys', 'api/reference', 'api/recordings', 'api/files'] },
   { label: 'Web API', items: ['api/connect-a-service', 'api/v1-reference'] },
   { label: 'The ring', items: ['ring/how-it-works', 'ring/parts-and-battery', 'ring/board', 'ring/models'] },
   { label: 'About', items: ['privacy'] },

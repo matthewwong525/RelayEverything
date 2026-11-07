@@ -23,7 +23,7 @@ The ring pictures in `site/src/assets/ring/` are rendered from `cad/`: run `npm 
 
 ## The API pages
 
-[Routes](../site/src/content/docs/api/reference.md) is made from the server's own route list by [`api-doc.ts`](../app/worker/apps/relay/api-doc.ts): each described route's method, path, fields, errors and example, and who can call it. After a route change, run `npm run relay:api-doc` in `app/`: it also writes the webhook format's public schema, `site/public/webhooks/v1.schema.json`, from [`format.ts`](../app/worker/apps/relay/webhooks/format.ts). The main app's checks fail when the page or the schema differs from what the code makes. A route with no description in the contract, such as the Pebble webhook, needs its own page and an entry in `HAND_PAGES` in `api-doc.ts`.
+[Routes](../site/src/content/docs/api/reference.md) is made from the server's own route list by [`api-doc.ts`](../app/worker/apps/relay/api-doc.ts): each described route's method, path, fields, errors and example, and who can call it. After a route change, run `npm run relay:api-doc` in `app/`: it also writes the webhook format's public schema, `site/public/webhooks/v1.schema.json`, from [`format.ts`](../app/worker/apps/relay/webhooks/format.ts). The main app's checks fail when the page or the schema differs from what the code makes. A route with no description in the contract, such as `GET audio`, needs its own page and an entry in `HAND_PAGES` in `api-doc.ts`.
 
 ## Update and preview
 

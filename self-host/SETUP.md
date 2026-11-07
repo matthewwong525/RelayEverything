@@ -35,7 +35,7 @@ It costs nothing on Cloudflare's free plan. Tell the person this, and ask before
    - **Workers:** open Workers & Pages once, to get a `workers.dev` address.
 4. **Install:** `node self-host/setup.mjs install --email <the person's email>`. Their email is the only login. Add `--name <name>` for another name. It prints `server=` and `connector=`.
 5. **Sign in:** the person opens the `server=` address, enters their email, and types the code Cloudflare sends. Their first visit makes their account and their own empty space. Only the owner's email gets an account. To let other people make one, the owner sets `RELAY_SIGN_UP` to `open` in `self-host/wrangler.jsonc` and runs `update`.
-6. **Keys:** on the Relay Everything page, the person taps *Add a device* for each phone, the Pebble app and each Claude Code computer. The page shows the key once, as a QR code, and the Pebble app's signing secret with it. Never ask for a key in the chat. Then point them to [Connect a phone](https://relayeverything.com/start/connect-a-phone/) and [the Pebble webhook](https://relayeverything.com/start/pebble-webhook/).
+6. **Keys:** on the Relay Everything page, the person taps *Add a device* for each phone and each Claude Code computer. The page shows the key once, as a QR code. Never ask for a key in the chat. Then point them to [Connect a phone](https://relayeverything.com/start/connect-a-phone/).
 7. **AI connector:** the person adds the `connector=` address to their AI, as [Connect your AI](https://relayeverything.com/connections/connect-your-ai/) shows. The AI app sends them to their server's own login.
 
 ## Update my Relay Everything

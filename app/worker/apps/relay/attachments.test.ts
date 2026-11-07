@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { handleApp } from "../index";
-import { ANA, bucket, call, env, matthew, NOW, phone, pebbleApp, request, rows, type Who } from "../../../tests/relay";
+import { ANA, bucket, call, env, matthew, NOW, phone, ipad, request, rows, type Who } from "../../../tests/relay";
 
 const PDF = new TextEncoder().encode("%PDF-1.7 warranty");
 const PNG = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -69,7 +69,7 @@ it("refuses a file its note does not list, one on another device's note, and one
   await note();
   expect((await upload(phone, "file-other-01", PDF)).status).toBe(404);
   expect((await upload(phone, "file-pdf-0001", PDF, "note-other-01")).status).toBe(404);
-  expect((await upload(pebbleApp, "file-pdf-0001", PDF)).status).toBe(404);
+  expect((await upload(ipad, "file-pdf-0001", PDF)).status).toBe(404);
   expect((await upload(phone, "bad id", PDF)).status).toBe(400);
   expect((await upload(phone, "file-pdf-0001", new Uint8Array(25 * 1024 * 1024 + 1))).status).toBe(413);
   expect(rows("relay_attachments").every(row => row.file_key === null)).toBe(true);

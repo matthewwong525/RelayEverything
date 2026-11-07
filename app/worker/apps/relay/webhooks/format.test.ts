@@ -6,7 +6,7 @@ import { base64, newSecret, signedHeaders } from "./sign.ts";
 
 const schemaFile = new URL("../../../../../site/public/webhooks/v1.schema.json", import.meta.url);
 const AT = Date.UTC(2026, 10, 4, 14, 1, 2);
-const device = { device_id: "d0000000-0000-4000-8000-000000000002", device_name: "Pebble app" };
+const device = { device_id: "d0000000-0000-4000-8000-000000000002", device_name: "iPad" };
 const ring: NoteRow = { id: "a0000000-0000-4000-8000-000000000001", source: "ring", text: "Call the PCB fab about the second batch.",
   recorded_at: Date.UTC(2026, 10, 4, 14, 1), created_at: AT, ...device, lat: 43.6629, lon: -79.3957, accuracy: 15, place: "Harbord St",
   place_from: "history", audio_key: "notes/a0000000-0000-4000-8000-000000000001.m4a" };
@@ -23,11 +23,11 @@ it("builds each type in the published format, with times in ISO 8601 and a recor
   for (const item of built) expect(message.parse(item), item.type).toEqual(item);
   expect(built[0]).toEqual({ version: 1, type: "note.created", timestamp: "2026-11-04T14:01:02.000Z", data: { note: {
     id: ring.id, source: "ring", text: ring.text, recorded_at: "2026-11-04T14:01:00.000Z", created_at: "2026-11-04T14:01:02.000Z",
-    device: { id: device.device_id, name: "Pebble app" }, place: { lat: 43.6629, lon: -79.3957, accuracy: 15, name: "Harbord St", from: "history" },
+    device: { id: device.device_id, name: "iPad" }, place: { lat: 43.6629, lon: -79.3957, accuracy: 15, name: "Harbord St", from: "history" },
     audio: { content_type: "audio/mp4", base64: "AAAAGA==" } } } });
   expect(built[1].data).toMatchObject({ note: { place: null, audio: null } });
   expect(built[2].data).not.toHaveProperty("note.audio");
-  expect(built[3].data).toEqual({ samples: [{ id: 2, device: { id: device.device_id, name: "Pebble app" }, type: "steps",
+  expect(built[3].data).toEqual({ samples: [{ id: 2, device: { id: device.device_id, name: "iPad" }, type: "steps",
     start: "2026-11-04T14:01:02.000Z", end: "2026-11-04T14:01:03.000Z", value: 5210, unit: "count", source: "fitness" }] });
   expect(() => message.parse({ ...built[5], version: 2 })).toThrow();
 });
@@ -56,6 +56,12 @@ it("keeps base64 whole for a recording larger than one piece", () => {
 it("publishes the schema the format makes", () => {
   if (process.env.RELAY_API_DOC_WRITE) writeFileSync(schemaFile, jsonSchema());
   expect(readFileSync(schemaFile, "utf8"), "The format changed: run `npm run relay:api-doc` in app/").toBe(jsonSchema());
+  // note.updated stays in version 1, marked as no longer sent, so a receiver built for it keeps working.
+  const schema = JSON.parse(jsonSchema()) as { oneOf?: { description?: string; properties: { type: { const: string } } }[];
+    anyOf?: { description?: string; properties: { type: { const: string } } }[] };
+  const updated = (schema.oneOf ?? schema.anyOf)!.find(item => item.properties.type.const === "note.updated");
+  expect(updated?.description).toMatch(/^No longer sent/);
+  expect(jsonSchema().toLowerCase()).not.toContain("pebble");
 });
 
 it("lists a note's files by name, type and size, never their bytes, and leaves the list out of a note with none", () => {

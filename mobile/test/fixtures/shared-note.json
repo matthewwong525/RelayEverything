@@ -1,0 +1,9 @@
+{
+  "clientId": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+  "text": "read on the train\nTen rules for slow travel\nhttps://example.com/slow-travel",
+  "createdAt": 1793797200000,
+  "attachments": [
+    {"id": "a1b2c3d4e5f60718293a4b5c6d7e8f90", "name": "IMG_2041.jpg", "type": "image/jpeg", "size": 2202009},
+    {"id": "0918273645546372819aabbccddeeff0", "name": "receipt.pdf", "type": "application/pdf", "size": 48213}
+  ]
+}

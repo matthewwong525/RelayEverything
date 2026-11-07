@@ -34,6 +34,7 @@ A change to `mobile/` runs [`mobile-ci.yml`](../.github/workflows/mobile-ci.yml)
 
 - **The App Store Connect key must have the Admin role.** The iPhone build signs in the cloud, and an App Manager key fails with *Cloud signing permission error*.
 - **Each iPhone build makes a new *Apple Development: Created via API* certificate.** The account holds only a few: when a build fails with *Choose a certificate to revoke*, revoke the old *Created via API* certificates through the key, after the person's yes. Keep the *Developer ID Application* certificate.
+- **The key can't make an App Group.** The build registers a new app part, such as the share extension, and turns on *App Groups* by itself, but gives it no group. The build then fails with *Provisioning profile … doesn't match the entitlements file's value for the com.apple.security.application-groups entitlement*. Register the group once on the [App Groups page](https://developer.apple.com/account/resources/identifiers/list/applicationGroup), turn it on for each app ID under *App Groups → Configure*, then build again. Relay Everything's group is `group.com.matthewwong525.relayApp`.
 - **On the Linux build computer, Flutter is in `/opt/flutter/bin`, not on `PATH`.** Run `export PATH=/opt/flutter/bin:$PATH` before `flutter pub get`, `flutter analyze` and `flutter test` in `mobile/`.
 
 ## Run your own server

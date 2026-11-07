@@ -423,7 +423,8 @@ void main() {
     await tester.pumpWidget(RelayApp(relay: relay));
     await openSettings(tester);
     await tester.tap(find.text('Pin notes to where I am'));
-    await tester.scrollUntilVisible(find.text('Location history'), 100);
+    await tester.ensureVisible(find.text('Location history'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Location history'));
     relay.problem = 'Relay Everything may not read your health data.';
     await tester.tap(find.text('Health: steps, heart rate, sleep and more'));

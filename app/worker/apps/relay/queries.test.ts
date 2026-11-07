@@ -21,7 +21,7 @@ it("counts each hour's steps once: the largest device, after each device's large
   steps("d-phone", "Health Connect", NOW, 1000);
   steps("d-phone", "Health Connect", NOW + HOUR / 2, 500);
   steps("d-phone", "Samsung Health", NOW, 1200);
-  steps("d-pebble", "Pebble", NOW + HOUR, 300);
+  steps("d-ipad", "iPad", NOW + HOUR, 300);
   const buckets = await healthBuckets(session(), "steps", [[NOW, NOW + HOUR], [NOW + HOUR, NOW + 2 * HOUR], [NOW + 2 * HOUR, NOW + 3 * HOUR]]);
   expect(buckets.map(bucket => bucket.total)).toEqual([1500, 300, 0]);
 });
@@ -81,7 +81,7 @@ it("sums the new health types: latest weight, each blood pressure reading, highe
   reading("resting_heart_rate", NOW, 55);
   reading("resting_heart_rate", NOW + HOUR, 58);
   reading("hrv_sdnn", NOW, 41);
-  reading("hrv_rmssd", NOW, 33, { device: "d-pebble" });
+  reading("hrv_rmssd", NOW, 33, { device: "d-ipad" });
   reading("blood_oxygen", NOW, 95);
   reading("blood_oxygen", NOW + HOUR, 98);
   db.sql.exec(`INSERT INTO relay_calendar_events (device_id, event_key, calendar, title, start_at, end_at, people, updated_at, created_at)

@@ -9,7 +9,8 @@ export type HealthType = (typeof HEALTH_TYPES)[number];
 /** A span from its first millisecond to the first one after it. */
 export type Span = [number, number];
 
-// lat, lon and place_from are set together: notes.ts takes lat and lon as a pair, and place.ts copies all three.
+// lat, lon and place_from are set together: notes.ts takes lat and lon as a pair. A stored ring note may hold a place
+// from location history, from before that was removed.
 type Row = { id: string; source: "ring" | "typed"; text: string; recorded_at: number; device: string; audio: number;
   lat: number | null; lon: number | null; accuracy: number | null; place: string | null; place_from: "phone" | "history" | null;
   files: string };

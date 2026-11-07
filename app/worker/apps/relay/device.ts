@@ -7,7 +7,7 @@ import { directory, hashToken, randomToken, type DirectoryEnv } from "./people.t
 import type { Caller, PersonSpace, Reach } from "./space.ts";
 
 const reaches = z.enum(["phone", "chats", "api"])
-  .describe("phone: notes, health and places, from a phone or the Pebble app. chats: Claude Code chats. api: the web API, which reads and adds notes.");
+  .describe("phone: notes, files, health and places, from a phone. chats: Claude Code chats. api: the web API, which reads and adds notes.");
 type Reaches = z.infer<typeof reaches>;
 const device = z.strictObject({ id: z.string(), name: z.string(), reaches, createdAt: z.number(), revokedAt: z.number().nullable() });
 const ERRORS = { not_found: "You have no device with this id." };
@@ -33,19 +33,18 @@ export const devices = defineAction({
 
 export const deviceAdd = defineAction({
   operationId: "relay.devices-add", summary: "Add a device",
-  description: "Make a key for a new device. The answer holds the key, its QR code text and, for a phone key, the Pebble signing secret: each " +
-    "shows only this once. An API key's answer names the web API's address.",
+  description: "Make a key for a new device. The answer holds the key and its QR code text: both show only this once. An API key's " +
+    "answer names the web API's address.",
   input: z.strictObject({ name: z.string().trim().min(1).max(60).describe("A name you know the device by."), reaches }),
   output: z.strictObject({ id: z.string(), name: z.string(), reaches, key: z.string().describe("Shown this once."),
     qr: z.string().describe("What the phone scans: the server's address and the key."),
-    pebbleSecret: z.string().nullable().describe("A phone key's Pebble signing secret, shown this once."),
     api: z.string().nullable().describe("An API key's web API address, or null when this server has no AI connector.") }),
   encoding: "json", effect: "write", agentAvailable: false, requiresIdentity: false, errors: {}, examples: [],
   handler: asPerson<ActionCall>(async ({ space, caller, env, call }) => {
     const { name, reaches: reach } = call.input as { name: string; reaches: Reaches };
-    const { id, key, pebbleSecret } = await makeDevice(space, env, caller, name, reach);
+    const { id, key } = await makeDevice(space, env, caller, name, reach);
     const qr = JSON.stringify({ relay: 1, server: call.url.origin, key });
-    return Response.json({ id, name, reaches: reach, key, qr, pebbleSecret, api: reach === "api" ? apiAddress(env) : null });
+    return Response.json({ id, name, reaches: reach, key, qr, api: reach === "api" ? apiAddress(env) : null });
   }),
 });
 
@@ -53,19 +52,15 @@ export const deviceAdd = defineAction({
  *  The answer holds the key, which only the caller's answer may show. */
 export async function makeDevice(space: PersonSpace, env: Pick<DirectoryEnv, "DB">, caller: Caller, name: string, reach: Reach) {
   const [id, key, now] = [crypto.randomUUID(), `rek_${randomToken()}`, Date.now()];
-  const pebbleSecret = reach === "phone" ? randomToken() : null;
-  await space.db.batch([
-    space.db.prepare(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at, reaches)
-      VALUES (?, ?, ?, '', ?, NULL, ?)`).bind(id, name, `rek:${id}`, now, reach),
-    ...pebbleSecret ? [space.db.prepare("INSERT INTO relay_device_secrets (device_id, pebble_secret) VALUES (?, ?)").bind(id, pebbleSecret)] : [],
-  ]);
+  await space.db.prepare(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at, reaches)
+    VALUES (?, ?, ?, '', ?, NULL, ?)`).bind(id, name, `rek:${id}`, now, reach).run();
   const db = directory(env);
   // The checker has no account of its own, so its key needs its fixed person row: a made-up address, never mailed.
   await db.batch([db.prepare("INSERT OR IGNORE INTO relay_people (id, email, created_at) SELECT ?, ?, ? WHERE ? = 'checker'")
     .bind(CHECKER_PERSON, "checker@example.invalid", now, caller.kind),
   db.prepare("INSERT INTO relay_keys (key_sha256, person_id, device_id, reaches, created_at) VALUES (?, ?, ?, ?, ?)")
     .bind(await hashToken(key), caller.personId, id, reach, now)]);
-  return { id, key, pebbleSecret };
+  return { id, key };
 }
 
 export const deviceOff = defineAction({

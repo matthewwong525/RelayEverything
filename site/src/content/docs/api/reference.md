@@ -11,7 +11,7 @@ lists the codes.
 
 ## Store a typed note
 
-`POST /apps/relay/api/notes` · `relay.notes-add` · writes · called by a phone or Pebble key
+`POST /apps/relay/api/notes` · `relay.notes-add` · writes · called by a phone key
 
 Store a note typed on a Relay Everything phone, once per phone and clientId.
 
@@ -43,7 +43,7 @@ Send the input as a JSON body.
 
 ## Store a phone's samples
 
-`POST /apps/relay/api/health` · `relay.samples-add` · writes · called by a phone or Pebble key
+`POST /apps/relay/api/health` · `relay.samples-add` · writes · called by a phone key
 
 Store health samples from Apple Health or Health Connect, such as steps, sleep, weight and blood pressure, once per type, time span and source.
 
@@ -70,9 +70,9 @@ Send the input as a JSON body.
 
 ## Store a phone's points
 
-`POST /apps/relay/api/locations` · `relay.points-add` · writes · called by a phone or Pebble key
+`POST /apps/relay/api/locations` · `relay.points-add` · writes · called by a phone key
 
-Store the phone's location history, once per time, and give ring notes near those times their place.
+Store the phone's location history, once per time. A note keeps the place it came with: a point gives no note a place.
 
 ### Input
 
@@ -96,7 +96,7 @@ Send the input as a JSON body.
 
 ## Store a phone's calendar events
 
-`POST /apps/relay/api/calendar` · `relay.calendar-add` · writes · called by a phone or Pebble key
+`POST /apps/relay/api/calendar` · `relay.calendar-add` · writes · called by a phone key
 
 Store the phone's new and changed calendar events, and mark the removed ones, once per device and occurrence.
 
@@ -831,7 +831,7 @@ It takes no input.
 | `devices` | array of object | yes |  |
 | `devices[].id` | string | yes |  |
 | `devices[].name` | string | yes |  |
-| `devices[].reaches` | "phone" or "chats" or "api" | yes | phone: notes, health and places, from a phone or the Pebble app. chats: Claude Code chats. api: the web API, which reads and adds notes. |
+| `devices[].reaches` | "phone" or "chats" or "api" | yes | phone: notes, files, health and places, from a phone. chats: Claude Code chats. api: the web API, which reads and adds notes. |
 | `devices[].createdAt` | number | yes |  |
 | `devices[].revokedAt` | number or null | yes |  |
 
@@ -839,7 +839,7 @@ It takes no input.
 
 `POST /apps/relay/api/devices` · `relay.devices-add` · writes · called by a signed-in person only, not a device key
 
-Make a key for a new device. The answer holds the key, its QR code text and, for a phone key, the Pebble signing secret: each shows only this once. An API key's answer names the web API's address.
+Make a key for a new device. The answer holds the key and its QR code text: both show only this once. An API key's answer names the web API's address.
 
 ### Input
 
@@ -848,7 +848,7 @@ Send the input as a JSON body.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `name` | string | yes | A name you know the device by. |
-| `reaches` | "phone" or "chats" or "api" | yes | phone: notes, health and places, from a phone or the Pebble app. chats: Claude Code chats. api: the web API, which reads and adds notes. |
+| `reaches` | "phone" or "chats" or "api" | yes | phone: notes, files, health and places, from a phone. chats: Claude Code chats. api: the web API, which reads and adds notes. |
 
 ### Output
 
@@ -856,10 +856,9 @@ Send the input as a JSON body.
 |---|---|---|---|
 | `id` | string | yes |  |
 | `name` | string | yes |  |
-| `reaches` | "phone" or "chats" or "api" | yes | phone: notes, health and places, from a phone or the Pebble app. chats: Claude Code chats. api: the web API, which reads and adds notes. |
+| `reaches` | "phone" or "chats" or "api" | yes | phone: notes, files, health and places, from a phone. chats: Claude Code chats. api: the web API, which reads and adds notes. |
 | `key` | string | yes | Shown this once. |
 | `qr` | string | yes | What the phone scans: the server's address and the key. |
-| `pebbleSecret` | string or null | yes | A phone key's Pebble signing secret, shown this once. |
 | `api` | string or null | yes | An API key's web API address, or null when this server has no AI connector. |
 
 ## Turn off a device
@@ -933,7 +932,6 @@ Send the input as a JSON body.
 
 ## Routes with their own page
 
-- `POST /apps/relay/api/pebble`: [Take a ring note from the Pebble app](../pebble-webhook/)
 - `POST /apps/relay/api/attachments`: [Send a note's file, after its note](../files/#send-a-file)
 - `GET /apps/relay/api/audio`: [Play a note's recording](../recordings/)
 - `GET /apps/relay/api/attachment`: [Open a note's file](../files/#open-a-file)

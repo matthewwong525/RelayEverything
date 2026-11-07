@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { body } from "../../../tests/body";
 import { fakeEnv } from "../../../tests/env";
-import { ANA, ben, benPhone, call, checker, db, deviceKey, directoryDb, laptop, lost, makeKey, matthew, owner, pebbleApp, phone, request, rows,
+import { ANA, ben, benPhone, call, checker, db, deviceKey, directoryDb, laptop, lost, makeKey, matthew, owner, ipad, phone, request, rows,
   type Who } from "../../../tests/relay";
 import { apiKeyCaller, callerOf, cookie, reaches, relayGate, SESSION_COOKIE, sessionCookie } from "./caller";
 import { hashToken } from "./people";
@@ -9,7 +9,7 @@ import { hashToken } from "./people";
 // The fingerprint of checker.id, "checker.access".
 const CHECKER_SHA256 = "6a6814c5281a7635cb9d9f881d7feae9b0d6159c868666fad3ffa0a164f4d999";
 const ORIGIN = "https://relay.example.com";
-const ROUTES = ["pebble", "notes", "health", "locations", "calendar"].map(route => `/apps/relay/api/${route}`);
+const ROUTES = ["attachments", "notes", "health", "locations", "calendar"].map(route => `/apps/relay/api/${route}`);
 const KEY = "/apps/relay/api/key";
 const CHATS = "/apps/relay/api/chats";
 const SAVES = "/apps/relay/api/chat-saves";
@@ -31,7 +31,7 @@ it("lets a phone key only send notes, health and places, and check itself, and n
   for (const [method, path] of [...ROUTES.map(route => ["GET", route]), ["POST", KEY], ["GET", "/apps/relay/api/timeline"],
     ["GET", "/apps/relay/api/audio"], ["GET", "/apps/relay/api/summary"], ["GET", "/apps/relay/api/devices"], ["POST", "/apps/relay/api/devices"],
     ["POST", "/apps/relay/api/account-delete"], ["GET", "/apps/relay/"], ["GET", "/apps/hello/api/greeting"], ["GET", "/api/health"], ["GET", "/"],
-    ["POST", "/apps/relay/api/notes/x"], ["POST", CHATS], ["POST", SAVES], ["GET", CHATS], ["DELETE", ROUTES[1]], ["HEAD", KEY]]) {
+    ["POST", "/apps/relay/api/notes/x"], ["POST", "/apps/relay/api/pebble"], ["POST", CHATS], ["POST", SAVES], ["GET", CHATS], ["DELETE", ROUTES[1]], ["HEAD", KEY]]) {
     expect(await gate(phone, method, path), `${method} ${path}`).toEqual([403, SEND_ONLY]);
   }
 });
@@ -53,7 +53,7 @@ it("refuses a turned-off or unknown key everywhere, and leaves the other keys wo
   }
   expect(await gate(phone, "POST", ROUTES[1])).toBeNull();
   expect(await gate(benPhone, "POST", ROUTES[1])).toBeNull();
-  expect(await gate(pebbleApp, "POST", ROUTES[0])).toBeNull();
+  expect(await gate(ipad, "POST", ROUTES[0])).toBeNull();
 });
 
 it("lets the checker through, and refuses every other service token everywhere", async () => {
@@ -127,8 +127,8 @@ it("makes an account from Access's email only for the server's owner, or while s
 it("lists a person's devices, newest last, with no key in the list", async () => {
   const { status, json } = await call(matthew, "GET", "devices");
   expect(status).toBe(200);
-  expect(json.devices.map(device => [device.id, device.reaches, device.revokedAt])).toEqual([["d-laptop", "chats", null],
-    ["d-lost", "phone", expect.any(Number)], ["d-pebble", "phone", null], ["d-phone", "phone", null]]);
+  expect(json.devices.map(device => [device.id, device.reaches, device.revokedAt])).toEqual([["d-ipad", "phone", null],
+    ["d-laptop", "chats", null], ["d-lost", "phone", expect.any(Number)], ["d-phone", "phone", null]]);
   expect(JSON.stringify(json)).not.toContain("rek_");
   expect((await call(ben, "GET", "devices")).json.devices.map(device => device.id)).toEqual(["d-ben"]);
 });
@@ -136,25 +136,25 @@ it("lists a person's devices, newest last, with no key in the list", async () =>
 it("shows a new key once, keeps only its SHA-256, and the key works at once", async () => {
   const { status, json } = await call(matthew, "POST", "devices", { name: " Kitchen tablet ", reaches: "phone" });
   expect(status).toBe(200);
-  const made = json as unknown as { id: string; key: string; qr: string; pebbleSecret: string };
-  expect(json).toMatchObject({ name: "Kitchen tablet", reaches: "phone", key: expect.stringMatching(/^rek_[A-Za-z0-9_-]{43}$/),
-    pebbleSecret: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/) });
+  const made = json as unknown as { id: string; key: string; qr: string };
+  expect(json).toEqual({ id: expect.any(String), name: "Kitchen tablet", reaches: "phone", key: expect.stringMatching(/^rek_[A-Za-z0-9_-]{43}$/),
+    qr: expect.any(String), api: null });
   expect(JSON.parse(made.qr)).toEqual({ relay: 1, server: ORIGIN, key: made.key });
   const stored = directoryDb.sql.prepare("SELECT * FROM relay_keys WHERE device_id = ?").all(made.id);
   expect(stored).toEqual([{ key_sha256: await hashToken(made.key), person_id: ANA, device_id: made.id, reaches: "phone", created_at: expect.any(Number),
     revoked_at: null }]);
   expect(JSON.stringify(directoryDb.sql.prepare("SELECT * FROM relay_keys").all())).not.toContain(made.key);
-  expect(rows("relay_device_secrets").at(-1)).toEqual({ device_id: made.id, pebble_secret: made.pebbleSecret });
+  // No signing secret is made or kept: the space has no table for one.
+  expect(db.sql.prepare("SELECT name FROM sqlite_master WHERE name = 'relay_device_secrets'").all()).toEqual([]);
   expect(await call({ bearer: made.key }, "GET", "key")).toEqual({ status: 200, json: { device: "Kitchen tablet" } });
   expect(await gate({ bearer: made.key }, "POST", ROUTES[1])).toBeNull();
   // The list never shows the key again.
   expect(JSON.stringify((await call(matthew, "GET", "devices")).json)).not.toContain(made.key);
 });
 
-it("gives a chats key no Pebble secret, and lets it send only chats", async () => {
+it("lets a chats key send only chats", async () => {
   const { json } = await call(matthew, "POST", "devices", { name: "Work laptop", reaches: "chats" });
-  expect(json.pebbleSecret).toBeNull();
-  expect(rows("relay_device_secrets").map(row => row.device_id)).toEqual(["d-pebble"]);
+  expect(Object.keys(json).sort()).toEqual(["api", "id", "key", "name", "qr", "reaches"]);
   expect(await gate({ bearer: String(json.key) }, "POST", CHATS)).toBeNull();
   expect(await gate({ bearer: String(json.key) }, "POST", ROUTES[1])).toEqual([403, "A chat key can only send chats."]);
 });
@@ -162,7 +162,7 @@ it("gives a chats key no Pebble secret, and lets it send only chats", async () =
 it("gives an API key the web API's address, and lets it reach only that and its own name on this server", async () => {
   const { json } = await call(matthew, "POST", "devices", { name: "Backup script", reaches: "api" },
     { RELAY_MCP_CALLBACK: "https://relay-mcp.example.com/callback" });
-  expect(json).toMatchObject({ reaches: "api", pebbleSecret: null, api: "https://relay-mcp.example.com/v1" });
+  expect(json).toMatchObject({ reaches: "api", api: "https://relay-mcp.example.com/v1" });
   const key = String(json.key);
   const API_ONLY = [403, "An API key works only on the web API, at your AI connector's address under /v1/."];
   for (const path of [ROUTES[1], CHATS, SAVES]) expect(await gate({ bearer: key }, "POST", path), path).toEqual(API_ONLY);

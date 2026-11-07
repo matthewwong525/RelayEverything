@@ -67,7 +67,7 @@
                     "name"
                   ],
                   "additionalProperties": false,
-                  "description": "The phone or Pebble app that sent the item."
+                  "description": "The phone or other device that sent the item."
                 },
                 "place": {
                   "anyOf": [
@@ -281,7 +281,7 @@
                     "name"
                   ],
                   "additionalProperties": false,
-                  "description": "The phone or Pebble app that sent the item."
+                  "description": "The phone or other device that sent the item."
                 },
                 "place": {
                   "anyOf": [
@@ -365,7 +365,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "A ring note got its place from a later location batch. It has no audio."
+      "description": "No longer sent: the server gives no note a place later. It once said a ring note got its place from a later location batch. It has no audio."
     },
     {
       "type": "object",
@@ -416,7 +416,7 @@
                       "name"
                     ],
                     "additionalProperties": false,
-                    "description": "The phone or Pebble app that sent the item."
+                    "description": "The phone or other device that sent the item."
                   },
                   "type": {
                     "type": "string",
@@ -538,7 +538,7 @@
                       "name"
                     ],
                     "additionalProperties": false,
-                    "description": "The phone or Pebble app that sent the item."
+                    "description": "The phone or other device that sent the item."
                   },
                   "at": {
                     "type": "string",
@@ -652,7 +652,7 @@
                       "name"
                     ],
                     "additionalProperties": false,
-                    "description": "The phone or Pebble app that sent the item."
+                    "description": "The phone or other device that sent the item."
                   },
                   "key": {
                     "type": "string",

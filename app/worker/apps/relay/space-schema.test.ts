@@ -21,11 +21,16 @@ it("leaves a new D1 with the directory and none of the old shared tables after e
   expect(tables(d1)).toEqual([...DIRECTORY].sort());
 });
 
-it("gives a new space each person's tables and none of the directory's", () => {
+const triggers = (sql: DatabaseSync) => (sql.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'").all() as { name: string }[])
+  .map(row => row.name);
+
+it("gives a new space each person's tables and none of the directory's, with no signing secret or late place", () => {
   const space = new DatabaseSync(":memory:");
   space.exec("PRAGMA foreign_keys = ON");
   for (const [, text] of MIGRATIONS) space.exec(text);
-  expect(tables(space)).toEqual([...PERSON, "relay_device_secrets"].sort());
+  expect(tables(space)).toEqual([...PERSON].sort());
+  expect(triggers(space)).not.toContain("relay_outbox_note_updated");
+  expect(triggers(space)).toContain("relay_outbox_note_created");
 });
 
 it("gives a space made before files the files table, once, and keeps its notes", () => {
@@ -91,7 +96,7 @@ it("widens a space's devices to API keys and connected apps, keeping every devic
 it("frees health types and adds the calendar, keeping every health row, log entry and webhook place", () => {
   const space = new DatabaseSync(":memory:");
   space.exec("PRAGMA foreign_keys = ON");
-  const at = MIGRATIONS.findIndex(([name]) => name === "0005_phone_data");
+  const at = MIGRATIONS.findIndex(([name]) => name === "0006_phone_data");
   for (const [, text] of MIGRATIONS.slice(0, at)) inTransaction(space, text);
   space.exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-phone', 'Phone', 'rek:d-phone', '', 1, 'phone');
     INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at) VALUES ('n-1', 'd-phone', 'typed', 'c-1', 'Hi.', 5, 5);
@@ -105,7 +110,7 @@ it("frees health types and adds the calendar, keeping every health row, log entr
   inTransaction(space, MIGRATIONS[at][1]);
   expect(queries.map(query => all(space, query))).toEqual(before);
   expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
-  expect(tables(space)).toEqual([...PERSON, "relay_device_secrets"].sort());
+  expect(tables(space)).toEqual([...PERSON].sort());
   // Every log trigger is back, numbering on from the kept entries, and the log takes the calendar.
   space.exec(`INSERT INTO relay_health (device_id, type, start_at, end_at, value, unit, source, created_at) VALUES ('d-phone', 'weight', 6, 6, 70, 'kg', 'fit', 6);
     INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at) VALUES ('n-2', 'd-phone', 'typed', 'c-2', 'Again.', 7, 7);
@@ -136,4 +141,27 @@ it("widens the directory's keys to API keys, keeping every key", () => {
   // A person's keys still go with the person.
   d1.exec("DELETE FROM relay_people WHERE id = 'p-1'");
   expect(all(d1, "SELECT * FROM relay_keys")).toEqual([]);
+});
+
+it("drops a space's signing secrets and its late-place trigger, keeping its ring notes and a waiting note.updated", () => {
+  const space = new DatabaseSync(":memory:");
+  space.exec("PRAGMA foreign_keys = ON");
+  const at = MIGRATIONS.findIndex(([name]) => name === "0005_no_pebble");
+  for (const [, text] of MIGRATIONS.slice(0, at)) inTransaction(space, text);
+  space.exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at) VALUES ('d-phone', 'iPad', 'rek:d-phone', '', 1);
+    INSERT INTO relay_device_secrets (device_id, pebble_secret) VALUES ('d-phone', 'secret');
+    INSERT INTO relay_notes (id, device_id, source, delivery_id, text, recorded_at, created_at) VALUES ('n-1', 'd-phone', 'ring', 'r-1', 'Ring.', 5, 5);
+    UPDATE relay_notes SET lat = 43, lon = -79, place_from = 'history' WHERE id = 'n-1';`);
+  const waiting = all(space, "SELECT kind, ref FROM relay_outbox ORDER BY seq");
+  expect(waiting).toEqual([{ kind: "note.created", ref: "n-1" }, { kind: "note.updated", ref: "n-1" }]);
+  inTransaction(space, MIGRATIONS[at][1]);
+  expect(tables(space)).not.toContain("relay_device_secrets");
+  expect(triggers(space)).not.toContain("relay_outbox_note_updated");
+  expect(all(space, "SELECT kind, ref FROM relay_outbox ORDER BY seq")).toEqual(waiting);
+  expect(all(space, "SELECT id, source, lat, lon, place_from FROM relay_notes")).toEqual([{ id: "n-1", source: "ring", lat: 43, lon: -79, place_from: "history" }]);
+  // A place set now logs nothing.
+  space.exec("INSERT INTO relay_notes (id, device_id, source, delivery_id, text, recorded_at, created_at) VALUES ('n-2', 'd-phone', 'ring', 'r-2', 'Old.', 6, 6)");
+  space.exec("UPDATE relay_notes SET lat = 1, lon = 1, place_from = 'history' WHERE id = 'n-2'");
+  expect(all(space, "SELECT kind FROM relay_outbox WHERE ref = 'n-2'")).toEqual([{ kind: "note.created" }]);
+  expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
 });

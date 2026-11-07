@@ -11,7 +11,6 @@ import { chats, chatSaves } from "./chats.ts";
 import { deviceAdd, deviceOff, devices } from "./device.ts";
 import { key } from "./key.ts";
 import { notes } from "./notes.ts";
-import { pebble } from "./pebble.ts";
 import { health, locations } from "./samples.ts";
 import { summary } from "./summary.ts";
 import { timeline } from "./timeline.ts";
@@ -19,7 +18,6 @@ import { add, list, remove, resend, retry, secret, sweepNow, test, update } from
 import { consume } from "./webhooks/send.ts";
 
 export const routes = new Map<string, Route>([
-  ["POST pebble", pebble],
   ["POST notes", notes],
   ["POST attachments", attachmentAdd],
   ["POST health", health],

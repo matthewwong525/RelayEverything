@@ -81,7 +81,7 @@ const NOTE = `SELECT n.*, d.name AS device_name FROM relay_notes n JOIN relay_de
 const ids = (group: Entry[]) => JSON.stringify(group.map(entry => Number(entry.ref)));
 const inOrder = `IN (SELECT value FROM json_each(?)) ORDER BY 1`;
 
-/** A ring note's recording in base64: "wait" while Pebble's handler may still be saving it, null when it never came. */
+/** A ring note's recording in base64: "wait" while it may still be saving, null when it never came. */
 async function audioOf(files: Files, row: NoteRow): Promise<string | null | "wait"> {
   if (!row.audio_key) return null;
   const bytes = await files.open(row.audio_key);
@@ -89,7 +89,8 @@ async function audioOf(files: Files, row: NoteRow): Promise<string | null | "wai
   return Date.now() - row.created_at < AUDIO_WAIT ? "wait" : null;
 }
 
-/** The message body for a group; "skip" for a note deleted since, as Pebble's handler does when its recording fails. */
+/** The message body for a group; "skip" for a note deleted since. A `note.updated` row logged before the server stopped
+ *  placing ring notes still sends. */
 async function bodyOf(files: Files, db: Db, group: Entry[]): Promise<{ type: string } | "skip" | "wait"> {
   const [first] = group;
   const at = group.at(-1)!.logged_at;

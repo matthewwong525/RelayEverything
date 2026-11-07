@@ -4,7 +4,6 @@
 -- each webhook's place is a log seq. The triggers that write the log are made again after it.
 -- openspec/changes/phone-calendar-health-meetings
 DROP TRIGGER relay_outbox_note_created;
-DROP TRIGGER relay_outbox_note_updated;
 DROP TRIGGER relay_outbox_health;
 DROP TRIGGER relay_outbox_location;
 
@@ -45,14 +44,6 @@ CREATE INDEX relay_outbox_at ON relay_outbox(at);
 CREATE TRIGGER relay_outbox_note_created AFTER INSERT ON relay_notes
 BEGIN
   INSERT INTO relay_outbox (kind, ref, at, logged_at) VALUES ('note.created', new.id, new.recorded_at, new.created_at);
-END;
-
--- A ring note gets its place later, from a location batch: the webhook hears of it once, when the place arrives.
-CREATE TRIGGER relay_outbox_note_updated AFTER UPDATE OF lat ON relay_notes
-WHEN old.lat IS NULL AND new.lat IS NOT NULL
-BEGIN
-  INSERT INTO relay_outbox (kind, ref, at, logged_at)
-    VALUES ('note.updated', new.id, new.recorded_at, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER));
 END;
 
 CREATE TRIGGER relay_outbox_health AFTER INSERT ON relay_health

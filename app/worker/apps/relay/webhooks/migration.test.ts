@@ -7,9 +7,9 @@ const migration = (file: string) => readFileSync(new URL(`../../../../../schema/
 const log = () => rows("relay_outbox").map(row => [row.kind, row.ref, row.at]);
 const MINUTE = 60_000;
 
-it("logs a stored note, sample and point once, and a ring note's place when it arrives, in the same write", async () => {
+it("logs a stored note, sample and point once, in the same write, and gives a stored ring note no place", async () => {
   db.sql.prepare(`INSERT INTO relay_notes (id, device_id, source, delivery_id, text, recorded_at, created_at)
-    VALUES ('aaaaaaaa-0000-4000-8000-000000000001', 'd-pebble', 'ring', 'delivery-1', 'Ring note', ?, ?)`).run(NOW - 5 * MINUTE, NOW);
+    VALUES ('aaaaaaaa-0000-4000-8000-000000000001', 'd-ipad', 'ring', 'delivery-1', 'Ring note', ?, ?)`).run(NOW - 5 * MINUTE, NOW);
   const note = { clientId: "note-0001", text: "Typed", createdAt: NOW - MINUTE };
   await call(phone, "POST", "notes", note);
   await call(phone, "POST", "notes", note);
@@ -17,14 +17,14 @@ it("logs a stored note, sample and point once, and a ring note's place when it a
   await call(phone, "POST", "health", { samples: [sample] });
   await call(phone, "POST", "health", { samples: [sample] });
   await call(phone, "POST", "locations", { points: [{ at: NOW - 4 * MINUTE, lat: 43.65, lon: -79.38, accuracy: 10 }] });
-  // A second point nearer the note changes nothing: its place was filled once.
+  // A point at the ring note's own time gives it no place, and logs no note.updated.
   await call(phone, "POST", "locations", { points: [{ at: NOW - 5 * MINUTE, lat: 43.66, lon: -79.39, accuracy: 10 }] });
   const typed = rows("relay_notes")[1].id;
   expect(log()).toEqual([
     ["note.created", "aaaaaaaa-0000-4000-8000-000000000001", NOW - 5 * MINUTE], ["note.created", typed, NOW - MINUTE],
-    ["health", "1", NOW - 60 * MINUTE], ["location", "1", NOW - 4 * MINUTE],
-    ["note.updated", "aaaaaaaa-0000-4000-8000-000000000001", NOW - 5 * MINUTE], ["location", "2", NOW - 5 * MINUTE]]);
-  expect(rows("relay_outbox").map(row => row.logged_at)).toEqual([NOW, NOW, NOW, NOW, expect.any(Number), NOW]);
+    ["health", "1", NOW - 60 * MINUTE], ["location", "1", NOW - 4 * MINUTE], ["location", "2", NOW - 5 * MINUTE]]);
+  expect(rows("relay_outbox").map(row => row.logged_at)).toEqual([NOW, NOW, NOW, NOW, NOW]);
+  expect(rows("relay_notes")[0]).toMatchObject({ lat: null, lon: null, place_from: null });
 });
 
 it("logs what was stored before the migration, in time order", () => {

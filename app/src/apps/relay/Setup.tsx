@@ -2,12 +2,14 @@ import { encode } from 'uqr'
 import { CopyText } from '@/components/CopyText'
 
 // What a new device's person does with its key, which the page shows once: scan it on a phone, enter it in the
-// Pebble app, or paste it in Claude Code. app/worker/apps/relay/ makes the key.
+// Pebble app, paste it in Claude Code, or send it from a script to the web API. app/worker/apps/relay/ makes the key.
 const RELEASES = 'https://github.com/matthewwong525/RelayEverything/releases/latest'
 const TESTFLIGHT = 'https://apps.apple.com/app/testflight/id899247664'
+export const API_DOCS = 'https://relayeverything.com/api/connect-a-service/'
 
-/** A new key as the server answers it: `qr` is the text a phone scans and Claude Code takes. */
-export type Made = { id: string; name: string; reaches: 'phone' | 'chats'; key: string; qr: string; pebbleSecret: string | null }
+/** A new key as the server answers it: `qr` is the text a phone scans and Claude Code takes, and `api` an API key's
+ *  web API address. */
+export type Made = { id: string; name: string; reaches: 'phone' | 'chats' | 'api'; key: string; qr: string; pebbleSecret: string | null; api?: string | null }
 
 const Code = ({ children }: { children: string }) => <code className="rounded bg-muted px-1 wrap-anywhere">{children}</code>
 
@@ -49,5 +51,16 @@ export function ClaudeSteps({ made }: { made: Made }) {
     <li>In Claude Code, add the plugin: <Code>/plugin marketplace add matthewwong525/RelayEverything</Code>, then{' '}
       <Code>/plugin install relay@relay</Code>.</li>
     <li>Paste the connect code when Claude Code asks. The key can only add chats.</li>
+  </ol>
+}
+
+export function ApiSteps({ made }: { made: Made }) {
+  const api = made.api ?? '<your-relay-server>/v1'
+  return <ol className="grid list-decimal gap-3 pl-5">
+    <li>Copy the key into your script or service's secret store. Never put it in a file you share:
+      <div className="mt-2"><CopyText text={made.key} label="Copy the key" /></div></li>
+    <li>Send it as a header. This call names the key and reads no data:
+      <div className="mt-2"><CopyText text={`curl -H "Authorization: Bearer ${made.key}" ${api}/me`} label="Copy the example" /></div></li>
+    <li>The key reads and adds notes. It can't change or delete them. <a className="underline" href={API_DOCS}>Read the web API's routes</a>.</li>
   </ol>
 }

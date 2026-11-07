@@ -12,10 +12,11 @@ const checked = Symbol("checked caller");
 /** How the caller proved who they are: a signed-in browser, a device key, an AI app's grant, a phone's one-time sign-in
  *  code, Access on a self-host, the preview checker, or a queue message the server itself sent. */
 export type CallerKind = "session" | "key" | "grant" | "code" | "access" | "checker" | "queue";
-export type Reach = "phone" | "chats";
+/** A key's reach: a phone, a chat sender, or an API key, which reaches only the web API. */
+export type Reach = "phone" | "chats" | "api";
 export type Caller = {
   readonly kind: CallerKind; readonly personId: string; readonly email?: string;
-  /** A device key's own device, which only adds data. */
+  /** A device key's own device: a phone or chat key only adds data; an API key reads and adds through the web API. */
   readonly device?: { readonly id: string; readonly reaches: Reach };
   readonly [checked]: true;
 };

@@ -70,6 +70,7 @@ test('the install\'s configs carry its own names, IDs and owner, and no secret',
   assert.equal(app.vars.CF_ACCESS_APP_ID, 'app-id');
   assert.equal(mcp.vars.RELAY_MCP_ADDRESS, 'https://relay-test-mcp.you.workers.dev/mcp');
   assert.equal(mcp.d1_databases[0].database_id, 'db-id');
+  assert.equal(mcp.queues.producers[0].queue, 'relay-test-webhooks');
   assert.deepEqual([app.vars.RELAY_SIGN_IN, app.vars.RELAY_MCP_CALLBACK], ['access', 'https://relay-test-mcp.you.workers.dev/callback']);
   assert.equal(mcp.vars.RELAY_SERVER_URL, 'https://relay-test.you.workers.dev');
   assert.equal(mcp.vars.WONG_OWNER_EMAIL, undefined);

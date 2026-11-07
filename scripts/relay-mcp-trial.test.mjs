@@ -18,6 +18,8 @@ function fakeConnector({ open = false } = {}) {
       case 'GET /.well-known/oauth-authorization-server': return Response.json({ registration_endpoint: `${STAGING}/register` });
       case 'GET /.well-known/oauth-protected-resource/mcp': return Response.json({ resource: `${STAGING}/mcp` });
       case 'POST /mcp': return new Response(null, { status: open ? 200 : 401 });
+      case 'GET /v1/me': return new Response(null, { status: new Headers(init.headers).has('Authorization') ? 403 : 401 });
+      case 'GET /v1/openapi.json': return Response.json({ openapi: '3.1.0' });
       case 'POST /register': return Response.json({ client_id: 'c1' }, { status: 201 });
       case 'GET /authorize': return new Response('<h1>Connect Relay Everything trial to Relay Everything?</h1><input name="handle" value="h1">',
         { headers: { 'Set-Cookie': '__Host-oauth-consent-x=abc; Path=/; Secure' } });
@@ -59,6 +61,8 @@ test('the staging trial passes a connector that refuses every stranger, and keep
   const { passed, printed } = await run(connector);
   assert.equal(passed, true, printed.join('\n'));
   assert.ok(printed.includes('ok refuses a service token'));
+  assert.ok(printed.includes('ok refuses an unknown key on the web API'));
+  assert.ok(printed.includes('ok describes the web API with no sign-in'));
   assert.ok(printed.includes("ok sends an approved app on to the server's sign-in"));
   assert.ok(printed.includes('ok the server sends no code to someone not signed in'));
   const approve = connector.seen.find(call => call.key === 'POST /authorize');
@@ -70,8 +74,8 @@ test('the trial fails a connector that lets /mcp in with no token; the live one 
   const { passed, printed } = await run(fakeConnector({ open: true }));
   assert.equal(passed, false);
   assert.ok(printed.includes('failed refuses /mcp with no token: 200'));
-  const live = await run({ request: async url => new URL(url).pathname === '/mcp' ? new Response(null, { status: 401 })
+  const live = await run({ request: async url => ['/mcp', '/v1/me'].includes(new URL(url).pathname) ? new Response(null, { status: 401 })
     : Response.json({ registration_endpoint: 'https://relay-everything-mcp.matthewwong525.workers.dev/register' }) }, { live: true });
   assert.deepEqual(live, { passed: true, printed: ['Trying relay-everything-mcp at https://relay-everything-mcp.matthewwong525.workers.dev',
-    'ok answers its OAuth metadata', 'ok refuses /mcp with no token'] });
+    'ok answers its OAuth metadata', 'ok refuses /mcp with no token', 'ok refuses the web API with no token'] });
 });

@@ -85,7 +85,7 @@ On the iPhone test build, a voice note never gets its words. Matthew held the bu
 - `mobile/lib/controller.dart`: `_write` catches every error and has a time limit; a failed set in memory; a retry action.
 - `mobile/lib/relay.dart`, `mobile/lib/screens/timeline.dart`: the failed state and the **Try again** button.
 - `mobile/ios/Runner.xcodeproj/project.pbxproj`: keep each looked-up `wf_*` symbol linked in Release.
-- `.github/workflows/mobile-ios.yml`: a symbol check after the build.
+- `mobile/ios/fastlane/Fastfile`: a symbol check on the `.ipa` before TestFlight.
 - `mobile/test/`: tests for an Error, a time-out, and the retry.
 - `.env.example`: App Store Connect key access is Admin.
 - `site/src/content/docs/app/voice-notes.md`: the failed state and **Try again**.

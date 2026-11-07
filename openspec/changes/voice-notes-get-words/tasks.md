@@ -12,7 +12,7 @@
 ## 2. iPhone build
 
 - [x] 2.1 In `mobile/ios/Runner.xcodeproj/project.pbxproj`, add `-Wl,-u,_wf_<name>` to Runner's Release and Profile `OTHER_LDFLAGS`, after the flags already there, for each `wf_*` symbol the package looks up.
-- [x] 2.2 In `.github/workflows/mobile-ios.yml`, after the build, fail the job if `nm -gU` on the app binary (and its frameworks) lacks `_wf_run`, `_wf_context_create`, `_wf_job_create` or `_wf_last_error`.
+- [x] 2.2 After the build, fail the job (now in `mobile/ios/fastlane/Fastfile`, see 2.3–2.5) if `nm -gU` on the app binary (and its frameworks) lacks `_wf_run`, `_wf_context_create`, `_wf_job_create` or `_wf_last_error`.
 - [x] 2.3 Add `STRIP_STYLE = "non-global";` to Runner's Release and Profile build settings, so the archive keeps the global symbols the package looks up.
 - [x] 2.4 Move the symbol check to the archive TestFlight gets: in `mobile/ios/fastlane/Fastfile`, between `build_app` and `upload_to_testflight`, fail the lane if the archived `Runner.app/Runner` and its frameworks lack `_wf_run`, `_wf_context_create`, `_wf_job_create` or `_wf_last_error`; remove the workflow step, so the list has one copy.
 - [x] 2.5 Check the exact file sent to TestFlight: `check_speech_parts` unzips the `.ipa` at `lane_context[SharedValues::IPA_OUTPUT_PATH]` to a temporary folder, runs `nm -gU` on `Payload/Runner.app/Runner` and its frameworks, and removes the folder.

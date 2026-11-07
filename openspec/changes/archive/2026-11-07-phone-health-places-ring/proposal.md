@@ -1,6 +1,6 @@
 # Make health, places and connecting work on the iPhone
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** ios-app-health-ring-webhooks
 **Open questions:** none
 
@@ -120,3 +120,6 @@ Non-goals: the Pebble ring over Bluetooth (its own plan, in another workspace), 
 - **2026-11-07** — Assumed: a drain stores every point before it looks up any name, in place of Swift keeping its file until Dart confirms, because iOS can end a wake during the slow lookups, and then only names are lost, never points.
 - **2026-11-07** — Assumed: one wake that a late answer from an earlier, already-ended wake reaches does not end the new wake early; Swift counts the wakes to check this, because the new iOS background task would end with it.
 - **2026-11-07** — Built and reviewed inside `/ship`: tasks 1.1–5.1 done, local checks and `flutter test` pass, a second look found five background-path faults, all fixed and reread clean; saving for the iPhone device check (5.2), which first compiles the Swift.
+- **2026-11-07** — Final acceptance: the staging migration ran in CI, the staging shared server was deployed by hand and its phone routes answered (signed out → sign-in; a bad code → 400), and the iPhone device check on `d2fa165` gave *works* (location modes could not be checked with no key). The sign-in sheet showed *Not found* on app.relayeverything.com, because the live shared server is deployed by hand after the merge.
+- **2026-11-07** — Assumed: task 5.3, the person's own TestFlight walk, moves out of the task list to an open item after publish, because it can only run on the published build and a merge must not wait on it.
+- **2026-11-07** — Archived for publish; main specs already hold the deltas.

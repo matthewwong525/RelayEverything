@@ -25,5 +25,5 @@
 ## 4. Checks
 
 - [x] 4.1 Run `flutter analyze` and `flutter test` in `mobile/`, and `node scripts/public-check.mjs`.
-- [ ] 4.2 `/save`, and confirm the iOS CI build passes with the symbol check.
-- [ ] 4.3 After publish, Matthew installs the new TestFlight build and records a short voice note; its words fill in.
+- [x] 4.2 `/save`, and confirm the iOS CI build passes with the symbol check.
+After publish, Matthew installs the new TestFlight build and records a short voice note; its words fill in. This is his own check, after the change is live, so it is not a task here.

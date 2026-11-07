@@ -1,6 +1,6 @@
 # Proposal: Voice notes get their words on the iPhone
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** repo-status-next-steps
 **Open questions:** none
 
@@ -70,6 +70,7 @@ On the iPhone test build, a voice note never gets its words. Matthew held the bu
 - **2026-11-07** — Assumed: the iPhone build keeps global symbols (Strip Style Non-Global) and the speech-parts check reads the `.ipa` sent to TestFlight, because an archive's default strip removes the symbols the app looks up, which `-u` cannot stop.
 - **2026-11-07** — Check: `mobile/ios/fastlane/Fastfile` gets a new step that stops the iPhone build when the archive lacks a speech part, because a build with that fault must not reach TestFlight. It loosens nothing: it adds a check.
 - **2026-11-07** — Built and saved; local checks pass. Left: the first iOS build with the new check, then one voice note on Matthew's phone. Matthew asked whether whisper.cpp is the best speech engine: research says keep it and fix it, because it is small (57 MB) and works fully offline; the next choice is `sherpa_onnx` with Moonshine or Parakeet, after the app is timed on a real iPhone.
+- **2026-11-07** — Asked: publish now or after the phone test → Matthew chose publish now. The iPhone build passed its speech-parts check and is on TestFlight; his voice-note test on the phone comes after publish.
 
 ## Capabilities
 

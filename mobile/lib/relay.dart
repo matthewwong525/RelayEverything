@@ -5,7 +5,7 @@ import 'dart:async';
 import 'data/settings.dart';
 import 'voice/model.dart';
 
-export 'data/settings.dart' show Settings;
+export 'data/settings.dart' show LocationMode, Settings;
 export 'voice/model.dart' show ModelState, ModelProblem;
 
 /// One row of the timeline: a note typed or said on this phone.
@@ -32,6 +32,15 @@ class Entry {
 
 enum SyncStatus { idle, syncing, synced, offline, refused }
 
+/// When one kind of data, health or places, last reached the server, and how many of it wait to send.
+class SendState {
+  const SendState({this.at, this.waiting = 0});
+
+  /// Null when none went yet.
+  final DateTime? at;
+  final int waiting;
+}
+
 /// What the screens read and do. The app's controller is one; a test's fake is another.
 abstract class Relay extends ChangeNotifier {
   bool get connected;
@@ -41,8 +50,18 @@ abstract class Relay extends ChangeNotifier {
   int get waiting;
   Settings get settings;
 
+  /// Health readings and location points: when each last went, and how many wait. Settings shows them.
+  SendState get healthSent;
+  SendState get pointsSent;
+  /// True on iPhone, where *Location history* has two ways to keep places.
+  bool get locationModes;
+
   /// Each returns null on success, or the words to show when it failed.
   Future<String?> connect(String code);
+  /// *Sign in to connect*: the person signs in on [server] inside the app and confirms, and this phone gets its own
+  /// key. Null also when the person closed the sign-in: then [connected] stays false.
+  Future<String?> signIn(String server);
+  Future<String?> setLocationMode(LocationMode mode);
   Future<String?> setServer(String server);
   Future<String?> setPinNotes(bool on);
   Future<String?> setHistory(bool on);

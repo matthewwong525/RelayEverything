@@ -21,6 +21,7 @@ const PLACES = [
   'mobile/ios/Runner/Info.plist',
   'mobile/android/app/src/main/AndroidManifest.xml',
   'app/src/apps/relay/app.json',
+  'app/worker/apps/relay/sign-in/phone.ts',
   'app/worker/relay-mcp/auth.ts',
   'app/worker/relay-mcp/index.ts',
   'app/worker/relay-mcp/tools.ts',

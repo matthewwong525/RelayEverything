@@ -3,7 +3,8 @@
 import { z } from "zod";
 import { defineAction, type ActionCall } from "../../api/contract.ts";
 import { asPerson, CHECKER_PERSON } from "./caller.ts";
-import { directory, hashToken, randomToken } from "./people.ts";
+import { directory, hashToken, randomToken, type DirectoryEnv } from "./people.ts";
+import type { Caller, PersonSpace, Reach } from "./space.ts";
 
 const reaches = z.enum(["phone", "chats"]).describe("phone: notes, health and places, from a phone or the Pebble app. chats: Claude Code chats.");
 const device = z.strictObject({ id: z.string(), name: z.string(), reaches, createdAt: z.number(), revokedAt: z.number().nullable() });
@@ -32,23 +33,30 @@ export const deviceAdd = defineAction({
   encoding: "json", effect: "write", agentAvailable: false, requiresIdentity: false, errors: {}, examples: [],
   handler: asPerson<ActionCall>(async ({ space, caller, env, call }) => {
     const { name, reaches: reach } = call.input as { name: string; reaches: "phone" | "chats" };
-    const [id, key, now] = [crypto.randomUUID(), `rek_${randomToken()}`, Date.now()];
-    const pebbleSecret = reach === "phone" ? randomToken() : null;
-    await space.db.batch([
-      space.db.prepare(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at, reaches)
-        VALUES (?, ?, ?, '', ?, NULL, ?)`).bind(id, name, `rek:${id}`, now, reach),
-      ...pebbleSecret ? [space.db.prepare("INSERT INTO relay_device_secrets (device_id, pebble_secret) VALUES (?, ?)").bind(id, pebbleSecret)] : [],
-    ]);
-    const db = directory(env);
-    // The checker has no account of its own, so its key needs its fixed person row: a made-up address, never mailed.
-    await db.batch([db.prepare("INSERT OR IGNORE INTO relay_people (id, email, created_at) SELECT ?, ?, ? WHERE ? = 'checker'")
-      .bind(CHECKER_PERSON, "checker@example.invalid", now, caller.kind),
-    db.prepare("INSERT INTO relay_keys (key_sha256, person_id, device_id, reaches, created_at) VALUES (?, ?, ?, ?, ?)")
-      .bind(await hashToken(key), caller.personId, id, reach, now)]);
+    const { id, key, pebbleSecret } = await makeDevice(space, env, caller, name, reach);
     const qr = JSON.stringify({ relay: 1, server: call.url.origin, key });
     return Response.json({ id, name, reaches: reach, key, qr, pebbleSecret });
   }),
 });
+
+/** Makes a device in the person's space and its key in the directory: *Add a device* and a phone's sign-in share it.
+ *  The answer holds the key, which only the caller's answer may show. */
+export async function makeDevice(space: PersonSpace, env: Pick<DirectoryEnv, "DB">, caller: Caller, name: string, reach: Reach) {
+  const [id, key, now] = [crypto.randomUUID(), `rek_${randomToken()}`, Date.now()];
+  const pebbleSecret = reach === "phone" ? randomToken() : null;
+  await space.db.batch([
+    space.db.prepare(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at, reaches)
+      VALUES (?, ?, ?, '', ?, NULL, ?)`).bind(id, name, `rek:${id}`, now, reach),
+    ...pebbleSecret ? [space.db.prepare("INSERT INTO relay_device_secrets (device_id, pebble_secret) VALUES (?, ?)").bind(id, pebbleSecret)] : [],
+  ]);
+  const db = directory(env);
+  // The checker has no account of its own, so its key needs its fixed person row: a made-up address, never mailed.
+  await db.batch([db.prepare("INSERT OR IGNORE INTO relay_people (id, email, created_at) SELECT ?, ?, ? WHERE ? = 'checker'")
+    .bind(CHECKER_PERSON, "checker@example.invalid", now, caller.kind),
+  db.prepare("INSERT INTO relay_keys (key_sha256, person_id, device_id, reaches, created_at) VALUES (?, ?, ?, ?, ?)")
+    .bind(await hashToken(key), caller.personId, id, reach, now)]);
+  return { id, key, pebbleSecret };
+}
 
 export const deviceOff = defineAction({
   operationId: "relay.devices-off", summary: "Turn off a device",

@@ -6,7 +6,8 @@ import { MIGRATIONS } from "../../spaces-worker";
 
 // D1 keeps only the directory; each person's data lives in their own space. wiki/relay-spaces.md
 const folder = new URL("../../../../schema/migrations/", import.meta.url);
-const DIRECTORY = ["relay_people", "relay_logins", "relay_sessions", "relay_sign_in_codes", "relay_keys", "relay_connect_codes"];
+const DIRECTORY = ["relay_people", "relay_logins", "relay_sessions", "relay_sign_in_codes", "relay_keys", "relay_connect_codes",
+  "relay_phone_codes"];
 const PERSON = ["relay_devices", "relay_notes", "relay_health", "relay_locations", "relay_chats", "relay_chat_messages",
   "relay_chat_saves", "relay_outbox", "relay_webhooks", "relay_webhook_attempts"];
 

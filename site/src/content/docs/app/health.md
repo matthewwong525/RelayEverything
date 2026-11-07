@@ -16,7 +16,12 @@ The phone asks for this only when you turn on **Health**. The app reads from tha
 
 ## When it sends
 
-The app sends new health data each time you open it, and every hour while it can run. An iPhone runs background work when it chooses, so open the app to send at once.
+The app sends new health data each time you open it. While it is closed, it sends too:
+
+- **On an iPhone**, Apple Health wakes the app when it has new readings, about once an hour. A locked iPhone keeps Health closed, so the readings go after you next unlock it.
+- **On Android**, the app sends every hour while the phone lets it run.
+
+Under **Health**, **Settings** shows when the data last went, and how many readings wait, such as *Sent 14:05 · 3 readings waiting*. Open the app to send at once.
 
 Each sample is kept once for its type, time and source, however often the phone sends it.
 

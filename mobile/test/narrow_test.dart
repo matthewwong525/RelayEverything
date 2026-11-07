@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/app.dart';
 import 'package:relay_app/relay.dart';
 
-import 'screens_test.dart' show FakeRelay;
+import 'screens_test.dart' show FakeRelay, openSettings;
 
 /// The app's own font, Inter from `assets/fonts/inter/`, so a width here is a width on a phone: the test font draws wider.
 Future<void> loadInter() async {
@@ -14,18 +14,18 @@ Future<void> loadInter() async {
   await (FontLoader('Inter')..addFont(Future.value(ByteData.sublistView(font.readAsBytesSync())))).load();
 }
 
-RenderParagraph paragraphOf(WidgetTester tester, String text) => tester.renderObject<RenderParagraph>(find.text(text));
-
-/// A text with no line limit wraps instead of overflowing, so check that its one-line width fits its box.
+/// A text with no line limit wraps instead of overflowing, so check that its one-line width fits its box. A large title
+/// is there twice, large and small, and both must fit.
 void expectOneLine(WidgetTester tester, String text) {
-  final paragraph = paragraphOf(tester, text);
-  expect(paragraph.getMaxIntrinsicWidth(double.infinity), lessThanOrEqualTo(paragraph.size.width), reason: '"$text" wraps');
+  for (final paragraph in tester.renderObjectList<RenderParagraph>(find.text(text))) {
+    expect(paragraph.getMaxIntrinsicWidth(double.infinity), lessThanOrEqualTo(paragraph.size.width), reason: '"$text" wraps');
+  }
 }
 
 void main() {
   setUpAll(loadInter);
 
-  testWidgets('at 360 px wide, the timeline title and the Settings switch show the whole name', (tester) async {
+  testWidgets('at 360 px wide, the large titles and the Settings switches show the whole name', (tester) async {
     tester.view
       ..physicalSize = const Size(360, 800)
       ..devicePixelRatio = 1;
@@ -36,10 +36,12 @@ void main() {
       ..settings = const Settings(sending: true);
     await tester.pumpWidget(RelayApp(relay: relay));
     await tester.pumpAndSettle();
-    expectOneLine(tester, 'Relay Everything');
-    await tester.tap(find.byTooltip('Settings'));
-    await tester.pumpAndSettle();
-    expectOneLine(tester, 'Send my notes');
+    expectOneLine(tester, 'Notes');
+    expectOneLine(tester, 'No notes ·');
+    await openSettings(tester);
+    for (final title in ['Settings', 'Send my notes', 'Health', 'Pin notes to where I am']) {
+      expectOneLine(tester, title);
+    }
     expect(tester.takeException(), isNull);
   });
 }

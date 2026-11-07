@@ -332,8 +332,18 @@ class FakeMicrophone implements Microphone {
     await File(path).writeAsBytes([82, 73, 70, 70]);
   }
 
+  /// Thrown by the next [stop], as by a microphone that fails to end its file; it is cleared then.
+  Exception? stopError;
+
   @override
-  Future<void> stop() async => calls.add('stop');
+  Future<void> stop() async {
+    calls.add('stop');
+    final error = stopError;
+    if (error != null) {
+      stopError = null;
+      throw error;
+    }
+  }
 
   @override
   Future<void> cancel() async => calls.add('cancel');

@@ -6,7 +6,7 @@ const iso = z.iso.datetime().describe("A time in ISO 8601, UTC.");
 const device = z.strictObject({
   id: z.string().describe("The device key's id in Relay Everything, or the phone's own install id when the phone sends to its own webhook."),
   name: z.string() })
-  .describe("The phone or Pebble app that sent the item.");
+  .describe("The phone or other device that sent the item.");
 const place = z.strictObject({
   lat: z.number(), lon: z.number(), accuracy: z.number().nullable().describe("In meters."),
   name: z.string().nullable().describe("The place's name from the phone's address lookup, such as a street."),
@@ -42,7 +42,7 @@ const envelope = <Type extends string, Data extends z.ZodType>(type: Type, data:
 
 export const message = z.discriminatedUnion("type", [
   envelope("note.created", z.strictObject({ note: note.extend({ audio, attachments }) }), "A note reached Relay Everything."),
-  envelope("note.updated", z.strictObject({ note }), "A ring note got its place from a later location batch. It has no audio."),
+  envelope("note.updated", z.strictObject({ note }), "No longer sent: the server gives no note a place later. It once said a ring note got its place from a later location batch. It has no audio."),
   envelope("health.samples", z.strictObject({ samples: z.array(sample).min(1).max(BATCH) }), "Health samples, in the order Relay Everything stored them."),
   envelope("location.points", z.strictObject({ points: z.array(point).min(1).max(BATCH) }), "Location points, in the order Relay Everything stored them."),
   envelope("note.file", z.strictObject({ note_id: z.string().describe("The id of the note this file is on."),

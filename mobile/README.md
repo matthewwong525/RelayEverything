@@ -1,6 +1,6 @@
 # Relay Everything app
 
-Relay Everything keeps your thoughts. Type a note on your phone and it stays on your phone: you need no account, no key and no signal, and the app sends nothing. When you want to do more with your notes, turn on sending: each note then goes to your own Relay Everything server, which can pass it to your own database and your AI. With sending on, the app can also send your steps, heart rate, sleep, workouts and a history of the places you went. Ring notes from a Pebble Index ring go to your server too. You read them on your Relay Everything page, not in this app.
+Relay Everything keeps your thoughts. Type a note on your phone and it stays on your phone: you need no account, no key and no signal, and the app sends nothing. When you want to do more with your notes, turn on sending: each note then goes to your own Relay Everything server, which can pass it to your own database and your AI. With sending on, the app can also send your steps, heart rate, sleep, workouts and a history of the places you went. You read your health and places on your Relay Everything page, not in this app.
 
 This is the phone app, for iPhone and Android. It is written in Flutter.
 

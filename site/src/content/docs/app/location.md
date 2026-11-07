@@ -3,7 +3,7 @@ title: Location
 description: Pin each note to a place, and keep a history of where you went.
 ---
 
-Relay Everything uses your location two ways: it pins each typed note to where you are, and, with sending on, it keeps a history of where you went, so ring notes get a place too.
+Relay Everything uses your location two ways: it pins each typed note to where you are, and, with sending on, it keeps a history of where you went.
 
 ## Pin notes to where I am
 
@@ -26,8 +26,6 @@ On an iPhone, the phone keeps the points while the app is closed, and the app se
 If you close the app with a swipe up, the iPhone stops keeping points until you open the app again.
 
 Under **Location history**, **Settings** shows when the points last went, and how many wait, such as *Sent 14:05 · 12 points waiting*.
-
-A ring note takes the history point nearest in time, up to 10 minutes before or after you spoke.
 
 ## Turn it off
 

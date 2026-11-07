@@ -5,13 +5,13 @@ Send the Relay data the server holds to addresses the owner adds, in one version
 
 ## Requirements
 
-### Requirement: Stored data goes to every active webhook
+### Requirement: Stored data goes to each active webhook
 
-After Relay's server stores a note, a health batch or a location batch, it SHALL send one message for it to each active webhook that takes that kind of data. Notes SHALL go to every active webhook. Health and location SHALL go only to webhooks the owner ticked for them. Only data that reached the server SHALL be sent: a note kept offline on a phone never goes out.
+After Relay Everything's server stores a note, a health batch or a location batch, it SHALL send one message for it to each active webhook that takes that kind of data. Notes SHALL go to every active webhook. Health and location SHALL go only to webhooks the owner ticked for them. Only data that reached the server SHALL be sent: a note kept offline on a phone never goes out. The server SHALL send no `note.updated` message; format version 1 SHALL still describe it, as no longer sent, so a receiver that handles it keeps working.
 
-#### Scenario: A ring note with one webhook
-- **WHEN** a ring note is stored and one active webhook exists
-- **THEN** that address gets a `note.created` message with the note's words, recording, time and place within a minute
+#### Scenario: A note with one webhook
+- **WHEN** a phone's note is stored and one active webhook exists
+- **THEN** that address gets a `note.created` message with the note's words, files, time and place within a minute
 
 #### Scenario: Health not ticked
 - **WHEN** a health batch is stored and the webhook takes notes only

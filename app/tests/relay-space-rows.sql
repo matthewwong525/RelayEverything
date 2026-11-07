@@ -1,9 +1,9 @@
 -- Made-up rows for one person's space, which worker/relay-mcp/tools.test.ts reads. No real person, key or address.
--- Relay: a made-up phone and Pebble app key with no real token behind either, one turned-off phone, and a day in
+-- Relay: a made-up phone and iPad key with no real token behind either, one turned-off phone, and a day in
 -- Toronto (Wednesday 4 November 2026): ring and typed notes, health samples, and the location history that placed them.
 INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at) VALUES
   ('d0000000-0000-4000-8000-000000000001', 'Android phone', 'seed-phone.access', 'seed-token-phone', 1793700000000, NULL),
-  ('d0000000-0000-4000-8000-000000000002', 'Pebble app', 'seed-pebble.access', 'seed-token-pebble', 1793700000000, NULL),
+  ('d0000000-0000-4000-8000-000000000002', 'iPad', 'seed-ipad.access', 'seed-token-ipad', 1793700000000, NULL),
   ('d0000000-0000-4000-8000-000000000003', 'Old phone', 'seed-old.access', 'seed-token-old', 1793000000000, 1793600000000);
 INSERT INTO relay_locations (device_id, at, lat, lon, accuracy, place, created_at) VALUES
   ('d0000000-0000-4000-8000-000000000001', 1793797200000, 43.6629, -79.3957, 15, 'Harbord St', 1793833200000),
@@ -34,13 +34,13 @@ INSERT INTO relay_chats (id, device_id, session_id, app, project, title, started
   ('c0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000004', 'seed-session-0001', 'claude-code', 'relay-ring',
    'How thick should the stiffener be?', 1793800800000, 1793801400000, 4, 1793800810000),
   ('c0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000004', 'seed-session-0002', 'claude-code', 'relay-ring',
-   'Fix the Pebble webhook signature', 1793815200000, 1793816100000, 3, 1793815210000);
+   'Fix the webhook signature', 1793815200000, 1793816100000, 3, 1793815210000);
 INSERT INTO relay_chat_messages (chat_id, seq, role, text, at) VALUES
   ('c0000000-0000-4000-8000-000000000001', 0, 'you', 'How thick should the stiffener be?', 1793800800000),
   ('c0000000-0000-4000-8000-000000000001', 1, 'step', 'Read pcb/relay.kicad_pcb', 1793800860000),
   ('c0000000-0000-4000-8000-000000000001', 2, 'ai', '0.2 mm steel is enough for a ring this size. Glue it under the battery.', 1793801100000),
   ('c0000000-0000-4000-8000-000000000001', 3, 'you', 'Save the plan for the stiffener to Relay', 1793801400000),
-  ('c0000000-0000-4000-8000-000000000002', 0, 'you', 'Fix the Pebble webhook signature', 1793815200000),
+  ('c0000000-0000-4000-8000-000000000002', 0, 'you', 'Fix the webhook signature', 1793815200000),
   ('c0000000-0000-4000-8000-000000000002', 1, 'step', 'Ran: npm test', 1793815800000),
   ('c0000000-0000-4000-8000-000000000002', 2, 'ai', 'The signature now uses the raw body. The tests pass.', 1793816100000);
 INSERT INTO relay_chat_saves (id, chat_id, title, text, created_at) VALUES

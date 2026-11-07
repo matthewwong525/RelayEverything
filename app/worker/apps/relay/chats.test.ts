@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { handleApp } from "../index";
 import { hashToken } from "./people";
-import { call, checker, env, laptop, lost, matthew, NOW, pebbleApp, phone, request, rows } from "../../../tests/relay";
+import { call, checker, env, laptop, lost, matthew, NOW, ipad, phone, request, rows } from "../../../tests/relay";
 
 const MINUTE = 60_000;
 const SESSION = "0b6f3c1e-5d2a-4e8b-9c7f-1a2b3c4d5e6f";
@@ -75,8 +75,8 @@ it("refuses a malformed send, and messages out of order", async () => {
   expect(chatRows()).toEqual([]);
 });
 
-it("takes chats only from a chat key: a phone, the Pebble app, a person or a revoked key is refused", async () => {
-  for (const who of [phone, pebbleApp, matthew, checker, lost, null]) {
+it("takes chats only from a chat key: a phone, an iPad, a person or a revoked key is refused", async () => {
+  for (const who of [phone, ipad, matthew, checker, lost, null]) {
     expect((await call(who, "POST", "chats", chat([said(0)]))).status).toBe(403);
     expect((await call(who, "POST", "chat-saves", { sessionId: SESSION, title: "T", text: "S" })).status).toBe(403);
   }
@@ -155,7 +155,7 @@ it("deletes a chat with its messages and saves, and leaves the others", async ()
 it("refuses every device key on the list, a chat and delete, and changes nothing", async () => {
   await call(laptop, "POST", "chats", chat([said(0)]));
   const id = chatRows()[0].id as string;
-  for (const who of [laptop, phone, pebbleApp]) {
+  for (const who of [laptop, phone, ipad]) {
     expect((await call(who, "GET", "chats")).status).toBe(403);
     expect((await call(who, "GET", "chat", { id })).status).toBe(403);
     expect((await call(who, "DELETE", "chat", { id })).status).toBe(403);

@@ -28,22 +28,22 @@ after(() => Promise.all([forward?.dispose(), hold?.dispose()]));
 
 const send = { method: 'POST', headers: {
   'Content-Type': 'application/octet-stream', 'CF-Access-Client-Id': 'phone.access', 'CF-Access-Client-Secret': 'phone-secret',
-  'Cf-Access-Jwt-Assertion': 'old-app-pass', Cookie: 'CF_Authorization=old-app-pass', 'X-Pebble-Signature': 'sig' } };
+  'Cf-Access-Jwt-Assertion': 'old-app-pass', Cookie: 'CF_Authorization=old-app-pass', 'X-Note-Id': 'note-1' } };
 
 test('a send reaches the new address byte for byte, with the device key and without the old app\'s sign-in', async () => {
   seen.length = 0;
   const body = randomBytes(4096);
-  const answer = await forward.dispatchFetch('https://relay-ring.example.workers.dev/apps/relay/api/pebble?x=1', { ...send, body });
+  const answer = await forward.dispatchFetch('https://relay-ring.example.workers.dev/apps/relay/api/notes?x=1', { ...send, body });
   assert.equal(answer.status, 201);
   assert.equal(await answer.text(), 'kept');
   assert.equal(seen.length, 1);
   const [request] = seen;
   assert.equal(request.method, 'POST');
-  assert.equal(request.url, `${TARGET}/apps/relay/api/pebble?x=1`);
+  assert.equal(request.url, `${TARGET}/apps/relay/api/notes?x=1`);
   assert.ok(request.body.equals(body));
   assert.equal(request.headers['cf-access-client-id'], 'phone.access');
   assert.equal(request.headers['cf-access-client-secret'], 'phone-secret');
-  assert.equal(request.headers['x-pebble-signature'], 'sig');
+  assert.equal(request.headers['x-note-id'], 'note-1');
   assert.equal(request.headers['cf-access-jwt-assertion'], undefined);
   assert.equal(request.headers.cookie, undefined);
 });
@@ -67,7 +67,7 @@ test('a browser page load goes to the same page and query at the new address', a
 test('hold answers 503 with try again in a minute, to a send and a page alike', async () => {
   seen.length = 0;
   for (const init of [{ ...send, body: 'note' }, { headers: { Accept: 'text/html' }, redirect: 'manual' }]) {
-    const answer = await hold.dispatchFetch('https://relay-ring.example.workers.dev/apps/relay/api/pebble', init);
+    const answer = await hold.dispatchFetch('https://relay-ring.example.workers.dev/apps/relay/api/notes', init);
     assert.equal(answer.status, 503);
     assert.equal(answer.headers.get('retry-after'), '60');
     assert.match(await answer.text(), /Relay Everything is moving; try again in a minute/);

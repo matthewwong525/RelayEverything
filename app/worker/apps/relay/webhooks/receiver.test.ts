@@ -25,7 +25,7 @@ afterAll(() => {
   rmSync(folder, { recursive: true, force: true });
 });
 
-const device = { device_id: "d0000000-0000-4000-8000-000000000002", device_name: "Pebble app" };
+const device = { device_id: "d0000000-0000-4000-8000-000000000002", device_name: "iPad" };
 const ring: NoteRow = { id: "a0000000-0000-4000-8000-000000000001", source: "ring", text: "Call the PCB fab about the second batch.",
   recorded_at: Date.UTC(2026, 10, 4, 14, 1), created_at: Date.UTC(2026, 10, 4, 14, 1, 2), ...device, lat: null, lon: null, accuracy: null,
   place: null, place_from: null, audio_key: "notes/a0000000-0000-4000-8000-000000000001.m4a" };

@@ -3,7 +3,7 @@ title: Run your own Relay Everything server
 description: Make your own Relay Everything server in your own Cloudflare account, with one request to your AI. Relay Everything's apps only add data to it.
 ---
 
-Your Relay Everything server keeps what your phone, the Pebble app and Claude Code send. You make it in your own Cloudflare account, so it and its data are yours. Relay Everything's apps only add data to it: they can't read it back. You read it on your Relay Everything page, and your own AI reads it through your AI connector.
+Your Relay Everything server keeps what your phone and Claude Code send. You make it in your own Cloudflare account, so it and its data are yours. Relay Everything's apps only add data to it: they can't read it back. You read it on your Relay Everything page, and your own AI reads it through your AI connector.
 
 ## Make it
 
@@ -26,7 +26,7 @@ Cloudflare's free plan is enough. Cloudflare asks you to turn on two parts once,
 |---|---|
 | The Relay Everything server: notes, recordings, health, places and AI chats, each person's in their own space | The tools that build Relay Everything |
 | Your Relay Everything page, with your email as its only login | A login for anyone else, until you turn sign-up on |
-| A key for each phone, Pebble app and Claude Code computer | A way for a key to read your data |
+| A key for each phone, Claude Code computer and script | A way for a key to read your data |
 | Your AI connector, so your own AI reads your data | A way in for Relay Everything's makers |
 | [Webhooks](../../connections/your-database/) to your own database | A cost, on the free plan |
 

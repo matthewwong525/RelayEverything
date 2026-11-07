@@ -45,7 +45,7 @@ beforeEach(() => {
     "/apps/relay/sign-in/email": () => Response.json({ sent: true }),
     "/apps/relay/sign-in/code": ({ code }) => code === "123456" ? (signedIn = true, Response.json({ ok: true })) : refused(401, "That code is wrong."),
     "/apps/relay/sign-in/out": () => (signedIn = false, Response.json({ ok: true })),
-    "/apps/relay/api/devices": ({ name, reaches }) => Response.json({ id: "d3", name, reaches, key: KEY, qr: QR, pebbleSecret: reaches === "phone" ? "pebble-secret" : null }),
+    "/apps/relay/api/devices": ({ name, reaches }) => Response.json({ id: "d3", name, reaches, key: KEY, qr: QR, api: null }),
     "/apps/relay/api/devices/off": ({ id }) => Response.json({ id, revokedAt: NOW }),
     "/apps/relay/api/account-delete": () => (signedIn = false, Response.json({ deleted: true })),
   };
@@ -180,33 +180,27 @@ it("adds a phone and shows its key and QR code once", async () => {
   fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
 });
 
-it("gives the Pebble app its address, header and signing secret, and Claude Code its connect code", async () => {
+it("offers Phone, Claude Code and API key only, and gives Claude Code its connect code", async () => {
   signedIn = true;
   await open();
   const list = await screen.findByRole("region", { name: "Devices" });
   fireEvent.click(within(list).getByRole("button", { name: "Add a device" }));
   let dialog = await screen.findByRole("dialog", { name: "Add a device" });
-  fireEvent.change(within(dialog).getByLabelText("Device"), { target: { value: "pebble" } });
-  await act(async () => { fireEvent.click(within(dialog).getByRole("button", { name: "Make the key" })); });
-  dialog = await screen.findByRole("dialog", { name: "Connect Pebble app" });
-  const copies = within(dialog).getAllByLabelText("The message to copy").map(field => (field as HTMLTextAreaElement).value);
-  expect(copies).toEqual(["https://relay.example.com/apps/relay/api/pebble", `Bearer ${KEY}`, "pebble-secret"]);
-  fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
-  fireEvent.click(within(list).getByRole("button", { name: "Add a device" }));
-  dialog = await screen.findByRole("dialog", { name: "Add a device" });
+  const kinds = within(within(dialog).getByLabelText("Device")).getAllByRole("option").map(option => option.textContent);
+  expect(kinds).toEqual(["Phone", "Claude Code", "API key"]);
   fireEvent.change(within(dialog).getByLabelText("Device"), { target: { value: "claude" } });
   await act(async () => { fireEvent.click(within(dialog).getByRole("button", { name: "Make the key" })); });
   dialog = await screen.findByRole("dialog", { name: "Connect Laptop" });
   expect(within(dialog).getByLabelText("The message to copy")).toHaveProperty("value", QR);
   expect(within(dialog).queryByRole("img")).toBeNull();
-  expect(sent("/apps/relay/api/devices")).toEqual([{ name: "Pebble app", reaches: "phone" }, { name: "Laptop", reaches: "chats" }]);
+  expect(sent("/apps/relay/api/devices")).toEqual([{ name: "Laptop", reaches: "chats" }]);
 });
 
 it("gives a script an API key with a curl example and no QR code, and lists it by what it may do", async () => {
   signedIn = true;
   devices = () => Response.json({ devices: [PHONE, { id: "d4", name: "Backup script", reaches: "api", createdAt: NOW, revokedAt: null }] });
   posts["/apps/relay/api/devices"] = ({ name, reaches }) =>
-    Response.json({ id: "d5", name, reaches, key: KEY, qr: QR, pebbleSecret: null, api: name === "Script" ? "https://relay-mcp.example.com/v1" : null });
+    Response.json({ id: "d5", name, reaches, key: KEY, qr: QR, api: name === "Script" ? "https://relay-mcp.example.com/v1" : null });
   await open();
   const list = await screen.findByRole("region", { name: "Devices" });
   expect(await within(list).findByText(/API: reads and adds notes/)).toBeTruthy();

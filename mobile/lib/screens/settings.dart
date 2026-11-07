@@ -38,7 +38,7 @@ String _placeLine(Relay relay) {
       'so your Relay Everything page and your AI can not read it.';
   }
   return 'To Relay Everything: ${Uri.tryParse(relay.server ?? '')?.host ?? ''}. Your server can pass notes to your own '
-    'database and your AI. Ring notes from the Pebble app come through it.';
+    'database and your AI.';
 }
 
 /// Each switch acts at once and asks for its permission only when turned on. Sending is off until the person turns it

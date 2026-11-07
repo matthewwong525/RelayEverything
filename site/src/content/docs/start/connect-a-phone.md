@@ -54,4 +54,4 @@ A preview of a change to Relay Everything's own server has its own address, its 
 
 ## Next
 
-[Set up the Pebble webhook](../pebble-webhook/), so the ring's notes reach Relay Everything.
+[Your notes](../../app/your-notes/) shows what you can do with each note.

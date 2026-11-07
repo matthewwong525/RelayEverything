@@ -62,7 +62,7 @@ Hold **Hold to talk**, talk, and let go. The phone writes the words itself. [Voi
 
 ## Where a ring note's place comes from
 
-The Pebble ring sends no place. With sending and **Location history** on, a ring note takes the history point nearest in time, up to 10 minutes before or after you spoke. You see the place on your Relay Everything page. [Location](../location/) tells more.
+A ring note keeps the place it already has, which you see on your Relay Everything page. Relay Everything gives no ring note a place later: a ring note with no place keeps none. [Location](../location/) tells how a typed note gets its place.
 
 ## The sync mark
 

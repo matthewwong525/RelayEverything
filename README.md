@@ -2,7 +2,7 @@
 
 Relay Everything gets your notes, health and location off your phone and devices, into a place you choose, where your own AI can read them. Read more and get started at [relayeverything.com](https://relayeverything.com), from [what you need](https://relayeverything.com/start/what-you-need/).
 
-A ring is one way to take a note: hold the band, talk, and let go. A Pebble Index ring works today. The Relay Everything ring, in [`cad/`](cad/) and [`pcb/`](pcb/), is in design.
+A ring is one way to take a note: hold the band, talk, and let go. The Relay Everything ring, in [`cad/`](cad/) and [`pcb/`](pcb/), is in design. When it is ready, it will send through the phone app.
 
 ## What is here
 

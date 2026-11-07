@@ -40,7 +40,7 @@ Settings then says *To your webhook*, with your receiver's address. Turn on **He
 What you give up:
 
 - **Data comes in groups, not live.** The phone sends only while it is on and has signal, and the phone's own limits choose when the app runs in the background.
-- **Your Relay Everything page and your AI can not read it**, because none of it is on the server. Ring notes from the Pebble app go through a server, so they do not come this way.
+- **Your Relay Everything page and your AI can not read it**, because none of it is on the server.
 - **A failing receiver holds back the rest.** The phone sends in order, so it keeps each item, and all after it, until your receiver answers `2xx`. Settings shows the last answer. It never drops an item for a `400`. Only a file your receiver refuses with `413` is dropped, and Settings names it.
 
 From the phone, `device.id` is the phone's own id, a UUID the app makes once. A note's `created_at` and the message's `timestamp` are when the phone kept it. Health samples and points are numbered on the phone, so save them by `device.id` and `id` together.
@@ -63,7 +63,7 @@ Every message is a `POST` with a JSON body in one envelope:
 | `type` | When | `data` holds |
 |---|---|---|
 | `note.created` | A note reaches your server. | `note`, with its words, time, place, device, recording, and the names of its files |
-| `note.updated` | A ring note gets its place from a later location batch. | `note`, without `audio` |
+| `note.updated` | No longer sent. It once said a ring note got its place from a later location batch. | `note`, without `audio` |
 | `health.samples` | A phone sends health samples. | `samples`: up to 500 |
 | `location.points` | A phone sends location points. | `points`: up to 500 |
 | `note.file` | Only from [the phone](#send-from-the-phone): one message for each file of a note, after the note. | `note_id`, and `file` with its bytes |
@@ -83,7 +83,7 @@ Every message is a `POST` with a JSON body in one envelope:
       "text": "Call the PCB fab about the second batch.",
       "recorded_at": "2026-11-04T14:01:00.000Z",
       "created_at": "2026-11-04T14:01:02.000Z",
-      "device": { "id": "d0000000-0000-4000-8000-000000000002", "name": "Pebble app" },
+      "device": { "id": "d0000000-0000-4000-8000-000000000001", "name": "Android phone" },
       "place": { "lat": 43.6629, "lon": -79.3957, "accuracy": 15, "name": "Harbord St", "from": "history" },
       "audio": { "content_type": "audio/mp4", "base64": "AAAAGGZ0eXA..." }
     }
@@ -91,7 +91,7 @@ Every message is a `POST` with a JSON body in one envelope:
 }
 ```
 
-`source` is `ring` or `typed`. `place` is null when the note has none. `from` says where the place came from: `phone` for a typed note's own place, `history` for the location point nearest a ring note. `audio` is a ring note's recording in base64, or null.
+`source` is `ring` or `typed`. `place` is null when the note has none. `from` says where the place came from: `phone` for a typed note's own place, `history` for an older ring note's place, taken from the location history. Relay Everything gives no note a place this way now. `audio` is a ring note's recording in base64, or null.
 
 ### A note's files
 
@@ -133,7 +133,7 @@ A 25 MB file makes a body of about 33 MB. Accept bodies that large, or answer `4
 
 ### `note.updated`
 
-The same `note` as `note.created`, without `audio`. Relay Everything sends it when a ring note gets its place after it arrived. Update the note's row by its `id`.
+Relay Everything no longer sends `note.updated`: it gives no note a place after the note arrives. The type stays in version 1, so a receiver that handles it keeps working. It held the same `note` as `note.created`, without `audio`. Update the note's row by its `id`.
 
 ### `health.samples`
 

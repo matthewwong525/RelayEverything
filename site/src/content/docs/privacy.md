@@ -15,7 +15,7 @@ Relay Everything keeps your notes on your phone. When you turn on sending, it ke
 | Notes you share from another app, with their files | The phone's own storage, always, with no place | With sending on: when you tap **Save** on the share card, or the next time the app opens |
 | Voice notes from the app: the recording | The phone's own storage, only. iCloud and Google backups leave it out. | Never |
 | Voice notes from the app: the words | The phone's own storage; with sending on, also your space on your Relay Everything server | The same as a typed note, once the phone has written the words |
-| Ring notes: the words and the recording | Your Relay Everything server: the words in your space, the recording sealed in your folder of its file store | Each time you hold the ring and talk, through the Pebble app |
+| Ring notes: the words and the recording | Your Relay Everything server: the words in your space, the recording sealed in your folder of its file store | Not now. Ring notes already in your space stay. The Relay Everything ring will send through the phone app when it is ready. |
 | Steps, heart rate, sleep and workouts | Your space on your Relay Everything server | On open and every hour, with sending and **Health** on |
 | Location history: a point each 100 m you move | Your space on your Relay Everything server | With sending and **Location history** on |
 | The phone's key | The iPhone Keychain or the Android Keystore; the server keeps only its fingerprint | Never sent, except as the key's header |
@@ -64,7 +64,6 @@ Click **Delete my account** on your Relay Everything page, and type your email t
 | Location history | Turn off **Location history** in Settings. |
 | Health | Turn off **Health** in Settings, and take back the permission in Apple Health or Health Connect. |
 | One phone | Tap **Disconnect this phone** in Settings, or click **Turn off** beside it on your Relay Everything page: [Keys](../api/keys/#make-list-and-turn-off-keys). |
-| Ring notes | Turn off the webhook in the Pebble app, or turn off the Pebble app's key on your Relay Everything page. |
 | A webhook to your database | **Pause** or **Remove** it on the Relay Everything page: [Your own database](../connections/your-database/). |
 
 Turning a part off stops new data. Data already in your space stays there until you [delete your account](#delete-your-account), and your notes stay on your phone.

@@ -9,7 +9,7 @@ const SOUND = [0, 0, 0, 24, 102, 116, 121, 112, 77, 52, 65, 32];
 
 const note = (clientId: string, text: string) => ({ clientId, text, createdAt: NOW - 60_000 });
 const texts = async (who: Who) => (await call(who, "GET", "timeline")).json.notes.map(item => item.text);
-/** A ring note in a person's space, its recording at `key`; the Pebble route writes the same row. */
+/** A stored ring note in a person's space, its recording at `key`. */
 const ringNote = (person: string, device: string, id: string, key: string) => spaces.sql(person).prepare(`INSERT INTO relay_notes (id, device_id,
   source, delivery_id, text, audio_key, recorded_at, created_at) VALUES (?, ?, 'ring', ?, 'Ring note', ?, ?, 0)`).run(id, device, `delivery-${id}`, key, NOW);
 const filesOf = (person: string) => spaceOf(env() as never, vouch("session", person)).files;
@@ -47,13 +47,13 @@ it("answers not found when Ana asks for Ben's recording, by its note id or by it
   expect((await play(ben, BEN_RING)).status).toBe(200);
   for (const who of [matthew, owner]) expect((await play(who, BEN_RING)).status).toBe(404);
   // A row in Ana's space that names Ben's object still opens nothing: it is outside her folder.
-  ringNote(ANA, "d-pebble", ANA_RING, `people/${BEN}/${BEN_RING}`);
+  ringNote(ANA, "d-ipad", ANA_RING, `people/${BEN}/${BEN_RING}`);
   expect((await play(matthew, ANA_RING)).status).toBe(404);
 });
 
 it("stores a recording sealed, plays back the bytes sent, and opens no copy under another name", async () => {
   const name = await filesOf(ANA).put(ANA_RING, new Uint8Array(SOUND).buffer);
-  ringNote(ANA, "d-pebble", ANA_RING, name);
+  ringNote(ANA, "d-ipad", ANA_RING, name);
   expect(name).toBe(`people/${ANA}/${ANA_RING}`);
   const stored = bucket.objects.get(name)!;
   expect(stored).not.toEqual(new Uint8Array(SOUND));
@@ -61,7 +61,7 @@ it("stores a recording sealed, plays back the bytes sent, and opens no copy unde
   expect(new Uint8Array(await (await play(matthew, ANA_RING)).arrayBuffer())).toEqual(new Uint8Array(SOUND));
   const copy = "aaaaaaaa-0000-4000-8000-0000000000a2";
   bucket.objects.set(`people/${ANA}/${copy}`, stored);
-  ringNote(ANA, "d-pebble", copy, `people/${ANA}/${copy}`);
+  ringNote(ANA, "d-ipad", copy, `people/${ANA}/${copy}`);
   expect((await play(matthew, copy)).status).toBe(404);
 });
 

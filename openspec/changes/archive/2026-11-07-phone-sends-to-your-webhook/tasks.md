@@ -34,4 +34,4 @@
 
 - [x] 6.1 Run `flutter test` in `mobile/`, the app tests in `app/`, `scripts/product-name.test.mjs` and `node scripts/public-check.mjs`
 - [x] 6.2 Run `site/public/webhooks/receiver.mjs` behind an `https://` tunnel, set it on a phone build in webhook mode, and send a note with a file, health and places; check the receiver saved each one and no request reached the server
-- [ ] 6.3 `/save`, then check the Android file from the run and the website preview (`node scripts/publish-relay-site.mjs --ref HEAD --staging`)
+- [x] 6.3 `/save`, then check the Android file from the run and the website preview (`node scripts/publish-relay-site.mjs --ref HEAD --staging`)

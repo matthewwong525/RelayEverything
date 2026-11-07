@@ -81,6 +81,7 @@ height: 900
 - **The card runs sealed.** It runs its own script, with no network, no sign-in, and no way to reach the review page or the app. A card that tries to leave says *This card tried to leave the page.* and starts again; after three tries it stops until you reload.
 - **It sends one answer.** The card's script calls `review.answer(text)`, such as `review.answer('Order: Fern, Palm, Ivy')`. The page keeps the newest answer, up to 2,000 characters, and sends it with the notes as `- Card #2 answer: Order: Fern, Palm, Ivy` (`Change #2 answer` on a plan).
 - **Phone, Computer, and Full screen.** *Phone* draws the page 390 px wide and *Computer* 1280 px, scaled to fit the card. *Full screen* shows it at its true size above the page.
+- **Open it in a browser before you build the page.** The builder does not run the script, so a script error shows only as an empty card. A top-level name that the browser already uses, such as `top`, `location` or `document`, stops the whole script: wrap the script in a function, or pick another name.
 
 ## Questions and files
 

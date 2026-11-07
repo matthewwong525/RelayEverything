@@ -76,3 +76,4 @@ None: this update changes WongStack's shared tools, not a Relay Everything behav
 - **2026-11-07** — Assumed: move this repo's *Ship every chat from one chat* section from `wiki/development/daily.md` to its own page, `ship-every-chat.md`, because upstream's new text put `daily.md` at 3,021 words, over the 3,000-word cap.
 - **2026-11-07** — Save checkpoint: built (95 files copied, 12 merged by hand, a relay real-database test, the seal pair made), reviewed with no findings, preflight now current; main's iPhone build passed on its rerun, so no Apple certificate was deleted.
 - **2026-11-07** — Assumed: save on a new branch, `wongstack-50-10-update`, because `sync-wongstack-upstream` already shipped as PR #15 for the 50.1.0 update.
+- **2026-11-07** — Archive checkpoint: all tasks done, PR #39 checks passed on f103868, the staging preview answered 200, and the change is archived for the ship.

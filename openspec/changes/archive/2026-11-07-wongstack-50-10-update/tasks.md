@@ -30,7 +30,7 @@
 - [x] 6.2 Run `npm test` in `app/` (with `check-runtime-tests.mjs` and `check-service-definitions.mjs`), `node --test .claude/skills/browser/scripts/*.test.mjs`, and `node scripts/public-check.mjs --tree`; verify all pass with no check loosened.
 - [x] 6.3 Run `node .claude/skills/browser/scripts/browse.mjs status`; verify it still prints `BROWSE_NETWORK=`.
 - [x] 6.4 Rerun the preflight; verify every unit is `latest-equivalent` or `locally-adapted` with only the named browser lines missing.
-- [ ] 6.5 Run `/save` and verify the pull request's checks pass and the staging preview opens.
+- [x] 6.5 Run `/save` and verify the pull request's checks pass and the staging preview opens.
 
 ## 7. Install record
 

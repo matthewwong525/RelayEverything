@@ -75,7 +75,8 @@ class RelayController extends Relay {
     voice?.recorder.onLongest = (recording) {
       _listening = null;
       notifyListeners();
-      unawaited(_keepVoice(recording));
+      if (recording == null) return notice(_stopFailed);
+      unawaited(_keepVoice(recording).then((problem) => problem == null ? null : notice(problem)));
     };
   }
 
@@ -676,7 +677,9 @@ class RelayController extends Relay {
   static const _noMicrophone = 'Relay Everything may not use the microphone. Allow it in the phone\'s settings.';
   static const _microphoneFailed = 'The microphone did not start. Try again.';
   static const _noRecording = 'This recording is not on this phone.';
-  static const _holdLonger = 'Hold the button while you talk, then let go.';
+  static const _tooShort = 'Too short to keep. Nothing was saved.';
+  static const _stopFailed = 'The microphone did not stop right. Nothing was saved.';
+  static const _notSaved = 'The voice note did not save.';
   static const _noSpeech = 'No speech heard. Nothing was saved.';
   static const _wordsDidNotCome = 'The words did not come. Tap Try again on the note.';
 
@@ -745,12 +748,18 @@ class RelayController extends Relay {
     if (parts == null) return null;
     await _started();
     if (!parts.recorder.recording) return null;
-    final recording = await parts.recorder.stop();
-    _listening = null;
-    notifyListeners();
-    if (recording == null) return _holdLonger;
-    await _keepVoice(recording);
-    return null;
+    final Recording? recording;
+    try {
+      recording = await parts.recorder.stop();
+    } catch (_) {
+      // The recorder has ended and deleted the file all the same.
+      return _stopFailed;
+    } finally {
+      _listening = null;
+      notifyListeners();
+    }
+    if (recording == null) return _tooShort;
+    return _keepVoice(recording);
   }
 
   @override
@@ -758,9 +767,14 @@ class RelayController extends Relay {
     final parts = voice;
     if (parts == null) return;
     await _started();
-    await parts.recorder.cancel();
-    _listening = null;
-    notifyListeners();
+    try {
+      await parts.recorder.cancel();
+    } catch (_) {
+      // The recorder has ended and deleted the file all the same: nothing is kept.
+    } finally {
+      _listening = null;
+      notifyListeners();
+    }
   }
 
   @override
@@ -773,13 +787,25 @@ class RelayController extends Relay {
     await parts.player.play(file);
   }
 
-  /// Shows the note at once, with no words yet, and writes them in the background.
-  Future<void> _keepVoice(Recording recording) async {
+  /// Shows the note at once, with no words yet, and writes them in the background. Returns the words to show when the
+  /// phone could not keep it, such as a full disk; then its recording is deleted too.
+  Future<String?> _keepVoice(Recording recording) async {
     final note = LocalNote(clientId: recording.clientId, text: '', createdAt: recording.startedAt, kind: NoteKind.voice,
       audioPath: recording.audioPath, durationMs: recording.length.inMilliseconds, wordsPending: true);
-    await store.addVoiceNote(note);
+    try {
+      await store.addVoiceNote(note);
+    } catch (_) {
+      try {
+        final file = await voice!.recorder.fileOf(recording.audioPath);
+        if (await file.exists()) await file.delete();
+      } catch (_) {
+        // The next open deletes a recording no note keeps.
+      }
+      return _notSaved;
+    }
     await _refreshLocal();
     _track(_write(note));
+    return null;
   }
 
   @override

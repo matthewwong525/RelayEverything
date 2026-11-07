@@ -1,13 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderParagraph;
+import 'package:flutter/rendering.dart' show CustomSemanticsAction, RenderParagraph, SemanticsAction;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/app.dart';
 import 'package:relay_app/brand.dart';
 import 'package:relay_app/relay.dart';
+import 'package:relay_app/screens/compose.dart';
 import 'package:relay_app/screens/connect.dart';
-import 'package:relay_app/screens/settings.dart' show problemLine, sentLine;
+import 'package:relay_app/screens/hold_to_talk.dart';
+import 'package:relay_app/screens/note.dart';
+import 'package:relay_app/screens/settings.dart' show SettingsScreen, problemLine, sentLine;
 
 class FakeRelay extends Relay {
   @override bool connected = false;
@@ -198,14 +201,44 @@ class FakeRelay extends Relay {
 
 final now = DateTime.now();
 
+/// The round *New note* button: a tap writes, a hold talks.
+final newNote = find.byType(NewNoteButton);
+
+/// Opens the ⋯ menu, and Settings from it.
+Future<void> openSettings(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('More'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Settings'));
+  await tester.pumpAndSettle();
+}
+
+/// Holds *New note* until it turns into the mic, then lets go: the phone keeps listening.
+Future<void> holdNewNote(WidgetTester tester) async {
+  final gesture = await tester.startGesture(tester.getCenter(newNote));
+  await tester.pump(holdToTalk);
+  await tester.pump();
+  await gesture.up();
+  await tester.pump();
+}
+
+/// A tap on the screen away from the card, which saves the voice note.
+Future<void> tapAnywhere(WidgetTester tester) async {
+  await tester.tapAt(const Offset(200, 150));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 100));
+}
+
+/// The fill and the word color of a [BrandTag].
+(Color?, Color?) tagColors(WidgetTester tester, String label) {
+  final tag = find.widgetWithText(BrandTag, label).first;
+  final box = tester.widget<DecoratedBox>(find.descendant(of: tag, matching: find.byType(DecoratedBox)).first);
+  final ink = tester.renderObject<RenderParagraph>(find.descendant(of: tag, matching: find.text(label))).text.style?.color;
+  return ((box.decoration as ShapeDecoration).color, ink);
+}
+
 void main() {
   late FakeRelay relay;
   setUp(() => relay = FakeRelay());
-
-  Future<void> openSettings(WidgetTester tester) async {
-    await tester.tap(find.byTooltip('Settings'));
-    await tester.pumpAndSettle();
-  }
 
   /// Scrolls the connect screen's own list until [finder] shows.
   Future<void> scrollConnect(WidgetTester tester, Finder finder, [double delta = 100]) => tester.scrollUntilVisible(finder, delta,
@@ -213,13 +246,15 @@ void main() {
 
   SwitchListTile switchOf(WidgetTester tester, String title) => tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, title));
 
-  testWidgets('shows the mark beside Relay Everything, in the brand colors that follow the phone', (tester) async {
+  testWidgets('shows the mark above the large Notes title, in the brand colors that follow the phone', (tester) async {
     await tester.pumpWidget(RelayApp(relay: relay));
     final bar = find.byType(AppBar);
     expect(find.descendant(of: bar, matching: find.byType(RelayMark)), findsOneWidget);
-    expect(find.descendant(of: bar, matching: find.text('Relay Everything')), findsOneWidget);
+    expect(find.descendant(of: bar, matching: find.text('Notes')), findsWidgets);
+    // The large title; the bar's small one shows only once the list scrolls under it.
+    expect(tester.renderObjectList<RenderParagraph>(find.text('Notes')).map((title) => title.text.style?.fontSize), contains(32));
     RelayMarkPainter painter() => tester.widget<CustomPaint>(
-      find.descendant(of: find.byType(RelayMark), matching: find.byType(CustomPaint))).painter! as RelayMarkPainter;
+      find.descendant(of: find.byType(RelayMark).first, matching: find.byType(CustomPaint))).painter! as RelayMarkPainter;
     expect(painter().ink, BrandColors.light.accentText);
     expect(painter().spark, BrandColors.light.spark);
     expect(Theme.of(tester.element(bar)).scaffoldBackgroundColor, BrandColors.light.paper);
@@ -235,8 +270,10 @@ void main() {
     await tester.pumpWidget(RelayApp(relay: relay));
     expect(find.text('Where should the phone send?'), findsNothing);
     expect(find.text('On this phone'), findsOneWidget);
-    expect(find.text('No notes yet. Tap New note, or hold to talk.'), findsOneWidget);
-    await tester.tap(find.text('New note'));
+    expect(find.text('No notes yet'), findsOneWidget);
+    expect(find.text('Tap New note to write one, or hold it to talk.'), findsOneWidget);
+    expect(find.text('Notes stay on this phone until you turn on sending in Settings.'), findsOneWidget);
+    await tester.tap(newNote);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Buy milk');
     await tester.pump();
@@ -249,14 +286,14 @@ void main() {
     await tester.pump();
     expect(find.textContaining('Pinned'), findsOneWidget);
     expect(find.textContaining('Waiting to send'), findsNothing);
-    expect(find.text('Open your Relay Everything page'), findsNothing);
+    expect(find.text('Today'), findsOneWidget);
   });
 
   testWidgets('turns sending on: connects a key first, then asks about earlier notes', (tester) async {
     relay.earlier = 42;
     await tester.pumpWidget(RelayApp(relay: relay, scanner: (_) async => null));
     await openSettings(tester);
-    expect(switchOf(tester, 'Health: steps, heart rate, sleep and more').onChanged, isNull);
+    expect(switchOf(tester, 'Health').onChanged, isNull);
     await tester.scrollUntilVisible(find.text('Location history'), 100);
     expect(switchOf(tester, 'Location history').onChanged, isNull);
     expect(find.text('Disconnect this phone'), findsNothing);
@@ -271,13 +308,14 @@ void main() {
     await tester.tap(find.text('Send my notes'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'key');
+    await scrollConnect(tester, find.text('Connect'));
     await tester.tap(find.text('Connect'));
     await tester.pumpAndSettle();
     expect(find.text('Send your 42 earlier notes too?'), findsOneWidget);
     await tester.tap(find.text('Only new notes'));
     await tester.pumpAndSettle();
     expect(relay.calls, ['connect key', 'start false']);
-    expect(find.text('Settings'), findsOneWidget);
+    expect(find.byType(SettingsScreen), findsOneWidget);
     expect(switchOf(tester, 'Location history').onChanged, isNotNull);
     await tester.scrollUntilVisible(find.text('Disconnect this phone'), 100);
     expect(find.text('Disconnect this phone'), findsOneWidget);
@@ -328,14 +366,16 @@ void main() {
     await tester.pumpAndSettle();
     relay.problem = 'That is not a Relay Everything key.';
     await tester.enterText(find.byType(TextField), 'nonsense');
+    await scrollConnect(tester, find.text('Connect'));
     await tester.tap(find.text('Connect'));
     await tester.pumpAndSettle();
     await scrollConnect(tester, find.text('That is not a Relay Everything key.'));
     relay.problem = null;
+    await tester.ensureVisible(find.text('Connect'));
     await tester.tap(find.text('Connect'));
     await tester.pumpAndSettle();
     expect(relay.calls, ['connect nonsense', 'connect nonsense', 'start false']);
-    expect(find.text('Settings'), findsOneWidget);
+    expect(find.byType(SettingsScreen), findsOneWidget);
   });
 
   testWidgets('connects by signing in, to the shared server or another, and stays open when the sign-in is closed', (tester) async {
@@ -362,7 +402,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(relay.calls, ['sign in https://app.relayeverything.com', 'sign in https://relay.example.com',
       'sign in https://app.relayeverything.com', 'start false']);
-    expect(find.text('Settings'), findsOneWidget);
+    expect(find.byType(SettingsScreen), findsOneWidget);
   });
 
   testWidgets('connects by a scanned key, and does nothing when the scan is closed', (tester) async {
@@ -395,46 +435,119 @@ void main() {
     expect(find.textContaining('King St W · Waiting to send'), findsOneWidget);
     expect(find.textContaining('Harbord St · Sent'), findsOneWidget);
     expect(find.textContaining('Jan 2'), findsOneWidget);
-    expect(find.text('Show older notes'), findsNothing);
+    expect(find.text('2 notes ·'), findsOneWidget);
     expect(find.text('1 waiting'), findsOneWidget);
     await tester.tap(find.text('1 waiting'));
     expect(relay.calls, ['sync']);
   });
 
-  testWidgets('with sending on, a card opens the Relay page in the browser; with sending off or no key, it is gone', (tester) async {
+  testWidgets('the ⋯ menu holds Settings, and while sending Sync now, and the page only when sending to a server',
+      (tester) async {
     final opened = <Uri>[];
     var opens = true;
-    relay
-      ..connected = true
-      ..server = 'https://relay.example.com'
-      ..settings = const Settings(sending: true)
-      ..entries = [Entry(text: 'Lunch idea', at: now)];
+    relay.entries = [Entry(text: 'Lunch idea', at: now)];
     await tester.pumpWidget(RelayApp(relay: relay, opener: (address) async {
       opened.add(address);
       return opens;
     }));
-    expect(find.text('Ring notes and recordings are on your Relay Everything page.'), findsOneWidget);
-    await tester.tap(find.text('Open your Relay Everything page'));
+    Future<List<String>> items() async {
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      final shown = [for (final label in ['Settings', 'Sync now', 'Open your Relay Everything page'])
+        if (find.widgetWithText(MenuItemButton, label).evaluate().isNotEmpty) label];
+      return shown;
+    }
+    Future<void> close() async {
+      await tester.tapAt(const Offset(10, 400));
+      await tester.pumpAndSettle();
+    }
+
+    expect(await items(), ['Settings']);
+    await close();
+    relay
+      ..settings = const Settings(sending: true, place: SendPlace.webhook)
+      ..changed();
     await tester.pump();
+    expect(await items(), ['Settings', 'Sync now']);
+    await tester.tap(find.text('Sync now'));
+    await tester.pumpAndSettle();
+    expect(relay.calls, ['sync']);
+    relay
+      ..connected = true
+      ..server = 'https://relay.example.com'
+      ..settings = const Settings(sending: true)
+      ..changed();
+    await tester.pump();
+    expect(await items(), ['Settings', 'Sync now', 'Open your Relay Everything page']);
+    await tester.tap(find.text('Open your Relay Everything page'));
+    await tester.pumpAndSettle();
     expect(opened, [Uri.parse('https://relay.example.com/apps/relay/')]);
     opens = false;
+    await items();
     await tester.tap(find.text('Open your Relay Everything page'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('The browser did not open. Try again.'), findsOneWidget);
-    relay
-      ..settings = const Settings()
-      ..changed();
+    expect([opened, relay.calls], [hasLength(2), ['sync']]);
+  });
+
+  testWidgets('groups notes by day, newest first, under Today, Yesterday and Previous 7 days', (tester) async {
+    relay.entries = [
+      Entry(text: 'Ask Sam if the trip moves', at: now),
+      Entry(text: 'Paint colours for the hall\nthe warm grey, not the blue.', at: now.subtract(const Duration(days: 1))),
+      Entry(text: 'Dentist moved to Thursday', at: now.subtract(const Duration(days: 4))),
+    ];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    double top(String text) => tester.getTopLeft(find.text(text)).dy;
+    expect([for (final heading in ['Today', 'Yesterday', 'Previous 7 days']) find.text(heading).evaluate().length], [1, 1, 1]);
+    expect(top('Today') < top('Ask Sam if the trip moves'), isTrue);
+    expect(top('Ask Sam if the trip moves') < top('Yesterday'), isTrue);
+    expect(top('Yesterday') < top('Paint colours for the hall'), isTrue);
+    expect(top('Paint colours for the hall') < top('Previous 7 days'), isTrue);
+    expect(top('Previous 7 days') < top('Dentist moved to Thursday'), isTrue);
+    // The first line is the row's title; the rest follows the time.
+    expect(find.textContaining('the warm grey, not the blue.', findRichText: true), findsOneWidget);
+  });
+
+  testWidgets('New note is the only control filled with the accent color', (tester) async {
+    relay.entries = [Entry(text: 'Spoken', at: now, voice: true), Entry(text: 'Written', at: now)];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    final accent = [for (final material in tester.widgetList<Material>(find.byType(Material)))
+      if (material.color == BrandColors.light.accent) material];
+    expect(accent, hasLength(1));
+    expect(find.descendant(of: newNote, matching: find.byWidget(accent.single)), findsOneWidget);
+    expect(tester.widgetList(find.byType(FilledButton)), isEmpty);
+  });
+
+  testWidgets('search shows only the notes that hold the words, in any case; Cancel shows them all again', (tester) async {
+    relay.entries = [
+      Entry(text: 'Dentist moved to Thursday 3 pm', at: now),
+      Entry(text: 'Paint colours for the hall', at: now, place: 'Home', files: const [
+        EntryFile(name: 'swatches.pdf', type: 'application/pdf', size: 245760, path: '/nowhere/swatches.pdf')]),
+      Entry(text: 'Gift ideas', at: now),
+    ];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    final search = find.widgetWithText(TextField, 'Search');
+    await tester.tap(search);
     await tester.pump();
-    expect(find.text('Open your Relay Everything page'), findsNothing);
-    relay
-      ..settings = const Settings(sending: true)
-      ..connected = false
-      ..server = null
-      ..changed();
+    expect([find.text('Cancel'), newNote], [findsOneWidget, findsNothing]);
+    await tester.enterText(search, 'DENTIST');
     await tester.pump();
-    expect(find.text('Ring notes and recordings are on your Relay Everything page.'), findsNothing);
-    expect([opened, relay.calls], [hasLength(2), isEmpty]);
+    expect([find.text('Dentist moved to Thursday 3 pm'), find.text('Paint colours for the hall'), find.text('Gift ideas')],
+      [findsOneWidget, findsNothing, findsNothing]);
+    for (final words in ['home', 'Swatches']) {
+      await tester.enterText(find.byType(TextField), words);
+      await tester.pump();
+      expect([find.text('Dentist moved to Thursday 3 pm'), find.text('Paint colours for the hall')], [findsNothing, findsOneWidget]);
+    }
+    await tester.enterText(find.byType(TextField), 'zzz');
+    await tester.pump();
+    expect(find.text('No notes with "zzz"'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect([find.text('Gift ideas'), find.text('Dentist moved to Thursday 3 pm'), newNote, find.text('Cancel')],
+      [findsOneWidget, findsOneWidget, findsOneWidget, findsNothing]);
+    expect(relay.calls, isEmpty);
   });
 
   testWidgets('names each sync state while sending, and an empty timeline in words', (tester) async {
@@ -442,7 +555,8 @@ void main() {
       ..connected = true
       ..settings = const Settings(sending: true);
     await tester.pumpWidget(RelayApp(relay: relay));
-    expect(find.text('No notes yet. Tap New note, or hold to talk.'), findsOneWidget);
+    expect(find.text('No notes yet'), findsOneWidget);
+    expect(find.text('Notes stay on this phone until you turn on sending in Settings.'), findsNothing);
     expect(find.text('On this phone'), findsNothing);
     for (final (status, waiting, label) in [(SyncStatus.syncing, 0, 'Syncing'), (SyncStatus.refused, 0, 'Key refused'),
       (SyncStatus.offline, 0, 'Offline'), (SyncStatus.offline, 2, '2 waiting'), (SyncStatus.idle, 0, 'Synced')]) {
@@ -453,14 +567,36 @@ void main() {
       await tester.pump();
       expect(find.text(label), findsOneWidget, reason: label);
     }
-    await tester.drag(find.textContaining('No notes yet'), const Offset(0, 300));
+    await tester.drag(find.text('No notes yet'), const Offset(0, 300));
     await tester.pumpAndSettle();
     expect(relay.calls, ['sync']);
   });
 
+  testWidgets('the Syncing dot pulses, the Synced dot is still, and with reduced motion Syncing is still too', (tester) async {
+    relay
+      ..connected = true
+      ..settings = const Settings(sending: true)
+      ..status = SyncStatus.syncing;
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(tester.hasRunningAnimations, isTrue);
+    relay
+      ..status = SyncStatus.synced
+      ..changed();
+    await tester.pumpAndSettle();
+    expect(tester.hasRunningAnimations, isFalse);
+    tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    relay
+      ..status = SyncStatus.syncing
+      ..changed();
+    await tester.pumpAndSettle();
+    expect([find.text('Syncing').evaluate().length, tester.hasRunningAnimations], [1, false]);
+  });
+
   testWidgets('saves a typed note once it has words', (tester) async {
     await tester.pumpWidget(RelayApp(relay: relay));
-    await tester.tap(find.text('New note'));
+    await tester.tap(newNote);
     await tester.pumpAndSettle();
     final save = find.widgetWithText(FilledButton, 'Save');
     expect(tester.widget<FilledButton>(save).onPressed, isNull);
@@ -469,7 +605,56 @@ void main() {
     await tester.tap(save);
     await tester.pumpAndSettle();
     expect(relay.calls, ['note Buy milk']);
-    expect(find.text('New note'), findsOneWidget);
+    expect(find.byType(ComposeScreen), findsNothing);
+    expect(newNote, findsOneWidget);
+  });
+
+  testWidgets('the New note page draws the first line bold and keeps the words as typed', (tester) async {
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await tester.tap(newNote);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Ideas for the birthday\nthe pottery class');
+    await tester.pump();
+    final field = tester.widget<TextField>(find.byType(TextField));
+    final span = field.controller!.buildTextSpan(context: tester.element(find.byType(TextField)), withComposing: false);
+    expect((span.children!.first as TextSpan).style?.fontWeight, FontWeight.w700);
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+    expect(relay.calls, ['note Ideas for the birthday\nthe pottery class']);
+  });
+
+  group('the New note page keeps the first line bold while the keyboard composes a word', () {
+    /// Each piece of text in [span], and whether it is bold and underlined.
+    List<(String, bool, bool)> runs(TextSpan span, [TextStyle inherited = const TextStyle()]) {
+      final style = inherited.merge(span.style);
+      return [
+        if (span.text != null) (span.text!, style.fontWeight == FontWeight.w700, style.decoration == TextDecoration.underline),
+        for (final child in span.children ?? const <InlineSpan>[]) ...runs(child as TextSpan, style),
+      ];
+    }
+
+    Future<List<(String, bool, bool)>> composing(WidgetTester tester, TextRange range) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.tap(newNote);
+      await tester.pumpAndSettle();
+      final controller = tester.widget<TextField>(find.byType(TextField)).controller!;
+      controller.value = TextEditingValue(text: 'Ideas for the birthday\nthe pottery class',
+        selection: TextSelection.collapsed(offset: range.end), composing: range);
+      await tester.pump();
+      return runs(controller.buildTextSpan(context: tester.element(find.byType(TextField)), withComposing: true));
+    }
+
+    testWidgets('a word in the first line', (tester) async {
+      expect(await composing(tester, const TextRange(start: 10, end: 13)), [
+        ('Ideas for ', true, false), ('the', true, true), (' birthday', true, false), ('\nthe pottery class', false, false),
+      ]);
+    });
+
+    testWidgets('a range across the line break', (tester) async {
+      expect(await composing(tester, const TextRange(start: 19, end: 26)), [
+        ('Ideas for the birth', true, false), ('day', true, true), ('\nthe', false, true), (' pottery class', false, false),
+      ]);
+    });
   });
 
   testWidgets('turns settings on and says why one could not be', (tester) async {
@@ -484,9 +669,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Location history'));
     relay.problem = 'Relay Everything may not read your health data.';
-    await tester.scrollUntilVisible(find.text('Health: steps, heart rate, sleep and more'), -100);
+    await tester.scrollUntilVisible(find.text('Health'), -100);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Health: steps, heart rate, sleep and more'));
+    await tester.tap(find.text('Health'));
     await tester.pump();
     expect(find.text('Relay Everything may not read your health data.'), findsOneWidget);
     expect(relay.calls, ['pin false', 'history true', 'health true']);
@@ -570,7 +755,9 @@ void main() {
       ..settings = const Settings(sending: true);
     await tester.pumpWidget(RelayApp(relay: relay));
     await openSettings(tester);
-    await tester.scrollUntilVisible(find.text('Disconnect this phone'), 100);
+    // To the end of Settings: a row scrolled just under the pinned title would not take the tap.
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -3000));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('https://relay.example.com'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cancel'));
@@ -653,9 +840,9 @@ void main() {
     expect(find.text('Where the phone sends'), findsOneWidget);
     expect([find.text('Server').evaluate(), find.text('Disconnect this phone').evaluate()], [isEmpty, isEmpty]);
     relay.testAnswer = 'Your receiver answered 401. Check that it has this secret.';
-    await tester.ensureVisible(find.widgetWithText(OutlinedButton, 'Send a test'));
+    await tester.ensureVisible(find.widgetWithText(TextButton, 'Send a test'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Send a test'));
+    await tester.tap(find.widgetWithText(TextButton, 'Send a test'));
     await tester.pump();
     await tester.pump();
     expect(find.text('Your receiver answered 401. Check that it has this secret.'), findsOneWidget);
@@ -671,60 +858,91 @@ void main() {
       'scan.pdf was too large for your receiver (14:05), so it was not sent.');
   });
 
-  group('voice notes', () {
-    Finder holdButton() => find.text('Hold to talk');
+  testWidgets('Settings shows three groups with no lines, and with sending off one line says what needs it', (tester) async {
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openSettings(tester);
+    final groups = find.descendant(of: find.byType(SettingsScreen), matching: find.byType(SliverList));
+    for (final heading in ['Notes', 'Voice notes', 'Sending']) {
+      expect(find.descendant(of: groups, matching: find.text(heading)), findsOneWidget, reason: heading);
+    }
+    expect(find.descendant(of: find.byType(SettingsScreen), matching: find.byType(Divider)), findsNothing);
+    await tester.scrollUntilVisible(find.text('Health, Calendar and Location history work with Send my notes on.'), 100);
+    expect(switchOf(tester, 'Location history').onChanged, isNull);
+    expect(find.text('Where you go, also while the app is closed.'), findsOneWidget);
+    relay
+      ..settings = const Settings(sending: true)
+      ..changed();
+    await tester.pumpAndSettle();
+    expect(find.text('Health, Calendar and Location history work with Send my notes on.'), findsNothing);
+  });
 
-    testWidgets('hold: the phone listens, and letting go saves', (tester) async {
+  group('voice notes', () {
+    testWidgets('hold New note: at 0.5 s it turns into the mic and listens, letting go keeps it, a tap anywhere saves',
+        (tester) async {
       await tester.pumpWidget(RelayApp(relay: relay));
-      final gesture = await tester.startGesture(tester.getCenter(holdButton()));
+      final gesture = await tester.startGesture(tester.getCenter(newNote));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(relay.calls, isEmpty);
+      await tester.pump(const Duration(milliseconds: 200));
       await tester.pump();
       expect(relay.calls, ['voice start']);
+      expect(find.descendant(of: newNote, matching: find.byIcon(Icons.mic)), findsOneWidget);
       expect(find.text('Listening'), findsOneWidget);
-      expect(find.text('Let go to save. Slide off to cancel.'), findsOneWidget);
+      expect(find.text('Tap anywhere to save.'), findsOneWidget);
       await gesture.up();
-      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      expect(relay.calls, ['voice start']);
+      expect(find.text('Listening'), findsOneWidget);
+      await tapAnywhere(tester);
       expect(relay.calls, ['voice start', 'voice end']);
-      expect(find.text('Listening'), findsNothing);
+      expect([find.text('Listening'), find.byType(ComposeScreen)], [findsNothing, findsNothing]);
     });
 
     testWidgets('a voice note and Listening wear the spark color; a typed note wears accent soft', (tester) async {
       relay.entries = [Entry(text: 'Spoken', at: now, voice: true), Entry(text: 'Written', at: now)];
       await tester.pumpWidget(RelayApp(relay: relay));
-      Chip chip(String label) => tester.widget<Chip>(find.widgetWithText(Chip, label));
-      Color? ink(String label) => tester.renderObject<RenderParagraph>(find.text(label)).text.style?.color;
-      expect(chip('Voice').backgroundColor, BrandColors.light.spark);
-      expect(ink('Voice'), BrandColors.light.onSpark);
-      expect(chip('Typed').backgroundColor, BrandColors.light.accentSoft);
-      expect(ink('Typed'), BrandColors.light.accentText);
-
-      final gesture = await tester.startGesture(tester.getCenter(holdButton()));
-      await tester.pump();
-      expect(chip('Listening').backgroundColor, BrandColors.light.spark);
-      expect(ink('Listening'), BrandColors.light.onSpark);
-      await gesture.up();
-      await tester.pump();
+      expect(tagColors(tester, 'Voice'), (BrandColors.light.spark, BrandColors.light.onSpark));
+      expect(tagColors(tester, 'Typed'), (BrandColors.light.accentSoft, BrandColors.light.accentText));
+      await holdNewNote(tester);
+      expect(tagColors(tester, 'Listening'), (BrandColors.light.spark, BrandColors.light.onSpark));
+      await tapAnywhere(tester);
     });
 
-    testWidgets('a short press saves nothing and says to hold', (tester) async {
-      relay.endProblem = 'Hold the button while you talk, then let go.';
+    testWidgets('a press under 0.5 s opens the page to write and records nothing', (tester) async {
       await tester.pumpWidget(RelayApp(relay: relay));
-      await tester.tap(holdButton());
-      await tester.pump();
-      expect(relay.calls, ['voice start', 'voice end']);
-      expect(find.text('Hold the button while you talk, then let go.'), findsOneWidget);
-      expect(find.byType(Card), findsNothing);
+      final gesture = await tester.startGesture(tester.getCenter(newNote));
+      await tester.pump(const Duration(milliseconds: 300));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(find.byType(ComposeScreen), findsOneWidget);
+      expect(relay.calls, isEmpty);
     });
 
-    testWidgets('slide off: the note is cancelled, and letting go then saves nothing', (tester) async {
+    testWidgets('Cancel keeps nothing', (tester) async {
       await tester.pumpWidget(RelayApp(relay: relay));
-      final gesture = await tester.startGesture(tester.getCenter(holdButton()));
-      await tester.pump();
-      await gesture.moveBy(const Offset(-200, -200));
-      await tester.pump();
-      expect(find.text('Listening'), findsNothing);
-      await gesture.up();
+      await holdNewNote(tester);
+      await tester.tap(find.text('Cancel'));
       await tester.pump();
       expect(relay.calls, ['voice start', 'voice cancel']);
+      expect(find.text('Listening'), findsNothing);
+    });
+
+    testWidgets('a voice note the phone could not keep says so, and the card closes', (tester) async {
+      relay.endProblem = 'The voice note did not save.';
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await holdNewNote(tester);
+      await tapAnywhere(tester);
+      expect([find.text('Listening'), find.text('The voice note did not save.')], [findsNothing, findsOneWidget]);
+      expect(relay.calls, ['voice start', 'voice end']);
+    });
+
+    testWidgets('a recording too short to keep says so', (tester) async {
+      relay.endProblem = 'Too short to keep. Nothing was saved.';
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await holdNewNote(tester);
+      await tapAnywhere(tester);
+      expect(find.text('Too short to keep. Nothing was saved.'), findsOneWidget);
+      expect(relay.calls, ['voice start', 'voice end']);
     });
 
     testWidgets('a voice note shows Writing the words, then its words, its length and Play', (tester) async {
@@ -733,6 +951,7 @@ void main() {
       await tester.pumpWidget(RelayApp(relay: relay));
       expect(find.text('Voice'), findsOneWidget);
       expect(find.text('Writing the words…'), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
       relay
         ..entries = [Entry(text: 'Ask the fab if the flex stiffener can be 0.2 mm', at: now, voice: true,
           recording: 'voice/a.wav', length: const Duration(seconds: 12))]
@@ -741,24 +960,38 @@ void main() {
       expect(find.text('Writing the words…'), findsNothing);
       expect(find.text('Ask the fab if the flex stiffener can be 0.2 mm'), findsOneWidget);
       expect(find.textContaining('0:12'), findsOneWidget);
+      expect(find.text('Play'), findsNothing);
+      await tester.tap(find.text('Ask the fab if the flex stiffener can be 0.2 mm'));
+      await tester.pumpAndSettle();
+      expect(find.byType(NoteScreen), findsOneWidget);
       await tester.tap(find.text('Play'));
       expect(relay.calls, ['play voice/a.wav']);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
       // A typed note has no Play.
       relay
         ..entries = [Entry(text: 'Typed', at: now)]
         ..changed();
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Typed').first);
+      await tester.pumpAndSettle();
       expect([find.text('Play'), find.text('Voice')], [findsNothing, findsNothing]);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
       relay.notice('No speech heard. Nothing was saved.');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.text('No speech heard. Nothing was saved.'), findsOneWidget);
     });
 
-    testWidgets('a note whose words failed says its recording is safe, keeps Play, and Try again writes them again', (tester) async {
+    testWidgets('a note whose words failed says so in the list; its page says the recording is safe, keeps Play, and Try again writes them again', (tester) async {
       relay.entries = [Entry(text: '', at: now, voice: true, failed: true, recording: 'voice/a.wav',
         length: const Duration(seconds: 3))];
       await tester.pumpWidget(RelayApp(relay: relay));
+      expect(find.text('The words did not come'), findsOneWidget);
+      expect([find.text('Writing the words…'), find.byType(LinearProgressIndicator)], [findsNothing, findsNothing]);
+      await tester.tap(find.text('The words did not come'));
+      await tester.pumpAndSettle();
       expect(find.text('The words did not come. Your recording is safe.'), findsOneWidget);
       expect([find.text('Writing the words…'), find.byType(LinearProgressIndicator)], [findsNothing, findsNothing]);
       expect(find.text('Play'), findsOneWidget);
@@ -771,10 +1004,10 @@ void main() {
       expect(find.text('The words did not come. Tap Try again on the note.'), findsOneWidget);
     });
 
-    testWidgets('with no model, a press asks first, and Not now gets nothing', (tester) async {
+    testWidgets('with no model, a hold asks first, and Not now gets nothing', (tester) async {
       relay.speechModel = ModelState.missing;
       await tester.pumpWidget(RelayApp(relay: relay));
-      await tester.tap(holdButton());
+      await holdNewNote(tester);
       await tester.pumpAndSettle();
       expect(find.text('Get the speech model?'), findsOneWidget);
       expect(find.textContaining('57 MB'), findsOneWidget);
@@ -785,45 +1018,50 @@ void main() {
       expect(find.textContaining('Getting the speech model'), findsNothing);
     });
 
-    testWidgets('with a screen reader, a tap with no model asks the first-time question once', (tester) async {
+    testWidgets('with a screen reader, New note writes on a tap and records once on its action; a tap saves', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(RelayApp(relay: relay));
+      tester.semantics.tap(find.semantics.byLabel('New note'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ComposeScreen), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      tester.semantics.performAction(find.semantics.byLabel('New note'), SemanticsAction.customAction,
+        args: CustomSemanticsAction.getIdentifier(const CustomSemanticsAction(label: 'Record a voice note')));
+      await tester.pump();
+      await tester.pump();
+      expect([relay.calls, find.text('Listening').evaluate().length], [['voice start'], 1]);
+      tester.semantics.tap(find.semantics.byLabel('Save the voice note'));
+      await tester.pump();
+      expect(relay.calls, ['voice start', 'voice end']);
+      semantics.dispose();
+    });
+
+    testWidgets('with a screen reader and no model, the action asks the first-time question', (tester) async {
       final semantics = tester.ensureSemantics();
       relay.speechModel = ModelState.missing;
       await tester.pumpWidget(RelayApp(relay: relay));
-      tester.semantics.tap(find.semantics.byLabel('Hold to talk'));
+      tester.semantics.performAction(find.semantics.byLabel('New note'), SemanticsAction.customAction,
+        args: CustomSemanticsAction.getIdentifier(const CustomSemanticsAction(label: 'Record a voice note')));
       await tester.pumpAndSettle();
       expect(find.text('Get the speech model?'), findsOneWidget);
       await tester.tap(find.text('Not now'));
       await tester.pumpAndSettle();
       expect(relay.calls, ['ask model', 'not now']);
-      // A finger's tap still asks once, not twice.
-      await tester.tap(holdButton());
-      await tester.pumpAndSettle();
-      expect(find.text('Get the speech model?'), findsOneWidget);
-      expect(relay.calls, ['ask model', 'not now', 'ask model']);
-      semantics.dispose();
-    });
-
-    testWidgets('with a screen reader and the model ready, a tap starts nothing', (tester) async {
-      final semantics = tester.ensureSemantics();
-      await tester.pumpWidget(RelayApp(relay: relay));
-      tester.semantics.tap(find.semantics.byLabel('Hold to talk'));
-      await tester.pumpAndSettle();
-      expect(relay.calls, isEmpty);
       semantics.dispose();
     });
 
     testWidgets('Get it shows the progress card, and typed notes still work', (tester) async {
       relay.speechModel = ModelState.missing;
       await tester.pumpWidget(RelayApp(relay: relay));
-      await tester.tap(holdButton());
+      await holdNewNote(tester);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Get it'));
       await tester.pumpAndSettle();
       expect(relay.calls, ['ask model', 'get model']);
       expect(find.text('Getting the speech model… 40%'), findsOneWidget);
       expect(find.text('You can type notes now. Voice notes start when it is done.'), findsOneWidget);
-      await tester.tap(holdButton());
-      await tester.pump();
+      await holdNewNote(tester);
       expect(find.textContaining('still coming'), findsOneWidget);
       expect(relay.calls, ['ask model', 'get model']);
     });
@@ -848,28 +1086,24 @@ void main() {
     testWidgets('a refused microphone says where to allow it', (tester) async {
       relay.startProblem = 'Relay Everything may not use the microphone. Allow it in the phone\'s settings.';
       await tester.pumpWidget(RelayApp(relay: relay));
-      final gesture = await tester.startGesture(tester.getCenter(holdButton()));
-      await tester.pump();
+      await holdNewNote(tester);
       expect(find.textContaining('may not use the microphone'), findsOneWidget);
       expect(find.text('Listening'), findsNothing);
-      await gesture.up();
-      await tester.pump();
     });
 
     testWidgets('Settings shows the model and its size; Remove returns the button to the first-time question', (tester) async {
       await tester.pumpWidget(RelayApp(relay: relay));
       await openSettings(tester);
       expect(find.text('Voice notes'), findsOneWidget);
-      expect(find.text('Speech model: on this phone, 57 MB'), findsOneWidget);
-      expect(find.text('Your voice is written into words on this phone. Recordings never leave it.'), findsOneWidget);
+      expect(find.text('On this phone, 57 MB. Your voice never leaves it.'), findsOneWidget);
       await tester.tap(find.text('Remove'));
       await tester.pumpAndSettle();
       expect(relay.calls, ['remove model']);
       expect(find.text('Remove'), findsNothing);
-      expect(find.textContaining('not on this phone'), findsOneWidget);
+      expect(find.textContaining('Not on this phone'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
-      await tester.tap(holdButton());
+      await holdNewNote(tester);
       await tester.pumpAndSettle();
       expect(find.text('Get the speech model?'), findsOneWidget);
       expect(relay.calls, ['remove model', 'ask model']);
@@ -888,7 +1122,7 @@ void main() {
               const NewFile(path: '/picked/c.mov', name: 'video.mov', size: 41943040)];
       }
       await tester.pumpWidget(RelayApp(relay: relay, picker: picker));
-      await tester.tap(find.text('New note'));
+      await tester.tap(newNote);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Add photo or file'));
       await tester.pumpAndSettle();
@@ -914,21 +1148,24 @@ void main() {
       expect(picks, [true, false]);
     });
 
-    testWidgets('a note shows its pictures small and other files by name and size; a tap opens one', (tester) async {
+    testWidgets('a row shows its first picture small; its page shows each picture and file, and a tap opens one',
+        (tester) async {
       relay.entries = [
         Entry(text: 'Receipt for the desk lamp', at: now, files: const [
           EntryFile(name: 'receipt.jpg', type: 'image/jpeg', size: 1258291, path: '/nowhere/receipt.jpg'),
           EntryFile(name: 'warranty.pdf', type: 'application/pdf', size: 245760, path: '/nowhere/warranty.pdf'),
         ]),
-        Entry(text: '', at: now, files: const [EntryFile(name: 'only.pdf', type: 'application/pdf', size: 512, path: '/nowhere/only.pdf')]),
+        Entry(text: '', at: now.subtract(const Duration(minutes: 1)),
+          files: const [EntryFile(name: 'only.pdf', type: 'application/pdf', size: 512, path: '/nowhere/only.pdf')]),
       ];
       await tester.pumpWidget(RelayApp(relay: relay));
       await tester.pump();
       expect(find.byTooltip('receipt.jpg'), findsOneWidget);
-      expect(find.text('receipt.jpg'), findsNothing);
-      expect([find.text('warranty.pdf'), find.text('240 KB'), find.text('only.pdf'), find.text('512 B')],
-        everyElement(findsOneWidget));
-      // A note of files alone shows no words, and no words about a recording.
+      // A note of files alone takes its first file's name as its title.
+      expect(find.text('only.pdf'), findsOneWidget);
+      await tester.tap(find.text('Receipt for the desk lamp'));
+      await tester.pumpAndSettle();
+      expect([find.text('warranty.pdf'), find.text('240 KB'), find.byTooltip('receipt.jpg')], everyElement(findsOneWidget));
       expect(find.text('No words, only the recording.'), findsNothing);
       await tester.tap(find.text('warranty.pdf'));
       await tester.tap(find.byTooltip('receipt.jpg'));
@@ -947,15 +1184,13 @@ void main() {
       return requests;
     }
 
-    testWidgets('opens the recording sheet and records at once; Stop saves', (tester) async {
+    testWidgets('records at once in the same listening card; a tap anywhere saves', (tester) async {
       await openWithRequest(tester);
-      expect(find.text('Recording'), findsOneWidget);
-      expect(find.text('Talk now. Tap Stop to save, or Cancel.'), findsOneWidget);
+      expect(find.text('Listening'), findsOneWidget);
+      expect(find.text('Tap anywhere to save.'), findsOneWidget);
       expect(relay.calls, ['voice start']);
-      await tester.tap(find.text('Stop'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(find.text('Recording'), findsNothing);
+      await tapAnywhere(tester);
+      expect(find.text('Listening'), findsNothing);
       expect(relay.calls, ['voice start', 'voice end']);
     });
 
@@ -963,25 +1198,15 @@ void main() {
       await openWithRequest(tester);
       await tester.tap(find.text('Cancel'));
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(find.text('Recording'), findsNothing);
+      expect(find.text('Listening'), findsNothing);
       expect(relay.calls, ['voice start', 'voice cancel']);
     });
 
-    testWidgets('a recording too short to keep says so', (tester) async {
-      relay.endProblem = 'Hold the button while you talk, then let go.';
-      await openWithRequest(tester);
-      await tester.tap(find.text('Stop'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(find.text('Too short to keep. Nothing was saved.'), findsOneWidget);
-    });
-
-    testWidgets('with no speech model, it asks to get it first, as Hold to talk does', (tester) async {
+    testWidgets('with no speech model, it asks to get it first, as a hold on New note does', (tester) async {
       relay.speechModel = ModelState.missing;
       await openWithRequest(tester);
       expect(find.text('Get the speech model?'), findsOneWidget);
-      expect(find.text('Recording'), findsNothing);
+      expect(find.text('Listening'), findsNothing);
       await tester.tap(find.text('Not now'));
       await tester.pumpAndSettle();
       expect(relay.calls, ['ask model', 'not now']);

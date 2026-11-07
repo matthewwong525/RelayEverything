@@ -113,12 +113,14 @@ ThemeData brandTheme(Brightness brightness) {
 
   final base = ThemeData(useMaterial3: true, colorScheme: scheme, fontFamily: brandFont, brightness: brightness);
   final text = base.textTheme.copyWith(
+    // The large app bar's title: *Notes* and *Settings*.
+    headlineMedium: base.textTheme.headlineMedium?.copyWith(fontSize: 32, fontWeight: FontWeight.w700, letterSpacing: -0.64),
     headlineSmall: base.textTheme.headlineSmall?.copyWith(fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.56),
     titleLarge: base.textTheme.titleLarge?.copyWith(fontSize: 20, fontWeight: _semi, letterSpacing: -0.4),
     titleMedium: base.textTheme.titleMedium?.copyWith(fontSize: 16, fontWeight: _semi),
     // Inter is drawn for text with no added letter spacing; Material's own 0.25 to 0.5 reads loose in it.
     bodyLarge: base.textTheme.bodyLarge?.copyWith(fontSize: 16, letterSpacing: 0),
-    bodyMedium: base.textTheme.bodyMedium?.copyWith(letterSpacing: 0),
+    bodyMedium: base.textTheme.bodyMedium?.copyWith(fontSize: 16, letterSpacing: 0),
     bodySmall: base.textTheme.bodySmall?.copyWith(fontSize: 13, letterSpacing: 0),
     labelLarge: base.textTheme.labelLarge?.copyWith(fontWeight: _semi),
   ).apply(bodyColor: c.ink, displayColor: c.ink);
@@ -128,11 +130,14 @@ ThemeData brandTheme(Brightness brightness) {
     textTheme: text,
     scaffoldBackgroundColor: c.paper,
     extensions: [c],
+    // No titleTextStyle: it would also set the large app bar's expanded title, which takes headlineMedium.
     appBarTheme: AppBarTheme(
-      backgroundColor: c.paper, foregroundColor: c.ink, surfaceTintColor: Colors.transparent, scrolledUnderElevation: 0,
-      titleTextStyle: text.titleLarge?.copyWith(color: c.ink)),
-    cardTheme: CardThemeData(color: c.card, surfaceTintColor: Colors.transparent, elevation: 0,
+      backgroundColor: c.paper, foregroundColor: c.ink, surfaceTintColor: Colors.transparent, scrolledUnderElevation: 0),
+    cardTheme: CardThemeData(color: c.card, surfaceTintColor: Colors.transparent, elevation: 0, margin: EdgeInsets.zero,
       shape: const RoundedRectangleBorder(borderRadius: _cardCorners)),
+    listTileTheme: ListTileThemeData(
+      titleTextStyle: text.bodyLarge?.copyWith(color: c.ink),
+      subtitleTextStyle: text.bodySmall?.copyWith(color: c.muted)),
     filledButtonTheme: FilledButtonThemeData(style: ButtonStyle(
       backgroundColor: WidgetStateProperty.resolveWith((states) => states.contains(WidgetState.disabled) ? null : c.accent),
       foregroundColor: WidgetStateProperty.resolveWith((states) => states.contains(WidgetState.disabled) ? null : c.onAccent),
@@ -156,7 +161,8 @@ ThemeData brandTheme(Brightness brightness) {
       errorBorder: OutlineInputBorder(borderRadius: _field, borderSide: BorderSide(color: c.danger, width: 1.5)),
       focusedErrorBorder: OutlineInputBorder(borderRadius: _field, borderSide: BorderSide(color: c.danger, width: 2)),
     ),
-    dialogTheme: DialogThemeData(backgroundColor: c.card, surfaceTintColor: Colors.transparent),
+    dialogTheme: DialogThemeData(backgroundColor: c.card, surfaceTintColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(borderRadius: _cardCorners)),
     bottomSheetTheme: BottomSheetThemeData(backgroundColor: c.card, surfaceTintColor: Colors.transparent),
     dividerTheme: DividerThemeData(color: c.line),
     progressIndicatorTheme: ProgressIndicatorThemeData(color: c.accent),
@@ -178,6 +184,36 @@ class AccentGlow extends StatelessWidget {
     final theme = Theme.of(context);
     return Theme(data: theme.copyWith(shadowColor: brandOf(context).accent.withValues(alpha: 0.6)), child: child);
   }
+}
+
+/// A small pill with a word: *Voice* and *Listening* in the spark color, a small live moment; *Typed* in accent text on
+/// accent soft. [large] is the size on a note's page and the listening card.
+class BrandTag extends StatelessWidget {
+  const BrandTag(this.label, {super.key, this.spark = false, this.large = false});
+
+  final String label;
+  final bool spark;
+  final bool large;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = brandOf(context);
+    return DecoratedBox(
+      decoration: ShapeDecoration(color: spark ? brand.spark : brand.accentSoft, shape: const StadiumBorder()),
+      child: Padding(
+        padding: large ? const EdgeInsets.symmetric(horizontal: 10, vertical: 4) : const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        child: Text(label, style: TextStyle(fontSize: large ? 13 : 11, fontWeight: _semi,
+          color: spark ? brand.onSpark : brand.accentText)),
+      ),
+    );
+  }
+}
+
+/// A quiet button: ink on [BrandColors.paper], for a second action inside a card, such as *Remove* or *Cancel*.
+ButtonStyle quietButton(BuildContext context) {
+  final brand = brandOf(context);
+  return TextButton.styleFrom(backgroundColor: brand.paper, foregroundColor: brand.ink,
+    textStyle: const TextStyle(fontSize: 15, fontWeight: _semi));
 }
 
 /// The *Signal R* mark from `brand/mark.svg`: a capital R on a 48 grid in round 4-unit strokes, its bowl sending two

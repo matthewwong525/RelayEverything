@@ -12,6 +12,8 @@ Relay Everything is in the share list of every app. Share a web page, text, phot
 3. Read what you share on the card. Add words in **Add words** if you like.
 4. Tap **Save**. The card closes.
 
+The card looks like the app: the paper color, a card that shows what you share, a green **Save** and the Inter font, in light and dark. It is the same as the card on Android, and it works with no network.
+
 Open the app once after you install it or update it, before the first share.
 
 ## Share on Android

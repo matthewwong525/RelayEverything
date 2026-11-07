@@ -14,7 +14,7 @@ what() {
     sed 's/^/- /' <<< "$specs"
   else
     echo "No scenarios were given, and no open change names the phone app. Check the main screens:"
-    echo "the timeline, a new note, Settings, and Hold to talk."
+    echo "the notes list, search, a new note, a voice note from holding New note, and Settings."
   fi
 }
 

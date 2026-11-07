@@ -71,6 +71,7 @@ On the iPhone test build, a voice note never gets its words. Matthew held the bu
 - **2026-11-07** — Check: `mobile/ios/fastlane/Fastfile` gets a new step that stops the iPhone build when the archive lacks a speech part, because a build with that fault must not reach TestFlight. It loosens nothing: it adds a check.
 - **2026-11-07** — Built and saved; local checks pass. Left: the first iOS build with the new check, then one voice note on Matthew's phone. Matthew asked whether whisper.cpp is the best speech engine: research says keep it and fix it, because it is small (57 MB) and works fully offline; the next choice is `sherpa_onnx` with Moonshine or Parakeet, after the app is timed on a real iPhone.
 - **2026-11-07** — Asked: publish now or after the phone test → Matthew chose publish now. The iPhone build passed its speech-parts check and is on TestFlight; his voice-note test on the phone comes after publish.
+- **2026-11-07** — Archive checkpoint. Assumed: after the Apple Notes layout went live in the same hour, the failed state moved into it. The list row says *The words did not come*, and the note's page shows the full message, **Play** and **Try again**, because the new list rows hold one title line and no buttons.
 
 ## Capabilities
 

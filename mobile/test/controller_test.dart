@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:drift/native.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart' show KeychainAccessibility;
 import 'package:flutter_test/flutter_test.dart';
@@ -915,7 +916,7 @@ void main() {
       await relay.load();
       await relay.addNote('Typed one');
       final before = relay.entries.length;
-      expect(await hold(relay, const Duration(milliseconds: 300)), contains('Hold the button'));
+      expect(await hold(relay, const Duration(milliseconds: 300)), 'Too short to keep. Nothing was saved.');
       await relay.wordsWritten();
       expect([relay.entries.length, recordings(), transcriber.heard, notices], [before, isEmpty, isEmpty, isEmpty]);
     });
@@ -938,6 +939,26 @@ void main() {
       await relay.wordsWritten();
       expect([relay.entries, await store.notes(), recordings()], [isEmpty, isEmpty, isEmpty]);
       expect(notices, ['No speech heard. Nothing was saved.']);
+    });
+
+    test('a microphone that does not stop says so, closes the card and keeps nothing; Cancel then does no harm', () async {
+      final relay = voiceController();
+      await relay.load();
+      microphone.stopError = Exception('stuck');
+      expect(await hold(relay, const Duration(seconds: 3)), 'The microphone did not stop right. Nothing was saved.');
+      await relay.cancelVoiceNote();
+      await relay.wordsWritten();
+      expect([relay.listening, relay.entries, await store.notes(), recordings(), transcriber.heard], [null, isEmpty, isEmpty, isEmpty, isEmpty]);
+    });
+
+    test('a voice note the phone cannot keep, such as on a full disk, says so, closes the card and keeps nothing', () async {
+      await store.close();
+      store = _FullStore();
+      final relay = voiceController();
+      await relay.load();
+      expect(await hold(relay, const Duration(seconds: 3)), 'The voice note did not save.');
+      await relay.wordsWritten();
+      expect([relay.listening, relay.entries, await store.notes(), recordings(), transcriber.heard], [null, isEmpty, isEmpty, isEmpty, isEmpty]);
     });
 
     test('a refused microphone says where to allow it, and records nothing', () async {
@@ -1332,4 +1353,12 @@ class _HeldHealth extends FakeHealth {
 
   @override
   Future<bool> allow() => answer.future;
+}
+
+/// A store whose disk is full: it can not keep a voice note.
+class _FullStore extends Store {
+  _FullStore() : super(NativeDatabase.memory());
+
+  @override
+  Future<void> addVoiceNote(LocalNote note) => throw Exception('disk full');
 }

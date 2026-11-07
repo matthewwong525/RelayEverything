@@ -6,7 +6,7 @@ import { connect, isIP } from 'node:net';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-/** Which network the browser last used: `{ network, reason, language, pid }`, never a host, an address, or a credential.
+/** Which network the browser last used: `{ network, route, reason, pid }`, never a host, an address, or a credential.
  * `pid` is the server process that wrote it, so a file left by another start never reads as current. */
 export const NETWORK_FILE = join(homedir(), '.wong-stack', 'camoufox', 'network.json');
 const NETWORK = {
@@ -24,13 +24,6 @@ export function networkLine(state, serverPid) {
   return state.reason === 'unreachable' ? 'direct (upstream unreachable)' : 'direct (no upstream proxy)';
 }
 
-/** The `BROWSE_LANGUAGE=` value for a network.json state and the server's pid; null, so no line, when it is stopped.
- * A state without `language` comes from an older start or a failed write: unknown, not a restart order. */
-export function languageLine(state, serverPid) {
-  if (!serverPid) return null;
-  if (state?.pid !== serverPid || !state.language) return 'unknown (started before this fix)';
-  return state.language === 'english' ? 'english' : 'random (browser tool changed)';
-}
 const MAX_REPLY = 16 * 1024;
 const MAX_BODY = 16 * 1024 * 1024;
 
@@ -142,11 +135,11 @@ function readBody(request) {
   });
 }
 
-/** Writes the network state, with `extra` kept in each write, when it changes; a write that fails never stops browsing. */
-function networkNote(file, extra) {
+/** Writes the network state when it changes; a write that fails never stops browsing. */
+function networkNote(file) {
   let last = null;
   return state => {
-    const text = `${JSON.stringify({ ...state, ...extra, pid: process.pid })}\n`;
+    const text = `${JSON.stringify({ ...state, pid: process.pid })}\n`;
     if (!file || text === last) return;
     last = text;
     try {
@@ -165,12 +158,9 @@ function networkClear(file) {
   } catch { /* no file, or not ours */ }
 }
 
-/** Starts an ephemeral listener; close destroys every downstream and upstream connection. `first` ({ host, port,
- * username?, password? }) and `upstream` ({ host, port, username, password }) are the routes, in that order, for
- * every connection to a non-local site; `first` is skipped for `downMs` after it fails a plain request, or a tunnel
- * that the upstream then opens. `networkFile` receives the network state, with the fields in `extra` (server.mjs's
- * `language`); `local` picks the hosts dialed directly. */
-export async function startForwarder({ connectMs = 15_000, startMs = 5000, downMs = 60_000, first = null, upstream = null, networkFile = null, extra = {}, local = isLocal } = {}) {
+/** Starts an ephemeral listener; close ends every connection. `first`, then `upstream`, carry each non-`local` site,
+ * and `first` waits `downMs` after a failure the upstream then carried; with neither, every connection is direct. */
+export async function startForwarder({ connectMs = 15_000, startMs = 5000, downMs = 60_000, first = null, upstream = null, networkFile = null, local = isLocal } = {}) {
   const sockets = new Set();
   const track = socket => {
     sockets.add(socket);
@@ -178,7 +168,7 @@ export async function startForwarder({ connectMs = 15_000, startMs = 5000, downM
     socket.once('close', () => sockets.delete(socket));
     return socket;
   };
-  const note = networkNote(networkFile, extra);
+  const note = networkNote(networkFile);
   // Each route records its own state; the upstream behind a first proxy is the backup.
   const routes = [
     first && { proxy: first, state: NETWORK.upstream, first: true },
@@ -278,7 +268,7 @@ export async function startForwarder({ connectMs = 15_000, startMs = 5000, downM
     client.once('error', stopDial);
     client.once('close', stopDial);
     // Nothing from the page leaves before a tunnel opens, so a failed route moves the same tunnel to the next one.
-    // The home proxy also refuses when only the site is down, so the Pi is skipped only once the backup opens it.
+    // A home proxy also refuses when only the site is down, so it is skipped only once the backup opens the tunnel.
     const open = ([route, ...later], firstFailed = false) => {
       if (!route) {
         settle();

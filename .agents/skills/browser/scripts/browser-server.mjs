@@ -8,11 +8,11 @@ import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { startArgs as addonArgs } from './addons.mjs';
-import { FILES, LAUNCH_MS, OLD_PROFILES, launchConfig, windowSetting } from './browse.mjs';
+import { FILES, LAUNCH_MS, OLD_PROFILES, launchConfig, proxySetting, windowSetting } from './browse.mjs';
 import { NETWORK_FILE, startForwarder } from './forwarder.mjs';
 import { moveLogins } from './login-move.mjs';
+import { resolveFirst, resolveUpstream } from './proxy-lines.mjs';
 import { ADDON_PAGE, ADDON_REFUSAL, MAX_FRAMES, buildSnapshot, frameHasBoxes, frameLabel, frameSkipped, windowSnapshot } from './refs.mjs';
-import { resolveFirst, resolveUpstream } from './server.mjs';
 import { isMain } from '../../memory/scripts/lib/cli.mjs';
 
 /** Xvfb as camofox ran it: one 1280x720 screen, no TCP, and the extensions a real desktop lacks turned off. */
@@ -497,9 +497,19 @@ export function windowLaunch({ platform, setting, env = {} }) {
   return { args: shown ? ['--window'] : [], env: screen, record: shown ? { window: true } : {}, xvfb: linux && !shown };
 }
 
+const savedLines = () => ({ first: resolveFirst(), upstream: resolveUpstream() });
+
+/** The local forwarder through the saved routes when the proxy setting is on: its launch flags and its close; none
+ * when off, and the saved lines are not read. A forwarder that fails to start fails the browser's start. */
+export async function startProxy(on, start = startForwarder, lines = savedLines) {
+  if (!on) return { on: false, args: [], close: () => {} };
+  const proxy = await start({ ...lines(), networkFile: NETWORK_FILE });
+  return { on: true, args: ['--proxy', `http://127.0.0.1:${proxy.port}`], close: () => proxy.close() };
+}
+
 const record = info => writeFileSync(FILES.server, `${JSON.stringify({ pid: process.pid, ...info })}\n`, { mode: 0o600 });
 
-/** Takes the port, then starts the route forwarder, the screen, the browser and the routes; /health says ok
+/** Takes the port, then starts the proxy when it is on, the screen, the browser and the routes; /health says ok
  * only once the browser is up. A failed start leaves its reason in server.json. */
 async function main() {
   const port = Number(process.env.BROWSE_SERVER_PORT);
@@ -519,8 +529,7 @@ async function main() {
   try {
     await new Promise((resolve, reject) => server.once('error', reject).listen(port, '127.0.0.1', resolve));
     stops.push(() => new Promise(done => { handle?.close(); server.close(done); server.closeAllConnections(); }));
-    // This repo's browser routes: every start goes through the forwarder, with no proxy setting (wiki/development/browser-proxy.md).
-    const proxy = await startForwarder({ first: resolveFirst(), upstream: resolveUpstream(), networkFile: NETWORK_FILE, extra: { language: 'english' } });
+    const proxy = await startProxy(proxySetting());
     stops.push(() => proxy.close());
     const setting = windowSetting();
     const windowed = windowLaunch({ platform: process.platform, setting, env: process.env });
@@ -528,14 +537,14 @@ async function main() {
     if (screen) stops.push(() => screen.child.kill());
     // A broken add-on never stops a start: the browser starts without it.
     const addon = await addonArgs().catch(() => []);
-    const config = await launchConfig(['--proxy', `http://127.0.0.1:${proxy.port}`, ...(screen ? ['--display', screen.display] : []), ...windowed.args, '--fingerprint', FILES.fingerprint, ...addon]);
+    const config = await launchConfig([...proxy.args, ...(screen ? ['--display', screen.display] : []), ...windowed.args, '--fingerprint', FILES.fingerprint, ...addon]);
     if (config.error) throw new Error(config.error);
     const { firefox } = createRequire(import.meta.url)(join(config.driver, 'index.js'));
     const context = await firefox.launchPersistentContext(FILES.profile, persistentOptions(config, windowed.env));
     stops.push(() => context.close());
     await moveLogins(context, { profilesDir: OLD_PROFILES, marker: FILES.marker }).catch(() => {});
     handle = routes(context, readFileSync(FILES.key, 'utf8').trim());
-    record({ port, display: screen?.display ?? null, ...windowed.record, windowSetting: setting, library: config.library, build: config.build, locale: config.locale });
+    record({ port, display: screen?.display ?? null, ...windowed.record, proxy: proxy.on, windowSetting: setting, library: config.library, build: config.build, locale: config.locale });
     // A browser that quits on its own takes the server with it, so the next command starts a fresh one.
     context.on('close', () => void stop(1));
   } catch (error) {

@@ -57,7 +57,7 @@ Read one note by its id, with the places visited within 30 minutes of it and the
 
 `GET /v1/days/{day}` · `getDay`
 
-One day: how many notes, steps, sleep minutes, heart rate, workouts, and each place visited.
+One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, each place visited, and the calendar's events with the people in each.
 
 | Field | In | Type | Required | What it holds |
 |---|---|---|---|---|
@@ -68,11 +68,11 @@ One day: how many notes, steps, sleep minutes, heart rate, workouts, and each pl
 
 `GET /v1/health` · `getHealth`
 
-One value per hour or day for one kind of health data: steps and sleep minutes as `total`, heart rate as min, max and average, workouts as a count and minutes. Sleep counts on the day it ends.
+One value per hour or day for one kind of health data: steps, sleep, mindful minutes and water (ml) as `total`; heart rate and blood pressure (mmHg) as min, max and average; workouts as a count and minutes; weight (kg) as `latest`; resting heart rate, heart rate variability (ms; hrv_sdnn from iPhone, hrv_rmssd from Android) as `average`; blood oxygen (%) as min and average; cycle flow as the highest `flow`, 0 none to 3 heavy. Sleep counts on the day it ends.
 
 | Field | In | Type | Required | What it holds |
 |---|---|---|---|---|
-| `type` | query | "steps" or "heart_rate" or "sleep" or "workout" | yes | Which health data. |
+| `type` | query | "steps" or "heart_rate" or "sleep" or "workout" or "weight" or "resting_heart_rate" or "hrv_sdnn" or "hrv_rmssd" or "blood_oxygen" or "blood_pressure_systolic" or "blood_pressure_diastolic" or "cycle_flow" or "mindful" or "water" | yes | Which health data. |
 | `from` | query | string | yes | The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
 | `to` | query | string | yes | The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
 | `bucket` | query | "hour" or "day" | no | One value per hour or per day, at most 400. |
@@ -89,6 +89,21 @@ The places visited from one time to another, oldest first: each place's name, wh
 | `from` | query | string | yes | The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
 | `to` | query | string | yes | The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
 | `limit` | query | integer | no | How many visits, at most 200. Read on from `next`. |
+| `timezone` | query | string | no | An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out. |
+
+## Read calendar events
+
+`GET /v1/calendar` · `listEvents`
+
+The events from the phone's calendars that overlap one time to another, with each one's calendar, title, time, place, notes and people. With `q`, only events whose title, place, notes or people hold every word, newest first; without, in start order.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `from` | query | string | yes | The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
+| `to` | query | string | yes | The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
+| `q` | query | string | no | The words to find. |
+| `limit` | query | integer | no | How many events, at most 100. |
+| `cursor` | query | string | no | The last answer's `nextCursor`, to read the next page. |
 | `timezone` | query | string | no | An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out. |
 
 ## Search saved chats

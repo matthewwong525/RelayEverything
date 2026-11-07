@@ -16,6 +16,7 @@ import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/settings.dart';
 import 'package:relay_app/data/store.dart';
 import 'package:relay_app/data/webhook.dart';
+import 'package:relay_app/sync/calendar.dart';
 import 'package:relay_app/sync/health.dart';
 import 'package:relay_app/sync/location.dart';
 import 'package:relay_app/sync/native.dart';
@@ -210,14 +211,52 @@ class FakeHealth implements HealthSource {
   }
 }
 
-HealthDataPoint reading(HealthDataType type, DateTime from, DateTime to, {num value = 0, String sourceId = 'com.apple.health'}) =>
+HealthDataPoint reading(HealthDataType type, DateTime from, DateTime to, {num value = 0, String sourceId = 'com.apple.health',
+  HealthValue? as}) =>
   HealthDataPoint(
     uuid: '${type.name}-${from.millisecondsSinceEpoch}', type: type, unit: HealthDataUnit.COUNT, dateFrom: from, dateTo: to,
-    value: type == HealthDataType.WORKOUT
+    value: as ?? (type == HealthDataType.WORKOUT
       ? WorkoutHealthValue(workoutActivityType: HealthWorkoutActivityType.RUNNING)
-      : NumericHealthValue(numericValue: value),
+      : NumericHealthValue(numericValue: value)),
     sourcePlatform: HealthPlatformType.appleHealth, sourceDeviceId: 'device', sourceId: sourceId, sourceName: 'Health',
   );
+
+/// The phone's calendars: [list] and [items], read only through the [CalendarSource] calls, each kept.
+class FakeCalendar implements CalendarSource {
+  bool allowed = true;
+  int asked = 0;
+  List<PhoneCalendar> list = const [PhoneCalendar(id: 'work', name: 'Work', account: 'sam@example.com'),
+    PhoneCalendar(id: 'holidays', name: 'US Holidays')];
+  List<PhoneEvent> items = [];
+  Object? error;
+  final reads = <(DateTime, DateTime, Set<String>)>[];
+  int listed = 0;
+
+  @override
+  Future<bool> allow() async {
+    asked++;
+    return allowed;
+  }
+
+  @override
+  Future<List<PhoneCalendar>> calendars() async {
+    listed++;
+    if (error != null) throw error!;
+    return list;
+  }
+
+  @override
+  Future<List<PhoneEvent>> events(DateTime from, DateTime to, Set<String> calendarIds) async {
+    reads.add((from, to, calendarIds));
+    if (error != null) throw error!;
+    return [for (final event in items) if (calendarIds.contains(event.calendarId)) event];
+  }
+}
+
+/// An event on the work calendar, one hour long.
+PhoneEvent meeting(String id, DateTime start, {String title = 'Board meeting', String calendar = 'work'}) =>
+  PhoneEvent(calendarId: calendar, eventId: id, title: title, start: start, end: start.add(const Duration(hours: 1)),
+    people: const [EventPerson(name: 'Sam', email: 'sam@example.com', organizer: true)]);
 
 /// A folder of its own for one test's recordings and model, deleted after it.
 Directory tempFolder() {

@@ -42,7 +42,7 @@ String _placeLine(Relay relay) {
 }
 
 /// Each switch acts at once and asks for its permission only when turned on. Sending is off until the person turns it
-/// on; health and location history sit under it and work only with it.
+/// on; health, the calendar and location history sit under it and work only with it.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.relay, this.scanner});
 
@@ -80,12 +80,28 @@ class SettingsScreen extends StatelessWidget {
               onChanged: (on) => on ? _choosePlace(context) : _stopSending(context),
             ),
             SwitchListTile(
-              title: const Text('Health: steps, heart rate, sleep, workouts'),
+              title: const Text('Health: steps, heart rate, sleep and more'),
               subtitle: Text(settings.health ? sentLine(relay.healthSent, 'reading', DateTime.now())
-                : 'Sends new readings about each hour, also while the app is closed.'),
+                : 'Sends the last 90 days, then new readings about each hour, also while the app is closed. You choose each '
+                  'type in the phone\'s health permission.'),
               value: settings.health,
               onChanged: sending ? (on) => _apply(context, relay.setHealth(on)) : null,
             ),
+            SwitchListTile(
+              title: const Text('Calendar'),
+              subtitle: Text(settings.calendar ? sentLine(relay.calendarSent, 'event', DateTime.now())
+                : 'Sends your events from the phone\'s calendars, 90 days back and ahead. It never changes an event.'),
+              value: settings.calendar,
+              onChanged: sending ? (on) => _apply(context, relay.setCalendar(on)) : null,
+            ),
+            if (settings.calendar)
+              for (final calendar in relay.calendars) SwitchListTile(
+                contentPadding: const EdgeInsets.only(left: 32, right: 16),
+                title: Text(calendar.name),
+                subtitle: calendar.account == null || calendar.account!.isEmpty ? null : Text(calendar.account!),
+                value: !settings.calendarsOff.contains(calendar.id),
+                onChanged: (on) => relay.setCalendarShown(calendar.id, on),
+              ),
             SwitchListTile(
               title: const Text('Location history'),
               subtitle: Text(settings.history ? sentLine(relay.pointsSent, 'point', DateTime.now())
@@ -165,7 +181,7 @@ class SettingsScreen extends StatelessWidget {
     final there = relay.settings.place == SendPlace.webhook ? 'at your webhook' : 'on your Relay Everything server';
     final sure = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
       title: const Text('Stop sending?'),
-      content: Text('New notes stay on this phone. Notes already $there stay there. Health and location stop.'),
+      content: Text('New notes stay on this phone. Notes already $there stay there. Health, the calendar and location stop.'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
         FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Stop sending')),

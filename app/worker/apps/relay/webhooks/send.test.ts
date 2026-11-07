@@ -264,6 +264,21 @@ it("still sends a note.updated row already waiting from before the server stoppe
   expect(webhook()).toMatchObject({ sent_seq: 2 });
 });
 
+it("sends changed and removed calendar events only to a webhook that takes the calendar", async () => {
+  hook("cal", { kinds: '["notes","calendar"]' });
+  hook("health", { kinds: '["notes","health"]' });
+  const event = { key: "work:1:1", calendar: "Work", title: "Board meeting", start: NOW, end: NOW + 60 * MINUTE, allDay: false, people: [] };
+  await call(phone, "POST", "calendar", { events: [event, { ...event, key: "work:2:2", title: "Sync" }], removed: [] });
+  await call(phone, "POST", "calendar", { events: [{ ...event, title: "Board meeting, moved", start: NOW + 60 * MINUTE, end: NOW + 120 * MINUTE }],
+    removed: ["work:2:2"] });
+  expect(queue.sent).toEqual([wakeUp("cal"), wakeUp("cal")]);
+  await deliver(wakeUp("cal"), wakeUp("health"));
+  expect(types()).toEqual(["calendar.events"]);
+  expect(bodies()[0].data.events.map((item: { title: string; status: string }) => [item.title, item.status]))
+    .toEqual([["Board meeting, moved", "changed"], ["Sync", "removed"]]);
+  expect(webhook("health").sent_seq).toBe(0);
+});
+
 it("sends 20 messages in a run, then queues the webhook again for the rest", async () => {
   hook();
   for (let index = 0; index < 21; index++) ringNote(`aaaaaaaa-0000-4000-8000-${String(index).padStart(12, "0")}`);

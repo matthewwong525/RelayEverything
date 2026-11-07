@@ -14,7 +14,7 @@ import { backfill } from "./sweep.ts";
 
 const RECENT = 20;
 
-const kind = z.enum(["notes", "health", "locations"]);
+const kind = z.enum(["notes", "health", "locations", "calendar"]);
 const id = z.string().min(1).max(64).describe("The webhook's id.");
 const attempt = z.strictObject({ at: z.number(), type: z.string(), status: z.number().nullable(), ms: z.number(),
   error: z.string().nullable(), first: z.number().nullable(), last: z.number().nullable() });
@@ -29,7 +29,7 @@ const webhook = z.strictObject({
 const one = z.strictObject({ webhook });
 const name = z.string().trim().min(1).max(80).describe("A name for the webhook, such as the database's.");
 const url = z.string().max(2000).describe("The https address Relay Everything sends to.");
-const kinds = z.array(kind).max(3).describe("What it takes besides notes, which always go: health, locations or both.");
+const kinds = z.array(kind).max(4).describe("What it takes besides notes, which always go: any of health, locations and calendar.");
 
 type View = z.infer<typeof webhook>;
 type Row = Hook & { waiting: number };
@@ -57,8 +57,8 @@ const failure = (code: string, status: 400 | 404) => Response.json({ error: { co
 const notFound = () => failure("not_found", 404);
 /** The webhook as one answer, or not found when `row` is null: no webhook had the id. */
 const answer = async (db: Db, row: unknown, id: string) => row ? Response.json({ webhook: (await views(db, id))[0] }) : notFound();
-/** Notes always go; the ticks add health and location. */
-const kindsOf = (ticked: Kind[]) => JSON.stringify(["notes", ...(["health", "locations"] as const).filter(item => ticked.includes(item))]);
+/** Notes always go; the ticks add health, location and calendar. */
+const kindsOf = (ticked: Kind[]) => JSON.stringify(["notes", ...(["health", "locations", "calendar"] as const).filter(item => ticked.includes(item))]);
 const refusalOf = (address: string, { url: page }: Pick<ActionCall, "url">) => {
   const refusal = checkAddress(address, page.hostname);
   return refusal && failure(refusal, 400);
@@ -87,7 +87,7 @@ export const list = owner({
 
 export const add = owner({
   operationId: "relay.webhooks-add", summary: "Add a webhook",
-  description: "Add an address that gets each new note, and the health and location ticked for it. The answer holds its secret, once.",
+  description: "Add an address that gets each new note, and the health, location and calendar ticked for it. The answer holds its secret, once.",
   input: z.strictObject({ name, url, kinds }), output: one.extend({ secret: z.string().describe("Shown this once.") }),
   handler: async (_env, db, input: { name: string; url: string; kinds: Kind[] }, call, space) => {
     const refusal = refusalOf(input.url, call);

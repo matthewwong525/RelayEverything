@@ -10,7 +10,7 @@ const DAY = 86_400_000;
 const hook = (id: string, more: Partial<Webhook> = {}): Webhook => ({ id, name: `Database ${id}`, url: `https://db${id}.example.com/relay`,
   kinds: ["notes"], state: "working", waiting: 0, lastStatus: null, lastError: null, lastSentAt: null, nextTryAt: null, failingSince: null,
   createdAt: NOW, attempts: [], ...more });
-const WORKING = hook("1", { kinds: ["notes", "health", "locations"], waiting: 3, lastStatus: 200, lastSentAt: NOW });
+const WORKING = hook("1", { kinds: ["notes", "health", "locations", "calendar"], waiting: 3, lastStatus: 200, lastSentAt: NOW });
 const FAILING = hook("2", { state: "failing", waiting: 12, lastStatus: 503, lastError: "Answered 503.", failingSince: NOW, nextTryAt: NOW + DAY });
 const PAUSED = hook("3", { state: "paused" });
 
@@ -58,7 +58,7 @@ it("shows each webhook's state, what it takes, what waits and its last answer", 
   await open();
   const working = card("Database 1");
   expect(working.getByText("Working")).toBeTruthy();
-  expect(working.getByText(/^db1\.example\.com · notes, health, location history · 3 waiting · last sent .+ · last answer: answered 200$/)).toBeTruthy();
+  expect(working.getByText(/^db1\.example\.com · notes, health, location history, calendar · 3 waiting · last sent .+ · last answer: answered 200$/)).toBeTruthy();
   expect(card("Database 2").getByText(/12 waiting · next try .+ · failing since .+ · last answer: Answered 503\.$/)).toBeTruthy();
   expect(card("Database 2").getByText("Failing")).toBeTruthy();
   expect(card("Database 3").getByText(/· nothing sent yet$/)).toBeTruthy();
@@ -89,9 +89,10 @@ it("adds a webhook with the kinds ticked, shows its secret once, and starts fres
   expect((again.getByLabelText("Address") as HTMLInputElement).value).toBe("https://");
   fireEvent.change(again.getByLabelText("Name"), { target: { value: "  Archive " } });
   fireEvent.click(again.getByRole("checkbox", { name: "Location history" }));
+  fireEvent.click(again.getByRole("checkbox", { name: /Calendar/ }));
   answer = () => Response.json({ webhook: hook("10", { name: "Archive" }), secret: "whsec_second" });
   await press("Add", again);
-  expect(posts().at(-1)?.input).toMatchObject({ name: "Archive", kinds: ["locations"] });
+  expect(posts().at(-1)?.input).toMatchObject({ name: "Archive", kinds: ["locations", "calendar"] });
   await press("Done");
   await press("Add a webhook");
   await press("Cancel");

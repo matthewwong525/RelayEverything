@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { Webhook } from "standardwebhooks";
 import { afterEach, expect, it, vi } from "vitest";
 import * as format from "./format.ts";
-import { healthSamples, jsonSchema, locationPoints, message, noteCreated, noteUpdated, webhookTest, type NoteRow } from "./format.ts";
+import { calendarEvents, healthSamples, jsonSchema, locationPoints, message, noteCreated, noteUpdated, webhookTest, type NoteRow } from "./format.ts";
 import { base64, newSecret, signedHeaders } from "./sign.ts";
 
 const schemaFile = new URL("../../../../../site/public/webhooks/v1.schema.json", import.meta.url);
@@ -65,6 +65,20 @@ it("publishes the schema the format makes", () => {
   expect(jsonSchema().toLowerCase()).not.toContain("pebble");
 });
 
+it("sends calendar events with their status, people and times in ISO 8601", () => {
+  const meeting = { id: 7, ...device, event_key: "work:5F1C2B:1793800800000", calendar: "Work", title: "Board meeting", start_at: AT,
+    end_at: AT + 3_600_000, all_day: 0, location: "Office, room 2", notes: null, url: null,
+    people: '[{"name":"Sam Lee","email":"sam@example.com","organizer":true},{}]', removed_at: null };
+  const built = calendarEvents([meeting, { ...meeting, id: 8, all_day: 1, people: "[]", removed_at: AT }], AT);
+  expect(message.parse(built)).toEqual(built);
+  const { events } = built.data as { events: Record<string, unknown>[] };
+  expect(events[0]).toEqual({ id: 7, status: "changed", device: { id: device.device_id, name: "iPad" },
+    key: "work:5F1C2B:1793800800000", calendar: "Work", title: "Board meeting", start: "2026-11-04T14:01:02.000Z", end: "2026-11-04T15:01:02.000Z",
+    all_day: false, location: "Office, room 2", notes: null, url: null, people: [{ name: "Sam Lee", email: "sam@example.com", organizer: true }, {}] });
+  expect(events[1]).toMatchObject({ id: 8, status: "removed", all_day: true, people: [] });
+  expect(() => message.parse({ ...built, data: { events: [{ ...events[0], status: "moved" }] } })).toThrow();
+});
+
 it("lists a note's files by name, type and size, never their bytes, and leaves the list out of a note with none", () => {
   const pdf = { id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 245_760 };
   const built = noteCreated(typed, null, AT, [{ ...pdf, file_key: "people/x/attachments/file-pdf-0001" } as typeof pdf]);
@@ -81,7 +95,7 @@ it("takes a note's file with its bytes, which only the phone sends: no server bu
     file: { id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 4, base64: "AAAAGA==" } } };
   expect(message.parse(file)).toEqual(file);
   expect(() => message.parse({ ...file, data: { ...file.data, file: { ...file.data.file, base64: undefined } } })).toThrow();
-  expect(Object.keys(format).sort()).toEqual(["healthSamples", "jsonSchema", "locationPoints", "message", "noteCreated", "noteUpdated",
+  expect(Object.keys(format).sort()).toEqual(["calendarEvents", "healthSamples", "jsonSchema", "locationPoints", "message", "noteCreated", "noteUpdated",
     "webhookTest"]);
   for (const name of ["send.ts", "routes.ts", "sweep.ts"]) {
     expect(readFileSync(new URL(name, import.meta.url), "utf8"), name).not.toContain("note.file");
@@ -93,7 +107,7 @@ const fixtures = new URL("../../../../../mobile/test/fixtures/webhook/", import.
 
 it("takes each message the phone builds, and its signature passes the server's own signing", async () => {
   const names = readdirSync(fixtures).filter(name => name.endsWith(".json")).sort();
-  expect(names).toEqual(["health.samples.json", "location.points.json", "note.created.json", "note.file.json", "webhook.test.json"]);
+  expect(names).toEqual(["calendar.events.json", "health.samples.json", "location.points.json", "note.created.json", "note.file.json", "webhook.test.json"]);
   for (const name of names) {
     const { secret, headers, body } = JSON.parse(readFileSync(new URL(name, fixtures), "utf8")) as
       { secret: string; headers: Record<string, string>; body: string };

@@ -3,14 +3,14 @@
 import { spaceOf, vouch, type Files, type PersonSpace, type SpaceEnv } from "../space.ts";
 import { MINUTE, type Db, type Env } from "../store.ts";
 import { checkAddress } from "./address.ts";
-import { healthSamples, locationPoints, noteCreated, noteUpdated, type AttachmentRow, type HealthRow, type LocationRow,
+import { calendarEvents, healthSamples, locationPoints, noteCreated, noteUpdated, type AttachmentRow, type EventRow, type HealthRow, type LocationRow,
   type NoteRow } from "./format.ts";
 import { BEHIND, TAKES } from "./log.ts";
 import { base64, signedHeaders } from "./sign.ts";
 
 /** What a webhook takes, as the owner ticks it; notes always. */
-export type Kind = "notes" | "health" | "locations";
-type Entry = { seq: number; kind: "note.created" | "note.updated" | "health" | "location"; ref: string; logged_at: number };
+export type Kind = "notes" | "health" | "locations" | "calendar";
+type Entry = { seq: number; kind: "note.created" | "note.updated" | "health" | "location" | "calendar"; ref: string; logged_at: number };
 export type Hook = { id: string; name: string; url: string; secret: string; kinds: string; active: number; sent_seq: number;
   pending_seq: number | null; backfill_seq: number | null; lease_until: number | null; tries: number; next_try_at: number | null;
   failing_since: number | null; last_status: number | null; last_error: string | null; last_sent_at: number | null; created_at: number };
@@ -65,8 +65,8 @@ const release = (db: Db, id: string, lease: number) =>
 const behind = async (db: Db, id: string) =>
   !!await db.prepare(`SELECT 1 FROM relay_webhooks w WHERE w.id = ? AND ${BEHIND}`).bind(id, Date.now()).first();
 
-/** The next group: a note alone, or up to 500 health samples or location points in a row. A frozen group ends at
- *  `pending_seq`, so every retry sends the same one. */
+/** The next group: a note alone, or up to 500 health samples, location points or calendar events in a row. A frozen
+ *  group ends at `pending_seq`, so every retry sends the same one. */
 async function groupOf(db: Db, hook: Hook): Promise<Entry[]> {
   const { results } = await db.prepare(`SELECT o.seq, o.kind, o.ref, o.logged_at FROM relay_outbox o, relay_webhooks w
     WHERE w.id = ? AND o.seq > w.sent_seq AND (w.pending_seq IS NULL OR o.seq <= w.pending_seq) AND ${TAKES}
@@ -103,6 +103,12 @@ async function bodyOf(files: Files, db: Db, group: Entry[]): Promise<{ type: str
     const { results } = await db.prepare(`SELECT l.*, d.name AS device_name FROM relay_locations l JOIN relay_devices d ON d.id = l.device_id
       WHERE l.id ${inOrder}`).bind(ids(group)).all<LocationRow>();
     return locationPoints(results, at);
+  }
+  if (first.kind === "calendar") {
+    // An event changed twice in one group goes once, as it is now.
+    const { results } = await db.prepare(`SELECT e.*, d.name AS device_name FROM relay_calendar_events e
+      JOIN relay_devices d ON d.id = e.device_id WHERE e.id ${inOrder}`).bind(ids(group)).all<EventRow>();
+    return calendarEvents(results, at);
   }
   const row = await db.prepare(NOTE).bind(first.ref).first<NoteRow>();
   if (!row) return "skip";

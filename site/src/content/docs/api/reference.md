@@ -45,7 +45,7 @@ Send the input as a JSON body.
 
 `POST /apps/relay/api/health` · `relay.samples-add` · writes · called by a phone key
 
-Store steps, heart rate, sleep and workouts from Apple Health or Health Connect, once per type, time span and source.
+Store health samples from Apple Health or Health Connect, such as steps, sleep, weight and blood pressure, once per type, time span and source.
 
 ### Input
 
@@ -54,7 +54,7 @@ Send the input as a JSON body.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `samples` | array of object | yes | Up to 500 rows; a row stored before is skipped. |
-| `samples[].type` | "steps" or "heart_rate" or "sleep" or "workout" | yes |  |
+| `samples[].type` | "steps" or "heart_rate" or "sleep" or "workout" or "weight" or "resting_heart_rate" or "hrv_sdnn" or "hrv_rmssd" or "blood_oxygen" or "blood_pressure_systolic" or "blood_pressure_diastolic" or "cycle_flow" or "mindful" or "water" | yes |  |
 | `samples[].start` | integer | yes |  |
 | `samples[].end` | integer | yes |  |
 | `samples[].value` | number | yes |  |
@@ -93,6 +93,42 @@ Send the input as a JSON body.
 |---|---|---|---|
 | `received` | integer | yes |  |
 | `added` | integer | yes |  |
+
+## Store a phone's calendar events
+
+`POST /apps/relay/api/calendar` · `relay.calendar-add` · writes · called by a phone key
+
+Store the phone's new and changed calendar events, and mark the removed ones, once per device and occurrence.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `events` | array of object | yes | Up to 200 new or changed events; one that has not changed is skipped. |
+| `events[].key` | string | yes | The phone's key for one occurrence: `<calendar>:<event>:<start ms>`. |
+| `events[].calendar` | string | yes | The calendar's name; its id stays on the phone. |
+| `events[].title` | string | yes |  |
+| `events[].start` | integer | yes |  |
+| `events[].end` | integer | yes |  |
+| `events[].allDay` | boolean | yes |  |
+| `events[].location` | string | no |  |
+| `events[].notes` | string | no |  |
+| `events[].url` | string | no |  |
+| `events[].people` | array of object | yes |  |
+| `events[].people[].name` | string | no |  |
+| `events[].people[].email` | string | no |  |
+| `events[].people[].organizer` | boolean | no |  |
+| `removed` | array of string | yes | Up to 200 keys of events gone from the phone. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `received` | integer | yes |  |
+| `changed` | integer | yes |  |
+| `removed` | integer | yes |  |
 
 ## Check a device key
 
@@ -156,7 +192,7 @@ Send the input as query parameters.
 
 `GET /apps/relay/api/summary` · `relay.summary` · reads · called by a signed-in person only, not a device key
 
-Count a day's notes, total its health samples and list its places.
+Count a day's notes, total its health samples, and list its places and calendar events.
 
 ### Input
 
@@ -182,6 +218,26 @@ Send the input as query parameters.
 | `workouts` | object | yes |  |
 | `workouts.count` | number | yes |  |
 | `workouts.minutes` | number | yes |  |
+| `weightKg` | number | no |  |
+| `restingHeartRate` | number | no |  |
+| `hrvSdnn` | number | no |  |
+| `hrvRmssd` | number | no |  |
+| `bloodOxygen` | object | no |  |
+| `bloodOxygen.min` | number | yes |  |
+| `bloodOxygen.average` | number | yes |  |
+| `bloodPressure` | array of object | no |  |
+| `bloodPressure[].at` | number | yes |  |
+| `bloodPressure[].upper` | number | yes |  |
+| `bloodPressure[].lower` | number | yes |  |
+| `cycleFlow` | number | no |  |
+| `mindfulMinutes` | number | no |  |
+| `waterMl` | number | no |  |
+| `events` | array of object | yes |  |
+| `events[].title` | string | yes |  |
+| `events[].start` | number | yes |  |
+| `events[].end` | number | yes |  |
+| `events[].allDay` | boolean | yes |  |
+| `events[].people` | array of string | yes |  |
 | `places` | array of object | yes |  |
 | `places[].name` | string | yes |  |
 | `places[].lat` | number | yes |  |
@@ -207,7 +263,7 @@ It takes no input.
 | `webhooks[].id` | string | yes |  |
 | `webhooks[].name` | string | yes |  |
 | `webhooks[].url` | string | yes |  |
-| `webhooks[].kinds` | array of "notes" or "health" or "locations" | yes |  |
+| `webhooks[].kinds` | array of "notes" or "health" or "locations" or "calendar" | yes |  |
 | `webhooks[].state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
 | `webhooks[].waiting` | integer | yes | How many stored items wait to be sent. |
 | `webhooks[].lastStatus` | number or null | yes |  |
@@ -240,7 +296,7 @@ It takes no input.
 
 `POST /apps/relay/api/webhooks` · `relay.webhooks-add` · writes · called by a signed-in person only, not a device key
 
-Add an address that gets each new note, and the health and location ticked for it. The answer holds its secret, once.
+Add an address that gets each new note, and the health, location and calendar ticked for it. The answer holds its secret, once.
 
 ### Input
 
@@ -250,7 +306,7 @@ Send the input as a JSON body.
 |---|---|---|---|
 | `name` | string | yes | A name for the webhook, such as the database's. |
 | `url` | string | yes | The https address Relay Everything sends to. |
-| `kinds` | array of "notes" or "health" or "locations" | yes | What it takes besides notes, which always go: health, locations or both. |
+| `kinds` | array of "notes" or "health" or "locations" or "calendar" | yes | What it takes besides notes, which always go: any of health, locations and calendar. |
 
 ### Output
 
@@ -260,7 +316,7 @@ Send the input as a JSON body.
 | `webhook.id` | string | yes |  |
 | `webhook.name` | string | yes |  |
 | `webhook.url` | string | yes |  |
-| `webhook.kinds` | array of "notes" or "health" or "locations" | yes |  |
+| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" | yes |  |
 | `webhook.state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
 | `webhook.waiting` | integer | yes | How many stored items wait to be sent. |
 | `webhook.lastStatus` | number or null | yes |  |
@@ -305,7 +361,7 @@ Send the input as a JSON body.
 | `id` | string | yes | The webhook's id. |
 | `name` | string | no | A name for the webhook, such as the database's. |
 | `url` | string | no | The https address Relay Everything sends to. |
-| `kinds` | array of "notes" or "health" or "locations" | no | What it takes besides notes, which always go: health, locations or both. |
+| `kinds` | array of "notes" or "health" or "locations" or "calendar" | no | What it takes besides notes, which always go: any of health, locations and calendar. |
 | `active` | boolean | no | False pauses it; true sends again from where it stopped. |
 
 ### Output
@@ -316,7 +372,7 @@ Send the input as a JSON body.
 | `webhook.id` | string | yes |  |
 | `webhook.name` | string | yes |  |
 | `webhook.url` | string | yes |  |
-| `webhook.kinds` | array of "notes" or "health" or "locations" | yes |  |
+| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" | yes |  |
 | `webhook.state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
 | `webhook.waiting` | integer | yes | How many stored items wait to be sent. |
 | `webhook.lastStatus` | number or null | yes |  |
@@ -463,7 +519,7 @@ Send the input as a JSON body.
 | `webhook.id` | string | yes |  |
 | `webhook.name` | string | yes |  |
 | `webhook.url` | string | yes |  |
-| `webhook.kinds` | array of "notes" or "health" or "locations" | yes |  |
+| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" | yes |  |
 | `webhook.state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
 | `webhook.waiting` | integer | yes | How many stored items wait to be sent. |
 | `webhook.lastStatus` | number or null | yes |  |
@@ -514,7 +570,7 @@ Send the input as a JSON body.
 | `webhook.id` | string | yes |  |
 | `webhook.name` | string | yes |  |
 | `webhook.url` | string | yes |  |
-| `webhook.kinds` | array of "notes" or "health" or "locations" | yes |  |
+| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" | yes |  |
 | `webhook.state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
 | `webhook.waiting` | integer | yes | How many stored items wait to be sent. |
 | `webhook.lastStatus` | number or null | yes |  |

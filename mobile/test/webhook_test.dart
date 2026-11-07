@@ -28,6 +28,10 @@ final samples = item(9, 'health', {'samples': [{'id': 1, 'type': 'steps', 'start
 final points = item(10, 'locations', {'points': [{'id': 2, 'at': Date.recorded, 'lat': 43.65, 'lon': -79.38,
   'accuracy': 12.0, 'place': 'King St W'}]});
 
+final calendar = item(13, 'calendar', {'events': [{'key': 'work:a:${Date.recorded}', 'calendar': 'Work',
+  'title': 'Board meeting', 'start': Date.recorded, 'end': Date.recorded + 3600000, 'allDay': false, 'location': 'Room 4',
+  'people': [{'name': 'Sam', 'email': 'sam@example.com', 'organizer': true}]}], 'removed': ['work:b:${Date.recorded}']});
+
 abstract final class Date {
   static final recorded = DateTime.utc(2026, 11, 4, 14, 1).millisecondsSinceEpoch;
 }
@@ -58,6 +62,19 @@ void main() {
       'source': 'com.apple.health'}]});
     expect(webhook.message(points)!['data'], {'points': [{'id': 2, 'device': device, 'at': '2026-11-04T14:01:00.000Z',
       'lat': 43.65, 'lon': -79.38, 'accuracy': 12.0, 'place': 'King St W'}]});
+    final [changed, removed] = webhook.message(calendar)!['data']['events'] as List;
+    expect(changed, {'id': isA<int>(), 'status': 'changed', 'device': device, 'key': 'work:a:${Date.recorded}',
+      'calendar': 'Work', 'title': 'Board meeting', 'start': '2026-11-04T14:01:00.000Z', 'end': '2026-11-04T15:01:00.000Z',
+      'all_day': false, 'location': 'Room 4', 'notes': null, 'url': null,
+      'people': [{'name': 'Sam', 'email': 'sam@example.com', 'organizer': true}]});
+    // A removed event keeps only its key; its start comes from the key.
+    expect(removed, {'id': isA<int>(), 'status': 'removed', 'device': device, 'key': 'work:b:${Date.recorded}',
+      'calendar': null, 'title': null, 'start': '2026-11-04T14:01:00.000Z', 'end': '2026-11-04T14:01:00.000Z',
+      'all_day': false, 'location': null, 'notes': null, 'url': null, 'people': []});
+    // Each change of one occurrence has the same id, so a receiver upserts by it; another occurrence has its own.
+    final again = webhook.message(item(14, 'calendar', {'events': [], 'removed': ['work:a:${Date.recorded}']}))!;
+    final id = (again['data']['events'] as List).single['id'] as int;
+    expect([id, id < 1 << 48, id == (removed as Map)['id']], [(changed as Map)['id'], true, false]);
     // A note with no place and no files has place null and no list.
     final bare = webhook.message(item(11, 'notes', {'clientId': 'a' * 32, 'text': 'Plain', 'createdAt': Date.recorded}))!;
     expect((bare['data'] as Map)['note'], allOf(containsPair('place', null), isNot(contains('attachments'))));
@@ -201,6 +218,7 @@ void main() {
     await webhook.sendFile(file, [1, 2, 3, 4]);
     await webhook.send(samples);
     await webhook.send(points);
+    await webhook.send(calendar);
     await webhook.test();
     for (final request in server.requests) {
       final type = jsonDecode(request.body)['type'] as String;

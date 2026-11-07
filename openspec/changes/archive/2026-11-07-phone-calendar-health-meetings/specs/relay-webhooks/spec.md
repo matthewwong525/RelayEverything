@@ -1,0 +1,17 @@
+## MODIFIED Requirements
+
+### Requirement: Stored data goes to every active webhook
+
+After Relay's server stores a note, a health batch, a location batch or calendar events, it SHALL send one message for it to each active webhook that takes that kind of data. Notes SHALL go to every active webhook. Health, location and calendar SHALL go only to webhooks the owner ticked for them. A changed or removed calendar event SHALL be sent again, marked as changed or removed. Only data that reached the server SHALL be sent: a note kept offline on a phone never goes out.
+
+#### Scenario: A ring note with one webhook
+- **WHEN** a ring note is stored and one active webhook exists
+- **THEN** that address gets a `note.created` message with the note's words, recording, time and place within a minute
+
+#### Scenario: Health not ticked
+- **WHEN** a health batch is stored and the webhook takes notes only
+- **THEN** that webhook gets no message for the batch
+
+#### Scenario: A cancelled meeting
+- **WHEN** a webhook takes the calendar and an event is deleted on the phone
+- **THEN** after the phone's next send the webhook gets the event again, marked removed

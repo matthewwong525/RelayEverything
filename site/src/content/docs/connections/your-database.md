@@ -1,9 +1,9 @@
 ---
 title: Your own database
-description: Add a webhook, and your Relay Everything server or your phone sends each new note, and the health and location you pick, to an address you own, in one signed format.
+description: Add a webhook, and your Relay Everything server or your phone sends each new note, and the health, calendar and location you pick, to an address you own, in one signed format.
 ---
 
-A webhook copies what your Relay Everything server stores in your space to an address you own, such as a small receiver beside your database. Your server sends each new note there a few seconds after it gets it. Health and location go only if you tick them.
+A webhook copies what your Relay Everything server stores in your space to an address you own, such as a small receiver beside your database. Your server sends each new note there a few seconds after it gets it. Health, calendar and location go only if you tick them.
 
 Your data lives in your own space: one Durable Object with its own SQLite database, in the spaces Worker (`relay-everything-spaces`, or `<name>-spaces` on [your own server](../../start/run-your-own/)). The server's D1 database holds only the list of accounts: each person, their sign-ins and sessions, and a fingerprint of each key. Each webhook belongs to one person's space, and it sends only that person's data.
 
@@ -16,7 +16,7 @@ To keep your data off Relay Everything completely, [send from the phone](#send-f
 1. Open your Relay Everything page, `https://<your-relay-server>/apps/relay/`, and sign in.
 2. Under **Send to your database**, click **Add a webhook**.
 3. Give it a name and its address. The address must start with `https://`. It can't be this computer, a private network, or your Relay Everything server itself.
-4. Tick **Health** or **Location history** only for a database you control: they are sensitive. Notes always go.
+4. Tick **Health**, **Calendar** or **Location history** only for a database you control: they are sensitive. Notes always go.
 5. Click **Add**, then copy the secret. Relay Everything shows it once. Your receiver uses it to check each message.
 6. Click **Send a test**. The card shows the answer, such as *Answered 200 in 180 ms*.
 
@@ -35,7 +35,7 @@ The phone app can send to your own webhook itself, with no Relay Everything acco
 5. Click **Send a test**. The app shows your receiver's answer, such as *Your receiver answered 204. It works.*
 6. Click **Save**. The app asks if your earlier notes go too.
 
-Settings then says *To your webhook*, with your receiver's address. Turn on **Health** or **Location history** to send them too. The phone sends each new note, then each of its files in a [`note.file`](#notefile) message.
+Settings then says *To your webhook*, with your receiver's address. Turn on **Health**, **Calendar** or **Location history** to send them too. The phone sends each new note, then each of its files in a [`note.file`](#notefile) message.
 
 What you give up:
 
@@ -43,7 +43,7 @@ What you give up:
 - **Your Relay Everything page and your AI can not read it**, because none of it is on the server.
 - **A failing receiver holds back the rest.** The phone sends in order, so it keeps each item, and all after it, until your receiver answers `2xx`. Settings shows the last answer. It never drops an item for a `400`. Only a file your receiver refuses with `413` is dropped, and Settings names it.
 
-From the phone, `device.id` is the phone's own id, a UUID the app makes once. A note's `created_at` and the message's `timestamp` are when the phone kept it. Health samples and points are numbered on the phone, so save them by `device.id` and `id` together.
+From the phone, `device.id` is the phone's own id, a UUID the app makes once. A note's `created_at` and the message's `timestamp` are when the phone kept it. Health samples and points are numbered on the phone, so save them by `device.id` and `id` together. A calendar event's `id` is made from the phone's id and the event's `key`, so each change of one event has the same `id`. A removed event from the phone has only its `key`, `id` and `start`.
 
 ## The message
 
@@ -66,6 +66,7 @@ Every message is a `POST` with a JSON body in one envelope:
 | `note.updated` | No longer sent. It once said a ring note got its place from a later location batch. | `note`, without `audio` |
 | `health.samples` | A phone sends health samples. | `samples`: up to 500 |
 | `location.points` | A phone sends location points. | `points`: up to 500 |
+| `calendar.events` | A phone sends new, changed or removed calendar events. | `events`: up to 500, each with its `status` |
 | `note.file` | Only from [the phone](#send-from-the-phone): one message for each file of a note, after the note. | `note_id`, and `file` with its bytes |
 | `webhook.test` | You click **Send a test**. | `webhook`: its `id` and `name` |
 
@@ -152,7 +153,21 @@ Relay Everything no longer sends `note.updated`: it gives no note a place after 
 }
 ```
 
-`type` is `steps`, `heart_rate`, `sleep` or `workout`.
+`type` is one of these, each in one fixed `unit`:
+
+| `type` | `unit` |
+|---|---|
+| `steps` | `count` |
+| `heart_rate`, `resting_heart_rate` | `bpm` |
+| `sleep`, `workout`, `mindful` | `min` |
+| `weight` | `kg` |
+| `hrv_sdnn` (iPhone), `hrv_rmssd` (Android) | `ms` |
+| `blood_oxygen` | `%`, from 0 to 100 |
+| `blood_pressure_systolic`, `blood_pressure_diastolic` | `mmHg` |
+| `cycle_flow` | `0` none, `1` light, `2` medium, `3` heavy |
+| `water` | `ml` |
+
+A blood pressure reading is two samples with the same `start`: the upper and the lower number. A later version can add a type, so keep a sample whose `type` you do not know.
 
 ### `location.points`
 
@@ -169,6 +184,27 @@ Relay Everything no longer sends `note.updated`: it gives no note a place after 
   }
 }
 ```
+
+### `calendar.events`
+
+```json
+{
+  "version": 1,
+  "type": "calendar.events",
+  "timestamp": "2026-11-04T19:00:00.000Z",
+  "data": {
+    "events": [
+      { "id": 7, "status": "changed", "device": { "id": "d0000000-0000-4000-8000-000000000001", "name": "iPhone" },
+        "key": "work:5F1C2B:1762264800000", "calendar": "Work", "title": "Board meeting",
+        "start": "2026-11-04T14:00:00.000Z", "end": "2026-11-04T15:00:00.000Z", "all_day": false,
+        "location": "Office, room 2", "notes": null, "url": null,
+        "people": [{ "name": "Sam Lee", "email": "sam@…", "organizer": true }] }
+    ]
+  }
+}
+```
+
+`status` is `changed` for a new or changed event, and `removed` for an event deleted on the phone or in a calendar turned off. Each time of a repeating event has its own `key`, and a resend of the same event has the same `key`. Save each event by its `id` as an upsert, and delete or mark the row when `status` is `removed`.
 
 ## Check the signature
 
@@ -193,7 +229,7 @@ const payload = new Webhook(process.env.RELAY_WEBHOOK_SECRET).verify(body, heade
 - Each webhook gets every item it takes, in the order Relay Everything stored them, with none skipped.
 - Answer with a `2xx` status within 15 seconds. Relay Everything does not follow a redirect.
 - After any other answer, Relay Everything tries the same message again after 30 s, 2 min, 10 min, 30 min, 1 h, 2 h, 4 h, 6 h and 8 h: about a day. Then the card shows **Failing**, with the last answer and how many items wait. If a send is lost, your space wakes itself every 15 minutes while it has a webhook, and sends what waits. **Try again now** sends them all, in order, from where it stopped.
-- A retry can send a message you already saved, when your answer was lost. Its id and body are the same. So save each note, sample and point by its `id`, as an upsert.
+- A retry can send a message you already saved, when your answer was lost. Its id and body are the same. So save each note, sample, point and event by its `id`, as an upsert.
 - From your server, accept bodies up to 16 MB. A ring note's recording is about 100 KB a minute, and base64 makes it a third larger.
 
 ## Tables in Postgres
@@ -237,6 +273,21 @@ CREATE TABLE relay_health_samples (
   unit text NOT NULL,
   source text NOT NULL,
   PRIMARY KEY (device_id, id)
+);
+CREATE TABLE relay_calendar_events (
+  id bigint PRIMARY KEY,
+  device_id text NOT NULL,
+  key text NOT NULL,
+  calendar text,
+  title text,
+  start_at timestamptz NOT NULL,
+  end_at timestamptz NOT NULL,
+  all_day boolean NOT NULL,
+  location text,
+  notes text,
+  url text,
+  people jsonb NOT NULL,
+  removed boolean NOT NULL DEFAULT false
 );
 CREATE TABLE relay_location_points (
   id bigint NOT NULL,

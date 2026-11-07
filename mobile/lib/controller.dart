@@ -18,6 +18,7 @@ import 'data/webhook.dart';
 import 'relay.dart';
 import 'share/inbox.dart';
 import 'shortcuts/inbox.dart';
+import 'sync/calendar.dart';
 import 'sync/health.dart';
 import 'sync/location.dart';
 import 'sync/native.dart';
@@ -62,7 +63,7 @@ class RelayController extends Relay {
   RelayController({required this.store, required this.vault, required this.places, required this.health,
     RelayApi Function(Connection)? apiFor, http.Client Function()? signInClient, WebAuth? webAuth, DateTime Function()? clock,
     WebhookClient Function(Webhook webhook, String installId)? webhookFor, this.schedule, this.voice, this.native, this.folder,
-    this.opener, this.share})
+    this.opener, this.share, this.calendar})
     : _sender = Sender(apiFor, signInClient, webhookFor), _webAuth = webAuth ?? phoneWebAuth, _clock = clock ?? DateTime.now {
     voice?.model.addListener(notifyListeners);
     // A recording at its longest ends as if the person let go.
@@ -77,6 +78,8 @@ class RelayController extends Relay {
   final KeyVault vault;
   final Places places;
   final HealthSource health;
+  /// The phone's calendars; with none, the calendar can not turn on.
+  final CalendarSource? calendar;
   /// Turns the hourly background sync on or off.
   final Future<void> Function(bool on)? schedule;
   /// Voice notes; with none, the app has typed notes only.
@@ -103,7 +106,8 @@ class RelayController extends Relay {
   Settings _settings = const Settings();
   StreamSubscription<Pin>? _history;
   Timer? _drainTimer;
-  SendState _healthSent = const SendState(), _pointsSent = const SendState();
+  SendState _healthSent = const SendState(), _pointsSent = const SendState(), _calendarSent = const SendState();
+  List<PhoneCalendar> _calendars = const [];
   Future<void>? _syncing;
   bool _again = false;
   DateTime? _listening;
@@ -120,6 +124,8 @@ class RelayController extends Relay {
   @override Settings get settings => _settings;
   @override SendState get healthSent => _healthSent;
   @override SendState get pointsSent => _pointsSent;
+  @override SendState get calendarSent => _calendarSent;
+  @override List<PhoneCalendar> get calendars => _calendars;
   @override bool get locationModes => native != null;
   @override String? get webhookAddress => _webhook?.address;
   @override String? get webhookSecret => _webhook?.secret;
@@ -161,6 +167,7 @@ class RelayController extends Relay {
     }
     await _drainShare(refresh: false);
     await voice?.model.load();
+    if (_settings.calendar) await _readCalendars();
     await _refreshLocal();
     // A voice note whose words the app's close cut short gets them now, from its kept recording.
     _track(_writePending(dropStray: true));
@@ -212,6 +219,7 @@ class RelayController extends Relay {
     _healthSent = SendState(at: await store.sentAt(sentHealth), waiting: await store.waitingReadings());
     _pointsSent = SendState(at: await store.sentAt(sentPoints), waiting: await store.waitingPoints());
     _problem = _problemOf(await store.get(webhookProblemKey));
+    _calendarSent = SendState(at: await store.sentAt(sentCalendar), waiting: await store.waitingEvents());
     _entries = [for (final note in notes) _entryOfLocal(note)];
     notifyListeners();
   }
@@ -340,6 +348,7 @@ class RelayController extends Relay {
   @override
   Future<void> stopSending() async {
     await _saveSettings(_settings.copyWith(sending: false));
+    _calendars = const [];
     await _stopHistory();
     // A round already sending finishes first, so nothing it read lands after the drop.
     await _syncing;
@@ -360,7 +369,7 @@ class RelayController extends Relay {
   Future<void> _saveSettings(Settings settings) async {
     _settings = settings;
     await store.set(settingsKey, settings.encode());
-    await schedule?.call(settings.history || settings.health);
+    await schedule?.call(settings.history || settings.health || settings.calendar);
     await _tellNative();
     await _tellShare();
     notifyListeners();
@@ -448,11 +457,71 @@ class RelayController extends Relay {
   Future<String?> setHealth(bool on) async {
     if (on && !_settings.sending) return _sendFirst;
     if (on && !await health.allow()) return 'Relay Everything may not read your health data. Allow it in the phone\'s health settings.';
-    // Health starts from now: nothing was kept while it was off, and there is no earlier backfill.
-    if (on) await store.set(healthSince, '${_clock().millisecondsSinceEpoch}');
+    // Health starts from now: the next rounds read new readings, and the last 90 days a week at a time.
+    if (on) await startHealth(store, _clock());
     await _saveSettings(_settings.copyWith(health: on));
     if (on) unawaited(sync());
     return null;
+  }
+
+  /// At open, asks once more for health when this version reads types the phone was not asked for, such as after an
+  /// update. Asked once, whatever the answer: the phone's health settings change it later. The asked types are kept
+  /// only when the question closes, so a background round while it is open does not start the history read before
+  /// the new types are allowed.
+  Future<void> askNewHealthTypes() async {
+    if (!_settings.health || await store.get(healthTypes) == askedTypes) return;
+    try {
+      await health.allow();
+    } on Exception {
+      // The next open does not ask again; the person allows types in the phone's health settings.
+    } finally {
+      await store.set(healthTypes, askedTypes);
+    }
+  }
+
+  static const _noCalendar = 'Relay Everything may not read your calendar. Allow it in the phone\'s settings.';
+
+  @override
+  Future<String?> setCalendar(bool on) async {
+    if (on && !_settings.sending) return _sendFirst;
+    final source = calendar;
+    if (on) {
+      try {
+        if (source == null || !await source.allow()) return _noCalendar;
+      } on Exception {
+        return _noCalendar;
+      }
+    }
+    await _saveSettings(_settings.copyWith(calendar: on));
+    if (on) {
+      await _readCalendars();
+      unawaited(sync());
+    } else {
+      // A round already reading finishes first, so nothing it queued stays after the drop.
+      await _syncing;
+      await store.dropCalendar();
+      _calendars = const [];
+      await _refreshLocal();
+    }
+    return null;
+  }
+
+  @override
+  Future<void> setCalendarShown(String id, bool on) async {
+    final off = {..._settings.calendarsOff};
+    on ? off.remove(id) : off.add(id);
+    await _saveSettings(_settings.copyWith(calendarsOff: off));
+    unawaited(sync());
+  }
+
+  /// Lists the phone's calendars for Settings. A refused or failed read leaves the list as it was.
+  Future<void> _readCalendars() async {
+    try {
+      _calendars = await calendar?.calendars() ?? const [];
+    } on Exception {
+      return;
+    }
+    notifyListeners();
   }
 
   static const _nothing = 'Give the note words or a file.';
@@ -570,6 +639,14 @@ class RelayController extends Relay {
         await syncHealth(store, health, now: _clock());
       } on Exception {
         // The health store can be closed for a while, such as on a locked iPhone; the next round reads again.
+      }
+    }
+    final source = calendar;
+    if (_settings.calendar && source != null) {
+      try {
+        await syncCalendar(store, source, _settings, now: _clock());
+      } on Exception {
+        // A refused calendar removes nothing; the next round reads again.
       }
     }
     if (_settings.history) await _drain();

@@ -131,8 +131,11 @@ final class HealthWake {
   private var queries: [HKObserverQuery] = []
 
   private var types: [HKSampleType] {
-    [HKQuantityType.quantityType(forIdentifier: .stepCount), HKQuantityType.quantityType(forIdentifier: .heartRate),
-     HKCategoryType.categoryType(forIdentifier: .sleepAnalysis), HKObjectType.workoutType()].compactMap { $0 }
+    let quantities: [HKQuantityTypeIdentifier] = [.stepCount, .heartRate, .bodyMass, .restingHeartRate, .heartRateVariabilitySDNN,
+      .oxygenSaturation, .bloodPressureSystolic, .bloodPressureDiastolic, .dietaryWater]
+    let categories: [HKCategoryTypeIdentifier] = [.sleepAnalysis, .menstrualFlow, .mindfulSession]
+    return quantities.compactMap { HKQuantityType.quantityType(forIdentifier: $0) }
+      + categories.compactMap { HKCategoryType.categoryType(forIdentifier: $0) } + [HKObjectType.workoutType()]
   }
 
   func apply() {

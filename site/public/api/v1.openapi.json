@@ -3,7 +3,7 @@
   "info": {
     "title": "Relay Everything API",
     "version": "1.0.0",
-    "description": "Read one person's Relay Everything notes, health, places and saved chats, and add notes. It changes and deletes nothing. Each caller reaches only the space of the person who connected it or made its key."
+    "description": "Read one person's Relay Everything notes, health, places, calendar and saved chats, and add notes. It changes and deletes nothing. Each caller reaches only the space of the person who connected it or made its key."
   },
   "servers": [
     {
@@ -782,7 +782,7 @@
       "get": {
         "operationId": "getDay",
         "summary": "Sum up a day",
-        "description": "One day: how many notes, steps, sleep minutes, heart rate, workouts, and each place visited.",
+        "description": "One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, each place visited, and the calendar's events with the people in each.",
         "parameters": [
           {
             "name": "day",
@@ -870,6 +870,73 @@
                       ],
                       "additionalProperties": false
                     },
+                    "weightKg": {
+                      "description": "The latest weight, in kg.",
+                      "type": "number"
+                    },
+                    "restingHeartRate": {
+                      "type": "number"
+                    },
+                    "hrvSdnn": {
+                      "description": "Heart rate variability from iPhone, in ms.",
+                      "type": "number"
+                    },
+                    "hrvRmssd": {
+                      "description": "Heart rate variability from Android, in ms.",
+                      "type": "number"
+                    },
+                    "bloodOxygen": {
+                      "description": "In %.",
+                      "type": "object",
+                      "properties": {
+                        "min": {
+                          "type": "number"
+                        },
+                        "average": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "min",
+                        "average"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "bloodPressure": {
+                      "description": "Each reading, in mmHg, up to 20.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "at": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "upper": {
+                            "type": "number"
+                          },
+                          "lower": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "at",
+                          "upper",
+                          "lower"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "cycleFlow": {
+                      "description": "The day's highest flow: 0 none, 1 light, 2 medium, 3 heavy.",
+                      "type": "number"
+                    },
+                    "mindfulMinutes": {
+                      "type": "number"
+                    },
+                    "waterMl": {
+                      "type": "number"
+                    },
                     "places": {
                       "type": "array",
                       "items": {
@@ -902,6 +969,44 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "title": {
+                            "type": "string"
+                          },
+                          "start": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "end": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "allDay": {
+                            "type": "boolean"
+                          },
+                          "people": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "Their names."
+                          }
+                        },
+                        "required": [
+                          "title",
+                          "start",
+                          "end",
+                          "allDay",
+                          "people"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "The day's calendar events, in start order, up to 50."
                     }
                   },
                   "required": [
@@ -912,7 +1017,8 @@
                     "sleepMinutes",
                     "heartRate",
                     "workouts",
-                    "places"
+                    "places",
+                    "events"
                   ],
                   "additionalProperties": false
                 }
@@ -966,7 +1072,7 @@
       "get": {
         "operationId": "getHealth",
         "summary": "Read health over time",
-        "description": "One value per hour or day for one kind of health data: steps and sleep minutes as `total`, heart rate as min, max and average, workouts as a count and minutes. Sleep counts on the day it ends.",
+        "description": "One value per hour or day for one kind of health data: steps, sleep, mindful minutes and water (ml) as `total`; heart rate and blood pressure (mmHg) as min, max and average; workouts as a count and minutes; weight (kg) as `latest`; resting heart rate, heart rate variability (ms; hrv_sdnn from iPhone, hrv_rmssd from Android) as `average`; blood oxygen (%) as min and average; cycle flow as the highest `flow`, 0 none to 3 heavy. Sleep counts on the day it ends.",
         "parameters": [
           {
             "name": "type",
@@ -979,7 +1085,17 @@
                 "steps",
                 "heart_rate",
                 "sleep",
-                "workout"
+                "workout",
+                "weight",
+                "resting_heart_rate",
+                "hrv_sdnn",
+                "hrv_rmssd",
+                "blood_oxygen",
+                "blood_pressure_systolic",
+                "blood_pressure_diastolic",
+                "cycle_flow",
+                "mindful",
+                "water"
               ]
             }
           },
@@ -1076,7 +1192,7 @@
                             }
                           ]
                         },
-                        "description": "`total` for steps and sleep minutes; `min`, `max` and `average` for heart rate; `count` and `minutes` for workouts."
+                        "description": "Each type's own values, as the health tool says: such as `total` for steps, `min`, `max` and `average` for heart rate."
                       }
                     }
                   },
@@ -1239,6 +1355,242 @@
                   "required": [
                     "visits",
                     "next"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/calendar": {
+      "get": {
+        "operationId": "listEvents",
+        "summary": "Read calendar events",
+        "description": "The events from the phone's calendars that overlap one time to another, with each one's calendar, title, time, place, notes and people. With `q`, only events whose title, place, notes or people hold every word, newest first; without, in start order.",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "description": "The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset.",
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "description": "The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset.",
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "The words to find.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "How many events, at most 100.",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "The last answer's `nextCursor`, to read the next page.",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "required": false,
+            "description": "An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "calendar": {
+                            "type": "string",
+                            "description": "The calendar's name."
+                          },
+                          "start": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "end": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "allDay": {
+                            "type": "boolean"
+                          },
+                          "location": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "notes": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "url": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "people": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "email": {
+                                  "type": "string"
+                                },
+                                "organizer": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          },
+                          "device": {
+                            "type": "string",
+                            "description": "The name of the phone that sent it."
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "title",
+                          "calendar",
+                          "start",
+                          "end",
+                          "allDay",
+                          "location",
+                          "notes",
+                          "url",
+                          "people",
+                          "device"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Send it as `cursor` to read the next page; null on the last one."
+                    }
+                  },
+                  "required": [
+                    "events",
+                    "nextCursor"
                   ],
                   "additionalProperties": false
                 }

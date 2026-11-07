@@ -1,13 +1,13 @@
 # relay-phone-webhook Specification
 
 ## Purpose
-Let the phone send notes, files, health and places straight to one webhook the person sets, in the same signed format as the server, with nothing going through a Relay Everything server.
+Let the phone send notes, files, health, calendar events and places straight to one webhook the person sets, in the same signed format as the server, with nothing going through a Relay Everything server.
 
 ## Requirements
 
 ### Requirement: The phone sends straight to one webhook the person sets
 
-When the person picks their own webhook, the phone SHALL send each new note, each note's files, and, when turned on, health samples and location points straight to that one address, and SHALL send nothing to a Relay Everything server.
+When the person picks their own webhook, the phone SHALL send each new note, each note's files, and, when turned on, health samples, calendar events and location points straight to that one address, and SHALL send nothing to a Relay Everything server.
 
 #### Scenario: A note with webhook mode on
 - **WHEN** the person picks their own webhook and writes a note
@@ -18,8 +18,8 @@ When the person picks their own webhook, the phone SHALL send each new note, eac
 - **THEN** the phone sends to it, and never asks them to sign in
 
 #### Scenario: Health and places with webhook mode on
-- **WHEN** health and location history are on in webhook mode
-- **THEN** the receiver gets `health.samples` and `location.points` messages, and nothing goes to the server
+- **WHEN** health, the calendar and location history are on in webhook mode
+- **THEN** the receiver gets `health.samples`, `calendar.events` and `location.points` messages, and nothing goes to the server
 
 ### Requirement: Phone messages match the server's format and signing
 

@@ -3,11 +3,12 @@
 import { z } from "zod";
 import { defineAction, type Action, type ActionCall } from "../../api/contract.ts";
 import { asDevice } from "./caller.ts";
+import { HEALTH_TYPES } from "./queries.ts";
 import { accuracy, BATCH, insertNew, latitude, longitude, placeName, time, type Db } from "./store.ts";
 import { wake, type Kind } from "./webhooks/send.ts";
 
 const sample = z.strictObject({
-  type: z.enum(["steps", "heart_rate", "sleep", "workout"]), start: time, end: time,
+  type: z.enum(HEALTH_TYPES), start: time, end: time,
   value: z.number().min(0).max(1e9), unit: z.string().min(1).max(20), source: z.string().min(1).max(200),
 }).refine(item => item.end >= item.start, "end comes before start.");
 const point = z.strictObject({ at: time, lat: latitude, lon: longitude, accuracy, place: placeName.optional() });
@@ -34,7 +35,7 @@ function batch<Item>(name: string, kind: Kind, items: z.ZodType<Item[]>, descrip
 const field = (name: string) => `json_extract(value, '$.${name}')`;
 
 export const health = batch("samples", "health", z.array(sample).min(1).max(BATCH),
-  "Store steps, heart rate, sleep and workouts from Apple Health or Health Connect, once per type, time span and source.",
+  "Store health samples from Apple Health or Health Connect, such as steps, sleep, weight and blood pressure, once per type, time span and source.",
   (db, device, rows) => insertNew(db, `INSERT INTO relay_health (device_id, type, start_at, end_at, value, unit, source, created_at)
     SELECT ?, ${["type", "start", "end", "value", "unit", "source"].map(field).join(", ")}, ? FROM json_each(?) WHERE true
     ON CONFLICT (device_id, type, start_at, end_at, source) DO NOTHING RETURNING id`, device, Date.now(), JSON.stringify(rows)));

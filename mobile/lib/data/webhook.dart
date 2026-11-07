@@ -68,9 +68,13 @@ class WebhookClient implements Outbound {
         'content_type': _type(body['type']), 'size': bytes!.length, 'base64': base64.encode(bytes)}}),
       'health' => ('health.samples', {'samples': [for (final sample in body['samples'] as List) _sample(sample as Map)]}),
       'locations' => ('location.points', {'points': [for (final point in body['points'] as List) _point(point as Map)]}),
+      'calendar' => ('calendar.events', {'events': [
+        for (final event in body['events'] as List) _event(event as Map),
+        for (final key in body['removed'] as List) _removed(key as String),
+      ]}),
       final route => throw ArgumentError.value(route, 'route'),
     };
-    if ((data['samples'] ?? data['points']) case final List rows when rows.isEmpty) return null;
+    if ((data['samples'] ?? data['points'] ?? data['events']) case final List rows when rows.isEmpty) return null;
     return {'version': 1, 'type': type, 'timestamp': _iso(item.createdAt.millisecondsSinceEpoch), 'data': data};
   }
 
@@ -95,6 +99,23 @@ class WebhookClient implements Outbound {
 
   Map<String, dynamic> _point(Map point) => {'id': point['id'], 'device': _device, 'at': _iso(point['at']),
     'lat': point['lat'], 'lon': point['lon'], 'accuracy': point['accuracy'], 'place': point['place']};
+
+  /// An event's id: the first 48 bits of the SHA-256 of the install id and its key, so each change of one occurrence
+  /// has the same id, and a receiver upserts by it as it does the server's.
+  int _eventId(String key) =>
+    sha256.convert(utf8.encode('$installId:$key')).bytes.take(6).fold(0, (id, byte) => id * 256 + byte);
+
+  Map<String, dynamic> _event(Map event) => {'id': _eventId(event['key'] as String), 'status': 'changed', 'device': _device,
+    'key': event['key'], 'calendar': event['calendar'], 'title': event['title'], 'start': _iso(event['start']),
+    'end': _iso(event['end']), 'all_day': event['allDay'], 'location': event['location'], 'notes': event['notes'],
+    'url': event['url'], 'people': event['people']};
+
+  /// A removed event. The phone keeps only its key, so the start comes from the key's end and the rest is empty.
+  Map<String, dynamic> _removed(String key) {
+    final start = _iso(int.tryParse(key.substring(key.lastIndexOf(':') + 1)) ?? 0);
+    return {'id': _eventId(key), 'status': 'removed', 'device': _device, 'key': key, 'calendar': null, 'title': null,
+      'start': start, 'end': start, 'all_day': false, 'location': null, 'notes': null, 'url': null, 'people': []};
+  }
 
   /// `<install id>:<outbox row id>`: the same over every retry, so a receiver keeps a message sent twice once.
   String _id(OutboxItem item) => '$installId:${item.id}';

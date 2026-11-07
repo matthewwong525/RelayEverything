@@ -100,8 +100,8 @@ String destinationOf(SendPlace place) => place == SendPlace.webhook ? ownWebhook
 /// The `state` keys: the destination new uploads take, this install's own id, and the next health or point id.
 const _destination = 'outbox.destination', _installId = 'install.id', _nextId = 'ids.next';
 
-/// When an upload of health, or of location points, last reached the server, in the store's `state`.
-const sentHealth = 'sent.health', sentPoints = 'sent.points';
+/// When an upload of health, of location points, or of calendar events last reached the server, in the store's `state`.
+const sentHealth = 'sent.health', sentPoints = 'sent.points', sentCalendar = 'sent.calendar';
 
 /// One waiting upload: a route and the JSON body to send it, where it goes, and when the phone queued it.
 class OutboxItem {
@@ -127,11 +127,15 @@ const _schema = [
   'CREATE TABLE points (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
   'CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
   _attachmentsTable,
+  _calendarSentTable,
 ];
 
 // A note's files: one row each, in the order they were added. sent_at: when the server took the file.
 const _attachmentsTable = 'CREATE TABLE attachments (id TEXT PRIMARY KEY, note_client_id TEXT NOT NULL, name TEXT, type TEXT, '
   'size INTEGER, path TEXT, sent_at INTEGER)';
+
+// Each calendar event sent, by its key, with the SHA-256 of what was sent: a round sends only what changed.
+const _calendarSentTable = 'CREATE TABLE calendar_sent (key TEXT PRIMARY KEY, hash TEXT NOT NULL)';
 
 /// The phone's own SQLite file: its typed and voice notes, waiting uploads, location points not yet sent, and small settings.
 /// Written as plain SQL through drift, so the app needs no generated code.
@@ -142,7 +146,7 @@ class Store extends GeneratedDatabase {
   Iterable<TableInfo<Table, dynamic>> get allTables => const [];
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(onCreate: (_) async {
@@ -173,6 +177,8 @@ class Store extends GeneratedDatabase {
     }
     // Version 4 had notes with no files.
     if (from < 5) await customStatement(_attachmentsTable);
+    // Version 5 had no calendar.
+    if (from < 6) await customStatement(_calendarSentTable);
   });
 
   Future<List<QueryRow>> _rows(String sql, [List<Object?> values = const []]) =>
@@ -206,8 +212,10 @@ class Store extends GeneratedDatabase {
   Future<String> destination() async => await get(_destination) ?? relayServer;
 
   /// Sends every waiting upload, and each new one, to [destination], in one step. Health and points queued before they
-  /// had ids get them here, as a webhook message needs them.
+  /// had ids get them here, as a webhook message needs them. A new place has none of the calendar, so the phone forgets
+  /// what went and the next read sends the whole window there.
   Future<void> moveOutbox(String destination) => transaction(() async {
+    if (await this.destination() != destination) await _dropCalendar();
     await set(_destination, destination);
     for (final row in await _rows("SELECT id, body FROM outbox WHERE route IN ('health', 'locations')")) {
       final body = jsonDecode(row.read<String>('body')) as Map<String, dynamic>;
@@ -427,12 +435,41 @@ class Store extends GeneratedDatabase {
     ],
   );
 
-  /// Drops the health and location that did not go yet, for when sending turns off. Note uploads stay, so a later
-  /// turn-on sends them with no second prompt.
+  /// Drops the health, location and calendar events that did not go yet, for when sending turns off. Note uploads
+  /// stay, so a later turn-on sends them with no second prompt.
   Future<void> dropReadings() => transaction(() async {
     await _run("DELETE FROM outbox WHERE route IN ('health', 'locations')");
     await _run('DELETE FROM points');
+    await _dropCalendar();
   });
+
+  /// Drops waiting calendar uploads and forgets what was sent, so the calendar turned on again sends its whole window.
+  Future<void> dropCalendar() => transaction(_dropCalendar);
+
+  Future<void> _dropCalendar() async {
+    await _run("DELETE FROM outbox WHERE route = 'calendar'");
+    await _run('DELETE FROM calendar_sent');
+  }
+
+  /// Each calendar event sent, by key, with the hash of what was sent.
+  Future<Map<String, String>> calendarSent() async => {
+    for (final row in await _rows('SELECT key, hash FROM calendar_sent')) row.read<String>('key'): row.read<String>('hash'),
+  };
+
+  /// Queues calendar [uploads] and, in the same step, marks [sent] keys with their hashes and forgets [forget] keys, so a
+  /// crash never marks an event sent that has no upload.
+  Future<void> queueCalendar(List<Map<String, dynamic>> uploads, Map<String, String> sent, Iterable<String> forget) =>
+    transaction(() async {
+      for (final upload in uploads) {
+        await enqueue('calendar', upload);
+      }
+      for (final entry in sent.entries) {
+        await _run('INSERT OR REPLACE INTO calendar_sent (key, hash) VALUES (?, ?)', [entry.key, entry.value]);
+      }
+      for (final key in forget) {
+        await _run('DELETE FROM calendar_sent WHERE key = ?', [key]);
+      }
+    });
 
   /// One point of location history; a second at the same moment is the same point.
   Future<void> addPoint(Pin point) =>
@@ -459,12 +496,17 @@ class Store extends GeneratedDatabase {
   Future<int> waitingReadings() async => (await _rows(
     "SELECT coalesce(sum(json_array_length(body, '\$.samples')), 0) AS n FROM outbox WHERE route = 'health'")).single.read<int>('n');
 
+  /// Calendar events waiting to send, changed or removed, in the outbox.
+  Future<int> waitingEvents() async => (await _rows(
+    "SELECT coalesce(sum(json_array_length(body, '\$.events') + json_array_length(body, '\$.removed')), 0) AS n "
+    "FROM outbox WHERE route = 'calendar'")).single.read<int>('n');
+
   /// Location points waiting to send: in the outbox, and kept but not yet queued.
   Future<int> waitingPoints() async => (await _rows(
     "SELECT coalesce((SELECT sum(json_array_length(body, '\$.points')) FROM outbox WHERE route = 'locations'), 0) "
     '+ (SELECT count(*) FROM points) AS n')).single.read<int>('n');
 
-  /// When [key], [sentHealth] or [sentPoints], was last written, or null for never.
+  /// When [key], [sentHealth], [sentPoints] or [sentCalendar], was last written, or null for never.
   Future<DateTime?> sentAt(String key) async {
     final value = int.tryParse(await get(key) ?? '');
     return value == null ? null : DateTime.fromMillisecondsSinceEpoch(value);

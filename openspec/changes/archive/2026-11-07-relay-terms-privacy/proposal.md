@@ -1,6 +1,6 @@
 # Proposal: Draft the terms, the privacy policy and the health data policy
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** incorporate-business-timing
 **Open questions:** none
 
@@ -91,3 +91,5 @@ None.
 - **2026-11-07** — Assumed: the recovery window is Cloudflare's, cited on the policy: a space (Durable Object) can be restored to any point in the past 30 days, and the account list (D1) to any minute in the past 30 days on Workers Paid, 7 on Workers Free; the policy says *up to 30 days*. R2 keeps no deleted copy by default.
 - **2026-11-07** — Assumed: each task's own check ran once at the end, after all source and tests were written, with its acceptance kept.
 - **2026-11-07** — Checkpoint inside /ship: built; the review found that the self-host docs promised the contact line on the sign-in screen, which Cloudflare Access hides, so `run-your-own.md` and `self-host/SETUP.md` now say the account card. The mail forward is on, and a test sign-in code sent from app-staging to privacy@relayeverything.com reached matthewwong525@gmail.com. Saved for tasks 4.1 and 4.2.
+- **2026-11-07** — Assumed: `scripts/publish-relay-site.mjs` reads the site's archive with a 256 MB buffer, because the new pages took `site/` past Node's 1 MiB default and the dry run failed with `ENOBUFS`; the guard is unchanged. Then the dry run gave `result=ready`, the staging site showed the three drafts with their box and outside the menu, and the branch's shared server, deployed to app-staging by hand, showed the contact line.
+- **2026-11-07** — Archived for publish inside /ship: every task is ticked; specs reconciled into `openspec/specs/relay-legal-pages/`.

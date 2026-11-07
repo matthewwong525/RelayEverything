@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · relay-terms-privacy</title>
+<title>Review · 2026-11-07-relay-terms-privacy</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="relay-terms-privacy" data-own-back>
+<body data-change="2026-11-07-relay-terms-privacy" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>relay-terms-privacy</h1>
+  <h1>2026-11-07-relay-terms-privacy</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -472,6 +472,8 @@
 <li class="decision card" id="decision-20" data-note="decision-20" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: the recovery window is Cloudflare's, cited on the policy: a space (Durable Object) can be restored to any point in the past 30 days, and the account list (D1) to any minute in the past 30 days on Workers Paid, 7 on Workers Free; the policy says <i>up to 30 days</i>. R2 keeps no deleted copy by default.</li>
 <li class="decision card" id="decision-21" data-note="decision-21" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: each task's own check ran once at the end, after all source and tests were written, with its acceptance kept.</li>
 <li class="decision card" id="decision-22" data-note="decision-22" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-07</p>Checkpoint inside /ship: built; the review found that the self-host docs promised the contact line on the sign-in screen, which Cloudflare Access hides, so <code>run-your-own.md</code> and <code>self-host/SETUP.md</code> now say the account card. The mail forward is on, and a test sign-in code sent from app-staging to privacy@relayeverything.com reached matthewwong525@gmail.com. Saved for tasks 4.1 and 4.2.</li>
+<li class="decision card" id="decision-23" data-note="decision-23" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: <code>scripts/publish-relay-site.mjs</code> reads the site's archive with a 256 MB buffer, because the new pages took <code>site/</code> past Node's 1 MiB default and the dry run failed with <code>ENOBUFS</code>; the guard is unchanged. Then the dry run gave <code>result=ready</code>, the staging site showed the three drafts with their box and outside the menu, and the branch's shared server, deployed to app-staging by hand, showed the contact line.</li>
+<li class="decision card" id="decision-24" data-note="decision-24" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-07</p>Archived for publish inside /ship: every task is ticked; specs reconciled into <code>openspec/specs/relay-legal-pages/</code>.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

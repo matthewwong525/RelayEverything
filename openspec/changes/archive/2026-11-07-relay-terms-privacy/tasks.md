@@ -17,5 +17,5 @@
 
 ## 4. Checks
 
-- [ ] 4.1 Run `npm test` in `app/` and `site/`, `node scripts/public-check.mjs`, and `node scripts/publish-relay-site.mjs --ref HEAD --dry-run`; each passes, and the guard prints `result=ready`.
-- [ ] 4.2 After `/save`, preview with `node scripts/publish-relay-site.mjs --ref HEAD --staging`: the three draft pages open at relay-staging with their draft box and are not in the menu, and the live `/terms/` is unchanged; app-staging.relayeverything.com's sign-in screen shows the contact line.
+- [x] 4.1 Run `npm test` in `app/` and `site/`, `node scripts/public-check.mjs`, and `node scripts/publish-relay-site.mjs --ref HEAD --dry-run`; each passes, and the guard prints `result=ready`.
+- [x] 4.2 After `/save`, preview with `node scripts/publish-relay-site.mjs --ref HEAD --staging`: the three draft pages open at relay-staging with their draft box and are not in the menu, and the live `/terms/` is unchanged; app-staging.relayeverything.com's sign-in screen shows the contact line.

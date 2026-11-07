@@ -1,7 +1,7 @@
 # Update WongStack to 50.10.0
 
 **Status:** ready-to-ship
-**Branch:** sync-wongstack-upstream
+**Branch:** wongstack-50-10-update
 **Open questions:** none
 
 ## Why
@@ -75,3 +75,4 @@ None: this update changes WongStack's shared tools, not a Relay Everything behav
 - **2026-11-07** — Assumed: make `worker-configuration.d.ts` with the pinned `wrangler types` and an empty env file, because this worktree's `.dev.vars` would add the five `RELAY_*` secret names that the committed file never held.
 - **2026-11-07** — Assumed: move this repo's *Ship every chat from one chat* section from `wiki/development/daily.md` to its own page, `ship-every-chat.md`, because upstream's new text put `daily.md` at 3,021 words, over the 3,000-word cap.
 - **2026-11-07** — Save checkpoint: built (95 files copied, 12 merged by hand, a relay real-database test, the seal pair made), reviewed with no findings, preflight now current; main's iPhone build passed on its rerun, so no Apple certificate was deleted.
+- **2026-11-07** — Assumed: save on a new branch, `wongstack-50-10-update`, because `sync-wongstack-upstream` already shipped as PR #15 for the 50.1.0 update.

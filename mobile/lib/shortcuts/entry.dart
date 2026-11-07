@@ -2,7 +2,10 @@ import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../controller.dart';
+import 'dart:io';
+
 import '../data/connection.dart';
+import '../share/inbox.dart';
 import '../sync/background.dart';
 import '../sync/health.dart';
 import '../sync/location.dart';
@@ -15,7 +18,7 @@ import 'bridge.dart';
 Future<void> shortcutsMain() async {
   WidgetsFlutterBinding.ensureInitialized();
   final relay = RelayController(store: openStore(), vault: KeyVault(), places: PhonePlaces(), health: PhoneHealth(),
-    folder: getApplicationSupportDirectory);
+    folder: getApplicationSupportDirectory, share: Platform.isIOS ? PhoneShareGroup() : null);
   await relay.load();
   await listenForShortcuts(ShortcutsBridge(relay));
 }

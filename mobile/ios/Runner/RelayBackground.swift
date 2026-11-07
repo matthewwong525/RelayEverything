@@ -235,6 +235,18 @@ final class PlacesWake: NSObject, CLLocationManagerDelegate {
 enum RelayChannels {
   static func register(_ messenger: FlutterBinaryMessenger) {
     FlutterMethodChannel(name: "relay/files", binaryMessenger: messenger).setMethodCallHandler { call, result in
+      // The App Group the share card (ios/ShareExtension/) shares: its folder, and whether the card may send.
+      let group = "group.com.matthewwong525.relayApp"
+      switch call.method {
+      case "appGroupPath":
+        return result(FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)?.path)
+      case "setShareSettings":
+        let sending = (call.arguments as? [String: Any])?["sending"] as? Bool ?? false
+        UserDefaults(suiteName: group)?.set(sending, forKey: "sending")
+        return result(nil)
+      default:
+        break
+      }
       guard call.method == "excludeFromBackup", let path = call.arguments as? String else {
         result(FlutterMethodNotImplemented)
         return

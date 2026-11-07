@@ -1,6 +1,6 @@
 # Add notes and files from Apple Shortcuts
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** apple-shortcuts-notes
 **Open questions:** none
 
@@ -140,3 +140,6 @@ None.
 **2026-11-07** — Checked on staging (`app-staging`, branch spaces Worker and server deployed by hand): a phone key sent a note with a picture and a PDF from a script, not the simulator, which can't reach staging. The page's timeline data showed both waiting, then ready; the PDF downloaded with the same bytes; a resend stored once; a device key got 403 and no sign-in 401; the webhook's `note.created` listed both files with no bytes. The trial key and webhook were turned off.
 **2026-11-07** — Checked on the iPhone simulator (device check on `cada368`): the app builds with iOS 15.0 as its lowest version, and the Shortcuts app lists *Add a note to Relay Everything* and *Get notes from Relay Everything*. Tapping *Add a note* shows *Unable to run App Shortcut*, so the flow's note never reached the timeline, and the run gave no system log to show why.
 **2026-11-07** — Assumed: the iPhone check now keeps the phone's log for the app, Shortcuts and App Intents, and the app's crash reports, because the failed action gave no words on the screen, and the next failure of this kind needs the same evidence.
+**2026-11-07** — Checked the phone log of a second iPhone check (`d262d5f`): the tap reaches the app, and iOS allows *Add a note* there. Then the Shortcuts service rejects the app with "Unable to get teamId" and "requiresValidBundle", so it reports "Couldn't find AppShortcutsProvider". The simulator build has no Apple team signature, so the simulator can't run this app's App Shortcuts. A TestFlight build has one.
+**2026-11-07** — Asked what to do now that the simulator can't run the app's App Shortcuts → chose "Publish, try on my iPhone (Recommended)": the action's run moves to Matthew's TestFlight check after the publish.
+**2026-11-07** — Archived for the publish; the change is complete.

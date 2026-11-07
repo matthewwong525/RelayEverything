@@ -25,7 +25,7 @@
 - [x] 4.1 Add `lib/shortcuts/` with `shortcutsMain` and the `relay/shortcuts` channel (`add`, `get`), and drain `shortcuts-inbox/` in `RelayController.load`; Dart tests for `add` (text, files, empty refused), `get` (count, words, since) and the inbox drain.
 - [x] 4.2 Add `ios/Runner/RelayIntents.swift`: `AddNoteIntent`, `GetNotesIntent`, `StartVoiceNoteIntent`, `RelayNoteEntity`, `RelayShortcuts` provider, the warm `ShortcutsEngine`, the 20-second inbox fallback, all `@available(iOS 16, *)`; wire `AppDelegate.swift`; answer the design's open question; `flutter build ios --simulator` passes on the Mac check with deployment target 15.0.
 - [x] 4.3 Add the tap-to-stop recording sheet that *Start a voice note* opens, reusing `startVoiceNote`/`endVoiceNote`/`cancelVoiceNote`; widget test for Stop and Cancel.
-- [ ] 4.4 Add a device-check flow in `mobile/device-check/flows/` that runs *Add a note* on the simulator (`xcrun simctl` or a Shortcuts URL) and sees the note in the timeline.
+- [x] 4.4 Add a device-check flow in `mobile/device-check/flows/` that runs *Add a note* on the simulator (`xcrun simctl` or a Shortcuts URL) and sees the note in the timeline. The flow is written; the simulator can't run an unsigned build's App Shortcuts, so the action's own run moves to the TestFlight check after the publish.
 
 ## 5. Website and wiki
 

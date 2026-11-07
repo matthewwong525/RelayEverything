@@ -62,6 +62,7 @@ A new push to a labelled pull request does not run the check again. That keeps t
 
 - **No health data.** The simulator has almost none. Check health on your own iPhone through TestFlight ([builds on GitHub](../../mobile/README.md#builds-on-github)).
 - **No microphone, no server, no Pebble ring.** Claude marks those scenarios *could not check*.
+- **No App Shortcuts.** The simulator build has no Apple team signature, so the Shortcuts app shows *Unable to run App Shortcut* for each of the app's actions. `phone.log` then says *Unable to get teamId* and *Couldn't find AppShortcutsProvider*. Check a Shortcuts action on your own iPhone through TestFlight.
 - **Pictures and a video, not a live iPhone.** A Mac you can use live costs money.
 
 ## Add a Windows job

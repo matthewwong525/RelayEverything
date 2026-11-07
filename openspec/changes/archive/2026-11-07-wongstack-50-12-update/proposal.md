@@ -1,6 +1,6 @@
 # Update WongStack to 50.12.0
 
-**Status:** ready-to-ship
+**Status:** shipped
 **Branch:** sync-and-ship-change
 **Open questions:** none
 
@@ -61,3 +61,4 @@ This repo runs WongStack 50.10.0. Four releases came out since then (50.10.1 to 
 - **2026-11-07** — Assumed: no Relay Everything website page changes, because the update changes the assistant's tools, not the app, server, ring or connections.
 - **2026-11-07** — Check: `.agents/skills/browser/scripts/forwarder.test.mjs` deleted, because it tested `languageLine`, `network off` and `server.mjs`, which are gone; WongStack now owns the route code and tests it in `scripts/tests/`.
 - **2026-11-07** — Assumed: take upstream's browser comment in `.env.example`, because the old one still called the routes always on, and the preflight did not list that file; the key names stay blank and the same.
+- **2026-11-07** — Archived for shipping; the save before it passed CI on PR #46.

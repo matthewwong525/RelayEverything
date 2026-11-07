@@ -16,7 +16,7 @@
 - [x] 4.1 Run `node /root/.cache/wong-stack/WongStack/.claude/skills/wong-sync/scripts/merge-check.mjs --target . --source /root/.cache/wong-stack/WongStack --from 1d14a762d2bc132ed78f054aec8adeca3cb4e406`; take every missing hunk, or name each one left out on purpose.
 - [x] 4.2 Run `npm test` in `app/` and `node scripts/public-check.mjs --tree`; verify both pass with no check loosened.
 - [x] 4.3 Run `node .claude/skills/browser/scripts/browse.mjs status` and `browse.mjs proxy`; verify `BROWSE_PROXY=on` and a `BROWSE_NETWORK=` line, with no restart.
-- [ ] 4.4 Run `/save` and verify the pull request's checks pass.
+- [x] 4.4 Run `/save` and verify the pull request's checks pass.
 
 ## 5. Install record
 

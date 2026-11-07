@@ -8,7 +8,7 @@ Relay Everything can keep your phone's calendar events beside your notes, so you
 ## Turn it on
 
 1. Open **Settings**.
-2. Turn on **Send to Relay Everything**, if it is off: [Connect a phone](../../start/connect-a-phone/). The calendar works only with sending on, and the app reads no calendar while it is off.
+2. Turn on **Send my notes**, if it is off: [Connect a phone](../../start/connect-a-phone/). The calendar works only with sending on, and the app reads no calendar while it is off.
 3. Turn on **Calendar**.
 4. Allow the phone to read your calendars. On an iPhone, pick **Allow Full Access**.
 
@@ -41,7 +41,9 @@ Under **Calendar**, **Settings** shows when the events last went, such as *Last 
 
 ## Where your events go
 
-Your events go only to your own space on your Relay Everything server. From there:
+Your events go only to the place you pick in **Send my notes**. With **My own webhook**, the phone sends them straight to your receiver as [`calendar.events`](../../connections/your-database/#send-from-the-phone), and your server gets none. When you change the place, the phone sends the whole window to the new place.
+
+With **Relay Everything**, your events go only to your own space on your server. From there:
 
 - your AI reads them with the **calendar** tool: [Connect your AI](../../connections/connect-your-ai/)
 - your scripts read them at `GET /v1/calendar`: [Connect a service](../../api/connect-a-service/)
@@ -49,4 +51,4 @@ Your events go only to your own space on your Relay Everything server. From ther
 
 ## Turn it off
 
-Turn off **Calendar** in **Settings**. The phone stops reading and sending, and deletes the events that did not go yet. When you turn it on again, the app sends the whole window again. Turning off **Send to Relay Everything** also stops the calendar. To take back the phone's permission, use the phone's settings. [Privacy](../../privacy/) says what the server keeps.
+Turn off **Calendar** in **Settings**. The phone stops reading and sending, and deletes the events that did not go yet. When you turn it on again, the app sends the whole window again. Turning off **Send my notes** also stops the calendar. To take back the phone's permission, use the phone's settings. [Privacy](../../privacy/) says what the server keeps.

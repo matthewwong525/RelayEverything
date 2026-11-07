@@ -1,0 +1,9 @@
+{
+  "secret": "whsec_cmVsYXktZXZlcnl0aGluZy13ZWJob29rLWZpeHR1cmU=",
+  "headers": {
+    "webhook-id": "0f5c2a64-1d6e-4b7a-9c3e-2a8d5b7f6e10:test-1793801100000",
+    "webhook-timestamp": "1793801100",
+    "webhook-signature": "v1,u9N/UrmGke0LsH3SVvRfw9lfzsOWieeZeo+eYPm8oMw="
+  },
+  "body": "{\"version\":1,\"type\":\"webhook.test\",\"timestamp\":\"2026-11-04T14:05:00.000Z\",\"data\":{\"webhook\":{\"id\":\"0f5c2a64-1d6e-4b7a-9c3e-2a8d5b7f6e10\",\"name\":\"Android phone\"}}}"
+}

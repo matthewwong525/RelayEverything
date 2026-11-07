@@ -33,6 +33,8 @@ A recording's file store key is `people/<person id>/<note id>`, and a note file'
 
 The send log, `relay_outbox`, and `relay_webhooks` live in each space. A webhook takes notes always, and `health`, `locations` and `calendar` only when its owner ticks them; a changed or removed event goes out again as `calendar.events`, with its `status`. A queue message carries the webhook and its person, and the consumer opens that person's space. Each space with a webhook sets an alarm every 15 minutes, which wakes any webhook left behind and drops tries older than 30 days. No job walks over all spaces, and a space with no webhook costs nothing.
 
+The phone can also send format v1 itself, straight to one webhook, with no space: [`mobile/lib/data/webhook.dart`](../mobile/lib/data/webhook.dart). Its fixtures in `mobile/test/fixtures/webhook/` keep it and [`format.ts`](../app/worker/apps/relay/webhooks/format.ts) the same.
+
 ## The Workers and their order
 
 Three Workers serve Relay Everything, and each deploy goes in this order, because Cloudflare refuses a binding to a Worker that does not exist:

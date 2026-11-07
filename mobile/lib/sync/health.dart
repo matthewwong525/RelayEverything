@@ -149,8 +149,6 @@ Future<int> _queue(Store store, List<HealthDataPoint> points) async {
     for (final point in points)
       if (sampleOf(point) case final sample? when seen.add('${sample['type']} ${sample['start']} ${sample['end']} ${sample['source']}')) sample,
   ];
-  for (var at = 0; at < samples.length; at += 500) {
-    await store.enqueue('health', {'samples': samples.sublist(at, (at + 500).clamp(0, samples.length))});
-  }
+  await store.queueSamples(samples);
   return samples.length;
 }

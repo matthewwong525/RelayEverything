@@ -27,7 +27,7 @@ Mindful minutes come from an iPhone only: Health Connect does not give them to t
 ## Turn it on
 
 1. Open **Settings**.
-2. Turn on **Send to Relay Everything**, if it is off: [Connect a phone](../../start/connect-a-phone/). Health works only with sending on, and the app reads no health data while it is off.
+2. Turn on **Send my notes**, if it is off: [Connect a phone](../../start/connect-a-phone/). Health works only with sending on, and the app reads no health data while it is off.
 3. Turn on **Health**.
 4. Allow the phone to read the types you want. The phone shows a switch for each type, so you can leave any type off, such as cycle. The app skips a type you leave off, with no error. On Android, also allow Health Connect to read in the background and to read past data.
 
@@ -56,4 +56,4 @@ The server counts each day's totals, as the table in [What it reads](#what-it-re
 
 ## Turn it off
 
-Turn off **Health** in **Settings**. The phone stops sending. Turning off **Send to Relay Everything** also stops health, and deletes the health data that did not go yet. To take back the phone's permission, use Apple Health or Health Connect. [Privacy](../../privacy/) says what the server keeps.
+Turn off **Health** in **Settings**. The phone stops sending. Turning off **Send my notes** also stops health, and deletes the health data that did not go yet. To take back the phone's permission, use Apple Health or Health Connect. [Privacy](../../privacy/) says what the server keeps.

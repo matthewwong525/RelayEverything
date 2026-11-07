@@ -22,7 +22,7 @@ Future<void> wakeRound() async {
   try {
     final store = openStore();
     try {
-      done = await backgroundRound(store, connection: await KeyVault().read(), health: PhoneHealth(), sender: Sender(),
+      done = await savedRound(store, KeyVault(), health: PhoneHealth(), sender: Sender(),
         native: Platform.isIOS ? PhoneBackground() : null, places: PhonePlaces(), folder: getApplicationSupportDirectory,
         share: Platform.isIOS ? PhoneShareGroup() : null, calendar: PhoneCalendarSource());
     } finally {

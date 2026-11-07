@@ -8,6 +8,6 @@ appId: com.matthewwong525.relayApp
     timeout: 60000
 - tapOn: "Settings"
 # Flutter joins a row's title and subtitle into one label, so match its start.
-- assertVisible: 'Send to Relay Everything(.|\n)*'
+- assertVisible: 'Send my notes(.|\n)*'
 - assertVisible: 'Pin notes to where I am(.|\n)*'
 - takeScreenshot: settings

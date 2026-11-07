@@ -41,12 +41,13 @@ A note holds up to 10 files, each up to 25 MB, the same as a note you write: [Ad
 
 ## What is sent
 
-The card follows your **Send to Relay Everything** setting in [Settings](../settings/). The last line of the card tells you which:
+The card follows your **Send my notes** setting in [Settings](../settings/). The last line of the card tells you which:
 
 | Sending | The card says | What happens |
 |---|---|---|
 | Off | *Kept on this phone. Sending is off.* | The note stays on the phone. The card makes no network call. |
 | On | *Sending…*, then *Sent* | The note and its files go to your space before the card closes. |
 | On, with no signal | *Kept. It sends when you open Relay Everything.* | The note is safe on the phone. The app sends it the next time it opens or syncs. |
+| On, to [your own webhook](../../connections/your-database/#send-from-the-phone) | On iPhone: *Kept. It sends when you open Relay Everything.* | The iPhone card only keeps the note. The app sends it to your webhook the next time it opens or syncs. Android's card sends it at once. |
 
 If the card sends a note and the app sends it again, your server keeps it one time. [Privacy](../../privacy/)

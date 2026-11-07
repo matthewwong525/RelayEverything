@@ -46,14 +46,14 @@ With no speech model on the phone yet, the app asks to get it first. [Get the sp
 
 ## What is sent
 
-The actions follow your **Send to Relay Everything** setting in [Settings](../settings/):
+The actions follow your **Send my notes** setting in [Settings](../settings/):
 
 | Sending | Add a note | Get notes | Start a voice note |
 |---|---|---|---|
 | Off | Kept on the phone. The app makes no network call. | Reads the phone. Sends nothing. | Kept on the phone. |
 | On | Kept on the phone, and sent to your space at once, with its files. | Reads the phone. Sends nothing. | Kept on the phone; its words go to your space. |
 
-Your server sends a note on to your webhooks with each file's name, type and size, not the file. [Privacy](../../privacy/)
+Your server sends a note on to your webhooks with each file's name, type and size, not the file. When the phone sends to [your own webhook](../../connections/your-database/#send-from-the-phone), the note and its files go there, not to your space. [Privacy](../../privacy/)
 
 ## Recipes
 

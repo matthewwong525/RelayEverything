@@ -79,4 +79,4 @@ Relay Everything has no Windows app yet. When it has one, add a job `windows` be
 
 Run `node --test scripts/device-check.test.mjs`: CI does not run it. Check the workflow with `npx --yes @action-validator/cli .github/workflows/mobile-device-check.yml` before you save it.
 
-**Match a Flutter row by the start of its text.** Flutter joins a card's lines, or a row's title and its small text, into one label, such as `Send to Relay Everything\nYour server can…`. Maestro matches the whole label, so `assertVisible: "Send to Relay Everything"` fails. Write `assertVisible: 'Send to Relay Everything(.|\n)*'`, in single quotes. A failed flow keeps its screen's labels in `maestro/<flow>/…/screen-hierarchy/`, in the run's results.
+**Match a Flutter row by the start of its text.** Flutter joins a card's lines, or a row's title and its small text, into one label, such as `Send my notes\nOff: nothing leaves…`. Maestro matches the whole label, so `assertVisible: "Send my notes"` fails. Write `assertVisible: 'Send my notes(.|\n)*'`, in single quotes. A failed flow keeps its screen's labels in `maestro/<flow>/…/screen-hierarchy/`, in the run's results.

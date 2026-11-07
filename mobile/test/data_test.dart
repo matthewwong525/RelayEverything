@@ -170,6 +170,41 @@ void main() {
     });
   });
 
+  group('a webhook', () {
+    test('takes an https address, a home one too, and refuses others with a reason', () {
+      for (final good in ['https://db.example.com/relay', ' https://192.168.1.20:8443/in ', 'https://nas.local/hook']) {
+        expect(Webhook.addressProblem(good), isNull, reason: good);
+      }
+      expect([Webhook.addressProblem('http://db.example.com'), Webhook.addressProblem('db.example.com'),
+        Webhook.addressProblem('https://me:pw@db.example.com'), Webhook.addressProblem('https://')], [
+        'The address must start with https://.', 'The address must start with https://.',
+        'Take the user name and password out of the address.', 'Enter the whole address, such as https://db.example.com/relay.']);
+      expect(hook.host, 'db.example.com');
+    });
+
+    test('takes a whsec_ secret of 16 to 64 bytes, as Standard Webhooks libraries do', () {
+      expect([Webhook.secretProblem(fixtureSecret), Webhook.secretProblem(' $fixtureSecret\n')], [isNull, isNull]);
+      for (final bad in ['', 'cmVsYXk=', 'whsec_', 'whsec_not base64!', 'whsec_${'A' * 20}', 'whsec_${'A' * 100}']) {
+        expect(Webhook.secretProblem(bad), 'The secret must be whsec_ and then base64, as your receiver shows it.', reason: bad);
+      }
+    });
+
+    test('lives in the app\'s own secure group, apart from the key, and is forgotten alone', () async {
+      final storage = MemoryStorage();
+      final vault = KeyVault(storage);
+      expect(await vault.readWebhook(), isNull);
+      await vault.save(bearer);
+      await vault.saveWebhook(hook);
+      expect([(await vault.readWebhook())!.address, (await vault.readWebhook())!.secret], [hook.address, hook.secret]);
+      expect(storage.values.keys, containsAll(['relay.webhook.address', 'relay.webhook.secret']));
+      expect(storage.shared.keys.where((name) => name.contains('webhook')), isEmpty);
+      await vault.forget();
+      expect(await vault.readWebhook(), isNotNull);
+      await vault.forgetWebhook();
+      expect([await vault.readWebhook(), storage.values.keys.where((name) => name.contains('webhook'))], [isNull, isEmpty]);
+    });
+  });
+
   group('the API', () {
     test('sends the key in both Access headers, and the body as JSON', () async {
       final server = FakeServer();
@@ -292,11 +327,33 @@ void main() {
       expect([await store.sentAt(sentPoints), await store.waitingPoints()], [at.add(const Duration(hours: 1)), 1]);
     });
 
-    test('keeps each upload under its destination', () async {
+    test('keeps each upload under its destination, and queues to the place sending is set to', () async {
       await store.enqueue('notes', {'clientId': 'a'});
-      await store.enqueue('notes', {'clientId': 'b'}, destination: 'webhook');
-      expect([for (final item in await store.outbox()) item.body['clientId']], ['a']);
-      expect([for (final item in await store.outbox(destination: 'webhook')) item.body['clientId']], ['b']);
+      await store.enqueue('notes', {'clientId': 'b'}, destination: ownWebhook);
+      expect([for (final item in await store.outbox()) (item.body['clientId'], item.destination)],
+        [('a', relayServer), ('b', ownWebhook)]);
+      expect([for (final item in await store.outbox(destination: ownWebhook)) item.body['clientId']], ['b']);
+      expect(await store.destination(), relayServer);
+      await store.moveOutbox(ownWebhook);
+      await store.enqueue('notes', {'clientId': 'c'});
+      expect([await store.destination(), {for (final item in await store.outbox()) item.destination}], [ownWebhook, {ownWebhook}]);
+      await store.moveOutbox(relayServer);
+      expect({for (final item in await store.outbox()) item.destination}, {relayServer});
+    });
+
+    test('gives each sample and point an id once, and fills ids in uploads queued before ids', () async {
+      await store.enqueue('health', {'samples': [{'type': 'steps'}]});
+      await store.enqueue('locations', {'points': [{'lat': 1}]});
+      await store.queueSamples([for (var i = 0; i < 501; i++) {'type': 'steps'}]);
+      await store.addPoint(Pin(at: at, lat: 1, lon: 1, accuracy: 1));
+      await store.queuePoints();
+      await store.moveOutbox(ownWebhook);
+      final rows = [for (final item in await store.outbox()) ...(item.body['samples'] ?? item.body['points']) as List];
+      final all = [for (final row in rows) (row as Map)['id']];
+      expect([all.length, all.toSet().length, all.every((id) => id is int && id > 0)], [504, 504, true]);
+      expect([for (final item in await store.outbox()) item.route], ['health', 'locations', 'health', 'health', 'locations']);
+      final id = await store.installId();
+      expect([id, await store.installId()], [matches(RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')), id]);
     });
 
     test('keeps a typed note as waiting until its upload lands, in order', () async {

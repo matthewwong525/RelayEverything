@@ -41,7 +41,7 @@ void main() {
     expectOneLine(tester, 'Relay Everything');
     await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
-    expectOneLine(tester, 'Send to Relay Everything');
+    expectOneLine(tester, 'Send my notes');
     expect(tester.takeException(), isNull);
   });
 }

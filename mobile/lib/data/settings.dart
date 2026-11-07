@@ -7,13 +7,16 @@ const settingsKey = 'settings';
 /// arrival and departure; [move] each 100 m, or each 5 minutes while still. Android keeps a point each 100 m.
 enum LocationMode { battery, move }
 
+/// Where sending goes: the person's Relay Everything [server], or their own [webhook]. Never both.
+enum SendPlace { server, webhook }
+
 /// What the person turned on. Each asks for its permission when turned on, and never before.
 ///
 /// Sending is off by default: notes stay on this phone. Health, location history and the calendar exist only to send,
 /// so they are off whenever sending is off. [calendarsOff] holds the ids of the phone's calendars the person turned off.
 class Settings {
   const Settings({this.sending = false, this.pinNotes = false, bool history = false, bool health = false,
-    bool calendar = false, this.calendarsOff = const {}, this.mode = LocationMode.battery})
+    bool calendar = false, this.calendarsOff = const {}, this.mode = LocationMode.battery, this.place = SendPlace.server})
     : history = sending && history, health = sending && health, calendar = sending && calendar;
 
   final bool sending;
@@ -23,15 +26,17 @@ class Settings {
   final bool calendar;
   final Set<String> calendarsOff;
   final LocationMode mode;
+  /// Where sending goes. Settings from before there was a choice read as [SendPlace.server].
+  final SendPlace place;
 
   Settings copyWith({bool? sending, bool? pinNotes, bool? history, bool? health, bool? calendar, Set<String>? calendarsOff,
-    LocationMode? mode}) => Settings(
+    LocationMode? mode, SendPlace? place}) => Settings(
     sending: sending ?? this.sending, pinNotes: pinNotes ?? this.pinNotes,
     history: history ?? this.history, health: health ?? this.health, calendar: calendar ?? this.calendar,
-    calendarsOff: calendarsOff ?? this.calendarsOff, mode: mode ?? this.mode);
+    calendarsOff: calendarsOff ?? this.calendarsOff, mode: mode ?? this.mode, place: place ?? this.place);
 
   String encode() => jsonEncode({'sending': sending, 'pinNotes': pinNotes, 'history': history, 'health': health,
-    'calendar': calendar, 'calendarsOff': (calendarsOff.toList()..sort()), 'mode': mode.name});
+    'calendar': calendar, 'calendarsOff': (calendarsOff.toList()..sort()), 'mode': mode.name, 'place': place.name});
 
   /// Reads saved settings. Settings from before sending was a switch, or none on a phone with a key, come from the
   /// first version, which sent everything: that install keeps sending on, so nothing it set up stops.
@@ -47,6 +52,7 @@ class Settings {
       calendar: json['calendar'] as bool? ?? false,
       calendarsOff: {for (final id in json['calendarsOff'] as List? ?? const []) if (id is String) id},
       mode: LocationMode.values.asNameMap()[json['mode']] ?? LocationMode.battery,
+      place: SendPlace.values.asNameMap()[json['place']] ?? SendPlace.server,
     );
   }
 }

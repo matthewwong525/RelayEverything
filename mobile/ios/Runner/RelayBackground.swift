@@ -244,8 +244,9 @@ enum RelayChannels {
       case "appGroupPath":
         return result(FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)?.path)
       case "setShareSettings":
-        let sending = (call.arguments as? [String: Any])?["sending"] as? Bool ?? false
-        UserDefaults(suiteName: group)?.set(sending, forKey: "sending")
+        let arguments = call.arguments as? [String: Any]
+        UserDefaults(suiteName: group)?.set(arguments?["sending"] as? Bool ?? false, forKey: "sending")
+        UserDefaults(suiteName: group)?.set(arguments?["later"] as? Bool ?? false, forKey: "later")
         return result(nil)
       default:
         break

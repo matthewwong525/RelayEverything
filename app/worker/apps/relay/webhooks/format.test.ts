@@ -1,6 +1,7 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { Webhook } from "standardwebhooks";
 import { afterEach, expect, it, vi } from "vitest";
+import * as format from "./format.ts";
 import { calendarEvents, healthSamples, jsonSchema, locationPoints, message, noteCreated, noteUpdated, webhookTest, type NoteRow } from "./format.ts";
 import { base64, newSecret, signedHeaders } from "./sign.ts";
 
@@ -87,4 +88,37 @@ it("lists a note's files by name, type and size, never their bytes, and leaves t
   expect(JSON.stringify(built)).not.toContain("file_key");
   expect(noteCreated(typed, null, AT).data).not.toHaveProperty("note.attachments");
   expect(() => message.parse({ ...built, data: { note: { ...note, attachments: [{ ...pdf, base64: "AAAA" }] } } })).toThrow();
+});
+
+it("takes a note's file with its bytes, which only the phone sends: no server builder makes one", () => {
+  const file = { version: 1, type: "note.file", timestamp: "2026-11-04T14:01:02.000Z", data: { note_id: typed.id,
+    file: { id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 4, base64: "AAAAGA==" } } };
+  expect(message.parse(file)).toEqual(file);
+  expect(() => message.parse({ ...file, data: { ...file.data, file: { ...file.data.file, base64: undefined } } })).toThrow();
+  expect(Object.keys(format).sort()).toEqual(["calendarEvents", "healthSamples", "jsonSchema", "locationPoints", "message", "noteCreated", "noteUpdated",
+    "webhookTest"]);
+  for (const name of ["send.ts", "routes.ts", "sweep.ts"]) {
+    expect(readFileSync(new URL(name, import.meta.url), "utf8"), name).not.toContain("note.file");
+  }
+});
+
+// The phone writes these from mobile/test/webhook_test.dart: one of each message it builds, signed with a fixed secret.
+const fixtures = new URL("../../../../../mobile/test/fixtures/webhook/", import.meta.url);
+
+it("takes each message the phone builds, and its signature passes the server's own signing", async () => {
+  const names = readdirSync(fixtures).filter(name => name.endsWith(".json")).sort();
+  expect(names).toEqual(["calendar.events.json", "health.samples.json", "location.points.json", "note.created.json", "note.file.json", "webhook.test.json"]);
+  for (const name of names) {
+    const { secret, headers, body } = JSON.parse(readFileSync(new URL(name, fixtures), "utf8")) as
+      { secret: string; headers: Record<string, string>; body: string };
+    const parsed = message.parse(JSON.parse(body));
+    expect(parsed.type, name).toBe(name.replace(/\.json$/, ""));
+    const sent = Number(headers["webhook-timestamp"]) * 1000;
+    const server = await signedHeaders(secret, headers["webhook-id"], body, sent);
+    expect(headers["webhook-signature"], name).toBe(server["webhook-signature"]);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(sent);
+    expect(new Webhook(secret).verify(body, headers), name).toEqual(JSON.parse(body));
+    vi.useRealTimers();
+  }
 });

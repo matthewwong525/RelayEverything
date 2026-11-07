@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
@@ -13,6 +14,7 @@ import 'data/sender.dart';
 import 'data/settings.dart';
 import 'data/sign_in.dart';
 import 'data/store.dart';
+import 'data/webhook.dart';
 import 'relay.dart';
 import 'share/inbox.dart';
 import 'shortcuts/inbox.dart';
@@ -60,8 +62,9 @@ String newClientId([Random? random]) {
 class RelayController extends Relay {
   RelayController({required this.store, required this.vault, required this.places, required this.health,
     RelayApi Function(Connection)? apiFor, http.Client Function()? signInClient, WebAuth? webAuth, DateTime Function()? clock,
-    this.schedule, this.voice, this.native, this.folder, this.opener, this.share, this.calendar})
-    : _sender = Sender(apiFor, signInClient), _webAuth = webAuth ?? phoneWebAuth, _clock = clock ?? DateTime.now {
+    WebhookClient Function(Webhook webhook, String installId)? webhookFor, this.schedule, this.voice, this.native, this.folder,
+    this.opener, this.share, this.calendar})
+    : _sender = Sender(apiFor, signInClient, webhookFor), _webAuth = webAuth ?? phoneWebAuth, _clock = clock ?? DateTime.now {
     voice?.model.addListener(notifyListeners);
     // A recording at its longest ends as if the person let go.
     voice?.recorder.onLongest = (recording) {
@@ -94,6 +97,9 @@ class RelayController extends Relay {
   final DateTime Function() _clock;
 
   Connection? _connection;
+  Webhook? _webhook;
+  String? _installId;
+  WebhookProblem? _problem;
   List<Entry> _entries = const [];
   SyncStatus _status = SyncStatus.idle;
   int _waiting = 0;
@@ -121,20 +127,30 @@ class RelayController extends Relay {
   @override SendState get calendarSent => _calendarSent;
   @override List<PhoneCalendar> get calendars => _calendars;
   @override bool get locationModes => native != null;
+  @override String? get webhookAddress => _webhook?.address;
+  @override String? get webhookSecret => _webhook?.secret;
+  @override WebhookProblem? get webhookProblem => _problem;
 
-  RelayApi? get _api => _sender.api(_settings, _connection);
+  Outbound? get _api => _sender.api(_settings, connection: _connection, webhook: _webhook, installId: _installId);
+
+  /// True when [place] has what it sends with: a key for the server, or a webhook's address and secret.
+  bool _ready(SendPlace place) => place == SendPlace.server ? _connection != null : _webhook != null;
 
   /// Reads the key, the settings and the notes, so the app opens with no network. With [watch] false, as in the
   /// Android share card's window, it starts no location history: the app's own engine keeps it.
   Future<void> load({bool watch = true}) async {
     // The app is open, so the phone is unlocked: a key kept by an earlier version is saved again for locked-phone wakes.
     _connection = await vault.upgrade();
+    _webhook = await vault.readWebhook();
+    _installId = await store.installId();
     final saved = await store.get(settingsKey);
     _settings = Settings.decode(saved, hasKey: _connection != null);
-    // A phone that lost its key, such as from a restore, can not send: sending reads as off until a new key.
-    if (_connection == null && _settings.sending) _settings = _settings.copyWith(sending: false);
+    // A phone that lost its key or webhook, such as from a restore, can not send: sending reads as off until set again.
+    if (_settings.sending && !_ready(_settings.place)) _settings = _settings.copyWith(sending: false);
     // The first version's settings, read once by the upgrade rule, are saved in today's shape.
     if (_settings.encode() != saved) await store.set(settingsKey, _settings.encode());
+    final destination = destinationOf(_settings.place);
+    if (await store.destination() != destination) await store.moveOutbox(destination);
     await store.remove(_oldTimeline);
     await _tellNative();
     await _tellShare();
@@ -202,6 +218,7 @@ class RelayController extends Relay {
     _waiting = await store.waiting();
     _healthSent = SendState(at: await store.sentAt(sentHealth), waiting: await store.waitingReadings());
     _pointsSent = SendState(at: await store.sentAt(sentPoints), waiting: await store.waitingPoints());
+    _problem = _problemOf(await store.get(webhookProblemKey));
     _calendarSent = SendState(at: await store.sentAt(sentCalendar), waiting: await store.waitingEvents());
     _entries = [for (final note in notes) _entryOfLocal(note)];
     notifyListeners();
@@ -271,14 +288,61 @@ class RelayController extends Relay {
   @override
   Future<int> earlierNotes() => store.earlierCount();
 
+  static WebhookProblem? _problemOf(String? saved) {
+    if (saved == null) return null;
+    final json = jsonDecode(saved) as Map<String, dynamic>;
+    return WebhookProblem(at: DateTime.fromMillisecondsSinceEpoch(json['at'] as int), status: json['status'] as int?,
+      file: json['file'] as String?);
+  }
+
+  /// Moves what waits to [place] in one step, so nothing goes to the place left. A round sending there stops at its next
+  /// upload, and a new round starts after it.
   @override
-  Future<String?> startSending({required bool sendEarlier}) async {
-    if (_connection == null) return 'Connect a key first.';
+  Future<String?> startSending({required bool sendEarlier, SendPlace? place}) async {
+    final to = place ?? _settings.place;
+    if (!_ready(to)) return to == SendPlace.server ? 'Connect a key first.' : 'Set your webhook first.';
+    await store.moveOutbox(destinationOf(to));
     if (sendEarlier) await store.queueEarlier();
-    await _saveSettings(_settings.copyWith(sending: true));
+    await _saveSettings(_settings.copyWith(sending: true, place: to));
     await _refreshLocal();
-    unawaited(sync());
+    final running = _syncing;
+    unawaited(running == null ? sync() : running.then((_) => sync()));
     return null;
+  }
+
+  @override
+  String newWebhookSecret() => makeWebhookSecret();
+
+  /// Checks the address and secret, as both [saveWebhook] and [testWebhook] take them.
+  static (Webhook?, String?) _webhookOf(String address, String secret) {
+    final problem = Webhook.addressProblem(address) ?? Webhook.secretProblem(secret);
+    return problem != null ? (null, problem) : (Webhook(address: address.trim(), secret: secret.trim()), null);
+  }
+
+  @override
+  Future<String?> saveWebhook(String address, String secret) async {
+    final (webhook, problem) = _webhookOf(address, secret);
+    if (webhook == null) return problem;
+    await vault.saveWebhook(webhook);
+    _webhook = webhook;
+    // A new address or secret starts with no failure to show.
+    await store.remove(webhookProblemKey);
+    _problem = null;
+    notifyListeners();
+    return null;
+  }
+
+  @override
+  Future<String> testWebhook(String address, String secret) async {
+    final (webhook, problem) = _webhookOf(address, secret);
+    if (webhook == null) return problem!;
+    final status = await _sender.tryWebhook(webhook, _installId ?? await store.installId()).test();
+    return switch (status) {
+      null => 'No answer from ${webhook.host}. Check the address, and that your receiver is running.',
+      final ok when ok >= 200 && ok < 300 => 'Your receiver answered $ok. It works.',
+      401 || 403 => 'Your receiver answered $status. Check that it has this secret.',
+      _ => 'Your receiver answered $status.',
+    };
   }
 
   @override
@@ -311,10 +375,12 @@ class RelayController extends Relay {
     notifyListeners();
   }
 
-  /// Tells the iPhone's share card whether it may send: only while sending is on and a key is kept.
+  /// Tells the iPhone's share card whether it may send: only while sending to the server is on and a key is kept. While
+  /// the phone sends to the person's own webhook, the card only keeps each share, and the app sends it.
   Future<void> _tellShare() async {
+    final server = _settings.place == SendPlace.server;
     try {
-      await share?.setSending(_settings.sending && _connection != null);
+      await share?.setSending(_settings.sending && server && _connection != null, later: _settings.sending && !server);
     } on Exception {
       // An engine with no Swift side; the next start tells it again.
     }
@@ -330,7 +396,7 @@ class RelayController extends Relay {
   }
 
   static const _noLocation = 'Relay Everything may not read your location. Allow it in the phone\'s settings.';
-  static const _sendFirst = 'Turn on Send to Relay Everything first.';
+  static const _sendFirst = 'Turn on Send my notes first.';
 
   @override
   Future<String?> setPinNotes(bool on) async {
@@ -585,7 +651,9 @@ class RelayController extends Relay {
     }
     if (_settings.history) await _drain();
     if (_settings.sending) await store.queuePoints();
-    final result = await flush(store, api, clock: _clock, keepGoing: () => _settings.sending, folder: folder);
+    final place = _settings.place;
+    final result = await flush(store, api, clock: _clock, keepGoing: () => _settings.sending && _settings.place == place,
+      folder: folder);
     _status = switch (result.failure) { Failure.refused => SyncStatus.refused, null => SyncStatus.synced, _ => SyncStatus.offline };
     // The stop's own state wins.
     if (!_settings.sending) _status = SyncStatus.idle;

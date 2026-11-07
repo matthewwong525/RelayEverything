@@ -12,7 +12,7 @@ Relay Everything uses your location two ways: it pins each typed note to where y
 ## Location history
 
 1. Open **Settings**.
-2. Turn on **Send to Relay Everything**, if it is off: [Connect a phone](../../start/connect-a-phone/). Location history works only with sending on.
+2. Turn on **Send my notes**, if it is off: [Connect a phone](../../start/connect-a-phone/). Location history works only with sending on.
 3. Turn on **Location history**.
 4. Allow your location. An iPhone asks a second time: choose **Always Allow**, so the app can record when it is closed.
 
@@ -29,4 +29,4 @@ Under **Location history**, **Settings** shows when the points last went, and ho
 
 ## Turn it off
 
-Turn off **Pin notes to where I am** or **Location history** in **Settings**. The phone stops at once. Turning off **Send to Relay Everything** also stops the history, and deletes the points that did not go yet. [Privacy](../../privacy/) says what the server keeps.
+Turn off **Pin notes to where I am** or **Location history** in **Settings**. The phone stops at once. Turning off **Send my notes** also stops the history, and deletes the points that did not go yet. [Privacy](../../privacy/) says what the server keeps.

@@ -26,7 +26,7 @@ export function PhoneSteps({ made }: { made: Made }) {
   return <ol className="grid list-decimal gap-3 pl-5">
     <li>Install the app: on Android, the newest file from <a className="underline" href={RELEASES}>Relay Everything's releases</a>; on iPhone, the
       newest build in <a className="underline" href={TESTFLIGHT}>TestFlight</a>.</li>
-    <li>In the app, open <b>Settings</b> and turn on <b>Send to Relay Everything</b>. Then tap <b>Scan the QR code</b> and scan this code:
+    <li>In the app, open <b>Settings</b> and turn on <b>Send my notes</b>. Then tap <b>Scan the QR code</b> and scan this code:
       <div className="mt-2"><Qr text={made.qr} label={`QR code for ${made.name}`} /></div></li>
     <li>No camera? Paste the code in the app:<div className="mt-2"><CopyText text={made.qr} label="Copy the code" /></div></li>
   </ol>

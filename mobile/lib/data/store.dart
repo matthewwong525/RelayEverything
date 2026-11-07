@@ -1,6 +1,10 @@
 import 'dart:convert';
 
+import 'dart:math';
+
 import 'package:drift/drift.dart';
+
+import 'settings.dart';
 
 /// How a note on this phone was made.
 enum NoteKind { typed, voice }
@@ -87,19 +91,27 @@ class Pin {
     {'at': at.millisecondsSinceEpoch, 'lat': lat, 'lon': lon, 'accuracy': accuracy, if (place != null) 'place': place};
 }
 
-/// Where an upload goes. Only the Relay server today; a later change can add another, such as a webhook.
-const relayServer = 'relay-server';
+/// Where an upload goes: the person's Relay Everything server, or their own webhook. Each waiting upload keeps one.
+const relayServer = 'relay-server', ownWebhook = 'webhook';
+
+/// The outbox destination for [place].
+String destinationOf(SendPlace place) => place == SendPlace.webhook ? ownWebhook : relayServer;
+
+/// The `state` keys: the destination new uploads take, this install's own id, and the next health or point id.
+const _destination = 'outbox.destination', _installId = 'install.id', _nextId = 'ids.next';
 
 /// When an upload of health, of location points, or of calendar events last reached the server, in the store's `state`.
 const sentHealth = 'sent.health', sentPoints = 'sent.points', sentCalendar = 'sent.calendar';
 
-/// One waiting upload: a route and the JSON body to send it.
+/// One waiting upload: a route and the JSON body to send it, where it goes, and when the phone queued it.
 class OutboxItem {
-  const OutboxItem(this.id, this.route, this.body);
+  const OutboxItem(this.id, this.route, this.body, {required this.destination, required this.createdAt});
 
   final int id;
   final String route;
   final Map<String, dynamic> body;
+  final String destination;
+  final DateTime createdAt;
 }
 
 const _voiceColumns = "kind TEXT NOT NULL DEFAULT 'typed', audio_path TEXT, duration_ms INTEGER, "
@@ -174,15 +186,76 @@ class Store extends GeneratedDatabase {
 
   Future<void> _run(String sql, [List<Object?> values = const []]) => customStatement(sql, values);
 
-  Future<void> enqueue(String route, Map<String, dynamic> body, {String destination = relayServer}) =>
-    _run('INSERT INTO outbox (destination, route, body, created_at) VALUES (?, ?, ?, ?)',
-      [destination, route, jsonEncode(body), DateTime.now().millisecondsSinceEpoch]);
+  /// Queues one upload. With no [destination] it takes the current one, read in the same statement, so an upload never
+  /// lands on the place the person just left.
+  Future<void> enqueue(String route, Map<String, dynamic> body, {String? destination}) =>
+    _run("INSERT INTO outbox (destination, route, body, created_at) VALUES (coalesce(?, (SELECT value FROM state WHERE key = "
+      "'$_destination'), '$relayServer'), ?, ?, ?)", [destination, route, jsonEncode(body), DateTime.now().millisecondsSinceEpoch]);
 
-  /// Every waiting upload for [destination], oldest first.
-  Future<List<OutboxItem>> outbox({String destination = relayServer}) async => [
-    for (final row in await _rows('SELECT id, route, body FROM outbox WHERE destination = ? ORDER BY id', [destination]))
-      OutboxItem(row.read<int>('id'), row.read<String>('route'), jsonDecode(row.read<String>('body')) as Map<String, dynamic>),
+  /// Every waiting upload, or those for [destination], oldest first.
+  Future<List<OutboxItem>> outbox({String? destination}) async => [
+    for (final row in await _rows('SELECT id, destination, route, body, created_at FROM outbox '
+        '${destination == null ? '' : 'WHERE destination = ? '}ORDER BY id', [?destination])) _outboxItem(row),
   ];
+
+  /// The waiting upload [id] as it is now, or null when it is gone.
+  Future<OutboxItem?> outboxItem(int id) async {
+    final rows = await _rows('SELECT id, destination, route, body, created_at FROM outbox WHERE id = ?', [id]);
+    return rows.isEmpty ? null : _outboxItem(rows.single);
+  }
+
+  static OutboxItem _outboxItem(QueryRow row) => OutboxItem(row.read<int>('id'), row.read<String>('route'),
+    jsonDecode(row.read<String>('body')) as Map<String, dynamic>, destination: row.read<String>('destination'),
+    createdAt: DateTime.fromMillisecondsSinceEpoch(row.read<int>('created_at')));
+
+  /// The destination new uploads take.
+  Future<String> destination() async => await get(_destination) ?? relayServer;
+
+  /// Sends every waiting upload, and each new one, to [destination], in one step. Health and points queued before they
+  /// had ids get them here, as a webhook message needs them. A new place has none of the calendar, so the phone forgets
+  /// what went and the next read sends the whole window there.
+  Future<void> moveOutbox(String destination) => transaction(() async {
+    if (await this.destination() != destination) await _dropCalendar();
+    await set(_destination, destination);
+    for (final row in await _rows("SELECT id, body FROM outbox WHERE route IN ('health', 'locations')")) {
+      final body = jsonDecode(row.read<String>('body')) as Map<String, dynamic>;
+      final items = [for (final item in (body['samples'] ?? body['points']) as List) item as Map<String, dynamic>];
+      final missing = items.where((item) => item['id'] == null).toList();
+      if (missing.isEmpty) continue;
+      var id = await _takeIds(missing.length);
+      for (final item in missing) {
+        item['id'] = id++;
+      }
+      await _run('UPDATE outbox SET body = ? WHERE id = ?', [jsonEncode(body), row.read<int>('id')]);
+    }
+    await _run('UPDATE outbox SET destination = ?', [destination]);
+  });
+
+  /// This install's own id, a UUID made once: a webhook message names the phone by it.
+  Future<String> installId() => transaction(() async {
+    final kept = await get(_installId);
+    if (kept != null) return kept;
+    final made = newUuid();
+    await set(_installId, made);
+    return made;
+  });
+
+  /// The first of [count] new ids for health readings or points, unique on this phone. Run it inside a transaction.
+  Future<int> _takeIds(int count) async {
+    final first = int.tryParse(await get(_nextId) ?? '') ?? 1;
+    await set(_nextId, '${first + count}');
+    return first;
+  }
+
+  /// Queues health readings, 500 to a batch, each with its own id, so a message sent again keeps the same ids.
+  Future<void> queueSamples(List<Map<String, dynamic>> samples) => transaction(() async {
+    var id = await _takeIds(samples.length);
+    for (var at = 0; at < samples.length; at += 500) {
+      await enqueue('health', {'samples': [
+        for (final sample in samples.sublist(at, min(at + 500, samples.length))) {...sample, 'id': id++},
+      ]});
+    }
+  });
 
   /// Waiting uploads, and notes that wait for their pin.
   Future<int> waiting() async => (await _rows(
@@ -411,7 +484,10 @@ class Store extends GeneratedDatabase {
     while (true) {
       final rows = await _rows('SELECT at, body FROM points ORDER BY at LIMIT ?', [batch]);
       if (rows.isEmpty) return;
-      await enqueue('locations', {'points': [for (final row in rows) jsonDecode(row.read<String>('body'))]});
+      var id = await _takeIds(rows.length);
+      await enqueue('locations', {'points': [
+        for (final row in rows) {...jsonDecode(row.read<String>('body')) as Map<String, dynamic>, 'id': id++},
+      ]});
       await _run('DELETE FROM points WHERE at <= ?', [rows.last.read<int>('at')]);
     }
   });
@@ -444,4 +520,14 @@ class Store extends GeneratedDatabase {
   Future<void> set(String key, String value) => _run('INSERT OR REPLACE INTO state (key, value) VALUES (?, ?)', [key, value]);
 
   Future<void> remove(String key) => _run('DELETE FROM state WHERE key = ?', [key]);
+}
+
+/// A random UUID, version 4.
+String newUuid([Random? random]) {
+  final source = random ?? Random.secure();
+  final bytes = List.generate(16, (_) => source.nextInt(256));
+  bytes[6] = bytes[6] & 0x0f | 0x40;
+  bytes[8] = bytes[8] & 0x3f | 0x80;
+  final hex = [for (final byte in bytes) byte.toRadixString(16).padLeft(2, '0')].join();
+  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
 }

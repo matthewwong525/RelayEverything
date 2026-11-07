@@ -13,9 +13,10 @@ const shareInboxFolder = 'share-inbox';
 
 /// The App Group the iPhone app shares with its share card, through Swift on `relay/files`. Android has none.
 abstract class ShareGroup {
-  /// Tells the share card whether it may send: true only while sending is on and the phone has a key. The key itself
-  /// never goes here: the card reads it from the shared Keychain group.
-  Future<void> setSending(bool on);
+  /// Tells the share card whether it may send: true only while sending to the server is on and the phone has a key.
+  /// The key itself never goes here: the card reads it from the shared Keychain group. [later] is true while the phone
+  /// sends to the person's own webhook: the card only keeps each share, and says the app sends it.
+  Future<void> setSending(bool on, {bool later = false});
 
   /// The App Group's folder, or null when this build has none.
   Future<Directory?> folder();
@@ -25,7 +26,8 @@ class PhoneShareGroup implements ShareGroup {
   static const _channel = MethodChannel('relay/files');
 
   @override
-  Future<void> setSending(bool on) => _channel.invokeMethod<void>('setShareSettings', {'sending': on});
+  Future<void> setSending(bool on, {bool later = false}) =>
+    _channel.invokeMethod<void>('setShareSettings', {'sending': on, 'later': later});
 
   @override
   Future<Directory?> folder() async {

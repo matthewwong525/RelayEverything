@@ -8,7 +8,7 @@ import 'sync/calendar.dart';
 import 'voice/model.dart';
 
 export 'data/attachments.dart' show NewFile, sizeLabel;
-export 'data/settings.dart' show LocationMode, Settings;
+export 'data/settings.dart' show LocationMode, SendPlace, Settings;
 export 'sync/calendar.dart' show PhoneCalendar;
 export 'voice/model.dart' show ModelState, ModelProblem;
 
@@ -62,6 +62,16 @@ class SendState {
   final int waiting;
 }
 
+/// The last time the person's own webhook did not take an upload: its answer's [status], or null for no answer. A
+/// [file] is a file it refused as too large, which the phone dropped.
+class WebhookProblem {
+  const WebhookProblem({required this.at, this.status, this.file});
+
+  final DateTime at;
+  final int? status;
+  final String? file;
+}
+
 /// What the screens read and do. The app's controller is one; a test's fake is another.
 abstract class Relay extends ChangeNotifier {
   bool get connected;
@@ -98,8 +108,21 @@ abstract class Relay extends ChangeNotifier {
 
   /// How many notes never went to the server: the earlier-notes prompt asks about them when sending turns on.
   Future<int> earlierNotes();
-  /// Turns sending on, with a key already kept; [sendEarlier] queues the earlier notes too, oldest first.
-  Future<String?> startSending({required bool sendEarlier});
+  /// Turns sending on to [place], or to the place set before, with its key or webhook already kept. What waits moves
+  /// there too. [sendEarlier] queues the earlier notes too, oldest first.
+  Future<String?> startSending({required bool sendEarlier, SendPlace? place});
+
+  /// The person's own webhook, when one is kept: its address and secret.
+  String? get webhookAddress;
+  String? get webhookSecret;
+  /// The last answer from the webhook that was not 2xx, or null.
+  WebhookProblem? get webhookProblem;
+  /// A new `whsec_` secret to show, copy and save.
+  String newWebhookSecret();
+  /// Keeps the webhook's address and secret; returns why it could not.
+  Future<String?> saveWebhook(String address, String secret);
+  /// *Send a test*: a signed test message to [address]. Returns the words to show: the receiver's answer, or why not.
+  Future<String> testWebhook(String address, String secret);
   /// Turns sending off: stops health, the calendar and location history and drops what of them did not go. Keeps notes
   /// and the key.
   Future<void> stopSending();

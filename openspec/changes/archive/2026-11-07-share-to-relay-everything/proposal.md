@@ -1,6 +1,6 @@
 # Share to Relay Everything from any app
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** chosen-cat
 **Open questions:** none
 
@@ -116,3 +116,4 @@ None.
 **2026-11-07** — Assumed: the hand check on Matthew's iPhone (share a Safari page and a photo, sending on, then off) runs after the publish, not as a build task, because TestFlight builds come only from `main`.
 **2026-11-07** — Built the share card on iPhone (a Swift share extension) and Android (a see-through window), the inbox drain, and the website page; a second look found 3 bugs (iPhone files sent from a moved folder, Android list not reloaded on return, a double take of one share), all fixed. The Swift code is compiled first by CI on the Mac.
 **2026-11-07** — The first iPhone build failed: the build key registered the share card's app ID but gave neither ID the App Group. Matthew said yes, and the assistant registered `group.com.matthewwong525.relayApp` on the Apple developer site and turned it on for `com.matthewwong525.relayApp` and `com.matthewwong525.relayApp.share`; the wiki's *Phone builds* section now says how.
+**2026-11-07** — The iPhone device check (run 42387327750) said works: the card opened over Safari with the title, link and *Kept on this phone. Sending is off.*, *Save* closed it, and the note showed in the timeline; the Swift tests passed. The photo share was not checked (no photo on the simulator). The Maestro flow `share-link.yaml` fails on this iOS, whose Safari keeps *Share* in its *…* menu; Claude's check covered the same steps by hand.

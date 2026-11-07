@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · share-to-relay-everything</title>
+<title>Review · 2026-11-07-share-to-relay-everything</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="share-to-relay-everything" data-own-back>
+<body data-change="2026-11-07-share-to-relay-everything" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>share-to-relay-everything</h1>
+  <h1>2026-11-07-share-to-relay-everything</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -454,7 +454,7 @@
 </section>
 <section id="decisions" aria-labelledby="decisions-h"><h2 id="decisions-h">Decisions</h2>
 <ol class="decisions">
-<li class="decision card" id="decision-1" data-note="decision-1" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-07</p>Check: <code>.github/workflows/mobile-device-check.yml</code> gets a new <i>Swift tests</i> step and loosens nothing, because the share card's Swift rules must be checked against the Dart ones on the Mac; a failure there makes the check broken. <b>2026-11-07</b> — Assumed: the hand check on Matthew's iPhone (share a Safari page and a photo, sending on, then off) runs after the publish, not as a build task, because TestFlight builds come only from <code>main</code>. <b>2026-11-07</b> — Built the share card on iPhone (a Swift share extension) and Android (a see-through window), the inbox drain, and the website page; a second look found 3 bugs (iPhone files sent from a moved folder, Android list not reloaded on return, a double take of one share), all fixed. The Swift code is compiled first by CI on the Mac. <b>2026-11-07</b> — The first iPhone build failed: the build key registered the share card's app ID but gave neither ID the App Group. Matthew said yes, and the assistant registered <code>group.com.matthewwong525.relayApp</code> on the Apple developer site and turned it on for <code>com.matthewwong525.relayApp</code> and <code>com.matthewwong525.relayApp.share</code>; the wiki's <i>Phone builds</i> section now says how.</li>
+<li class="decision card" id="decision-1" data-note="decision-1" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-07</p>Check: <code>.github/workflows/mobile-device-check.yml</code> gets a new <i>Swift tests</i> step and loosens nothing, because the share card's Swift rules must be checked against the Dart ones on the Mac; a failure there makes the check broken. <b>2026-11-07</b> — Assumed: the hand check on Matthew's iPhone (share a Safari page and a photo, sending on, then off) runs after the publish, not as a build task, because TestFlight builds come only from <code>main</code>. <b>2026-11-07</b> — Built the share card on iPhone (a Swift share extension) and Android (a see-through window), the inbox drain, and the website page; a second look found 3 bugs (iPhone files sent from a moved folder, Android list not reloaded on return, a double take of one share), all fixed. The Swift code is compiled first by CI on the Mac. <b>2026-11-07</b> — The first iPhone build failed: the build key registered the share card's app ID but gave neither ID the App Group. Matthew said yes, and the assistant registered <code>group.com.matthewwong525.relayApp</code> on the Apple developer site and turned it on for <code>com.matthewwong525.relayApp</code> and <code>com.matthewwong525.relayApp.share</code>; the wiki's <i>Phone builds</i> section now says how. <b>2026-11-07</b> — The iPhone device check (run 42387327750) said works: the card opened over Safari with the title, link and <i>Kept on this phone. Sending is off.</i>, <i>Save</i> closed it, and the note showed in the timeline; the Swift tests passed. The photo share was not checked (no photo on the simulator). The Maestro flow <code>share-link.yaml</code> fails on this iOS, whose Safari keeps <i>Share</i> in its <i>…</i> menu; Claude's check covered the same steps by hand.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

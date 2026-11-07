@@ -54,7 +54,7 @@ const phone = (type: string) =>
   (JSON.parse(readFileSync(new URL(`../../../../../mobile/test/fixtures/webhook/${type}.json`, import.meta.url), "utf8")) as { body: string }).body;
 
 it("saves what the phone sends to its own webhook, with each file's bytes beside its note", async () => {
-  const types = ["note.created", "note.file", "health.samples", "location.points", "webhook.test"];
+  const types = ["note.created", "note.file", "health.samples", "location.points", "calendar.events", "webhook.test"];
   for (const type of types) expect((await post(`${address}/`, secret, `phone_${type}`, phone(type))).status, type).toBe(204);
   const note = JSON.parse(phone("note.created")).data.note;
   const saved = new DatabaseSync(database, { readOnly: true });
@@ -62,5 +62,17 @@ it("saves what the phone sends to its own webhook, with each file's bytes beside
     .map(row => ({ ...row }))).toEqual([{ name: "receipt.jpg", bytes: "01020304" }]);
   // The phone numbers its samples from 1 too: its own device id keeps them apart from the server's.
   expect(saved.prepare("SELECT count(*) AS n FROM health_samples WHERE device_id = ?").get(note.device.id)).toEqual({ n: 1 });
+  expect(saved.prepare("SELECT status, title, all_day FROM calendar_events WHERE device_id = ? ORDER BY status").all(note.device.id)
+    .map(row => ({ ...row }))).toEqual([{ status: "changed", title: "Board meeting", all_day: 0 }, { status: "removed", title: null, all_day: 0 }]);
+  expect(saved.prepare("SELECT count(*) AS n FROM other_messages").get()).toEqual({ n: 0 });
+  saved.close();
+});
+
+it("answers 2xx to a type it does not know yet and keeps it as one raw row, once, however often it comes", async () => {
+  const body = JSON.stringify({ version: 1, type: "photo.added", timestamp: new Date().toISOString(), data: { photo: { id: "p-1" } } });
+  for (let tries = 0; tries < 2; tries++) expect((await post(`${address}/`, secret, "msg_new_type", body)).status).toBe(204);
+  const saved = new DatabaseSync(database, { readOnly: true });
+  expect(saved.prepare("SELECT webhook_id, type, body FROM other_messages").all().map(row => ({ ...row }))).toEqual([
+    { webhook_id: "msg_new_type", type: "photo.added", body }]);
   saved.close();
 });

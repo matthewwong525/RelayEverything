@@ -27,8 +27,10 @@ type ChatSave = { id: string; title: string; text: string; createdAt: number }
 export type ChatMessage = { seq: number; role: 'you' | 'ai' | 'step'; text: string; at: number }
 export type ChatPart = { chat: ChatSummary; saves: ChatSave[]; messages: ChatMessage[]; next: number | null }
 type Attempt = { at: number; type: string; status: number | null; ms: number; error: string | null; first: number | null; last: number | null }
+/** A kind of data a webhook can take, as the server lists it for the form's ticks and the card. */
+export type WebhookKind = { id: string; label: string; detail: string; always: boolean; sensitive: boolean }
 export type Webhook = {
-  id: string; name: string; url: string; kinds: ('notes' | 'health' | 'locations' | 'calendar')[]
+  id: string; name: string; url: string; kinds: string[]
   state: 'working' | 'paused' | 'failing' | 'backfilling'; waiting: number
   lastStatus: number | null; lastError: string | null; lastSentAt: number | null; nextTryAt: number | null; failingSince: number | null
   createdAt: number; attempts: Attempt[]

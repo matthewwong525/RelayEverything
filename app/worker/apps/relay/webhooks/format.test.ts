@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { Webhook } from "standardwebhooks";
 import { afterEach, expect, it, vi } from "vitest";
+import { z } from "zod";
 import * as format from "./format.ts";
 import { calendarEvents, healthSamples, jsonSchema, locationPoints, message, noteCreated, noteUpdated, webhookTest, type NoteRow } from "./format.ts";
 import { base64, newSecret, signedHeaders } from "./sign.ts";
@@ -63,6 +64,19 @@ it("publishes the schema the format makes", () => {
   const updated = (schema.oneOf ?? schema.anyOf)!.find(item => item.properties.type.const === "note.updated");
   expect(updated?.description).toMatch(/^No longer sent/);
   expect(jsonSchema().toLowerCase()).not.toContain("pebble");
+});
+
+it("publishes a schema that takes a field or a value added later, while the server's own parse stays strict", () => {
+  const published = z.fromJSONSchema(JSON.parse(jsonSchema()));
+  const built = healthSamples([{ id: 2, ...device, type: "steps", start_at: AT, end_at: AT + 1000, value: 5210, unit: "count", source: "fitness" }], AT);
+  const [sample] = (built.data as { samples: Record<string, unknown>[] }).samples;
+  const later = { ...built, added: true, data: { samples: [{ ...sample, type: "body_temperature", place: "Home" }] } };
+  expect(published.safeParse(later).success).toBe(true);
+  expect(() => message.parse(later)).toThrow();
+  expect(published.safeParse({ ...built, version: 2 }).success).toBe(false);
+  expect(published.safeParse({ ...built, data: { samples: [{ ...sample, value: "many" }] } }).success).toBe(false);
+  expect(jsonSchema()).not.toContain('"additionalProperties": false');
+  expect(jsonSchema()).not.toContain('"grows"');
 });
 
 it("sends calendar events with their status, people and times in ISO 8601", () => {

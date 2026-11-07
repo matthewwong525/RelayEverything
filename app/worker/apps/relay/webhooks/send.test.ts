@@ -279,6 +279,23 @@ it("sends changed and removed calendar events only to a webhook that takes the c
   expect(webhook("health").sent_seq).toBe(0);
 });
 
+it("sends a webhook made for notes only no health or calendar stored later, until its owner ticks them", async () => {
+  const { json } = await call(matthew, "POST", "webhooks", { name: "Notes only", url: "https://db.example.com/relay", kinds: [] });
+  const made = { id: String(json.webhook.id) };
+  const sample = { type: "steps", start: NOW - 60 * MINUTE, end: NOW - 30 * MINUTE, value: 1200, unit: "count", source: "Health Connect" };
+  await call(phone, "POST", "health", { samples: [sample] });
+  const event = { key: "work:1:1", calendar: "Work", title: "Board meeting", start: NOW, end: NOW + 60 * MINUTE, allDay: false, people: [] };
+  await call(phone, "POST", "calendar", { events: [event], removed: [] });
+  await note("note-0001");
+  await deliver(wakeUp(made.id));
+  expect(types()).toEqual(["note.created"]);
+  sent.length = 0;
+  await call(matthew, "POST", "webhooks/update", { id: made.id, kinds: ["calendar"] });
+  await call(phone, "POST", "calendar", { events: [{ ...event, title: "Board meeting, moved" }], removed: [] });
+  await deliver(wakeUp(made.id));
+  expect(types()).toEqual(["calendar.events"]);
+});
+
 it("sends 20 messages in a run, then queues the webhook again for the rest", async () => {
   hook();
   for (let index = 0; index < 21; index++) ringNote(`aaaaaaaa-0000-4000-8000-${String(index).padStart(12, "0")}`);

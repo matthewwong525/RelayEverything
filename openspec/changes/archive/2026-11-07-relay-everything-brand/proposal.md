@@ -1,6 +1,6 @@
 # Give Relay Everything its own look: an electric R and rich colors for the app and the website
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** brand-app-ui-cleanup
 **Open questions:** none
 
@@ -101,3 +101,4 @@ None.
 - **2026-11-07** — Assumed: the favicon keeps its 16-unit round corners while `brand/icon.svg` stays full bleed, because a browser tab shows the picture as it is and no platform rounds it.
 - **2026-11-07** — Assumed: the old-blue check reads built `.svg` files as well as `.html` and `.css`, because a picture in `public/` can carry the old color too.
 - **2026-11-07** — Checkpoint: the second look's three fixes (spark on the Voice and Listening chips, one script for every logo file, the old-blue check on whole pages) saved.
+- **2026-11-07** — Archive checkpoint: the iPhone check passed (timeline, new note, settings, light and dark, and the launch screen with the Signal R on paper white), and the staging website shows the new logo and colors; tasks 1.3 and 5.2 ticked, ready to publish.

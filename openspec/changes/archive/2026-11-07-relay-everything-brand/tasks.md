@@ -2,7 +2,7 @@
 
 - [x] 1.1 Draw the picked mark in `brand/mark.svg` (`currentColor`), `brand/logo.svg` (mark plus outlined wordmark) and `brand/icon.svg` (on-accent mark on accent, full bleed), from *Signal R*'s paths in `prototypes/brand/index.html` (stem, bowl, leg, and the two waves in spark); verify each opens in a browser and matches the board.
 - [x] 1.2 Write `brand/make-icons.mjs` to render `icon.svg` with `magick` into every size in `mobile/ios/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json`, every Android `mipmap-*` density, an Android adaptive icon (`mipmap-anydpi-v26/ic_launcher.xml` with accent background and mark foreground), and the iOS `LaunchImage` and Android launch mark; run it and verify `git status` shows only the expected PNG and XML files, and that the 1024 px icon has no alpha (App Store rule).
-- [ ] 1.3 Set the iOS `LaunchScreen.storyboard` background and Android `launch_background.xml` to the light paper with the mark centered; verify in the simulator build of task 2.5.
+- [x] 1.3 Set the iOS `LaunchScreen.storyboard` background and Android `launch_background.xml` to the light paper with the mark centered; verify in the simulator build of task 2.5.
 
 ## 2. The app
 
@@ -26,7 +26,7 @@
 ## 5. Checks
 
 - [x] 5.1 Run `node scripts/public-check.mjs`, `flutter analyze`, `flutter test`, and `npm test` in `site/`; verify all pass.
-- [ ] 5.2 `/save`, then verify the iPhone device check's timeline, new note and settings screenshots show the brand in light mode, and preview the website with `node scripts/publish-relay-site.mjs --ref HEAD --staging`; show both on the preview page, *Approved* (board section 6) beside *Built*.
+- [x] 5.2 `/save`, then verify the iPhone device check's timeline, new note and settings screenshots show the brand in light mode, and preview the website with `node scripts/publish-relay-site.mjs --ref HEAD --staging`; show both on the preview page, *Approved* (board section 6) beside *Built*.
 
 ## 6. Review fixes
 

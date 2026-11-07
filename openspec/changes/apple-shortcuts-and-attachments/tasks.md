@@ -23,7 +23,7 @@
 ## 4. Shortcuts actions (iPhone)
 
 - [x] 4.1 Add `lib/shortcuts/` with `shortcutsMain` and the `relay/shortcuts` channel (`add`, `get`), and drain `shortcuts-inbox/` in `RelayController.load`; Dart tests for `add` (text, files, empty refused), `get` (count, words, since) and the inbox drain.
-- [ ] 4.2 Add `ios/Runner/RelayIntents.swift`: `AddNoteIntent`, `GetNotesIntent`, `StartVoiceNoteIntent`, `RelayNoteEntity`, `RelayShortcuts` provider, the warm `ShortcutsEngine`, the 20-second inbox fallback, all `@available(iOS 16, *)`; wire `AppDelegate.swift`; answer the design's open question; `flutter build ios --simulator` passes on the Mac check with deployment target 15.0.
+- [x] 4.2 Add `ios/Runner/RelayIntents.swift`: `AddNoteIntent`, `GetNotesIntent`, `StartVoiceNoteIntent`, `RelayNoteEntity`, `RelayShortcuts` provider, the warm `ShortcutsEngine`, the 20-second inbox fallback, all `@available(iOS 16, *)`; wire `AppDelegate.swift`; answer the design's open question; `flutter build ios --simulator` passes on the Mac check with deployment target 15.0.
 - [x] 4.3 Add the tap-to-stop recording sheet that *Start a voice note* opens, reusing `startVoiceNote`/`endVoiceNote`/`cancelVoiceNote`; widget test for Stop and Cancel.
 - [ ] 4.4 Add a device-check flow in `mobile/device-check/flows/` that runs *Add a note* on the simulator (`xcrun simctl` or a Shortcuts URL) and sees the note in the timeline.
 
@@ -35,7 +35,7 @@
 ## 6. Checks
 
 - [x] 6.1 Run `npm test`, `flutter test` in `mobile/`, `node scripts/public-check.mjs`, and `node scripts/product-name.test.mjs`; all pass.
-- [ ] 6.2 `/save`, then on staging: send a note with a picture and a PDF from the simulator build, see both on the page, download the PDF, and see `attachments` in a test webhook's `note.created`.
-- [ ] 6.3 Preview the website with `node scripts/publish-relay-site.mjs --ref HEAD --staging` and check the Shortcuts page.
+- [x] 6.2 `/save`, then on staging: send a note with a picture and a PDF from the simulator build, see both on the page, download the PDF, and see `attachments` in a test webhook's `note.created`.
+- [x] 6.3 Preview the website with `node scripts/publish-relay-site.mjs --ref HEAD --staging` and check the Shortcuts page.
 
 After the publish (not tracked, because the TestFlight build comes only from `main`): Matthew makes a screenshot shortcut on his iPhone and sees the note with its picture in the app and on his page.

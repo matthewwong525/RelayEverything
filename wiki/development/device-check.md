@@ -21,7 +21,7 @@ flowchart LR
 3. **Opens the app on an iPhone.** It boots an iPhone on the newest iOS the Mac has, installs the app, starts a video and opens the app.
 4. **Runs the fixed tour.** [Maestro](https://maestro.mobile.dev) flows in [`mobile/device-check/flows/`](../../mobile/device-check/flows/) open the timeline, write and save a note, and open Settings, with a screenshot of each. The tour uses no AI, so it costs nothing and gives the same pictures each run. If the timeline does not open, the run ends as *broken* and Claude does not start.
 5. **Claude tries the change.** Claude runs on the same Mac, with [the brief](../../mobile/device-check/brief.md) and the scenarios to check. It taps through the app, looks at each screen and writes a report.
-6. **Keeps the results** as the run's file `device-check-iphone`: `report.md`, `verdict.txt`, `tour/`, `claude/`, `run.mp4` and the logs. Job `report` puts `report.md` on the pull request.
+6. **Keeps the results** as the run's file `device-check-iphone`: `report.md`, `verdict.txt`, `tour/`, `claude/`, `run.mp4` and the logs. `phone.log` holds the iPhone's system log for the app, Shortcuts and App Intents, and `crashes/` the app's crash reports: read them when a step fails with no words on the screen. Job `report` puts `report.md` on the pull request.
 
 Each run ends with one verdict:
 

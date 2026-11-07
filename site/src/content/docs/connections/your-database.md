@@ -3,7 +3,7 @@ title: Your own database
 description: Add a webhook, and your Relay Everything server or your phone sends each new note, and the health, calendar and location you pick, to an address you own, in one signed format.
 ---
 
-A webhook copies what your Relay Everything server stores in your space to an address you own, such as a small receiver beside your database. Your server sends each new note there a few seconds after it gets it. Health, calendar and location go only if you tick them.
+A webhook copies what your Relay Everything server stores in your space to an address you own, such as a small receiver beside your database. Your server sends each new note there a few seconds after it gets it, then each of its files in a [`note.file`](#notefile) message. Health, calendar and location go only if you tick them.
 
 Your data lives in your own space: one Durable Object with its own SQLite database, in the spaces Worker (`relay-everything-spaces`, or `<name>-spaces` on [your own server](../../start/run-your-own/)). The server's D1 database holds only the list of accounts: each person, their sign-ins and sessions, and a fingerprint of each key. Each webhook belongs to one person's space, and it sends only that person's data.
 
@@ -67,7 +67,7 @@ Every message is a `POST` with a JSON body in one envelope:
 | `health.samples` | A phone sends health samples. | `samples`: up to 500 |
 | `location.points` | A phone sends location points. | `points`: up to 500 |
 | `calendar.events` | A phone sends new, changed or removed calendar events. | `events`: up to 500, each with its `status` |
-| `note.file` | Only from [the phone](#send-from-the-phone): one message for each file of a note, after the note. | `note_id`, and `file` with its bytes |
+| `note.file` | A file of a note reaches your server, or the phone sends it: one message for each file, after the note. | `note_id`, and `file` with its bytes |
 | `webhook.test` | You click **Send a test**. | `webhook`: its `id` and `name` |
 
 ### `note.created`
@@ -111,11 +111,11 @@ A note from the phone can hold up to 10 files, such as photos and PDFs. Only a n
 | `content_type` | Its type, such as `application/pdf` or `image/jpeg` |
 | `size` | Its size in bytes, up to 25 MB |
 
-The message holds no file bytes, because a file can be too big for one message. From your server, open or download a file on your Relay Everything page. The message goes when the note is stored, so a file can arrive in your space after the message. From [the phone](#send-from-the-phone), each file comes next, in its own `note.file` message.
+The message holds no file bytes, because a file can be too big for one message. Each file comes after it, in its own `note.file` message. From your server, that message goes when the file's bytes reach your space, which can be some time after the note.
 
 ### `note.file`
 
-Only the phone sends it, when it sends to your own webhook. It holds one file of a note, with its bytes in base64, and comes after the note's `note.created`.
+Your server sends it when it stores a file of a note, and the phone sends it when it sends to your own webhook. It holds one file, with its bytes in base64, and comes after the note's `note.created`. Save it by the file's `id`, beside its note.
 
 ```json
 {
@@ -130,7 +130,9 @@ Only the phone sends it, when it sends to your own webhook. It holds one file of
 }
 ```
 
-A 25 MB file makes a body of about 33 MB. Accept bodies that large, or answer `413`: the phone then drops that file and sends the rest.
+A 25 MB file makes a body of about 33 MB. Accept bodies that large, or answer `413`: Relay Everything, or the phone, then skips that file and sends the rest. The webhook's card, or the phone's Settings, names the skipped file. A file your receiver skips stays on your Relay Everything page. Every other failed answer is tried again, as for every message.
+
+Files that your server stored before it sent `note.file` go once to each webhook, in the order of their notes.
 
 ### `note.updated`
 
@@ -226,11 +228,11 @@ const payload = new Webhook(process.env.RELAY_WEBHOOK_SECRET).verify(body, heade
 
 ## Order, retries and repeats
 
-- Each webhook gets every item it takes, in the order Relay Everything stored them, with none skipped.
+- Each webhook gets every item it takes, in the order Relay Everything stored them, with none skipped but a file your receiver refuses with `413`.
 - Answer with a `2xx` status within 15 seconds. Relay Everything does not follow a redirect.
 - After any other answer, Relay Everything tries the same message again after 30 s, 2 min, 10 min, 30 min, 1 h, 2 h, 4 h, 6 h and 8 h: about a day. Then the card shows **Failing**, with the last answer and how many items wait. If a send is lost, your space wakes itself every 15 minutes while it has a webhook, and sends what waits. **Try again now** sends them all, in order, from where it stopped.
 - A retry can send a message you already saved, when your answer was lost. Its id and body are the same. So save each note, sample, point and event by its `id`, as an upsert.
-- From your server, accept bodies up to 16 MB. A ring note's recording is about 100 KB a minute, and base64 makes it a third larger.
+- From your server, accept bodies up to 34 MB. A ring note's recording is about 100 KB a minute, a file is up to 25 MB, and base64 makes each a third larger. To accept less, answer `413` to a `note.file` that is too large.
 
 ## When the format changes
 
@@ -313,11 +315,11 @@ CREATE TABLE relay_location_points (
 );
 ```
 
-Save a note with `INSERT ... ON CONFLICT (id) DO UPDATE`, and keep the stored `audio` when a `note.updated` has none. Save each of a note's `attachments` by its `id` too, and a `note.file` in `relay_note_files`.
+Save a note with `INSERT ... ON CONFLICT (id) DO UPDATE`, and keep the stored `audio` when a `note.updated` has none. Save each of a note's `attachments` by its `id` too, and a `note.file` in `relay_note_files`. A file listed in `attachments` that has no row in `relay_note_files` did not come, such as one your receiver skipped.
 
 ## An example receiver
 
-[`receiver.mjs`](../../webhooks/receiver.mjs) is about 80 lines of Node with no packages. It checks each signature and saves notes, their files from the phone, samples, points and calendar events in a SQLite file, so it needs no database server. It keeps a message of a type it does not know in its `other_messages` table, by its `webhook-id`, and answers `204`. It needs Node 22.13 or later.
+[`receiver.mjs`](../../webhooks/receiver.mjs) is about 80 lines of Node with no packages. It checks each signature and saves notes, their files, samples, points and calendar events in a SQLite file, so it needs no database server. It keeps a message of a type it does not know in its `other_messages` table, by its `webhook-id`, and answers `204`. It needs Node 22.13 or later.
 
 ```bash
 curl -O https://relayeverything.com/webhooks/receiver.mjs

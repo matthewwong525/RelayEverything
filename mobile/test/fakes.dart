@@ -13,9 +13,11 @@ import 'package:crypto/crypto.dart';
 import 'package:relay_app/controller.dart';
 import 'package:relay_app/data/api.dart';
 import 'package:relay_app/data/connection.dart';
+import 'package:relay_app/data/settings.dart';
 import 'package:relay_app/data/store.dart';
 import 'package:relay_app/sync/health.dart';
 import 'package:relay_app/sync/location.dart';
+import 'package:relay_app/sync/native.dart';
 import 'package:relay_app/sync/photos.dart';
 import 'package:relay_app/voice/model.dart';
 import 'package:relay_app/voice/recorder.dart';
@@ -43,15 +45,22 @@ class FakeServer {
   /// When set, each reply waits for it, so a test can act while a request is still open.
   Completer<void>? hold;
 
-  static http.Response ok(http.Request request) => json(request.url.path.endsWith('/key') ? {'device': 'Android phone'} : {'added': 1});
+  static http.Response ok(http.Request request) => json(switch (request.url.path) {
+    '/apps/relay/sign-in/phone/key' => {'server': request.url.origin, 'key': pageKey},
+    final path when path.endsWith('/key') => {'device': 'Android phone'},
+    _ => {'added': 1},
+  });
   static http.Response json(Object body, [int status = 200]) =>
     http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json'});
 
-  RelayApi api(Connection connection) => RelayApi(connection, MockClient((request) async {
+  RelayApi api(Connection connection) => RelayApi(connection, client());
+
+  /// The plain client the sign-in's trade uses, with no key.
+  http.Client client() => MockClient((request) async {
     requests.add(request);
     await hold?.future;
     return answer(request);
-  }));
+  });
 
   List<String> get routes => [for (final request in requests) request.url.path.split('/').last];
 }
@@ -62,18 +71,33 @@ FakeServer noNetwork() => FakeServer((_) => FakeServer.json({'error': 'no call m
 
 class MemoryStorage extends Fake implements FlutterSecureStorage {
   final values = <String, String>{};
+  /// Each item's iPhone Keychain access, as last written; null for the plugin's default, open only while unlocked.
+  final access = <String, KeychainAccessibility?>{};
+  /// The iPhone options of each read, write and delete.
+  final options = <AppleOptions?>[];
 
   @override
   Future<Map<String, String>> readAll({AppleOptions? iOptions, AndroidOptions? aOptions, LinuxOptions? lOptions,
-    WebOptions? webOptions, AppleOptions? mOptions, WindowsOptions? wOptions}) async => Map.of(values);
+    WebOptions? webOptions, AppleOptions? mOptions, WindowsOptions? wOptions}) async {
+    options.add(iOptions);
+    return Map.of(values);
+  }
 
   @override
   Future<void> write({required String key, required String? value, AppleOptions? iOptions, AndroidOptions? aOptions,
-    LinuxOptions? lOptions, WebOptions? webOptions, AppleOptions? mOptions, WindowsOptions? wOptions}) async => values[key] = value!;
+    LinuxOptions? lOptions, WebOptions? webOptions, AppleOptions? mOptions, WindowsOptions? wOptions}) async {
+    options.add(iOptions);
+    values[key] = value!;
+    access[key] = iOptions?.accessibility;
+  }
 
   @override
   Future<void> delete({required String key, AppleOptions? iOptions, AndroidOptions? aOptions, LinuxOptions? lOptions,
-    WebOptions? webOptions, AppleOptions? mOptions, WindowsOptions? wOptions}) async => values.remove(key);
+    WebOptions? webOptions, AppleOptions? mOptions, WindowsOptions? wOptions}) async {
+    options.add(iOptions);
+    values.remove(key);
+    access.remove(key);
+  }
 }
 
 class FakePlaces implements Places {
@@ -103,6 +127,50 @@ class FakePlaces implements Places {
 
   @override
   Stream<Pin> history() => points.stream;
+
+  /// Each place name looked up, by its point.
+  final lookups = <(double, double)>[];
+
+  @override
+  Future<String?> nameOf(double lat, double lon) async {
+    lookups.add((lat, lon));
+    return 'Place ${lookups.length}';
+  }
+}
+
+/// The iPhone's Swift side: it keeps each flag it was told, and hands back [lines] once per drain.
+class FakeBackground implements NativeBackground {
+  final flags = <({bool health, bool history, LocationMode mode})>[];
+  List<String> lines = [];
+  int drains = 0;
+
+  @override
+  Future<void> set({required bool health, required bool history, required LocationMode mode}) async =>
+    flags.add((health: health, history: history, mode: mode));
+
+  @override
+  Future<List<String>> drain() async {
+    drains++;
+    final kept = lines;
+    lines = [];
+    return kept;
+  }
+}
+
+/// A point as Swift writes it.
+String swiftPoint(DateTime at, double lat, double lon, {double accuracy = 12}) =>
+  jsonEncode({'at': at.millisecondsSinceEpoch, 'lat': lat, 'lon': lon, 'accuracy': accuracy});
+
+/// The sign-in sheet: it keeps each page it opened, and comes back to [back], or to a code for the page's challenge.
+class FakeWebAuth {
+  final opened = <Uri>[];
+  /// Null: the person closed the sheet.
+  Uri? Function(Uri url) back = (_) => Uri.parse('relayeverything://connected?code=one-time-code');
+
+  Future<Uri?> call(Uri url) async {
+    opened.add(url);
+    return back(url);
+  }
 }
 
 class FakeHealth implements HealthSource {

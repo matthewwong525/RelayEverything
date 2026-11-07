@@ -39,8 +39,12 @@ void main() {
     var clock = DateTime(2026, 11, 5, 9, 41);
     final photos = FakePhotos()..take('IMG_0001', DateTime(2026, 11, 5, 9, 50), lat: 43.65, lon: -79.38);
     final network = FakeNetwork();
+    // The iPhone's Swift side, with a point it would hand over, and a sign-in sheet that would open the network.
+    final swift = FakeBackground()..lines = [swiftPoint(DateTime(2026, 11, 5, 9), 43.65, -79.38)];
+    final webAuth = FakeWebAuth();
     final relay = RelayController(store: store, vault: KeyVault(storage), places: places, health: health, apiFor: server.api,
-      schedule: (on) async => scheduled.add(on), voice: fakeVoice(folder, models, clock: () => clock), photos: photos, network: network);
+      signInClient: server.client, webAuth: webAuth.call, schedule: (on) async => scheduled.add(on),
+      voice: fakeVoice(folder, models, clock: () => clock), native: swift, photos: photos, network: network);
     // A key is kept, sending is off, and a note written while it was on still waits to send: only the Sender gate
     // keeps that upload on the phone.
     await tester.runAsync(() async {
@@ -91,7 +95,7 @@ void main() {
     await tester.runAsync(() async {
       await relay.sync();
       expect(await backgroundRound(store, connection: await KeyVault(storage).read(), health: health, sender: Sender(server.api),
-        photos: photos, network: network), isTrue);
+        native: swift, places: places, photos: photos, network: network), isTrue);
       expect(await relay.earlierNotes(), 1);
       expect([for (final item in await store.outbox()) item.body['clientId']], ['waiting']);
       expect(Settings.decode(await store.get(settingsKey), hasKey: true).sending, isFalse);
@@ -127,6 +131,8 @@ void main() {
     expect(models.requests, hasLength(1));
 
     expect(server.requests, isEmpty);
+    expect([webAuth.opened, swift.drains, places.lookups], [isEmpty, 0, isEmpty]);
+    expect(swift.flags.every((flag) => !flag.health && !flag.history), isTrue);
     expect(places.named, [false]);
     expect(places.asked, [false]);
     expect(health.reads, isEmpty);

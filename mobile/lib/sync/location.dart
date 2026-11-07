@@ -26,7 +26,10 @@ abstract class Places {
   /// One fix for a note. With [name] the phone names the place through Apple's or Google's lookup, a network call,
   /// so the app asks for a name only while sending is on.
   Future<Pin?> here({required bool name});
+  /// Android's history: a point each 100 m. On iPhone, Swift keeps the points instead: lib/sync/native.dart.
   Stream<Pin> history();
+  /// The place's name, through the phone's lookup: a network call, made only while sending is on. Null when none.
+  Future<String?> nameOf(double lat, double lon);
 }
 
 class PhonePlaces implements Places {
@@ -43,9 +46,12 @@ class PhonePlaces implements Places {
       : permission == LocationPermission.always || permission == LocationPermission.whileInUse;
   }
 
-  Future<String?> _name(Position position) async {
+  Future<String?> _name(Position position) => nameOf(position.latitude, position.longitude);
+
+  @override
+  Future<String?> nameOf(double lat, double lon) async {
     try {
-      final marks = await _geocoding.placemarkFromCoordinates(position.latitude, position.longitude);
+      final marks = await _geocoding.placemarkFromCoordinates(lat, lon);
       return marks.isEmpty ? null : placeOf(marks.first);
     } on Exception {
       return null;

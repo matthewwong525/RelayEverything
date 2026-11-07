@@ -8,6 +8,18 @@ import 'timeline.dart' show Opener, openInBrowser;
 /// What the person picked when turning photos off.
 enum _PhotosChoice { openPage, stop }
 
+String _two(int value) => value.toString().padLeft(2, '0');
+
+/// What a Settings line says about sending: *Sent 14:05 · 3 waiting*, with the date when it was not today.
+String sentLine(SendState state, String what, DateTime now) {
+  final at = state.at;
+  final waiting = switch (state.waiting) { 0 => 'none waiting', 1 => '1 $what waiting', final n => '$n ${what}s waiting' };
+  if (at == null) return 'Not sent yet · $waiting';
+  final time = '${_two(at.hour)}:${_two(at.minute)}';
+  final today = at.year == now.year && at.month == now.month && at.day == now.day;
+  return 'Sent ${today ? time : '${at.day}/${at.month} $time'} · $waiting';
+}
+
 /// Each switch acts at once and asks for its permission only when turned on. Sending is off until the person turns it
 /// on; health, location history and photos sit under it and work only with it.
 class SettingsScreen extends StatelessWidget {
@@ -51,15 +63,27 @@ class SettingsScreen extends StatelessWidget {
             ),
             SwitchListTile(
               title: const Text('Health: steps, heart rate, sleep, workouts'),
-              subtitle: const Text('Sends them every hour.'),
+              subtitle: Text(settings.health ? sentLine(relay.healthSent, 'reading', DateTime.now())
+                : 'Sends new readings about each hour, also while the app is closed.'),
               value: settings.health,
               onChanged: sending ? (on) => _apply(context, relay.setHealth(on)) : null,
             ),
             SwitchListTile(
               title: const Text('Location history'),
-              subtitle: const Text('Keeps a point each 100 m you move, so ring notes get a place too.'),
+              subtitle: Text(settings.history ? sentLine(relay.pointsSent, 'point', DateTime.now())
+                : 'Keeps where you go, also while the app is closed, so ring notes get a place too.'),
               value: settings.history,
               onChanged: sending ? (on) => _apply(context, relay.setHistory(on)) : null,
+            ),
+            if (settings.history && relay.locationModes) RadioGroup<LocationMode>(
+              groupValue: settings.mode,
+              onChanged: (mode) { if (mode != null) _apply(context, relay.setLocationMode(mode)); },
+              child: const Column(children: [
+                RadioListTile(value: LocationMode.battery, title: Text('Save battery'),
+                  subtitle: Text('A point at each move of about 500 m, and when you arrive or leave.')),
+                RadioListTile(value: LocationMode.move, title: Text('Every 100 m'),
+                  subtitle: Text('A point each 100 m, or each 5 minutes while you stay. It uses more battery.')),
+              ]),
             ),
             SwitchListTile(
               title: const Text('Photos'),
@@ -146,7 +170,7 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Future<void> _editServer(BuildContext context) async {
-    final address = await showDialog<String>(context: context, builder: (context) => _ServerDialog(server: relay.server));
+    final address = await showDialog<String>(context: context, builder: (context) => ServerDialog(server: relay.server));
     if (address != null && context.mounted) await _apply(context, relay.setServer(address));
   }
 
@@ -209,39 +233,6 @@ class _EarlierDialog extends StatelessWidget {
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Only new notes')),
         FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(count == 1 ? 'Send it' : 'Send them')),
-      ],
-    );
-  }
-}
-
-/// Owns its text field, so the field lives until the dialog's closing animation ends.
-class _ServerDialog extends StatefulWidget {
-  const _ServerDialog({required this.server});
-
-  final String? server;
-
-  @override
-  State<_ServerDialog> createState() => _ServerDialogState();
-}
-
-class _ServerDialogState extends State<_ServerDialog> {
-  late final _text = TextEditingController(text: widget.server);
-
-  @override
-  void dispose() {
-    _text.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Server'),
-      content: TextField(controller: _text, keyboardType: TextInputType.url, autofocus: true,
-        decoration: const InputDecoration(helperText: 'Use a preview address to try a change.')),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        TextButton(onPressed: () => Navigator.pop(context, _text.text), child: const Text('Save')),
       ],
     );
   }

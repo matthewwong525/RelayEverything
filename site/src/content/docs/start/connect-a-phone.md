@@ -1,13 +1,25 @@
 ---
 title: Connect a phone
-description: Turn on sending, and give a phone its own key from your Relay Everything page, so it can send notes to your account.
+description: Turn on sending, and sign in from the app to give the phone its own key, so it can send notes to your account.
 ---
 
-The Relay Everything app keeps your notes on the phone, with no key. To send them to your Relay Everything account, you turn on sending and connect the phone with its own key. The key also holds the server's address, so you type no address.
+The Relay Everything app keeps your notes on the phone, with no key. To send them to your Relay Everything account, you turn on sending and connect the phone with its own key. The easy way is to sign in from the app. You need an account first: [Sign up](../sign-up/).
 
-## Make the key
+## Connect by signing in
 
-You make one key for each phone, on your Relay Everything page. You need an account first: [Sign up](../sign-up/).
+1. Open the Relay Everything app, then open **Settings** from the gear at the top.
+2. Turn on **Send to Relay Everything**. The app shows **Connect Relay Everything**.
+3. Tap **Sign in to connect**. A sign-in page opens in the app. Sign in, if you are not signed in on the phone already.
+4. The page asks **Connect this phone?**, with a name for the phone. Change the name if you want, and tap **Connect**.
+5. The app comes back with its own key, and checks it with the server. If you wrote notes before, the app asks **Send your earlier notes too?**: see step 4 of [Connect with a QR code](#connect-with-a-qr-code).
+
+The key never shows. It goes from the server to the phone only, and works only with a secret that the phone made for this one sign-in. Tap **Cancel** on the page, or close it, and the phone gets no key.
+
+On your own server, tap **Use another server**, and enter its address, such as `https://<your-relay-server>`.
+
+## Make a key with a QR code
+
+To connect with no sign-in on the phone, make the key on your Relay Everything page.
 
 1. Open `https://<your-relay-server>/apps/relay/` on a computer or another phone, and sign in.
 2. Click **Add a device**, and give it a name, such as `Android phone`.
@@ -15,11 +27,11 @@ You make one key for each phone, on your Relay Everything page. You need an acco
 
 The key starts with `rek_`. It adds data only to your own space. [Keys](../../api/keys/) tells more about keys.
 
-## Connect
+## Connect with a QR code
 
 1. Open the Relay Everything app, then open **Settings** from the gear at the top.
 2. Turn on **Send to Relay Everything**. The app shows **Connect Relay Everything**.
-3. Tap **Scan the QR code**, and point the camera at the key's QR code.
+3. Under **Or use a key from Add a device**, tap **Scan the QR code**, and point the camera at the key's QR code. The key holds the server's address, so you type no address.
    Or tap **Or paste the key**, paste it, and tap **Connect**.
 4. If you wrote notes before, the app asks **Send your earlier notes too?** Tap **Send them** to send them, or **Only new notes** to keep them only on the phone. The app asks again each time you turn sending on.
 
@@ -36,7 +48,7 @@ Turn off **Send to Relay Everything** in **Settings**, and tap **Stop sending**.
 
 ## Try a preview
 
-A preview of a change to Relay Everything's own server has its own address, its own accounts and its own keys. Sign in on the preview's page, make a key there with **Add a device**, then in the app open **Settings**, tap **Server**, and enter the preview's address.
+A preview of a change to Relay Everything's own server has its own address, its own accounts and its own keys. In the app, tap **Use another server**, enter the preview's address, and sign in there. Or make a key there with **Add a device**, connect with it, then open **Settings**, tap **Server**, and enter the preview's address.
 
 ## Next
 

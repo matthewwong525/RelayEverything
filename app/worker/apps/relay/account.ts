@@ -36,7 +36,7 @@ export const accountDelete = defineAction({
     // The ways in go first and the space last: a step that fails leaves no way into a half-deleted account, and the
     // person row stays, so signing in again and deleting again finishes it.
     const db = directory(env);
-    await db.batch(["relay_keys", "relay_sessions", "relay_logins", "relay_connect_codes"]
+    await db.batch(["relay_keys", "relay_sessions", "relay_logins", "relay_connect_codes", "relay_phone_codes"]
       .map(table => db.prepare(`DELETE FROM ${table} WHERE person_id = ?`).bind(caller.personId)));
     await endGrants(env, caller.personId);
     await space.files.removeAll();

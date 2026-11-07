@@ -28,7 +28,7 @@ A photo that waits for Wi-Fi does not hold back your notes, health or places: th
 
 ## When it sends
 
-The app looks for new photos each time you open it, and about once an hour while it can run. An iPhone runs background work when iOS chooses, so a photo can arrive some hours late. Open the app to send at once.
+The app looks for new photos each time you open it, and about once an hour while it can run. On an iPhone, it also looks each time Apple Health or a new place wakes the closed app, after it sends the readings and points. iOS runs background work when it chooses, so a photo can arrive some hours late. Open the app to send at once.
 
 Each photo is kept once, however often the phone sends it.
 

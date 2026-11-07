@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
@@ -12,6 +14,7 @@ import 'package:relay_app/data/store.dart';
 import 'package:relay_app/sync/background.dart';
 import 'package:relay_app/sync/health.dart';
 import 'package:relay_app/sync/location.dart';
+import 'package:relay_app/sync/native.dart';
 import 'package:relay_app/sync/photos.dart';
 
 import 'fakes.dart';
@@ -83,6 +86,76 @@ void main() {
       server.answer = (_) => FakeServer.json({}, 503);
       expect(await backgroundRound(store, connection: connection, health: source, sender: Sender(server.api), now: later(120)), isFalse);
     });
+
+    test('on iPhone, moves the points Swift kept into the round, and names only the newest 10', () async {
+      final store = memoryStore();
+      addTearDown(store.close);
+      final server = FakeServer();
+      final places = FakePlaces();
+      final swift = FakeBackground()..lines = [for (var i = 0; i < 12; i++) swiftPoint(later(i), 43.6 + i / 1000, -79.3)];
+      await store.set(settingsKey, const Settings(sending: true, history: true).encode());
+      expect(await backgroundRound(store, connection: connection, health: FakeHealth(), sender: Sender(server.api), native: swift,
+        places: places), isTrue);
+      final sent = [for (final point in jsonDecode(server.requests.single.body)['points'] as List) point as Map];
+      expect([sent.length, sent.first['at'], sent.where((point) => point.containsKey('place')).length], [12, start.millisecondsSinceEpoch, 10]);
+      // The two oldest go with no name.
+      expect([sent[0]['place'], sent[1]['place'], sent[2]['place']], [null, null, 'Place 10']);
+      // History off: Swift's file is not read.
+      await store.set(settingsKey, const Settings(sending: true).encode());
+      swift.lines = [swiftPoint(later(20), 1, 1)];
+      await backgroundRound(store, connection: connection, health: FakeHealth(), sender: Sender(server.api), native: swift, places: places);
+      expect(swift.drains, 1);
+    });
+
+    test('a Health read refused on a locked iPhone still sends the points, and reads the same span next time', () async {
+      final store = memoryStore();
+      addTearDown(store.close);
+      final server = FakeServer();
+      final source = FakeHealth()..error = Exception('Protected health data is inaccessible');
+      await store.set(settingsKey, const Settings(sending: true, health: true, history: true).encode());
+      await store.set(healthSince, '${start.millisecondsSinceEpoch}');
+      await store.addPoint(Pin(at: start, lat: 1, lon: 1, accuracy: 1));
+      expect(await backgroundRound(store, connection: connection, health: source, sender: Sender(server.api), now: later(60)), isFalse);
+      expect([server.routes, await store.get(healthSince)], [['locations'], '${start.millisecondsSinceEpoch}']);
+      source.error = null;
+      expect(await backgroundRound(store, connection: connection, health: source, sender: Sender(server.api), now: later(120)), isTrue);
+      expect(source.reads.last.$1.isBefore(start), isTrue);
+    });
+  });
+
+  group('the points Swift keeps', () {
+    test('are all stored before any name lookup, so a slow or failed lookup loses no point', () async {
+      final store = memoryStore();
+      addTearDown(store.close);
+      final swift = FakeBackground()..lines = [for (var i = 0; i < 12; i++) swiftPoint(later(i), 43.6 + i / 1000, -79.3)];
+      final lookup = Completer<String?>();
+      var asked = 0;
+      Future<String?> name(double lat, double lon) {
+        asked++;
+        if (asked == 1) return lookup.future;
+        if (asked == 2) throw Exception('Too many lookups');
+        return Future.value('Place $asked');
+      }
+      final drained = drainPoints(store, swift, name: name);
+      await pumpEventQueue();
+      // The first lookup still waits, as one cut off by iOS would, and every point is in the store.
+      expect([asked, await store.waitingPoints()], [1, 12]);
+      lookup.complete(null);
+      expect(await drained, 12);
+      await store.queuePoints();
+      final points = [for (final item in await store.outbox()) ...item.body['points'] as List];
+      final places = {for (final point in points) (point as Map)['at']: point['place']};
+      // Newest first: no name, then a failed lookup, then the next 8 named; the 2 oldest are not looked up.
+      expect([points.length, asked], [12, 10]);
+      expect([places[later(11).millisecondsSinceEpoch], places[later(10).millisecondsSinceEpoch], places[later(9).millisecondsSinceEpoch],
+        places[later(0).millisecondsSinceEpoch]], [null, null, 'Place 3', null]);
+    });
+
+    test('read as pins, and a line that is not one is skipped', () {
+      final pin = pointOf(swiftPoint(start, 43.65, -79.38, accuracy: -1))!;
+      expect([pin.at, pin.lat, pin.lon, pin.accuracy], [start, 43.65, -79.38, 0]);
+      expect([pointOf('nope'), pointOf('[]'), pointOf('{"at":"x","lat":1,"lon":1,"accuracy":1}')], [null, null, null]);
+    });
   });
 
   group('photos', () {
@@ -129,6 +202,18 @@ void main() {
       // The next look starts at the photo's own second and finds it again, but it goes no second time.
       expect(await round(), isTrue);
       expect([server.routes, photos.copied], [['notes', 'photos'], ['IMG_0001']]);
+    });
+
+    test('an iPhone wake sends the points Swift kept first, then photos, also when a locked iPhone refuses Health', () async {
+      await store.set(settingsKey, const Settings(sending: true, health: true, history: true, photos: true).encode());
+      await store.set(healthSince, '${start.millisecondsSinceEpoch}');
+      photos.take('IMG_0001', later(1));
+      final swift = FakeBackground()..lines = [swiftPoint(later(2), 43.65, -79.38)];
+      final health = FakeHealth()..error = Exception('Protected health data is inaccessible');
+      // Health is read again next time, so the round is not done; the points and the photo still go.
+      expect(await backgroundRound(store, connection: connection, health: health, sender: Sender(server.api), native: swift,
+        places: FakePlaces(), photos: photos, network: network, now: later(600)), isFalse);
+      expect([server.routes, await store.waitingPhotos()], [['locations', 'photos'], isEmpty]);
     });
 
     test('with mobile data allowed, photos go on mobile data, and never with no network', () async {

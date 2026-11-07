@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:flutter/widgets.dart';
 import 'package:workmanager/workmanager.dart';
@@ -8,6 +10,8 @@ import '../data/sender.dart';
 import '../data/settings.dart';
 import '../data/store.dart';
 import 'health.dart';
+import 'location.dart';
+import 'native.dart';
 import 'photos.dart';
 
 /// The hourly task's name; iPhone also lists it in Info.plist and AppDelegate.swift.
@@ -26,8 +30,8 @@ void backgroundSync() {
     if (connection == null) return true;
     final store = openStore();
     try {
-      return await backgroundRound(store, connection: connection, health: PhoneHealth(), sender: Sender(), photos: PhonePhotos(),
-        network: PhoneNetwork());
+      return await backgroundRound(store, connection: connection, health: PhoneHealth(), sender: Sender(),
+        native: Platform.isIOS ? PhoneBackground() : null, places: PhonePlaces(), photos: PhonePhotos(), network: PhoneNetwork());
     } on Exception {
       return false;
     } finally {
@@ -36,24 +40,33 @@ void backgroundSync() {
   });
 }
 
-/// One background round, apart from the plugin that runs it so a test can drive it. True when it is done. The photo
-/// step runs after the outbox, so a photo waiting for Wi-Fi holds back no note; it runs only with [photos] and
-/// [network] given.
+/// One background round, apart from the plugin that runs it so a test can drive it: the hourly task and an iPhone
+/// wake share it. With [native], it first moves the points Swift kept. True when it is done. The photo step runs after
+/// the outbox, so a photo waiting for Wi-Fi holds back no note; it runs only with [photos] and [network] given.
 Future<bool> backgroundRound(Store store, {required Connection? connection, required HealthSource health, required Sender sender,
-  PhotoSource? photos, Network? network, DateTime? now}) async {
+  NativeBackground? native, Places? places, PhotoSource? photos, Network? network, DateTime? now}) async {
   final settings = Settings.decode(await store.get(settingsKey), hasKey: connection != null);
   final api = sender.api(settings, connection);
   if (api == null) return true;
-  if (settings.health) await syncHealth(store, health, now: now);
+  if (native != null && settings.history) await drainPoints(store, native, name: places?.nameOf);
+  var read = true;
+  if (settings.health) {
+    try {
+      await syncHealth(store, health, now: now);
+    } on Exception {
+      // A locked iPhone refuses Health reads: the points still go, and the next round reads the same readings again.
+      read = false;
+    }
+  }
   await store.queuePoints();
   final notes = await flush(store, api);
-  if (photos == null || network == null || !settings.photos) return notes.failure == null;
+  if (photos == null || network == null || !settings.photos) return notes.failure == null && read;
   // The app can turn photos off while this round runs: it reads the switch again before each photo.
   final failure = await syncPhotos(store, api, photos, network, settings: settings, send: notes.failure == null, now: now,
     keepGoing: () async => Settings.decode(await store.get(settingsKey), hasKey: true).photos);
   // A refused photo from a key that still answers, such as on an older server with no photos, comes back as null; a
   // turned-off key fails the round, as for the notes.
-  return notes.failure == null && failure == null;
+  return notes.failure == null && read && failure == null;
 }
 
 /// Turns the hourly round on while sending and history, health or photos are on, and off otherwise.

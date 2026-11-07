@@ -40,7 +40,7 @@ Each note gives its words, time, place, files, and whether it is a voice note. *
 
 ## Start a voice note
 
-**Start a voice note** opens the app and starts to record at once. Talk, then tap **Stop** to save the note, or **Cancel** to keep nothing. The phone writes the words itself, as with **Hold to talk**. [Voice notes](../voice-notes/)
+**Start a voice note** opens the app and starts to record at once. It shows the same **Listening** card as a hold on **New note**. Talk, then tap anywhere on the screen to save the note, or tap **Cancel** to keep nothing. The phone writes the words itself. [Voice notes](../voice-notes/)
 
 With no speech model on the phone yet, the app asks to get it first. [Get the speech model](../voice-notes/#get-the-speech-model)
 
@@ -103,4 +103,4 @@ On an iPhone with an Action button:
 2. Swipe to **Shortcut**, and tap **Choose a Shortcut**.
 3. Pick **Relay Everything**, then **Start a voice note**.
 
-Press the Action button, talk, and tap **Stop**.
+Press the Action button, talk, and tap anywhere on the screen to save.

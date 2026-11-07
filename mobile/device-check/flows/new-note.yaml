@@ -1,17 +1,31 @@
-# A typed note: New note, type, Save, and the note is in the timeline.
+# A typed note: tap New note, type, Save, and the note is in the list. Then search finds it.
 appId: com.matthewwong525.relayApp
 ---
 - launchApp:
     clearState: true
 - extendedWaitUntil:
-    visible: "New note"
+    visible: "Notes"
     timeout: 60000
+# A short tap on the round New note button opens the New note page. A hold of 0.5 s records.
 - tapOn: "New note"
+- extendedWaitUntil:
+    visible: "Save"
+    timeout: 10000
 - inputText: "Device check note"
 - tapOn: "Save"
+# Flutter joins a row's lines into one label, so match a word inside it, or its start.
 - extendedWaitUntil:
-    visible: "Typed"
+    visible: '(.|\n)*Typed(.|\n)*'
     timeout: 10000
-# Flutter joins a card's lines into one label, so match its start.
 - assertVisible: 'Device check note(.|\n)*'
 - takeScreenshot: new-note
+# Search the phone's notes: a match stays, no match says so, and Cancel brings back New note.
+- tapOn: "Search"
+- assertVisible: "Cancel"
+- inputText: "check"
+- assertVisible: 'Device check note(.|\n)*'
+- inputText: " zzz"
+- assertVisible: 'No notes with "check zzz"'
+- tapOn: "Cancel"
+- assertVisible: "New note"
+- assertVisible: 'Device check note(.|\n)*'

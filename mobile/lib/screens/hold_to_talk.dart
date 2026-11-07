@@ -1,7 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart' show kLongPressTimeout;
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show CustomSemanticsAction;
+import 'package:flutter/services.dart';
 
+import '../brand.dart';
 import '../relay.dart';
 import '../voice/model.dart' show megabytes;
 
@@ -9,87 +13,60 @@ void _say(BuildContext context, String? message) {
   if (message != null) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
 
-/// Hold to talk: press to record, let go to save, slide off to cancel. A `Listener` over the button, because Material
-/// buttons give no release-outside event. With no speech model yet, a press asks to get it.
-class HoldToTalkButton extends StatefulWidget {
-  const HoldToTalkButton({super.key, required this.relay});
+/// *New note*: a tap writes, a hold talks. A press held [holdToTalk] buzzes, turns the button into the spark mic, and
+/// starts a voice note, which keeps recording after the finger lifts; the listening card saves it. A shorter press
+/// opens the page to write. With no speech model yet, a hold asks to get it.
+class NewNoteButton extends StatefulWidget {
+  const NewNoteButton({super.key, required this.relay, required this.onWrite});
 
   final Relay relay;
+  /// Opens the page to write a note.
+  final VoidCallback onWrite;
 
   @override
-  State<HoldToTalkButton> createState() => _HoldToTalkButtonState();
+  State<NewNoteButton> createState() => _NewNoteButtonState();
 }
 
-/// How far, in logical pixels, a finger may go past the button's edge before the note is cancelled.
-const _slop = 24.0;
+/// How long a press must last to start a voice note: the phone's own long press, and the voice notes rule's floor.
+const holdToTalk = kLongPressTimeout;
 
-class _HoldToTalkButtonState extends State<HoldToTalkButton> {
-  // This press records; false for a press that asks for the model instead.
-  bool _holding = false;
-  bool _cancelled = false;
-  // A finger is on the button, so the Listener acts and onPressed does not.
-  bool _touched = false;
+class _NewNoteButtonState extends State<NewNoteButton> {
+  // From the hold until the voice note has started, or said why not.
+  bool _starting = false;
 
   Relay get _relay => widget.relay;
 
-  Future<void> _down(PointerDownEvent event) async {
-    _touched = true;
-    _cancelled = false;
-    _holding = _relay.speechModel == ModelState.ready;
-    if (!_holding) return;
+  Future<void> _talk() async {
+    unawaited(HapticFeedback.mediumImpact());
+    if (_relay.speechModel != ModelState.ready) return askForModel(context, _relay);
+    setState(() => _starting = true);
     final problem = await _relay.startVoiceNote();
-    if (mounted) _say(context, problem);
+    if (!mounted) return;
+    setState(() => _starting = false);
+    _say(context, problem);
   }
-
-  void _move(PointerMoveEvent event) {
-    final size = context.size;
-    if (!_holding || _cancelled || size == null) return;
-    final at = event.localPosition;
-    if (at.dx < -_slop || at.dy < -_slop || at.dx > size.width + _slop || at.dy > size.height + _slop) _cancel();
-  }
-
-  Future<void> _up(PointerUpEvent event) async {
-    _untouch();
-    if (!_holding) return _whenNotReady();
-    _holding = false;
-    if (_cancelled) return;
-    final problem = await _relay.endVoiceNote();
-    if (mounted) _say(context, problem);
-  }
-
-  // The button's own tap comes in the same pointer event, so the flag clears after it.
-  void _untouch() => scheduleMicrotask(() => _touched = false);
-
-  /// A screen reader's double tap sends no pointer events: it can not hold, but it can get the model.
-  void _pressed() {
-    if (_touched || _relay.speechModel == ModelState.ready) return;
-    unawaited(_whenNotReady());
-  }
-
-  void _cancel() {
-    _cancelled = true;
-    unawaited(_relay.cancelVoiceNote());
-  }
-
-  Future<void> _whenNotReady() => askForModel(context, _relay);
 
   @override
   Widget build(BuildContext context) {
-    return Listener(
-      onPointerDown: _down,
-      onPointerMove: _move,
-      onPointerUp: _up,
-      onPointerCancel: (_) {
-        _untouch();
-        if (_holding && !_cancelled) _cancel();
-        _holding = false;
-      },
-      child: OutlinedButton.icon(
-        // The Listener acts on a finger; the button gives the look, the ripple, the screen reader's label and its tap.
-        onPressed: _pressed,
-        style: OutlinedButton.styleFrom(minimumSize: const Size(56, 56), backgroundColor: Theme.of(context).colorScheme.surface),
-        icon: const Icon(Icons.mic_none),
-        label: const Text('Hold to talk'),
+    final brand = brandOf(context);
+    final live = _starting || _relay.listening != null;
+    return Semantics(
+      label: 'New note',
+      button: true,
+      onTap: widget.onWrite,
+      customSemanticsActions: {const CustomSemanticsAction(label: 'Record a voice note'): _talk},
+      excludeSemantics: true,
+      // A tap fires on a lift before [holdToTalk]; the long press at it, so lifting after a hold does nothing.
+      child: GestureDetector(
+        onTap: widget.onWrite,
+        onLongPress: _talk,
+        child: AccentGlow(child: Material(
+          color: live ? brand.spark : brand.accent,
+          shape: const CircleBorder(),
+          elevation: live ? 0 : 3,
+          child: SizedBox.square(dimension: 52,
+            child: Icon(live ? Icons.mic : Icons.edit_square, color: live ? brand.onSpark : brand.onAccent)),
+        )),
       ),
     );
   }
@@ -109,25 +86,26 @@ Future<void> askForModel(BuildContext context, Relay relay) async {
   }
 }
 
-/// *Start a voice note* from Shortcuts or the Action button: the recording sheet, or, with no speech model yet, the
-/// same question a first press of *Hold to talk* asks.
+/// *Start a voice note* from Shortcuts or the Action button: it records at once, in the same listening card as a hold
+/// on *New note*, or, with no speech model yet, asks the same question.
 Future<void> recordFromShortcut(BuildContext context, Relay relay) async {
   if (relay.speechModel != ModelState.ready) return askForModel(context, relay);
-  await showModalBottomSheet<void>(context: context, isDismissible: false, enableDrag: false,
-    builder: (_) => RecordingSheet(relay: relay));
+  final problem = await relay.startVoiceNote();
+  if (context.mounted) _say(context, problem);
 }
 
-/// Tap to stop: it starts recording as it opens. *Stop* saves the note and writes its words; *Cancel* keeps nothing.
-class RecordingSheet extends StatefulWidget {
-  const RecordingSheet({super.key, required this.relay});
+/// Over the whole app while the phone listens: a tap anywhere saves the voice note and writes its words; *Cancel*
+/// keeps nothing. The timeline shows it whenever [Relay.listening] is set, from a hold or from Shortcuts.
+class ListeningOverlay extends StatefulWidget {
+  const ListeningOverlay({super.key, required this.relay});
 
   final Relay relay;
 
   @override
-  State<RecordingSheet> createState() => _RecordingSheetState();
+  State<ListeningOverlay> createState() => _ListeningOverlayState();
 }
 
-class _RecordingSheetState extends State<RecordingSheet> {
+class _ListeningOverlayState extends State<ListeningOverlay> {
   late final Timer _tick;
   bool _done = false;
 
@@ -137,8 +115,6 @@ class _RecordingSheetState extends State<RecordingSheet> {
   void initState() {
     super.initState();
     _tick = Timer.periodic(const Duration(milliseconds: 250), (_) => setState(() {}));
-    // After the first frame: starting tells the timeline, which must not rebuild while this sheet builds.
-    WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_start()));
   }
 
   @override
@@ -147,49 +123,66 @@ class _RecordingSheetState extends State<RecordingSheet> {
     super.dispose();
   }
 
-  Future<void> _start() async {
-    final problem = await _relay.startVoiceNote();
-    if (problem != null) _close(problem);
-  }
-
-  void _close([String? message]) {
-    if (!mounted || _done) return;
+  Future<void> _save() async {
+    if (_done) return;
     _done = true;
     final messenger = ScaffoldMessenger.of(context);
-    Navigator.of(context).pop();
-    if (message != null) messenger.showSnackBar(SnackBar(content: Text(message)));
+    try {
+      final problem = await _relay.endVoiceNote();
+      if (problem != null) messenger.showSnackBar(SnackBar(content: Text(problem)));
+    } catch (_) {
+      // A guard: the app's Relay returns its problems. A card still listening stays usable: a tap tries again, and
+      // Cancel closes it.
+      _done = false;
+      final listening = _relay.listening != null;
+      messenger.showSnackBar(SnackBar(content: Text(listening
+        ? 'The voice note did not save. Tap to try again, or Cancel.'
+        : 'The voice note did not save.')));
+    }
   }
 
-  Future<void> _stop() async {
-    if (_done) return;
-    final problem = await _relay.endVoiceNote();
-    // endVoiceNote's one message is for a recording too short to keep.
-    _close(problem == null ? null : 'Too short to keep. Nothing was saved.');
-  }
-
+  // Cancel always runs, also after a save that failed, so the card can never stay stuck.
   Future<void> _cancel() async {
-    if (_done) return;
-    await _relay.cancelVoiceNote();
-    _close();
+    _done = true;
+    try {
+      await _relay.cancelVoiceNote();
+    } catch (_) {
+      _done = false;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final brand = brandOf(context);
     final since = _relay.listening;
     final length = since == null ? Duration.zero : DateTime.now().difference(since);
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, spacing: 8, children: [
-          Text('Recording', style: theme.textTheme.titleLarge),
-          Text(clockOf(length.isNegative ? Duration.zero : length), style: theme.textTheme.bodySmall),
-          const Text('Talk now. Tap Stop to save, or Cancel.'),
-          Row(children: [
-            TextButton(onPressed: _cancel, child: const Text('Cancel')),
-            const Spacer(),
-            FilledButton.icon(onPressed: _stop, icon: const Icon(Icons.stop), label: const Text('Stop')),
-          ]),
+    return Material(
+      type: MaterialType.transparency,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _save,
+        child: Stack(children: [
+          Positioned.fill(child: Semantics(label: 'Save the voice note', button: true, onTap: _save,
+            child: const ColoredBox(color: Color(0x59000000)))),
+          Positioned(left: 16, right: 16, bottom: 96 + MediaQuery.paddingOf(context).bottom, child: Card(
+            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(20))),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, spacing: 10, children: [
+                Row(children: [
+                  const BrandTag('Listening', spark: true, large: true),
+                  const Spacer(),
+                  TextButton(onPressed: _cancel, style: quietButton(context), child: const Text('Cancel')),
+                ]),
+                Text(clockOf(length.isNegative ? Duration.zero : length), style: const TextStyle(fontSize: 32,
+                  fontWeight: FontWeight.w600, letterSpacing: -0.64, fontFeatures: [FontFeature.tabularFigures()])),
+                DecoratedBox(decoration: ShapeDecoration(color: brand.spark, shape: const StadiumBorder()),
+                  child: const SizedBox(height: 4, width: double.infinity)),
+                Text('Tap anywhere to save.', style: theme.textTheme.bodySmall?.copyWith(color: brand.muted)),
+              ]),
+            ),
+          )),
         ]),
       ),
     );
@@ -218,53 +211,6 @@ class ModelDialog extends StatelessWidget {
 
 /// m:ss
 String clockOf(Duration length) => '${length.inMinutes}:${(length.inSeconds % 60).toString().padLeft(2, '0')}';
-
-/// Shows while the phone listens: for how long, and how to save or cancel. It covers nothing and moves nothing.
-class ListeningCard extends StatefulWidget {
-  const ListeningCard({super.key, required this.since});
-
-  final DateTime since;
-
-  @override
-  State<ListeningCard> createState() => _ListeningCardState();
-}
-
-class _ListeningCardState extends State<ListeningCard> {
-  late final Timer _tick;
-
-  @override
-  void initState() {
-    super.initState();
-    _tick = Timer.periodic(const Duration(milliseconds: 250), (_) => setState(() {}));
-  }
-
-  @override
-  void dispose() {
-    _tick.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final length = DateTime.now().difference(widget.since);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, spacing: 6, children: [
-          Row(mainAxisSize: MainAxisSize.min, spacing: 8, children: [
-            // Listening is a small live moment: the spark color.
-            Chip(avatar: Icon(Icons.mic, size: 16, color: theme.colorScheme.onTertiary), label: const Text('Listening'),
-              visualDensity: VisualDensity.compact, backgroundColor: theme.colorScheme.tertiary,
-              labelStyle: theme.chipTheme.labelStyle?.copyWith(color: theme.colorScheme.onTertiary)),
-            Text(clockOf(length.isNegative ? Duration.zero : length)),
-          ]),
-          Text('Let go to save. Slide off to cancel.', style: theme.textTheme.bodySmall),
-        ]),
-      ),
-    );
-  }
-}
 
 /// On the timeline while the speech model downloads, or when its download failed.
 class ModelCard extends StatelessWidget {

@@ -54,7 +54,7 @@ const shortest = Duration(milliseconds: 500);
 /// A recording ends by itself at this length, so a stuck press can not fill the phone.
 const longest = Duration(minutes: 5);
 
-/// Hold to talk: records to `<support>/voice/<clientId>.wav` while the person holds the button.
+/// A voice note: records to `<support>/voice/<clientId>.wav` until the person saves or cancels it.
 class VoiceRecorder {
   VoiceRecorder({required this.microphone, required this.folder, this.excludeFromBackup, DateTime Function()? clock,
     Timer Function(Duration, void Function())? timer})
@@ -72,8 +72,9 @@ class VoiceRecorder {
   String? _clientId;
   DateTime? _startedAt;
   Timer? _cap;
-  /// Called with the recording when it reaches [longest], as if the person let go.
-  void Function(Recording recording)? onLongest;
+  /// Called with the recording when it reaches [longest], as if the person let go; with null when the microphone did not
+  /// stop, and nothing is kept.
+  void Function(Recording? recording)? onLongest;
 
   bool get recording => _clientId != null;
   DateTime? get startedAt => _startedAt;
@@ -100,7 +101,12 @@ class VoiceRecorder {
     _clientId = clientId;
     _startedAt = startedAt;
     _cap = _timer(longest, () async {
-      final done = await stop();
+      final Recording? done;
+      try {
+        done = await stop();
+      } catch (_) {
+        return onLongest?.call(null);
+      }
       if (done != null) onLongest?.call(done);
     });
     return true;
@@ -113,11 +119,20 @@ class VoiceRecorder {
     _end();
     final length = _clock().difference(startedAt);
     if (length < shortest) {
-      await microphone.cancel();
-      await _delete(clientId);
+      try {
+        await microphone.cancel();
+      } finally {
+        await _delete(clientId);
+      }
       return null;
     }
-    await microphone.stop();
+    try {
+      await microphone.stop();
+    } catch (_) {
+      // A file the microphone did not end is not kept.
+      await _delete(clientId);
+      rethrow;
+    }
     try {
       await excludeFromBackup?.call(await fileOf(pathOf(clientId)));
     } catch (_) {
@@ -131,8 +146,11 @@ class VoiceRecorder {
     final clientId = _clientId;
     if (clientId == null) return;
     _end();
-    await microphone.cancel();
-    await _delete(clientId);
+    try {
+      await microphone.cancel();
+    } finally {
+      await _delete(clientId);
+    }
   }
 
   void _end() {

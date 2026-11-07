@@ -19,7 +19,7 @@ The mark is *Signal R*: a capital R on a 48 by 48 grid, in round strokes 4 units
 - **Rerun the icon script** after a change to `brand/mark.svg` or to a brand color: `node brand/make-icons.mjs`, then commit what it writes. It writes `brand/icon.svg`, `brand/logo.svg`, the website's two top-bar marks and its favicon, every iPhone icon size, every Android density, the Android adaptive icon and both launch marks. Headless Chromium draws, because ImageMagick's own SVG renderer drops paths: set `RELAY_CHROME` if it finds no Chromium. Never edit a file it writes by hand: the next run replaces it. A second run changes nothing.
 - **The app draws the mark in code** (`RelayMark` in [`mobile/lib/brand.dart`](../mobile/lib/brand.dart)), with the same paths. A change to the mark changes both.
 - **The website uses** `site/src/assets/relay-mark.svg` (light) and `relay-mark-dark.svg` in the top bar, and the icon with round corners as `site/public/favicon.svg`. The script writes all three.
-- **The icon stays still.** A moving pulse is for a later *Syncing* state, not the icon.
+- **The icon stays still.** Only the sync dot moves, and only while it says *Syncing*: [words with every color](#rules-for-every-screen).
 - **The ring circle is not the logo.** It shows only on the ring's own pages.
 
 ## Colors
@@ -41,14 +41,14 @@ The *Emerald* set. Each token has a light and a dark value; the app and the webs
 | on-spark | text on spark | `#121614` | `#121614` |
 | danger | errors | `#C9302C` | `#FF8A80` |
 
-- **Each color has one home per surface.** The app: [`mobile/lib/brand.dart`](../mobile/lib/brand.dart), as `BrandColors` and the theme built from it. The website: `site/src/styles/custom.css`. The icons: the constants at the top of `brand/make-icons.mjs`. Change all three together, and this table.
+- **Each color has one home per surface.** The app: [`mobile/lib/brand.dart`](../mobile/lib/brand.dart), as `BrandColors` and the theme built from it. The iPhone share sheet: [`mobile/ios/ShareExtension/Brand.swift`](../mobile/ios/ShareExtension/Brand.swift), because it runs outside Flutter. The website: `site/src/styles/custom.css`. The icons: the constants at the top of `brand/make-icons.mjs`. Change all four together, and this table. `mobile/test/brand_test.dart` fails, and names the token, when a value in `Brand.swift` is not the same as in `BrandColors`.
 - **A screen reads the theme, never a color in code.** Use `Theme.of(context).colorScheme` or `brandOf(context)`. A fixed color does not follow dark mode. The share card's dim layer over another app is the one exception.
 - **Every text color stays at 4.5 to 1 or more** on each background it sits on, light and dark. `mobile/test/brand_test.dart` checks each pair and names the one that fails.
 - **Material's slots map to the tokens:** surface is paper, every surface container is card, primary is accent, primary container is accent-soft, tertiary is spark, secondary is ink. Selected chips and segments stay ink on a quiet fill, because the accent is for the one main action.
 
 ## Type
 
-Inter, one variable font, inside the app and served by the website: no network call, no outside font host. The SIL Open Font License sits beside each copy (`mobile/assets/fonts/inter/OFL.txt`, `site/public/fonts/OFL.txt`), and the app's licenses page lists it.
+Inter, one variable font, inside the app, inside the iPhone share sheet and served by the website: no network call, no outside font host. The SIL Open Font License sits beside each copy (`mobile/assets/fonts/inter/OFL.txt`, `site/public/fonts/OFL.txt`), and the app's licenses page lists it. The iPhone share sheet runs outside the app, so its build takes in the app's font file and license as its own resources, and its `Info.plist` lists the font under `UIAppFonts`.
 
 | Role | Size | Weight |
 |---|---|---|
@@ -57,11 +57,9 @@ Inter, one variable font, inside the app and served by the website: no network c
 | Body | 16 | 400 |
 | Small | 13 | 400 |
 
-Material's 14-pixel body and label sizes stay until the screens are cleaned up, so no screen moves.
-
 ## Corners and spacing
 
-- **Corners:** 12 on buttons and fields, 16 on cards. The floating *New note* button is a pill.
+- **Corners:** 12 on buttons and fields, 16 on cards. *New note* is a round button, 52 px, with an icon and no words; its accessibility label is *New note*.
 - **Spacing:** 4, 8, 12, 16, 24, 32.
 - **The glow:** the one main action carries a soft shadow in the accent color (`AccentGlow` in the app).
 
@@ -69,9 +67,9 @@ Material's 14-pixel body and label sizes stay until the screens are cleaned up, 
 
 | Rule | What it means |
 |---|---|
-| One bright thing | The accent marks the one main action on a screen. The spark is for small live moments: the *Voice* tag and *Listening* fill with spark, with on-spark text. A *Typed* tag is accent text on accent-soft. Everything else is ink or muted. |
+| One bright thing | The accent marks the one main action on a screen. The spark is for small live moments: the *Voice* tag, *Listening* and *New note* while it records fill with spark, with on-spark text. A *Typed* tag is accent text on accent-soft. Everything else is ink or muted. |
 | Cards, no borders | A card is a lighter shape on paper. No box inside a box. |
-| Words with every color | A state says its name: *Synced*, *Waiting*, *Off*. Never color alone. |
+| Words with every color | A state says its name: *Synced*, *Waiting*, *Off*. Never color alone. The sync dot sits beside its word: still accent for *Synced*, spark that pulses for *Syncing*, a hollow ring for *2 waiting* and *Offline*, danger for *Key refused*, and no dot for *On this phone*. With reduced motion on the phone, the dot stays still. |
 | Soft corners | 12 px on buttons and fields, 16 px on cards. |
 
 These rules apply the [UX principles](ux-principles.md#principles) *one primary action*, *fewer borders* and *never rely on color alone* to Relay Everything.

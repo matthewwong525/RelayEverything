@@ -98,44 +98,51 @@ struct ShareCardView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       HStack {
-        Button("Cancel") { model.cancel() }.disabled(model.saving)
+        Button("Cancel") { model.cancel() }.font(Brand.body).foregroundColor(Color(Brand.accentText))
+          .disabled(model.saving)
         Spacer()
-        Text("Relay Everything").font(.headline)
+        Text("Relay Everything").font(Brand.title).foregroundColor(Color(Brand.ink))
         Spacer()
-        Button("Save") { Task { await model.save() } }.buttonStyle(.borderedProminent).disabled(!model.canSave)
+        Button("Save") { Task { await model.save() } }.buttonStyle(BrandFilledButton()).disabled(!model.canSave)
       }
       if let draft = model.draft {
         shared(draft)
-        TextField("Add words", text: $model.words).textFieldStyle(.roundedBorder).disabled(model.saving)
-        if let leftOut = draft.leftOut { Text(leftOut).font(.footnote).foregroundColor(.red) }
+        TextField("Add words", text: $model.words).font(Brand.body).foregroundColor(Color(Brand.ink))
+          .padding(12).background(Color(Brand.card), in: RoundedRectangle(cornerRadius: Brand.fieldCorners))
+          .disabled(model.saving)
+        if let leftOut = draft.leftOut { Text(leftOut).font(Brand.small).foregroundColor(Color(Brand.danger)) }
       } else {
-        ProgressView()
+        ProgressView().tint(Color(Brand.accent))
       }
-      Text(model.footLine).font(.footnote).foregroundColor(.secondary)
+      Text(model.footLine).font(Brand.small).foregroundColor(Color(Brand.muted))
       Spacer()
     }
     .padding()
+    .background(Color(Brand.paper).ignoresSafeArea())
+    .tint(Color(Brand.accentText))
   }
 
   @ViewBuilder private func shared(_ draft: ShareDraft) -> some View {
     if draft.title != nil || draft.url != nil {
       VStack(alignment: .leading, spacing: 4) {
-        if let title = draft.title { Text(title) }
-        if let url = draft.url { Text(url).font(.footnote).foregroundColor(.secondary).lineLimit(2) }
+        if let title = draft.title { Text(title).font(Brand.body).foregroundColor(Color(Brand.ink)) }
+        if let url = draft.url { Text(url).font(Brand.small).foregroundColor(Color(Brand.muted)).lineLimit(2) }
       }
-      .padding(10).frame(maxWidth: .infinity, alignment: .leading).background(Color(.secondarySystemBackground)).cornerRadius(8)
+      .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+      .background(Color(Brand.card), in: RoundedRectangle(cornerRadius: Brand.cardCorners))
     }
     if let text = draft.text {
-      Text(text).lineLimit(4).padding(10).frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemBackground)).cornerRadius(8)
+      Text(text).font(Brand.body).foregroundColor(Color(Brand.ink)).lineLimit(4).padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(Brand.card), in: RoundedRectangle(cornerRadius: Brand.cardCorners))
     }
     if !draft.files.isEmpty {
       ScrollView(.horizontal, showsIndicators: false) {
         HStack {
           ForEach(draft.files, id: \.id) { file in
             Text("\(file.name) · \(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))")
-              .font(.footnote).padding(.horizontal, 8).padding(.vertical, 4)
-              .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary))
+              .font(Brand.small).foregroundColor(Color(Brand.ink)).padding(.horizontal, 10).padding(.vertical, 4)
+              .background(Color(Brand.line), in: Capsule())
           }
         }
       }

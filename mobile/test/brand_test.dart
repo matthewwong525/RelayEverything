@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -49,6 +51,31 @@ List<String> unreadable(Map<String, (Color, Color)> pairs) => [
     if (contrast(text, back) < 4.5) '$name: ${contrast(text, back).toStringAsFixed(2)} to 1',
 ];
 
+/// Each brand token by its name, as `Brand.swift` names it.
+Map<String, Color> tokens(BrandColors c) => {
+  'paper': c.paper, 'card': c.card, 'line': c.line, 'ink': c.ink, 'muted': c.muted, 'accent': c.accent,
+  'onAccent': c.onAccent, 'accentText': c.accentText, 'accentSoft': c.accentSoft, 'spark': c.spark,
+  'onSpark': c.onSpark, 'danger': c.danger, 'onDanger': c.onDanger,
+};
+
+/// The tokens where the share sheet's `Brand.swift` differs from [BrandColors], each named with both values.
+List<String> swiftDrift(String swift) {
+  final line = RegExp(r'static let (\w+) = color\(light: 0x([0-9A-Fa-f]{6}), dark: 0x([0-9A-Fa-f]{6})\)');
+  final found = {
+    for (final m in line.allMatches(swift)) m[1]!: ['0x${m[2]!.toUpperCase()}', '0x${m[3]!.toUpperCase()}'],
+  };
+  String hex(Color c) => '0x${(c.toARGB32() & 0xFFFFFF).toRadixString(16).toUpperCase().padLeft(6, '0')}';
+  final names = tokens(BrandColors.light).keys;
+  final sides = [('light', tokens(BrandColors.light)), ('dark', tokens(BrandColors.dark))];
+  return [
+    for (final name in names)
+      for (final (i, (side, colors)) in sides.indexed)
+        if (found[name]?[i] != hex(colors[name]!))
+          '$name $side: Brand.swift has ${found[name]?[i] ?? 'none'}, BrandColors ${hex(colors[name]!)}',
+    for (final name in found.keys) if (!names.contains(name)) '$name: in Brand.swift, not in BrandColors',
+  ];
+}
+
 void main() {
   test('the contrast check measures WCAG ratios', () {
     expect(contrast(Colors.black, Colors.white), closeTo(21, 0.01));
@@ -78,15 +105,26 @@ void main() {
       });
 
       test('uses Inter for every text style', () {
-        final styles = [theme.textTheme.displayLarge, theme.textTheme.headlineSmall, theme.textTheme.titleLarge,
-          theme.textTheme.titleMedium, theme.textTheme.bodyLarge, theme.textTheme.bodyMedium, theme.textTheme.bodySmall,
-          theme.textTheme.labelLarge, theme.appBarTheme.titleTextStyle];
+        // The app bars' titles take titleLarge and, large, headlineMedium.
+        final styles = [theme.textTheme.displayLarge, theme.textTheme.headlineMedium, theme.textTheme.headlineSmall,
+          theme.textTheme.titleLarge, theme.textTheme.titleMedium, theme.textTheme.bodyLarge, theme.textTheme.bodyMedium,
+          theme.textTheme.bodySmall, theme.textTheme.labelLarge, theme.listTileTheme.titleTextStyle,
+          theme.listTileTheme.subtitleTextStyle];
         for (final style in styles) {
           expect(style?.fontFamily, brandFont);
         }
       });
     });
   }
+
+  test('the theme sets the brand scale: 16 px body, 13 px muted list help, 32 px large titles, flat cards, soft dialogs', () {
+    final theme = brandTheme(Brightness.light);
+    expect([theme.textTheme.bodyMedium?.fontSize, theme.listTileTheme.subtitleTextStyle?.fontSize,
+      theme.listTileTheme.subtitleTextStyle?.color, theme.textTheme.headlineMedium?.fontSize,
+      theme.textTheme.headlineMedium?.fontWeight, theme.cardTheme.margin, theme.appBarTheme.backgroundColor],
+      [16, 13, BrandColors.light.muted, 32, FontWeight.w700, EdgeInsets.zero, BrandColors.light.paper]);
+    expect((theme.dialogTheme.shape! as RoundedRectangleBorder).borderRadius, BorderRadius.circular(16));
+  });
 
   test('a muted color too light for paper fails, and the failure names the pair', () {
     final pale = BrandColors.light.copyWith(muted: const Color(0xFF9AA39C));
@@ -99,6 +137,16 @@ void main() {
     expect(RelayMarkPainter.waves.computeMetrics().length, 2);
     expect(painter.shouldRepaint(const RelayMarkPainter(ink: Color(0xFF0E7A5A), spark: Color(0xFFF5A524))), isFalse);
     expect(painter.shouldRepaint(const RelayMarkPainter(ink: Color(0xFF4CC79A), spark: Color(0xFFF5A524))), isTrue);
+  });
+
+  test("the iPhone share sheet's Brand.swift has every BrandColors hex, light and dark", () {
+    expect(swiftDrift(File('ios/ShareExtension/Brand.swift').readAsStringSync()), isEmpty);
+  });
+
+  test('a Swift hex that differs from BrandColors fails, and the failure names the token', () {
+    final swift = File('ios/ShareExtension/Brand.swift').readAsStringSync()
+      .replaceFirst('static let muted = color(light: 0x5E6660', 'static let muted = color(light: 0x9AA39C');
+    expect(swiftDrift(swift), ['muted light: Brand.swift has 0x9AA39C, BrandColors 0x5E6660']);
   });
 
   testWidgets("Inter's license is on the licenses page", (tester) async {

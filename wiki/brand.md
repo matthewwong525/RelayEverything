@@ -13,12 +13,12 @@ The mark is *Signal R*: a capital R on a 48 by 48 grid, in round strokes 4 units
 | File | What it is | Where it goes |
 |---|---|---|
 | [`brand/mark.svg`](../brand/mark.svg) | The mark. The R is `currentColor`, the waves are spark. | The one source of the drawing. |
-| [`brand/logo.svg`](../brand/logo.svg) | The mark and *Relay Everything* in Inter Bold, as outlines, so it needs no font. It follows the reader's light or dark setting. | Documents, slides, a README. |
+| [`brand/logo.svg`](../brand/logo.svg) | The mark and *Relay Everything* in Inter Bold, as outlines, so it needs no font. It follows the reader's light or dark setting. The script below redraws its mark and keeps its wordmark. | Documents, slides, a README. |
 | [`brand/icon.svg`](../brand/icon.svg) | The mark in white on the accent, full bleed. Each platform rounds its own corners. | Made by the script below. |
 
-- **Rerun the icon script** after a change to `brand/mark.svg` or to the accent: `node brand/make-icons.mjs`, then commit what it writes. It writes `brand/icon.svg`, every iPhone icon size, every Android density, the Android adaptive icon and both launch marks. Headless Chromium draws, because ImageMagick's own SVG renderer drops paths: set `RELAY_CHROME` if it finds no Chromium. Never edit an icon PNG by hand: the next run replaces it.
+- **Rerun the icon script** after a change to `brand/mark.svg` or to a brand color: `node brand/make-icons.mjs`, then commit what it writes. It writes `brand/icon.svg`, `brand/logo.svg`, the website's two top-bar marks and its favicon, every iPhone icon size, every Android density, the Android adaptive icon and both launch marks. Headless Chromium draws, because ImageMagick's own SVG renderer drops paths: set `RELAY_CHROME` if it finds no Chromium. Never edit a file it writes by hand: the next run replaces it. A second run changes nothing.
 - **The app draws the mark in code** (`RelayMark` in [`mobile/lib/brand.dart`](../mobile/lib/brand.dart)), with the same paths. A change to the mark changes both.
-- **The website uses** `site/src/assets/relay-mark.svg` (light) and `relay-mark-dark.svg` in the top bar, and the icon as `site/public/favicon.svg`.
+- **The website uses** `site/src/assets/relay-mark.svg` (light) and `relay-mark-dark.svg` in the top bar, and the icon with round corners as `site/public/favicon.svg`. The script writes all three.
 - **The icon stays still.** A moving pulse is for a later *Syncing* state, not the icon.
 - **The ring circle is not the logo.** It shows only on the ring's own pages.
 
@@ -69,7 +69,7 @@ Material's 14-pixel body and label sizes stay until the screens are cleaned up, 
 
 | Rule | What it means |
 |---|---|
-| One bright thing | The accent marks the one main action on a screen. The spark is for small live moments, such as recording. Everything else is ink or muted. |
+| One bright thing | The accent marks the one main action on a screen. The spark is for small live moments: the *Voice* tag and *Listening* fill with spark, with on-spark text. A *Typed* tag is accent text on accent-soft. Everything else is ink or muted. |
 | Cards, no borders | A card is a lighter shape on paper. No box inside a box. |
 | Words with every color | A state says its name: *Synced*, *Waiting*, *Off*. Never color alone. |
 | Soft corners | 12 px on buttons and fields, 16 px on cards. |

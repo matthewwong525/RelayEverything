@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/app.dart';
 import 'package:relay_app/brand.dart';
@@ -569,6 +570,24 @@ void main() {
       await tester.pump();
       expect(relay.calls, ['voice start', 'voice end']);
       expect(find.text('Listening'), findsNothing);
+    });
+
+    testWidgets('a voice note and Listening wear the spark color; a typed note wears accent soft', (tester) async {
+      relay.entries = [Entry(text: 'Spoken', at: now, voice: true), Entry(text: 'Written', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      Chip chip(String label) => tester.widget<Chip>(find.widgetWithText(Chip, label));
+      Color? ink(String label) => tester.renderObject<RenderParagraph>(find.text(label)).text.style?.color;
+      expect(chip('Voice').backgroundColor, BrandColors.light.spark);
+      expect(ink('Voice'), BrandColors.light.onSpark);
+      expect(chip('Typed').backgroundColor, BrandColors.light.accentSoft);
+      expect(ink('Typed'), BrandColors.light.accentText);
+
+      final gesture = await tester.startGesture(tester.getCenter(holdButton()));
+      await tester.pump();
+      expect(chip('Listening').backgroundColor, BrandColors.light.spark);
+      expect(ink('Listening'), BrandColors.light.onSpark);
+      await gesture.up();
+      await tester.pump();
     });
 
     testWidgets('a short press saves nothing and says to hold', (tester) async {

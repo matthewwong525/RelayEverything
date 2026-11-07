@@ -27,3 +27,9 @@
 
 - [x] 5.1 Run `node scripts/public-check.mjs`, `flutter analyze`, `flutter test`, and `npm test` in `site/`; verify all pass.
 - [ ] 5.2 `/save`, then verify the iPhone device check's timeline, new note and settings screenshots show the brand in light mode, and preview the website with `node scripts/publish-relay-site.mjs --ref HEAD --staging`; show both on the preview page, *Approved* (board section 6) beside *Built*.
+
+## 6. Review fixes
+
+- [x] 6.1 Fill the timeline's *Voice* tag and the *Listening* chip with spark (`colorScheme.tertiary`) and on-spark text, and the *Typed* tag with accent-soft and accent text, as board section 6 shows; verify a widget test in `mobile/test/screens_test.dart` finds each chip in its color, and `flutter analyze` and `flutter test` pass.
+- [x] 6.2 Make `brand/make-icons.mjs` also write `brand/logo.svg`, `site/src/assets/relay-mark.svg`, `site/src/assets/relay-mark-dark.svg` and `site/public/favicon.svg` from `brand/mark.svg`, and say so in `wiki/brand.md`; verify a second run leaves `git status` unchanged, and a changed color reaches each file.
+- [x] 6.3 Make `site/tests/brand.test.mjs` search every built `.html`, `.css` and `.svg` file for `#3b5bdb`, any case, so the hero SVG's attributes are checked; verify `npm test` in `site/` passes.

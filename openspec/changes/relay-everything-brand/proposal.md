@@ -96,3 +96,8 @@ None.
 - **2026-11-07** — Assumed: the website's dark accent for links and the main button is the dark accent text (`#4CC79A`), not ink, because Starlight uses that value as the dark link color.
 - **2026-11-07** — Assumed: the iPhone share sheet, which is native SwiftUI, keeps the phone's own look; the Android share card wears the brand, because restyling the native sheet needs its own font bundle and a build to check.
 - **2026-11-07** — Checkpoint: built with *Signal R* and *Emerald*; local checks pass; saved for the iPhone check and the website preview (tasks 1.3 and 5.2).
+- **2026-11-07** — Assumed: the *Typed* tag is accent text on accent-soft and the *Listening* microphone is on-spark, because board section 6 shows that tag so and an ink icon on spark breaks the one-color chip.
+- **2026-11-07** — Assumed: `brand/make-icons.mjs` keeps the wordmark outlines it finds in `brand/logo.svg` and redraws only the mark and colors, because the outlines have no other source and the font is not in the repository's build tools.
+- **2026-11-07** — Assumed: the favicon keeps its 16-unit round corners while `brand/icon.svg` stays full bleed, because a browser tab shows the picture as it is and no platform rounds it.
+- **2026-11-07** — Assumed: the old-blue check reads built `.svg` files as well as `.html` and `.css`, because a picture in `public/` can carry the old color too.
+- **2026-11-07** — Checkpoint: the second look's three fixes (spark on the Voice and Listening chips, one script for every logo file, the old-blue check on whole pages) saved.

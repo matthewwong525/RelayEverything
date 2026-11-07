@@ -19,8 +19,10 @@ test('the built site has styles to check', () => {
   assert.ok(styles.length > 0, 'run `npm run build` first');
 });
 
-test('no style keeps the old blue', () => {
-  const old = styles.filter(([, css]) => /#3b5bdb/i.test(css)).map(([file]) => file);
+test('no style, page or picture keeps the old blue', () => {
+  // Whole pages, not only their <style> blocks: the home page's hero SVG sets its colors in attributes.
+  const old = files.filter(file => /\.(?:css|html|svg)$/.test(file) && /#3b5bdb/i.test(readFileSync(file, 'utf8')))
+    .map(file => relative(dist, file));
   assert.deepEqual(old, []);
 });
 

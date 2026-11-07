@@ -160,7 +160,7 @@ class _NoteCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 6, children: [
           Row(spacing: 8, children: [
-            Chip(label: Text(entry.voice ? 'Voice' : 'Typed'), visualDensity: VisualDensity.compact),
+            _KindChip(voice: entry.voice),
             if (recording != null) ...[
               const Spacer(),
               TextButton.icon(onPressed: () => relay.play(recording), icon: const Icon(Icons.play_arrow), label: const Text('Play')),
@@ -179,6 +179,25 @@ class _NoteCard extends StatelessWidget {
           Text(line, style: muted),
         ]),
       ),
+    );
+  }
+}
+
+/// A note's kind: *Voice* in the spark color, a small live moment; *Typed* in accent text on accent soft.
+class _KindChip extends StatelessWidget {
+  const _KindChip({required this.voice});
+
+  final bool voice;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final brand = brandOf(context);
+    return Chip(
+      label: Text(voice ? 'Voice' : 'Typed'),
+      visualDensity: VisualDensity.compact,
+      backgroundColor: voice ? theme.colorScheme.tertiary : brand.accentSoft,
+      labelStyle: theme.chipTheme.labelStyle?.copyWith(color: voice ? theme.colorScheme.onTertiary : brand.accentText),
     );
   }
 }

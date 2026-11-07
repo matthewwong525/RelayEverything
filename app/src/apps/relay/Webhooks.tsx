@@ -44,8 +44,8 @@ function Tick({ checked, onChange, children }: { checked: boolean; onChange: (va
   return <Label className="font-normal"><Checkbox checked={checked} onCheckedChange={(value) => onChange(value === true)} />{children}</Label>
 }
 
-/** "A, B and C". */
-const listed = (words: string[]) => words.length < 2 ? words.join('') : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`
+/** "A is", or "A, B and C are". */
+const listed = (words: string[]) => words.length < 2 ? `${words.join('')} is` : `${words.slice(0, -1).join(', ')} and ${words.at(-1)} are`
 
 function AddWebhook({ kinds, onAdd }: { kinds: WebhookKind[]; onAdd: Changed }) {
   const [open, setOpen] = useState(false)
@@ -84,7 +84,7 @@ function AddWebhook({ kinds, onAdd }: { kinds: WebhookKind[]; onAdd: Changed }) 
             {always.map((kind) => <span key={kind.id} className="text-sm">{kind.label} always go, {kind.detail}.</span>)}
             {kinds.filter((kind) => !kind.always).map((kind) => <Tick key={kind.id} checked={ticked.includes(kind.id)} onChange={(on) => tick(kind.id, on)}>
               {kind.detail ? `${kind.label}: ${kind.detail}` : kind.label}</Tick>)}
-            {sensitive.length > 0 && <span className="text-sm text-muted-foreground">{listed(sensitive)} are sensitive. Tick them only for a database you control.</span>}
+            {sensitive.length > 0 && <span className="text-sm text-muted-foreground">{listed(sensitive)} sensitive. Tick each only for a database you control.</span>}
           </div>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         </div>
@@ -200,7 +200,8 @@ export function Webhooks() {
   useEffect(read, [read])
   const load = () => { setHooks('loading'); read() }
   // From the newest list, as two actions can answer in either order.
-  const change = (next: (list: Webhook[]) => Webhook[]) => setHooks((now) => next(Array.isArray(now) ? now : []))
+  // Only a card or the form calls it, and both show only once the list has loaded.
+  const change = (next: (list: Webhook[]) => Webhook[]) => setHooks((now) => next(now as Webhook[]))
   const replace = (hook: Webhook) => change((list) => list.some((other) => other.id === hook.id) ? list.map((other) => other.id === hook.id ? hook : other) : [...list, hook])
   return <section className="grid gap-3" aria-label="Send to your database">
     <div className="flex flex-wrap items-center gap-2">

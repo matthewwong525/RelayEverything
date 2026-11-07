@@ -120,12 +120,20 @@ it("draws the ticks and the card's names from the kinds the server lists, and of
   expect(dialog.getByText("Notes always go, with their words, recording and place.")).toBeTruthy();
   expect(dialog.getAllByRole("checkbox").map(box => box.parentElement?.textContent)).toEqual(
     ["Calendar: new, changed and removed events", "Texts: each message you send and get"]);
-  expect(dialog.getByText("Calendar and texts are sensitive. Tick them only for a database you control.")).toBeTruthy();
+  expect(dialog.getByText("Calendar and texts are sensitive. Tick each only for a database you control.")).toBeTruthy();
   fireEvent.change(dialog.getByLabelText("Address"), { target: { value: "https://db.example.com/relay" } });
   fireEvent.click(dialog.getByRole("checkbox", { name: /Texts/ }));
   answer = () => Response.json({ webhook: hook("9", { kinds: ["notes", "texts"] }), secret: "whsec_example" });
   await press("Add", dialog);
   expect(posts().at(-1)?.input).toMatchObject({ kinds: ["texts"] });
+});
+
+it("names a kind the server did not list by its id, and says one sensitive kind is sensitive", async () => {
+  answer = list([hook("5", { kinds: ["notes", "texts"] })], [KINDS[0], KINDS[3]]);
+  await open();
+  expect(card("Database 5").getByText(/^db5\.example\.com · notes, texts · /)).toBeTruthy();
+  await press("Add a webhook");
+  expect(screen.getByText("Calendar is sensitive. Tick each only for a database you control.")).toBeTruthy();
 });
 
 it("sends a test and says what came back, or why nothing did", async () => {

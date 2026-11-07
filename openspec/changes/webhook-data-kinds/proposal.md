@@ -55,6 +55,7 @@ Non-goals: webhook versions, an *Upgrade* button, end dates for old versions and
 - **2026-11-07** — Check: the `Webhooks.test.tsx` case *adds a webhook with the kinds ticked* now loads the list before it goes offline, because the form's ticks come from the list. What it checks is the same.
 - **2026-11-07** — Assumed: task 1.1's check passed: `log.ts` names `calendar`, and `npm test` in `app/` failed only two page tests that ran out of time under load and passed alone (`Welcome.test.tsx`, `Drag.test.tsx`).
 - **2026-11-07** — Built inside /ship: list of kinds, ignore-unknown schema and receiver, ticks from the server, docs and wiki page; the review found nothing to fix. Full `npm test` failed only on two untouched page tests that time out under load (Inbox week rows, Access welcome) and pass alone; the rest of the chain passed. Specs reconciled; saved for the preview check (task 6.2).
+- **2026-11-07** — Assumed: the form's warning reads *X is sensitive* for one kind and *X and Y are sensitive* for several, then *Tick each only for a database you control.*, because CI found the one-kind case untested and its words wrong; a test now covers it and a kind the server does not list.
 
 ## Capabilities
 

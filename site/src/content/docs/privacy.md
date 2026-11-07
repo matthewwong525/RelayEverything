@@ -3,7 +3,7 @@ title: Privacy
 description: What Relay Everything keeps, where it keeps it, and how to turn each part off.
 ---
 
-Relay Everything keeps your notes on your phone. When you turn on sending, it keeps your notes, health and places in your own space on a Relay Everything server. Your server sends them on only to the webhooks you add: notes to each one, and health and places only to those you tick them for. It answers only the AI apps and services you connect and the API keys you make, each only when it asks. This website holds none of them.
+Relay Everything keeps your notes on your phone. When you turn on sending, it keeps your notes, health and places in your own space on a Relay Everything server, or the phone sends them straight to [your own webhook](../connections/your-database/#send-from-the-phone), and none of them reach Relay Everything. Your server sends them on only to the webhooks you add: notes to each one, and health and places only to those you tick them for. It answers only the AI apps and services you connect and the API keys you make, each only when it asks. This website holds none of them.
 
 ## What is kept, and where
 
@@ -22,6 +22,8 @@ Relay Everything keeps your notes on your phone. When you turn on sending, it ke
 | Your email | The server's list of accounts, to sign you in | When you sign up |
 | Your sign-in | A cookie in your browser, for 30 days | With each visit to your Relay Everything page |
 | A copy of what your server stores | [Your own database](../connections/your-database/), through a webhook you add | Notes always, with each file's name, type and size but not the file; health and location only if you tick them for that webhook |
+| Everything the phone sends, when you pick **My own webhook** | Only [your own database](../connections/your-database/#send-from-the-phone), straight from the phone; nothing on your Relay Everything server | With sending on, the same as above: notes, then each file with its bytes; health and location only with their switches on |
+| Your webhook's address and secret | The iPhone Keychain or the Android Keystore | Never sent: the secret signs each message |
 
 With sending off, the app makes no network call, reads no health data, and keeps no location history. The one exception is the speech model for voice notes, and only after you tap **Get it**. The same is true when a shortcut adds a note: [Shortcuts](../app/shortcuts/#what-is-sent) follow your sending setting, and **Get notes** reads only the phone. The share card also follows it: with sending off it makes no network call: [Share from any app](../app/share/#what-is-sent).
 
@@ -46,7 +48,7 @@ Click **Delete my account** on your Relay Everything page, and type your email t
 
 ## What is not kept
 
-- The Relay Everything app has no ads and no analytics. It sends your notes, their files, health and places only to your Relay Everything server, and only with sending on. Your server sends them on only to your webhooks, and sends a file's name, type and size, never the file.
+- The Relay Everything app has no ads and no analytics. It sends your notes, their files, health and places only to the one place you pick, your Relay Everything server or your own webhook, and only with sending on. Your server sends them on only to your webhooks, and sends a file's name, type and size, never the file.
 - To name a place, such as a street, the phone uses its own address lookup from Apple or Google, only with sending on. That lookup gets the place's coordinates, not the note. With sending off, a pinned note shows **Pinned**.
 - The phone writes a voice note's words itself. No speech service on a network hears your voice.
 - The speech model comes from [whisper.cpp's page on Hugging Face](https://huggingface.co/ggerganov/whisper.cpp), one time, after you tap **Get it**. Hugging Face sees the phone's internet address, the same as any download. It gets no note, no recording and no key.
@@ -56,7 +58,7 @@ Click **Delete my account** on your Relay Everything page, and type your email t
 
 | Part | How |
 |---|---|
-| Everything sent | Turn off **Send to Relay Everything** in [Settings](../app/settings/). Health and location stop, and what of them did not go yet is deleted. |
+| Everything sent | Turn off **Send my notes** in [Settings](../app/settings/). Health and location stop, and what of them did not go yet is deleted. |
 | Voice notes | Do not tap **Get it**, or tap **Remove** in Settings to delete the speech model. Delete a recording by removing the app. |
 | Pins on typed notes | Turn off **Pin notes to where I am** in Settings. |
 | Location history | Turn off **Location history** in Settings. |

@@ -75,9 +75,7 @@ Future<int> syncHealth(Store store, HealthSource source, {DateTime? now}) async 
     for (final point in await source.read(from, to))
       if (sampleOf(point) case final sample? when seen.add('${sample['type']} ${sample['start']} ${sample['end']} ${sample['source']}')) sample,
   ];
-  for (var at = 0; at < samples.length; at += 500) {
-    await store.enqueue('health', {'samples': samples.sublist(at, (at + 500).clamp(0, samples.length))});
-  }
+  await store.queueSamples(samples);
   await store.set(healthSince, '${to.millisecondsSinceEpoch}');
   return samples.length;
 }

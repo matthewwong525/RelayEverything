@@ -8,7 +8,7 @@ Relay Everything can keep your steps, heart rate, sleep and workouts beside your
 ## Turn it on
 
 1. Open **Settings**.
-2. Turn on **Send to Relay Everything**, if it is off: [Connect a phone](../../start/connect-a-phone/). Health works only with sending on, and the app reads no health data while it is off.
+2. Turn on **Send my notes**, if it is off: [Connect a phone](../../start/connect-a-phone/). Health works only with sending on, and the app reads no health data while it is off.
 3. Turn on **Health: steps, heart rate, sleep, workouts**.
 4. Allow the phone to read steps, heart rate, sleep and workouts. On Android, also allow Health Connect to read in the background.
 
@@ -31,4 +31,4 @@ The server counts each day's steps, sleep, heart rate and workouts. When two dev
 
 ## Turn it off
 
-Turn off **Health** in **Settings**. The phone stops sending. Turning off **Send to Relay Everything** also stops health, and deletes the health data that did not go yet. To take back the phone's permission, use Apple Health or Health Connect. [Privacy](../../privacy/) says what the server keeps.
+Turn off **Health** in **Settings**. The phone stops sending. Turning off **Send my notes** also stops health, and deletes the health data that did not go yet. To take back the phone's permission, use Apple Health or Health Connect. [Privacy](../../privacy/) says what the server keeps.

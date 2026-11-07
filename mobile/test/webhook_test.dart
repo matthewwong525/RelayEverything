@@ -1,0 +1,219 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:crypto/crypto.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:relay_app/data/api.dart';
+import 'package:relay_app/data/outbox.dart';
+import 'package:relay_app/data/store.dart';
+import 'package:relay_app/data/webhook.dart';
+
+import 'fakes.dart';
+
+final queued = DateTime.utc(2026, 11, 4, 14, 1, 2);
+final sent = DateTime.utc(2026, 11, 4, 14, 5);
+
+OutboxItem item(int id, String route, Map<String, dynamic> body) =>
+  OutboxItem(id, route, body, destination: ownWebhook, createdAt: queued);
+
+final note = item(7, 'notes', {'clientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'text': 'Receipt for the desk lamp',
+  'createdAt': Date.recorded, 'lat': 43.65, 'lon': -79.38, 'accuracy': 12.0, 'place': 'King St W',
+  'attachments': [{'id': 'f1', 'name': 'receipt.jpg', 'type': 'image/jpeg', 'size': 4}]});
+final file = item(8, 'attachment', {'noteClientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'id': 'f1',
+  'path': 'attachments/f1.jpg', 'name': 'receipt.jpg', 'type': 'image/jpeg'});
+final samples = item(9, 'health', {'samples': [{'id': 1, 'type': 'steps', 'start': Date.recorded,
+  'end': Date.recorded + 60000, 'value': 120.0, 'unit': 'count', 'source': 'com.apple.health'}]});
+final points = item(10, 'locations', {'points': [{'id': 2, 'at': Date.recorded, 'lat': 43.65, 'lon': -79.38,
+  'accuracy': 12.0, 'place': 'King St W'}]});
+
+abstract final class Date {
+  static final recorded = DateTime.utc(2026, 11, 4, 14, 1).millisecondsSinceEpoch;
+}
+
+WebhookClient client(FakeServer server) =>
+  WebhookClient(hook, installId: installId, deviceName: 'Android phone', client: server.client(), clock: () => sent);
+
+/// True when [request] is signed with [fixtureSecret] by Standard Webhooks.
+bool signed(http.Request request) {
+  final id = request.headers['webhook-id'], timestamp = request.headers['webhook-timestamp'];
+  final mac = Hmac(sha256, base64.decode(fixtureSecret.substring(6))).convert(utf8.encode('$id.$timestamp.${request.body}'));
+  return request.headers['webhook-signature'] == 'v1,${base64.encode(mac.bytes)}';
+}
+
+void main() {
+  test('builds each upload as a format v1 message, the same as the server sends', () {
+    final webhook = client(FakeServer());
+    final device = {'id': installId, 'name': 'Android phone'};
+    expect(webhook.message(note), {'version': 1, 'type': 'note.created', 'timestamp': '2026-11-04T14:01:02.000Z', 'data': {
+      'note': {'id': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'source': 'typed', 'text': 'Receipt for the desk lamp',
+        'recorded_at': '2026-11-04T14:01:00.000Z', 'created_at': '2026-11-04T14:01:02.000Z', 'device': device,
+        'place': {'lat': 43.65, 'lon': -79.38, 'accuracy': 12.0, 'name': 'King St W', 'from': 'phone'}, 'audio': null,
+        'attachments': [{'id': 'f1', 'name': 'receipt.jpg', 'content_type': 'image/jpeg', 'size': 4}]}}});
+    expect(webhook.message(file, [1, 2, 3, 4])!['data'], {'note_id': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'file': {'id': 'f1',
+      'name': 'receipt.jpg', 'content_type': 'image/jpeg', 'size': 4, 'base64': 'AQIDBA=='}});
+    expect(webhook.message(samples)!['data'], {'samples': [{'id': 1, 'device': device, 'type': 'steps',
+      'start': '2026-11-04T14:01:00.000Z', 'end': '2026-11-04T14:02:00.000Z', 'value': 120.0, 'unit': 'count',
+      'source': 'com.apple.health'}]});
+    expect(webhook.message(points)!['data'], {'points': [{'id': 2, 'device': device, 'at': '2026-11-04T14:01:00.000Z',
+      'lat': 43.65, 'lon': -79.38, 'accuracy': 12.0, 'place': 'King St W'}]});
+    // A note with no place and no files has place null and no list.
+    final bare = webhook.message(item(11, 'notes', {'clientId': 'a' * 32, 'text': 'Plain', 'createdAt': Date.recorded}))!;
+    expect((bare['data'] as Map)['note'], allOf(containsPair('place', null), isNot(contains('attachments'))));
+    // An empty batch needs no message.
+    expect(webhook.message(item(12, 'health', {'samples': []})), isNull);
+  });
+
+  test('signs each message, and a retry sends the same webhook-id and body', () async {
+    final server = FakeServer((_) => http.Response('', 503));
+    final webhook = client(server);
+    for (var round = 0; round < 2; round++) {
+      await expectLater(webhook.send(note), throwsA(isA<ApiException>().having((error) => error.status, 'status', 503)));
+    }
+    final [first, second] = server.requests;
+    expect([first.url.toString(), first.method, first.headers['webhook-id'], first.headers['webhook-timestamp']],
+      [hook.address, 'POST', '$installId:7', '${sent.millisecondsSinceEpoch ~/ 1000}']);
+    expect([second.headers['webhook-id'], second.body], [first.headers['webhook-id'], first.body]);
+    expect([signed(first), signed(second)], [true, true]);
+    expect(first.headers.keys.map((name) => name.toLowerCase()), isNot(contains('authorization')));
+  });
+
+  test('counts only 2xx as sent; a 413 drops a file only; 400, 401 and no answer keep the upload', () async {
+    Future<Failure?> answer(OutboxItem upload, Object status) async {
+      final server = FakeServer((request) => status is int ? http.Response('', status) : throw const SocketException('none'));
+      try {
+        upload.route == 'attachment' ? await client(server).sendFile(upload, [1]) : await client(server).send(upload);
+        return null;
+      } on ApiException catch (error) {
+        return error.failure;
+      }
+    }
+    expect([await answer(note, 200), await answer(note, 204), await answer(file, 202)], [null, null, null]);
+    expect(await answer(file, 413), Failure.rejected);
+    for (final status in [413, 400, 401, 404, 500, 503, 'none']) {
+      expect(await answer(note, status), Failure.offline, reason: '$status');
+    }
+    expect(await answer(file, 400), Failure.offline);
+  });
+
+  test('Send a test sends a signed webhook.test and gives back the status, or null for no answer', () async {
+    final server = FakeServer((_) => http.Response('', 204));
+    expect(await client(server).test(), 204);
+    final request = server.requests.single;
+    expect([signed(request), jsonDecode(request.body)['type']], [true, 'webhook.test']);
+    expect(await client(FakeServer((_) => http.Response('', 401))).test(), 401);
+    expect(await client(FakeServer((_) => throw const SocketException('none'))).test(), isNull);
+  });
+
+  test('makes a secret a Standard Webhooks library takes', () {
+    final secret = makeWebhookSecret();
+    expect(secret, matches(RegExp(r'^whsec_[A-Za-z0-9+/]{43}=$')));
+    expect(makeWebhookSecret(), isNot(secret));
+  });
+
+  test('flush in webhook mode: a 503 keeps all in order, a 413 file is dropped and named, a 400 is kept', () async {
+    final store = memoryStore();
+    addTearDown(store.close);
+    final folder = tempFolder();
+    File('${folder.path}/f1.jpg').writeAsBytesSync([1, 2]);
+    await store.moveOutbox(ownWebhook);
+    await store.addNote(LocalNote(clientId: 'n1', text: 'With a file', createdAt: queued, attachments: const [
+      Attachment(id: 'f1', name: 'big.jpg', type: 'image/jpeg', size: 2, path: 'f1.jpg')]), send: true);
+    await store.addNote(LocalNote(clientId: 'n2', text: 'After', createdAt: queued), send: true);
+    expect({for (final upload in await store.outbox()) upload.destination}, {ownWebhook});
+    var status = 503;
+    final server = FakeServer((request) => http.Response('', jsonDecode(request.body)['type'] == 'note.file' ? 413 : status));
+    Future<FlushResult> round() => flush(store, client(server), clock: () => sent, folder: () async => folder);
+
+    expect((await round()).failure, Failure.offline);
+    expect([(await store.outbox()).length, jsonDecode((await store.get(webhookProblemKey))!)], [3, {'at': sent.millisecondsSinceEpoch,
+      'status': 503}]);
+    status = 400;
+    expect((await round()).failure, Failure.offline);
+    expect((await store.outbox()).length, 3);
+    status = 200;
+    final result = await round();
+    expect([result.sent, result.dropped, result.failure], [2, 1, null]);
+    expect([for (final request in server.requests.skip(2)) jsonDecode(request.body)['type']],
+      ['note.created', 'note.file', 'note.created']);
+    expect(jsonDecode((await store.get(webhookProblemKey))!), {'at': sent.millisecondsSinceEpoch, 'status': 413, 'file': 'big.jpg'});
+    expect([for (final kept in await store.notes()) kept.sentAt?.millisecondsSinceEpoch], [for (var i = 0; i < 2; i++) sent.millisecondsSinceEpoch]);
+    expect(await store.waiting(), 0);
+  });
+
+  test('flush stops at an upload for another place, and sends it once it is moved', () async {
+    final store = memoryStore();
+    addTearDown(store.close);
+    await store.addNote(LocalNote(clientId: 'n1', text: 'Queued for the server', createdAt: queued), send: true);
+    final server = FakeServer();
+    expect((await flush(store, client(server))).failure, Failure.offline);
+    expect(server.requests, isEmpty);
+    await store.moveOutbox(ownWebhook);
+    expect((await flush(store, client(server))).sent, 1);
+  });
+
+  test('a switch to the webhook in the middle of a round sends nothing more to the server, and keeps the rest', () async {
+    final store = memoryStore();
+    addTearDown(store.close);
+    for (final id in ['n1', 'n2', 'n3']) {
+      await store.addNote(LocalNote(clientId: id, text: 'Note $id', createdAt: queued), send: true);
+    }
+    final server = FakeServer()..hold = Completer<void>();
+    // A background round has no keepGoing: only the outbox itself can stop it.
+    final round = flush(store, server.api(connection));
+    await pumpEventQueue();
+    expect(server.requests.length, 1);
+    await store.moveOutbox(ownWebhook);
+    server.hold!.complete();
+    final result = await round;
+    expect([result.sent, result.failure], [1, Failure.offline]);
+    expect([for (final request in server.requests) jsonDecode(request.body)['clientId']], ['n1']);
+    expect([for (final upload in await store.outbox()) (upload.body['clientId'], upload.destination)],
+      [('n2', ownWebhook), ('n3', ownWebhook)]);
+    final hookServer = FakeServer((_) => http.Response('', 204));
+    expect((await flush(store, client(hookServer))).sent, 2);
+    expect(await store.waiting(), 0);
+  });
+
+  test('flush stops at an upload gone since the round listed it', () async {
+    final store = memoryStore();
+    addTearDown(store.close);
+    await store.moveOutbox(ownWebhook);
+    await store.addNote(LocalNote(clientId: 'n1', text: 'First', createdAt: queued), send: true);
+    await store.addNote(LocalNote(clientId: 'n2', text: 'Second', createdAt: queued), send: true);
+    final second = (await store.outbox()).last.id;
+    final server = FakeServer((_) => http.Response('', 204))..hold = Completer<void>();
+    final round = flush(store, client(server));
+    await pumpEventQueue();
+    await store.done(second);
+    server.hold!.complete();
+    expect([(await round).sent, server.requests.length], [1, 1]);
+  });
+
+  // The worker's format.test.ts parses each of these with the server's schema and checks its signature. A change to
+  // what the phone sends fails here first: run with WEBHOOK_FIXTURES_WRITE=1 to write them again, then run that test.
+  test('writes one of each message to the fixtures the server checks', () async {
+    final folder = Directory('test/fixtures/webhook');
+    final server = FakeServer((_) => http.Response('', 204));
+    final webhook = client(server);
+    await webhook.send(note);
+    await webhook.sendFile(file, [1, 2, 3, 4]);
+    await webhook.send(samples);
+    await webhook.send(points);
+    await webhook.test();
+    for (final request in server.requests) {
+      final type = jsonDecode(request.body)['type'] as String;
+      final fixture = '${const JsonEncoder.withIndent('  ').convert({'secret': fixtureSecret, 'headers': {
+        for (final name in ['webhook-id', 'webhook-timestamp', 'webhook-signature']) name: request.headers[name]},
+        'body': request.body})}\n';
+      final path = File('${folder.path}/$type.json');
+      if (Platform.environment['WEBHOOK_FIXTURES_WRITE'] == '1') {
+        path
+          ..parent.createSync(recursive: true)
+          ..writeAsStringSync(fixture);
+      }
+      expect(path.readAsStringSync(), fixture, reason: '$type changed: run with WEBHOOK_FIXTURES_WRITE=1');
+    }
+  });
+}

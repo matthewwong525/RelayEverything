@@ -31,7 +31,9 @@ final class ShareModel: ObservableObject {
     sending = ShareSettings.sending && ShareConnection.read() != nil
   }
 
-  var footLine: String { foot ?? (inbox == nil ? ShareWords.noGroup : sending ? ShareWords.sendingOn : ShareWords.sendingOff) }
+  var footLine: String { foot ?? (inbox == nil ? ShareWords.noGroup : sending ? ShareWords.sendingOn : keptLine) }
+  /// While the app sends to the person's own webhook, the card keeps the share and the app sends it.
+  var keptLine: String { ShareSettings.later ? ShareWords.later : ShareWords.sendingOff }
   var canSave: Bool { !saving && inbox != nil && (draft?.canSave(words) ?? false) }
 
   func load(_ items: [NSExtensionItem]) async {
@@ -68,7 +70,7 @@ final class ShareModel: ObservableObject {
       foot = ShareWords.sendingNow
       foot = await send(connection, inbox: inbox, text: text, createdAt: createdAt, files: files)
     } else {
-      foot = ShareWords.sendingOff
+      foot = keptLine
     }
     try? await Task.sleep(nanoseconds: 900_000_000)
     close(true)

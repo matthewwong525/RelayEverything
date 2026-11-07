@@ -7,6 +7,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart' show KeychainAccessibility;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:health/health.dart';
+import 'package:http/http.dart' as http;
 import 'package:relay_app/controller.dart';
 import 'package:relay_app/data/attachments.dart';
 import 'package:relay_app/data/connection.dart';
@@ -33,7 +34,7 @@ void main() {
 
   RelayController controller({NativeBackground? native}) => RelayController(store: store, vault: KeyVault(storage), places: places,
     health: health, apiFor: server.api, signInClient: server.client, webAuth: webAuth.call, clock: () => clock,
-    schedule: (on) async => scheduled.add(on), native: native);
+    schedule: (on) async => scheduled.add(on), native: native, webhookFor: server.webhook);
 
   List<Map<String, dynamic>> sentNotes() => [
     for (final request in server.requests) if (request.url.path.endsWith('notes')) jsonDecode(request.body) as Map<String, dynamic>,
@@ -70,8 +71,8 @@ void main() {
       expect([relay.status, relay.waiting], [SyncStatus.idle, 0]);
       expect(await store.outbox(), isEmpty);
       expect(await relay.earlierNotes(), 2);
-      expect(await relay.setHealth(true), contains('Send to Relay Everything'));
-      expect(await relay.setHistory(true), contains('Send to Relay Everything'));
+      expect(await relay.setHealth(true), contains('Send my notes'));
+      expect(await relay.setHistory(true), contains('Send my notes'));
       expect([places.asked, health.reads, scheduled], [[false], isEmpty, [false]]);
       expect(server.requests, isEmpty);
     });
@@ -149,6 +150,73 @@ void main() {
       expect(server.routes, ['key', 'notes']);
       await relay.stopSending();
       expect(relay.entries, hasLength(2));
+    });
+  });
+
+  group('sending to your own webhook', () {
+    List<String> hookTypes() => [
+      for (final request in server.requests) if (request.url.toString() == hook.address) jsonDecode(request.body)['type'] as String,
+    ];
+
+    test('needs no key: set the webhook, test it, and each note goes there signed, and nothing to the server', () async {
+      final relay = controller();
+      await relay.load();
+      expect(await relay.startSending(sendEarlier: false, place: SendPlace.webhook), 'Set your webhook first.');
+      expect(await relay.saveWebhook('http://db.example.com/relay', fixtureSecret), 'The address must start with https://.');
+      expect(await relay.testWebhook(hook.address, 'whsec_short'), startsWith('The secret must be'));
+      expect(server.requests, isEmpty);
+      server.answer = (_) => http.Response('', 204);
+      expect(await relay.testWebhook(hook.address, fixtureSecret), 'Your receiver answered 204. It works.');
+      server.answer = (_) => http.Response('', 401);
+      expect(await relay.testWebhook(hook.address, fixtureSecret), 'Your receiver answered 401. Check that it has this secret.');
+      server.answer = (_) => throw const SocketException('none');
+      expect(await relay.testWebhook(hook.address, fixtureSecret),
+        'No answer from db.example.com. Check the address, and that your receiver is running.');
+      server.answer = FakeServer.ok;
+      await relay.addNote('Before');
+      expect(await relay.saveWebhook(hook.address, fixtureSecret), isNull);
+      expect([relay.webhookAddress, relay.webhookSecret, relay.connected], [hook.address, fixtureSecret, false]);
+      expect(await relay.startSending(sendEarlier: true, place: SendPlace.webhook), isNull);
+      await relay.settled();
+      await relay.addNote('After');
+      await relay.settled();
+      expect([relay.settings.sending, relay.settings.place, relay.status], [true, SendPlace.webhook, SyncStatus.synced]);
+      expect(hookTypes(), ['webhook.test', 'webhook.test', 'webhook.test', 'note.created', 'note.created']);
+      expect(server.requests.where((request) => request.url.host != 'db.example.com'), isEmpty);
+      expect(server.requests.every((request) => request.headers['webhook-signature']!.startsWith('v1,')), isTrue);
+      relay.dispose();
+    });
+
+    test('a switch moves what waits to the new place, and a failing receiver keeps it and shows why', () async {
+      await KeyVault(storage).save(bearer);
+      final relay = controller();
+      await relay.load();
+      expect(await relay.startSending(sendEarlier: false, place: SendPlace.server), isNull);
+      await relay.settled();
+      server.answer = (request) => FakeServer.json({}, 503);
+      await relay.addNote('Waits');
+      await relay.settled();
+      expect(relay.waiting, 1);
+      await relay.saveWebhook(hook.address, fixtureSecret);
+      server.requests.clear();
+      expect(await relay.startSending(sendEarlier: false, place: SendPlace.webhook), isNull);
+      await relay.settled();
+      expect([hookTypes(), relay.waiting, relay.webhookProblem?.status], [['note.created'], 1, 503]);
+      expect({for (final item in await store.outbox()) item.destination}, {ownWebhook});
+      server.answer = FakeServer.ok;
+      await relay.sync();
+      expect([relay.waiting, relay.webhookProblem, (await store.notes()).single.sentAt], [0, isNull, isNotNull]);
+      expect(server.requests.where((request) => request.url.path.endsWith('/notes')), isEmpty);
+      relay.dispose();
+    });
+
+    test('a phone that lost its webhook reads sending as off, and the key stays for the server', () async {
+      await store.set('settings', const Settings(sending: true, place: SendPlace.webhook).encode());
+      await KeyVault(storage).save(bearer);
+      final relay = controller();
+      await relay.load();
+      expect([relay.settings.sending, relay.connected], [false, true]);
+      relay.dispose();
     });
   });
 
@@ -269,7 +337,8 @@ void main() {
       expect([const Settings(history: true, health: true).history, const Settings(history: true, health: true).health], [false, false]);
       const on = Settings(sending: true, history: true, health: true);
       expect([on.copyWith(sending: false).history, on.copyWith(sending: false).health], [false, false]);
-      expect(jsonDecode(on.encode()), {'sending': true, 'pinNotes': false, 'history': true, 'health': true, 'mode': 'battery'});
+      expect(jsonDecode(on.encode()), {'sending': true, 'pinNotes': false, 'history': true, 'health': true, 'mode': 'battery',
+        'place': 'server'});
       final back = Settings.decode(on.encode(), hasKey: false);
       expect([back.sending, back.health], [true, true]);
     });
@@ -291,7 +360,7 @@ void main() {
       await relay.load();
       expect([relay.settings.sending, relay.settings.pinNotes], [false, true]);
       expect(jsonDecode((await store.get('settings'))!), {'sending': false, 'pinNotes': true, 'history': false, 'health': false,
-        'mode': 'battery'});
+        'mode': 'battery', 'place': 'server'});
     });
 
     test('turn each on only with its permission, and schedule the hourly sync only while sending', () async {
@@ -314,7 +383,7 @@ void main() {
       expect(await relay.setPinNotes(true), isNull);
       expect(scheduled, [false, true, true, true, true]);
       expect(jsonDecode((await store.get('settings'))!), {'sending': true, 'pinNotes': true, 'history': false, 'health': true,
-        'mode': 'battery'});
+        'mode': 'battery', 'place': 'server'});
       expect(places.asked, [false, true, true, false]);
       // Each change started a sync; the last round ends before the store closes.
       await relay.settled();

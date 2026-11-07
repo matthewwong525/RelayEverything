@@ -91,8 +91,9 @@ class _TimelineScreenState extends State<TimelineScreen> {
         final model = relay.speechModel == ModelState.downloading || relay.speechModel == ModelState.failed;
         final server = relay.server;
         final top = <Widget>[
-          // Ring notes and recordings are on the Relay page: a device key can not read them.
-          if (relay.settings.sending && server != null) _PageCard(server: server, opener: widget.opener ?? _openInBrowser),
+          // Ring notes and recordings are on the Relay page: a device key can not read them. Nothing of this phone's
+          // goes there while it sends to the person's own webhook.
+          if (relay.settings.sending && relay.settings.place == SendPlace.server && server != null) _PageCard(server: server, opener: widget.opener ?? _openInBrowser),
           if (model) ModelCard(relay: relay),
         ];
         final listening = relay.listening;

@@ -27,8 +27,10 @@ struct ShareConnection {
 
 /// True only while the app has sending on and a key: the app writes it on each change (`setShareSettings`). An app
 /// that never wrote it reads as off.
+/// `later` is true while the app sends to the person's own webhook: the card only keeps the share, and the app sends it.
 enum ShareSettings {
   static var sending: Bool { UserDefaults(suiteName: ShareRules.appGroup)?.bool(forKey: "sending") ?? false }
+  static var later: Bool { UserDefaults(suiteName: ShareRules.appGroup)?.bool(forKey: "later") ?? false }
 }
 
 /// Sends a shared note, then each file from disk, with the phone's key, until one deadline. It stops at the first

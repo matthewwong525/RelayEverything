@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/app.dart';
 import 'package:relay_app/relay.dart';
-import 'package:relay_app/screens/settings.dart' show sentLine;
+import 'package:relay_app/screens/connect.dart';
+import 'package:relay_app/screens/settings.dart' show problemLine, sentLine;
 
 class FakeRelay extends Relay {
   @override bool connected = false;
@@ -60,11 +61,34 @@ class FakeRelay extends Relay {
   @override Future<int> earlierNotes() async => earlier;
 
   @override
-  Future<String?> startSending({required bool sendEarlier}) async {
-    calls.add('start $sendEarlier');
-    settings = settings.copyWith(sending: true);
+  Future<String?> startSending({required bool sendEarlier, SendPlace? place}) async {
+    calls.add('start $sendEarlier${place == SendPlace.webhook ? ' webhook' : ''}');
+    settings = settings.copyWith(sending: true, place: place);
     notifyListeners();
     return null;
+  }
+
+  @override String? webhookAddress;
+  @override String? webhookSecret;
+  @override WebhookProblem? webhookProblem;
+  @override String newWebhookSecret() => 'whsec_bmV3LXNlY3JldC1mb3ItYS10ZXN0LW9ubHk=';
+  /// What [testWebhook] answers.
+  String testAnswer = 'Your receiver answered 204. It works.';
+
+  @override
+  Future<String?> saveWebhook(String address, String secret) async {
+    calls.add('webhook $address $secret');
+    if (problem == null) {
+      webhookAddress = address;
+      webhookSecret = secret;
+    }
+    return problem;
+  }
+
+  @override
+  Future<String> testWebhook(String address, String secret) async {
+    calls.add('test $address');
+    return testAnswer;
   }
 
   @override
@@ -167,11 +191,15 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// Scrolls the connect screen's own list until [finder] shows.
+  Future<void> scrollConnect(WidgetTester tester, Finder finder, [double delta = 100]) => tester.scrollUntilVisible(finder, delta,
+    scrollable: find.descendant(of: find.byType(ConnectScreen), matching: find.byType(Scrollable)).first);
+
   SwitchListTile switchOf(WidgetTester tester, String title) => tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, title));
 
   testWidgets('opens on the timeline with no key, and keeps a note on this phone', (tester) async {
     await tester.pumpWidget(RelayApp(relay: relay));
-    expect(find.text('Connect Relay Everything'), findsNothing);
+    expect(find.text('Where should the phone send?'), findsNothing);
     expect(find.text('On this phone'), findsOneWidget);
     expect(find.text('No notes yet. Tap New note, or hold to talk.'), findsOneWidget);
     await tester.tap(find.text('New note'));
@@ -198,14 +226,14 @@ void main() {
     expect(switchOf(tester, 'Location history').onChanged, isNull);
     expect(find.text('Disconnect this phone'), findsNothing);
     expect(find.text('Server'), findsNothing);
-    await tester.tap(find.text('Send to Relay Everything'));
+    await tester.tap(find.text('Send my notes'));
     await tester.pumpAndSettle();
-    expect(find.text('Connect Relay Everything'), findsOneWidget);
+    expect(find.text('Where should the phone send?'), findsOneWidget);
     // Back from the connect screen with no key: sending stays off.
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(relay.calls, isEmpty);
-    await tester.tap(find.text('Send to Relay Everything'));
+    await tester.tap(find.text('Send my notes'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'key');
     await tester.tap(find.text('Connect'));
@@ -227,25 +255,32 @@ void main() {
       ..earlier = 1;
     await tester.pumpWidget(RelayApp(relay: relay));
     await openSettings(tester);
-    await tester.tap(find.text('Send to Relay Everything'));
+    expect(find.text('Off: nothing leaves this phone. On: to your Relay Everything server, or to your own webhook.'), findsOneWidget);
+    await tester.tap(find.text('Send my notes'));
+    await tester.pumpAndSettle();
+    expect(find.text('This phone has a key for https://relay.example.com.'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Send to Relay Everything'));
     await tester.pumpAndSettle();
     expect(find.text('Send your earlier note too?'), findsOneWidget);
     await tester.tap(find.text('Send it'));
     await tester.pumpAndSettle();
+    expect(find.textContaining('To Relay Everything: relay.example.com.'), findsOneWidget);
     relay.earlier = 0;
-    await tester.tap(find.text('Send to Relay Everything'));
+    await tester.tap(find.text('Send my notes'));
     await tester.pumpAndSettle();
     expect(find.text('Stop sending?'), findsOneWidget);
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(relay.settings.sending, isTrue);
-    await tester.tap(find.text('Send to Relay Everything'));
+    await tester.tap(find.text('Send my notes'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Stop sending'));
     await tester.pumpAndSettle();
     expect(relay.calls, ['start true', 'stop']);
     // Off and on again with nothing earlier: no prompt.
-    await tester.tap(find.text('Send to Relay Everything'));
+    await tester.tap(find.text('Send my notes'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Send to Relay Everything'));
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsNothing);
     expect(relay.calls, ['start true', 'stop', 'start false']);
@@ -254,13 +289,13 @@ void main() {
   testWidgets('connects by a pasted key, and says why one is refused', (tester) async {
     await tester.pumpWidget(RelayApp(relay: relay));
     await openSettings(tester);
-    await tester.tap(find.text('Send to Relay Everything'));
+    await tester.tap(find.text('Send my notes'));
     await tester.pumpAndSettle();
     relay.problem = 'That is not a Relay Everything key.';
     await tester.enterText(find.byType(TextField), 'nonsense');
     await tester.tap(find.text('Connect'));
     await tester.pumpAndSettle();
-    expect(find.text('That is not a Relay Everything key.'), findsOneWidget);
+    await scrollConnect(tester, find.text('That is not a Relay Everything key.'));
     relay.problem = null;
     await tester.tap(find.text('Connect'));
     await tester.pumpAndSettle();
@@ -271,19 +306,20 @@ void main() {
   testWidgets('connects by signing in, to the shared server or another, and stays open when the sign-in is closed', (tester) async {
     await tester.pumpWidget(RelayApp(relay: relay));
     await openSettings(tester);
-    await tester.tap(find.text('Send to Relay Everything'));
+    await tester.tap(find.text('Send my notes'));
     await tester.pumpAndSettle();
     relay.signsIn = false;
     await tester.tap(find.text('Sign in to connect'));
     await tester.pumpAndSettle();
-    expect(find.text('Connect Relay Everything'), findsOneWidget);
+    expect(find.text('Where should the phone send?'), findsOneWidget);
     relay.problem = 'The server did not connect this phone. Sign in and try again.';
     await tester.tap(find.text('Use another server'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).last, 'https://relay.example.com');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
-    expect(find.text('The server did not connect this phone. Sign in and try again.'), findsOneWidget);
+    await scrollConnect(tester, find.text('The server did not connect this phone. Sign in and try again.'));
+    await scrollConnect(tester, find.text('Sign in to connect'), -100);
     relay
       ..problem = null
       ..signsIn = true;
@@ -298,7 +334,7 @@ void main() {
     String? scanned;
     await tester.pumpWidget(RelayApp(relay: relay, scanner: (_) async => scanned));
     await openSettings(tester);
-    await tester.tap(find.text('Send to Relay Everything'));
+    await tester.tap(find.text('Send my notes'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Scan the QR code'));
     await tester.pumpAndSettle();
@@ -483,11 +519,87 @@ void main() {
     await tester.pumpAndSettle();
     expect(relay.calls, ['server https://preview.example.com', 'disconnect']);
     expect(find.text('Disconnect this phone'), findsNothing);
-    expect(switchOf(tester, 'Send to Relay Everything').value, isFalse);
+    expect(switchOf(tester, 'Send my notes').value, isFalse);
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('On this phone'), findsOneWidget);
   });
+
+  testWidgets('sets up a webhook with no key: refuses a bad address, copies the secret, tests it, and saves', (tester) async {
+    final copied = <String>[];
+    relay.earlier = 2;
+    await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => Scaffold(body: TextButton(
+      onPressed: () async {
+        final place = await Navigator.of(context).push(MaterialPageRoute<SendPlace>(
+          builder: (_) => ConnectScreen(relay: relay, copy: (text) async => copied.add(text))));
+        relay.calls.add('closed ${place?.name}');
+      },
+      child: const Text('Open'))))));
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    expect(find.text('Sign in to connect'), findsOneWidget);
+    await tester.tap(find.text('My own webhook'));
+    await tester.pumpAndSettle();
+    expect(find.text('Sign in to connect'), findsNothing);
+    final secret = relay.newWebhookSecret();
+    expect(find.text(secret), findsOneWidget);
+    await tester.tap(find.text('Copy'));
+    await tester.pump();
+    expect([copied, find.text('Secret copied.').evaluate().length], [[secret], 1]);
+    await tester.enterText(find.widgetWithText(TextField, 'Address'), 'https://db.example.com/relay');
+    await tester.tap(find.text('Send a test'));
+    await tester.pumpAndSettle();
+    expect(find.text('Your receiver answered 204. It works.'), findsOneWidget);
+    relay.problem = 'The address must start with https://.';
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('The address must start with https://.'), findsOneWidget);
+    relay.problem = null;
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(relay.calls, ['test https://db.example.com/relay', 'webhook https://db.example.com/relay $secret',
+      'webhook https://db.example.com/relay $secret', 'closed webhook']);
+  });
+
+  testWidgets('in Settings, picks My own webhook, asks about earlier notes, and shows where it sends and its last problem',
+    (tester) async {
+    relay.earlier = 2;
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openSettings(tester);
+    await tester.tap(find.text('Send my notes'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('My own webhook'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Address'), 'https://db.example.com/relay');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('They were only on this phone. New notes go to your webhook from now on.'), findsOneWidget);
+    await tester.tap(find.text('Send them'));
+    await tester.pumpAndSettle();
+    expect(relay.calls.last, 'start true webhook');
+    expect(find.textContaining('To your webhook: db.example.com. Nothing goes to Relay Everything'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('https://db.example.com/relay'), 100);
+    expect(find.text('Where the phone sends'), findsOneWidget);
+    expect([find.text('Server').evaluate(), find.text('Disconnect this phone').evaluate()], [isEmpty, isEmpty]);
+    relay.testAnswer = 'Your receiver answered 401. Check that it has this secret.';
+    await tester.ensureVisible(find.widgetWithText(OutlinedButton, 'Send a test'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Send a test'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Your receiver answered 401. Check that it has this secret.'), findsOneWidget);
+    final at = DateTime.now();
+    relay
+      ..webhookProblem = WebhookProblem(at: at, status: 503)
+      ..changed();
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text(problemLine(relay.webhookProblem!, at)), 100);
+    expect(problemLine(WebhookProblem(at: DateTime(2026, 11, 4, 9, 5), status: null), DateTime(2026, 11, 6)),
+      'No answer from your receiver at 4/11 09:05. Notes wait on this phone until it answers.');
+    expect(problemLine(WebhookProblem(at: DateTime(2026, 11, 6, 14, 5), status: 413, file: 'scan.pdf'), DateTime(2026, 11, 6)),
+      'scan.pdf was too large for your receiver (14:05), so it was not sent.');
+  });
+
   group('voice notes', () {
     Finder holdButton() => find.text('Hold to talk');
 

@@ -62,6 +62,41 @@ class Connection {
   }
 }
 
+/// The person's own webhook: an `https://` address, and the `whsec_` secret the phone signs each message with. It needs
+/// no Relay Everything account or key.
+class Webhook {
+  const Webhook({required this.address, required this.secret});
+
+  final String address;
+  final String secret;
+
+  String get host => Uri.parse(address).host;
+
+  /// Why [text] can not be a webhook's address, or null when it can. A home or private address, such as
+  /// `https://192.168.1.20/relay`, is allowed: only the person's own phone sends to it.
+  static String? addressProblem(String text) {
+    final uri = Uri.tryParse(text.trim());
+    if (uri == null || uri.scheme != 'https') return 'The address must start with https://.';
+    if (uri.userInfo.isNotEmpty) return 'Take the user name and password out of the address.';
+    if (uri.host.isEmpty) return 'Enter the whole address, such as https://db.example.com/relay.';
+    return null;
+  }
+
+  /// Why [text] can not be a secret, or null when it can: `whsec_` and 16 to 64 bytes in base64, as Standard Webhooks
+  /// libraries take.
+  static String? secretProblem(String text) {
+    const problem = 'The secret must be whsec_ and then base64, as your receiver shows it.';
+    final value = text.trim();
+    if (!value.startsWith('whsec_')) return problem;
+    try {
+      final bytes = base64.decode(value.substring(6));
+      return bytes.length < 16 || bytes.length > 64 ? problem : null;
+    } on FormatException {
+      return problem;
+    }
+  }
+}
+
 /// The App Group the iPhone app shares with its share extension: a folder, settings, and the Keychain items below.
 const appGroup = 'group.com.matthewwong525.relayApp';
 
@@ -81,6 +116,7 @@ class KeyVault {
   final bool _shared;
   static const _server = 'relay.server', _id = 'relay.clientId', _secret = 'relay.clientSecret', _key = 'relay.key';
   static const _names = [_server, _id, _secret, _key];
+  static const _webhookAddress = 'relay.webhook.address', _webhookSecret = 'relay.webhook.secret';
 
   /// The service name of the shared items: a different one from the old items', so a delete of an old item never
   /// matches a new one. `ios/ShareExtension/ShareSender.swift` reads the same group and service.
@@ -202,5 +238,22 @@ class KeyVault {
     for (final name in _names) {
       await _storage.delete(key: name, iOptions: iOptions);
     }
+  }
+
+  /// The person's own webhook, kept in the app's own group: the share card never sends to it.
+  Future<Webhook?> readWebhook() async {
+    final values = await _storage.readAll(iOptions: iOptions);
+    final address = values[_webhookAddress], secret = values[_webhookSecret];
+    return address == null || secret == null ? null : Webhook(address: address, secret: secret);
+  }
+
+  Future<void> saveWebhook(Webhook webhook) async {
+    await _storage.write(key: _webhookAddress, value: webhook.address, iOptions: iOptions);
+    await _storage.write(key: _webhookSecret, value: webhook.secret, iOptions: iOptions);
+  }
+
+  Future<void> forgetWebhook() async {
+    await _storage.delete(key: _webhookAddress, iOptions: iOptions);
+    await _storage.delete(key: _webhookSecret, iOptions: iOptions);
   }
 }

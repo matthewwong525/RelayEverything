@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:health/health.dart';
+import 'package:http/http.dart' as http;
+import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/sender.dart';
 import 'package:relay_app/data/settings.dart';
 import 'package:relay_app/data/store.dart';
@@ -81,6 +83,54 @@ void main() {
       expect([source.reads.length, server.routes.last], [1, 'health']);
       server.answer = (_) => FakeServer.json({}, 503);
       expect(await backgroundRound(store, connection: connection, health: source, sender: Sender(server.api), now: later(120)), isFalse);
+    });
+
+    test('in webhook mode sends health and points to the webhook with their ids, and no key is needed', () async {
+      final store = memoryStore();
+      addTearDown(store.close);
+      final server = FakeServer((_) => http.Response('', 204));
+      final source = FakeHealth()..readings = [reading(HealthDataType.STEPS, start, later(5), value: 10)];
+      await store.set(settingsKey, const Settings(sending: true, health: true, place: SendPlace.webhook).encode());
+      await store.moveOutbox(ownWebhook);
+      await store.addPoint(Pin(at: start, lat: 1, lon: 1, accuracy: 1));
+      expect(await backgroundRound(store, connection: null, webhook: hook, health: source,
+        sender: Sender(null, null, server.webhook), now: later(60)), isTrue);
+      final messages = [for (final request in server.requests) jsonDecode(request.body) as Map];
+      expect([for (final message in messages) message['type']], ['health.samples', 'location.points']);
+      final sample = (messages[0]['data']['samples'] as List).single as Map;
+      final point = (messages[1]['data']['points'] as List).single as Map;
+      expect([sample['id'], point['id'], sample['device']['id']], [1, 2, await store.installId()]);
+      expect(server.requests.every((request) => request.url.toString() == hook.address), isTrue);
+    });
+
+    test('a round from the saved vault, as an iPhone wake runs, sends to the webhook with no key', () async {
+      final store = memoryStore();
+      addTearDown(store.close);
+      final vault = KeyVault(MemoryStorage(), false);
+      await vault.saveWebhook(hook);
+      final server = FakeServer((_) => http.Response('', 204));
+      final source = FakeHealth()..readings = [reading(HealthDataType.STEPS, start, later(5), value: 10)];
+      final swift = FakeBackground()..lines = [swiftPoint(start, 43.6, -79.3)];
+      await store.set(settingsKey, const Settings(sending: true, health: true, history: true, place: SendPlace.webhook).encode());
+      await store.moveOutbox(ownWebhook);
+      expect(await savedRound(store, vault, health: source, sender: Sender(null, null, server.webhook), native: swift,
+        places: FakePlaces(), now: later(60)), isTrue);
+      expect([swift.drains, source.reads.length], [1, 1]);
+      expect([for (final request in server.requests) (request.url.toString(), jsonDecode(request.body)['type'])],
+        [(hook.address, 'health.samples'), (hook.address, 'location.points')]);
+      expect(await store.waiting(), 0);
+    });
+
+    test('the server gets health and points without the ids the phone keeps for a webhook', () async {
+      final store = memoryStore();
+      addTearDown(store.close);
+      final server = FakeServer();
+      final source = FakeHealth()..readings = [reading(HealthDataType.STEPS, start, later(5), value: 10)];
+      await store.set(settingsKey, const Settings(sending: true, health: true).encode());
+      await store.addPoint(Pin(at: start, lat: 1, lon: 1, accuracy: 1));
+      await backgroundRound(store, connection: connection, health: source, sender: Sender(server.api), now: later(60));
+      final rows = [for (final request in server.requests) ...(jsonDecode(request.body) as Map).values.single as List];
+      expect([rows.length, rows.any((row) => (row as Map).containsKey('id'))], [2, false]);
     });
 
     test('on iPhone, moves the points Swift kept into the round, and names only the newest 10', () async {

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'connection.dart';
+import 'store.dart';
 
 /// Why a call did not land: the key was refused, the server turned the body down, or the network or server failed.
 enum Failure { refused, rejected, offline }
@@ -17,11 +18,51 @@ class ApiException implements Exception {
   String toString() => 'ApiException($failure, $status)';
 }
 
+/// Where the outbox sends: the Relay Everything server, or the person's own webhook. Each call throws [ApiException]:
+/// [Failure.rejected] drops the upload, and any other failure stops the round with it kept.
+abstract class Outbound {
+  /// The outbox destination this client sends to.
+  String get destination;
+
+  /// Sends one waiting upload's JSON body.
+  Future<void> send(OutboxItem item);
+
+  /// Sends one file of a note: [item] is its `attachment` upload.
+  Future<void> sendFile(OutboxItem item, List<int> bytes);
+}
+
 /// Relay's device routes, each call carrying this phone's key: `Authorization: Bearer` for a page-made key, or
 /// Cloudflare Access's two headers for an older one. A device key only adds data: the server refuses it on every
 /// route that reads.
-class RelayApi {
+class RelayApi implements Outbound {
   RelayApi(this.connection, [http.Client? client]) : _client = client ?? http.Client();
+
+  @override
+  String get destination => relayServer;
+
+  /// A server older than files turns down a note that lists them, so that note goes once more without the list; its
+  /// files' uploads then get 404 and are dropped.
+  @override
+  Future<void> send(OutboxItem item) async {
+    final body = _forServer(item.route, item.body);
+    try {
+      await post(item.route, body);
+    } on ApiException catch (error) {
+      if (error.failure != Failure.rejected || item.route != 'notes' || body['attachments'] == null) rethrow;
+      await post(item.route, {...body}..remove('attachments'));
+    }
+  }
+
+  @override
+  Future<void> sendFile(OutboxItem item, List<int> bytes) => upload(noteClientId: item.body['noteClientId'] as String,
+    id: item.body['id'] as String, type: item.body['type'] as String? ?? '', bytes: bytes);
+
+  /// The server numbers its own rows, and its routes take no `id` on a reading or point: the ids are for webhooks.
+  static Map<String, dynamic> _forServer(String route, Map<String, dynamic> body) {
+    final list = switch (route) { 'health' => 'samples', 'locations' => 'points', _ => null };
+    if (list == null) return body;
+    return {...body, list: [for (final item in body[list] as List) Map<String, dynamic>.of(item as Map<String, dynamic>)..remove('id')]};
+  }
 
   final Connection connection;
   final http.Client _client;

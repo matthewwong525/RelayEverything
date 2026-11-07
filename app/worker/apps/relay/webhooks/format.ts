@@ -1,9 +1,11 @@
-// Format v1 of what a webhook receives: one envelope, five types. This schema is the source of the public
-// site/public/webhooks/v1.schema.json; a change that breaks a receiver raises `version`.
+// Format v1 of what a webhook receives: one envelope, six types; mobile/lib/data/webhook.dart builds it too. The source
+// of the public site/public/webhooks/v1.schema.json; a change that breaks a receiver raises `version`.
 import { z } from "zod";
 
 const iso = z.iso.datetime().describe("A time in ISO 8601, UTC.");
-const device = z.strictObject({ id: z.string().describe("The device key's id in Relay Everything."), name: z.string() })
+const device = z.strictObject({
+  id: z.string().describe("The device key's id in Relay Everything, or the phone's own install id when the phone sends to its own webhook."),
+  name: z.string() })
   .describe("The phone or Pebble app that sent the item.");
 const place = z.strictObject({
   lat: z.number(), lon: z.number(), accuracy: z.number().nullable().describe("In meters."),
@@ -11,7 +13,7 @@ const place = z.strictObject({
   from: z.enum(["phone", "history"]).describe("phone: where a typed note was written. history: the location point nearest a ring note."),
 });
 const note = z.strictObject({
-  id: z.string().describe("The note's id: a UUID, the same in every message about this note."),
+  id: z.string().describe("The note's id, the same in every message about this note: a UUID, or the phone's own note id when the phone sends to its own webhook."),
   source: z.enum(["ring", "typed"]), text: z.string().describe("The words: a typed note, or a ring note's transcription."),
   recorded_at: iso, created_at: iso.describe("When Relay Everything stored it."), device, place: place.nullable(),
 });
@@ -23,26 +25,30 @@ const attachment = z.strictObject({
 });
 const attachments = z.array(attachment).min(1).max(10).optional()
   .describe("The note's files: each one's name, type and size, never its bytes. Only a note with files has this list.");
+const ownId = "Unique in this Relay Everything server, or on the phone when the phone sends to its own webhook.";
 const sample = z.strictObject({
-  id: z.number().int().describe("Unique in this Relay Everything server."), device, type: z.enum(["steps", "heart_rate", "sleep", "workout"]),
+  id: z.number().int().describe(ownId), device, type: z.enum(["steps", "heart_rate", "sleep", "workout"]),
   start: iso, end: iso, value: z.number(), unit: z.string(), source: z.string().describe("The app or watch that counted it."),
 });
 const point = z.strictObject({
-  id: z.number().int().describe("Unique in this Relay Everything server."), device, at: iso, lat: z.number(), lon: z.number(),
+  id: z.number().int().describe(ownId), device, at: iso, lat: z.number(), lon: z.number(),
   accuracy: z.number().describe("In meters."), place: z.string().nullable(),
 });
 
 const BATCH = 500;
+const stored = iso.describe("When Relay Everything, or the phone that sends to its own webhook, stored what this message holds.");
 const envelope = <Type extends string, Data extends z.ZodType>(type: Type, data: Data, description: string) =>
-  z.strictObject({ version: z.literal(1), type: z.literal(type), timestamp: iso.describe("When Relay Everything stored what this message holds."), data })
-    .describe(description);
+  z.strictObject({ version: z.literal(1), type: z.literal(type), timestamp: stored, data }).describe(description);
 
 export const message = z.discriminatedUnion("type", [
   envelope("note.created", z.strictObject({ note: note.extend({ audio, attachments }) }), "A note reached Relay Everything."),
   envelope("note.updated", z.strictObject({ note }), "A ring note got its place from a later location batch. It has no audio."),
   envelope("health.samples", z.strictObject({ samples: z.array(sample).min(1).max(BATCH) }), "Health samples, in the order Relay Everything stored them."),
   envelope("location.points", z.strictObject({ points: z.array(point).min(1).max(BATCH) }), "Location points, in the order Relay Everything stored them."),
-  envelope("webhook.test", z.strictObject({ webhook: z.strictObject({ id: z.string(), name: z.string() }) }), "Send a test, from the Relay Everything page."),
+  envelope("note.file", z.strictObject({ note_id: z.string().describe("The id of the note this file is on."),
+    file: attachment.extend({ base64: z.string().describe("The file's bytes in base64.") }) }),
+    "One file of a note, with its bytes. Only a phone that sends to its own webhook sends it, after the note's note.created."),
+  envelope("webhook.test", z.strictObject({ webhook: z.strictObject({ id: z.string(), name: z.string() }) }), "Send a test, from the Relay Everything page or the phone."),
 ]).meta({ title: "Relay Everything webhook message, version 1", description: "The JSON body of each message a Relay Everything webhook sends." });
 
 type Message = z.infer<typeof message>;

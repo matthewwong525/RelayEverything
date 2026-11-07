@@ -1,6 +1,6 @@
 ---
 title: Your own database
-description: Add a webhook, and your Relay Everything server sends each new note, and the health and location you tick, to an address you own, in one signed format.
+description: Add a webhook, and your Relay Everything server or your phone sends each new note, and the health and location you pick, to an address you own, in one signed format.
 ---
 
 A webhook copies what your Relay Everything server stores in your space to an address you own, such as a small receiver beside your database. Your server sends each new note there a few seconds after it gets it. Health and location go only if you tick them.
@@ -8,6 +8,8 @@ A webhook copies what your Relay Everything server stores in your space to an ad
 Your data lives in your own space: one Durable Object with its own SQLite database, in the spaces Worker (`relay-everything-spaces`, or `<name>-spaces` on [your own server](../../start/run-your-own/)). The server's D1 database holds only the list of accounts: each person, their sign-ins and sessions, and a fingerprint of each key. Each webhook belongs to one person's space, and it sends only that person's data.
 
 Only data that reached your server goes out. The app keeps notes on the phone until you turn on sending, so a note that stays on the phone never reaches a webhook.
+
+To keep your data off Relay Everything completely, [send from the phone](#send-from-the-phone) straight to your webhook instead.
 
 ## Add a webhook
 
@@ -22,6 +24,27 @@ A new webhook gets only data stored after you add it. To send earlier data too, 
 
 Each card shows the webhook's state: **Working**, **Paused**, **Failing** or **Sending past data**, with what waits and the last answer. **New secret** replaces the secret, and the old one stops working at once. **Remove** deletes the webhook, its secret and its send history. Your notes stay in Relay Everything.
 
+## Send from the phone
+
+The phone app can send to your own webhook itself, with no Relay Everything account, sign-in or key. Your receiver gets the same messages, signed the same way, so one receiver works for both. The phone sends to your server or to your webhook, never both.
+
+1. Start your receiver at an `https://` address. A home address, such as your own computer on your Wi-Fi, is allowed. The phone does not take a self-made certificate.
+2. In the app, open **Settings** and turn on **Send my notes**.
+3. Pick **My own webhook**, and type your receiver's address.
+4. Click **Copy**, and give the secret to your receiver. You can also paste your receiver's own `whsec_` secret.
+5. Click **Send a test**. The app shows your receiver's answer, such as *Your receiver answered 204. It works.*
+6. Click **Save**. The app asks if your earlier notes go too.
+
+Settings then says *To your webhook*, with your receiver's address. Turn on **Health** or **Location history** to send them too. The phone sends each new note, then each of its files in a [`note.file`](#notefile) message.
+
+What you give up:
+
+- **Data comes in groups, not live.** The phone sends only while it is on and has signal, and the phone's own limits choose when the app runs in the background.
+- **Your Relay Everything page and your AI can not read it**, because none of it is on the server. Ring notes from the Pebble app go through a server, so they do not come this way.
+- **A failing receiver holds back the rest.** The phone sends in order, so it keeps each item, and all after it, until your receiver answers `2xx`. Settings shows the last answer. It never drops an item for a `400`. Only a file your receiver refuses with `413` is dropped, and Settings names it.
+
+From the phone, `device.id` is the phone's own id, a UUID the app makes once. A note's `created_at` and the message's `timestamp` are when the phone kept it. Health samples and points are numbered on the phone, so save them by `device.id` and `id` together.
+
 ## The message
 
 Every message is a `POST` with a JSON body in one envelope:
@@ -35,7 +58,7 @@ Every message is a `POST` with a JSON body in one envelope:
 }
 ```
 
-`timestamp` is when Relay Everything stored what the message holds. Times are ISO 8601, in UTC. [`v1.schema.json`](../../webhooks/v1.schema.json) is the JSON Schema of every message. A change that breaks a receiver gets a new `version`. Within a version, a message can get a new optional field, such as a note's `attachments`. So let your receiver keep a field it does not know, and not refuse the message.
+`timestamp` is when Relay Everything, or the phone that sends to your webhook, stored what the message holds. Times are ISO 8601, in UTC. [`v1.schema.json`](../../webhooks/v1.schema.json) is the JSON Schema of every message. A change that breaks a receiver gets a new `version`. Within a version, a message can get a new optional field, such as a note's `attachments`. So let your receiver keep a field it does not know, and not refuse the message.
 
 | `type` | When | `data` holds |
 |---|---|---|
@@ -43,6 +66,7 @@ Every message is a `POST` with a JSON body in one envelope:
 | `note.updated` | A ring note gets its place from a later location batch. | `note`, without `audio` |
 | `health.samples` | A phone sends health samples. | `samples`: up to 500 |
 | `location.points` | A phone sends location points. | `points`: up to 500 |
+| `note.file` | Only from [the phone](#send-from-the-phone): one message for each file of a note, after the note. | `note_id`, and `file` with its bytes |
 | `webhook.test` | You click **Send a test**. | `webhook`: its `id` and `name` |
 
 ### `note.created`
@@ -86,7 +110,26 @@ A note from the phone can hold up to 10 files, such as photos and PDFs. Only a n
 | `content_type` | Its type, such as `application/pdf` or `image/jpeg` |
 | `size` | Its size in bytes, up to 25 MB |
 
-The message holds no file bytes, because a file can be too big for one message. Open or download a file on your Relay Everything page. The message goes when the note is stored, so a file can arrive in your space after the message.
+The message holds no file bytes, because a file can be too big for one message. From your server, open or download a file on your Relay Everything page. The message goes when the note is stored, so a file can arrive in your space after the message. From [the phone](#send-from-the-phone), each file comes next, in its own `note.file` message.
+
+### `note.file`
+
+Only the phone sends it, when it sends to your own webhook. It holds one file of a note, with its bytes in base64, and comes after the note's `note.created`.
+
+```json
+{
+  "version": 1,
+  "type": "note.file",
+  "timestamp": "2026-11-04T14:01:02.000Z",
+  "data": {
+    "note_id": "3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7",
+    "file": { "id": "3f9c2a7be1d04c58a6f0b2e4d7c91a05", "name": "warranty.pdf", "content_type": "application/pdf",
+      "size": 245760, "base64": "JVBERi0xLjcK..." }
+  }
+}
+```
+
+A 25 MB file makes a body of about 33 MB. Accept bodies that large, or answer `413`: the phone then drops that file and sends the rest.
 
 ### `note.updated`
 
@@ -151,7 +194,7 @@ const payload = new Webhook(process.env.RELAY_WEBHOOK_SECRET).verify(body, heade
 - Answer with a `2xx` status within 15 seconds. Relay Everything does not follow a redirect.
 - After any other answer, Relay Everything tries the same message again after 30 s, 2 min, 10 min, 30 min, 1 h, 2 h, 4 h, 6 h and 8 h: about a day. Then the card shows **Failing**, with the last answer and how many items wait. If a send is lost, your space wakes itself every 15 minutes while it has a webhook, and sends what waits. **Try again now** sends them all, in order, from where it stopped.
 - A retry can send a message you already saved, when your answer was lost. Its id and body are the same. So save each note, sample and point by its `id`, as an upsert.
-- Accept bodies up to 16 MB. A ring note's recording is about 100 KB a minute, and base64 makes it a third larger.
+- From your server, accept bodies up to 16 MB. A ring note's recording is about 100 KB a minute, and base64 makes it a third larger.
 
 ## Tables in Postgres
 
@@ -176,36 +219,46 @@ CREATE TABLE relay_note_attachments (
   content_type text NOT NULL,
   size bigint NOT NULL
 );
+CREATE TABLE relay_note_files (
+  id text PRIMARY KEY,
+  note_id uuid NOT NULL REFERENCES relay_notes (id),
+  name text NOT NULL,
+  content_type text NOT NULL,
+  size bigint NOT NULL,
+  bytes bytea NOT NULL
+);
 CREATE TABLE relay_health_samples (
-  id bigint PRIMARY KEY,
+  id bigint NOT NULL,
   device_id text NOT NULL,
   type text NOT NULL,
   start_at timestamptz NOT NULL,
   end_at timestamptz NOT NULL,
   value double precision NOT NULL,
   unit text NOT NULL,
-  source text NOT NULL
+  source text NOT NULL,
+  PRIMARY KEY (device_id, id)
 );
 CREATE TABLE relay_location_points (
-  id bigint PRIMARY KEY,
+  id bigint NOT NULL,
   device_id text NOT NULL,
   at timestamptz NOT NULL,
   lat double precision NOT NULL,
   lon double precision NOT NULL,
   accuracy double precision NOT NULL,
-  place text
+  place text,
+  PRIMARY KEY (device_id, id)
 );
 ```
 
-Save a note with `INSERT ... ON CONFLICT (id) DO UPDATE`, and keep the stored `audio` when a `note.updated` has none. Save each of a note's `attachments` by its `id` too.
+Save a note with `INSERT ... ON CONFLICT (id) DO UPDATE`, and keep the stored `audio` when a `note.updated` has none. Save each of a note's `attachments` by its `id` too, and a `note.file` in `relay_note_files`.
 
 ## An example receiver
 
-[`receiver.mjs`](../../webhooks/receiver.mjs) is about 60 lines of Node with no packages. It checks each signature and saves notes, samples and points in a SQLite file, so it needs no database server. It needs Node 22.13 or later.
+[`receiver.mjs`](../../webhooks/receiver.mjs) is about 60 lines of Node with no packages. It checks each signature and saves notes, their files from the phone, samples and points in a SQLite file, so it needs no database server. It needs Node 22.13 or later.
 
 ```bash
 curl -O https://relayeverything.com/webhooks/receiver.mjs
 RELAY_WEBHOOK_SECRET=whsec_... PORT=8787 DATABASE=relay.sqlite node receiver.mjs
 ```
 
-Your Relay Everything server must reach it at an `https` address. To try it from your own computer, put it behind a tunnel, such as `cloudflared tunnel --url http://localhost:8787`, and add the tunnel's address as the webhook.
+Your Relay Everything server, or your phone, must reach it at an `https` address. To try it from your own computer, put it behind a tunnel, such as `cloudflared tunnel --url http://localhost:8787`, and add the tunnel's address as the webhook.

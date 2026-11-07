@@ -15,6 +15,7 @@ import 'package:relay_app/data/api.dart';
 import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/settings.dart';
 import 'package:relay_app/data/store.dart';
+import 'package:relay_app/data/webhook.dart';
 import 'package:relay_app/sync/health.dart';
 import 'package:relay_app/sync/location.dart';
 import 'package:relay_app/sync/native.dart';
@@ -28,6 +29,11 @@ final code = jsonEncode({'relay': 1, 'server': connection.server, 'clientId': co
 const pageKey = 'rek_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE';
 const bearer = Connection.bearer(server: 'https://relay.example.com', key: pageKey);
 final pageCode = jsonEncode({'relay': 1, 'server': bearer.server, 'key': pageKey});
+
+/// A made-up secret, fixed so the webhook fixtures stay the same: the worker's test checks them with it.
+const fixtureSecret = 'whsec_cmVsYXktZXZlcnl0aGluZy13ZWJob29rLWZpeHR1cmU=';
+const hook = Webhook(address: 'https://db.example.com/relay', secret: fixtureSecret);
+const installId = '0f5c2a64-1d6e-4b7a-9c3e-2a8d5b7f6e10';
 
 Store memoryStore() => Store(NativeDatabase.memory());
 
@@ -49,6 +55,9 @@ class FakeServer {
     http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json'});
 
   RelayApi api(Connection connection) => RelayApi(connection, client());
+
+  /// The person's own receiver, at [Webhook.address].
+  WebhookClient webhook(Webhook webhook, String installId) => WebhookClient(webhook, installId: installId, client: client());
 
   /// The plain client the sign-in's trade uses, with no key.
   http.Client client() => MockClient((request) async {

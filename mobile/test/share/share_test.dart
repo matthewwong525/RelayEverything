@@ -31,7 +31,7 @@ class FakeShareGroup implements ShareGroup {
   final told = <Object?>[];
 
   @override
-  Future<void> setSending(bool on) async => told.add(on);
+  Future<void> setSending(bool on, {bool later = false}) async => told.add(later ? 'later' : on);
 
   @override
   Future<Directory?> folder() async => group;
@@ -203,6 +203,17 @@ void main() {
       expect(server.routes, ['notes', 'attachments']);
       expect((await store.notes()).single.sentAt, isNotNull);
     });
+
+    test('in webhook mode the hourly round sends the inbox to the webhook, with no key', () async {
+      final server = FakeServer((_) => http.Response('', 204));
+      await store.set(settingsKey, const Settings(sending: true, place: SendPlace.webhook).encode());
+      await store.moveOutbox(ownWebhook);
+      leave(group, id);
+      expect(await backgroundRound(store, connection: null, webhook: hook, health: FakeHealth(),
+        sender: Sender(null, null, server.webhook), share: FakeShareGroup(group), folder: () async => root), isTrue);
+      expect([for (final request in server.requests) (request.url.toString(), jsonDecode(request.body)['type'])],
+        [(hook.address, 'note.created')]);
+    });
   });
 
   group('the app with a share card', () {
@@ -237,6 +248,27 @@ void main() {
       await relay.disconnect();
       expect(share.told, [false, false, true, true, false, false]);
       expect(share.told.every((told) => told is bool), isTrue);
+    });
+
+    test('in webhook mode tells the card to keep each share, and the app sends it to the webhook, not the server', () async {
+      final relay = RelayController(store: store, vault: KeyVault(storage), places: places, health: FakeHealth(),
+        apiFor: server.api, webhookFor: server.webhook, clock: () => now, folder: () async => root, share: share);
+      await relay.load();
+      await relay.connect(code);
+      expect(await relay.saveWebhook(hook.address, hook.secret), isNull);
+      expect(await relay.startSending(sendEarlier: false, place: SendPlace.webhook), isNull);
+      await relay.settled();
+      expect(share.told.last, 'later');
+      server.requests.clear();
+      leave(inbox, 'f' * 32, files: {'a.jpg': [1, 2]});
+      await relay.resume();
+      await relay.settled();
+      expect([for (final request in server.requests) (request.url.toString(), jsonDecode(request.body)['type'])],
+        [(hook.address, 'note.created'), (hook.address, 'note.file')]);
+      expect((await store.notes()).single.sentAt, isNotNull);
+      await relay.startSending(sendEarlier: false, place: SendPlace.server);
+      expect(share.told.last, true);
+      await relay.settled();
     });
 
     test('a shared note gets no place, even with Pin notes on', () async {

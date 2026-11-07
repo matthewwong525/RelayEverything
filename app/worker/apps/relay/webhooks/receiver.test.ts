@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -46,5 +46,21 @@ it("saves what Relay sends, once each, and refuses a message signed with another
     { id: ring.id, place: "Harbord St", lat: 43.6629, audio: "00000018" }]);
   expect(saved.prepare("SELECT id, type, value FROM health_samples").all().map(row => ({ ...row }))).toEqual([{ id: 2, type: "steps", value: 5210 }]);
   expect(saved.prepare("SELECT id, place FROM location_points").all().map(row => ({ ...row }))).toEqual([{ id: 1, place: null }]);
+  saved.close();
+});
+
+// The phone's own messages, as mobile/test/webhook_test.dart writes them, signed again with this receiver's secret.
+const phone = (type: string) =>
+  (JSON.parse(readFileSync(new URL(`../../../../../mobile/test/fixtures/webhook/${type}.json`, import.meta.url), "utf8")) as { body: string }).body;
+
+it("saves what the phone sends to its own webhook, with each file's bytes beside its note", async () => {
+  const types = ["note.created", "note.file", "health.samples", "location.points", "webhook.test"];
+  for (const type of types) expect((await post(`${address}/`, secret, `phone_${type}`, phone(type))).status, type).toBe(204);
+  const note = JSON.parse(phone("note.created")).data.note;
+  const saved = new DatabaseSync(database, { readOnly: true });
+  expect(saved.prepare("SELECT f.name, hex(f.bytes) AS bytes FROM files f JOIN notes n ON n.id = f.note_id WHERE n.id = ?").all(note.id)
+    .map(row => ({ ...row }))).toEqual([{ name: "receipt.jpg", bytes: "01020304" }]);
+  // The phone numbers its samples from 1 too: its own device id keeps them apart from the server's.
+  expect(saved.prepare("SELECT count(*) AS n FROM health_samples WHERE device_id = ?").get(note.device.id)).toEqual({ n: 1 });
   saved.close();
 });

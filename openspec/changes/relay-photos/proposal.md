@@ -1,7 +1,7 @@
 # Send photos from the phone to Relay Everything, for your AI to see
 
-**Status:** planned
-**Branch:** shy-bedbug
+**Status:** in-progress
+**Branch:** relay-feature-ideas
 **Open questions:** none
 
 ## Why
@@ -99,3 +99,4 @@ Non-goals: sending the old library, videos, sending photos to webhooks, captions
 - **2026-11-07** — Assumed: when a server refuses a photo upload, as an older self-hosted server does, the phone stops only the photo send and does not show *Key refused*, because notes still go and the key is fine.
 - **2026-11-07** — Assumed: when a photo's copy fails, as with an iCloud download cut short, the round stops at that photo and the next round tries it again; after 3 failed rounds the phone skips it, so one broken photo can't stop the rest.
 - **2026-11-07** — Assumed: after Apple Health and location began to wake the closed iPhone app, the photo step runs in each wake's round too, last, because a wake runs the same round as the hourly task; a wake that iOS ends at 25 s has sent the readings and points first, and a photo it did not send waits for the next round.
+- **2026-11-07** — Saved for final acceptance: built, reviewed twice, merged with the iPhone health, places and connect change (#27), and the local checks pass; the staging check (6.2) and the phone build check (6.3) remain.

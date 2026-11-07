@@ -43,7 +43,7 @@
 ## 8. Checks
 
 - [x] 8.1 Run `flutter analyze` and `flutter test` in `mobile/`, `node scripts/public-check.mjs`, and the wiki link check; verify all pass.
-- [ ] 8.2 `/save`, then run the iPhone device check with this change's scenarios, including a hold on *New note*, a search, and a share into Relay Everything in dark mode; verify its pictures match the drawing in light and dark, and show them beside the drawing on the preview page.
+- [x] 8.2 `/save`, then run the iPhone device check with this change's scenarios, including a hold on *New note*, a search, and a share into Relay Everything in dark mode; verify its pictures match the drawing in light and dark, and show them beside the drawing on the preview page.
 
 ## 9. Review fixes
 

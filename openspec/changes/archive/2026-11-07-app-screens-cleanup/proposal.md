@@ -1,6 +1,6 @@
 # Make the phone app feel like Apple Notes, in the Relay Everything brand
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** cheerful-pelican
 **Open questions:** none
 
@@ -120,3 +120,5 @@ Non-goals: editing a note after you save it; pinned notes or folders; a new note
 - **2026-11-07** — Check: the slide-off-to-cancel test is replaced by the *Cancel* test, because the hold no longer ends on a lift; no other test was dropped.
 - **2026-11-07** — Check: the Inter test in `brand_test.dart` lists `headlineMedium` and the list row styles in place of the app bar's title style, because the theme no longer sets that style; it still fails on any text style without Inter.
 - **2026-11-07** — Built every screen, test and page; a second look found four problems, all fixed (the bold first line while a keyboard composes, a listening card that could stay stuck, a failed save offering a retry with no card, and the connect page's words). Saved for the iPhone check, task 8.2.
+- **2026-11-07** — Asked how to finish after the iPhone check showed every new screen in light mode but did not reach dark mode or the iPhone share sheet (its Claude part gave no report; the fixed tour passed) → chose *Publish now*; dark mode and the share sheet were not seen on a device. TestFlight build 84 holds this code.
+- **2026-11-07** — Archived for publishing; every task ticked.

@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · app-screens-cleanup</title>
+<title>Review · 2026-11-07-app-screens-cleanup</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="app-screens-cleanup" data-own-back>
+<body data-change="2026-11-07-app-screens-cleanup" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>app-screens-cleanup</h1>
+  <h1>2026-11-07-app-screens-cleanup</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -741,6 +741,8 @@
 <li class="decision card" id="decision-24" data-note="decision-24" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-07</p>Check: the slide-off-to-cancel test is replaced by the <i>Cancel</i> test, because the hold no longer ends on a lift; no other test was dropped.</li>
 <li class="decision card" id="decision-25" data-note="decision-25" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-07</p>Check: the Inter test in <code>brand_test.dart</code> lists <code>headlineMedium</code> and the list row styles in place of the app bar's title style, because the theme no longer sets that style; it still fails on any text style without Inter.</li>
 <li class="decision card" id="decision-26" data-note="decision-26" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-07</p>Built every screen, test and page; a second look found four problems, all fixed (the bold first line while a keyboard composes, a listening card that could stay stuck, a failed save offering a retry with no card, and the connect page's words). Saved for the iPhone check, task 8.2.</li>
+<li class="decision card" id="decision-27" data-note="decision-27" tabindex="0"><p class="meta"><span class="tag asked">asked</span>2026-11-07</p>Asked how to finish after the iPhone check showed every new screen in light mode but did not reach dark mode or the iPhone share sheet (its Claude part gave no report; the fixed tour passed) → chose <i>Publish now</i>; dark mode and the share sheet were not seen on a device. TestFlight build 84 holds this code.</li>
+<li class="decision card" id="decision-28" data-note="decision-28" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-07</p>Archived for publishing; every task ticked.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

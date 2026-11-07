@@ -32,6 +32,10 @@ The [Relay Everything website's guard](relay-website.md#what-the-guard-refuses) 
 
 A change to `mobile/` runs [`mobile-ci.yml`](../.github/workflows/mobile-ci.yml) on GitHub: the Flutter tests, then the Android file, kept with the run. A publish to `main` makes a release, tagged `mobile-v<version>+<build>`; the website's *Android app* link opens the latest one. The iPhone build skips until the repository has the App Store Connect secrets that [`.env.example`](../.env.example) names. [`mobile/README.md`](../mobile/README.md) has the steps.
 
+- **The App Store Connect key must have the Admin role.** The iPhone build signs in the cloud, and an App Manager key fails with *Cloud signing permission error*.
+- **Each iPhone build makes a new *Apple Development: Created via API* certificate.** The account holds only a few: when a build fails with *Choose a certificate to revoke*, revoke the old *Created via API* certificates through the key, after the person's yes. Keep the *Developer ID Application* certificate.
+- **On the Linux build computer, Flutter is in `/opt/flutter/bin`, not on `PATH`.** Run `export PATH=/opt/flutter/bin:$PATH` before `flutter pub get`, `flutter analyze` and `flutter test` in `mobile/`.
+
 ## Run your own server
 
 Anyone can run Relay Everything in their own Cloudflare account: [`self-host/SETUP.md`](../self-host/SETUP.md) is the guide an AI follows, over [`self-host/setup.mjs`](../self-host/setup.mjs). An install deploys the same Relay Everything files as this repository's app, through its own entry, [`app/worker/relay-only.ts`](../app/worker/relay-only.ts), and its own page build, `npm run build:relay-only`. It carries none of WongStack.

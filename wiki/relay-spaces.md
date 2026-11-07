@@ -43,7 +43,7 @@ Three Workers serve Relay Everything, and each deploy goes in this order, becaus
 
 A publish deploys the live spaces Worker, the connector and the company app ([`scripts/cf-deploy.sh`](../scripts/cf-deploy.sh)). A preview deploys only the company app, so deploy a branch's spaces Worker from `app/` by hand: `npx wrangler deploy -c wrangler.spaces.jsonc --env staging`. Every branch deploys to the same staging spaces Worker, so a deploy from one branch drops another branch's space steps: a staging check that fails on a missing table or a CHECK rule may only need your branch deployed again. Spaces track each step by name, so two branches' `0003_` files both run.
 
-The shared server is built through the relay-only build, then deployed by hand:
+A publish does not deploy the shared server. After a merge that changes it, build it through the relay-only build in the main checkout's `app/`, then deploy it by hand. When the build misses a package, run `npm ci` first: `node_modules` can be old.
 
 ```bash
 RELAY_CONFIG=wrangler.relay.jsonc CLOUDFLARE_ENV=staging npm run build:relay-only   # leave out CLOUDFLARE_ENV for live

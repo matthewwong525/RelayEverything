@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · webhook-data-kinds</title>
+<title>Review · 2026-11-07-webhook-data-kinds</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="webhook-data-kinds" data-own-back>
+<body data-change="2026-11-07-webhook-data-kinds" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>webhook-data-kinds</h1>
+  <h1>2026-11-07-webhook-data-kinds</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -457,6 +457,8 @@
 <li class="decision card" id="decision-16" data-note="decision-16" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: task 1.1's check passed: <code>log.ts</code> names <code>calendar</code>, and <code>npm test</code> in <code>app/</code> failed only two page tests that ran out of time under load and passed alone (<code>Welcome.test.tsx</code>, <code>Drag.test.tsx</code>).</li>
 <li class="decision card" id="decision-17" data-note="decision-17" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-07</p>Built inside /ship: list of kinds, ignore-unknown schema and receiver, ticks from the server, docs and wiki page; the review found nothing to fix. Full <code>npm test</code> failed only on two untouched page tests that time out under load (Inbox week rows, Access welcome) and pass alone; the rest of the chain passed. Specs reconciled; saved for the preview check (task 6.2).</li>
 <li class="decision card" id="decision-18" data-note="decision-18" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: the form's warning reads <i>X is sensitive</i> for one kind and <i>X and Y are sensitive</i> for several, then <i>Tick each only for a database you control.</i>, because CI found the one-kind case untested and its words wrong; a test now covers it and a kind the server does not list.</li>
+<li class="decision card" id="decision-19" data-note="decision-19" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: task 6.2's form check ran on this computer (<code>npm run dev</code>), not on the preview, because a preview's Relay Everything routes answer 503 by design (no spaces Worker). CI passed; the local form showed the Health, Location history and Calendar ticks and the sensitive-data line.</li>
+<li class="decision card" id="decision-20" data-note="decision-20" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-07</p>Archived for publish inside /ship: CI passed on the build and the coverage fix; every task is ticked; specs were already reconciled.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

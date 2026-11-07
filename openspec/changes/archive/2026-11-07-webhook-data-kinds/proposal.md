@@ -1,6 +1,6 @@
 # Proposal: Add a kind of data once, and never break a webhook
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** juicy-ladybug
 **Open questions:** none
 
@@ -56,6 +56,8 @@ Non-goals: webhook versions, an *Upgrade* button, end dates for old versions and
 - **2026-11-07** — Assumed: task 1.1's check passed: `log.ts` names `calendar`, and `npm test` in `app/` failed only two page tests that ran out of time under load and passed alone (`Welcome.test.tsx`, `Drag.test.tsx`).
 - **2026-11-07** — Built inside /ship: list of kinds, ignore-unknown schema and receiver, ticks from the server, docs and wiki page; the review found nothing to fix. Full `npm test` failed only on two untouched page tests that time out under load (Inbox week rows, Access welcome) and pass alone; the rest of the chain passed. Specs reconciled; saved for the preview check (task 6.2).
 - **2026-11-07** — Assumed: the form's warning reads *X is sensitive* for one kind and *X and Y are sensitive* for several, then *Tick each only for a database you control.*, because CI found the one-kind case untested and its words wrong; a test now covers it and a kind the server does not list.
+- **2026-11-07** — Assumed: task 6.2's form check ran on this computer (`npm run dev`), not on the preview, because a preview's Relay Everything routes answer 503 by design (no spaces Worker). CI passed; the local form showed the Health, Location history and Calendar ticks and the sensitive-data line.
+- **2026-11-07** — Archived for publish inside /ship: CI passed on the build and the coverage fix; every task is ticked; specs were already reconciled.
 
 ## Capabilities
 

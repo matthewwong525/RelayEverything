@@ -26,4 +26,4 @@
 ## 6. Checks
 
 - [x] 6.1 Run `npm test` in `app/`, the site's tests, and `node scripts/public-check.mjs`. Verify: all pass.
-- [ ] 6.2 Run `/save`, and on the preview add a webhook and see the Health, Location history and Calendar ticks. Verify: CI passes and the form shows the three ticks.
+- [x] 6.2 Run `/save`, and on the preview add a webhook and see the Health, Location history and Calendar ticks. Verify: CI passes and the form shows the three ticks.

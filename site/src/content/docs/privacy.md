@@ -3,7 +3,7 @@ title: Privacy
 description: What Relay Everything keeps, where it keeps it, and how to turn each part off.
 ---
 
-Relay Everything keeps your notes on your phone. When you turn on sending, it keeps your notes, health and places in your own space on a Relay Everything server. Your server sends them on only to the webhooks you add: notes to each one, and health and places only to those you tick them for. This website holds none of them.
+Relay Everything keeps your notes on your phone. When you turn on sending, it keeps your notes, health and places in your own space on a Relay Everything server. Your server sends them on only to the webhooks you add: notes to each one, and health and places only to those you tick them for. It answers only the AI apps and services you connect and the API keys you make, each only when it asks. This website holds none of them.
 
 ## What is kept, and where
 
@@ -29,8 +29,9 @@ With sending off, the app makes no network call, reads no health data, and keeps
 Each person's data is in their own space: a separate store that holds only that person's notes, health, places, chats, devices and webhooks. One shared list holds only who has an account, how they sign in, and a fingerprint of each key.
 
 - **You** see your own space on your Relay Everything page, after you sign in.
-- **Your devices** only add data to your space. A device's key can't read your notes, health or places back: [Keys](../api/keys/).
-- **Your AI apps** read only your space, and only after you connect them: [Connect your AI](../connections/connect-your-ai/).
+- **Your devices** only add data to your space. A phone's key or a chat key can't read your notes, health or places back: [Keys](../api/keys/).
+- **Your AI apps** read only your space, and add notes to it, only after you connect them: [Connect your AI](../connections/connect-your-ai/).
+- **Your own scripts and services** read your space and add notes through the web API, only with an API key you made or after you connect them: [Connect a service](../api/connect-a-service/).
 - **Your webhooks** send only your data, to the addresses you add.
 - **No one else.** The server opens a space only for the person who signed in, or for that person's own key or AI app. There is no screen, route or tool for the server's owner to open another person's space. [The code is public](https://github.com/matthewwong525/RelayEverything), and a test fails if such a way in is added.
 

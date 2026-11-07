@@ -1,10 +1,10 @@
-// POST notes: a note typed on a phone, with the place the phone had and the list of its files. A phone that sends it
-// again, after losing its answer, gets the same note back. Each file's bytes come after, by POST attachments.
+// POST notes: a note typed on a phone, with its place and its files' names; each file's bytes come after, by POST
+// attachments. A phone that sends it again, after losing its answer, gets the same note back: add-note.ts.
 import { z } from "zod";
 import { defineAction, type ActionCall } from "../../api/contract.ts";
+import { addNote } from "./add-note.ts";
 import { asDevice } from "./caller.ts";
 import { accuracy, latitude, longitude, placeName, time } from "./store.ts";
-import { wake } from "./webhooks/send.ts";
 
 /** A note holds up to 10 files, each up to 25 MB. */
 const MAX_FILES = 10;
@@ -43,25 +43,7 @@ export const notes = defineAction({
   encoding: "json", effect: "write", agentAvailable: false, requiresIdentity: false, errors: {}, examples: [],
   handler: asDevice<ActionCall>("Only a Relay Everything device key can send notes", async ({ space, device, env, call }) => {
     const note = call.input as z.infer<typeof noteInput>;
-    const { db } = space;
-    const where = note.lat === undefined ? null : "phone";
-    const files = (note.attachments ?? []).map(file => ({ ...file, type: typeOf(file.type) }));
-    // One transaction: the note, then its files, which name the note by the phone's id. A resend adds neither again.
-    const [inserted] = await db.batch([
-      db.prepare(`INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, lat, lon, accuracy,
-        place, place_from, created_at) VALUES (?, ?, 'typed', ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (device_id, client_id) DO NOTHING RETURNING id`)
-        .bind(crypto.randomUUID(), device.id, note.clientId, note.text, note.createdAt, note.lat ?? null, note.lon ?? null,
-          note.accuracy ?? null, note.place ?? null, where, Date.now()),
-      ...files.length ? [db.prepare(`INSERT INTO relay_attachments (id, note_id, name, content_type, size, created_at)
-        SELECT json_extract(f.value, '$.id'), n.id, json_extract(f.value, '$.name'), json_extract(f.value, '$.type'),
-          json_extract(f.value, '$.size'), ? FROM json_each(?) f, relay_notes n WHERE n.device_id = ? AND n.client_id = ?
-        ON CONFLICT (id) DO NOTHING`).bind(Date.now(), JSON.stringify(files), device.id, note.clientId)] : [],
-    ]) as { id: string }[][];
-    if (inserted.length) {
-      await wake(env, space, ["notes"]);
-      return Response.json({ id: inserted[0].id, added: true });
-    }
-    const kept = await db.prepare("SELECT id FROM relay_notes WHERE device_id = ? AND client_id = ?").bind(device.id, note.clientId).first<{ id: string }>();
-    return Response.json({ id: kept!.id, added: false });
+    const attachments = note.attachments?.map(file => ({ ...file, type: typeOf(file.type) }));
+    return Response.json(await addNote(env, space, device.id, { ...note, attachments }));
   }),
 });

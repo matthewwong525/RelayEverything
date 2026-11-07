@@ -1,0 +1,1830 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Relay Everything API",
+    "version": "1.0.0",
+    "description": "Read one person's Relay Everything notes, health, places and saved chats, and add notes. It changes and deletes nothing. Each caller reaches only the space of the person who connected it or made its key."
+  },
+  "servers": [
+    {
+      "url": "https://<your-relay-server>"
+    }
+  ],
+  "security": [
+    {
+      "oauth2": []
+    },
+    {
+      "apiKey": []
+    }
+  ],
+  "paths": {
+    "/v1/notes": {
+      "get": {
+        "operationId": "listNotes",
+        "summary": "Search notes, or read a time range",
+        "description": "With `q`, the notes whose text holds every word, as the `search` tool: `source` picks ring or typed notes, and `limit` is at most 50. Without `q`, every note from `from` to `to`, as the `timeline` tool: both are needed, and `limit` is at most 100. Newest first; read on with `cursor`.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "The words to find.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset.",
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset.",
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "description": "Only ring notes, or only typed ones.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ring",
+                "typed"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "How many notes, at most 100.",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "The last answer's `nextCursor`, to read the next page.",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "required": false,
+            "description": "An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string",
+                            "description": "The first 80 characters of the text."
+                          },
+                          "source": {
+                            "type": "string",
+                            "enum": [
+                              "ring",
+                              "typed"
+                            ]
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "recordedAt": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "device": {
+                            "type": "string",
+                            "description": "The name of the device that sent it."
+                          },
+                          "audio": {
+                            "type": "boolean",
+                            "description": "Whether it has a recording."
+                          },
+                          "place": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "lat": {
+                                    "type": "number"
+                                  },
+                                  "lon": {
+                                    "type": "number"
+                                  },
+                                  "accuracy": {
+                                    "anyOf": [
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "name": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "from": {
+                                    "type": "string",
+                                    "enum": [
+                                      "phone",
+                                      "history"
+                                    ],
+                                    "description": "phone: the phone's place at the time; history: matched from the location history."
+                                  }
+                                },
+                                "required": [
+                                  "lat",
+                                  "lon",
+                                  "accuracy",
+                                  "name",
+                                  "from"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "attachments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string"
+                                },
+                                "size": {
+                                  "type": "number",
+                                  "description": "In bytes."
+                                },
+                                "ready": {
+                                  "type": "boolean",
+                                  "description": "Whether the file's bytes have arrived."
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name",
+                                "type",
+                                "size",
+                                "ready"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "description": "The note's files: names, types and sizes, never the bytes."
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "title",
+                          "source",
+                          "text",
+                          "recordedAt",
+                          "device",
+                          "audio",
+                          "place",
+                          "attachments"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Send it as `cursor` to read the next page; null on the last one."
+                    }
+                  },
+                  "required": [
+                    "notes",
+                    "nextCursor"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "addNote",
+        "summary": "Add a note",
+        "description": "Add a typed note, with this key's or app's name as its device, and send it on to the person's webhooks. Send the same `clientId` again after a lost answer: the note is stored once, and `added` is false. 201 when added.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "clientId": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9-]{8,64}$",
+                    "description": "Your own id for this note, 8 to 64 letters, digits or dashes, such as a new UUID, so a resend is stored once."
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000,
+                    "description": "What the note says."
+                  },
+                  "createdAt": {
+                    "type": "string",
+                    "maxLength": 40,
+                    "description": "When it was written; now when left out: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset."
+                  },
+                  "lat": {
+                    "description": "Where it was written: latitude. Send it with lon.",
+                    "type": "number",
+                    "minimum": -90,
+                    "maximum": 90
+                  },
+                  "lon": {
+                    "description": "Where it was written: longitude. Send it with lat.",
+                    "type": "number",
+                    "minimum": -180,
+                    "maximum": 180
+                  },
+                  "accuracy": {
+                    "description": "How sure you are of the place, in meters.",
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100000
+                  },
+                  "place": {
+                    "description": "The place's name, such as a street.",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "timezone": {
+                    "description": "An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "clientId",
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Added before: the same note.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "The note's id."
+                    },
+                    "added": {
+                      "type": "boolean",
+                      "description": "False when this clientId was added before."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "added"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Added.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "The note's id."
+                    },
+                    "added": {
+                      "type": "boolean",
+                      "description": "False when this clientId was added before."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "added"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/notes/{id}": {
+      "get": {
+        "operationId": "getNote",
+        "summary": "Read one note",
+        "description": "Read one note by its id, with the places visited within 30 minutes of it and the health totals of its day.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The note's id, from search or timeline.",
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            }
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "required": false,
+            "description": "An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string",
+                      "description": "The first 80 characters of the text."
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "ring",
+                        "typed"
+                      ]
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "recordedAt": {
+                      "type": "string",
+                      "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                    },
+                    "device": {
+                      "type": "string",
+                      "description": "The name of the device that sent it."
+                    },
+                    "audio": {
+                      "type": "boolean",
+                      "description": "Whether it has a recording."
+                    },
+                    "place": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "lat": {
+                              "type": "number"
+                            },
+                            "lon": {
+                              "type": "number"
+                            },
+                            "accuracy": {
+                              "anyOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "name": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "from": {
+                              "type": "string",
+                              "enum": [
+                                "phone",
+                                "history"
+                              ],
+                              "description": "phone: the phone's place at the time; history: matched from the location history."
+                            }
+                          },
+                          "required": [
+                            "lat",
+                            "lon",
+                            "accuracy",
+                            "name",
+                            "from"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "attachments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "type": "number",
+                            "description": "In bytes."
+                          },
+                          "ready": {
+                            "type": "boolean",
+                            "description": "Whether the file's bytes have arrived."
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "type",
+                          "size",
+                          "ready"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "The note's files: names, types and sizes, never the bytes."
+                    },
+                    "placesNearby": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "lat": {
+                            "type": "number"
+                          },
+                          "lon": {
+                            "type": "number"
+                          },
+                          "arrived": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "left": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "lat",
+                          "lon",
+                          "arrived",
+                          "left"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "day": {
+                      "type": "object",
+                      "properties": {
+                        "day": {
+                          "type": "string"
+                        },
+                        "steps": {
+                          "type": "number"
+                        },
+                        "sleepMinutes": {
+                          "type": "number"
+                        },
+                        "heartRate": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "min": {
+                                  "type": "number"
+                                },
+                                "max": {
+                                  "type": "number"
+                                },
+                                "average": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "min",
+                                "max",
+                                "average"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "workouts": {
+                          "type": "object",
+                          "properties": {
+                            "count": {
+                              "type": "number"
+                            },
+                            "minutes": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "count",
+                            "minutes"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "day",
+                        "steps",
+                        "sleepMinutes",
+                        "heartRate",
+                        "workouts"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "source",
+                    "text",
+                    "recordedAt",
+                    "device",
+                    "audio",
+                    "place",
+                    "attachments",
+                    "placesNearby",
+                    "day"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/days/{day}": {
+      "get": {
+        "operationId": "getDay",
+        "summary": "Sum up a day",
+        "description": "One day: how many notes, steps, sleep minutes, heart rate, workouts, and each place visited.",
+        "parameters": [
+          {
+            "name": "day",
+            "in": "path",
+            "required": true,
+            "description": "The day, as YYYY-MM-DD.",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "required": false,
+            "description": "An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "day": {
+                      "type": "string"
+                    },
+                    "timezone": {
+                      "type": "string"
+                    },
+                    "notes": {
+                      "type": "number"
+                    },
+                    "steps": {
+                      "type": "number"
+                    },
+                    "sleepMinutes": {
+                      "type": "number"
+                    },
+                    "heartRate": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "min": {
+                              "type": "number"
+                            },
+                            "max": {
+                              "type": "number"
+                            },
+                            "average": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "min",
+                            "max",
+                            "average"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "workouts": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "type": "number"
+                        },
+                        "minutes": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "count",
+                        "minutes"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "places": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "lat": {
+                            "type": "number"
+                          },
+                          "lon": {
+                            "type": "number"
+                          },
+                          "from": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "to": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "lat",
+                          "lon",
+                          "from",
+                          "to"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "day",
+                    "timezone",
+                    "notes",
+                    "steps",
+                    "sleepMinutes",
+                    "heartRate",
+                    "workouts",
+                    "places"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Read health over time",
+        "description": "One value per hour or day for one kind of health data: steps and sleep minutes as `total`, heart rate as min, max and average, workouts as a count and minutes. Sleep counts on the day it ends.",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "description": "Which health data.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "steps",
+                "heart_rate",
+                "sleep",
+                "workout"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "description": "The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset.",
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "description": "The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset.",
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "bucket",
+            "in": "query",
+            "required": false,
+            "description": "One value per hour or per day, at most 400.",
+            "schema": {
+              "default": "day",
+              "type": "string",
+              "enum": [
+                "hour",
+                "day"
+              ]
+            }
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "required": false,
+            "description": "An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "bucket": {
+                      "type": "string",
+                      "enum": [
+                        "hour",
+                        "day"
+                      ]
+                    },
+                    "timezone": {
+                      "type": "string"
+                    },
+                    "values": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "from": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "to": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          }
+                        },
+                        "required": [
+                          "from",
+                          "to"
+                        ],
+                        "additionalProperties": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "description": "`total` for steps and sleep minutes; `min`, `max` and `average` for heart rate; `count` and `minutes` for workouts."
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "bucket",
+                    "timezone",
+                    "values"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/places": {
+      "get": {
+        "operationId": "listPlaces",
+        "summary": "Read places visited",
+        "description": "The places visited from one time to another, oldest first: each place's name, where it is, and when you arrived and left.",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "description": "The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset.",
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "description": "The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset.",
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "How many visits, at most 200. Read on from `next`.",
+            "schema": {
+              "default": 100,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "required": false,
+            "description": "An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "visits": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "lat": {
+                            "type": "number"
+                          },
+                          "lon": {
+                            "type": "number"
+                          },
+                          "arrived": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "left": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "lat",
+                          "lon",
+                          "arrived",
+                          "left"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "next": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "The first visit left out: read on from it."
+                    }
+                  },
+                  "required": [
+                    "visits",
+                    "next"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chats": {
+      "get": {
+        "operationId": "searchChats",
+        "summary": "Search saved chats",
+        "description": "Find saved Claude Code chats whose messages or AI summaries hold every word of the query, newest first, with up to 3 matching lines each.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "description": "The words to find.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Only chats active from this time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset.",
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Only chats last active before this time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset.",
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "How many chats, at most 20.",
+            "schema": {
+              "default": 10,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "The last answer's `nextCursor`, to read the next page.",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "required": false,
+            "description": "An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "chats": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "project": {
+                            "type": "string",
+                            "description": "The project's folder name."
+                          },
+                          "app": {
+                            "type": "string",
+                            "const": "claude-code"
+                          },
+                          "startedAt": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "lastAt": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "messages": {
+                            "type": "number"
+                          },
+                          "savedByAi": {
+                            "type": "boolean"
+                          },
+                          "lines": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "role": {
+                                  "type": "string",
+                                  "enum": [
+                                    "you",
+                                    "ai",
+                                    "step"
+                                  ]
+                                },
+                                "text": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "role",
+                                "text"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "title",
+                          "project",
+                          "app",
+                          "startedAt",
+                          "lastAt",
+                          "messages",
+                          "savedByAi",
+                          "lines"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Send it as `cursor` to read the next page; null on the last one."
+                    }
+                  },
+                  "required": [
+                    "chats",
+                    "nextCursor"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chats/{id}": {
+      "get": {
+        "operationId": "getChat",
+        "summary": "Read one saved chat",
+        "description": "Read one saved chat by its id: the AI's saved summaries, then its messages in order, 200 at a time. Each message is yours (`you`), the AI's (`ai`), or one line for a step the AI took (`step`).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The chat's id, from search_chats.",
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "The last answer's `nextCursor`, to read the next part.",
+            "schema": {
+              "type": "string",
+              "maxLength": 20
+            }
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "required": false,
+            "description": "An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "project": {
+                      "type": "string",
+                      "description": "The project's folder name."
+                    },
+                    "app": {
+                      "type": "string",
+                      "const": "claude-code"
+                    },
+                    "startedAt": {
+                      "type": "string",
+                      "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                    },
+                    "lastAt": {
+                      "type": "string",
+                      "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "seq": {
+                            "type": "number"
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "you",
+                              "ai",
+                              "step"
+                            ]
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "at": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          }
+                        },
+                        "required": [
+                          "seq",
+                          "role",
+                          "text",
+                          "at"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "savedByAi": {
+                      "type": "boolean"
+                    },
+                    "saves": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "title",
+                          "text",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Send it as `cursor` to read the next page; null on the last one."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "project",
+                    "app",
+                    "startedAt",
+                    "lastAt",
+                    "messages",
+                    "savedByAi",
+                    "saves",
+                    "nextCursor"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me": {
+      "get": {
+        "operationId": "getMe",
+        "summary": "Check the caller",
+        "description": "The caller's device name, as the phone's key check answers, and whether it may add notes. It reads no data.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "device": {
+                      "type": "string",
+                      "description": "The key's device name, or the app's name."
+                    },
+                    "adds": {
+                      "type": "boolean",
+                      "description": "Whether it may add notes."
+                    }
+                  },
+                  "required": [
+                    "device",
+                    "adds"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "oauth2": {
+        "type": "oauth2",
+        "description": "Connect an app with the person's own sign-in: register the app at `/register` (OAuth dynamic client registration), then the authorization code flow with PKCE (S256). Leave out `resource`, or send this server's `/mcp` address: the same token works on `/mcp` and here. An app connected before adding notes reads only; connect it again to add.",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "https://<your-relay-server>/authorize",
+            "tokenUrl": "https://<your-relay-server>/token",
+            "refreshUrl": "https://<your-relay-server>/token",
+            "scopes": {}
+          }
+        }
+      },
+      "apiKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "rek_…",
+        "description": "An API key, made on the person's Relay Everything page with *Add a device*: send it as `Authorization: Bearer rek_…`. A phone's or a chat key is refused here."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error",
+          "error_description"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "invalid_request",
+              "invalid_token",
+              "forbidden",
+              "not_found",
+              "method_not_allowed"
+            ]
+          },
+          "error_description": {
+            "type": "string",
+            "description": "What went wrong, in words to show a person."
+          }
+        }
+      }
+    }
+  }
+}

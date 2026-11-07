@@ -48,7 +48,7 @@ A new push to a labelled pull request does not run the check again. That keeps t
 ## The key and what it costs
 
 - **GitHub's Macs cost nothing**, because the repository is public. A run takes about 15 minutes.
-- **Claude uses the repository secret `CLAUDE_CODE_OAUTH_TOKEN`**, a token from a Claude subscription, so each run uses that plan's usage and costs nothing more. Today it is the operations@claymoo.com *Personal Ultra* plan. Make a new one with `claude setup-token`: it prints a sign-in link, and the code from the signed-in page goes back into it. The token lasts a year. Copy it to GitHub with `gh secret set CLAUDE_CODE_OAUTH_TOKEN`, through stdin, and keep it in `.env`. An Anthropic API key in `ANTHROPIC_API_KEY` works in its place, billed for each run. With neither, the tour still runs and the report says *Claude skipped: no key*.
+- **Claude uses the repository secret `CLAUDE_CODE_OAUTH_TOKEN`**, a token from a Claude subscription, so each run uses that plan's usage and costs nothing more. Today it is the operations@claymoo.com *Personal Ultra* plan. Make a new one with `claude setup-token`: it prints a sign-in link, and the code from the signed-in page goes back into it. The token lasts a year: the one in use now was made on 2026-11-06, so make a new one before 2027-11-06, or the Claude step fails. Copy it to GitHub with `gh secret set CLAUDE_CODE_OAUTH_TOKEN`, through stdin, and keep it in `.env`. An Anthropic API key in `ANTHROPIC_API_KEY` works in its place, billed for each run. With neither, the tour still runs and the report says *Claude skipped: no key*.
 - **Each run uses Sonnet 5.5, with at most 40 turns.** A run started by hand can ask for another model, such as `claude-opus-5-5`. The Claude step's summary on GitHub gives the cost each run would have with an API key.
 
 ## What keeps the key safe
@@ -64,6 +64,7 @@ A new push to a labelled pull request does not run the check again. That keeps t
 - **No microphone, no server, no Pebble ring.** Claude marks those scenarios *could not check*.
 - **No App Shortcuts.** The simulator build has no Apple team signature, so the Shortcuts app shows *Unable to run App Shortcut* for each of the app's actions. `phone.log` then says *Unable to get teamId* and *Couldn't find AppShortcutsProvider*. Check a Shortcuts action on your own iPhone through TestFlight.
 - **Pictures and a video, not a live iPhone.** A Mac you can use live costs money.
+- **No Android check.** An Android change gets only its built file from [the phone builds](../open-source.md#phone-builds). This computer has no `/dev/kvm`, so it can't start an Android emulator.
 
 ## Add a Windows job
 

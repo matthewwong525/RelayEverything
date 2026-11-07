@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import 'data/api.dart';
 import 'data/attachments.dart';
@@ -10,11 +11,13 @@ import 'data/connection.dart';
 import 'data/outbox.dart';
 import 'data/sender.dart';
 import 'data/settings.dart';
+import 'data/sign_in.dart';
 import 'data/store.dart';
 import 'relay.dart';
 import 'shortcuts/inbox.dart';
 import 'sync/health.dart';
 import 'sync/location.dart';
+import 'sync/native.dart';
 import 'voice/model.dart';
 import 'voice/recorder.dart';
 import 'voice/transcriber.dart';
@@ -54,8 +57,9 @@ String newClientId([Random? random]) {
 /// it syncs on open, on a new note, on pull, and every hour in the background.
 class RelayController extends Relay {
   RelayController({required this.store, required this.vault, required this.places, required this.health,
-    RelayApi Function(Connection)? apiFor, DateTime Function()? clock, this.schedule, this.voice, this.folder, this.opener})
-    : _sender = Sender(apiFor), _clock = clock ?? DateTime.now {
+    RelayApi Function(Connection)? apiFor, http.Client Function()? signInClient, WebAuth? webAuth, DateTime Function()? clock,
+    this.schedule, this.voice, this.native, this.folder, this.opener})
+    : _sender = Sender(apiFor, signInClient), _webAuth = webAuth ?? phoneWebAuth, _clock = clock ?? DateTime.now {
     voice?.model.addListener(notifyListeners);
     // A recording at its longest ends as if the person let go.
     voice?.recorder.onLongest = (recording) {
@@ -73,11 +77,14 @@ class RelayController extends Relay {
   final Future<void> Function(bool on)? schedule;
   /// Voice notes; with none, the app has typed notes only.
   final VoiceParts? voice;
+  /// The iPhone's Swift side, which keeps places and wakes the app while it is closed; null on Android.
+  final NativeBackground? native;
   /// The app's support folder, where a note's files are kept in `attachments/`; with none, notes take no files.
   final Future<Directory> Function()? folder;
   /// Opens a note's file; with none, the app says it can not.
   final FileOpener? opener;
   final Sender _sender;
+  final WebAuth _webAuth;
   final DateTime Function() _clock;
 
   Connection? _connection;
@@ -86,6 +93,8 @@ class RelayController extends Relay {
   int _waiting = 0;
   Settings _settings = const Settings();
   StreamSubscription<Pin>? _history;
+  Timer? _drainTimer;
+  SendState _healthSent = const SendState(), _pointsSent = const SendState();
   Future<void>? _syncing;
   bool _again = false;
   DateTime? _listening;
@@ -100,12 +109,16 @@ class RelayController extends Relay {
   @override SyncStatus get status => _status;
   @override int get waiting => _waiting;
   @override Settings get settings => _settings;
+  @override SendState get healthSent => _healthSent;
+  @override SendState get pointsSent => _pointsSent;
+  @override bool get locationModes => native != null;
 
   RelayApi? get _api => _sender.api(_settings, _connection);
 
   /// Reads the key, the settings and the notes, so the app opens with no network.
   Future<void> load() async {
-    _connection = await vault.read();
+    // The app is open, so the phone is unlocked: a key kept by an earlier version is saved again for locked-phone wakes.
+    _connection = await vault.upgrade();
     final saved = await store.get(settingsKey);
     _settings = Settings.decode(saved, hasKey: _connection != null);
     // A phone that lost its key, such as from a restore, can not send: sending reads as off until a new key.
@@ -113,6 +126,7 @@ class RelayController extends Relay {
     // The first version's settings, read once by the upgrade rule, are saved in today's shape.
     if (_settings.encode() != saved) await store.set(settingsKey, _settings.encode());
     await store.remove(_oldTimeline);
+    await _tellNative();
     if (_settings.history) _startHistory();
     // Nothing waits for a fix yet at start, so a note still waiting lost its wait when the app closed.
     await store.settleWaiting(send: _settings.sending);
@@ -149,6 +163,8 @@ class RelayController extends Relay {
   Future<void> _refreshLocal() async {
     final notes = await store.notes();
     _waiting = await store.waiting();
+    _healthSent = SendState(at: await store.sentAt(sentHealth), waiting: await store.waitingReadings());
+    _pointsSent = SendState(at: await store.sentAt(sentPoints), waiting: await store.waitingPoints());
     _entries = [for (final note in notes) _entryOfLocal(note)];
     notifyListeners();
   }
@@ -169,10 +185,41 @@ class RelayController extends Relay {
     return null;
   }
 
+  static const _badServer = 'Enter an address that starts with https:// and has no path.';
+  static const _signInFailed = 'The server did not connect this phone. Sign in and try again.';
+
+  @override
+  Future<String?> signIn(String address) async {
+    final server = Connection.serverOf(address);
+    if (server == null) return _badServer;
+    final verifier = newVerifier();
+    final Uri? back;
+    try {
+      back = await _webAuth(signInUrl(server, challengeOf(verifier), Platform.isIOS ? 'iPhone' : 'Android phone'));
+    } on Exception {
+      return 'The sign-in did not open. Try again.';
+    }
+    final code = back?.queryParameters['code'];
+    // Closed, or *Cancel* on the page: nothing to say.
+    if (back == null || back.queryParameters['error'] == 'cancelled') return null;
+    if (code == null) return _signInFailed;
+    final Connection connection;
+    try {
+      connection = await _sender.trade(server, code, verifier);
+      await _sender.check(connection).key();
+    } on ApiException catch (error) {
+      return error.failure == Failure.offline ? 'No connection. Try again when the phone is online.' : _signInFailed;
+    }
+    await vault.save(connection);
+    _connection = connection;
+    notifyListeners();
+    return null;
+  }
+
   @override
   Future<String?> setServer(String text) async {
     final server = Connection.serverOf(text);
-    if (server == null) return 'Enter an address that starts with https:// and has no path.';
+    if (server == null) return _badServer;
     if (_connection == null) return 'Connect a key first.';
     _connection = _connection!.withServer(server);
     await vault.save(_connection!);
@@ -196,8 +243,7 @@ class RelayController extends Relay {
   @override
   Future<void> stopSending() async {
     await _saveSettings(_settings.copyWith(sending: false));
-    await _history?.cancel();
-    _history = null;
+    await _stopHistory();
     // A round already sending finishes first, so nothing it read lands after the drop.
     await _syncing;
     await store.dropReadings();
@@ -217,7 +263,17 @@ class RelayController extends Relay {
     _settings = settings;
     await store.set(settingsKey, settings.encode());
     await schedule?.call(settings.history || settings.health);
+    await _tellNative();
     notifyListeners();
+  }
+
+  /// Tells Swift what it may read and keep while the app is closed: nothing while sending is off.
+  Future<void> _tellNative() async {
+    try {
+      await native?.set(health: _settings.health, history: _settings.history, mode: _settings.mode);
+    } on Exception {
+      // An engine with no Swift side, such as a test's; the next start tells it again.
+    }
   }
 
   static const _noLocation = 'Relay Everything may not read your location. Allow it in the phone\'s settings.';
@@ -238,14 +294,44 @@ class RelayController extends Relay {
     if (on) {
       _startHistory();
     } else {
-      await _history?.cancel();
-      _history = null;
+      await _stopHistory();
     }
     return null;
   }
 
+  @override
+  Future<String?> setLocationMode(LocationMode mode) async {
+    await _saveSettings(_settings.copyWith(mode: mode));
+    return null;
+  }
+
+  /// Android keeps its own stream. On iPhone, Swift keeps the points, and the open app moves them in each minute, so
+  /// the timeline's pins do not wait for the next round.
   void _startHistory() {
-    _history ??= places.history().listen((point) => store.addPoint(point), onError: (_) {});
+    if (native == null) {
+      _history ??= places.history().listen((point) => store.addPoint(point), onError: (_) {});
+      return;
+    }
+    _drainTimer ??= Timer.periodic(const Duration(minutes: 1), (_) => unawaited(_drain()));
+    unawaited(_drain());
+  }
+
+  Future<void> _stopHistory() async {
+    _drainTimer?.cancel();
+    _drainTimer = null;
+    await _history?.cancel();
+    _history = null;
+  }
+
+  Future<void> _drain() async {
+    final swift = native;
+    if (swift == null || !_settings.history) return;
+    try {
+      if (await drainPoints(store, swift, name: _settings.sending ? places.nameOf : null) > 0) await _refreshLocal();
+    } on Exception {
+      // Swift empties its file as it answers, but the points are in the store before any name lookup, so a failure
+      // here costs at most a name.
+    }
   }
 
   @override
@@ -400,6 +486,7 @@ class RelayController extends Relay {
         // The health store can be closed for a while, such as on a locked iPhone; the next round reads again.
       }
     }
+    if (_settings.history) await _drain();
     if (_settings.sending) await store.queuePoints();
     final result = await flush(store, api, clock: _clock, keepGoing: () => _settings.sending, folder: folder);
     _status = switch (result.failure) { Failure.refused => SyncStatus.refused, null => SyncStatus.synced, _ => SyncStatus.offline };
@@ -595,6 +682,7 @@ class RelayController extends Relay {
   void dispose() {
     _disposed = true;
     _history?.cancel();
+    _drainTimer?.cancel();
     voice?.model.removeListener(notifyListeners);
     super.dispose();
   }

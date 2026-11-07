@@ -11,6 +11,8 @@ import '../data/sender.dart';
 import '../data/settings.dart';
 import '../data/store.dart';
 import 'health.dart';
+import 'location.dart';
+import 'native.dart';
 
 /// The hourly task's name; iPhone also lists it in Info.plist and AppDelegate.swift.
 const syncTask = 'com.matthewwong525.relay.sync';
@@ -29,7 +31,7 @@ void backgroundSync() {
     final store = openStore();
     try {
       return await backgroundRound(store, connection: connection, health: PhoneHealth(), sender: Sender(),
-        folder: getApplicationSupportDirectory);
+        native: Platform.isIOS ? PhoneBackground() : null, places: PhonePlaces(), folder: getApplicationSupportDirectory);
     } on Exception {
       return false;
     } finally {
@@ -38,15 +40,25 @@ void backgroundSync() {
   });
 }
 
-/// One background round, apart from the plugin that runs it so a test can drive it. True when it is done.
+/// One background round, apart from the plugin that runs it so a test can drive it: the hourly task and an iPhone
+/// wake share it. With [native], it first moves the points Swift kept. True when it is done.
 Future<bool> backgroundRound(Store store, {required Connection? connection, required HealthSource health, required Sender sender,
-  DateTime? now, Future<Directory> Function()? folder}) async {
+  NativeBackground? native, Places? places, DateTime? now, Future<Directory> Function()? folder}) async {
   final settings = Settings.decode(await store.get(settingsKey), hasKey: connection != null);
   final api = sender.api(settings, connection);
   if (api == null) return true;
-  if (settings.health) await syncHealth(store, health, now: now);
+  if (native != null && settings.history) await drainPoints(store, native, name: places?.nameOf);
+  var read = true;
+  if (settings.health) {
+    try {
+      await syncHealth(store, health, now: now);
+    } on Exception {
+      // A locked iPhone refuses Health reads: the points still go, and the next round reads the same readings again.
+      read = false;
+    }
+  }
   await store.queuePoints();
-  return (await flush(store, api, folder: folder)).failure == null;
+  return (await flush(store, api, folder: folder)).failure == null && read;
 }
 
 /// Turns the hourly round on while sending and history or health are on, and off otherwise.

@@ -2,7 +2,10 @@ import { readdirSync, readFileSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { beforeAll, expect, it } from "vitest";
-import { ANA, BEN, fakeSpaces } from "../../tests/relay";
+import { ANA, BEN, fakeSpaces, NOW, queue } from "../../tests/relay";
+import { APP_DEVICE, RECONNECT } from "./answers";
+import { APP_DEVICE_OFF } from "./asker";
+import type { GrantProps } from "./env";
 import { mcpHandler } from "./tools";
 
 const spaceRows = readFileSync(new URL("../../tests/relay-space-rows.sql", import.meta.url), "utf8");
@@ -18,11 +21,14 @@ function seeded() {
   return { sql, SPACES: made.SPACES };
 }
 
-/** An MCP client that reaches the connector with a grant for this person's space. */
-async function connect(SPACES: DurableObjectNamespace, personId = ANA) {
+/** A grant as /callback makes it now: Ana's space, and adding notes as the app's own device. */
+const GRANT: GrantProps = { personId: ANA, adds: true, deviceId: "e0000000-0000-4000-8000-000000000001", name: "Claude" };
+
+/** An MCP client that reaches the connector with this grant. */
+async function connect(SPACES: DurableObjectNamespace, props: GrantProps = GRANT) {
   const connected = new Client({ name: "test", version: "1.0.0" });
   await connected.connect(new StreamableHTTPClientTransport(new URL("https://relay-mcp.example.com/mcp"),
-    { fetch: (url, init) => mcpHandler.fetch(new Request(url, init), { SPACES }, { props: { personId } }) }));
+    { fetch: (url, init) => mcpHandler.fetch(new Request(url, init), { SPACES, RELAY_WEBHOOKS: queue as never }, { props }) }));
   return connected;
 }
 
@@ -45,10 +51,11 @@ it("names itself Relay Everything to the AI app", () => {
   expect(client.getInstructions()).toMatch(/^Relay Everything /);
 });
 
-it("lists eight tools, each marked read-only", async () => {
+it("lists nine tools, each read-only but add_note, which changes and deletes nothing", async () => {
   const { tools } = await client.listTools();
-  expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "places", "search_chats", "read_chat"]);
-  for (const tool of tools) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+  expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "places", "search_chats", "read_chat", "add_note"]);
+  for (const tool of tools.slice(0, 8)) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+  expect(tools[8].annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
 });
 
 it("finds notes holding every word, in any case, with a title and the time in the zone", async () => {
@@ -189,16 +196,48 @@ it("titles a note with no words, and lets a database fault through as an error, 
 
 it("reads only the grant's own person's space, and asks an app from before spaces to connect again", async () => {
   const { SPACES } = seeded();
-  const ben = await connect(SPACES, BEN);
+  const ben = await connect(SPACES, { personId: BEN });
   const found = JSON.parse((await ben.callTool({ name: "search", arguments: { query: "milk" } }) as { content: { text: string }[] }).content[0].text);
   expect(found.notes.map((note: { id: string }) => note.id)).toEqual([ID(7)]);
   expect(ids(await ask("search", { query: "ring" }))).not.toContain(ID(7));
-  const old = await mcpHandler.fetch(new Request("https://relay-mcp.example.com/mcp", { method: "POST" }), { SPACES }, { props: {} });
+  const old = await mcpHandler.fetch(new Request("https://relay-mcp.example.com/mcp", { method: "POST" }), { SPACES, RELAY_WEBHOOKS: queue as never }, { props: {} });
   expect([old.status, await old.json()]).toEqual([401, { error: "invalid_token", error_description: "Connect this AI app again." }]);
 });
 
-// The connector reads with every note's rights: only SELECT reaches a space from its code. Its one write takes a
-// used sign-in code out of the directory.
+it("adds a note as the app's own device, once on a resend, and wakes the webhooks that take notes", async () => {
+  const { sql, SPACES } = seeded();
+  sql.exec(`INSERT INTO relay_webhooks (id, name, url, secret, kinds, sent_seq, created_at)
+    VALUES ('w-notes', 'Example database', 'https://db.example.com/relay', 'whsec_AAAA', '["notes"]', 0, 0)`);
+  client = await connect(SPACES);
+  const note = { clientId: "claude-note-0001", text: "Order the second PCB batch.", createdAt: "2026-11-04T18:00" };
+  const first = await ask("add_note", note);
+  expect(first).toEqual({ id: expect.stringMatching(/^[0-9a-f-]{36}$/), added: true });
+  expect(await ask("add_note", { ...note, text: "Changed on the resend." })).toEqual({ id: first.id, added: false });
+  expect(queue.sent).toEqual([{ webhook: "w-notes", person: ANA }]);
+  expect(sql.prepare("SELECT name, token_client_id, reaches, created_at, revoked_at FROM relay_devices WHERE id = ?").get(GRANT.deviceId!))
+    .toEqual({ name: "Claude", token_client_id: `app:${GRANT.deviceId}`, reaches: "app", created_at: NOW, revoked_at: null });
+  expect(await ask("fetch", { id: first.id })).toMatchObject({ text: "Order the second PCB batch.", source: "typed", device: "Claude",
+    recordedAt: "2026-11-04T18:00:00-05:00", place: null });
+  const placed = await ask("add_note", { clientId: "claude-note-0002", text: "At the fab.", lat: 43.65, lon: -79.38, place: "King St W" });
+  expect(await ask("fetch", { id: placed.id })).toMatchObject({ recordedAt: "2026-11-05T09:00:00-05:00", place: { name: "King St W", from: "phone" } });
+  expect(await ask("add_note", { clientId: "claude-note-0003", text: "Where?", lat: 43.65 })).toEqual({ refused: "Send lat and lon together." });
+  expect(await ask("add_note", { clientId: "claude-note-0003", text: "When?", createdAt: "yesterday" }))
+    .toEqual({ refused: "Give `createdAt` as a day or an ISO time." });
+  expect((await ask("add_note", { clientId: "short", text: "Hi" })).refused).toContain("clientId");
+  client = await connect(seeded().SPACES);
+});
+
+it("lets an app connected before adding read, but asks it to connect again to add", async () => {
+  const { sql, SPACES } = seeded();
+  client = await connect(SPACES, { personId: ANA });
+  expect(ids(await ask("search", { query: "milk" }))).toEqual([ID(3)]);
+  expect(await ask("add_note", { clientId: "claude-note-0001", text: "Hi" })).toEqual({ refused: RECONNECT });
+  expect(sql.prepare("SELECT count(*) AS count FROM relay_notes").get()).toEqual({ count: 3 });
+  client = await connect(seeded().SPACES);
+});
+
+// Only SELECT reaches a space from the connector, but for these writes: a used sign-in code, an app's device row and
+// its turning off. A note is added only through apps/relay/add-note.ts, as a phone's.
 const WRITES = /\b(?:INSERT|UPDATE|DELETE|REPLACE|UPSERT|CREATE|DROP|ALTER|PRAGMA|ATTACH|VACUUM)\b|\b(?:db|DB)\.exec\(|\.(?:batch|run)\(/;
 const writes = (source: string) => WRITES.test(source);
 
@@ -208,7 +247,16 @@ it("holds no statement but SELECT in the connector or its queries", () => {
     new URL("../apps/relay/queries.ts", import.meta.url)];
   expect(files.length).toBeGreaterThan(5);
   const CODE_TAKEN = "DELETE FROM relay_connect_codes WHERE code_sha256 = ? AND expires_at > ? RETURNING person_id";
-  expect(readFileSync(new URL("auth.ts", folder), "utf8")).toContain(CODE_TAKEN);
-  for (const file of files) expect(writes(readFileSync(file, "utf8").replace(CODE_TAKEN, "")), file.pathname).toBe(false);
+  const ALLOWED: Record<string, string[]> = { "auth.ts": [CODE_TAKEN],
+    "answers.ts": [APP_DEVICE.slice(0, APP_DEVICE.indexOf("VALUES")), ".bind(adder.deviceId, adder.name, `app:${adder.deviceId}`, Date.now()).run()"],
+    "asker.ts": [JSON.stringify(APP_DEVICE_OFF), "db.prepare(APP_DEVICE_OFF).bind(Date.now(), deviceId).run()"] };
+  for (const file of files) {
+    let source = readFileSync(file, "utf8");
+    for (const allowed of ALLOWED[file.pathname.split("/").pop()!] ?? []) {
+      expect(source, file.pathname).toContain(allowed);
+      source = source.replace(allowed, "");
+    }
+    expect(writes(source), file.pathname).toBe(false);
+  }
   for (const bad of ["INSERT INTO relay_notes", "db.exec('x')", "db.batch([])", "statement.run()"]) expect(writes(bad), bad).toBe(true);
 });

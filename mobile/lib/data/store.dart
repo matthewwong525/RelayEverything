@@ -90,6 +90,9 @@ class Pin {
 /// Where an upload goes. Only the Relay server today; a later change can add another, such as a webhook.
 const relayServer = 'relay-server';
 
+/// When an upload of health, or of location points, last reached the server, in the store's `state`.
+const sentHealth = 'sent.health', sentPoints = 'sent.points';
+
 /// One waiting upload: a route and the JSON body to send it.
 class OutboxItem {
   const OutboxItem(this.id, this.route, this.body);
@@ -338,6 +341,10 @@ class Store extends GeneratedDatabase {
   Future<void> addPoint(Pin point) =>
     _run('INSERT OR IGNORE INTO points (at, body) VALUES (?, ?)', [point.at.millisecondsSinceEpoch, jsonEncode(point.toJson())]);
 
+  /// Gives the point kept at [at] its place name, while it waits in the store. A point already queued stays unnamed.
+  Future<void> namePoint(DateTime at, String place) =>
+    _run("UPDATE points SET body = json_set(body, '\$.place', ?) WHERE at = ?", [place, at.millisecondsSinceEpoch]);
+
   /// Moves up to [batch] points at a time into the outbox, in time order.
   Future<void> queuePoints({int batch = 500}) => transaction(() async {
     while (true) {
@@ -347,6 +354,21 @@ class Store extends GeneratedDatabase {
       await _run('DELETE FROM points WHERE at <= ?', [rows.last.read<int>('at')]);
     }
   });
+
+  /// Health readings waiting to send, in the outbox.
+  Future<int> waitingReadings() async => (await _rows(
+    "SELECT coalesce(sum(json_array_length(body, '\$.samples')), 0) AS n FROM outbox WHERE route = 'health'")).single.read<int>('n');
+
+  /// Location points waiting to send: in the outbox, and kept but not yet queued.
+  Future<int> waitingPoints() async => (await _rows(
+    "SELECT coalesce((SELECT sum(json_array_length(body, '\$.points')) FROM outbox WHERE route = 'locations'), 0) "
+    '+ (SELECT count(*) FROM points) AS n')).single.read<int>('n');
+
+  /// When [key], [sentHealth] or [sentPoints], was last written, or null for never.
+  Future<DateTime?> sentAt(String key) async {
+    final value = int.tryParse(await get(key) ?? '');
+    return value == null ? null : DateTime.fromMillisecondsSinceEpoch(value);
+  }
 
   Future<String?> get(String key) async {
     final rows = await _rows('SELECT value FROM state WHERE key = ?', [key]);

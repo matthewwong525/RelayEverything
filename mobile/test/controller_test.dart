@@ -3,14 +3,18 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:fake_async/fake_async.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart' show KeychainAccessibility;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:health/health.dart';
 import 'package:relay_app/controller.dart';
 import 'package:relay_app/data/attachments.dart';
 import 'package:relay_app/data/connection.dart';
+import 'package:relay_app/data/sign_in.dart';
 import 'package:relay_app/data/store.dart';
 import 'package:relay_app/relay.dart';
 import 'package:relay_app/sync/health.dart';
+import 'package:relay_app/sync/native.dart';
 import 'package:relay_app/voice/model.dart';
 
 import 'fakes.dart';
@@ -24,10 +28,12 @@ void main() {
   late FakePlaces places;
   late FakeHealth health;
   late List<bool> scheduled;
+  late FakeWebAuth webAuth;
   var clock = now;
 
-  RelayController controller() => RelayController(store: store, vault: KeyVault(storage), places: places, health: health,
-    apiFor: server.api, clock: () => clock, schedule: (on) async => scheduled.add(on));
+  RelayController controller({NativeBackground? native}) => RelayController(store: store, vault: KeyVault(storage), places: places,
+    health: health, apiFor: server.api, signInClient: server.client, webAuth: webAuth.call, clock: () => clock,
+    schedule: (on) async => scheduled.add(on), native: native);
 
   List<Map<String, dynamic>> sentNotes() => [
     for (final request in server.requests) if (request.url.path.endsWith('notes')) jsonDecode(request.body) as Map<String, dynamic>,
@@ -40,6 +46,7 @@ void main() {
     places = FakePlaces();
     health = FakeHealth();
     scheduled = [];
+    webAuth = FakeWebAuth();
     clock = now;
   });
   tearDown(() => store.close());
@@ -142,6 +149,19 @@ void main() {
       expect(server.routes, ['key', 'notes']);
       await relay.stopSending();
       expect(relay.entries, hasLength(2));
+    });
+  });
+
+  group('the key', () {
+    test('kept under the old Keychain access is saved again at start, so a locked-phone wake can send', () async {
+      storage.values.addAll({'relay.server': bearer.server, 'relay.key': pageKey});
+      storage.access.addAll({'relay.server': null, 'relay.key': null});
+      final relay = controller();
+      await relay.load();
+      expect(relay.connected, isTrue);
+      expect(storage.values, {'relay.server': bearer.server, 'relay.key': pageKey});
+      expect(storage.access.values.toSet(), {KeychainAccessibility.first_unlock_this_device});
+      relay.dispose();
     });
   });
 
@@ -249,7 +269,7 @@ void main() {
       expect([const Settings(history: true, health: true).history, const Settings(history: true, health: true).health], [false, false]);
       const on = Settings(sending: true, history: true, health: true);
       expect([on.copyWith(sending: false).history, on.copyWith(sending: false).health], [false, false]);
-      expect(jsonDecode(on.encode()), {'sending': true, 'pinNotes': false, 'history': true, 'health': true});
+      expect(jsonDecode(on.encode()), {'sending': true, 'pinNotes': false, 'history': true, 'health': true, 'mode': 'battery'});
       final back = Settings.decode(on.encode(), hasKey: false);
       expect([back.sending, back.health], [true, true]);
     });
@@ -270,7 +290,8 @@ void main() {
       final relay = controller();
       await relay.load();
       expect([relay.settings.sending, relay.settings.pinNotes], [false, true]);
-      expect(jsonDecode((await store.get('settings'))!), {'sending': false, 'pinNotes': true, 'history': false, 'health': false});
+      expect(jsonDecode((await store.get('settings'))!), {'sending': false, 'pinNotes': true, 'history': false, 'health': false,
+        'mode': 'battery'});
     });
 
     test('turn each on only with its permission, and schedule the hourly sync only while sending', () async {
@@ -292,7 +313,8 @@ void main() {
       expect(await relay.setHistory(false), isNull);
       expect(await relay.setPinNotes(true), isNull);
       expect(scheduled, [false, true, true, true, true]);
-      expect(jsonDecode((await store.get('settings'))!), {'sending': true, 'pinNotes': true, 'history': false, 'health': true});
+      expect(jsonDecode((await store.get('settings'))!), {'sending': true, 'pinNotes': true, 'history': false, 'health': true,
+        'mode': 'battery'});
       expect(places.asked, [false, true, true, false]);
       // Each change started a sync; the last round ends before the store closes.
       await relay.settled();
@@ -494,6 +516,134 @@ void main() {
       expect(relay.entries.single.text, 'Kept');
       await relay.sync();
       expect(server.requests.every((request) => request.url.host == 'preview.example.com'), isTrue);
+    });
+  });
+
+  group('signing in to connect', () {
+    test('opens the sign-in with a challenge, trades the code with its secret, checks the key and keeps it', () async {
+      final relay = controller();
+      await relay.load();
+      expect(await relay.signIn(defaultServer), isNull);
+      final page = webAuth.opened.single;
+      expect(page.toString(), startsWith('https://app.relayeverything.com/apps/relay/sign-in/phone?'));
+      expect(page.queryParameters['challenge'], matches(RegExp(r'^[A-Za-z0-9_-]{43}$')));
+      expect(page.queryParameters['name'], isNotEmpty);
+      final trade = server.requests.first;
+      expect([trade.method, trade.url.toString(), trade.headers['Authorization']],
+        ['POST', 'https://app.relayeverything.com/apps/relay/sign-in/phone/key', null]);
+      final sent = jsonDecode(trade.body) as Map<String, dynamic>;
+      expect(sent['code'], 'one-time-code');
+      // The page keeps only the secret's SHA-256; the secret goes once, here.
+      expect(challengeOf(sent['verifier'] as String), page.queryParameters['challenge']);
+      expect([server.requests.last.method, server.routes.last, server.requests.last.headers['Authorization']],
+        ['GET', 'key', 'Bearer $pageKey']);
+      expect([relay.connected, relay.server, storage.values['relay.key']], [true, defaultServer, pageKey]);
+      // Connected, sending stays off until the person's switch turns it on.
+      expect(relay.settings.sending, isFalse);
+    });
+
+    test('a closed sheet or Cancel keeps no key and says nothing; a refused code says to try again', () async {
+      final relay = controller();
+      await relay.load();
+      webAuth.back = (_) => null;
+      expect(await relay.signIn(defaultServer), isNull);
+      webAuth.back = (_) => Uri.parse('relayeverything://connected?error=cancelled');
+      expect(await relay.signIn(defaultServer), isNull);
+      expect([relay.connected, server.requests], [false, isEmpty]);
+      webAuth.back = FakeWebAuth().back;
+      server.answer = (_) => FakeServer.json({'error': {'code': 'invalid_input'}}, 400);
+      expect(await relay.signIn(defaultServer), contains('Sign in and try again'));
+      server.answer = (_) => FakeServer.json({}, 503);
+      expect(await relay.signIn(defaultServer), contains('No connection'));
+      expect([relay.connected, storage.values], [false, isEmpty]);
+    });
+
+    test('signs in to another server, and refuses an address that is not one', () async {
+      final relay = controller();
+      await relay.load();
+      expect(await relay.signIn('relay.example.com'), contains('https://'));
+      expect(webAuth.opened, isEmpty);
+      expect(await relay.signIn('https://relay.example.com/'), isNull);
+      expect(webAuth.opened.single.host, 'relay.example.com');
+      expect(server.requests.every((request) => request.url.host == 'relay.example.com'), isTrue);
+      expect(relay.server, 'https://relay.example.com');
+    });
+  });
+
+  group('on iPhone', () {
+    late FakeBackground swift;
+
+    setUp(() async {
+      swift = FakeBackground();
+      await KeyVault(storage).save(bearer);
+      await store.set('settings', const Settings(sending: true).encode());
+    });
+
+    test('tells Swift each flag at start and on each change, and both off when sending stops', () async {
+      final relay = controller(native: swift);
+      await relay.load();
+      expect(relay.locationModes, isTrue);
+      expect(await relay.setHealth(true), isNull);
+      expect(await relay.setHistory(true), isNull);
+      expect(relay.settings.mode, LocationMode.battery);
+      expect(await relay.setLocationMode(LocationMode.move), isNull);
+      await relay.stopSending();
+      expect([for (final flag in swift.flags) (flag.health, flag.history, flag.mode)], [
+        (false, false, LocationMode.battery),
+        (true, false, LocationMode.battery),
+        (true, true, LocationMode.battery),
+        (true, true, LocationMode.move),
+        (false, false, LocationMode.move),
+      ]);
+      expect(jsonDecode((await store.get('settings'))!)['mode'], 'move');
+      relay.dispose();
+    });
+
+    test('history drains the points file each minute while open, names the newest, and stops when turned off', () async {
+      fakeAsync((async) {
+        final relay = controller(native: swift);
+        relay.load();
+        async.elapse(const Duration(milliseconds: 1));
+        relay.setHistory(true);
+        async.elapse(const Duration(milliseconds: 1));
+        expect(swift.drains, 1);
+        swift.lines = [swiftPoint(now, 43.6487, -79.3817), 'not a point', swiftPoint(now.add(const Duration(minutes: 5)), 43.65, -79.38)];
+        async.elapse(const Duration(minutes: 1));
+        expect(swift.drains, 2);
+        expect(places.lookups, [(43.65, -79.38), (43.6487, -79.3817)]);
+        expect(relay.pointsSent.waiting, 2);
+        relay.setHistory(false);
+        async.elapse(const Duration(milliseconds: 1));
+        async.elapse(const Duration(minutes: 3));
+        expect(swift.drains, 2);
+        relay.dispose();
+      });
+    });
+
+    test('a sync moves the points in before it sends them, and history never uses the Android stream', () async {
+      final relay = controller(native: swift);
+      await relay.load();
+      await relay.setHistory(true);
+      swift.lines = [swiftPoint(now, 43.6487, -79.3817)];
+      await relay.sync();
+      expect(server.routes, contains('locations'));
+      expect(places.points.hasListener, isFalse);
+      expect([relay.pointsSent.at, relay.pointsSent.waiting], [now, 0]);
+      relay.dispose();
+    });
+
+    test('Android has no modes and keeps the stream; sending off reads no points at all', () async {
+      final relay = controller();
+      await relay.load();
+      expect(relay.locationModes, isFalse);
+      await relay.setHistory(true);
+      expect(places.points.hasListener, isTrue);
+      await relay.stopSending();
+      expect(places.points.hasListener, isFalse);
+      final iphone = controller(native: swift);
+      await iphone.load();
+      await iphone.sync();
+      expect(swift.drains, 0);
     });
   });
 

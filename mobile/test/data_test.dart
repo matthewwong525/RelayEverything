@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart' show KeychainAccessibility;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -85,6 +86,31 @@ void main() {
     test('reads nothing from a store with a server but no whole key', () async {
       final storage = MemoryStorage()..values.addAll({'relay.server': 'https://relay.example.com', 'relay.clientId': 'a'});
       expect(await KeyVault(storage).read(), isNull);
+    });
+
+    test('opens after the first unlock on iPhone, so a wake on a locked phone can read it', () async {
+      final storage = MemoryStorage();
+      final vault = KeyVault(storage);
+      await vault.save(bearer);
+      await vault.read();
+      await vault.forget();
+      expect(storage.options.map((option) => option?.accessibility).toSet(), {KeychainAccessibility.first_unlock_this_device});
+    });
+
+    test('saves a key kept under the old Keychain access again, unchanged, with the new one', () async {
+      final storage = MemoryStorage();
+      // An earlier version saved with the plugin's default, open only while the phone is unlocked.
+      storage.values.addAll({'relay.server': bearer.server, 'relay.key': pageKey});
+      storage.access.addAll({'relay.server': null, 'relay.key': null});
+      final read = (await KeyVault(storage).upgrade())!;
+      expect([read.server, read.key], [bearer.server, pageKey]);
+      expect(storage.values, {'relay.server': bearer.server, 'relay.key': pageKey});
+      expect(storage.access, {'relay.server': KeychainAccessibility.first_unlock_this_device,
+        'relay.key': KeychainAccessibility.first_unlock_this_device});
+      // No key: nothing to save, and nothing written.
+      final empty = MemoryStorage();
+      expect(await KeyVault(empty).upgrade(), isNull);
+      expect(empty.values, isEmpty);
     });
   });
 
@@ -190,6 +216,22 @@ void main() {
       expect([for (final item in await store.outbox()) item.route], ['notes']);
       await store.queuePoints();
       expect(await store.waiting(), 1);
+    });
+
+    test('records when health and points last landed, and counts what waits of each', () async {
+      expect([await store.sentAt(sentHealth), await store.sentAt(sentPoints), await store.waitingReadings(), await store.waitingPoints()],
+        [null, null, 0, 0]);
+      await store.enqueue('health', {'samples': [{}, {}, {}]});
+      await store.addPoint(Pin(at: at, lat: 1, lon: 1, accuracy: 1));
+      await store.queuePoints();
+      await store.addPoint(Pin(at: at.add(const Duration(minutes: 1)), lat: 1, lon: 1, accuracy: 1));
+      expect([await store.waitingReadings(), await store.waitingPoints()], [3, 2]);
+      final server = FakeServer((request) => request.url.path.endsWith('locations') ? FakeServer.json({}, 503) : FakeServer.ok(request));
+      await flush(store, server.api(connection), clock: () => at);
+      expect([await store.sentAt(sentHealth), await store.sentAt(sentPoints), await store.waitingReadings()], [at, null, 0]);
+      server.answer = FakeServer.ok;
+      await flush(store, server.api(connection), clock: () => at.add(const Duration(hours: 1)));
+      expect([await store.sentAt(sentPoints), await store.waitingPoints()], [at.add(const Duration(hours: 1)), 1]);
     });
 
     test('keeps each upload under its destination', () async {

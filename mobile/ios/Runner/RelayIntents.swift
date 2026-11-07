@@ -125,6 +125,7 @@ final class ShortcutsEngine {
     }
     engine.run(withEntrypoint: "shortcutsMain", libraryURI: "package:relay_app/shortcuts/entry.dart")
     GeneratedPluginRegistrant.register(with: engine)
+    if let registrar = engine.registrar(forPlugin: "RelayChannels") { RelayChannels.register(registrar.messenger()) }
     self.engine = engine
     engineChannel = channel
     return channel

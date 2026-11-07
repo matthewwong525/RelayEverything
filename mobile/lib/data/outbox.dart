@@ -12,6 +12,9 @@ class FlushResult {
   final Failure? failure;
 }
 
+// Settings shows when health and places last landed, so a person sees when the iPhone stopped them.
+const _sentKeys = {'health': sentHealth, 'locations': sentPoints};
+
 /// Sends waiting uploads oldest first, and stops at the first that can not land now, so order holds.
 /// A body the server turns down is dropped: it would never land, and would hold back the rest.
 /// An `attachment` upload sends a note's file from [folder], the app's support folder, after its note. A file the
@@ -35,6 +38,8 @@ Future<FlushResult> flush(Store store, RelayApi api, {DateTime Function()? clock
         await _post(api, item.route, item.body);
       }
       sent++;
+      final kind = _sentKeys[item.route];
+      if (kind != null) await store.set(kind, '${(clock ?? DateTime.now)().millisecondsSinceEpoch}');
     } on ApiException catch (error) {
       if (error.failure != Failure.rejected) return FlushResult(sent: sent, dropped: dropped, failure: error.failure);
       dropped++;

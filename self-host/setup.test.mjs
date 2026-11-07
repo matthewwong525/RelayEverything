@@ -70,13 +70,15 @@ test('the install\'s configs carry its own names, IDs and owner, and no secret',
   assert.equal(app.vars.CF_ACCESS_APP_ID, 'app-id');
   assert.equal(mcp.vars.RELAY_MCP_ADDRESS, 'https://relay-test-mcp.you.workers.dev/mcp');
   assert.equal(mcp.d1_databases[0].database_id, 'db-id');
+  assert.equal(mcp.queues.producers[0].queue, 'relay-test-webhooks');
   assert.deepEqual([app.vars.RELAY_SIGN_IN, app.vars.RELAY_MCP_CALLBACK], ['access', 'https://relay-test-mcp.you.workers.dev/callback']);
   assert.equal(mcp.vars.RELAY_SERVER_URL, 'https://relay-test.you.workers.dev');
   assert.equal(mcp.vars.WONG_OWNER_EMAIL, undefined);
   assert.deepEqual([spaces.name, spaces.account_id, spaces.queues.producers[0].queue], ['relay-test-spaces', ACCOUNT, 'relay-test-webhooks']);
   for (const config of [app, mcp]) assert.equal(config.durable_objects.bindings[0].script_name, 'relay-test-spaces');
   assert.equal(app.triggers, undefined);
-  assert.deepEqual(keysApp('Keys', 'h.example.com').destinations.map(item => item.uri), ['h.example.com/apps/relay/api']);
+  assert.deepEqual(keysApp('Keys', 'h.example.com').destinations.map(item => item.uri), ['h.example.com/apps/relay/api',
+    'h.example.com/apps/relay/sign-in/phone/key']);
   assert.equal(bypassPolicy.decision, 'bypass');
   assert.deepEqual(accessApp(names('relay-test').app, 'relay-test.you.workers.dev').destinations, [{ type: 'public', uri: 'relay-test.you.workers.dev' }]);
   assert.deepEqual(accessApp(names('relay-test').app, 'relay-test.you.workers.dev', 'w1').destinations[0], { type: 'worker', worker_id: 'w1' });
@@ -110,6 +112,19 @@ test('update writes each config again, opens the keys\' way past the login, and 
   assert.ok(calls.includes(`POST /accounts/${ACCOUNT}/access/apps/keys/policies`), 'the keys app gets its bypass policy');
   assert.ok(calls.includes(`DELETE /accounts/${ACCOUNT}/access/apps/sso`), 'the old connector sign-in app goes');
   assert.ok(lines.includes('ok database changes applied, then the newest Relay Everything put live'));
+});
+
+test('update gives an older keys app the phone\'s sign-in trade, and leaves a current one', async () => {
+  const keys = names('relay').keysApp;
+  const host = 'relay.you.workers.dev';
+  for (const [uris, puts] of [[[`${host}/apps/relay/api`], true], [keysApp(keys, host).destinations.map(item => item.uri), false]]) {
+    const { place, answers } = installed();
+    answers[`GET /accounts/${ACCOUNT}/access/apps`] = [{ id: 'keys', name: keys, destinations: uris.map(uri => ({ type: 'public', uri })) }];
+    answers[`GET /accounts/${ACCOUNT}/access/apps/keys/policies`] = [{}];
+    answers[`PUT /accounts/${ACCOUNT}/access/apps/keys`] = {};
+    const { calls } = await run(['update'], answers, { files: place });
+    assert.equal(calls.includes(`PUT /accounts/${ACCOUNT}/access/apps/keys`), puts);
+  }
 });
 
 test('a failed database change stops update before anything goes live', async () => {

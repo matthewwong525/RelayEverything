@@ -67,6 +67,14 @@ The agent shows page pictures in the chat at key moments, so you can catch a wro
 - **Never in the repo.** A picture can hold your mail or your bank balance, so it stays in the temp folder, never a repo file.
 - **None while [a live view](live-view.md) is open, and none of a typed card.** From sending the link until it closes, the agent takes no pictures: one could show your card. After it, a snapshot is safe; a picture waits until no card box holds a value, since a site can keep a typed card in its boxes.
 
+## When your turn holds the browser
+
+While another tab has your turn, the browser refuses `click` from the agent. `open`, `snapshot`, `type`, `select`, `press`, `get` and `screenshot` still work, so the agent goes on with the keyboard:
+
+- **Focus a button with Tab.** Open the page fresh, then press `Shift+Tab` from the page end to the button. Take a picture to see the focus ring before `Enter`: a wrong count can land on *Delete my account*.
+- **In a dialog,** *Cancel* usually holds the focus; one `Tab` moves to the action.
+- **Read a folded text box** with `get value '<selector>'`: it reads a `<textarea>` inside a closed `<details>` without opening it. A key read this way goes into a private temporary file, never into the chat.
+
 ## When a step needs you
 
 When a step needs something only you can give, each kind of step has one route:

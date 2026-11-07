@@ -1,5 +1,5 @@
 // The connector's sign-in pages. /authorize asks the person to approve the AI app by name, then sends them to the
-// server's own sign-in; /callback trades the server's one-time code for the person whose space the app may read.
+// server's own sign-in; /callback trades the server's one-time code for the person whose space the app may use.
 import { AuthorizationError, type AuthRequest } from "@cloudflare/workers-oauth-provider";
 import { hashToken } from "../apps/relay/people.ts";
 import type { GrantProps, McpEnv } from "./env.ts";
@@ -24,7 +24,7 @@ async function consent(request: Request, env: McpEnv): Promise<Response> {
   const about = await env.OAUTH_PROVIDER.describeConsent(authRequest);
   const { handle, headers } = await env.OAUTH_PROVIDER.beginConsent(authRequest);
   return html(`<h1>Connect ${escape(about.clientName)} to Relay Everything?</h1>
-<p>It can then read your Relay Everything notes, health and places when you ask it. It can't change them.</p>
+<p>It can then read your Relay Everything notes, health, places and saved chats, and add notes, when you ask it. It can't change or delete them.</p>
 <p>Its answers go to <b>${escape(about.redirectHost)}</b>.${about.redirectIsLoopback ? " That is an app on this computer." : ""}</p>
 <form method="post"><input type="hidden" name="handle" value="${escape(handle)}">
 <button name="choice" value="approve">Connect</button> <button name="choice" value="deny">Cancel</button></form>`, 200, headers);
@@ -53,7 +53,8 @@ async function personOf(env: McpEnv, code: string): Promise<string | null> {
   return found?.person_id ?? null;
 }
 
-/** The server sends the signed-in person back here with a code: trade it for the person, then let the AI app in. */
+/** The server sends the signed-in person back here with a code: trade it for the person, then let the app in. Its
+ *  grant may add notes, as the consent page said, under a device of its own, made on its first note. */
 async function callback(request: Request, env: McpEnv): Promise<Response> {
   const { request: authRequest, headers } = await env.OAUTH_PROVIDER.finishUpstream(request);
   const code = new URL(request.url).searchParams.get("code");
@@ -61,9 +62,11 @@ async function callback(request: Request, env: McpEnv): Promise<Response> {
   const personId = await personOf(env, code);
   if (!personId) return refused("This sign-in was used already, or is too old. Start again from your AI app.");
   const client = await env.OAUTH_PROVIDER.lookupClient(authRequest.clientId);
-  const props: GrantProps = { personId };
+  const name = client?.clientName?.trim() || authRequest.clientId;
+  const deviceId = crypto.randomUUID();
+  const props: GrantProps = { personId, adds: true, deviceId, name };
   const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({ request: authRequest, userId: personId,
-    metadata: { name: client?.clientName?.trim() || authRequest.clientId }, scope: authRequest.scope, props });
+    metadata: { name, deviceId }, scope: authRequest.scope, props });
   headers.set("Location", redirectTo);
   return new Response(null, { status: 302, headers });
 }

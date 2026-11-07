@@ -12,5 +12,6 @@
   "vars": { "RELAY_MCP_ADDRESS": "https://relay-mcp.your-subdomain.workers.dev/mcp", "RELAY_SERVER_URL": "https://relay.your-subdomain.workers.dev" },
   "d1_databases": [{ "binding": "DB", "database_name": "relay-db", "database_id": "00000000-0000-0000-0000-000000000000" }],
   "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-spaces" }] },
+  "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-webhooks" }] },
   "kv_namespaces": [{ "binding": "OAUTH_KV" }]
 }

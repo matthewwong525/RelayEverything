@@ -38,6 +38,8 @@ it("shows the address to add and each connected app with when it connected", asy
   expect(screen.getByText("2 connected")).toBeTruthy();
   expect(within(row("Claude")).getByText(/Connected Nov 4/)).toBeTruthy();
   expect(within(row("ChatGPT")).getByText(/^Connected/)).toBeTruthy();
+  expect(screen.getByText(/same sign-in opens the web API/)).toBeTruthy();
+  expect(screen.getByRole("link", { name: "Connect a service" }).getAttribute("href")).toBe("https://relayeverything.com/api/connect-a-service/");
 });
 
 it("disconnects an app only after a confirm, then reads the list again", async () => {

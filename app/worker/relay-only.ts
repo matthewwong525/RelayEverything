@@ -8,6 +8,7 @@ import { relayGate } from "./apps/relay/caller.ts";
 import { signIn, type SignInEnv } from "./apps/relay/sign-in/index.ts";
 
 const PAGE = "/apps/relay/";
+const PHONE_KEY = "/apps/relay/sign-in/phone/key";
 const RELAY_API = /^\/apps\/relay\/api(?:\/(.*))?$/;
 
 /** `access` on a self-host, which keeps Cloudflare Access for its owner; the shared server signs people in itself. */
@@ -30,8 +31,8 @@ export default {
     const url = new URL(request.url);
     const access = env.RELAY_SIGN_IN === "access";
     const identity = access ? await getAccessIdentity(request, env) : null;
-    // Behind Access, only a key's own calls pass the sign-in wall without a person.
-    if (access && !identity && !request.headers.has("Authorization")) {
+    // Behind Access, only a key's own calls, and a phone's trade of its sign-in code, pass the wall without a person.
+    if (access && !identity && !request.headers.has("Authorization") && !(request.method === "POST" && url.pathname === PHONE_KEY)) {
       return new Response("Unauthorized", { status: 401, headers: { "Cache-Control": "no-store" } });
     }
     const signedIn = await signIn(request, env, identity);

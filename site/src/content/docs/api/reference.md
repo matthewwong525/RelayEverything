@@ -775,7 +775,7 @@ It takes no input.
 | `devices` | array of object | yes |  |
 | `devices[].id` | string | yes |  |
 | `devices[].name` | string | yes |  |
-| `devices[].reaches` | "phone" or "chats" | yes | phone: notes, health and places, from a phone or the Pebble app. chats: Claude Code chats. |
+| `devices[].reaches` | "phone" or "chats" or "api" | yes | phone: notes, health and places, from a phone or the Pebble app. chats: Claude Code chats. api: the web API, which reads and adds notes. |
 | `devices[].createdAt` | number | yes |  |
 | `devices[].revokedAt` | number or null | yes |  |
 
@@ -783,7 +783,7 @@ It takes no input.
 
 `POST /apps/relay/api/devices` · `relay.devices-add` · writes · called by a signed-in person only, not a device key
 
-Make a key for a new device. The answer holds the key, its QR code text and, for a phone key, the Pebble signing secret: each shows only this once.
+Make a key for a new device. The answer holds the key, its QR code text and, for a phone key, the Pebble signing secret: each shows only this once. An API key's answer names the web API's address.
 
 ### Input
 
@@ -792,7 +792,7 @@ Send the input as a JSON body.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `name` | string | yes | A name you know the device by. |
-| `reaches` | "phone" or "chats" | yes | phone: notes, health and places, from a phone or the Pebble app. chats: Claude Code chats. |
+| `reaches` | "phone" or "chats" or "api" | yes | phone: notes, health and places, from a phone or the Pebble app. chats: Claude Code chats. api: the web API, which reads and adds notes. |
 
 ### Output
 
@@ -800,10 +800,11 @@ Send the input as a JSON body.
 |---|---|---|---|
 | `id` | string | yes |  |
 | `name` | string | yes |  |
-| `reaches` | "phone" or "chats" | yes | phone: notes, health and places, from a phone or the Pebble app. chats: Claude Code chats. |
+| `reaches` | "phone" or "chats" or "api" | yes | phone: notes, health and places, from a phone or the Pebble app. chats: Claude Code chats. api: the web API, which reads and adds notes. |
 | `key` | string | yes | Shown this once. |
 | `qr` | string | yes | What the phone scans: the server's address and the key. |
 | `pebbleSecret` | string or null | yes | A phone key's Pebble signing secret, shown this once. |
+| `api` | string or null | yes | An API key's web API address, or null when this server has no AI connector. |
 
 ## Turn off a device
 

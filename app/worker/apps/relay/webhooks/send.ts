@@ -35,7 +35,7 @@ export async function wakeEach(env: Pick<Env, "RELAY_WEBHOOKS">, person: string,
 
 /** After a store: runs every active webhook that takes one of `kinds`. It never fails a route, as the sweep catches a
  *  lost wake-up. */
-export async function wake(env: Env, space: PersonSpace, kinds: Kind[]) {
+export async function wake(env: Pick<Env, "RELAY_WEBHOOKS">, space: PersonSpace, kinds: Kind[]) {
   if (!kinds.length) return;
   try {
     const { results } = await space.db.prepare(`SELECT id FROM relay_webhooks w WHERE active = 1 AND failing_since IS NULL

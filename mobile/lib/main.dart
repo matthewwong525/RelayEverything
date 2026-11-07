@@ -13,12 +13,18 @@ import 'shortcuts/bridge.dart';
 import 'sync/background.dart';
 import 'sync/health.dart';
 import 'sync/location.dart';
+import 'sync/native.dart';
+import 'sync/wake.dart';
 import 'voice/model.dart';
 import 'voice/recorder.dart';
 import 'voice/transcriber.dart';
 
 // The entry point Shortcuts' background engine starts. Exported, so a release build keeps it.
 export 'shortcuts/entry.dart' show shortcutsMain;
+
+/// Swift starts this by name when Health or a place wakes the closed iPhone app (ios/Runner/RelayBackground.swift).
+/// Naming it here keeps `sync/wake.dart` in the build: a library that `main.dart` does not reach is left out.
+const wakeEntryPoint = wakeRound;
 
 /// Opens a note's file in the app the phone picks for its type.
 Future<bool> openWithPhone(File file, String type) async {
@@ -34,7 +40,9 @@ Future<void> main() async {
     excludeFromBackup: excludeFromBackup),
     transcriber: WhisperTranscriber(() async => (await model.file).path), player: PhonePlayer());
   final relay = RelayController(store: openStore(), vault: KeyVault(), places: PhonePlaces(), health: PhoneHealth(), schedule: scheduleSync,
-    voice: voice, folder: getApplicationSupportDirectory, opener: openWithPhone);
+    voice: voice, native: Platform.isIOS ? PhoneBackground() : null, folder: getApplicationSupportDirectory, opener: openWithPhone);
+  // A Health or place wake while the app runs syncs here, in place of a second engine.
+  if (Platform.isIOS) PhoneBackground.onWake(relay.sync);
   await relay.load();
   // *Start a voice note* from Shortcuts or the Action button. The timeline takes each request once it is on screen.
   final voiceRequests = StreamController<void>();

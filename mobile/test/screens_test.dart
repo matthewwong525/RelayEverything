@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/app.dart';
 import 'package:relay_app/relay.dart';
+import 'package:relay_app/screens/settings.dart' show sentLine;
 
 class FakeRelay extends Relay {
   @override bool connected = false;
@@ -12,6 +13,9 @@ class FakeRelay extends Relay {
   @override SyncStatus status = SyncStatus.synced;
   @override int waiting = 0;
   @override Settings settings = const Settings();
+  @override SendState healthSent = const SendState();
+  @override SendState pointsSent = const SendState();
+  @override bool locationModes = false;
   final calls = <String>[];
   String? problem;
   int earlier = 0;
@@ -25,6 +29,27 @@ class FakeRelay extends Relay {
       connected = true;
       notifyListeners();
     }
+    return problem;
+  }
+
+  /// Null: the person closed the sign-in, so no key is kept.
+  bool signsIn = true;
+
+  @override
+  Future<String?> signIn(String server) async {
+    calls.add('sign in $server');
+    if (problem == null && signsIn) {
+      connected = true;
+      notifyListeners();
+    }
+    return problem;
+  }
+
+  @override
+  Future<String?> setLocationMode(LocationMode mode) async {
+    calls.add('mode ${mode.name}');
+    settings = settings.copyWith(mode: mode);
+    notifyListeners();
     return problem;
   }
 
@@ -243,6 +268,32 @@ void main() {
     expect(find.text('Settings'), findsOneWidget);
   });
 
+  testWidgets('connects by signing in, to the shared server or another, and stays open when the sign-in is closed', (tester) async {
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openSettings(tester);
+    await tester.tap(find.text('Send to Relay Everything'));
+    await tester.pumpAndSettle();
+    relay.signsIn = false;
+    await tester.tap(find.text('Sign in to connect'));
+    await tester.pumpAndSettle();
+    expect(find.text('Connect Relay Everything'), findsOneWidget);
+    relay.problem = 'The server did not connect this phone. Sign in and try again.';
+    await tester.tap(find.text('Use another server'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'https://relay.example.com');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('The server did not connect this phone. Sign in and try again.'), findsOneWidget);
+    relay
+      ..problem = null
+      ..signsIn = true;
+    await tester.tap(find.text('Sign in to connect'));
+    await tester.pumpAndSettle();
+    expect(relay.calls, ['sign in https://app.relayeverything.com', 'sign in https://relay.example.com',
+      'sign in https://app.relayeverything.com', 'start false']);
+    expect(find.text('Settings'), findsOneWidget);
+  });
+
   testWidgets('connects by a scanned key, and does nothing when the scan is closed', (tester) async {
     String? scanned;
     await tester.pumpWidget(RelayApp(relay: relay, scanner: (_) async => scanned));
@@ -364,6 +415,45 @@ void main() {
     await tester.pump();
     expect(find.text('Relay Everything may not read your health data.'), findsOneWidget);
     expect(relay.calls, ['pin false', 'history true', 'health true']);
+  });
+
+  testWidgets('on iPhone, location history offers Save battery or Every 100 m; Android offers no choice', (tester) async {
+    relay
+      ..connected = true
+      ..locationModes = true
+      ..settings = const Settings(sending: true);
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openSettings(tester);
+    expect(find.text('Save battery'), findsNothing);
+    relay.settings = const Settings(sending: true, history: true);
+    relay.changed();
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Every 100 m'));
+    await tester.pumpAndSettle();
+    RadioGroup<LocationMode> group() => tester.widget(find.byType(RadioGroup<LocationMode>));
+    expect(group().groupValue, LocationMode.battery);
+    await tester.tap(find.text('Every 100 m'));
+    await tester.pumpAndSettle();
+    expect([relay.calls, group().groupValue], [['mode move'], LocationMode.move]);
+    relay.locationModes = false;
+    relay.changed();
+    await tester.pumpAndSettle();
+    expect(find.text('Every 100 m'), findsNothing);
+  });
+
+  testWidgets('says when health and places last went, and how many wait', (tester) async {
+    relay
+      ..connected = true
+      ..settings = const Settings(sending: true, health: true, history: true)
+      ..healthSent = SendState(at: DateTime(now.year, now.month, now.day, 14, 5), waiting: 3);
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openSettings(tester);
+    await tester.scrollUntilVisible(find.text('Not sent yet · none waiting'), 100);
+    expect(find.text('Sent 14:05 · 3 readings waiting'), findsOneWidget);
+    expect(find.text('Not sent yet · none waiting'), findsOneWidget);
+    final today = DateTime(2026, 11, 7, 18);
+    expect(sentLine(SendState(at: DateTime(2026, 11, 6, 9, 30), waiting: 1), 'point', today), 'Sent 6/11 09:30 · 1 point waiting');
+    expect(sentLine(SendState(at: DateTime(2026, 11, 7, 9, 3)), 'point', today), 'Sent 09:03 · none waiting');
   });
 
   testWidgets('changes the server, and disconnects after asking', (tester) async {

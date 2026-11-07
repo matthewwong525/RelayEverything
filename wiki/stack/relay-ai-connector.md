@@ -1,6 +1,6 @@
 # Relay Everything's AI connector
 
-Relay Everything's AI connector lets an AI chat app, such as the Claude app or ChatGPT, read your Relay Everything notes, health, places and saved chats when you ask it a question. It only reads: it can't add, change or delete a note. It is part of [the Cloudflare stack](README.md): its own Worker, `relay-everything-mcp`, beside the main app.
+Relay Everything's AI connector lets an AI chat app, such as the Claude app or ChatGPT, read your Relay Everything notes, health, places and saved chats when you ask it a question, and add a note when you ask it to save one. It can't change or delete a note. The same Worker answers the [web API](#the-web-api) under `/v1/`, for scripts and services. It is part of [the Cloudflare stack](README.md): its own Worker, `relay-everything-mcp`, beside the main app.
 
 | Where | Address to add |
 | --- | --- |
@@ -21,9 +21,9 @@ You connect each app one time. Each app opens a sign-in page: you click **Connec
 
 Then ask, for example: *What did I note on 4 November?* or *How many steps did I walk last week?* Days are Toronto days unless you name another time zone.
 
-## What the app can read
+## What the app can read and add
 
-The connector has eight tools. Each answer has a limit, so one question can't copy all of Relay Everything.
+The connector has nine tools: eight read, and `add_note` adds. Each answer has a limit, so one question can't copy all of Relay Everything.
 
 - **search**: notes that hold every word you give, newest first.
 - **fetch**: one note, the places near it in time, and its day's health totals.
@@ -33,6 +33,7 @@ The connector has eight tools. Each answer has a limit, so one question can't co
 - **places**: each stay at a place, with when you arrived and left.
 - **search_chats**: saved Claude Code chats that hold every word you give, with the lines that match ([Relay Everything's Claude Code chats](relay-chats.md)).
 - **read_chat**: one saved chat, a part at a time, with the AI's saved summaries.
+- **add_note**: a typed note, under the app's own device row (`reaches = 'app'`, named for the app), made on its first note. The app's `clientId` keeps a resend to one note, and the note wakes the webhooks that take notes, as a phone's does. An app connected before adding has no `adds` in its grant: it reads, and `add_note` asks it to connect again.
 
 ## What leaves Relay Everything
 
@@ -49,9 +50,18 @@ On the Relay Everything page, find the app in the **AI apps** card and click **D
 The connector has no sign-in of its own. After you click **Connect**, it sends you to the Relay Everything server named by `RELAY_SERVER_URL` in `app/wrangler.relay-mcp.jsonc`, which signs you in as it does on the page ([Relay Everything spaces](../relay-spaces.md)):
 
 1. The server sends you back to the connector's `/callback` with a one-time code. The code works once, for a few minutes.
-2. The connector trades the code in the shared database for your person id, and puts it in the grant. Each tool opens only that person's space.
+2. The connector trades the code in the shared database for your person id, and puts it in the grant with `adds`, a new device id and the app's name. Each tool opens only that person's space.
 
-An app stays connected while you use it. Its access token works for one hour, and the app gets a new one when it asks again. After 30 days with no use, the sign-in drops, and you connect the app again. Disconnect ends it at once. A device key from the [Relay Everything phones](../../app/worker/apps/relay/caller.ts) can't use the connector, and the connector's tokens can't open the main app.
+An app stays connected while you use it. Its access token works for one hour, and the app gets a new one when it asks again. After 30 days with no use, the sign-in drops, and you connect the app again. Disconnect ends it at once. A device key from the [Relay Everything phones](../../app/worker/apps/relay/caller.ts) can't use the connector, and the connector's tokens can't open the main app. Disconnect also turns off the app's device row.
+
+## The web API
+
+`/v1/` is the connector's tools as plain HTTP with JSON, for a person's own scripts and services. The website owns how to use it: [Connect a service](../../site/src/content/docs/api/connect-a-service.md). Each route parses its tool's own input from `inputs.ts` and answers through `answers.ts`, so a route and its tool can't differ; `openapi.ts` makes the OpenAPI file, served at `/v1/openapi.json` with no sign-in.
+
+- **An API key** (`reaches = 'api'`), made with *Add a device*, goes through `apiKeyCaller` in `caller.ts`. A phone or chat key gets `403`.
+- **A connected app's token** works too. The installed OAuth provider refuses any route outside its one resource, `/mcp`, so `index.ts` answers `/v1/` before the provider: it checks the token with the provider's `unwrapToken` and needs the `/mcp` audience. A service leaves out `resource`, or sends the `/mcp` address.
+
+A refusal answers `{ "error", "error_description" }`, and every answer is open to any web page (CORS `*`): it takes a bearer token, never a cookie. After a route change, run `npm run relay:api-doc` in `app/`: it writes the website's OpenAPI file and reference page, which name `<your-relay-server>`.
 
 ## Set it up
 
@@ -86,14 +96,14 @@ The trial script connects to the staging connector as an AI app does, and prints
 ```bash
 node scripts/relay-mcp-trial.mjs              # staging, no sign-in
 node scripts/relay-mcp-trial.mjs --sign-in    # staging, then you sign in once in a browser on this computer
-node scripts/relay-mcp-trial.mjs --live       # the live connector: its metadata, and /mcp refused with no token
+node scripts/relay-mcp-trial.mjs --live       # the live connector: its metadata, and /mcp and /v1/ refused with no token
 ```
 
-With no sign-in, it checks each step up to the server's sign-in: the metadata, an app's registration, the consent page, and the hand-off to the server. It also checks that a made-up sign-in answer, a made-up code, a wrong token and a service token are each refused. It can't sign in by itself. With `--sign-in`, it shows a link; you click **Connect** and sign in, and the app's token then reads a made-up note. Disconnect the app **Relay Everything trial** on the preview's **AI apps** card after.
+With no sign-in, it checks each step up to the server's sign-in: the metadata, an app's registration, the consent page, and the hand-off to the server. It also checks that a made-up sign-in answer, a made-up code, a wrong token and a service token are each refused. It can't sign in by itself. With `--sign-in`, it shows a link; you click **Connect** and sign in, and the app's token then reads a made-up note, and adds one through `add_note` and through `/v1/notes`. Disconnect the app **Relay Everything trial** on the preview's **AI apps** card after.
 
 ## Where the code is
 
-- [`app/worker/relay-mcp/`](../../app/worker/relay-mcp/index.ts): the connector Worker, its sign-in pages and its tools.
+- [`app/worker/relay-mcp/`](../../app/worker/relay-mcp/index.ts): the connector Worker, its sign-in pages, its tools and the web API.
 - [`app/worker/apps/relay/queries.ts`](../../app/worker/apps/relay/queries.ts): the reads the tools and the Relay Everything page share. A test fails on any statement there but `SELECT`.
 - [`app/worker/apps/relay/ai-apps.ts`](../../app/worker/apps/relay/ai-apps.ts): the routes behind the **AI apps** card.
 - [`scripts/relay-mcp-setup.mjs`](../../scripts/relay-mcp-setup.mjs): setup.

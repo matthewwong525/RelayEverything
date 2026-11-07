@@ -3,7 +3,7 @@ import { body } from "../../../tests/body";
 import { fakeEnv } from "../../../tests/env";
 import { ANA, ben, benPhone, call, checker, db, deviceKey, directoryDb, laptop, lost, makeKey, matthew, owner, pebbleApp, phone, request, rows,
   type Who } from "../../../tests/relay";
-import { callerOf, cookie, reaches, relayGate, SESSION_COOKIE, sessionCookie } from "./caller";
+import { apiKeyCaller, callerOf, cookie, reaches, relayGate, SESSION_COOKIE, sessionCookie } from "./caller";
 import { hashToken } from "./people";
 
 // The fingerprint of checker.id, "checker.access".
@@ -157,6 +157,34 @@ it("gives a chats key no Pebble secret, and lets it send only chats", async () =
   expect(rows("relay_device_secrets").map(row => row.device_id)).toEqual(["d-pebble"]);
   expect(await gate({ bearer: String(json.key) }, "POST", CHATS)).toBeNull();
   expect(await gate({ bearer: String(json.key) }, "POST", ROUTES[1])).toEqual([403, "A chat key can only send chats."]);
+});
+
+it("gives an API key the web API's address, and lets it reach only that and its own name on this server", async () => {
+  const { json } = await call(matthew, "POST", "devices", { name: "Backup script", reaches: "api" },
+    { RELAY_MCP_CALLBACK: "https://relay-mcp.example.com/callback" });
+  expect(json).toMatchObject({ reaches: "api", pebbleSecret: null, api: "https://relay-mcp.example.com/v1" });
+  const key = String(json.key);
+  const API_ONLY = [403, "An API key works only on the web API, at your AI connector's address under /v1/."];
+  for (const path of [ROUTES[1], CHATS, SAVES]) expect(await gate({ bearer: key }, "POST", path), path).toEqual(API_ONLY);
+  expect(await gate({ bearer: key }, "GET", "/apps/relay/api/timeline")).toEqual(API_ONLY);
+  expect(await call({ bearer: key }, "GET", "key")).toEqual({ status: 200, json: { device: "Backup script" } });
+  expect(await apiKeyCaller({ DB: db.DB }, key)).toMatchObject({ kind: "key", personId: ANA, device: { id: json.id, reaches: "api" } });
+  // A phone or chat key is refused by the web API's door, and a turned-off API key too.
+  for (const sent of [phone, laptop]) {
+    const refused = await apiKeyCaller({ DB: db.DB }, (sent as { bearer: string }).bearer) as Response;
+    expect([refused.status, (await body(refused)).error.message])
+      .toEqual([403, "A phone or chat key only sends. Make an API key on your Relay Everything page."]);
+  }
+  await call(matthew, "POST", "devices/off", { id: json.id });
+  expect(await body(await apiKeyCaller({ DB: db.DB }, key) as Response)).toMatchObject({ error: { message: "This device key is turned off." } });
+  // A server with no AI connector makes the key, and names no address.
+  expect((await call(matthew, "POST", "devices", { name: "Other script", reaches: "api" })).json.api).toBeNull();
+  expect((await call(matthew, "POST", "devices", { name: "Phone two", reaches: "phone" })).json.api).toBeNull();
+});
+
+it("hides a connected app's device row, which the AI apps card shows", async () => {
+  db.sql.prepare(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-app', 'Claude', 'app:d-app', '', 0, 'app')`).run();
+  expect((await call(matthew, "GET", "devices")).json.devices.map(device => device.id)).not.toContain("d-app");
 });
 
 it("turns a device's key off at once, keeps the first time it was turned off, and refuses an unknown id", async () => {

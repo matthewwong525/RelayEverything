@@ -26,13 +26,13 @@ async function input<T extends z.ZodType>(request: Request, shape: T): Promise<z
 }
 
 /** True when a rate limit refuses one of the keys. A server with no limit bound, such as a local run, has none. */
-async function limited(env: SignInEnv, keys: string[]): Promise<boolean> {
+export async function limited(env: SignInEnv, keys: string[]): Promise<boolean> {
   for (const key of keys) if (env.RELAY_SIGN_IN_LIMIT && !(await env.RELAY_SIGN_IN_LIMIT.limit({ key })).success) return true;
   return false;
 }
 
-const ipOf = (request: Request) => `ip:${request.headers.get("CF-Connecting-IP") ?? "unknown"}`;
-const tooMany = () => answer(429, "rate_limited", "Too many tries. Wait a few minutes, then try again.");
+export const ipOf = (request: Request) => `ip:${request.headers.get("CF-Connecting-IP") ?? "unknown"}`;
+export const tooMany = () => answer(429, "rate_limited", "Too many tries. Wait a few minutes, then try again.");
 const codeHash = (email: string, code: string) => hashToken(`${email}:${code}`);
 
 /** The one place a code leaves the server, so another sender can take its place. */

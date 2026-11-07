@@ -51,7 +51,20 @@ class RelayApi {
     return json['device'] as String? ?? '';
   }
 
+  /// Trades the sign-in's one-time code, with the secret only this phone holds, for this phone's own key. The call
+  /// carries no key: the code and the secret are its proof.
+  static Future<Connection> trade(http.Client client, String server, String code, String verifier) async {
+    final json = await _answer(() => client.post(Uri.parse('$server/apps/relay/sign-in/phone/key'),
+      headers: {'Accept': 'application/json', 'Content-Type': 'application/json'}, body: jsonEncode({'code': code, 'verifier': verifier})));
+    final key = json['key'];
+    if (key is! String || !Connection.keyForm.hasMatch(key)) throw const ApiException(Failure.rejected, 200);
+    return Connection.bearer(server: server, key: key);
+  }
+
   Future<Map<String, dynamic>> _call(Future<http.Response> Function() send, {Set<int> rejected = const {400, 413},
+    Duration timeout = _timeout}) => _answer(send, rejected: rejected, timeout: timeout);
+
+  static Future<Map<String, dynamic>> _answer(Future<http.Response> Function() send, {Set<int> rejected = const {400, 413},
     Duration timeout = _timeout}) async {
     final http.Response response;
     try {

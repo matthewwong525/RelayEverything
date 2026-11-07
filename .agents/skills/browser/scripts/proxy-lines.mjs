@@ -1,5 +1,5 @@
-// The first and upstream proxy lines: from the repo's keys, else this computer's saved files. Only the forwarder holds
-// them; the browser sees just the local forwarder.
+// The saved first and upstream proxy lines: from the repo's keys, else this computer's saved files. Only the
+// forwarder holds them; the browser sees just the local forwarder.
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { primaryRoot } from '../../memory/scripts/lib/primary-root.mjs';
 import { parseEnv } from '../../memory/scripts/lib/store.mjs';
 
-/** The repo key that holds the upstream proxy line, `[http://]login:password@host:port` (wiki/development/browser-proxy.md). */
+/** The repo key of the upstream proxy line, `[http://]login:password@host:port` (wiki/development/browser-proxy.md). */
 export const PROXY_KEY = 'BROWSE_UPSTREAM_PROXY';
 /** The line saved for the whole computer: the browser is shared, so a start from any repo uses it. */
 export const UPSTREAM_FILE = join(homedir(), '.wong-stack', 'camoufox', 'upstream-proxy');
@@ -21,15 +21,14 @@ export const FIRST_FILE = join(homedir(), '.wong-stack', 'camoufox', 'first-prox
 /** The old camofox browser's first proxy file, read when the new one is missing. */
 export const OLD_FIRST_FILE = join(homedir(), '.wong-stack', 'camofox', 'first-proxy');
 
-/** The forwarder's upstream from a proxy line, or null when it is blank or not that shape. The last `@`
- * splits the login from the address, so a password may hold `@` or `:`. With `loginOptional`, a line with no
- * `@` gives an address with no login. */
+/** The forwarder's route from a proxy line, or null when blank or not that shape. The last `@` splits the login, so a
+ * password may hold `@` or `:`; with `loginOptional`, a line with no `@` gives an address with no login. */
 export function parseUpstream(line, { loginOptional = false } = {}) {
   const text = line?.trim().replace(/^http:\/\//i, '').replace(/\/$/, '');
   if (!text || /^[a-z][\w+.-]*:\/\//i.test(text)) return null;
   const at = text.lastIndexOf('@');
   if (at < 0 && !loginOptional) return null;
-  const address = /^(\[[0-9a-f:]+\]|[^\s:/@\[\]]+):(\d+)$/i.exec(text.slice(at + 1));
+  const address = /^(\[[0-9a-f:]+\]|[^\s:/@[\]]+):(\d+)$/i.exec(text.slice(at + 1));
   const port = Number(address?.[2]);
   if (!address || port < 1 || port > 65535) return null;
   const host = address[1].replace(/^\[|\]$/g, '');
@@ -46,7 +45,9 @@ export const parseFirst = line => parseUpstream(line, { loginOptional: true });
 /** The key from the environment, else the primary worktree's `.env`; blank when neither holds it. */
 export function repoLine(env = process.env, envFile = primaryEnvFile(), key = PROXY_KEY) {
   if (env[key]?.trim()) return env[key].trim();
-  try { if (envFile && existsSync(envFile)) return parseEnv(readFileSync(envFile, 'utf8'))[key]?.trim() ?? ''; } catch { /* none */ }
+  try {
+    if (envFile && existsSync(envFile)) return parseEnv(readFileSync(envFile, 'utf8'))[key]?.trim() ?? '';
+  } catch { /* none */ }
   return '';
 }
 

@@ -57,12 +57,12 @@ To show you a page when its task is done, with no turn, the agent runs `browse.m
 
 ## Settings stay on this computer
 
-The window or link setting is in `~/.wong-stack/browser-settings.json`, which only you can read. No repo file holds it, so each computer keeps its own, and a teammate who pulls your repo gets none of yours. The setting applies to every repo on the computer. [The browser routes](browser-proxy.md#save-the-routes) keep their own files beside it.
+The window or link setting and [the proxy setting](browsing.md#the-proxy-setting) are in `~/.wong-stack/browser-settings.json`, which only you can read. No repo file holds them, so each computer keeps its own, and a teammate who pulls your repo gets none of yours. Each setting applies to every repo on the computer.
 
 ```text
-{ "window": true }
+{ "window": true, "proxy": false }
 ```
 
-`browse.mjs status` prints `BROWSE_WINDOW=` and [`BROWSE_NETWORK=`](browser-proxy.md#check-the-live-route), and says when the running browser started with another window setting.
+`browse.mjs status` prints `BROWSE_WINDOW=` and `BROWSE_PROXY=`, and says when the running browser started with other settings.
 
 Back to [browsing](browsing.md).

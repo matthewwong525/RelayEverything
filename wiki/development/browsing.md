@@ -46,11 +46,11 @@ A failed command prints one `BROWSE_ERROR=` line. A ref comes from the newest sn
 
 **The first start moves your old logins once.** It copies the cookies and site storage of the old camofox browser into the new profile, then writes a `migrated` file so it never copies again. It never copies a Facebook, Messenger, Instagram, or other Meta login: Meta can lock an account when its login shows up in another browser, so you sign in to those again.
 
-### The browser routes
+### The proxy setting
 
-**Every new start uses a local forwarding proxy automatically**, with no extra install or account. It keeps no browsing logs and tunnels secure traffic encrypted. Startup failure stops the browser; stopping the browser closes its proxy.
+**The proxy is off unless you turn it on.** The browser goes straight to sites. If a site such as UPS does not load, say *turn the browser proxy on*: the agent runs `browse.mjs proxy on`, which prints `BROWSE_PROXY=on`. The browser then goes through a local forwarding proxy on this computer, with no extra install or account. It keeps no browsing logs and tunnels secure traffic encrypted. With the proxy on, a proxy that fails to start stops the browser's start; stopping the browser closes its proxy. `proxy off` turns it off, and `proxy` alone prints the setting. The setting [stays on this computer](browser-window.md#settings-stay-on-this-computer).
 
-It goes out through [the browser routes](browser-proxy.md): a first proxy, such as your home, then an upstream proxy, then this computer's own network. With no route saved, it uses this computer's own network, so sites see the computer's country. Its timezone and English follow the address that sites see. Sites can still [refuse](#when-a-site-refuses-the-browser).
+With the proxy on and [saved proxies](browser-proxy.md), such as one at your home and a paid backup, the browser goes through them first, so sites see your home address. Otherwise it uses this computer's own network, so sites see the computer's country. Its timezone and English follow the address sites see. It needs no WARP, relay, or phone connection, and chooses no country. Sites can still [refuse](#when-a-site-refuses-the-browser).
 
 A running browser keeps its pages and logins, and takes a setting or an update only once you stop it and a later errand starts it. Never restart it for a setting or an update.
 
@@ -116,9 +116,9 @@ Some sites turn the browser away, keep it on a *Verify you are human* page as Do
 
 1. **Say so in one line.** *DoorDash won't let my browser in.*
 2. **Stop browsing that site.** No other browser and no second link.
-3. **Give [steps to finish it yourself](#steps-for-you-to-finish)**, with the page's link.
+3. **Give [steps to finish it yourself](#steps-for-you-to-finish)**, with the page's link. With [the proxy](#the-proxy-setting) off, the first step is: *say turn the browser proxy on, then ask me to restart the browser and try again*. A site such as UPS loaded only through it.
 
-A check that clears by itself in a few seconds is not a refusal: the agent reads the page again first. It never moves to another network address to get past a refusal, uses a check-solving service, or solves a check that asks whether a person is there: [the browser routes](browser-proxy.md) are set before, not changed for one site. One refusal ends the try: repeats can lock your account.
+A check that clears by itself in a few seconds is not a refusal: the agent reads the page again first. It never routes its traffic through a hired or borrowed network address, uses a check-solving service, or solves a check that asks whether a person is there. One refusal ends the try: repeats can lock your account.
 
 ## Saved details
 

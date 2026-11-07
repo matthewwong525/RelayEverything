@@ -22,12 +22,17 @@ Send the input as a JSON body.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `clientId` | string | yes | The phone's own id for the note, so a resend is stored once. |
-| `text` | string | yes | What the note says. |
+| `text` | string | yes | What the note says. It can be empty only when the note has files. |
 | `createdAt` | integer | yes | When it was written, in Unix milliseconds. |
 | `lat` | number | no | Where it was written: latitude. Send it with lon. |
 | `lon` | number | no | Where it was written: longitude. Send it with lat. |
 | `accuracy` | number | no | How sure the phone was of the place, in meters. |
 | `place` | string | no | The place's name from the phone's address lookup. |
+| `attachments` | array of object | no | The note's files, up to 10: only their names, types and sizes. Send each file's bytes after, with POST attachments. |
+| `attachments[].id` | string | yes | The phone's own id for the file: its upload names it. |
+| `attachments[].name` | string | yes | The file's name, such as `warranty.pdf`. |
+| `attachments[].type` | string | yes | The file's content type, such as `application/pdf`; empty when the phone does not know it. |
+| `attachments[].size` | integer | yes | The file's size in bytes, up to 25 MB. |
 
 ### Output
 
@@ -138,6 +143,12 @@ Send the input as query parameters.
 | `notes[].place.accuracy` | number or null | yes |  |
 | `notes[].place.name` | string or null | yes |  |
 | `notes[].place.from` | "phone" or "history" | yes |  |
+| `notes[].attachments` | array of object | yes | The note's files, oldest first. |
+| `notes[].attachments[].id` | string | yes |  |
+| `notes[].attachments[].name` | string | yes |  |
+| `notes[].attachments[].type` | string | yes |  |
+| `notes[].attachments[].size` | number | yes |  |
+| `notes[].attachments[].ready` | boolean | yes | True once the phone has sent the file: then GET attachment opens it. |
 | `next` | number or null | yes |  |
 | `nextId` | string or null | yes |  |
 
@@ -867,5 +878,7 @@ Send the input as a JSON body.
 ## Routes with their own page
 
 - `POST /apps/relay/api/pebble`: [Take a ring note from the Pebble app](../pebble-webhook/)
+- `POST /apps/relay/api/attachments`: [Send a note's file, after its note](../files/#send-a-file)
 - `GET /apps/relay/api/audio`: [Play a note's recording](../recordings/)
+- `GET /apps/relay/api/attachment`: [Open a note's file](../files/#open-a-file)
 - `POST /apps/relay/api/chats`: [Send a Claude Code chat's new messages, with a chat key](../../connections/claude-code/#what-the-server-receives)

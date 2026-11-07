@@ -35,11 +35,11 @@ Every message is a `POST` with a JSON body in one envelope:
 }
 ```
 
-`timestamp` is when Relay Everything stored what the message holds. Times are ISO 8601, in UTC. [`v1.schema.json`](../../webhooks/v1.schema.json) is the JSON Schema of every message. A change that breaks a receiver gets a new `version`.
+`timestamp` is when Relay Everything stored what the message holds. Times are ISO 8601, in UTC. [`v1.schema.json`](../../webhooks/v1.schema.json) is the JSON Schema of every message. A change that breaks a receiver gets a new `version`. Within a version, a message can get a new optional field, such as a note's `attachments`. So let your receiver keep a field it does not know, and not refuse the message.
 
 | `type` | When | `data` holds |
 |---|---|---|
-| `note.created` | A note reaches your server. | `note`, with its words, time, place, device and recording |
+| `note.created` | A note reaches your server. | `note`, with its words, time, place, device, recording, and the names of its files |
 | `note.updated` | A ring note gets its place from a later location batch. | `note`, without `audio` |
 | `health.samples` | A phone sends health samples. | `samples`: up to 500 |
 | `location.points` | A phone sends location points. | `points`: up to 500 |
@@ -68,6 +68,25 @@ Every message is a `POST` with a JSON body in one envelope:
 ```
 
 `source` is `ring` or `typed`. `place` is null when the note has none. `from` says where the place came from: `phone` for a typed note's own place, `history` for the location point nearest a ring note. `audio` is a ring note's recording in base64, or null.
+
+### A note's files
+
+A note from the phone can hold up to 10 files, such as photos and PDFs. Only a note with files has an `attachments` list in its `note.created` message. A note without files gets the message above, with no `attachments` field.
+
+```json
+"attachments": [
+  { "id": "3f9c2a7be1d04c58a6f0b2e4d7c91a05", "name": "warranty.pdf", "content_type": "application/pdf", "size": 245760 }
+]
+```
+
+| Field | Holds |
+|---|---|
+| `id` | The file's id, from the phone. A resend has the same id. |
+| `name` | The file's name, such as `warranty.pdf` |
+| `content_type` | Its type, such as `application/pdf` or `image/jpeg` |
+| `size` | Its size in bytes, up to 25 MB |
+
+The message holds no file bytes, because a file can be too big for one message. Open or download a file on your Relay Everything page. The message goes when the note is stored, so a file can arrive in your space after the message.
 
 ### `note.updated`
 
@@ -150,6 +169,13 @@ CREATE TABLE relay_notes (
   place text,
   audio bytea
 );
+CREATE TABLE relay_note_attachments (
+  id text PRIMARY KEY,
+  note_id uuid NOT NULL REFERENCES relay_notes (id),
+  name text NOT NULL,
+  content_type text NOT NULL,
+  size bigint NOT NULL
+);
 CREATE TABLE relay_health_samples (
   id bigint PRIMARY KEY,
   device_id text NOT NULL,
@@ -171,7 +197,7 @@ CREATE TABLE relay_location_points (
 );
 ```
 
-Save a note with `INSERT ... ON CONFLICT (id) DO UPDATE`, and keep the stored `audio` when a `note.updated` has none.
+Save a note with `INSERT ... ON CONFLICT (id) DO UPDATE`, and keep the stored `audio` when a `note.updated` has none. Save each of a note's `attachments` by its `id` too.
 
 ## An example receiver
 

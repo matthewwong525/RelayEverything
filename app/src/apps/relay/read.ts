@@ -2,7 +2,12 @@ import { useCallback, useEffect, useState } from 'react'
 
 // Relay's own routes, read in the shapes app/worker/apps/relay/ writes.
 export type Place = { lat: number; lon: number; accuracy: number | null; name: string | null; from: 'phone' | 'history' }
-export type Note = { id: string; source: 'ring' | 'typed'; text: string; recordedAt: number; device: string; audio: boolean; place: Place | null }
+/** A note's file: `ready` once the phone has sent it. */
+export type NoteFile = { id: string; name: string; type: string; size: number; ready: boolean }
+export type Note = {
+  id: string; source: 'ring' | 'typed'; text: string; recordedAt: number; device: string; audio: boolean; place: Place | null
+  attachments: NoteFile[]
+}
 export type Timeline = { notes: Note[]; next: number | null; nextId: string | null }
 export type Summary = {
   day: string; notes: number; steps: number; sleepMinutes: number
@@ -106,3 +111,10 @@ export function when(ms: number, now = Date.now()) {
 /** Where a note was taken: the phone's place name, or its coordinates. */
 export const where = (place: Place | null) =>
   place === null ? null : place.name ?? `${place.lat.toFixed(4)}, ${place.lon.toFixed(4)}`
+
+/** A file's size as the page shows it, such as 240 KB or 1.2 MB. */
+export function sizeOf(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}

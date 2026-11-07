@@ -73,6 +73,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.runAsync(pumpEventQueue);
+    await tester.runAsync(relay.settled);
     await tester.pumpAndSettle();
     expect(find.text('Call the PCB fab about the flex stiffener'), findsOneWidget);
     expect(find.textContaining('Pinned'), findsOneWidget);

@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android 12 and later: the same as backup_rules.xml. -->
+<!-- Android 12 and later: the same as backup_rules.xml. A move to a new phone by cable takes a note's files. -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="file" path="speech-model/"/>
         <exclude domain="file" path="voice/"/>
+        <exclude domain="file" path="attachments/"/>
     </cloud-backup>
     <device-transfer>
         <exclude domain="file" path="speech-model/"/>

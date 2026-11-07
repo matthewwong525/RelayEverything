@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../data/connection.dart';
 import '../data/sender.dart';
@@ -20,7 +21,7 @@ Future<void> wakeRound() async {
     final store = openStore();
     try {
       done = await backgroundRound(store, connection: await KeyVault().read(), health: PhoneHealth(), sender: Sender(),
-        native: Platform.isIOS ? PhoneBackground() : null, places: PhonePlaces());
+        native: Platform.isIOS ? PhoneBackground() : null, places: PhonePlaces(), folder: getApplicationSupportDirectory);
     } finally {
       await store.close();
     }

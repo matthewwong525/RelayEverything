@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/app.dart';
@@ -81,7 +83,13 @@ class FakeRelay extends Relay {
   }
 
   @override Future<void> sync() async => calls.add('sync');
-  @override Future<void> addNote(String text) async => calls.add('note $text');
+  @override
+  Future<String?> addNote(String text, {List<NewFile> files = const []}) async {
+    calls.add('note $text${files.isEmpty ? '' : ' + ${[for (final file in files) file.name].join(', ')}'}');
+    return null;
+  }
+
+  @override Future<void> openFile(EntryFile file) async => calls.add('open ${file.name}');
 
   @override ModelState speechModel = ModelState.ready;
   @override double modelProgress = 0;
@@ -648,6 +656,118 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Get the speech model?'), findsOneWidget);
       expect(relay.calls, ['remove model', 'ask model']);
+    });
+  });
+
+  group('files', () {
+    testWidgets('the paperclip adds photos and files as chips: one too big is left out, a chip removes, and Save keeps them',
+        (tester) async {
+      final picks = <bool>[];
+      Future<List<NewFile>> picker({required bool photos}) async {
+        picks.add(photos);
+        return photos
+          ? [const NewFile(path: '/picked/a.jpg', name: 'receipt.jpg', size: 1258291)]
+          : [const NewFile(path: '/picked/b.pdf', name: 'warranty.pdf', size: 245760),
+              const NewFile(path: '/picked/c.mov', name: 'video.mov', size: 41943040)];
+      }
+      await tester.pumpWidget(RelayApp(relay: relay, picker: picker));
+      await tester.tap(find.text('New note'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add photo or file'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Photos'));
+      await tester.pumpAndSettle();
+      expect(find.text('receipt.jpg · 1.2 MB'), findsOneWidget);
+      // A note can be files alone.
+      expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Save')).onPressed, isNotNull);
+      await tester.tap(find.text('Add photo or file'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Files'));
+      await tester.pumpAndSettle();
+      expect(find.text('warranty.pdf · 240 KB'), findsOneWidget);
+      expect(find.byTooltip('Remove video.mov'), findsNothing);
+      expect(find.text('video.mov is over 25 MB, so it was not added.'), findsOneWidget);
+      await tester.tap(find.byTooltip('Remove receipt.jpg'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('receipt.jpg'), findsNothing);
+      await tester.enterText(find.byType(TextField), 'Receipt for the desk lamp');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['note Receipt for the desk lamp + warranty.pdf']);
+      expect(picks, [true, false]);
+    });
+
+    testWidgets('a note shows its pictures small and other files by name and size; a tap opens one', (tester) async {
+      relay.entries = [
+        Entry(text: 'Receipt for the desk lamp', at: now, files: const [
+          EntryFile(name: 'receipt.jpg', type: 'image/jpeg', size: 1258291, path: '/nowhere/receipt.jpg'),
+          EntryFile(name: 'warranty.pdf', type: 'application/pdf', size: 245760, path: '/nowhere/warranty.pdf'),
+        ]),
+        Entry(text: '', at: now, files: const [EntryFile(name: 'only.pdf', type: 'application/pdf', size: 512, path: '/nowhere/only.pdf')]),
+      ];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.pump();
+      expect(find.byTooltip('receipt.jpg'), findsOneWidget);
+      expect(find.text('receipt.jpg'), findsNothing);
+      expect([find.text('warranty.pdf'), find.text('240 KB'), find.text('only.pdf'), find.text('512 B')],
+        everyElement(findsOneWidget));
+      // A note of files alone shows no words, and no words about a recording.
+      expect(find.text('No words, only the recording.'), findsNothing);
+      await tester.tap(find.text('warranty.pdf'));
+      await tester.tap(find.byTooltip('receipt.jpg'));
+      expect(relay.calls, ['open warranty.pdf', 'open receipt.jpg']);
+    });
+  });
+
+  group('start a voice note from Shortcuts', () {
+    Future<StreamController<void>> openWithRequest(WidgetTester tester) async {
+      final requests = StreamController<void>();
+      addTearDown(requests.close);
+      await tester.pumpWidget(RelayApp(relay: relay, voiceRequests: requests.stream));
+      requests.add(null);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      return requests;
+    }
+
+    testWidgets('opens the recording sheet and records at once; Stop saves', (tester) async {
+      await openWithRequest(tester);
+      expect(find.text('Recording'), findsOneWidget);
+      expect(find.text('Talk now. Tap Stop to save, or Cancel.'), findsOneWidget);
+      expect(relay.calls, ['voice start']);
+      await tester.tap(find.text('Stop'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('Recording'), findsNothing);
+      expect(relay.calls, ['voice start', 'voice end']);
+    });
+
+    testWidgets('Cancel keeps nothing', (tester) async {
+      await openWithRequest(tester);
+      await tester.tap(find.text('Cancel'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('Recording'), findsNothing);
+      expect(relay.calls, ['voice start', 'voice cancel']);
+    });
+
+    testWidgets('a recording too short to keep says so', (tester) async {
+      relay.endProblem = 'Hold the button while you talk, then let go.';
+      await openWithRequest(tester);
+      await tester.tap(find.text('Stop'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('Too short to keep. Nothing was saved.'), findsOneWidget);
+    });
+
+    testWidgets('with no speech model, it asks to get it first, as Hold to talk does', (tester) async {
+      relay.speechModel = ModelState.missing;
+      await openWithRequest(tester);
+      expect(find.text('Get the speech model?'), findsOneWidget);
+      expect(find.text('Recording'), findsNothing);
+      await tester.tap(find.text('Not now'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['ask model', 'not now']);
     });
   });
 }

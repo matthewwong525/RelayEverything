@@ -3,7 +3,8 @@
 import { spaceOf, vouch, type Files, type PersonSpace, type SpaceEnv } from "../space.ts";
 import { MINUTE, type Db, type Env } from "../store.ts";
 import { checkAddress } from "./address.ts";
-import { healthSamples, locationPoints, noteCreated, noteUpdated, type HealthRow, type LocationRow, type NoteRow } from "./format.ts";
+import { healthSamples, locationPoints, noteCreated, noteUpdated, type AttachmentRow, type HealthRow, type LocationRow,
+  type NoteRow } from "./format.ts";
 import { BEHIND, TAKES } from "./log.ts";
 import { base64, signedHeaders } from "./sign.ts";
 
@@ -106,7 +107,11 @@ async function bodyOf(files: Files, db: Db, group: Entry[]): Promise<{ type: str
   if (!row) return "skip";
   if (first.kind === "note.updated") return noteUpdated(row, at);
   const audio = await audioOf(files, row);
-  return audio === "wait" ? "wait" : noteCreated(row, audio, at);
+  if (audio === "wait") return "wait";
+  // The message names the files and never waits for their bytes, as it carries none.
+  const { results } = await db.prepare("SELECT id, name, content_type, size FROM relay_attachments WHERE note_id = ? ORDER BY rowid")
+    .bind(row.id).all<AttachmentRow>();
+  return noteCreated(row, audio, at, results);
 }
 
 /** One POST, with no redirects followed and 15 seconds to answer. */

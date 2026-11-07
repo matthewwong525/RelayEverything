@@ -9,7 +9,7 @@ const defaultServer = 'https://app.relayeverything.com';
 /// made (`rek_…`, sent as `Authorization: Bearer`), or an older Cloudflare Access service token (sent in Access's two
 /// headers). The phone takes both, so a phone keeps sending while its person moves to a new key.
 class Connection {
-  /// An Access service token, made by `relay-device-key.mjs create`.
+  /// An older Access service token, from before the page made keys.
   const Connection({required this.server, required String this.clientId, required String this.clientSecret}) : key = null;
 
   /// A key from *Add a device* on the Relay Everything page.
@@ -30,7 +30,7 @@ class Connection {
   Map<String, String> get headers =>
     key != null ? {'Authorization': 'Bearer $key'} : {'CF-Access-Client-Id': clientId!, 'CF-Access-Client-Secret': clientSecret!};
 
-  /// The code the Relay Everything page or `relay-device-key.mjs create` shows as a QR code, scanned or pasted. It
+  /// The code the Relay Everything page shows as a QR code, scanned or pasted. It
   /// holds either `key` or both `clientId` and `clientSecret`, never both forms. Null when it is not one.
   static Connection? parse(String text) {
     try {

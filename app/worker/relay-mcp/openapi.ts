@@ -11,6 +11,8 @@ const note = z.strictObject({
   recordedAt: at, device: z.string().describe("The name of the device that sent it."), audio: z.boolean().describe("Whether it has a recording."),
   place: z.strictObject({ lat: z.number(), lon: z.number(), accuracy: z.number().nullable(), name: z.string().nullable(),
     from: z.enum(["phone", "history"]).describe("phone: the phone's place at the time; history: matched from the location history.") }).nullable(),
+  attachments: z.array(z.strictObject({ id: z.string(), name: z.string(), type: z.string(), size: z.number().describe("In bytes."),
+    ready: z.boolean().describe("Whether the file's bytes have arrived.") })).describe("The note's files: names, types and sizes, never the bytes."),
 });
 const visit = z.strictObject({ name: z.string(), lat: z.number(), lon: z.number(), arrived: at, left: at });
 const totals = { steps: z.number(), sleepMinutes: z.number(), heartRate: z.strictObject({ min: z.number(), max: z.number(), average: z.number() }).nullable(),

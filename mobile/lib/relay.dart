@@ -2,16 +2,18 @@ import 'package:flutter/foundation.dart';
 
 import 'dart:async';
 
+import 'data/attachments.dart';
 import 'data/settings.dart';
 import 'voice/model.dart';
 
+export 'data/attachments.dart' show NewFile, sizeLabel;
 export 'data/settings.dart' show LocationMode, Settings;
 export 'voice/model.dart' show ModelState, ModelProblem;
 
 /// One row of the timeline: a note typed or said on this phone.
 class Entry {
   const Entry({required this.text, required this.at, this.place, this.sent = false, this.waiting = false, this.voice = false,
-    this.writing = false, this.recording, this.length});
+    this.writing = false, this.recording, this.length, this.files = const []});
 
   final String text;
   final DateTime at;
@@ -28,6 +30,23 @@ class Entry {
   /// The recording on this phone, to play: [Relay.play] takes it.
   final String? recording;
   final Duration? length;
+
+  /// The note's files on this phone, in the order they were added.
+  final List<EntryFile> files;
+}
+
+/// One file on a note, kept on this phone.
+class EntryFile {
+  const EntryFile({required this.name, required this.type, required this.size, required this.path});
+
+  final String name;
+  final String type;
+  final int size;
+  /// The app's copy, as a full path.
+  final String path;
+
+  /// A picture shows small in the note; any other file shows as a row with its name and size.
+  bool get picture => type.startsWith('image/');
 }
 
 enum SyncStatus { idle, syncing, synced, offline, refused }
@@ -77,7 +96,11 @@ abstract class Relay extends ChangeNotifier {
   /// Forgets the key and turns sending off.
   Future<void> disconnect();
   Future<void> sync();
-  Future<void> addNote(String text);
+  /// Keeps a note with words, files, or both. Returns the words to show for files left out, such as one over 25 MB,
+  /// or for a note with nothing in it; null when all of it was kept.
+  Future<String?> addNote(String text, {List<NewFile> files = const []});
+  /// Opens a note's file in an app on the phone.
+  Future<void> openFile(EntryFile file);
 
   /// The speech model voice notes need, and its download's progress from 0 to 1.
   ModelState get speechModel;

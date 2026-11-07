@@ -196,6 +196,40 @@
                                 "type": "null"
                               }
                             ]
+                          },
+                          "attachments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string"
+                                },
+                                "size": {
+                                  "type": "number",
+                                  "description": "In bytes."
+                                },
+                                "ready": {
+                                  "type": "boolean",
+                                  "description": "Whether the file's bytes have arrived."
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name",
+                                "type",
+                                "size",
+                                "ready"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "description": "The note's files: names, types and sizes, never the bytes."
                           }
                         },
                         "required": [
@@ -206,7 +240,8 @@
                           "recordedAt",
                           "device",
                           "audio",
-                          "place"
+                          "place",
+                          "attachments"
                         ],
                         "additionalProperties": false
                       }
@@ -549,6 +584,40 @@
                         }
                       ]
                     },
+                    "attachments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "type": "number",
+                            "description": "In bytes."
+                          },
+                          "ready": {
+                            "type": "boolean",
+                            "description": "Whether the file's bytes have arrived."
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "type",
+                          "size",
+                          "ready"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "The note's files: names, types and sizes, never the bytes."
+                    },
                     "placesNearby": {
                       "type": "array",
                       "items": {
@@ -657,6 +726,7 @@
                     "device",
                     "audio",
                     "place",
+                    "attachments",
                     "placesNearby",
                     "day"
                   ],

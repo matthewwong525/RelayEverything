@@ -65,8 +65,8 @@ function dbOf(stub: Pick<Stub, "query" | "batch">): Db {
 const encoder = new TextEncoder();
 const IV = 12;
 
-/** A person's recordings in the file store: each under their own folder, sealed with their space's file key and its
- *  own name, so the store alone, or a copy under another name, never opens. */
+/** A person's recordings and note files in the file store: each under their own folder, sealed with their space's
+ *  file key and its own name, so the store alone, or a copy under another name, never opens. */
 function filesOf(bucket: R2Bucket, stub: Pick<Stub, "fileKey">, personId: string) {
   const prefix = `people/${personId}/`;
   let key: Promise<CryptoKey> | undefined;
@@ -80,11 +80,11 @@ function filesOf(bucket: R2Bucket, stub: Pick<Stub, "fileKey">, personId: string
     return out;
   };
   const files = {
-    /** The file store's name for a note's recording. */
-    nameOf: (noteId: string) => `${prefix}${noteId}`,
-    /** Seals a recording and stores it under the person's folder; answers its name for the note's row. */
-    async put(noteId: string, bytes: ArrayBuffer): Promise<string> {
-      const name = files.nameOf(noteId);
+    /** The file store's name for a note's recording (its note id), or a note's file (`attachments/<id>`). */
+    nameOf: (item: string) => `${prefix}${item}`,
+    /** Seals a recording or a file and stores it under the person's folder; answers its name for the row. */
+    async put(item: string, bytes: ArrayBuffer): Promise<string> {
+      const name = files.nameOf(item);
       await bucket.put(name, await seal(name, bytes), { httpMetadata: { contentType: "application/octet-stream" } });
       return name;
     },

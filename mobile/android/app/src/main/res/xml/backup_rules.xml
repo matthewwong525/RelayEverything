@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Android 11 and earlier. The speech model is 57 MB and can be got again; lib/voice/model.dart keeps it in
      speech-model/. Recordings never leave the phone; lib/voice/recorder.dart keeps them in voice/. Either can pass
-     Android's 25 MB backup limit, which would stop the whole backup. -->
+     Android's 25 MB backup limit, which would stop the whole backup. A note's files, in attachments/, can too. -->
 <full-backup-content>
     <exclude domain="file" path="speech-model/"/>
     <exclude domain="file" path="voice/"/>
+    <exclude domain="file" path="attachments/"/>
 </full-backup-content>

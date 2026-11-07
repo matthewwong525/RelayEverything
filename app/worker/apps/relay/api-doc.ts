@@ -12,6 +12,8 @@ type HandPage = { summary: string; page: string };
 const HAND_PAGES: Record<string, HandPage> = {
   "POST pebble": { summary: "Take a ring note from the Pebble app", page: "../pebble-webhook/" },
   "GET audio": { summary: "Play a note's recording", page: "../recordings/" },
+  "POST attachments": { summary: "Send a note's file, after its note", page: "../files/#send-a-file" },
+  "GET attachment": { summary: "Open a note's file", page: "../files/#open-a-file" },
   "POST chats": { summary: "Send a Claude Code chat's new messages, with a chat key", page: "../../connections/claude-code/#what-the-server-receives" },
 };
 const ENCODING: Record<Action["encoding"], string> = {

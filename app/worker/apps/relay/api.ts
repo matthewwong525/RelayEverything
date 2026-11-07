@@ -3,6 +3,7 @@
 import type { Route } from "../../api/contract.ts";
 import { account, accountDelete } from "./account.ts";
 import { aiAppDisconnect, aiApps } from "./ai-apps.ts";
+import { attachment, attachmentAdd } from "./attachments.ts";
 import { audio } from "./audio.ts";
 import { chatDelete, chatList, chatRead } from "./chat-read.ts";
 import { chats, chatSaves } from "./chats.ts";
@@ -19,12 +20,14 @@ import { consume } from "./webhooks/send.ts";
 export const routes = new Map<string, Route>([
   ["POST pebble", pebble],
   ["POST notes", notes],
+  ["POST attachments", attachmentAdd],
   ["POST health", health],
   ["POST locations", locations],
   ["GET key", key],
   ["GET timeline", timeline],
   ["GET summary", summary],
   ["GET audio", audio],
+  ["GET attachment", attachment],
   ["GET webhooks", list],
   ["POST webhooks", add],
   ["POST webhooks/update", update],

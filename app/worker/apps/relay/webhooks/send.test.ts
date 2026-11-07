@@ -286,3 +286,11 @@ it("sends Ben's note only to Ben's webhook, never to Ana's", async () => {
   expect([webhook("ana-hook").sent_seq, rows("relay_webhooks", BEN)[0].sent_seq]).toEqual([0, 1]);
   expect(rows("relay_notes")).toEqual([]);
 });
+
+it("names a note's files in its message at once, without waiting for their bytes", async () => {
+  hook();
+  await call(phone, "POST", "notes", { clientId: "note-files-01", text: "Receipt", createdAt: NOW - MINUTE,
+    attachments: [{ id: "file-pdf-0001", name: "warranty.pdf", type: "application/pdf", size: 245_760 }] });
+  await deliver(wakeUp("hook-1"));
+  expect(bodies()[0].data.note.attachments).toEqual([{ id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 245_760 }]);
+});

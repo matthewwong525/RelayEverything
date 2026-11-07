@@ -1,15 +1,15 @@
 /// <reference types="node" />
 import { readdirSync, readFileSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { expect, it } from "vitest";
-import { MIGRATIONS } from "../../spaces-worker";
+import { migrate, MIGRATIONS } from "../../spaces-worker";
 
 // D1 keeps only the directory; each person's data lives in their own space. wiki/relay-spaces.md
 const folder = new URL("../../../../schema/migrations/", import.meta.url);
 const DIRECTORY = ["relay_people", "relay_logins", "relay_sessions", "relay_sign_in_codes", "relay_keys", "relay_connect_codes",
   "relay_phone_codes"];
 const PERSON = ["relay_devices", "relay_notes", "relay_health", "relay_locations", "relay_chats", "relay_chat_messages",
-  "relay_chat_saves", "relay_outbox", "relay_webhooks", "relay_webhook_attempts"];
+  "relay_chat_saves", "relay_outbox", "relay_webhooks", "relay_webhook_attempts", "relay_attachments"];
 
 const tables = (sql: DatabaseSync) => (sql.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'relay\\_%' ESCAPE '\\'")
   .all() as { name: string }[]).map(row => row.name).sort();
@@ -28,6 +28,28 @@ it("gives a new space each person's tables and none of the directory's", () => {
   expect(tables(space)).toEqual([...PERSON, "relay_device_secrets"].sort());
 });
 
+it("gives a space made before files the files table, once, and keeps its notes", () => {
+  const sql = new DatabaseSync(":memory:");
+  sql.exec("PRAGMA foreign_keys = ON");
+  // A Durable Object's storage, as much of it as migrate uses.
+  const run = (query: string, params: SQLInputValue[]) => /^\s*SELECT/i.test(query) ? sql.prepare(query).all(...params)
+    : params.length ? (sql.prepare(query).run(...params), []) : (sql.exec(query), []);
+  const storage = { sql: { exec: (query: string, ...params: SQLInputValue[]) => { const rows = run(query, params); return { toArray: () => rows }; } },
+    transactionSync: <T>(run: () => T) => run() } as unknown as Parameters<typeof migrate>[0];
+  sql.exec("CREATE TABLE space_migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)");
+  for (const [name, text] of MIGRATIONS.slice(0, 3)) {
+    sql.exec(text);
+    sql.prepare("INSERT INTO space_migrations VALUES (?, 0)").run(name);
+  }
+  sql.exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at) VALUES ('d-phone', 'Phone', 'c', '', 0);
+    INSERT INTO relay_notes (id, device_id, source, text, recorded_at, created_at) VALUES ('n1', 'd-phone', 'typed', 'Kept', 0, 0)`);
+  migrate(storage);
+  migrate(storage);
+  expect(tables(sql)).toContain("relay_attachments");
+  expect(sql.prepare("SELECT name FROM space_migrations ORDER BY name").all().map(row => row.name)).toEqual(MIGRATIONS.map(([name]) => name));
+  expect(sql.prepare("SELECT text FROM relay_notes").all()).toEqual([{ text: "Kept" }]);
+});
+
 /** Runs `text` as `migrate` does: one transaction, which the deferred foreign-key check closes. */
 const inTransaction = (sql: DatabaseSync, text: string) => {
   sql.exec("BEGIN");
@@ -40,9 +62,9 @@ const KEEP = ["SELECT * FROM relay_devices ORDER BY id", "SELECT * FROM relay_no
 it("widens a space's devices to API keys and connected apps, keeping every device and what points at it", () => {
   const space = new DatabaseSync(":memory:");
   space.exec("PRAGMA foreign_keys = ON");
-  const [last, ...earlier] = [...MIGRATIONS].reverse();
-  expect(last[0]).toBe("0003_api_devices");
-  for (const [, text] of earlier.reverse()) inTransaction(space, text);
+  const at = MIGRATIONS.findIndex(([name]) => name === "0003_api_devices");
+  const last = MIGRATIONS[at];
+  for (const [, text] of MIGRATIONS.slice(0, at)) inTransaction(space, text);
   space.exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at, reaches) VALUES
       ('d-phone', 'Phone', 'rek:d-phone', '', 1, NULL, 'phone'), ('d-laptop', 'Laptop', 'rek:d-laptop', '', 2, 3, 'chats');
     INSERT INTO relay_device_secrets (device_id, pebble_secret) VALUES ('d-phone', 'secret');
@@ -56,7 +78,7 @@ it("widens a space's devices to API keys and connected apps, keeping every devic
   inTransaction(space, last[1]);
   expect(KEEP.map(query => all(space, query))).toEqual(before);
   expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
-  expect(tables(space)).toEqual([...PERSON, "relay_device_secrets"].sort());
+  expect(tables(space)).toEqual([...PERSON.filter(name => name !== "relay_attachments"), "relay_device_secrets"].sort());
   space.exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-api', 'Script', 'rek:d-api', '', 1, 'api'),
     ('d-app', 'Claude', 'app:d-app', '', 1, 'app')`);
   // The table still guards its notes: a note from no device, or a made-up reach, is refused.

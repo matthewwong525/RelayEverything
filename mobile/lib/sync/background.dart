@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:flutter/widgets.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:workmanager/workmanager.dart';
 
 import '../data/connection.dart';
@@ -30,7 +31,7 @@ void backgroundSync() {
     final store = openStore();
     try {
       return await backgroundRound(store, connection: connection, health: PhoneHealth(), sender: Sender(),
-        native: Platform.isIOS ? PhoneBackground() : null, places: PhonePlaces());
+        native: Platform.isIOS ? PhoneBackground() : null, places: PhonePlaces(), folder: getApplicationSupportDirectory);
     } on Exception {
       return false;
     } finally {
@@ -42,7 +43,7 @@ void backgroundSync() {
 /// One background round, apart from the plugin that runs it so a test can drive it: the hourly task and an iPhone
 /// wake share it. With [native], it first moves the points Swift kept. True when it is done.
 Future<bool> backgroundRound(Store store, {required Connection? connection, required HealthSource health, required Sender sender,
-  NativeBackground? native, Places? places, DateTime? now}) async {
+  NativeBackground? native, Places? places, DateTime? now, Future<Directory> Function()? folder}) async {
   final settings = Settings.decode(await store.get(settingsKey), hasKey: connection != null);
   final api = sender.api(settings, connection);
   if (api == null) return true;
@@ -57,7 +58,7 @@ Future<bool> backgroundRound(Store store, {required Connection? connection, requ
     }
   }
   await store.queuePoints();
-  return (await flush(store, api)).failure == null && read;
+  return (await flush(store, api, folder: folder)).failure == null && read;
 }
 
 /// Turns the hourly round on while sending and history or health are on, and off otherwise.

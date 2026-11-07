@@ -71,18 +71,7 @@ class _HoldToTalkButtonState extends State<HoldToTalkButton> {
     unawaited(_relay.cancelVoiceNote());
   }
 
-  Future<void> _whenNotReady() async {
-    if (_relay.speechModel == ModelState.downloading) {
-      return _say(context, 'The speech model is still coming. You can type notes now.');
-    }
-    _relay.askSpeechModel();
-    final yes = await showDialog<bool>(context: context, builder: (context) => ModelDialog(bytes: _relay.modelBytes));
-    if (yes == true) {
-      unawaited(_relay.getSpeechModel());
-    } else {
-      _relay.notNowSpeechModel();
-    }
-  }
+  Future<void> _whenNotReady() => askForModel(context, _relay);
 
   @override
   Widget build(BuildContext context) {
@@ -101,6 +90,107 @@ class _HoldToTalkButtonState extends State<HoldToTalkButton> {
         style: OutlinedButton.styleFrom(minimumSize: const Size(56, 56), backgroundColor: Theme.of(context).colorScheme.surface),
         icon: const Icon(Icons.mic_none),
         label: const Text('Hold to talk'),
+      ),
+    );
+  }
+}
+
+/// With no speech model yet: says it is coming, or asks to get it, as a first voice note does.
+Future<void> askForModel(BuildContext context, Relay relay) async {
+  if (relay.speechModel == ModelState.downloading) {
+    return _say(context, 'The speech model is still coming. You can type notes now.');
+  }
+  relay.askSpeechModel();
+  final yes = await showDialog<bool>(context: context, builder: (context) => ModelDialog(bytes: relay.modelBytes));
+  if (yes == true) {
+    unawaited(relay.getSpeechModel());
+  } else {
+    relay.notNowSpeechModel();
+  }
+}
+
+/// *Start a voice note* from Shortcuts or the Action button: the recording sheet, or, with no speech model yet, the
+/// same question a first press of *Hold to talk* asks.
+Future<void> recordFromShortcut(BuildContext context, Relay relay) async {
+  if (relay.speechModel != ModelState.ready) return askForModel(context, relay);
+  await showModalBottomSheet<void>(context: context, isDismissible: false, enableDrag: false,
+    builder: (_) => RecordingSheet(relay: relay));
+}
+
+/// Tap to stop: it starts recording as it opens. *Stop* saves the note and writes its words; *Cancel* keeps nothing.
+class RecordingSheet extends StatefulWidget {
+  const RecordingSheet({super.key, required this.relay});
+
+  final Relay relay;
+
+  @override
+  State<RecordingSheet> createState() => _RecordingSheetState();
+}
+
+class _RecordingSheetState extends State<RecordingSheet> {
+  late final Timer _tick;
+  bool _done = false;
+
+  Relay get _relay => widget.relay;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick = Timer.periodic(const Duration(milliseconds: 250), (_) => setState(() {}));
+    // After the first frame: starting tells the timeline, which must not rebuild while this sheet builds.
+    WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_start()));
+  }
+
+  @override
+  void dispose() {
+    _tick.cancel();
+    super.dispose();
+  }
+
+  Future<void> _start() async {
+    final problem = await _relay.startVoiceNote();
+    if (problem != null) _close(problem);
+  }
+
+  void _close([String? message]) {
+    if (!mounted || _done) return;
+    _done = true;
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.of(context).pop();
+    if (message != null) messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _stop() async {
+    if (_done) return;
+    final problem = await _relay.endVoiceNote();
+    // endVoiceNote's one message is for a recording too short to keep.
+    _close(problem == null ? null : 'Too short to keep. Nothing was saved.');
+  }
+
+  Future<void> _cancel() async {
+    if (_done) return;
+    await _relay.cancelVoiceNote();
+    _close();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final since = _relay.listening;
+    final length = since == null ? Duration.zero : DateTime.now().difference(since);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, spacing: 8, children: [
+          Text('Recording', style: theme.textTheme.titleLarge),
+          Text(clockOf(length.isNegative ? Duration.zero : length), style: theme.textTheme.bodySmall),
+          const Text('Talk now. Tap Stop to save, or Cancel.'),
+          Row(children: [
+            TextButton(onPressed: _cancel, child: const Text('Cancel')),
+            const Spacer(),
+            FilledButton.icon(onPressed: _stop, icon: const Icon(Icons.stop), label: const Text('Stop')),
+          ]),
+        ]),
       ),
     );
   }

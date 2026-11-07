@@ -369,6 +369,168 @@ void main() {
       expect([for (final note in await store.notes()) note.clientId], ['v']);
     });
 
+    group('files', () {
+      late Directory folder;
+      setUp(() {
+        folder = tempFolder();
+        Directory('${folder.path}/attachments').createSync();
+      });
+
+      Attachment kept(String id, String name, String type, List<int> bytes) {
+        File('${folder.path}/attachments/$id').writeAsBytesSync(bytes);
+        return Attachment(id: id, name: name, type: type, size: bytes.length, path: 'attachments/$id');
+      }
+
+      Future<FlushResult> send(FakeServer server) =>
+        flush(store, server.api(bearer), clock: () => at, folder: () async => folder);
+
+      test('a note lists its files, and each file goes after its note as its own upload', () async {
+        await store.addNote(LocalNote(clientId: 'n1', text: 'Receipt for the desk lamp', createdAt: at, attachments: [
+          kept('f1', 'receipt.jpg', 'image/jpeg', [1, 2, 3, 4]),
+          kept('f2', 'warranty.pdf', 'application/pdf', [5, 6]),
+        ]), send: true);
+        expect([for (final item in await store.outbox()) item.route], ['notes', 'attachment', 'attachment']);
+        expect((await store.outbox()).first.body['attachments'], [
+          {'id': 'f1', 'name': 'receipt.jpg', 'type': 'image/jpeg', 'size': 4},
+          {'id': 'f2', 'name': 'warranty.pdf', 'type': 'application/pdf', 'size': 2},
+        ]);
+        final server = FakeServer();
+        final result = await send(server);
+        expect([result.sent, result.dropped, result.failure], [3, 0, null]);
+        expect(server.routes, ['notes', 'attachments', 'attachments']);
+        final upload = server.requests[1];
+        expect([upload.method, upload.url.toString()], ['POST', 'https://relay.example.com/apps/relay/api/attachments']);
+        expect([upload.headers['Authorization'], upload.headers['X-Note-Client-Id'], upload.headers['X-Attachment-Id'],
+          upload.headers['Content-Type']], ['Bearer $pageKey', 'n1', 'f1', 'image/jpeg']);
+        expect(upload.bodyBytes, [1, 2, 3, 4]);
+        expect(server.requests[2].bodyBytes, [5, 6]);
+        final note = (await store.notes()).single;
+        expect([note.sentAt, for (final file in note.attachments) file.sentAt], [at, at, at]);
+        expect(await store.waiting(), 0);
+      });
+
+      test('a note without files sends the body it sent before', () async {
+        await store.addNote(LocalNote(clientId: 'n1', text: 'Plain', createdAt: at), send: true);
+        expect((await store.outbox()).single.body, {'clientId': 'n1', 'text': 'Plain', 'createdAt': at.millisecondsSinceEpoch});
+      });
+
+      test('a file the server turns down, or one no longer on the phone, is dropped; its note stays sent', () async {
+        await store.addNote(LocalNote(clientId: 'n1', text: 'Two files', createdAt: at, attachments: [
+          kept('f1', 'a.jpg', 'image/jpeg', [1]),
+          const Attachment(id: 'gone', name: 'b.pdf', type: 'application/pdf', size: 1, path: 'attachments/gone'),
+        ]), send: true);
+        await store.addNote(LocalNote(clientId: 'n2', text: 'After', createdAt: at.add(const Duration(minutes: 1))), send: true);
+        for (final status in [404, 413, 400]) {
+          expect(await FakeServer((_) => FakeServer.json({}, status)).api(bearer)
+            .upload(noteClientId: 'n1', id: 'f1', type: 'image/jpeg', bytes: [1])
+            .then<Failure?>((_) => null, onError: (Object error) => (error as ApiException).failure), Failure.rejected, reason: '$status');
+        }
+        final server = FakeServer((request) =>
+          request.url.path.endsWith('attachments') ? FakeServer.json({'error': 'This file is not on its note.'}, 404) : FakeServer.ok(request));
+        final result = await send(server);
+        expect([result.sent, result.dropped, result.failure], [2, 2, null]);
+        expect(server.routes, ['notes', 'attachments', 'notes']);
+        expect([for (final note in await store.notes()) note.sentAt], [at, at]);
+        expect(await store.waiting(), 0);
+      });
+
+      test('a server older than files gets the note once more without its list, and drops the files', () async {
+        await store.addNote(LocalNote(clientId: 'n1', text: 'With a file', createdAt: at, attachments: [
+          kept('f1', 'a.jpg', 'image/jpeg', [1]),
+        ]), send: true);
+        // The old server refuses unknown note fields with 400 and has no file route.
+        final server = FakeServer((request) {
+          if (request.url.path.endsWith('attachments')) return FakeServer.json({'error': 'Not found'}, 404);
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          return body.containsKey('attachments') ? FakeServer.json({'error': 'Unrecognized key'}, 400) : FakeServer.ok(request);
+        });
+        final result = await send(server);
+        expect([result.sent, result.dropped, result.failure], [1, 1, null]);
+        expect(server.routes, ['notes', 'notes', 'attachments']);
+        expect(jsonDecode(server.requests[1].body), {'clientId': 'n1', 'text': 'With a file', 'createdAt': at.millisecondsSinceEpoch});
+        expect((await store.notes()).single.sentAt, at);
+        expect(await store.waiting(), 0);
+      });
+
+      test('a note with files that the server turns down twice is dropped after two tries', () async {
+        await store.addNote(LocalNote(clientId: 'n1', text: 'Bad', createdAt: at, attachments: [
+          kept('f1', 'a.jpg', 'image/jpeg', [1]),
+        ]), send: true);
+        final server = FakeServer((request) => FakeServer.json({}, 400));
+        final result = await send(server);
+        expect([result.sent, result.dropped, result.failure], [0, 2, null]);
+        expect(server.routes, ['notes', 'notes', 'attachments']);
+      });
+
+      test('a 404 on a note still means the server could not be reached, so the note waits', () async {
+        await store.addNote(LocalNote(clientId: 'n1', text: 'Waits', createdAt: at), send: true);
+        final result = await send(FakeServer((_) => FakeServer.json({}, 404)));
+        expect([result.sent, result.failure], [0, Failure.offline]);
+        expect(await store.waiting(), 1);
+      });
+
+      test('a file whose answer was lost goes again with the same id, and is sent once it lands', () async {
+        await store.addNote(LocalNote(clientId: 'n1', text: 'Photo', createdAt: at,
+          attachments: [kept('f1', 'a.jpg', 'image/jpeg', [1])]), send: true);
+        final lost = FakeServer((request) =>
+          request.url.path.endsWith('attachments') ? FakeServer.json({}, 503) : FakeServer.ok(request));
+        expect((await send(lost)).failure, Failure.offline);
+        expect([for (final item in await store.outbox()) item.route], ['attachment']);
+        final server = FakeServer((_) => FakeServer.json({'ok': true, 'added': false}));
+        expect((await send(server)).failure, isNull);
+        expect([lost.requests.last.headers['X-Attachment-Id'], server.requests.single.headers['X-Attachment-Id']], ['f1', 'f1']);
+        expect((await store.notes()).single.attachments.single.sentAt, at);
+      });
+
+      test('Send them queues an earlier note with its files, and a note that waited for its pin keeps its files', () async {
+        await store.addNote(LocalNote(clientId: 'early', text: 'Earlier', createdAt: at,
+          attachments: [kept('f1', 'old.pdf', 'application/pdf', [9])]));
+        await store.addNote(LocalNote(clientId: 'pinned', text: 'Pinned', createdAt: at.add(const Duration(minutes: 1)),
+          attachments: [kept('f2', 'new.jpg', 'image/jpeg', [8])]), waitForPin: true);
+        expect([await store.earlierCount(), (await store.outbox()).length], [1, 0]);
+        await store.queueEarlier();
+        expect(await store.settlePin('pinned', Pin(at: at, lat: 1, lon: 2, accuracy: 3, place: 'Main St'), send: true), isTrue);
+        final outbox = await store.outbox();
+        expect([for (final item in outbox) (item.route, item.body['clientId'] ?? item.body['id'])],
+          [('notes', 'early'), ('attachment', 'f1'), ('notes', 'pinned'), ('attachment', 'f2')]);
+        expect(outbox[2].body['attachments'], [{'id': 'f2', 'name': 'new.jpg', 'type': 'image/jpeg', 'size': 1}]);
+        expect(outbox[2].body['place'], 'Main St');
+        expect(outbox[1].body, {'noteClientId': 'early', 'id': 'f1', 'path': 'attachments/f1', 'name': 'old.pdf', 'type': 'application/pdf'});
+      });
+    });
+
+    test('upgrades a phone from before files: every note stays, with no files, and new notes take files', () async {
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+      addTearDown(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = false);
+      final old = Store(NativeDatabase.memory(setup: (db) {
+        for (final statement in [
+          "CREATE TABLE outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, destination TEXT NOT NULL DEFAULT 'relay-server', "
+            'route TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL)',
+          'CREATE TABLE notes (client_id TEXT PRIMARY KEY, body TEXT NOT NULL, created_at INTEGER NOT NULL, sent_at INTEGER, '
+            "queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0, kind TEXT NOT NULL DEFAULT 'typed', "
+            'audio_path TEXT, duration_ms INTEGER, words_pending INTEGER NOT NULL DEFAULT 0)',
+          'CREATE TABLE points (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
+          'CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+        ]) {
+          db.execute(statement);
+        }
+        String body(String id) => jsonEncode(note(id).toJson());
+        db.execute("INSERT INTO notes (client_id, body, created_at, sent_at, queued, kind, audio_path, duration_ms) VALUES "
+          "(?, ?, 1, 5, 1, 'typed', NULL, NULL), (?, ?, 2, NULL, 0, 'typed', NULL, NULL), (?, ?, 3, NULL, 1, 'voice', 'voice/v.wav', 4000)",
+          ['sent', body('sent'), 'local', body('local'), 'voice', body('voice')]);
+        db.execute("INSERT INTO outbox (route, body, created_at) VALUES ('notes', ?, 3)", [body('voice')]);
+        db.execute('PRAGMA user_version = 4');
+      }));
+      addTearDown(old.close);
+      expect([for (final kept in await old.notes()) (kept.clientId, kept.kind, kept.sentAt != null, kept.attachments.length)],
+        [('voice', NoteKind.voice, false, 0), ('local', NoteKind.typed, false, 0), ('sent', NoteKind.typed, true, 0)]);
+      expect([for (final item in await old.outbox()) item.route], ['notes']);
+      expect(await old.earlierCount(), 1);
+      await old.addNote(LocalNote(clientId: 'new', text: 'With a file', createdAt: at.add(const Duration(days: 1)),
+        attachments: const [Attachment(id: 'f1', name: 'a.pdf', type: 'application/pdf', size: 1, path: 'attachments/f1')]));
+      expect([for (final file in await old.attachmentsOf('new')) file.name], ['a.pdf']);
+    });
+
     test('keeps small values by name', () async {
       expect(await store.get('x'), isNull);
       await store.set('x', '1');

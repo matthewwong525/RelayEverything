@@ -10,7 +10,7 @@ const NOW = Date.now();
 const DAY = 86_400_000;
 const place = { lat: 43.6532, lon: -79.3832, accuracy: 12, name: "Queen St W", from: "phone" as const };
 const note = (id: string, more: object = {}) =>
-  ({ id, source: "typed", text: `Note ${id}`, recordedAt: NOW, device: "Android phone", audio: false, place: null, ...more });
+  ({ id, source: "typed", text: `Note ${id}`, recordedAt: NOW, device: "Android phone", audio: false, place: null, attachments: [], ...more });
 const FIRST = { notes: [
   note("00000000-0000-4000-8000-000000000001", { source: "ring", audio: true, text: "", device: "Pebble app",
     place: { ...place, name: null, from: "history" } }),

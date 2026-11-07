@@ -53,6 +53,9 @@ dependencies:
   crypto: ^3.0.8
   # Opens your Relay page in the phone's browser.
   url_launcher: ^6.3.2
+  # Files on a note: the paperclip picks photos and files, and a tap opens one in an app on the phone.
+  file_picker: ^13.3.2
+  open_filex: ^5.0.0
   # Sign in to connect: your Relay Everything sign-in inside the app, and back with a one-time code.
   flutter_web_auth_2: ^5.1.0
 

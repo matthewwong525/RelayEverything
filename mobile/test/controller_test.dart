@@ -8,6 +8,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart' show Keychai
 import 'package:flutter_test/flutter_test.dart';
 import 'package:health/health.dart';
 import 'package:relay_app/controller.dart';
+import 'package:relay_app/data/attachments.dart';
 import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/sign_in.dart';
 import 'package:relay_app/data/store.dart';
@@ -229,6 +230,26 @@ void main() {
       expect([for (final item in await store.outbox()) item.route], ['notes']);
     });
 
+    test('a note kept while a round sends goes in a round after it, before settled ends', () async {
+      await KeyVault(storage).save(connection);
+      final relay = controller();
+      await relay.load();
+      await relay.setPinNotes(false);
+      await relay.settled();
+      server.requests.clear();
+      server.hold = Completer();
+      await relay.keepNote('First');
+      await pumpEventQueue();
+      // The round read the outbox before the second note, and holds open its upload.
+      expect(server.routes, ['notes']);
+      await relay.keepNote('Second');
+      final done = relay.settled();
+      server.hold!.complete();
+      await done;
+      expect([for (final note in sentNotes()) note['text']], ['First', 'Second']);
+      expect(await store.waiting(), 0);
+    });
+
     test('health starts from the moment it turns on, with no earlier backfill', () async {
       await KeyVault(storage).save(connection);
       final relay = controller();
@@ -295,6 +316,8 @@ void main() {
       expect(jsonDecode((await store.get('settings'))!), {'sending': true, 'pinNotes': true, 'history': false, 'health': true,
         'mode': 'battery'});
       expect(places.asked, [false, true, true, false]);
+      // Each change started a sync; the last round ends before the store closes.
+      await relay.settled();
     });
   });
 
@@ -875,6 +898,96 @@ void main() {
       await pumpEventQueue();
       expect([for (final note in sentNotes()) note['text']], ['Typed while off', 'Order more TL3312 switches']);
       expect(await relay.earlierNotes(), 0);
+    });
+  });
+
+  group('files', () {
+    late Directory folder;
+    setUp(() => folder = tempFolder());
+
+    RelayController withFiles({FileOpener? opener}) => RelayController(store: store, vault: KeyVault(storage), places: places,
+      health: health, apiFor: server.api, clock: () => clock, folder: () async => folder, opener: opener);
+
+    NewFile picked(String name, List<int> bytes, {int? size}) {
+      final source = File('${folder.path}/picked/$name')..createSync(recursive: true)..writeAsBytesSync(bytes);
+      return NewFile(path: source.path, name: name, size: size ?? bytes.length);
+    }
+
+    test('a note can be files alone: the phone keeps its own copy, and sending off makes no request', () async {
+      server = noNetwork();
+      final relay = withFiles();
+      await relay.load();
+      expect(await relay.addNote('  ', files: [picked('receipt.jpg', [1, 2, 3]), picked('warranty.pdf', [4, 5])]), isNull);
+      final entry = relay.entries.single;
+      expect(entry.text, '');
+      expect([for (final file in entry.files) (file.name, file.type, file.size, file.picture)],
+        [('receipt.jpg', 'image/jpeg', 3, true), ('warranty.pdf', 'application/pdf', 2, false)]);
+      for (final file in entry.files) {
+        expect(file.path, startsWith('${folder.path}/attachments/'));
+      }
+      expect(File(entry.files.first.path).readAsBytesSync(), [1, 2, 3]);
+      expect(entry.files.last.path, endsWith('.pdf'));
+      // The app copied the picked file and left it where it was.
+      expect(File('${folder.path}/picked/receipt.jpg').existsSync(), isTrue);
+      await relay.sync();
+      expect([server.requests, await store.outbox()], [isEmpty, isEmpty]);
+    });
+
+    test('a file over 25 MB, or an eleventh file, is left out with a message, and the rest are kept', () async {
+      final relay = withFiles();
+      await relay.load();
+      final big = picked('video.mov', [0], size: maxFileBytes + 1);
+      final problem = await relay.addNote('Lots', files: [big, for (var i = 0; i < 11; i++) picked('p$i.png', [i])]);
+      expect(problem, contains('video.mov is over 25 MB'));
+      expect(problem, contains('1 file was not added'));
+      expect(relay.entries.single.files, hasLength(10));
+      // Nothing to keep: no note at all.
+      expect(await relay.addNote('', files: [big]), endsWith('Give the note words or a file.'));
+      expect(await relay.addNote(' '), 'Give the note words or a file.');
+      expect(relay.entries, hasLength(1));
+    });
+
+    test('with sending on, each note goes first, then its files; Send them sends an earlier note\'s files too', () async {
+      final relay = withFiles();
+      await relay.load();
+      await relay.addNote('Earlier', files: [picked('old.pdf', [9])]);
+      expect(await relay.connect(pageCode), isNull);
+      await relay.startSending(sendEarlier: true);
+      await relay.sync();
+      clock = now.add(const Duration(minutes: 1));
+      await relay.addNote('New', files: [picked('new.jpg', [1, 2])]);
+      await relay.sync();
+      expect(server.routes, ['key', 'notes', 'attachments', 'notes', 'attachments']);
+      final uploads = [for (final request in server.requests) if (request.url.path.endsWith('attachments')) request];
+      expect([for (final upload in uploads) upload.bodyBytes], [[9], [1, 2]]);
+      final notes = sentNotes();
+      expect(notes.first['attachments'],
+        [{'id': uploads.first.headers['X-Attachment-Id'], 'name': 'old.pdf', 'type': 'application/pdf', 'size': 1}]);
+      expect([for (final upload in uploads) upload.headers['X-Note-Client-Id']], [for (final note in notes) note['clientId']]);
+      expect(relay.waiting, 0);
+    });
+
+    test('opens a file with the phone, and says when it is gone or no app opens it', () async {
+      final opened = <(String, String)>[];
+      var opens = true;
+      final relay = withFiles(opener: (file, type) async {
+        opened.add((file.path, type));
+        return opens;
+      });
+      await relay.load();
+      final notices = <String>[];
+      relay.notices.listen(notices.add);
+      await relay.addNote('', files: [picked('warranty.pdf', [1])]);
+      final file = relay.entries.single.files.single;
+      await relay.openFile(file);
+      expect(opened, [(file.path, 'application/pdf')]);
+      opens = false;
+      await relay.openFile(file);
+      File(file.path).deleteSync();
+      await relay.openFile(file);
+      await pumpEventQueue();
+      expect(notices, ['No app on this phone opens this file.', 'This file is not on this phone.']);
+      expect(opened, hasLength(2));
     });
   });
 

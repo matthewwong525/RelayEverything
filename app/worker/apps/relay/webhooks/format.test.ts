@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { Webhook } from "standardwebhooks";
 import { afterEach, expect, it, vi } from "vitest";
-import { healthSamples, jsonSchema, locationPoints, message, noteCreated, noteUpdated, webhookTest, type NoteRow } from "./format.ts";
+import { calendarEvents, healthSamples, jsonSchema, locationPoints, message, noteCreated, noteUpdated, webhookTest, type NoteRow } from "./format.ts";
 import { base64, newSecret, signedHeaders } from "./sign.ts";
 
 const schemaFile = new URL("../../../../../site/public/webhooks/v1.schema.json", import.meta.url);
@@ -56,6 +56,20 @@ it("keeps base64 whole for a recording larger than one piece", () => {
 it("publishes the schema the format makes", () => {
   if (process.env.RELAY_API_DOC_WRITE) writeFileSync(schemaFile, jsonSchema());
   expect(readFileSync(schemaFile, "utf8"), "The format changed: run `npm run relay:api-doc` in app/").toBe(jsonSchema());
+});
+
+it("sends calendar events with their status, people and times in ISO 8601", () => {
+  const meeting = { id: 7, ...device, event_key: "work:5F1C2B:1793800800000", calendar: "Work", title: "Board meeting", start_at: AT,
+    end_at: AT + 3_600_000, all_day: 0, location: "Office, room 2", notes: null, url: null,
+    people: '[{"name":"Sam Lee","email":"sam@example.com","organizer":true},{}]', removed_at: null };
+  const built = calendarEvents([meeting, { ...meeting, id: 8, all_day: 1, people: "[]", removed_at: AT }], AT);
+  expect(message.parse(built)).toEqual(built);
+  const { events } = built.data as { events: Record<string, unknown>[] };
+  expect(events[0]).toEqual({ id: 7, status: "changed", device: { id: device.device_id, name: "Pebble app" },
+    key: "work:5F1C2B:1793800800000", calendar: "Work", title: "Board meeting", start: "2026-11-04T14:01:02.000Z", end: "2026-11-04T15:01:02.000Z",
+    all_day: false, location: "Office, room 2", notes: null, url: null, people: [{ name: "Sam Lee", email: "sam@example.com", organizer: true }, {}] });
+  expect(events[1]).toMatchObject({ id: 8, status: "removed", all_day: true, people: [] });
+  expect(() => message.parse({ ...built, data: { events: [{ ...events[0], status: "moved" }] } })).toThrow();
 });
 
 it("lists a note's files by name, type and size, never their bytes, and leaves the list out of a note with none", () => {

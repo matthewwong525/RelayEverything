@@ -206,14 +206,16 @@ void main() {
       expect([for (final kept in await store.notes()) kept.sentAt], [at, at, at]);
     });
 
-    test('drops waiting health and location, and keeps note uploads', () async {
+    test('drops waiting health, location and calendar, and keeps note uploads', () async {
       await store.addNote(note('note-0001'), send: true);
       await store.enqueue('health', {'samples': []});
+      await store.queueCalendar([{'events': [{'key': 'k'}], 'removed': []}], {'k': 'hash'}, const []);
       await store.addPoint(Pin(at: at, lat: 1, lon: 1, accuracy: 1));
       await store.queuePoints();
       await store.addPoint(Pin(at: at.add(const Duration(minutes: 1)), lat: 1, lon: 1, accuracy: 1));
       await store.dropReadings();
       expect([for (final item in await store.outbox()) item.route], ['notes']);
+      expect(await store.calendarSent(), isEmpty);
       await store.queuePoints();
       expect(await store.waiting(), 1);
     });
@@ -529,6 +531,36 @@ void main() {
       await old.addNote(LocalNote(clientId: 'new', text: 'With a file', createdAt: at.add(const Duration(days: 1)),
         attachments: const [Attachment(id: 'f1', name: 'a.pdf', type: 'application/pdf', size: 1, path: 'attachments/f1')]));
       expect([for (final file in await old.attachmentsOf('new')) file.name], ['a.pdf']);
+    });
+
+    test('upgrades a phone from before the calendar: notes and uploads stay, and the calendar can be sent', () async {
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+      addTearDown(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = false);
+      final old = Store(NativeDatabase.memory(setup: (db) {
+        for (final statement in [
+          "CREATE TABLE outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, destination TEXT NOT NULL DEFAULT 'relay-server', "
+            'route TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL)',
+          'CREATE TABLE notes (client_id TEXT PRIMARY KEY, body TEXT NOT NULL, created_at INTEGER NOT NULL, sent_at INTEGER, '
+            "queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0, kind TEXT NOT NULL DEFAULT 'typed', "
+            'audio_path TEXT, duration_ms INTEGER, words_pending INTEGER NOT NULL DEFAULT 0)',
+          'CREATE TABLE points (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
+          'CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+          'CREATE TABLE attachments (id TEXT PRIMARY KEY, note_client_id TEXT NOT NULL, name TEXT, type TEXT, size INTEGER, '
+            'path TEXT, sent_at INTEGER)',
+        ]) {
+          db.execute(statement);
+        }
+        db.execute('INSERT INTO notes (client_id, body, created_at, queued) VALUES (?, ?, 1, 1)',
+          ['kept', jsonEncode(note('kept').toJson())]);
+        db.execute("INSERT INTO outbox (route, body, created_at) VALUES ('health', '{\"samples\":[{}]}', 2)");
+        db.execute("INSERT INTO state (key, value) VALUES ('health.since', '5')");
+        db.execute('PRAGMA user_version = 5');
+      }));
+      addTearDown(old.close);
+      expect([for (final kept in await old.notes()) kept.clientId], ['kept']);
+      expect([await old.waitingReadings(), await old.get('health.since'), await old.calendarSent()], [1, '5', isEmpty]);
+      await old.queueCalendar([{'events': [{'key': 'k'}], 'removed': ['gone']}], {'k': 'hash'}, const ['gone']);
+      expect([await old.waitingEvents(), await old.calendarSent()], [2, {'k': 'hash'}]);
     });
 
     test('keeps small values by name', () async {

@@ -13,7 +13,12 @@ export type Summary = {
   day: string; notes: number; steps: number; sleepMinutes: number
   heartRate: { min: number; max: number; average: number } | null
   workouts: { count: number; minutes: number }
+  /** The other health values: each only when the day has some. */
+  weightKg?: number; restingHeartRate?: number; hrvSdnn?: number; hrvRmssd?: number
+  bloodOxygen?: { min: number; average: number }; bloodPressure?: { at: number; upper: number; lower: number }[]
+  cycleFlow?: number; mindfulMinutes?: number; waterMl?: number
   places: { name: string; lat: number; lon: number; from: number; to: number }[]
+  events: { title: string; start: number; end: number; allDay: boolean; people: string[] }[]
 }
 
 export type ChatSummary = { id: string; title: string; project: string; app: 'claude-code'; startedAt: number; lastAt: number; messages: number; savedByAi: boolean }
@@ -23,7 +28,7 @@ export type ChatMessage = { seq: number; role: 'you' | 'ai' | 'step'; text: stri
 export type ChatPart = { chat: ChatSummary; saves: ChatSave[]; messages: ChatMessage[]; next: number | null }
 type Attempt = { at: number; type: string; status: number | null; ms: number; error: string | null; first: number | null; last: number | null }
 export type Webhook = {
-  id: string; name: string; url: string; kinds: ('notes' | 'health' | 'locations')[]
+  id: string; name: string; url: string; kinds: ('notes' | 'health' | 'locations' | 'calendar')[]
   state: 'working' | 'paused' | 'failing' | 'backfilling'; waiting: number
   lastStatus: number | null; lastError: string | null; lastSentAt: number | null; nextTryAt: number | null; failingSince: number | null
   createdAt: number; attempts: Attempt[]

@@ -49,6 +49,14 @@ it("stores only the health samples it lacks, and says how many it added", async 
   expect((await call(lost, "POST", "health", { samples: day })).status).toBe(403);
 });
 
+it("stores a batch of every health type the phone sends, each in its own unit", async () => {
+  const units = { weight: "kg", resting_heart_rate: "bpm", hrv_sdnn: "ms", hrv_rmssd: "ms", blood_oxygen: "%", blood_pressure_systolic: "mmHg",
+    blood_pressure_diastolic: "mmHg", cycle_flow: "flow", mindful: "min", water: "ml" };
+  const samples = Object.entries(units).map(([type, unit], index) => sample(type, NOW - index * MINUTE, NOW - index * MINUTE, 2, { unit }));
+  expect(await call(phone, "POST", "health", { samples })).toEqual({ status: 200, json: { received: 10, added: 10 } });
+  expect(rows("relay_health").map(row => row.type)).toEqual(Object.keys(units));
+});
+
 it("stores location points once, and places ring notes that came before them", async () => {
   ringNote("aaaaaaaa-0000-4000-8000-000000000001", NOW - 20 * MINUTE);
   ringNote("aaaaaaaa-0000-4000-8000-000000000002", NOW - 2 * 60 * MINUTE);
@@ -111,9 +119,9 @@ it("sums a day for the site page: notes, the larger phone's steps and sleep, hea
   expect(json).toEqual({ day: "2026-11-05", notes: 1, steps: 8214, sleepMinutes: 450, heartRate: { min: 61, max: 90, average: 76 },
     workouts: { count: 1, minutes: 45 }, places: [
       { name: "Queen St W", lat: 43.6487, lon: -79.3962, from: start + 60 * MINUTE, to: start + 90 * MINUTE },
-      { name: "43.663, -79.396", lat: 43.6629, lon: -79.3957, from: start + 3 * 60 * MINUTE, to: start + 3 * 60 * MINUTE }] });
+      { name: "43.663, -79.396", lat: 43.6629, lon: -79.3957, from: start + 3 * 60 * MINUTE, to: start + 3 * 60 * MINUTE }], events: [] });
   expect((await call(matthew, "GET", "summary", { day: "2026-11-04" })).json).toEqual({ day: "2026-11-04", notes: 1, steps: 0, sleepMinutes: 0,
-    heartRate: null, workouts: { count: 0, minutes: 0 }, places: [] });
+    heartRate: null, workouts: { count: 0, minutes: 0 }, places: [], events: [] });
   for (const day of ["yesterday", "2026-13-45"]) expect((await call(matthew, "GET", "summary", { day })).status).toBe(400);
   for (const [who, status] of [[phone, 403], [null, 401]] as const) expect((await call(who, "GET", "summary", { day: "2026-11-05" })).status).toBe(status);
 });

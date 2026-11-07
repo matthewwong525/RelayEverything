@@ -4,10 +4,12 @@ import 'dart:async';
 
 import 'data/attachments.dart';
 import 'data/settings.dart';
+import 'sync/calendar.dart';
 import 'voice/model.dart';
 
 export 'data/attachments.dart' show NewFile, sizeLabel;
 export 'data/settings.dart' show LocationMode, Settings;
+export 'sync/calendar.dart' show PhoneCalendar;
 export 'voice/model.dart' show ModelState, ModelProblem;
 
 /// One row of the timeline: a note typed or said on this phone.
@@ -51,7 +53,7 @@ class EntryFile {
 
 enum SyncStatus { idle, syncing, synced, offline, refused }
 
-/// When one kind of data, health or places, last reached the server, and how many of it wait to send.
+/// When one kind of data, health, places or the calendar, last reached the server, and how many of it wait to send.
 class SendState {
   const SendState({this.at, this.waiting = 0});
 
@@ -72,6 +74,10 @@ abstract class Relay extends ChangeNotifier {
   /// Health readings and location points: when each last went, and how many wait. Settings shows them.
   SendState get healthSent;
   SendState get pointsSent;
+  /// Calendar events and removals: when they last went, and how many wait.
+  SendState get calendarSent;
+  /// The phone's calendars, while the calendar is on; each has its own switch in Settings.
+  List<PhoneCalendar> get calendars;
   /// True on iPhone, where *Location history* has two ways to keep places.
   bool get locationModes;
 
@@ -85,12 +91,17 @@ abstract class Relay extends ChangeNotifier {
   Future<String?> setPinNotes(bool on);
   Future<String?> setHistory(bool on);
   Future<String?> setHealth(bool on);
+  /// Turns the calendar on, after the phone's permission, or off, which drops what of it did not go.
+  Future<String?> setCalendar(bool on);
+  /// Turns one of the phone's calendars on or off. Its events leave the space at the next send.
+  Future<void> setCalendarShown(String id, bool on);
 
   /// How many notes never went to the server: the earlier-notes prompt asks about them when sending turns on.
   Future<int> earlierNotes();
   /// Turns sending on, with a key already kept; [sendEarlier] queues the earlier notes too, oldest first.
   Future<String?> startSending({required bool sendEarlier});
-  /// Turns sending off: stops health and location history and drops what of them did not go. Keeps notes and the key.
+  /// Turns sending off: stops health, the calendar and location history and drops what of them did not go. Keeps notes
+  /// and the key.
   Future<void> stopSending();
 
   /// Forgets the key and turns sending off.

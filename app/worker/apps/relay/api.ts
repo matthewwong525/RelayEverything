@@ -1,10 +1,11 @@
-// Relay Everything's server: notes, health and location from the phones, sent on to webhooks, and Claude Code chats,
-// each in the caller's own space. A device key only adds data, and checks itself with GET key: caller.ts.
+// Relay Everything's server: notes, health, location and calendar from the phones, sent on to webhooks, and Claude
+// Code chats, each in the caller's own space. A device key only adds data, and checks itself with GET key: caller.ts.
 import type { Route } from "../../api/contract.ts";
 import { account, accountDelete } from "./account.ts";
 import { aiAppDisconnect, aiApps } from "./ai-apps.ts";
 import { attachment, attachmentAdd } from "./attachments.ts";
 import { audio } from "./audio.ts";
+import { calendar } from "./calendar.ts";
 import { chatDelete, chatList, chatRead } from "./chat-read.ts";
 import { chats, chatSaves } from "./chats.ts";
 import { deviceAdd, deviceOff, devices } from "./device.ts";
@@ -23,6 +24,7 @@ export const routes = new Map<string, Route>([
   ["POST attachments", attachmentAdd],
   ["POST health", health],
   ["POST locations", locations],
+  ["POST calendar", calendar],
   ["GET key", key],
   ["GET timeline", timeline],
   ["GET summary", summary],

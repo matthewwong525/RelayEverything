@@ -12,8 +12,8 @@ class FlushResult {
   final Failure? failure;
 }
 
-// Settings shows when health and places last landed, so a person sees when the iPhone stopped them.
-const _sentKeys = {'health': sentHealth, 'locations': sentPoints};
+// Settings shows when health, places and the calendar last landed, so a person sees when the iPhone stopped them.
+const _sentKeys = {'health': sentHealth, 'locations': sentPoints, 'calendar': sentCalendar};
 
 /// Sends waiting uploads oldest first, and stops at the first that can not land now, so order holds.
 /// A body the server turns down is dropped: it would never land, and would hold back the rest.

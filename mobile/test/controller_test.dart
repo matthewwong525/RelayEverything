@@ -29,11 +29,12 @@ void main() {
   late FakeHealth health;
   late List<bool> scheduled;
   late FakeWebAuth webAuth;
+  late FakeCalendar calendar;
   var clock = now;
 
   RelayController controller({NativeBackground? native}) => RelayController(store: store, vault: KeyVault(storage), places: places,
     health: health, apiFor: server.api, signInClient: server.client, webAuth: webAuth.call, clock: () => clock,
-    schedule: (on) async => scheduled.add(on), native: native);
+    schedule: (on) async => scheduled.add(on), native: native, calendar: calendar);
 
   List<Map<String, dynamic>> sentNotes() => [
     for (final request in server.requests) if (request.url.path.endsWith('notes')) jsonDecode(request.body) as Map<String, dynamic>,
@@ -47,6 +48,7 @@ void main() {
     health = FakeHealth();
     scheduled = [];
     webAuth = FakeWebAuth();
+    calendar = FakeCalendar();
     clock = now;
   });
   tearDown(() => store.close());
@@ -250,15 +252,103 @@ void main() {
       expect(await store.waiting(), 0);
     });
 
-    test('health starts from the moment it turns on, with no earlier backfill', () async {
+    test('health starts from the moment it turns on, then reads the last 90 days a week at a time', () async {
       await KeyVault(storage).save(connection);
       final relay = controller();
       await relay.load();
+      expect(await relay.startSending(sendEarlier: false), isNull);
+      await relay.settled();
       expect(await relay.setHealth(true), isNull);
+      await relay.settled();
+      expect(health.reads, [(now.subtract(const Duration(hours: 2)), now), (now.subtract(const Duration(days: 7)), now)]);
+      expect([await store.get(healthSince), await store.get(healthTypes)], ['${now.millisecondsSinceEpoch}', askedTypes]);
+    });
+
+    test('a phone that allowed health before the new types is asked once more, at open', () async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', const Settings(sending: true, health: true).encode());
+      var asked = 0;
+      health = _CountingHealth(() => asked++);
+      final relay = controller();
+      await relay.load();
+      await relay.askNewHealthTypes();
+      await relay.askNewHealthTypes();
+      expect([asked, await store.get(healthTypes)], [1, askedTypes]);
+      // A phone with health off is not asked.
+      await store.remove(healthTypes);
+      await relay.stopSending();
+      await relay.askNewHealthTypes();
+      expect(asked, 1);
+    });
+
+    test('a background round while the new types are asked does not start the history read', () async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', const Settings(sending: true, health: true).encode());
+      await store.set(healthSince, '${now.subtract(const Duration(hours: 1)).millisecondsSinceEpoch}');
+      final held = _HeldHealth();
+      health = held;
+      final relay = controller();
+      await relay.load();
+      final asking = relay.askNewHealthTypes();
       await pumpEventQueue();
-      expect(health.reads.first.$2, now);
-      expect(health.reads.first.$1, now.subtract(const Duration(hours: 2)));
-      expect(await store.get(healthSince), '${now.millisecondsSinceEpoch}');
+      // The permission screen is open: a round reads only the new readings, and the history mark stays unset.
+      await syncHealth(store, held, now: now);
+      expect([await store.get(healthTypes), await store.get(healthBackfill), held.reads.length], [isNull, isNull, 1]);
+      held.answer.complete(true);
+      await asking;
+      expect(await store.get(healthTypes), askedTypes);
+    });
+
+    test('a failed question for the new types still counts as asked', () async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', const Settings(sending: true, health: true).encode());
+      final held = _HeldHealth();
+      health = held;
+      final relay = controller();
+      await relay.load();
+      final asking = relay.askNewHealthTypes();
+      await pumpEventQueue();
+      held.answer.completeError(Exception('refused'));
+      await asking;
+      expect(await store.get(healthTypes), askedTypes);
+    });
+
+    test('the calendar turns on only with sending and its permission, lists the calendars, and sends', () async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', const Settings().encode());
+      calendar.items = [meeting('a', now.add(const Duration(hours: 1))), meeting('h', now.add(const Duration(days: 3)), calendar: 'holidays')];
+      final relay = controller();
+      await relay.load();
+      expect(await relay.setCalendar(true), contains('Send to Relay Everything'));
+      expect(await relay.startSending(sendEarlier: false), isNull);
+      await relay.settled();
+      calendar.allowed = false;
+      expect(await relay.setCalendar(true), contains('calendar'));
+      expect([relay.settings.calendar, calendar.reads], [false, isEmpty]);
+      calendar.allowed = true;
+      expect(await relay.setCalendar(true), isNull);
+      await relay.settled();
+      expect([relay.settings.calendar, [for (final c in relay.calendars) c.name], scheduled.last], [true, ['Work', 'US Holidays'], true]);
+      expect(server.routes.last, 'calendar');
+      expect(relay.calendarSent.at, now);
+      // Turning holidays off sends its removal.
+      await relay.setCalendarShown('holidays', false);
+      await relay.settled();
+      expect(jsonDecode(server.requests.last.body)['removed'], ['holidays:h:${now.add(const Duration(days: 3)).millisecondsSinceEpoch}']);
+      expect(relay.settings.calendarsOff, {'holidays'});
+    });
+
+    test('turning the calendar off drops its waiting uploads and what was sent', () async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', const Settings(sending: true, calendar: true).encode());
+      server = FakeServer((_) => FakeServer.json({}, 503));
+      calendar.items = [meeting('a', now.add(const Duration(hours: 1)))];
+      final relay = controller();
+      await relay.load();
+      await relay.sync();
+      expect([relay.calendarSent.waiting, (await store.calendarSent()).length], [1, 1]);
+      expect(await relay.setCalendar(false), isNull);
+      expect([relay.calendarSent.waiting, await store.calendarSent(), relay.calendars], [0, isEmpty, isEmpty]);
     });
   });
 
@@ -269,9 +359,21 @@ void main() {
       expect([const Settings(history: true, health: true).history, const Settings(history: true, health: true).health], [false, false]);
       const on = Settings(sending: true, history: true, health: true);
       expect([on.copyWith(sending: false).history, on.copyWith(sending: false).health], [false, false]);
-      expect(jsonDecode(on.encode()), {'sending': true, 'pinNotes': false, 'history': true, 'health': true, 'mode': 'battery'});
+      expect(jsonDecode(on.encode()), {'sending': true, 'pinNotes': false, 'history': true, 'health': true, 'calendar': false,
+        'calendarsOff': [], 'mode': 'battery'});
       final back = Settings.decode(on.encode(), hasKey: false);
       expect([back.sending, back.health], [true, true]);
+    });
+
+    test('keep the calendar and the calendars turned off, and sending off forces the calendar off', () {
+      const on = Settings(sending: true, calendar: true, calendarsOff: {'holidays', 'birthdays'});
+      final back = Settings.decode(on.encode(), hasKey: true);
+      expect([back.calendar, back.calendarsOff], [true, {'holidays', 'birthdays'}]);
+      expect([const Settings(calendar: true).calendar, on.copyWith(sending: false).calendar], [false, false]);
+      expect(on.copyWith(sending: false).calendarsOff, {'holidays', 'birthdays'});
+      // Saved by a version from before the calendar.
+      final before = Settings.decode(jsonEncode({'sending': true, 'health': true}), hasKey: true);
+      expect([before.calendar, before.calendarsOff], [false, isEmpty]);
     });
 
     test('an upgrade from the first version keeps sending on for a phone with a key', () {
@@ -291,7 +393,7 @@ void main() {
       await relay.load();
       expect([relay.settings.sending, relay.settings.pinNotes], [false, true]);
       expect(jsonDecode((await store.get('settings'))!), {'sending': false, 'pinNotes': true, 'history': false, 'health': false,
-        'mode': 'battery'});
+        'calendar': false, 'calendarsOff': [], 'mode': 'battery'});
     });
 
     test('turn each on only with its permission, and schedule the hourly sync only while sending', () async {
@@ -314,7 +416,7 @@ void main() {
       expect(await relay.setPinNotes(true), isNull);
       expect(scheduled, [false, true, true, true, true]);
       expect(jsonDecode((await store.get('settings'))!), {'sending': true, 'pinNotes': true, 'history': false, 'health': true,
-        'mode': 'battery'});
+        'calendar': false, 'calendarsOff': [], 'mode': 'battery'});
       expect(places.asked, [false, true, true, false]);
       // Each change started a sync; the last round ends before the store closes.
       await relay.settled();
@@ -471,6 +573,7 @@ void main() {
     test('sends health on each sync, and goes on when the health store is closed', () async {
       await KeyVault(storage).save(connection);
       await store.set('settings', jsonEncode({'pinNotes': true, 'history': false, 'health': true}));
+      await store.set(healthTypes, askedTypes);
       final relay = controller();
       await relay.load();
       health.readings = [reading(HealthDataType.STEPS, now.subtract(const Duration(hours: 1)), now, value: 100)];
@@ -995,4 +1098,25 @@ void main() {
     expect(newClientId(Random(1)), matches(RegExp(r'^[0-9a-f]{32}$')));
     expect(newClientId(), isNot(newClientId()));
   });
+}
+
+/// Health that counts each ask for its permission.
+class _CountingHealth extends FakeHealth {
+  _CountingHealth(this.onAsk);
+
+  final void Function() onAsk;
+
+  @override
+  Future<bool> allow() async {
+    onAsk();
+    return true;
+  }
+}
+
+/// Holds the health question open until the test completes [answer].
+class _HeldHealth extends FakeHealth {
+  final answer = Completer<bool>();
+
+  @override
+  Future<bool> allow() => answer.future;
 }

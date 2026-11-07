@@ -2,7 +2,10 @@
 // SELECT only, so the connector can read every note and change none. A test fails on any other statement here.
 import { MINUTE, type Db } from "./store.ts";
 
-export type HealthType = "steps" | "heart_rate" | "sleep" | "workout";
+/** Every health type a phone sends, each in one unit: the one list POST health, the webhooks and the connector take. */
+export const HEALTH_TYPES = ["steps", "heart_rate", "sleep", "workout", "weight", "resting_heart_rate", "hrv_sdnn", "hrv_rmssd",
+  "blood_oxygen", "blood_pressure_systolic", "blood_pressure_diastolic", "cycle_flow", "mindful", "water"] as const;
+export type HealthType = (typeof HEALTH_TYPES)[number];
 /** A span from its first millisecond to the first one after it. */
 export type Span = [number, number];
 
@@ -57,19 +60,37 @@ const joined = (at: string, type: HealthType) => `FROM b JOIN relay_health h ON 
 const largest = (type: HealthType, total: string, at: string) =>
   `${SPANS} SELECT i, MAX(total) AS total FROM (SELECT b.i, ${total} AS total ${joined(at, type)} GROUP BY b.i, h.device_id, h.source) GROUP BY i`;
 
+/** Values over each span's readings, as `name AS column` parts; a span with none reads as nulls. */
+const over = (type: HealthType, values: string[]) => ({ sql: `${SPANS} SELECT b.i, ${values.join(", ")} ${joined("start_at", type)} GROUP BY b.i`,
+  empty: Object.fromEntries(values.map(value => [value.split(" AS ")[1], null])) });
+const range = (type: HealthType) => over(type, ["MIN(h.value) AS min", "MAX(h.value) AS max", "ROUND(AVG(h.value)) AS average"]);
+const average = (type: HealthType) => over(type, ["ROUND(AVG(h.value), 1) AS average"]);
+const minutes = `SUM(h.end_at - h.start_at) / ${MINUTE}`;
+
 const HEALTH: Record<HealthType, { sql: string; empty: Record<string, number | null> }> = {
   steps: { sql: largest("steps", "SUM(h.value)", "start_at"), empty: { total: 0 } },
-  sleep: { sql: largest("sleep", `SUM(h.end_at - h.start_at) / ${MINUTE}`, "end_at"), empty: { total: 0 } },
-  heart_rate: { sql: `${SPANS} SELECT b.i, MIN(h.value) AS min, MAX(h.value) AS max, ROUND(AVG(h.value)) AS average
-    ${joined("start_at", "heart_rate")} GROUP BY b.i`, empty: { min: null, max: null, average: null } },
-  workout: { sql: `${SPANS} SELECT b.i, COUNT(*) AS count, SUM(h.end_at - h.start_at) / ${MINUTE} AS minutes
+  sleep: { sql: largest("sleep", minutes, "end_at"), empty: { total: 0 } },
+  heart_rate: range("heart_rate"),
+  workout: { sql: `${SPANS} SELECT b.i, COUNT(*) AS count, ${minutes} AS minutes
     ${joined("start_at", "workout")} GROUP BY b.i`, empty: { count: 0, minutes: 0 } },
+  // The bare value beside MAX() is SQLite's: it comes from the row with the latest start.
+  weight: { sql: `SELECT i, latest FROM (${SPANS} SELECT b.i, h.value AS latest, MAX(h.start_at) ${joined("start_at", "weight")} GROUP BY b.i)`,
+    empty: { latest: null } },
+  resting_heart_rate: average("resting_heart_rate"),
+  hrv_sdnn: average("hrv_sdnn"),
+  hrv_rmssd: average("hrv_rmssd"),
+  blood_oxygen: over("blood_oxygen", ["MIN(h.value) AS min", "ROUND(AVG(h.value), 1) AS average"]),
+  blood_pressure_systolic: range("blood_pressure_systolic"),
+  blood_pressure_diastolic: range("blood_pressure_diastolic"),
+  cycle_flow: over("cycle_flow", ["MAX(h.value) AS flow"]),
+  mindful: { sql: largest("mindful", minutes, "start_at"), empty: { total: 0 } },
+  water: { sql: largest("water", "SUM(h.value)", "start_at"), empty: { total: 0 } },
 };
 
 const ROUNDED = new Set(["total", "minutes"]);
 
-/** One value per span: steps and sleep minutes as `total`, heart rate as min, max and average, workouts as a count
- *  and minutes. Sleep counts on the span it ends in, so a night belongs to the morning it ends. */
+/** One value per span, by the type's own values: steps as `total`, heart rate as min, max and average, and so on.
+ *  Sleep counts on the span it ends in, so a night belongs to the morning it ends. */
 export async function healthBuckets(db: Db, type: HealthType, spans: Span[]): Promise<({ from: number; to: number } & Record<string, number | null>)[]> {
   const { results } = await db.prepare(HEALTH[type].sql).bind(JSON.stringify(spans)).all<{ i: number } & Record<string, number>>();
   const found = new Map(results.map(({ i, ...values }) => [i, values]));
@@ -83,19 +104,80 @@ export async function healthBuckets(db: Db, type: HealthType, spans: Span[]): Pr
 /** A place point's name: the phone's own, else its coordinates. */
 const NAME = "COALESCE(place, printf('%.3f, %.3f', lat, lon))";
 
-/** One day: how many notes, the health totals and the places visited, each place once. */
+/** Each blood pressure reading, upper and lower paired by device and time, oldest first, up to 20. */
+async function pressures(db: Db, from: number, to: number) {
+  const { results } = await db.prepare(`SELECT s.start_at AS at, s.value AS upper, d.value AS lower FROM relay_health s
+    JOIN relay_health d ON d.device_id = s.device_id AND d.start_at = s.start_at AND d.type = 'blood_pressure_diastolic'
+    WHERE s.type = 'blood_pressure_systolic' AND s.start_at >= ? AND s.start_at < ? GROUP BY s.device_id, s.start_at ORDER BY 1 LIMIT 20`)
+    .bind(from, to).all<{ at: number; upper: number; lower: number }>();
+  return results;
+}
+
+/** The day's other health values, each only when the day has some. */
+async function dayHealth(db: Db, spans: Span[]) {
+  const read = (type: HealthType) => healthBuckets(db, type, spans).then(([value]) => value);
+  const [weight, resting, sdnn, rmssd, oxygen, flow, mindful, water] = await Promise.all((["weight", "resting_heart_rate", "hrv_sdnn",
+    "hrv_rmssd", "blood_oxygen", "cycle_flow", "mindful", "water"] as const).map(read));
+  return { ...weight.latest !== null && { weightKg: weight.latest }, ...resting.average !== null && { restingHeartRate: resting.average },
+    ...sdnn.average !== null && { hrvSdnn: sdnn.average }, ...rmssd.average !== null && { hrvRmssd: rmssd.average },
+    ...oxygen.min !== null && { bloodOxygen: { min: oxygen.min, average: oxygen.average! } },
+    ...flow.flow !== null && { cycleFlow: flow.flow }, ...mindful.total! > 0 && { mindfulMinutes: mindful.total },
+    ...water.total! > 0 && { waterMl: water.total } };
+}
+
+/** One day: how many notes, the health totals, the places visited, each place once, and the calendar's events. */
 export async function daySummary(db: Db, from: number, to: number) {
   const spans: Span[] = [[from, to]];
-  const [notes, [steps], [sleep], [heart], [workouts], places] = await Promise.all([
+  const [notes, [steps], [sleep], [heart], [workouts], more, bloodPressure, places, events] = await Promise.all([
     db.prepare("SELECT COUNT(*) AS count FROM relay_notes WHERE recorded_at >= ? AND recorded_at < ?").bind(from, to).first<{ count: number }>(),
     healthBuckets(db, "steps", spans), healthBuckets(db, "sleep", spans), healthBuckets(db, "heart_rate", spans),
-    healthBuckets(db, "workout", spans),
+    healthBuckets(db, "workout", spans), dayHealth(db, spans), pressures(db, from, to),
     db.prepare(`SELECT ${NAME} AS name, AVG(lat) AS lat, AVG(lon) AS lon, MIN(at) AS "from", MAX(at) AS "to"
       FROM relay_locations WHERE at >= ? AND at < ? GROUP BY 1 ORDER BY 4`).bind(from, to).all<{ name: string; lat: number; lon: number; from: number; to: number }>(),
+    eventPage(db, { from, to, limit: DAY_EVENTS }),
   ]);
   return { notes: notes!.count, steps: steps.total!, sleepMinutes: sleep.total!,
     heartRate: heart.min === null ? null : { min: heart.min!, max: heart.max!, average: heart.average! },
-    workouts: { count: workouts.count!, minutes: workouts.minutes! }, places: places.results };
+    workouts: { count: workouts.count!, minutes: workouts.minutes! }, ...more, ...bloodPressure.length > 0 && { bloodPressure },
+    places: places.results,
+    events: events.events.map(({ title, start, end, allDay, people }) => ({ title, start, end, allDay, people: people.flatMap(person => person.name ?? []) })) };
+}
+
+// Calendar events from the phone: a removed one is kept for its webhooks, and no read shows it.
+type EventRow = { id: number; calendar: string; title: string; start_at: number; end_at: number; all_day: number;
+  location: string | null; notes: string | null; url: string | null; people: string; device: string };
+export type Person = { name?: string; email?: string; organizer?: boolean };
+
+const eventShaped = (row: EventRow) => ({ id: String(row.id), title: row.title, calendar: row.calendar, start: row.start_at,
+  end: row.end_at, allDay: row.all_day === 1, location: row.location, notes: row.notes, url: row.url,
+  people: JSON.parse(row.people) as Person[], device: row.device });
+
+export type CalendarEvent = ReturnType<typeof eventShaped>;
+
+/** At most this many events in one day's summary. */
+export const DAY_EVENTS = 50;
+const EVENT = `SELECT e.id, e.calendar, e.title, e.start_at, e.end_at, e.all_day, e.location, e.notes, e.url, e.people, d.name AS device
+  FROM relay_calendar_events e JOIN relay_devices d ON d.id = e.device_id`;
+/** A word in the title, place, notes or people. */
+const EVENT_WORD = "(e.title LIKE ?1 ESCAPE '\\' OR e.location LIKE ?1 ESCAPE '\\' OR e.notes LIKE ?1 ESCAPE '\\' OR e.people LIKE ?1 ESCAPE '\\')";
+
+export type EventFilter = { from: number; to: number; words?: string[]; limit: number; after?: { at: number; id: number } };
+
+/** A page of events that overlap `from` to `to`. With words, the newest first, each holding every word; without, in
+ *  start order. `after` is the last event of the page before. */
+export async function eventPage(db: Db, filter: EventFilter) {
+  const { from, to, words = [], limit, after } = filter;
+  const newest = words.length > 0;
+  const where = ["e.removed_at IS NULL", "e.start_at < ?1", "e.end_at > ?2 OR e.start_at >= ?2",
+    ...after ? [newest ? "(e.start_at < ?3 OR (e.start_at = ?3 AND e.id < ?4))" : "(e.start_at > ?3 OR (e.start_at = ?3 AND e.id > ?4))"] : [],
+    ...words.map((_, index) => EVENT_WORD.replaceAll("?1", `?${index + 6}`))];
+  const order = newest ? "DESC" : "ASC";
+  const { results } = await db.prepare(`${EVENT} WHERE ${where.map(part => `(${part})`).join(" AND ")}
+    ORDER BY e.start_at ${order}, e.id ${order} LIMIT ?5`)
+    .bind(to, from, after?.at ?? 0, after?.id ?? 0, limit + 1, ...words.map(like)).all<EventRow>();
+  const page = results.slice(0, limit);
+  const last = results.length > limit ? page.at(-1)! : null;
+  return { events: page.map(eventShaped), next: last && { at: last.start_at, id: last.id } };
 }
 
 type Visit = { name: string; lat: number; lon: number; arrived: number; left: number };

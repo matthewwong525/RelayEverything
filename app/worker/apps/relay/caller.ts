@@ -16,7 +16,7 @@ export const sessionCookie = (url: URL) => url.protocol === "https:" ? SESSION_C
 /** A key's reach here is POST, plus `GET key`, which answers only its own name; `GET chats` shares an address with a
  *  send, so the method is checked too. An API key reads only on the connector's web API, so here it has `GET key`. */
 const REACH: Record<Reach, { routes: RegExp; refusal: string }> = {
-  phone: { routes: /^\/apps\/relay\/api\/(?:pebble|notes|attachments|health|locations)$/, refusal: "A device key can only send to Relay Everything." },
+  phone: { routes: /^\/apps\/relay\/api\/(?:pebble|notes|attachments|health|locations|calendar)$/, refusal: "A device key can only send to Relay Everything." },
   chats: { routes: /^\/apps\/relay\/api\/(?:chats|chat-saves)$/, refusal: "A chat key can only send chats." },
   api: { routes: /^$/, refusal: "An API key works only on the web API, at your AI connector's address under /v1/." },
 };

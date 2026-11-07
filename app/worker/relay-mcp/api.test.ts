@@ -43,6 +43,9 @@ const SAME: [string, ToolName, Record<string, unknown>][] = [
   ["health?type=steps&from=2026-11-04T07:00&to=2026-11-04T10:00&bucket=hour", "health", { type: "steps", from: "2026-11-04T07:00", to: "2026-11-04T10:00", bucket: "hour" }],
   ["health?type=heart_rate&from=2026-11-03&to=2026-11-05", "health", { type: "heart_rate", from: "2026-11-03", to: "2026-11-05" }],
   ["places?from=2026-11-04&to=2026-11-05&limit=2", "places", { from: "2026-11-04", to: "2026-11-05", limit: 2 }],
+  ["calendar?from=2026-11-04&to=2026-11-05&limit=1", "calendar", { from: "2026-11-04", to: "2026-11-05", limit: 1 }],
+  ["calendar?q=sam&from=2026-11-01&to=2026-12-01", "calendar", { query: "sam", from: "2026-11-01", to: "2026-12-01" }],
+  ["health?type=weight&from=2026-11-04&to=2026-11-05", "health", { type: "weight", from: "2026-11-04", to: "2026-11-05" }],
   ["chats?q=stiffener", "search_chats", { query: "stiffener" }],
   [`chats/${CHAT(1)}`, "read_chat", { id: CHAT(1) }],
 ];

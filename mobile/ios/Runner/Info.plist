@@ -47,8 +47,12 @@
 	<string>Relay Everything adds the photos you pick to a note.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Relay Everything uses the camera only to scan the QR code of your device key.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>With the calendar on, Relay Everything reads your events and sends them to your own Relay Everything server. It never changes an event.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>With the calendar on, Relay Everything reads your events and sends them to your own Relay Everything server. It never changes an event.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Relay Everything reads your steps, heart rate, sleep and workouts and sends them to your own Relay Everything server.</string>
+	<string>Relay Everything reads your steps, heart rate, sleep, workouts, weight, resting heart rate, heart rate variability, blood oxygen, blood pressure, cycle, mindful minutes and water, and sends them to your own Relay Everything server. You can leave any type off.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Relay Everything does not write to Health. iOS asks each app that reads Health for this text.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

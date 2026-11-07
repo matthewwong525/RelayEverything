@@ -23,15 +23,15 @@ A newly installed Relay phone app SHALL let the person write and read notes with
 
 ### Requirement: Health and location history only while sending
 
-The app SHALL read health samples and record location history only while sending is on, and SHALL keep no copy of either while sending is off.
+The app SHALL read health samples, calendar events for sending, and record location history only while sending is on, and SHALL keep no copy of any of them while sending is off.
 
 #### Scenario: Sending is off
 - **WHEN** the person has never turned sending on
-- **THEN** the app asks for no health or background-location permission and stores no samples or points
+- **THEN** the app asks for no health, calendar or background-location permission, and stores no samples, events or points
 
 #### Scenario: Sending turned off with uploads waiting
-- **WHEN** the person turns sending off while health samples or location points are still waiting to go
-- **THEN** the app deletes them, stops reading health and recording location, and keeps every note
+- **WHEN** the person turns sending off while health samples, calendar events or location points are still waiting to go
+- **THEN** the app deletes them, stops reading health and the calendar and recording location, and keeps every note
 
 ### Requirement: Earlier notes go only when the person says so
 

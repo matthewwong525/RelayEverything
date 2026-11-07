@@ -11,6 +11,7 @@ import 'controller.dart';
 import 'data/connection.dart';
 import 'shortcuts/bridge.dart';
 import 'sync/background.dart';
+import 'sync/calendar.dart';
 import 'sync/health.dart';
 import 'sync/location.dart';
 import 'sync/native.dart';
@@ -40,7 +41,8 @@ Future<void> main() async {
     excludeFromBackup: excludeFromBackup),
     transcriber: WhisperTranscriber(() async => (await model.file).path), player: PhonePlayer());
   final relay = RelayController(store: openStore(), vault: KeyVault(), places: PhonePlaces(), health: PhoneHealth(), schedule: scheduleSync,
-    voice: voice, native: Platform.isIOS ? PhoneBackground() : null, folder: getApplicationSupportDirectory, opener: openWithPhone);
+    voice: voice, native: Platform.isIOS ? PhoneBackground() : null, folder: getApplicationSupportDirectory, opener: openWithPhone,
+    calendar: PhoneCalendarSource());
   // A Health or place wake while the app runs syncs here, in place of a second engine.
   if (Platform.isIOS) PhoneBackground.onWake(relay.sync);
   await relay.load();
@@ -51,5 +53,7 @@ Future<void> main() async {
   unawaited(listenForShortcuts(ShortcutsBridge(relay, onVoice: () => voiceRequests.add(null))));
   // Each open, and each return to the app, sends what waits.
   AppLifecycleListener(onResume: relay.sync);
+  // After an update that reads new health types, the phone asks for them once, before the first round reads.
+  await relay.askNewHealthTypes();
   await relay.sync();
 }

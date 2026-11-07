@@ -1,8 +1,8 @@
 // Each connector question's answer, shared by the MCP tools and the web API so one input answers the same through
 // either. Reads are capped; a note is added only through add-note.ts. No answer holds a key or a device's id.
 import { addNote, type TypedNote } from "../apps/relay/add-note.ts";
-import { chatById, chatLines, chatMessages, chatPage, daySummary, healthBuckets, noteById, notePage, placeVisits, type Chat, type HealthType,
-  type Note, type Span } from "../apps/relay/queries.ts";
+import { chatById, chatLines, chatMessages, chatPage, daySummary, eventPage, healthBuckets, noteById, notePage, placeVisits, type CalendarEvent,
+  type Chat, type HealthType, type Note, type Span } from "../apps/relay/queries.ts";
 import type { Db, PersonSpace } from "../apps/relay/space.ts";
 import type { McpEnv } from "./env.ts";
 import { LINES, MAX_BUCKETS, PART, type Input, type ToolName } from "./inputs.ts";
@@ -63,9 +63,22 @@ function buckets(from: number, to: number, size: "hour" | "day", timezone: strin
 }
 
 async function summary(db: Db, date: string, timezone: string) {
-  const { places, ...totals } = await daySummary(db, startOfDay(date, timezone), startOfDay(nextDay(date), timezone));
-  return { day: date, timezone, ...totals, places: places.map(place => ({ ...place, from: local(place.from, timezone), to: local(place.to, timezone) })) };
+  const { places, events, bloodPressure, ...totals } = await daySummary(db, startOfDay(date, timezone), startOfDay(nextDay(date), timezone));
+  return { day: date, timezone, ...totals,
+    ...bloodPressure && { bloodPressure: bloodPressure.map(reading => ({ ...reading, at: local(reading.at, timezone) })) },
+    places: places.map(place => ({ ...place, from: local(place.from, timezone), to: local(place.to, timezone) })),
+    events: events.map(event => ({ ...event, start: local(event.start, timezone), end: local(event.end, timezone) })) };
 }
+
+/** Where an event page starts: the last answer's cursor, the start and id of the event before. */
+function eventAfter(text: string | undefined): { at: number; id: number } | undefined {
+  if (text === undefined) return undefined;
+  const [, at, id] = /^(\d{1,16})\.(\d{1,16})$/.exec(text) ?? [];
+  if (!at) throw new Refusal("That cursor is not one this connector gave.");
+  return { at: Number(at), id: Number(id) };
+}
+
+const eventShown = (event: CalendarEvent, timezone: string) => ({ ...event, start: local(event.start, timezone), end: local(event.end, timezone) });
 
 async function visits(db: Db, from: number, to: number, limit: number, timezone: string) {
   const found = await placeVisits(db, from, to, limit);
@@ -127,6 +140,11 @@ const READS = {
     return { type, bucket, timezone, values: values.map(value => ({ ...value, from: local(value.from, timezone), to: local(value.to, timezone) })) };
   },
   places: async (db, { from, to, limit, timezone = ZONE }) => visits(db, ...range(from, to, timezone), limit, timezone),
+  calendar: async (db, { from, to, query, limit, cursor: text, timezone = ZONE }) => {
+    const [start, end] = range(from, to, timezone);
+    const found = await eventPage(db, { from: start, to: end, words: query?.split(/\s+/).slice(0, 10), limit, after: eventAfter(text) });
+    return { events: found.events.map(event => eventShown(event, timezone)), nextCursor: found.next && `${found.next.at}.${found.next.id}` };
+  },
   search_chats: async (db, { query, from = "2001-01-01", to = "2286-01-01", limit, cursor: text, timezone = ZONE }) => {
     const [after, end] = range(from, to, timezone);
     return chatsFound(db, query.split(/\s+/).slice(0, 10), { after, limit, ...pageBefore(text, end) }, timezone);

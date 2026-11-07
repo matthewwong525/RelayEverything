@@ -23,7 +23,7 @@ const KINDS: Record<Kind, { label: string; name: string; reaches: Made['reaches'
   api: { label: 'API key', name: 'Script', reaches: 'api' },
 }
 
-const REACHES: Record<Made['reaches'], string> = { phone: 'Notes, health and places', chats: 'Chats', api: 'API: reads and adds notes' }
+const REACHES: Record<Made['reaches'], string> = { phone: 'Notes, health, places and calendar', chats: 'Chats', api: 'API: reads and adds notes' }
 
 function Steps({ kind, made }: { kind: Kind; made: Made }) {
   if (kind === 'pebble') return <PebbleSteps made={made} origin={window.location.origin} />

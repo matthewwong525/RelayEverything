@@ -17,6 +17,18 @@ const note = z.strictObject({
 const visit = z.strictObject({ name: z.string(), lat: z.number(), lon: z.number(), arrived: at, left: at });
 const totals = { steps: z.number(), sleepMinutes: z.number(), heartRate: z.strictObject({ min: z.number(), max: z.number(), average: z.number() }).nullable(),
   workouts: z.strictObject({ count: z.number(), minutes: z.number() }) };
+/** The day's other health values: each is there only when the day has some. */
+const more = { weightKg: z.number().optional().describe("The latest weight, in kg."), restingHeartRate: z.number().optional(),
+  hrvSdnn: z.number().optional().describe("Heart rate variability from iPhone, in ms."),
+  hrvRmssd: z.number().optional().describe("Heart rate variability from Android, in ms."),
+  bloodOxygen: z.strictObject({ min: z.number(), average: z.number() }).optional().describe("In %."),
+  bloodPressure: z.array(z.strictObject({ at, upper: z.number(), lower: z.number() })).optional().describe("Each reading, in mmHg, up to 20."),
+  cycleFlow: z.number().optional().describe("The day's highest flow: 0 none, 1 light, 2 medium, 3 heavy."),
+  mindfulMinutes: z.number().optional(), waterMl: z.number().optional() };
+const person = z.strictObject({ name: z.string().optional(), email: z.string().optional(), organizer: z.boolean().optional() });
+const event = z.strictObject({ id: z.string(), title: z.string(), calendar: z.string().describe("The calendar's name."), start: at, end: at,
+  allDay: z.boolean(), location: z.string().nullable(), notes: z.string().nullable(), url: z.string().nullable(), people: z.array(person),
+  device: z.string().describe("The name of the phone that sent it.") });
 const chat = { id: z.string(), title: z.string(), project: z.string().describe("The project's folder name."), app: z.literal("claude-code"),
   startedAt: at, lastAt: at, messages: z.number(), savedByAi: z.boolean() };
 const role = z.enum(["you", "ai", "step"]);
@@ -26,12 +38,15 @@ export const ANSWERS = {
   search: z.strictObject({ notes: z.array(note), nextCursor }),
   timeline: z.strictObject({ notes: z.array(note), nextCursor }),
   fetch: note.extend({ placesNearby: z.array(visit), day: z.strictObject({ day: z.string(), ...totals }) }),
-  day_summary: z.strictObject({ day: z.string(), timezone: z.string(), notes: z.number(), ...totals,
-    places: z.array(z.strictObject({ name: z.string(), lat: z.number(), lon: z.number(), from: at, to: at })) }),
+  day_summary: z.strictObject({ day: z.string(), timezone: z.string(), notes: z.number(), ...totals, ...more,
+    places: z.array(z.strictObject({ name: z.string(), lat: z.number(), lon: z.number(), from: at, to: at })),
+    events: z.array(z.strictObject({ title: z.string(), start: at, end: at, allDay: z.boolean(), people: z.array(z.string()).describe("Their names.") }))
+      .describe("The day's calendar events, in start order, up to 50.") }),
   health: z.strictObject({ type: z.string(), bucket: z.enum(["hour", "day"]), timezone: z.string(),
     values: z.array(z.object({ from: at, to: at }).catchall(z.number().nullable())
-      .describe("`total` for steps and sleep minutes; `min`, `max` and `average` for heart rate; `count` and `minutes` for workouts.")) }),
+      .describe("Each type's own values, as the health tool says: such as `total` for steps, `min`, `max` and `average` for heart rate.")) }),
   places: z.strictObject({ visits: z.array(visit), next: at.nullable().describe("The first visit left out: read on from it.") }),
+  calendar: z.strictObject({ events: z.array(event), nextCursor }),
   search_chats: z.strictObject({ chats: z.array(z.strictObject({ ...chat, lines: z.array(z.strictObject({ role, text: z.string() })) })), nextCursor }),
   read_chat: z.strictObject({ ...chat, saves: z.array(z.strictObject({ id: z.string(), title: z.string(), text: z.string(), createdAt: at })),
     messages: z.array(z.strictObject({ seq: z.number(), role, text: z.string(), at })), nextCursor }),
@@ -95,7 +110,7 @@ export function openApi(origin: string) {
   return {
     openapi: "3.1.0",
     info: { title: "Relay Everything API", version: "1.0.0",
-      description: "Read one person's Relay Everything notes, health, places and saved chats, and add notes. It changes and deletes nothing. " +
+      description: "Read one person's Relay Everything notes, health, places, calendar and saved chats, and add notes. It changes and deletes nothing. " +
         "Each caller reaches only the space of the person who connected it or made its key." },
     servers: [{ url: origin }],
     security: [{ oauth2: [] }, { apiKey: [] }],

@@ -10,12 +10,13 @@ Open **Settings** from the gear at the top of your notes. Each switch acts at on
 | **Pin notes to where I am** | Each typed note keeps where you were. It works with no signal. [Location](../location/#pin-notes-to-where-i-am) |
 | **Voice notes** | Shows the speech model and its size, with **Remove**. Your voice is written into words on this phone, and recordings never leave it. [More below](#voice-notes) |
 | **Send to Relay Everything** | Sends your notes to your space on your Relay Everything server, which can pass them to your own database and your AI. Off: nothing leaves this phone. Ring notes from the Pebble app come through your server, so they need it on. [Connect a phone](../../start/connect-a-phone/) |
-| **Health: steps, heart rate, sleep, workouts** | Sends them every hour. Only with sending on. [Health](../health/) |
+| **Health** | Sends steps, heart rate, sleep, workouts, weight, blood pressure and more every hour, and the last 90 days the first time. Only with sending on. [Health](../health/) |
+| **Calendar** | Sends the events of your phone's calendars: the last 90 days and the next 90 days, then each change. Under it, a switch for each calendar turns that one off. Only with sending on. [Calendar](../calendar/) |
 | **Location history** | Keeps a point each 100 m you move, so ring notes get a place too. Only with sending on. [Location](../location/#location-history) |
 | **Server** | The server this phone sends to. Change it to try a preview. Shows when a key is kept. [Connect a phone](../../start/connect-a-phone/#try-a-preview) |
 | **Disconnect this phone** | Removes the key from this phone and turns sending off. Your notes stay here. You need a new key to send again. Shows when a key is kept. |
 
-Turning sending off asks first, then stops health and location history and deletes what of them did not go yet. Your notes, and the key, stay on the phone. [Connect a phone](../../start/connect-a-phone/#stop-sending)
+Turning sending off asks first, then stops health, the calendar and location history and deletes what of them did not go yet. Your notes, and the key, stay on the phone. [Connect a phone](../../start/connect-a-phone/#stop-sending)
 
 ## Voice notes
 

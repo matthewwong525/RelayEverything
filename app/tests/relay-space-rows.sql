@@ -46,8 +46,29 @@ INSERT INTO relay_chat_messages (chat_id, seq, role, text, at) VALUES
 INSERT INTO relay_chat_saves (id, chat_id, title, text, created_at) VALUES
   ('e0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', 'Stiffener plan',
    'Use a 0.2 mm steel stiffener under the battery, glued, not soldered.', 1793801460000);
+-- More health from the phone that day: two weights, of which the evening's is the latest, and one blood pressure reading.
+INSERT INTO relay_health (device_id, type, start_at, end_at, value, unit, source, created_at) VALUES
+  ('d0000000-0000-4000-8000-000000000001', 'weight', 1793793600000, 1793793600000, 71.8, 'kg', 'com.google.android.apps.fitness', 1793833200000),
+  ('d0000000-0000-4000-8000-000000000001', 'weight', 1793840400000, 1793840400000, 71.4, 'kg', 'com.google.android.apps.fitness', 1793840460000),
+  ('d0000000-0000-4000-8000-000000000001', 'blood_pressure_systolic', 1793799000000, 1793799000000, 118, 'mmHg', 'com.google.android.apps.fitness', 1793833200000),
+  ('d0000000-0000-4000-8000-000000000001', 'blood_pressure_diastolic', 1793799000000, 1793799000000, 76, 'mmHg', 'com.google.android.apps.fitness', 1793833200000);
+
+-- The phone's calendar: a board meeting and a lunch that day, one meeting removed on the phone, and one the next day.
+INSERT INTO relay_calendar_events (device_id, event_key, calendar, title, start_at, end_at, all_day, location, notes, url, people,
+  removed_at, updated_at, created_at) VALUES
+  ('d0000000-0000-4000-8000-000000000001', 'work:board-1:1793804400000', 'Work', 'Board meeting', 1793804400000, 1793808000000, 0,
+   'Office, room 2', 'Bring the ring samples.', NULL, '[{"name":"Sam Lee","email":"sam@example.com","organizer":true},{"name":"Ana"}]',
+   NULL, 1793700000000, 1793700000000),
+  ('d0000000-0000-4000-8000-000000000001', 'home:lunch-1:1793811600000', 'Home', 'Lunch with Sam', 1793811600000, 1793815200000, 0,
+   'King St W', NULL, NULL, '[{"name":"Sam Lee"}]', NULL, 1793700000000, 1793700000000),
+  ('d0000000-0000-4000-8000-000000000001', 'work:sync-1:1793818800000', 'Work', 'Cancelled sync', 1793818800000, 1793820600000, 0,
+   NULL, NULL, NULL, '[]', 1793750000000, 1793750000000, 1793700000000),
+  ('d0000000-0000-4000-8000-000000000001', 'work:review-1:1793887200000', 'Work', 'Design review with Sam', 1793887200000, 1793890800000, 0,
+   NULL, NULL, 'https://meet.example.com/review', '[]', NULL, 1793700000000, 1793700000000);
+
 -- Relay webhooks: one made-up address at example.com, paused so a preview never sends to it, with notes sent and the
--- health batch waiting. The rows above filled relay_outbox through its triggers: locations 1-3, notes 4-6, health 7-12.
+-- health batch waiting. The rows above filled relay_outbox through its triggers: locations 1-3, notes 4-6, health 7-16,
+-- calendar 17-20.
 INSERT INTO relay_webhooks (id, name, url, secret, kinds, active, sent_seq, last_status, last_sent_at, created_at) VALUES
   ('e0000000-0000-4000-8000-000000000001', 'Example database', 'https://example.com/relay',
    'whsec_c2VlZC1vbmx5LW5vdC1hLXJlYWwtc2VjcmV0LTAwMDA=', '["notes","health"]', 0, 6, 200, 1793829510000, 1793790000000);

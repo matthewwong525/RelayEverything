@@ -19,8 +19,11 @@ const FIRST = { notes: [
 const OLDER = { notes: [note("00000000-0000-4000-8000-000000000003", { recordedAt: NOW - 2 * DAY })], next: null, nextId: null };
 const SUMMARY = { day: "2026-11-05", notes: 2, steps: 8432, sleepMinutes: 455,
   heartRate: { min: 52, max: 131, average: 74 }, workouts: { count: 1, minutes: 40 },
-  places: [{ name: "Queen St W", lat: 43.65, lon: -79.38, from: NOW - 3_600_000, to: NOW }, { name: "Home", lat: 43.66, lon: -79.4, from: NOW, to: NOW }] };
-const EMPTY = { day: "2026-11-05", notes: 0, steps: 0, sleepMinutes: 0, heartRate: null, workouts: { count: 0, minutes: 0 }, places: [] };
+  weightKg: 71.2, hrvSdnn: 48, bloodPressure: [{ at: NOW, upper: 118, lower: 76 }], waterMl: 1500,
+  places: [{ name: "Queen St W", lat: 43.65, lon: -79.38, from: NOW - 3_600_000, to: NOW }, { name: "Home", lat: 43.66, lon: -79.4, from: NOW, to: NOW }],
+  events: [{ title: "Board meeting", start: NOW, end: NOW + 3_600_000, allDay: false, people: ["Sam Lee", "Ana"] },
+    { title: "US Holiday", start: NOW, end: NOW + DAY, allDay: true, people: [] }] };
+const EMPTY = { day: "2026-11-05", notes: 0, steps: 0, sleepMinutes: 0, heartRate: null, workouts: { count: 0, minutes: 0 }, places: [], events: [] };
 
 const CHAT_1 = "c0000000-0000-4000-8000-000000000001";
 const CHAT_2 = "c0000000-0000-4000-8000-000000000002";
@@ -78,7 +81,12 @@ it("shows today's summary, every note with its place and recording, and the plac
   const tiles = await screen.findByRole("region", { name: "Today" });
   expect(within(tiles).getByText("8,432")).toBeTruthy();
   expect(within(tiles).getByText("7 h 35 min")).toBeTruthy();
-  expect(screen.getByText(/Heart rate 52 to 131 bpm, 74 on average\. 1 workout, 40 min\./)).toBeTruthy();
+  expect(screen.getByText(/Heart rate 52 to 131 bpm, 74 on average\. 1 workout, 40 min\. Weight 71\.2 kg\. Heart rate variability 48 ms\. Blood pressure 118\/76 mmHg\. Water 1,500 ml\./))
+    .toBeTruthy();
+  const calendar = screen.getByRole("region", { name: "Calendar" });
+  expect(within(calendar).getByText("Board meeting")).toBeTruthy();
+  expect(within(calendar).getByText(/Sam Lee, Ana/)).toBeTruthy();
+  expect(within(calendar).getByText("All day")).toBeTruthy();
   const places = screen.getByRole("region", { name: "Places" });
   expect(within(places).getByText("Home")).toBeTruthy();
   expect(within(places).getByText(/ to /)).toBeTruthy();
@@ -120,6 +128,7 @@ it("shows an empty day and an empty timeline in words", async () => {
   expect(await screen.findByText("None yet")).toBeTruthy();
   expect(screen.getByText("No heart rate yet today. No workouts yet today.")).toBeTruthy();
   expect(screen.getByText(/No places yet today/)).toBeTruthy();
+  expect(screen.getByText(/No events today/)).toBeTruthy();
   expect(await screen.findByText(/No notes yet/)).toBeTruthy();
   expect(await screen.findByText(/No chats yet/)).toBeTruthy();
   answer = route => route === "timeline" ? Response.json({ notes: [], next: null, nextId: null }) : Response.json({ ...EMPTY, workouts: { count: 3, minutes: 95 } });
@@ -132,10 +141,14 @@ it("says when the summary or the notes fail, and tries each again", async () => 
   await screen.findByText("Today's summary could not be loaded.");
   expect(screen.getByText("Notes could not be loaded.")).toBeTruthy();
   failing = false;
-  answer = route => route.startsWith("summary?") ? Response.json({ ...SUMMARY, workouts: { count: 3, minutes: 95 } }) : ordinary(route);
+  const other = { workouts: { count: 3, minutes: 95 }, hrvSdnn: undefined, hrvRmssd: 40, restingHeartRate: 55, bloodOxygen: { min: 94, average: 97 },
+    cycleFlow: 2, mindfulMinutes: 10, events: [{ title: "", start: NOW, end: NOW + 60_000, allDay: false, people: [] }] };
+  answer = route => route.startsWith("summary?") ? Response.json({ ...SUMMARY, ...other }) : ordinary(route);
   const [summary, notes] = screen.getAllByRole("button", { name: "Try again" });
   fireEvent.click(summary);
-  expect(await screen.findByText(/3 workouts, 95 min\./)).toBeTruthy();
+  expect(await screen.findByText(/3 workouts, 95 min\. Weight 71\.2 kg\. Resting heart rate 55 bpm\. Heart rate variability 40 ms\. Blood oxygen 94% lowest, 97% on average\..* Cycle flow medium\. 10 mindful min\./))
+    .toBeTruthy();
+  expect(screen.getByText("No title")).toBeTruthy();
   fireEvent.click(notes);
   expect(await screen.findByLabelText("Ring note")).toBeTruthy();
 });

@@ -34,6 +34,6 @@
 ## 6. Checks
 
 - [x] 6.1 Run `flutter analyze` and `flutter test` in `mobile/`, `npm test` and the type check in `app/`, `node scripts/product-name.test.mjs` and `node scripts/public-check.mjs`; all pass.
-- [ ] 6.2 `/save`; the pull request's checks pass, including the Android and iOS builds.
-- [ ] 6.3 Run the device check on the iPhone simulator through `/verify`: Settings shows the calendar switch and the calendar list (no health in the simulator).
-- [ ] 6.4 Preview the website with `node scripts/publish-relay-site.mjs --ref HEAD --staging` and check the calendar and health pages.
+- [x] 6.2 `/save`; the pull request's checks pass, including the Android and iOS builds.
+- [x] 6.3 Run the device check on the iPhone simulator through `/verify`: Settings shows the calendar switch, and with sending off it stays off and asks for no permission (no health in the simulator; the calendar list needs a signed-in phone, so `screens_test.dart` and the TestFlight check cover it).
+- [x] 6.4 Preview the website with `node scripts/publish-relay-site.mjs --ref HEAD --staging` and check the calendar and health pages.

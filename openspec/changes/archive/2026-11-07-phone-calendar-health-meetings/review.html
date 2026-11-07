@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · phone-calendar-health-meetings</title>
+<title>Review · 2026-11-07-phone-calendar-health-meetings</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="phone-calendar-health-meetings" data-own-back>
+<body data-change="2026-11-07-phone-calendar-health-meetings" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>phone-calendar-health-meetings</h1>
+  <h1>2026-11-07-phone-calendar-health-meetings</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -487,6 +487,8 @@
 <li class="decision card" id="decision-24" data-note="decision-24" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: the website publish after the merge (<code>node scripts/publish-relay-site.mjs</code>, reported by its <code>result=</code> line) is a step after publishing, not a task, because a check only possible after publishing can't be ticked before the merge.</li>
 <li class="decision card" id="decision-25" data-note="decision-25" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: Matthew's own check on his iPhone from TestFlight (turn on the calendar and health; Claude's connector shows today's events and 90 days of weight or heart rate) comes after publishing, not as a task, because TestFlight gets the build only after the merge.</li>
 <li class="decision card" id="decision-26" data-note="decision-26" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-07</p>Built: server, web page, phone and docs, with the review's two backfill fixes; specs reconciled; saved for the pull request's checks inside /ship.</li>
+<li class="decision card" id="decision-27" data-note="decision-27" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: task 6.3 checks only what the simulator can show (the calendar switch, and no permission ask with sending off), because the simulator can't sign in to a server, so sending and the calendar list stay off there; the device check said works, and <code>screens_test.dart</code> and Matthew's TestFlight check cover the list.</li>
+<li class="decision card" id="decision-28" data-note="decision-28" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-07</p>Archive checkpoint inside /ship: the checks, the iPhone simulator check (works) and the staging site passed. Main's iPhone build had failed on Apple's certificate limit; asked whether to revoke the two <i>Created via API</i> certificates → chose revoke both, and main's build passed. Main then took space migration <code>0005_no_pebble</code>, so this change's migration became <code>0006_phone_data</code> and no longer makes the dropped <code>relay_outbox_note_updated</code> trigger again.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

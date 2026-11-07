@@ -1,6 +1,6 @@
 # Proposal: Your phone's calendar and more health
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** innocent-stingray
 **Open questions:** none
 
@@ -97,6 +97,8 @@ When you connect your phone and open Claude, it should know your day at once: wh
 - **2026-11-07** — Assumed: the website publish after the merge (`node scripts/publish-relay-site.mjs`, reported by its `result=` line) is a step after publishing, not a task, because a check only possible after publishing can't be ticked before the merge.
 - **2026-11-07** — Assumed: Matthew's own check on his iPhone from TestFlight (turn on the calendar and health; Claude's connector shows today's events and 90 days of weight or heart rate) comes after publishing, not as a task, because TestFlight gets the build only after the merge.
 - **2026-11-07** — Built: server, web page, phone and docs, with the review's two backfill fixes; specs reconciled; saved for the pull request's checks inside /ship.
+- **2026-11-07** — Assumed: task 6.3 checks only what the simulator can show (the calendar switch, and no permission ask with sending off), because the simulator can't sign in to a server, so sending and the calendar list stay off there; the device check said works, and `screens_test.dart` and Matthew's TestFlight check cover the list.
+- **2026-11-07** — Archive checkpoint inside /ship: the checks, the iPhone simulator check (works) and the staging site passed. Main's iPhone build had failed on Apple's certificate limit; asked whether to revoke the two *Created via API* certificates → chose revoke both, and main's build passed. Main then took space migration `0005_no_pebble`, so this change's migration became `0006_phone_data` and no longer makes the dropped `relay_outbox_note_updated` trigger again.
 
 ## Capabilities
 

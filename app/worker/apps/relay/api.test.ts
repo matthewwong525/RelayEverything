@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { handleApp } from "../index";
 import { hashToken } from "./people";
 import { spaceOf, vouch } from "./space";
-import { ANA, call, checker, db, directoryDb, env, laptop, lost, makeKey, matthew, NOW, pebbleApp, phone, queue, request, rows,
+import { ANA, call, checker, db, directoryDb, env, laptop, lost, makeKey, matthew, NOW, ipad, phone, queue, request, rows,
   type Who } from "../../../tests/relay";
 
 const MINUTE = 60_000;
@@ -11,13 +11,22 @@ const sample = (type: string, start: number, end: number, value: number, more: R
   ({ type, start, end, value, unit: type === "heart_rate" ? "bpm" : type === "steps" ? "count" : "minutes", source: "Health Connect", ...more });
 const point = (at: number, more: Record<string, unknown> = {}) => ({ at, lat: 43.6487, lon: -79.3962, accuracy: 15, place: "Queen St W", ...more });
 const ringNote = (id: string, recordedAt: number) => db.sql.prepare(`INSERT INTO relay_notes (id, device_id, source, delivery_id, text, audio_key,
-  recorded_at, created_at) VALUES (?, 'd-pebble', 'ring', ?, 'Ring note', ?, ?, 0)`).run(id, `delivery-${id}`, `people/${ANA}/${id}`, recordedAt);
+  recorded_at, created_at) VALUES (?, 'd-ipad', 'ring', ?, 'Ring note', ?, ?, 0)`).run(id, `delivery-${id}`, `people/${ANA}/${id}`, recordedAt);
 const RING = "aaaaaaaa-0000-4000-8000-000000000001";
-/** Seals a recording into Ana's folder, as the Pebble route stores one. */
+/** Seals a recording into Ana's folder, as a stored ring note keeps one. */
 const seal = (id: string, bytes: number[]) => spaceOf(env() as never, vouch("session", ANA)).files.put(id, new Uint8Array(bytes).buffer);
 /** The audio route as `who` plays it, with a Range header when one is given. */
 const play = (who: Who, id: string, range?: string) => handleApp(request(who, "GET", `https://relay.example.com/apps/relay/api/audio?id=${id}`,
   range ? { headers: { Range: range } } : {}), env(), null);
+
+it("has no Pebble address: a live phone key posting a signed ring note there gets not found and stores nothing", async () => {
+  const response = await handleApp(request(phone, "POST", "https://relay.example.com/apps/relay/api/pebble", { headers: {
+    "content-type": "application/json", "X-Index-Delivery": "delivery-1", "X-Pebble-Signature": "sha256=00" },
+    body: JSON.stringify({ text: "Buy milk", recordedAt: NOW }) }), env(), null);
+  expect(response.status).toBe(404);
+  expect(rows("relay_notes")).toEqual([]);
+  expect(rows("relay_outbox")).toEqual([]);
+});
 
 it("stores a typed note once per phone, with the place its phone sent", async () => {
   const first = await call(phone, "POST", "notes", typed("note-0001", { lat: 43.65, lon: -79.38, accuracy: 8, place: "Home" }));
@@ -41,7 +50,7 @@ it("stores only the health samples it lacks, and says how many it added", async 
   expect(await call(phone, "POST", "health", { samples: day.slice(0, 1) })).toEqual({ status: 200, json: { received: 1, added: 1 } });
   expect(await call(phone, "POST", "health", { samples: day })).toEqual({ status: 200, json: { received: 2, added: 1 } });
   // The same span from another source, or another phone, is its own sample.
-  expect((await call(pebbleApp, "POST", "health", { samples: [{ ...day[0], source: "Apple Health" }] })).json.added).toBe(1);
+  expect((await call(ipad, "POST", "health", { samples: [{ ...day[0], source: "Apple Health" }] })).json.added).toBe(1);
   expect(rows("relay_health")).toHaveLength(3);
   for (const wrong of [[], [sample("mood", NOW, NOW, 1)], [sample("steps", NOW, NOW - 1, 1)], Array(501).fill(day[0])]) {
     expect((await call(phone, "POST", "health", { samples: wrong })).status).toBe(400);
@@ -49,13 +58,14 @@ it("stores only the health samples it lacks, and says how many it added", async 
   expect((await call(lost, "POST", "health", { samples: day })).status).toBe(403);
 });
 
-it("stores location points once, and places ring notes that came before them", async () => {
+it("stores location points once, and gives no stored ring note a place from them", async () => {
   ringNote("aaaaaaaa-0000-4000-8000-000000000001", NOW - 20 * MINUTE);
   ringNote("aaaaaaaa-0000-4000-8000-000000000002", NOW - 2 * 60 * MINUTE);
   const points = [point(NOW - 23 * MINUTE), point(NOW - 12 * MINUTE, { lat: 43.66, place: undefined })];
   expect(await call(phone, "POST", "locations", { points })).toEqual({ status: 200, json: { received: 2, added: 2 } });
   expect(await call(phone, "POST", "locations", { points })).toEqual({ status: 200, json: { received: 2, added: 0 } });
-  expect(rows("relay_notes").map(row => [row.place, row.lat, row.place_from])).toEqual([["Queen St W", 43.6487, "history"], [null, null, null]]);
+  expect(rows("relay_notes").map(row => [row.place, row.lat, row.place_from])).toEqual([[null, null, null], [null, null, null]]);
+  expect(rows("relay_outbox").map(row => row.kind)).not.toContain("note.updated");
   expect(rows("relay_locations").map(row => row.place)).toEqual(["Queen St W", null]);
   expect((await call(phone, "POST", "locations", { points: [point(NOW, { lat: 91 })] })).status).toBe(400);
   expect((await call(matthew, "POST", "locations", { points })).status).toBe(403);
@@ -70,7 +80,7 @@ it("reads the timeline newest first, a page at a time, for the site page, and re
   expect(all.json.notes.map(note => [note.source, note.device, note.audio, note.place])).toEqual([
     ["typed", "Android phone", false, null],
     ["typed", "Android phone", false, { lat: 43.65, lon: -79.38, accuracy: null, name: null, from: "phone" }],
-    ["ring", "Pebble app", true, null]]);
+    ["ring", "iPad", true, null]]);
   expect(all.json.next).toBeNull();
   const first = await call(matthew, "GET", "timeline", { limit: 2 });
   expect([first.json.notes.length, first.json.next, first.json.nextId]).toEqual([2, NOW - 2 * MINUTE, first.json.notes[1].id]);
@@ -101,7 +111,7 @@ it("sums a day for the site page: notes, the larger phone's steps and sleep, hea
     sample("steps", start + 60 * MINUTE, start + 90 * MINUTE, 3000), sample("steps", start + 120 * MINUTE, start + 150 * MINUTE, 5214),
     sample("heart_rate", start + 60 * MINUTE, start + 60 * MINUTE, 61), sample("heart_rate", start + 70 * MINUTE, start + 70 * MINUTE, 90),
     sample("sleep", start - 7 * 60 * MINUTE, start + 30 * MINUTE, 450), sample("workout", start + 3 * 60 * MINUTE, start + 3 * 60 * MINUTE + 45 * MINUTE, 45)] });
-  await call(pebbleApp, "POST", "health", { samples: [sample("steps", start + 60 * MINUTE, start + 90 * MINUTE, 4000)] });
+  await call(ipad, "POST", "health", { samples: [sample("steps", start + 60 * MINUTE, start + 90 * MINUTE, 4000)] });
   await call(phone, "POST", "locations", { points: [point(start + 60 * MINUTE), point(start + 90 * MINUTE),
     point(start + 3 * 60 * MINUTE, { lat: 43.6629, lon: -79.3957, place: undefined })] });
   await call(phone, "POST", "notes", typed("note-0001", { createdAt: start + 61 * MINUTE }));
@@ -143,7 +153,7 @@ it("streams a ring note's recording, and answers not found for a note without on
   }
   expect((await call(matthew, "GET", "audio")).status).toBe(400);
   // A device key only sends: it plays no recording.
-  for (const [who, status] of [[phone, 403], [pebbleApp, 403], [null, 401]] as const) expect((await play(who, RING)).status).toBe(status);
+  for (const [who, status] of [[phone, 403], [ipad, 403], [null, 401]] as const) expect((await play(who, RING)).status).toBe(status);
 });
 
 it("answers one byte range of a recording, as Safari asks before it plays", async () => {

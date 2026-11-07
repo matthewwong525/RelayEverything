@@ -3,7 +3,7 @@ title: Keys
 description: How a device proves who it is to the Relay Everything server, which routes its key reaches, and how to make and turn off a key on the page.
 ---
 
-Each call to the Relay Everything server needs a key or a sign-in. A phone, the Pebble app and each Claude Code computer have their own device key, and a script has its own API key; a person in a browser signs in instead: [Sign up](../../start/sign-up/).
+Each call to the Relay Everything server needs a key or a sign-in. Each phone and each Claude Code computer has its own device key, and a script has its own API key; a person in a browser signs in instead: [Sign up](../../start/sign-up/).
 
 ## Send a key
 
@@ -20,7 +20,7 @@ A call with a wrong key, or a key that is off, answers `403`.
 
 A device key only adds data, and only to the space of the person who made it. It reaches only these routes:
 
-- `POST pebble`, `POST notes`, `POST attachments`, `POST health`, `POST locations`
+- `POST notes`, `POST attachments`, `POST health`, `POST locations`
 - `GET key`, which answers the key's own device name and no data, so a device can check its key
 
 Any other address or method answers `403` to a device key. To read, a person signs in on the Relay Everything page: `GET timeline`, `GET audio`, `GET attachment` and `GET summary` need a signed-in person, and each answers only from that person's own space. [Routes](../reference/) shows who can call each route.
@@ -39,7 +39,7 @@ You make and turn off your keys on your Relay Everything page, signed in:
 
 | On the page | What it does |
 |---|---|
-| **Add a device** | Makes a key for a phone, the Pebble app, a Claude Code computer or a script. It shows once: as a QR code for a phone, or with a `curl` example for an API key. A Pebble device also gets its own signing secret, shown once with the key. |
+| **Add a device** | Makes a key for a phone, a Claude Code computer or a script. It shows once: as a QR code for a phone, or with a `curl` example for an API key. |
 | The list of devices | Shows each key: its name, its kind, when it was made, and whether it is off. |
 | **Turn off** | Turns the key off at once. The other keys go on. |
 
@@ -68,7 +68,7 @@ A refused call answers with a status and an error:
 | Status | Code | When |
 |---|---|---|
 | `400` | `invalid_input` | A field is missing or wrong. The answer's `issues` names each field. |
-| `401` | `authentication_required` | No one is signed in, or a Pebble webhook's signature or time is wrong. |
+| `401` | `authentication_required` | No one is signed in. |
 | `403` | `forbidden` | The key is off, on no list of devices, or calls a route it doesn't reach. |
 | `413` | `invalid_input` | The body is too large. |
 | `503` | `unavailable` | The server could not save or read. Send it again. |

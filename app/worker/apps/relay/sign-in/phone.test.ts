@@ -52,10 +52,9 @@ it("makes the phone its own key from a code and its secret, once, and the key on
   const { server, key } = await answer.json() as { server: string; key: string };
   expect([server, key]).toEqual([ORIGIN, expect.stringMatching(/^rek_[A-Za-z0-9_-]{43}$/)]);
   expect(directoryDb.sql.prepare("SELECT count(*) AS n FROM relay_phone_codes").get()).toEqual({ n: 0 });
-  // The page lists the phone, with no key in the list, and it has its Pebble secret, never shown here.
+  // The page lists the phone, with no key in the list.
   const listed = (await call(matthew, "GET", "devices")).json.devices.find(device => String(device.name) === "Ana's iPhone");
   expect(listed).toMatchObject({ reaches: "phone", revokedAt: null });
-  expect(rows("relay_device_secrets").map(row => row.device_id)).toContain(listed!.id);
   expect(JSON.stringify(directoryDb.sql.prepare("SELECT * FROM relay_keys").all())).not.toContain(key);
   // The key checks itself, sends a note to Ana's space, and reads nothing.
   expect(await call({ bearer: key }, "GET", "key")).toEqual({ status: 200, json: { device: "Ana's iPhone" } });

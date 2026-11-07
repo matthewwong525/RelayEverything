@@ -16,7 +16,7 @@ export function forwardHeaders(headers) {
   return out;
 }
 
-/** A browser opening a page. A send never gets a redirect: the phone's and the Pebble's clients don't follow one. */
+/** A browser opening a page. A send never gets a redirect: a phone's client doesn't follow one. */
 const pageLoad = request => request.method === 'GET' && !request.headers.has('upgrade') && (request.headers.get('accept') ?? '').includes('text/html');
 
 export default {

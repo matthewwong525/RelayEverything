@@ -50,8 +50,8 @@ class SettingsScreen extends StatelessWidget {
             const Divider(),
             SwitchListTile(
               title: const Text('Send to Relay Everything'),
-              subtitle: const Text('Your server can pass notes to your own database and your AI. Ring notes from the Pebble app '
-                'come through it. Off: nothing leaves this phone.'),
+              subtitle: const Text('Your server can pass notes to your own database and your AI. '
+                'Off: nothing leaves this phone.'),
               value: sending,
               onChanged: (on) => on ? _startSending(context) : _stopSending(context),
             ),

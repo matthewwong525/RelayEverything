@@ -18,7 +18,7 @@ it("counts each hour's steps once: the largest device, after each device's large
   steps("d-phone", "Health Connect", NOW, 1000);
   steps("d-phone", "Health Connect", NOW + HOUR / 2, 500);
   steps("d-phone", "Samsung Health", NOW, 1200);
-  steps("d-pebble", "Pebble", NOW + HOUR, 300);
+  steps("d-ipad", "iPad", NOW + HOUR, 300);
   const buckets = await healthBuckets(session(), "steps", [[NOW, NOW + HOUR], [NOW + HOUR, NOW + 2 * HOUR], [NOW + 2 * HOUR, NOW + 3 * HOUR]]);
   expect(buckets.map(bucket => bucket.total)).toEqual([1500, 300, 0]);
 });

@@ -8,5 +8,6 @@ What your assistant knows about how you work, who is who, and how the project ru
 - [Relay Everything's person spaces](relay-spaces.md): each person's data in their own space, the one door that opens it and its check, the directory, and the move.
 - [Add a kind of data to Relay Everything](relay-webhook-changes.md): the one list of kinds, the check that names a missing part, and the rules for a new webhook message.
 - [How the phone sends health and the calendar](relay-phone-sync.md): the background round, the 90-day health backfill, and the calendar's send-only-changes rule.
+- [The Relay Everything brand](brand.md): the logo, colors, type and rules every screen of the app and the website follow, and when to remake the app icons.
 - [Open source](open-source.md): the public RelayEverything repository, its license, and the check that keeps keys and private notes out.
 - [AI knowledge centers](agent-knowledge-center.md), [wiki style](wiki-style.md), [voice](voice.md), [UX principles](ux-principles.md), [review pages](review-pages.md), [contributing upstream](contributing.md)

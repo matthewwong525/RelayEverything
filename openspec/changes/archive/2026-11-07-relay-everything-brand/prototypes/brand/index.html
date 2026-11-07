@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relay Everything brand</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Inter, -apple-system, "Segoe UI", system-ui, sans-serif; background: var(--paper); color: var(--ink); }
+  main { max-width: 960px; margin: 0 auto; padding: 0 16px 48px; }
+  .hero { position: relative; overflow: hidden; border-radius: 0 0 28px 28px; padding: 28px 20px 32px; margin: 0 -16px;
+    background: radial-gradient(120% 90% at 85% 0%, var(--accent-soft) 0%, transparent 60%), radial-gradient(80% 80% at 0% 100%, var(--spark-soft) 0%, transparent 55%), var(--paper); }
+  .hero .lockup { font-size: 30px; gap: 14px; }
+  .tagline { font-size: 17px; margin-top: 12px; max-width: 30em; }
+  h2 { font-size: 13px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 40px 0 12px; }
+  p { margin: 0 0 8px; line-height: 1.5; }
+  .muted { color: var(--muted); }
+  .bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .grow { flex: 1; }
+  button { font: inherit; border: 0; border-radius: 12px; padding: 10px 16px; cursor: pointer; }
+  .primary { background: var(--accent); color: var(--on-accent); font-weight: 650; }
+  .quiet { background: var(--card); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .tile { background: var(--card); border-radius: 16px; padding: 18px; }
+  .logo { display: flex; flex-direction: column; gap: 14px; align-items: flex-start; box-shadow: inset 0 0 0 2px transparent; }
+  .logo.picked, .pal.picked { box-shadow: inset 0 0 0 2px var(--accent-text); }
+  .lockup { display: flex; align-items: center; gap: 10px; font-size: 19px; font-weight: 700; letter-spacing: -0.02em; }
+  .mark { color: var(--accent-text); display: inline-flex; }
+  .pulse { stroke: var(--spark); }
+  .sparkfill { fill: var(--spark); }
+  .sparkline { stroke: var(--spark); }
+  .icons { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
+  .icon { width: 72px; height: 72px; border-radius: 17px; background: var(--icon-bg); color: var(--icon-fg); display: grid; place-items: center; }
+  .icon.small { width: 44px; height: 44px; border-radius: 10px; }
+  .pal { display: flex; flex-direction: column; gap: 10px; cursor: pointer; }
+  .chips { display: flex; gap: 6px; }
+  .chips span { width: 28px; height: 28px; border-radius: 8px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+  .swatch { border-radius: 12px; padding: 14px; min-height: 76px; display: flex; flex-direction: column; justify-content: flex-end; font-size: 13px; }
+  .swatch b { font-weight: 650; }
+  .phone { width: 360px; max-width: 100%; background: var(--paper); border-radius: 30px; box-shadow: 0 0 0 1px var(--line), 0 20px 40px -20px rgba(0,0,0,.25); overflow: hidden; }
+  .appbar { display: flex; align-items: center; gap: 8px; padding: 18px 16px 8px; }
+  .appbar .title { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+  .chip { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; font-weight: 550; color: var(--ink); padding: 6px 10px; border-radius: 999px; background: var(--card); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 var(--accent); animation: beat 2s infinite; }
+  @keyframes beat { 0% { box-shadow: 0 0 0 0 var(--accent); } 70% { box-shadow: 0 0 0 6px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+  .list { padding: 8px 12px 0; display: flex; flex-direction: column; gap: 8px; }
+  .note { background: var(--card); border-radius: 16px; padding: 14px; }
+  .note p { font-size: 16px; margin-bottom: 6px; }
+  .meta { font-size: 13px; color: var(--muted); }
+  .kind { font-size: 12px; font-weight: 650; color: var(--accent-text); background: var(--accent-soft); padding: 3px 9px; border-radius: 999px; }
+  .kind.voice { color: var(--on-spark); background: var(--spark); }
+  .fabs { display: flex; justify-content: flex-end; gap: 10px; padding: 24px 16px 20px; }
+  .fabs .quiet { border-radius: 999px; }
+  .fabs .primary { border-radius: 999px; box-shadow: 0 6px 16px -4px var(--accent); }
+  .answer { margin-top: 12px; font-size: 14px; }
+  .rule { background: var(--card); border-radius: 12px; padding: 12px 14px; }
+  .rule b { display: block; margin-bottom: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="hero">
+    <div class="bar">
+      <span class="grow"></span>
+      <button class="quiet" id="mode">Dark</button>
+    </div>
+    <div class="lockup" style="margin-top:8px"><span class="mark" id="heromark"></span>Relay Everything</div>
+    <p class="tagline">Everything you have, passed on to your AI. Small pulses run along the R's wires.</p>
+  </div>
+
+  <h2>1 · Pick a logo</h2>
+  <p class="muted">Five takes on a capital R, each with a relay or a circuit in it. Tap a logo to pick it.</p>
+  <div class="grid" id="logos"></div>
+
+  <h2>2 · Pick the colors</h2>
+  <p class="muted">Each set has one bright main color and one small spark color. Tap a set; the whole board changes.</p>
+  <div class="grid" id="palettes"></div>
+  <p class="answer muted" id="picked"></p>
+
+  <h2>3 · App icon</h2>
+  <div class="tile">
+    <div class="icons" id="icons"></div>
+    <p class="muted" style="margin-top:12px">The same icon on iPhone, Android and the website tab. The icon stays still; the pulse is for the board and, later, the app's <i>Syncing</i> state.</p>
+  </div>
+
+  <h2>4 · Colors in this set</h2>
+  <div class="grid">
+    <div class="swatch" style="background:var(--accent);color:var(--on-accent)"><b>Main color</b><span data-hex="accent"></span></div>
+    <div class="swatch" style="background:var(--spark);color:var(--on-spark)"><b>Spark</b><span data-hex="spark"></span></div>
+    <div class="swatch" style="background:var(--accent-soft);color:var(--accent-text)"><b>Soft</b><span data-hex="accent-soft"></span></div>
+    <div class="swatch" style="background:var(--ink);color:var(--paper)"><b>Ink</b><span data-hex="ink"></span></div>
+    <div class="swatch" style="background:var(--paper);box-shadow:inset 0 0 0 1px var(--line)"><b>Paper</b><span class="muted" data-hex="paper"></span></div>
+    <div class="swatch" style="background:var(--card);box-shadow:inset 0 0 0 1px var(--line)"><b>Card</b><span class="muted" data-hex="card"></span></div>
+  </div>
+
+  <h2>5 · Type</h2>
+  <div class="tile">
+    <div style="font-size:28px;font-weight:700;letter-spacing:-0.02em;margin-bottom:10px">Title 28 · Your notes</div>
+    <div style="font-size:20px;font-weight:650;margin-bottom:10px">Heading 20 · Today</div>
+    <div style="font-size:16px;margin-bottom:10px">Body 16 · Call the dentist about Thursday.</div>
+    <div style="font-size:13px" class="muted">Small 13 · 9:41 · Sent</div>
+    <p class="muted" style="margin-top:12px">Inter, one family, set a little tighter and bolder in titles.</p>
+  </div>
+
+  <h2>6 · Today's notes screen, in the new look</h2>
+  <p class="muted">Only colors, type and the logo change here. The second plan cleans up the layout.</p>
+  <div class="phone">
+    <div class="appbar">
+      <span class="mark" id="appmark"></span>
+      <span class="title grow">Relay Everything</span>
+      <span class="chip"><span class="dot"></span>Synced</span>
+    </div>
+    <div class="list">
+      <div class="note">
+        <div class="bar" style="margin-bottom:8px"><span class="kind voice">Voice</span></div>
+        <p>Ask Sam if the trip moves to the 14th, and book the train after.</p>
+        <div class="meta">9:41 · 0:12 · Sent</div>
+      </div>
+      <div class="note">
+        <div class="bar" style="margin-bottom:8px"><span class="kind">Typed</span></div>
+        <p>Paint colours for the hall: the warm grey, not the blue.</p>
+        <div class="meta">Yesterday, 18:05 · Waiting to send</div>
+      </div>
+    </div>
+    <div class="fabs">
+      <button class="quiet">Hold to talk</button>
+      <button class="primary">New note</button>
+    </div>
+  </div>
+
+  <h2>7 · Rules for every screen</h2>
+  <div class="grid">
+    <div class="rule"><b>One bright thing</b><span class="muted">The main color marks the one main action. The spark is for small live moments: recording, a new item.</span></div>
+    <div class="rule"><b>Cards, no borders</b><span class="muted">A card is a lighter shape on paper. No box inside a box.</span></div>
+    <div class="rule"><b>Words with every color</b><span class="muted">A state says its name: Synced, Waiting, Off. Color alone never.</span></div>
+    <div class="rule"><b>Soft corners</b><span class="muted">12 px on buttons and fields, 16 on cards.</span></div>
+  </div>
+</main>
+<script>
+  // Each mark: its wires (where the spark pulses run) and the rest of its drawing.
+  const converge = (end) => ['M4 11c9 0 12 13 ' + (end - 4) + ' 13', 'M4 24h' + (end - 4), 'M4 37c9 0 12-13 ' + (end - 4) + '-13'];
+  const dot = (x, y, r) => '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="currentColor" stroke="none"/>';
+  const spark = (x, y) => '<path class="sparkfill" stroke="none" d="M' + x + ' ' + (y - 4.5) + 'l1.2 3 3 1.2-3 1.2-1.2 3-1.2-3-3-1.2 3-1.2z"/>';
+  const stem = 'M13 42V7';
+  const bowl = 'M13 7h11a8.5 8.5 0 0 1 0 17H13';
+  const leg = 'M22 24l11 17';
+  const marks = {
+    'Relay R': {
+      note: 'The leg is a relay switch: its arm swings toward the contact, with a spark.',
+      wires: [stem, bowl],
+      body: dot(23, 24, 3.2) + '<path d="M23 24 31 36"/>' + dot(36, 41, 4) + spark(38, 31),
+    },
+    'Trace R': {
+      note: 'An R routed like a circuit board: straight traces, 45-degree corners, a pad at each end.',
+      wires: ['M13 40V7', 'M13 7h10l7 7v3l-7 7H13', 'M21 24l10 10v5'],
+      body: dot(13, 41, 3.6) + dot(31, 40, 3.6),
+    },
+    'Rooted R': {
+      note: 'Three pins join into the stem: everything flows into one R.',
+      wires: ['M6 44v-2l7-7', 'M13 44V7', 'M20 44v-2l-7-7', bowl, leg],
+      body: dot(6, 44, 2.6) + dot(13, 44, 2.6) + dot(20, 44, 2.6),
+    },
+    'Signal R': {
+      note: 'The bowl of the R sends out signal waves, like a relay tower.',
+      wires: [stem, bowl, leg],
+      body: '<path class="sparkline" d="M35.1 6.2a14.5 14.5 0 0 1 0 18.6"/><path class="sparkline" d="M39.7 2.3a20.5 20.5 0 0 1 0 26.4"/>',
+    },
+    'Bolt R': {
+      note: 'The leg is a bolt of current.',
+      wires: [stem, bowl],
+      body: '<path class="sparkline" d="M22 24l6 9h-4l8 9"/>',
+    },
+  };
+  const markSvg = (name, live) => {
+    const m = marks[name];
+    const pulses = live ? m.wires.map((d, i) => '<path class="pulse" d="' + d + '" stroke-dasharray="3 44" stroke-width="4.5"><animate attributeName="stroke-dashoffset" from="47" to="0" dur="1.8s" begin="' + (i * 0.6) + 's" repeatCount="indefinite"/></path>').join('') : '';
+    return '<svg viewBox="0 0 48 48" width="SIZE" height="SIZE" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">' +
+      m.wires.map((d) => '<path d="' + d + '"/>').join('') + m.body + pulses + '</svg>';
+  };
+  const palettes = {
+    Emerald: {
+      note: 'A deep, rich green with an amber spark. Alive, not loud.',
+      light: { paper: '#F7F8F4', card: '#FFFFFF', line: '#E3E6DF', ink: '#121614', muted: '#5E6660', accent: '#0E7A5A', 'on-accent': '#FFFFFF', 'accent-text': '#0E7A5A', 'accent-soft': '#E1F2EA', spark: '#F5A524', 'on-spark': '#121614', 'spark-soft': '#FDF0D6' },
+      dark: { paper: '#0C110F', card: '#161D1A', line: '#26302B', ink: '#ECF3EE', muted: '#9AA8A0', accent: '#4CC79A', 'on-accent': '#06281A', 'accent-text': '#4CC79A', 'accent-soft': '#133328', spark: '#FFC24D', 'on-spark': '#121614', 'spark-soft': '#33280F' },
+    },
+    Signal: {
+      note: 'Bright cyan, coral spark.',
+      light: { paper: '#F6F8FA', card: '#FFFFFF', line: '#E1E6EB', ink: '#0F1720', muted: '#5A6573', accent: '#00B8D9', 'on-accent': '#042B33', 'accent-text': '#00728A', 'accent-soft': '#D9F6FC', spark: '#FF6B3D', 'on-spark': '#0F1720', 'spark-soft': '#FFE4DA' },
+      dark: { paper: '#0A1016', card: '#131B23', line: '#233041', ink: '#EAF2F8', muted: '#96A4B3', accent: '#22D3EE', 'on-accent': '#04242B', 'accent-text': '#5BE3F5', 'accent-soft': '#0E3442', spark: '#FF8A5C', 'on-spark': '#0F1720', 'spark-soft': '#3A1D12' },
+    },
+    Volt: {
+      note: 'Electric violet, lime spark.',
+      light: { paper: '#F7F6FB', card: '#FFFFFF', line: '#E4E1EE', ink: '#15121F', muted: '#625D70', accent: '#6D4AFF', 'on-accent': '#FFFFFF', 'accent-text': '#5634E0', 'accent-soft': '#ECE7FF', spark: '#C6F432', 'on-spark': '#15121F', 'spark-soft': '#F1FCCB' },
+      dark: { paper: '#0E0C15', card: '#18151F', line: '#2B2638', ink: '#EFEDF6', muted: '#A29DB3', accent: '#8C72FF', 'on-accent': '#0E0C15', 'accent-text': '#B4A3FF', 'accent-soft': '#2A2150', spark: '#D4FF4F', 'on-spark': '#15121F', 'spark-soft': '#2A3310' },
+    },
+  };
+  let logo = 'Signal R';
+  let palette = 'Emerald';
+  let dark = false;
+  const svg = (name, size, live) => markSvg(name, live).replace(/SIZE/g, size);
+
+  function send() {
+    document.getElementById('picked').textContent = 'Picked: ' + logo + ' logo, ' + palette + ' colors.';
+    if (window.review) window.review.answer('Logo: ' + logo + '; Colors: ' + palette);
+  }
+
+  function draw() {
+    const set = palettes[palette][dark ? 'dark' : 'light'];
+    for (const [key, value] of Object.entries(set)) document.body.style.setProperty('--' + key, value);
+    document.body.style.setProperty('--icon-bg', palettes[palette].light.accent);
+    document.body.style.setProperty('--icon-fg', palettes[palette].light['on-accent']);
+
+    const logos = document.getElementById('logos');
+    logos.innerHTML = '';
+    for (const name of Object.keys(marks)) {
+      const tile = document.createElement('div');
+      tile.className = 'tile logo' + (name === logo ? ' picked' : '');
+      tile.innerHTML = '<span class="mark">' + svg(name, 72, true) + '</span><div class="lockup"><span class="mark">' + svg(name, 24, false) + '</span>Relay Everything</div>' +
+        '<div><b>' + name + (name === logo ? ' · picked' : '') + '</b><div class="muted">' + marks[name].note + '</div></div>';
+      tile.onclick = () => { logo = name; send(); draw(); };
+      logos.appendChild(tile);
+    }
+
+    const pals = document.getElementById('palettes');
+    pals.innerHTML = '';
+    for (const name of Object.keys(palettes)) {
+      const p = palettes[name][dark ? 'dark' : 'light'];
+      const tile = document.createElement('div');
+      tile.className = 'tile pal' + (name === palette ? ' picked' : '');
+      tile.innerHTML = '<div class="chips"><span style="background:' + p.accent + '"></span><span style="background:' + p.spark + '"></span><span style="background:' + p.ink + '"></span><span style="background:' + p.paper + '"></span></div>' +
+        '<div><b>' + name + (name === palette ? ' · picked' : '') + '</b><div class="muted">' + palettes[name].note + '</div></div>';
+      tile.onclick = () => { palette = name; send(); draw(); };
+      pals.appendChild(tile);
+    }
+
+    document.getElementById('heromark').innerHTML = svg(logo, 56, true);
+    document.getElementById('appmark').innerHTML = svg(logo, 28, false);
+    document.getElementById('icons').innerHTML = '<div class="icon">' + svg(logo, 46, false) + '</div><div class="icon small">' + svg(logo, 28, false) + '</div>';
+    for (const el of document.querySelectorAll('[data-hex]')) el.textContent = set[el.dataset.hex];
+  }
+
+  document.getElementById('mode').onclick = (event) => {
+    dark = !dark;
+    event.target.textContent = dark ? 'Light' : 'Dark';
+    draw();
+  };
+  send();
+  draw();
+</script>
+</body>
+</html>

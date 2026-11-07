@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'brand.dart';
 import 'relay.dart';
 import 'screens/compose.dart' show FilesPicker;
 import 'screens/connect.dart' show Scanner;
@@ -21,8 +22,8 @@ class RelayApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Relay Everything',
-      theme: ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true),
-      darkTheme: ThemeData(colorSchemeSeed: Colors.indigo, brightness: Brightness.dark, useMaterial3: true),
+      theme: brandTheme(Brightness.light),
+      darkTheme: brandTheme(Brightness.dark),
       home: TimelineScreen(relay: relay, scanner: scanner, opener: opener, picker: picker, voiceRequests: voiceRequests),
     );
   }

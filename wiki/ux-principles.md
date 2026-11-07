@@ -20,7 +20,7 @@ Then design the **flow**: the shortest path from intent to done for the common c
 
 ## Principles
 
-Distilled from [Refactoring UI](https://www.refactoringui.com/). A mature design system already solves the book's "define systems in advance" chapters — type scale, spacing scale, palette are decided; never invent values outside them. What's left is judgment:
+Distilled from [Refactoring UI](https://www.refactoringui.com/). A mature design system already solves the book's "define systems in advance" chapters — type scale, spacing scale, palette are decided; never invent values outside them. Relay Everything's own palette, type and screen rules are on [the brand page](brand.md). What's left is judgment:
 
 - **Hierarchy is everything.** A screen where everything is equally loud says nothing. Decide what matters most for the job and make everything else visibly subordinate.
 - **One primary action per screen.** The job's next step gets the one solid, filled button; everything else is secondary (outline) or tertiary (ghost/menu). Two primary buttons means the brief wasn't finished.

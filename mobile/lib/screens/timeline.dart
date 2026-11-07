@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../brand.dart';
 import '../relay.dart';
 import 'compose.dart';
 import 'connect.dart' show Scanner;
@@ -98,7 +99,10 @@ class _TimelineScreenState extends State<TimelineScreen> {
         ];
         final listening = relay.listening;
         return Scaffold(
-          appBar: AppBar(title: const Text('Relay Everything'), actions: [
+          appBar: AppBar(titleSpacing: 12, title: const Row(mainAxisSize: MainAxisSize.min, spacing: 8, children: [
+            RelayMark(size: 24),
+            Flexible(child: Text('Relay Everything', overflow: TextOverflow.ellipsis)),
+          ]), actions: [
             relay.settings.sending ? _SyncChip(relay: relay) : const _LocalChip(),
             IconButton(
               tooltip: 'Settings',
@@ -110,11 +114,11 @@ class _TimelineScreenState extends State<TimelineScreen> {
             if (listening != null) ListeningCard(since: listening),
             Row(mainAxisSize: MainAxisSize.min, spacing: 12, children: [
               HoldToTalkButton(relay: relay),
-              FloatingActionButton.extended(
+              AccentGlow(child: FloatingActionButton.extended(
                 onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ComposeScreen(relay: relay, picker: widget.picker))),
                 icon: const Icon(Icons.edit_outlined),
                 label: const Text('New note'),
-              ),
+              )),
             ]),
           ]),
           body: RefreshIndicator(
@@ -157,7 +161,7 @@ class _NoteCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 6, children: [
           Row(spacing: 8, children: [
-            Chip(label: Text(entry.voice ? 'Voice' : 'Typed'), visualDensity: VisualDensity.compact),
+            _KindChip(voice: entry.voice),
             if (recording != null) ...[
               const Spacer(),
               TextButton.icon(onPressed: () => relay.play(recording), icon: const Icon(Icons.play_arrow), label: const Text('Play')),
@@ -176,6 +180,25 @@ class _NoteCard extends StatelessWidget {
           Text(line, style: muted),
         ]),
       ),
+    );
+  }
+}
+
+/// A note's kind: *Voice* in the spark color, a small live moment; *Typed* in accent text on accent soft.
+class _KindChip extends StatelessWidget {
+  const _KindChip({required this.voice});
+
+  final bool voice;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final brand = brandOf(context);
+    return Chip(
+      label: Text(voice ? 'Voice' : 'Typed'),
+      visualDensity: VisualDensity.compact,
+      backgroundColor: voice ? theme.colorScheme.tertiary : brand.accentSoft,
+      labelStyle: theme.chipTheme.labelStyle?.copyWith(color: voice ? theme.colorScheme.onTertiary : brand.accentText),
     );
   }
 }

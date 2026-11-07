@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/app.dart';
+import 'package:relay_app/brand.dart';
 import 'package:relay_app/relay.dart';
 import 'package:relay_app/screens/connect.dart';
 import 'package:relay_app/screens/settings.dart' show problemLine, sentLine;
@@ -209,6 +211,24 @@ void main() {
     scrollable: find.descendant(of: find.byType(ConnectScreen), matching: find.byType(Scrollable)).first);
 
   SwitchListTile switchOf(WidgetTester tester, String title) => tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, title));
+
+  testWidgets('shows the mark beside Relay Everything, in the brand colors that follow the phone', (tester) async {
+    await tester.pumpWidget(RelayApp(relay: relay));
+    final bar = find.byType(AppBar);
+    expect(find.descendant(of: bar, matching: find.byType(RelayMark)), findsOneWidget);
+    expect(find.descendant(of: bar, matching: find.text('Relay Everything')), findsOneWidget);
+    RelayMarkPainter painter() => tester.widget<CustomPaint>(
+      find.descendant(of: find.byType(RelayMark), matching: find.byType(CustomPaint))).painter! as RelayMarkPainter;
+    expect(painter().ink, BrandColors.light.accentText);
+    expect(painter().spark, BrandColors.light.spark);
+    expect(Theme.of(tester.element(bar)).scaffoldBackgroundColor, BrandColors.light.paper);
+
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    await tester.pumpAndSettle();
+    expect(painter().ink, BrandColors.dark.accentText);
+    expect(Theme.of(tester.element(bar)).scaffoldBackgroundColor, BrandColors.dark.paper);
+  });
 
   testWidgets('opens on the timeline with no key, and keeps a note on this phone', (tester) async {
     await tester.pumpWidget(RelayApp(relay: relay));
@@ -664,6 +684,24 @@ void main() {
       await tester.pump();
       expect(relay.calls, ['voice start', 'voice end']);
       expect(find.text('Listening'), findsNothing);
+    });
+
+    testWidgets('a voice note and Listening wear the spark color; a typed note wears accent soft', (tester) async {
+      relay.entries = [Entry(text: 'Spoken', at: now, voice: true), Entry(text: 'Written', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      Chip chip(String label) => tester.widget<Chip>(find.widgetWithText(Chip, label));
+      Color? ink(String label) => tester.renderObject<RenderParagraph>(find.text(label)).text.style?.color;
+      expect(chip('Voice').backgroundColor, BrandColors.light.spark);
+      expect(ink('Voice'), BrandColors.light.onSpark);
+      expect(chip('Typed').backgroundColor, BrandColors.light.accentSoft);
+      expect(ink('Typed'), BrandColors.light.accentText);
+
+      final gesture = await tester.startGesture(tester.getCenter(holdButton()));
+      await tester.pump();
+      expect(chip('Listening').backgroundColor, BrandColors.light.spark);
+      expect(ink('Listening'), BrandColors.light.onSpark);
+      await gesture.up();
+      await tester.pump();
     });
 
     testWidgets('a short press saves nothing and says to hold', (tester) async {

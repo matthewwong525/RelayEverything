@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:workmanager/workmanager.dart';
 
 import 'app.dart';
+import 'brand.dart';
 import 'controller.dart';
 import 'data/connection.dart';
 import 'share/inbox.dart';
@@ -38,6 +39,7 @@ Future<bool> openWithPhone(File file, String type) async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerBrandLicenses();
   await Workmanager().initialize(backgroundSync);
   final model = SpeechModel(folder: getApplicationSupportDirectory, excludeFromBackup: excludeFromBackup);
   final voice = VoiceParts(model: model, recorder: VoiceRecorder(microphone: PhoneMicrophone(), folder: getApplicationSupportDirectory,

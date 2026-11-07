@@ -253,8 +253,10 @@ class _ListeningCardState extends State<ListeningCard> {
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, spacing: 6, children: [
           Row(mainAxisSize: MainAxisSize.min, spacing: 8, children: [
-            Chip(avatar: const Icon(Icons.mic, size: 16), label: const Text('Listening'), visualDensity: VisualDensity.compact,
-              backgroundColor: theme.colorScheme.primaryContainer),
+            // Listening is a small live moment: the spark color.
+            Chip(avatar: Icon(Icons.mic, size: 16, color: theme.colorScheme.onTertiary), label: const Text('Listening'),
+              visualDensity: VisualDensity.compact, backgroundColor: theme.colorScheme.tertiary,
+              labelStyle: theme.chipTheme.labelStyle?.copyWith(color: theme.colorScheme.onTertiary)),
             Text(clockOf(length.isNegative ? Duration.zero : length)),
           ]),
           Text('Let go to save. Slide off to cancel.', style: theme.textTheme.bodySmall),

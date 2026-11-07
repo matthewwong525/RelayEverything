@@ -15,6 +15,9 @@ class FakeRelay extends Relay {
   @override Settings settings = const Settings();
   @override SendState healthSent = const SendState();
   @override SendState pointsSent = const SendState();
+  @override SendState calendarSent = const SendState();
+  @override List<PhoneCalendar> calendars = const [PhoneCalendar(id: 'work', name: 'Work', account: 'sam@example.com'),
+    PhoneCalendar(id: 'holidays', name: 'US Holidays')];
   @override bool locationModes = false;
   final calls = <String>[];
   String? problem;
@@ -57,6 +60,16 @@ class FakeRelay extends Relay {
   @override Future<String?> setPinNotes(bool on) async { calls.add('pin $on'); return problem; }
   @override Future<String?> setHistory(bool on) async { calls.add('history $on'); return problem; }
   @override Future<String?> setHealth(bool on) async { calls.add('health $on'); return problem; }
+  @override Future<String?> setCalendar(bool on) async { calls.add('calendar $on'); return problem; }
+
+  @override
+  Future<void> setCalendarShown(String id, bool on) async {
+    calls.add('calendar $id $on');
+    final off = {...settings.calendarsOff};
+    on ? off.remove(id) : off.add(id);
+    settings = settings.copyWith(calendarsOff: off);
+    notifyListeners();
+  }
   @override Future<int> earlierNotes() async => earlier;
 
   @override
@@ -194,7 +207,8 @@ void main() {
     relay.earlier = 42;
     await tester.pumpWidget(RelayApp(relay: relay, scanner: (_) async => null));
     await openSettings(tester);
-    expect(switchOf(tester, 'Health: steps, heart rate, sleep, workouts').onChanged, isNull);
+    expect(switchOf(tester, 'Health: steps, heart rate, sleep and more').onChanged, isNull);
+    await tester.scrollUntilVisible(find.text('Location history'), 100);
     expect(switchOf(tester, 'Location history').onChanged, isNull);
     expect(find.text('Disconnect this phone'), findsNothing);
     expect(find.text('Server'), findsNothing);
@@ -409,9 +423,11 @@ void main() {
     await tester.pumpWidget(RelayApp(relay: relay));
     await openSettings(tester);
     await tester.tap(find.text('Pin notes to where I am'));
+    await tester.ensureVisible(find.text('Location history'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Location history'));
     relay.problem = 'Relay Everything may not read your health data.';
-    await tester.tap(find.text('Health: steps, heart rate, sleep, workouts'));
+    await tester.tap(find.text('Health: steps, heart rate, sleep and more'));
     await tester.pump();
     expect(find.text('Relay Everything may not read your health data.'), findsOneWidget);
     expect(relay.calls, ['pin false', 'history true', 'health true']);
@@ -428,7 +444,7 @@ void main() {
     relay.settings = const Settings(sending: true, history: true);
     relay.changed();
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Every 100 m'));
+    await tester.scrollUntilVisible(find.text('Every 100 m'), 100);
     await tester.pumpAndSettle();
     RadioGroup<LocationMode> group() => tester.widget(find.byType(RadioGroup<LocationMode>));
     expect(group().groupValue, LocationMode.battery);
@@ -454,6 +470,38 @@ void main() {
     final today = DateTime(2026, 11, 7, 18);
     expect(sentLine(SendState(at: DateTime(2026, 11, 6, 9, 30), waiting: 1), 'point', today), 'Sent 6/11 09:30 · 1 point waiting');
     expect(sentLine(SendState(at: DateTime(2026, 11, 7, 9, 3)), 'point', today), 'Sent 09:03 · none waiting');
+  });
+
+  testWidgets('lists the phone\'s calendars only while the calendar is on, each with its own switch', (tester) async {
+    relay
+      ..connected = true
+      ..settings = const Settings(sending: true)
+      ..calendarSent = SendState(at: DateTime(now.year, now.month, now.day, 10, 42), waiting: 2);
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openSettings(tester);
+    expect(find.text('US Holidays'), findsNothing);
+    await tester.scrollUntilVisible(find.text('Calendar'), 100);
+    await tester.tap(find.text('Calendar'));
+    await tester.pump();
+    expect(relay.calls, ['calendar true']);
+    relay
+      ..settings = const Settings(sending: true, calendar: true)
+      ..changed();
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('US Holidays'), 100);
+    expect(find.text('Sent 10:42 · 2 events waiting'), findsOneWidget);
+    expect(find.text('sam@example.com'), findsOneWidget);
+    expect(switchOf(tester, 'US Holidays').value, isTrue);
+    await tester.tap(find.text('US Holidays'));
+    await tester.pumpAndSettle();
+    expect([relay.calls.last, switchOf(tester, 'US Holidays').value, switchOf(tester, 'Work').value],
+      ['calendar holidays false', false, true]);
+    relay
+      ..settings = const Settings()
+      ..changed();
+    await tester.pumpAndSettle();
+    expect(find.text('US Holidays'), findsNothing);
+    expect(switchOf(tester, 'Calendar').onChanged, isNull);
   });
 
   testWidgets('changes the server, and disconnects after asking', (tester) async {

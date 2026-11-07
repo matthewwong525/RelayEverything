@@ -51,11 +51,12 @@ it("names itself Relay Everything to the AI app", () => {
   expect(client.getInstructions()).toMatch(/^Relay Everything /);
 });
 
-it("lists nine tools, each read-only but add_note, which changes and deletes nothing", async () => {
+it("lists ten tools, each read-only but add_note, which changes and deletes nothing", async () => {
   const { tools } = await client.listTools();
-  expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "places", "search_chats", "read_chat", "add_note"]);
-  for (const tool of tools.slice(0, 8)) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
-  expect(tools[8].annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+  expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "places", "calendar", "search_chats",
+    "read_chat", "add_note"]);
+  for (const tool of tools.slice(0, 9)) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+  expect(tools[9].annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
 });
 
 it("finds notes holding every word, in any case, with a title and the time in the zone", async () => {
@@ -103,7 +104,10 @@ it("sums up a day, and an empty one", async () => {
   expect(await ask("day_summary", { day: "2026-11-04" })).toEqual({ day: "2026-11-04", timezone: "America/Toronto", notes: 3, ...day, places: [
     { name: "Harbord St", lat: 43.6629, lon: -79.3957, from: "2026-11-04T08:00:00-05:00", to: "2026-11-04T08:00:00-05:00" },
     { name: "King St W", lat: 43.6487, lon: -79.3817, from: "2026-11-04T12:00:00-05:00", to: "2026-11-04T12:00:00-05:00" },
-    { name: "Kensington Ave", lat: 43.6544, lon: -79.4006, from: "2026-11-04T17:00:00-05:00", to: "2026-11-04T17:30:00-05:00" }] });
+    { name: "Kensington Ave", lat: 43.6544, lon: -79.4006, from: "2026-11-04T17:00:00-05:00", to: "2026-11-04T17:30:00-05:00" }],
+    weightKg: 71.4, bloodPressure: [{ at: "2026-11-04T08:30:00-05:00", upper: 118, lower: 76 }], events: [
+      { title: "Board meeting", start: "2026-11-04T10:00:00-05:00", end: "2026-11-04T11:00:00-05:00", allDay: false, people: ["Sam Lee", "Ana"] },
+      { title: "Lunch with Sam", start: "2026-11-04T12:00:00-05:00", end: "2026-11-04T13:00:00-05:00", allDay: false, people: ["Sam Lee"] }] });
   expect(await ask("day_summary", { day: "2026-11-05" })).toMatchObject({ notes: 0, steps: 0, sleepMinutes: 0, heartRate: null,
     workouts: { count: 0, minutes: 0 }, places: [] });
   expect((await ask("day_summary", { day: "2026-13-45" })).refused).toContain("Not a day.");
@@ -124,6 +128,32 @@ it("reads health by the hour or the day, and refuses too many values", async () 
     .toEqual(["2026-10-31T00:00:00-04:00", "2026-11-01T00:00:00-04:00", "2026-11-02T00:00:00-05:00"]);
   expect(await ask("health", { type: "steps", from: "2026-01-01", to: "2026-03-01", bucket: "hour" }))
     .toEqual({ refused: "That is more than 400 hours: ask for a shorter range or a larger bucket." });
+});
+
+it("reads the new health types: the day's latest weight and blood pressure's range", async () => {
+  expect((await ask("health", { type: "weight", from: "2026-11-03", to: "2026-11-05" })).values.map((value: { latest: number | null }) => value.latest))
+    .toEqual([null, 71.4]);
+  expect((await ask("health", { type: "blood_pressure_systolic", from: "2026-11-04", to: "2026-11-05" })).values[0])
+    .toMatchObject({ min: 118, max: 118, average: 118 });
+  expect((await ask("health", { type: "water", from: "2026-11-04", to: "2026-11-05" })).values[0].total).toBe(0);
+});
+
+it("reads calendar events by time or words, never a removed one, a page at a time", async () => {
+  const titles = (answer: { events: { title: string }[] }) => answer.events.map(event => event.title);
+  const day = await ask("calendar", { from: "2026-11-04", to: "2026-11-05" });
+  expect(titles(day)).toEqual(["Board meeting", "Lunch with Sam"]);
+  expect(day.events[0]).toEqual({ id: expect.any(String), title: "Board meeting", calendar: "Work", start: "2026-11-04T10:00:00-05:00",
+    end: "2026-11-04T11:00:00-05:00", allDay: false, location: "Office, room 2", notes: "Bring the ring samples.", url: null,
+    people: [{ name: "Sam Lee", email: "sam@example.com", organizer: true }, { name: "Ana" }], device: "Android phone" });
+  expect(titles(await ask("calendar", { from: "2026-11-01", to: "2026-12-01", query: "sam" }))).toEqual(["Design review with Sam", "Lunch with Sam", "Board meeting"]);
+  expect(titles(await ask("calendar", { from: "2026-11-04T10:30", to: "2026-11-04T10:45" }))).toEqual(["Board meeting"]);
+  const newest = await ask("calendar", { from: "2026-11-01", to: "2026-12-01", query: "sam", limit: 2 });
+  expect(titles(await ask("calendar", { from: "2026-11-01", to: "2026-12-01", query: "sam", cursor: newest.nextCursor }))).toEqual(["Board meeting"]);
+  const first = await ask("calendar", { from: "2026-11-01", to: "2026-12-01", limit: 1 });
+  expect(titles(first)).toEqual(["Board meeting"]);
+  expect(titles(await ask("calendar", { from: "2026-11-01", to: "2026-12-01", cursor: first.nextCursor }))).toEqual(["Lunch with Sam", "Design review with Sam"]);
+  expect((await ask("calendar", { from: "2026-11-01", to: "2026-12-01", limit: 101 })).refused).toBeDefined();
+  expect(await ask("calendar", { from: "2026-11-01", to: "2026-12-01", cursor: "page-2" })).toEqual({ refused: "That cursor is not one this connector gave." });
 });
 
 it("lists visits in order, one per stay at a place, and says where to read on", async () => {

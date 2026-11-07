@@ -1,6 +1,6 @@
 # Relay Everything's AI connector
 
-Relay Everything's AI connector lets an AI chat app, such as the Claude app or ChatGPT, read your Relay Everything notes, health, places and saved chats when you ask it a question, and add a note when you ask it to save one. It can't change or delete a note. The same Worker answers the [web API](#the-web-api) under `/v1/`, for scripts and services. It is part of [the Cloudflare stack](README.md): its own Worker, `relay-everything-mcp`, beside the main app.
+Relay Everything's AI connector lets an AI chat app, such as the Claude app or ChatGPT, read your Relay Everything notes, health, calendar, places and saved chats when you ask it a question, and add a note when you ask it to save one. It can't change or delete a note. The same Worker answers the [web API](#the-web-api) under `/v1/`, for scripts and services. It is part of [the Cloudflare stack](README.md): its own Worker, `relay-everything-mcp`, beside the main app.
 
 | Where | Address to add |
 | --- | --- |
@@ -23,13 +23,14 @@ Then ask, for example: *What did I note on 4 November?* or *How many steps did I
 
 ## What the app can read and add
 
-The connector has nine tools: eight read, and `add_note` adds. Each answer has a limit, so one question can't copy all of Relay Everything.
+The connector has ten tools: nine read, and `add_note` adds. Each answer has a limit, so one question can't copy all of Relay Everything.
 
 - **search**: notes that hold every word you give, newest first.
 - **fetch**: one note, the places near it in time, and its day's health totals.
 - **timeline**: every note from one time to another, a page at a time.
-- **day_summary**: one day's notes count, steps, sleep, heart rate, workouts and places.
-- **health**: steps, sleep, heart rate or workouts, one value per hour or per day.
+- **day_summary**: one day's notes count, health totals, places and events (title, start, end and people's names). A health type with no readings that day is left out.
+- **health**: one type from `HEALTH_TYPES` in `queries.ts`, one value per hour or per day.
+- **calendar**: events from `relay_calendar_events` between two times, by start, or newest first with `q`; removed events are skipped. `GET /v1/calendar` is the same read. `fetch` stays notes and chats.
 - **places**: each stay at a place, with when you arrived and left.
 - **search_chats**: saved Claude Code chats that hold every word you give, with the lines that match ([Relay Everything's Claude Code chats](relay-chats.md)).
 - **read_chat**: one saved chat, a part at a time, with the AI's saved summaries.
@@ -37,7 +38,7 @@ The connector has nine tools: eight read, and `add_note` adds. Each answer has a
 
 ## What leaves Relay Everything
 
-When an app uses a tool, the answer goes to that app's company: Anthropic for Claude, OpenAI for ChatGPT. Their own terms then apply to it. An answer can hold a note's words, its time, the place name and coordinates, the device name, health totals, and a chat's messages.
+When an app uses a tool, the answer goes to that app's company: Anthropic for Claude, OpenAI for ChatGPT. Their own terms then apply to it. An answer can hold a note's words, its time, the place name and coordinates, the device name, health totals, calendar events with their people, and a chat's messages.
 
 An answer never holds a recording, a device key, or a device's or delivery's id. The app gets only what a tool answers for one question, not a copy of the database.
 

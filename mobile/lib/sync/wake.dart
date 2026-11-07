@@ -8,6 +8,7 @@ import '../data/connection.dart';
 import '../data/sender.dart';
 import '../share/inbox.dart';
 import 'background.dart';
+import 'calendar.dart';
 import 'health.dart';
 import 'location.dart';
 import 'native.dart';
@@ -23,7 +24,7 @@ Future<void> wakeRound() async {
     try {
       done = await backgroundRound(store, connection: await KeyVault().read(), health: PhoneHealth(), sender: Sender(),
         native: Platform.isIOS ? PhoneBackground() : null, places: PhonePlaces(), folder: getApplicationSupportDirectory,
-        share: Platform.isIOS ? PhoneShareGroup() : null);
+        share: Platform.isIOS ? PhoneShareGroup() : null, calendar: PhoneCalendarSource());
     } finally {
       await store.close();
     }

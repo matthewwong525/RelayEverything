@@ -1,6 +1,7 @@
-// Format v1 of what a webhook receives: one envelope, five types. This schema is the source of the public
+// Format v1 of what a webhook receives: one envelope, six types. This schema is the source of the public
 // site/public/webhooks/v1.schema.json; a change that breaks a receiver raises `version`.
 import { z } from "zod";
+import { HEALTH_TYPES, type HealthType } from "../queries.ts";
 
 const iso = z.iso.datetime().describe("A time in ISO 8601, UTC.");
 const device = z.strictObject({ id: z.string().describe("The device key's id in Relay Everything."), name: z.string() })
@@ -24,12 +25,20 @@ const attachment = z.strictObject({
 const attachments = z.array(attachment).min(1).max(10).optional()
   .describe("The note's files: each one's name, type and size, never its bytes. Only a note with files has this list.");
 const sample = z.strictObject({
-  id: z.number().int().describe("Unique in this Relay Everything server."), device, type: z.enum(["steps", "heart_rate", "sleep", "workout"]),
+  id: z.number().int().describe("Unique in this Relay Everything server."), device, type: z.enum(HEALTH_TYPES),
   start: iso, end: iso, value: z.number(), unit: z.string(), source: z.string().describe("The app or watch that counted it."),
 });
 const point = z.strictObject({
   id: z.number().int().describe("Unique in this Relay Everything server."), device, at: iso, lat: z.number(), lon: z.number(),
   accuracy: z.number().describe("In meters."), place: z.string().nullable(),
+});
+const event = z.strictObject({
+  id: z.number().int().describe("Unique in this Relay Everything server: upsert by it."),
+  status: z.enum(["changed", "removed"]).describe("changed: new or changed. removed: deleted on the phone, or its calendar turned off."),
+  device, key: z.string().describe("The phone's key for this occurrence: each time of a repeating event has its own."),
+  calendar: z.string().nullable().describe("The calendar's name."), title: z.string().nullable(), start: iso, end: iso, all_day: z.boolean(),
+  location: z.string().nullable(), notes: z.string().nullable(), url: z.string().nullable(),
+  people: z.array(z.strictObject({ name: z.string().optional(), email: z.string().optional(), organizer: z.boolean().optional() })),
 });
 
 const BATCH = 500;
@@ -42,6 +51,8 @@ export const message = z.discriminatedUnion("type", [
   envelope("note.updated", z.strictObject({ note }), "No longer sent: the server gives no note a place later. It once said a ring note got its place from a later location batch. It has no audio."),
   envelope("health.samples", z.strictObject({ samples: z.array(sample).min(1).max(BATCH) }), "Health samples, in the order Relay Everything stored them."),
   envelope("location.points", z.strictObject({ points: z.array(point).min(1).max(BATCH) }), "Location points, in the order Relay Everything stored them."),
+  envelope("calendar.events", z.strictObject({ events: z.array(event).min(1).max(BATCH) }),
+    "Calendar events that are new, changed or removed, in the order Relay Everything stored them."),
   envelope("webhook.test", z.strictObject({ webhook: z.strictObject({ id: z.string(), name: z.string() }) }), "Send a test, from the Relay Everything page."),
 ]).meta({ title: "Relay Everything webhook message, version 1", description: "The JSON body of each message a Relay Everything webhook sends." });
 
@@ -52,10 +63,13 @@ export type NoteRow = { id: string; source: "ring" | "typed"; text: string; reco
   device_name: string; lat: number | null; lon: number | null; accuracy: number | null; place: string | null;
   place_from: "phone" | "history" | null; audio_key: string | null };
 export type AttachmentRow = { id: string; name: string; content_type: string; size: number };
-export type HealthRow = { id: number; device_id: string; device_name: string; type: "steps" | "heart_rate" | "sleep" | "workout";
+export type HealthRow = { id: number; device_id: string; device_name: string; type: HealthType;
   start_at: number; end_at: number; value: number; unit: string; source: string };
 export type LocationRow = { id: number; device_id: string; device_name: string; at: number; lat: number; lon: number; accuracy: number;
   place: string | null };
+export type EventRow = { id: number; device_id: string; device_name: string; event_key: string; calendar: string | null;
+  title: string | null; start_at: number; end_at: number; all_day: number; location: string | null; notes: string | null; url: string | null;
+  people: string; removed_at: number | null };
 
 const isoOf = (ms: number) => new Date(ms).toISOString();
 const deviceOf = (row: { device_id: string; device_name: string }) => ({ id: row.device_id, name: row.device_name });
@@ -81,6 +95,11 @@ export const healthSamples = (rows: HealthRow[], at: number) => wrap("health.sam
 
 export const locationPoints = (rows: LocationRow[], at: number) => wrap("location.points", { points: rows.map(row => ({
   id: row.id, device: deviceOf(row), at: isoOf(row.at), lat: row.lat, lon: row.lon, accuracy: row.accuracy, place: row.place })) }, at);
+
+export const calendarEvents = (rows: EventRow[], at: number) => wrap("calendar.events", { events: rows.map(row => ({
+  id: row.id, status: row.removed_at === null ? "changed" as const : "removed" as const, device: deviceOf(row), key: row.event_key,
+  calendar: row.calendar, title: row.title, start: isoOf(row.start_at), end: isoOf(row.end_at), all_day: row.all_day === 1,
+  location: row.location, notes: row.notes, url: row.url, people: JSON.parse(row.people) })) }, at);
 
 export const webhookTest = (webhook: { id: string; name: string }, at: number) => wrap("webhook.test", { webhook }, at);
 

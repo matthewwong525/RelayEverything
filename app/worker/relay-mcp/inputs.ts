@@ -1,6 +1,7 @@
 // What each connector tool takes, shared by the MCP tools (tools.ts) and the web API (api.ts), so the two can't drift
 // apart: one schema per question, with the same limits. openapi.ts describes the web API from these too.
 import { z } from "zod";
+import { HEALTH_TYPES } from "../apps/relay/queries.ts";
 import { accuracy, latitude, longitude, placeName } from "../apps/relay/store.ts";
 import { knownZone, ZONE } from "./time.ts";
 
@@ -39,14 +40,17 @@ export const TOOLS = {
   },
   day_summary: {
     title: "Sum up a day",
-    description: "One day: how many notes, steps, sleep minutes, heart rate, workouts, and each place visited.",
+    description: "One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, each place " +
+      "visited, and the calendar's events with the people in each.",
     input: { day, timezone: zone },
   },
   health: {
     title: "Read health over time",
-    description: "One value per hour or day for one kind of health data: steps and sleep minutes as `total`, heart rate as min, max " +
-      "and average, workouts as a count and minutes. Sleep counts on the day it ends.",
-    input: { type: z.enum(["steps", "heart_rate", "sleep", "workout"]).describe("Which health data."), from: when("The first time"),
+    description: "One value per hour or day for one kind of health data: steps, sleep, mindful minutes and water (ml) as `total`; heart " +
+      "rate and blood pressure (mmHg) as min, max and average; workouts as a count and minutes; weight (kg) as `latest`; resting heart " +
+      "rate, heart rate variability (ms; hrv_sdnn from iPhone, hrv_rmssd from Android) as `average`; blood oxygen (%) as min and average; " +
+      "cycle flow as the highest `flow`, 0 none to 3 heavy. Sleep counts on the day it ends.",
+    input: { type: z.enum(HEALTH_TYPES).describe("Which health data."), from: when("The first time"),
       to: when("The time to stop before"), bucket: z.enum(["hour", "day"]).default("day").describe(`One value per hour or per day, at most ${MAX_BUCKETS}.`),
       timezone: zone },
   },
@@ -55,6 +59,13 @@ export const TOOLS = {
     description: "The places visited from one time to another, oldest first: each place's name, where it is, and when you arrived and left.",
     input: { from: when("The first time"), to: when("The time to stop before"),
       limit: z.number().int().min(1).max(200).default(100).describe("How many visits, at most 200. Read on from `next`."), timezone: zone },
+  },
+  calendar: {
+    title: "Read calendar events",
+    description: "The events from the phone's calendars that overlap one time to another, with each one's calendar, title, time, place, " +
+      "notes and people. With `query`, only events whose title, place, notes or people hold every word, newest first; without, in start order.",
+    input: { from: when("The first time"), to: when("The time to stop before"), query: query.optional(),
+      limit: z.number().int().min(1).max(100).default(50).describe("How many events, at most 100."), cursor, timezone: zone },
   },
   search_chats: {
     title: "Search saved chats",

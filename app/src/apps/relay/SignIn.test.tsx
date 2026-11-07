@@ -23,7 +23,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 const assign = vi.fn();
 
 const refused = (status: number, message: string) => Response.json({ error: { code: "forbidden", message } }, { status });
-const EMPTY_DAY = { day: "2026-11-05", notes: 0, steps: 0, sleepMinutes: 0, heartRate: null, workouts: { count: 0, minutes: 0 }, places: [] };
+const EMPTY_DAY = { day: "2026-11-05", notes: 0, steps: 0, sleepMinutes: 0, heartRate: null, workouts: { count: 0, minutes: 0 }, places: [], events: [] };
 
 function api(route: string): Response {
   if (!signedIn) return refused(401, "Sign in to Relay Everything.");

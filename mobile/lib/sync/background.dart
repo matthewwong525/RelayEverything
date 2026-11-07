@@ -11,6 +11,7 @@ import '../data/sender.dart';
 import '../data/settings.dart';
 import '../data/store.dart';
 import '../share/inbox.dart';
+import 'calendar.dart';
 import 'health.dart';
 import 'location.dart';
 import 'native.dart';
@@ -21,8 +22,8 @@ const syncTask = 'com.matthewwong525.relay.sync';
 // The app and the background round share one connection, so their writes never collide.
 Store openStore() => Store(driftDatabase(name: 'relay', native: const DriftNativeOptions(shareAcrossIsolates: true)));
 
-/// The background round: health since the last read, the location points kept, then every waiting upload. With
-/// sending off it reads, keeps and sends nothing.
+/// The background round: health since the last read, the calendar's changes, the location points kept, then every
+/// waiting upload. With sending off it reads, keeps and sends nothing.
 @pragma('vm:entry-point')
 void backgroundSync() {
   Workmanager().executeTask((task, input) async {
@@ -33,7 +34,7 @@ void backgroundSync() {
     try {
       return await backgroundRound(store, connection: connection, health: PhoneHealth(), sender: Sender(),
         native: Platform.isIOS ? PhoneBackground() : null, places: PhonePlaces(), folder: getApplicationSupportDirectory,
-        share: Platform.isIOS ? PhoneShareGroup() : null);
+        share: Platform.isIOS ? PhoneShareGroup() : null, calendar: PhoneCalendarSource());
     } on Exception {
       return false;
     } finally {
@@ -44,9 +45,11 @@ void backgroundSync() {
 
 /// One background round, apart from the plugin that runs it so a test can drive it: the hourly task and an iPhone
 /// wake share it. With [share], it first keeps the notes the iPhone's share card left. With [native], it moves the
-/// points Swift kept. True when it is done.
+/// points Swift kept. True when it is done; a calendar that could not be read, such as where the iPhone's background
+/// engine has no calendar, does not hold the round back.
 Future<bool> backgroundRound(Store store, {required Connection? connection, required HealthSource health, required Sender sender,
-  NativeBackground? native, Places? places, DateTime? now, Future<Directory> Function()? folder, ShareGroup? share}) async {
+  NativeBackground? native, Places? places, DateTime? now, Future<Directory> Function()? folder, ShareGroup? share,
+  CalendarSource? calendar}) async {
   final settings = Settings.decode(await store.get(settingsKey), hasKey: connection != null);
   final api = sender.api(settings, connection);
   if (api == null) return true;
@@ -68,11 +71,18 @@ Future<bool> backgroundRound(Store store, {required Connection? connection, requ
       read = false;
     }
   }
+  if (settings.calendar && calendar != null) {
+    try {
+      await syncCalendar(store, calendar, settings, now: now);
+    } on Exception {
+      // A refused calendar removes nothing; the next round reads again.
+    }
+  }
   await store.queuePoints();
   return (await flush(store, api, folder: folder)).failure == null && read;
 }
 
-/// Turns the hourly round on while sending and history or health are on, and off otherwise.
+/// Turns the hourly round on while sending and history, health or the calendar are on, and off otherwise.
 Future<void> scheduleSync(bool on) async {
   if (!on) return Workmanager().cancelByUniqueName(syncTask);
   await Workmanager().registerPeriodicTask(syncTask, syncTask, frequency: const Duration(hours: 1),

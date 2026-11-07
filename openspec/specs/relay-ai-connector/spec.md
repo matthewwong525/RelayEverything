@@ -15,7 +15,7 @@ Relay SHALL offer one remote MCP connector address that a chat app supporting re
 
 ### Requirement: The AI reads but never changes
 
-Every connector tool but one SHALL be marked read-only and SHALL only read notes, health samples, locations and saved chats. The one other tool SHALL add a typed note, and only for an app connected with the words that say it can add notes. No tool SHALL edit or delete any Relay Everything data, and recordings SHALL NOT be returned.
+Every connector tool but one SHALL be marked read-only and SHALL only read notes, health samples, locations, calendar events and saved chats. The one other tool SHALL add a typed note, and only for an app connected with the words that say it can add notes. No tool SHALL edit or delete any Relay Everything data, and recordings SHALL NOT be returned.
 
 #### Scenario: The AI is asked to delete a note
 - **WHEN** a chat asks the AI to delete or edit a Relay note
@@ -28,6 +28,10 @@ Every connector tool but one SHALL be marked read-only and SHALL only read notes
 #### Scenario: An app connected before notes could be added
 - **WHEN** an app connected before this change tries to add a note
 - **THEN** it is refused with a message to connect again, and its reads still work
+
+#### Scenario: The AI reads the day's calendar
+- **WHEN** a chat asks what is on the person's day
+- **THEN** the AI reads that day's events, with times and people, and no event is changed
 
 ### Requirement: Answers are bounded to the question
 

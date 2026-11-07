@@ -14,7 +14,7 @@ import { get, post, when, type Webhook } from './read'
 type Changed = (hook: Webhook) => void
 
 const STATE: Record<Webhook['state'], string> = { working: 'Working', paused: 'Paused', failing: 'Failing', backfilling: 'Sending past data' }
-const KIND: Record<Webhook['kinds'][number], string> = { notes: 'notes', health: 'health', locations: 'location history' }
+const KIND: Record<Webhook['kinds'][number], string> = { notes: 'notes', health: 'health', locations: 'location history', calendar: 'calendar' }
 const DAY = 86_400_000
 
 const duration = (ms: number) => ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`
@@ -52,14 +52,15 @@ function AddWebhook({ onAdd }: { onAdd: Changed }) {
   const [url, setUrl] = useState('https://')
   const [health, setHealth] = useState(false)
   const [places, setPlaces] = useState(false)
+  const [calendar, setCalendar] = useState(false)
   const [error, setError] = useState('')
   const close = (next: boolean) => {
     setOpen(next)
-    if (!next) { setSecret(null); setName(''); setUrl('https://'); setHealth(false); setPlaces(false); setError('') }
+    if (!next) { setSecret(null); setName(''); setUrl('https://'); setHealth(false); setPlaces(false); setCalendar(false); setError('') }
   }
   const add = async () => {
     try {
-      const kinds = [...(health ? ['health'] : []), ...(places ? ['locations'] : [])]
+      const kinds = [...(health ? ['health'] : []), ...(places ? ['locations'] : []), ...(calendar ? ['calendar'] : [])]
       const made = await post<{ webhook: Webhook; secret: string }>('webhooks', { name: name.trim() || 'My database', url, kinds })
       onAdd(made.webhook)
       setSecret(made.secret)
@@ -78,9 +79,10 @@ function AddWebhook({ onAdd }: { onAdd: Changed }) {
           <div className="grid gap-2"><Label htmlFor="hook-url">Address</Label><Input id="hook-url" value={url} onChange={(event) => setUrl(event.target.value)} /></div>
           <div className="grid gap-3">
             <span className="text-sm">Notes always go, with their words, recording and place.</span>
-            <Tick checked={health} onChange={setHealth}>Health: steps, heart rate, sleep, workouts</Tick>
+            <Tick checked={health} onChange={setHealth}>Health: steps, heart rate, sleep, weight and more</Tick>
             <Tick checked={places} onChange={setPlaces}>Location history</Tick>
-            <span className="text-sm text-muted-foreground">Health and location are sensitive. Tick them only for a database you control.</span>
+            <Tick checked={calendar} onChange={setCalendar}>Calendar: new, changed and removed events</Tick>
+            <span className="text-sm text-muted-foreground">Health, location and calendar are sensitive. Tick them only for a database you control.</span>
           </div>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         </div>

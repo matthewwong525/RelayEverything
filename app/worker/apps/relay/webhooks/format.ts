@@ -1,5 +1,5 @@
-// Format v1 of what a webhook receives: one envelope, seven types; mobile/lib/data/webhook.dart builds it too. The source
-// of the public site/public/webhooks/v1.schema.json; a change that breaks a receiver raises `version`.
+// Format v1 of what a webhook receives: one envelope, seven types; mobile/lib/data/webhook.dart builds it too. The
+// source of the public site/public/webhooks/v1.schema.json; a change that breaks a receiver raises `version`.
 import { z } from "zod";
 import { HEALTH_TYPES, type HealthType } from "../queries.ts";
 

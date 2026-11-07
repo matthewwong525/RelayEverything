@@ -102,3 +102,4 @@ None.
 - **2026-11-07** — Assumed: the old-blue check reads built `.svg` files as well as `.html` and `.css`, because a picture in `public/` can carry the old color too.
 - **2026-11-07** — Checkpoint: the second look's three fixes (spark on the Voice and Listening chips, one script for every logo file, the old-blue check on whole pages) saved.
 - **2026-11-07** — Archive checkpoint: the iPhone check passed (timeline, new note, settings, light and dark, and the launch screen with the Signal R on paper white), and the staging website shows the new logo and colors; tasks 1.3 and 5.2 ticked, ready to publish.
+- **2026-11-07** — Assumed: the main spec's logo line says *a capital R that sends out signal waves*, not *wires meeting in one place*, because the picked Signal R is not a converge mark; the archived delta keeps its first wording.

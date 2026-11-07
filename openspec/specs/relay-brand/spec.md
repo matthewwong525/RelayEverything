@@ -30,7 +30,7 @@ Each text color the brand uses SHALL have a contrast of at least 4.5 to 1 agains
 
 ### Requirement: One logo and one app icon
 
-Relay Everything SHALL have one logo, a mark of wires meeting in one place beside the name, and one app icon made from it: the mark on the brand's main color. The iPhone and Android home screens, the launch screen, and the website's top bar and browser tab SHALL show this mark, and none of them SHALL show the old ring circle.
+Relay Everything SHALL have one logo, a capital R that sends out signal waves, beside the name, and one app icon made from it: the mark on the brand's main color. The iPhone and Android home screens, the launch screen, and the website's top bar and browser tab SHALL show this mark, and none of them SHALL show the old ring circle.
 
 #### Scenario: The new icon on the home screen
 

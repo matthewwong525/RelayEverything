@@ -1,13 +1,18 @@
+import 'dart:io';
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:health/health.dart';
+import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/sender.dart';
 import 'package:relay_app/data/settings.dart';
 import 'package:relay_app/data/store.dart';
 import 'package:relay_app/sync/background.dart';
 import 'package:relay_app/sync/health.dart';
 import 'package:relay_app/sync/location.dart';
+import 'package:relay_app/sync/photos.dart';
 
 import 'fakes.dart';
 
@@ -77,6 +82,256 @@ void main() {
       expect([source.reads.length, server.routes.last], [1, 'health']);
       server.answer = (_) => FakeServer.json({}, 503);
       expect(await backgroundRound(store, connection: connection, health: source, sender: Sender(server.api), now: later(120)), isFalse);
+    });
+  });
+
+  group('photos', () {
+    late Store store;
+    late FakeServer server;
+    late FakePhotos photos;
+    late FakeNetwork network;
+
+    setUp(() async {
+      store = memoryStore();
+      server = FakeServer();
+      photos = FakePhotos();
+      network = FakeNetwork();
+      await store.set(settingsKey, const Settings(sending: true, photos: true).encode());
+      await store.set(photosSince, '${start.millisecondsSinceEpoch}');
+    });
+    tearDown(() => store.close());
+
+    Future<bool> round({Connection? key = connection}) => backgroundRound(store, connection: key, health: FakeHealth(),
+      sender: Sender(server.api), photos: photos, network: network, now: later(600));
+
+    List<String> queued(List<QueuedPhoto> waiting) => [for (final photo in waiting) photo.assetId];
+
+    test('a photo waiting for Wi-Fi never holds back a note, and goes on Wi-Fi with its time and place, once', () async {
+      photos.take('IMG_0001', later(1), lat: 43.65, lon: -79.38);
+      await store.addNote(LocalNote(clientId: 'note-0001', text: 'Lunch idea', createdAt: later(2)), send: true);
+      network.current = Link.mobile;
+      expect(await round(), isTrue);
+      expect(server.routes, ['notes']);
+      final waiting = (await store.waitingPhotos()).single;
+      expect([waiting.assetId, waiting.takenAt, waiting.lat, waiting.lon, waiting.width, waiting.height],
+        ['IMG_0001', later(1), 43.65, -79.38, 1600, 1200]);
+      expect(waiting.clientId, matches(RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')));
+      final copy = await store.photoFile(waiting.path);
+      expect(copy.readAsBytesSync(), jpegOf(1600, 1200));
+      network.current = Link.wifi;
+      expect(await round(), isTrue);
+      expect(server.routes, ['notes', 'photos']);
+      final parts = formParts(server.requests.last);
+      expect(parts.keys, ['clientId', 'takenAt', 'lat', 'lon', 'photo']);
+      expect([parts['clientId']!.$2, parts['takenAt']!.$2, parts['lat']!.$2, parts['lon']!.$2, parts['photo']!.$1],
+        [waiting.clientId, '${later(1).millisecondsSinceEpoch}', '43.65', '-79.38', 'image/jpeg']);
+      expect([await store.waitingPhotos(), copy.existsSync()], [isEmpty, false]);
+      // The next look starts at the photo's own second and finds it again, but it goes no second time.
+      expect(await round(), isTrue);
+      expect([server.routes, photos.copied], [['notes', 'photos'], ['IMG_0001']]);
+    });
+
+    test('with mobile data allowed, photos go on mobile data, and never with no network', () async {
+      await store.set(settingsKey, const Settings(sending: true, photos: true, photosOnMobileData: true).encode());
+      photos.take('IMG_0001', later(1));
+      network.current = Link.none;
+      expect(await round(), isTrue);
+      expect([server.routes, queued(await store.waitingPhotos())], [isEmpty, ['IMG_0001']]);
+      network.current = Link.mobile;
+      expect(await round(), isTrue);
+      expect([server.routes, await store.waitingPhotos()], [['photos'], isEmpty]);
+      expect([photosMayGo(const Settings(sending: true, photos: true), Link.mobile),
+        photosMayGo(const Settings(sending: true, photos: true), Link.wifi)], [false, true]);
+    });
+
+    test('reads no library and sends no photo while photos or sending is off, or with no key', () async {
+      photos.take('IMG_0001', later(1));
+      for (final saved in [const Settings(sending: true).encode(), '{"sending":false,"photos":true,"photosOnMobileData":true}']) {
+        await store.set(settingsKey, saved);
+        expect(await round(), isTrue);
+      }
+      await store.set(settingsKey, const Settings(sending: true, photos: true).encode());
+      expect(await round(key: null), isTrue);
+      expect([photos.finds, photos.copied, photos.asked, server.requests, await store.waitingPhotos()],
+        [isEmpty, isEmpty, 0, isEmpty, isEmpty]);
+    });
+
+    test('queues only photos taken since the switch turned on, 50 a round, oldest first, each once', () async {
+      network.current = Link.mobile;
+      for (var i = 0; i < 60; i++) {
+        photos.take('IMG_${'$i'.padLeft(4, '0')}', later(i + 1));
+      }
+      // Saved today from an old trip: Android finds it as new, but it was taken before the switch turned on.
+      photos.take('old-trip', start.subtract(const Duration(days: 365)), addedAt: later(61));
+      expect(await round(), isTrue);
+      var waiting = queued(await store.waitingPhotos());
+      expect([waiting.length, waiting.first, waiting.last], [50, 'IMG_0000', 'IMG_0049']);
+      expect(await store.get(photosAfter), '${later(50).millisecondsSinceEpoch}');
+      expect(await round(), isTrue);
+      waiting = queued(await store.waitingPhotos());
+      expect([waiting.length, waiting.toSet().length, waiting.last], [60, 60, 'IMG_0059']);
+      expect(await round(), isTrue);
+      expect([(await store.waitingPhotos()).length, photos.copied.length, photos.copied.contains('old-trip')], [60, 60, false]);
+      expect([for (final look in photos.finds) look.$1], [start, later(50), later(60)]);
+      expect(server.requests, isEmpty);
+    });
+
+    test('a photo only in iCloud waits for a network the photo send may use, and so do the photos after it', () async {
+      network.current = Link.mobile;
+      photos
+        ..take('cloud', later(1))
+        ..take('local', later(2))
+        ..cloudOnly.add('cloud');
+      expect(await round(), isTrue);
+      expect([await store.waitingPhotos(), photos.copied, await store.get(photosAfter)], [isEmpty, isEmpty, '${start.millisecondsSinceEpoch}']);
+      network.current = Link.wifi;
+      expect(await round(), isTrue);
+      expect([photos.copied, server.routes], [['cloud', 'local'], ['photos', 'photos']]);
+    });
+
+    test('a photo the server turns down is dropped with its copy; an offline answer stops only the photo send', () async {
+      network.current = Link.mobile;
+      photos
+        ..take('refused', later(1))
+        ..take('waits', later(2));
+      expect(await round(), isTrue);
+      final files = [for (final photo in await store.waitingPhotos()) await store.photoFile(photo.path)];
+      network.current = Link.wifi;
+      var tries = 0;
+      server.answer = (request) => !request.url.path.endsWith('photos') ? FakeServer.ok(request)
+        : tries++ == 0 ? FakeServer.json({'error': 'not a JPEG'}, 400) : FakeServer.json({}, 503);
+      await store.addNote(LocalNote(clientId: 'note-0001', text: 'Lunch idea', createdAt: later(3)), send: true);
+      expect(await round(), isFalse);
+      expect(server.routes, ['notes', 'photos', 'photos']);
+      expect([queued(await store.waitingPhotos()), files.first.existsSync(), files.last.existsSync()], [['waits'], false, true]);
+      server.answer = FakeServer.ok;
+      expect(await round(), isTrue);
+      expect([await store.waitingPhotos(), files.last.existsSync()], [isEmpty, false]);
+    });
+
+    test('a photo the phone can not copy small enough is skipped, once', () async {
+      photos
+        ..take('broken', later(1))
+        ..take('huge', later(2))
+        ..take('fine', later(3))
+        ..jpegs['broken'] = null
+        ..jpegs['huge'] = jpegOf(2000, 1500);
+      expect(await round(), isTrue);
+      expect(await round(), isTrue);
+      expect([photos.copied, server.routes, await store.waitingPhotos()], [['broken', 'huge', 'fine'], ['photos'], isEmpty]);
+    });
+
+    test('a photo the phone fails to copy once waits, with the photos after it, and goes on the next round, once', () async {
+      network.current = Link.mobile;
+      var failures = 0;
+      photos
+        ..take('first', later(1))
+        ..take('fails', later(2))
+        ..take('third', later(3))
+        ..whileCopying = (photo) async {
+          if (photo.id == 'fails' && failures++ == 0) throw Exception('iCloud download failed');
+        };
+      expect(await round(), isTrue);
+      expect([queued(await store.waitingPhotos()), photos.copied, await store.get(photosFailed)],
+        [['first'], ['first', 'fails'], '{"fails":1}']);
+      expect(await round(), isTrue);
+      expect(await round(), isTrue);
+      expect([queued(await store.waitingPhotos()), photos.copied, await store.get(photosFailed)],
+        [['first', 'fails', 'third'], ['first', 'fails', 'fails', 'third'], '{}']);
+      // The phone ends the round at the next photo after one is queued: that one is not queued again.
+      photos
+        ..take('fourth', later(4))
+        ..take('fifth', later(5));
+      var asks = 0;
+      await expectLater(queuePhotos(store, photos, network: false, keepGoing: () async {
+        if (asks++ == 2) throw Exception('task ended');
+        return true;
+      }), throwsException);
+      expect(queued(await store.waitingPhotos()), ['first', 'fails', 'third', 'fourth']);
+      expect(await round(), isTrue);
+      expect(queued(await store.waitingPhotos()), ['first', 'fails', 'third', 'fourth', 'fifth']);
+      expect(photos.copied, ['first', 'fails', 'fails', 'third', 'fourth', 'fifth']);
+    });
+
+    test('a photo whose copy always fails is skipped after 3 rounds, and the photos after it then go', () async {
+      network.current = Link.mobile;
+      photos
+        ..take('broken', later(1))
+        ..take('next', later(2))
+        ..whileCopying = (photo) async {
+          if (photo.id == 'broken') throw Exception('iCloud download failed');
+        };
+      expect(await round(), isTrue);
+      expect(await round(), isTrue);
+      expect([await store.waitingPhotos(), photos.copied, await store.get(photosFailed)],
+        [isEmpty, ['broken', 'broken'], '{"broken":2}']);
+      expect(await round(), isTrue);
+      expect([queued(await store.waitingPhotos()), photos.copied, await store.get(photosFailed)],
+        [['next'], ['broken', 'broken', 'broken', 'next'], '{}']);
+      expect(await round(), isTrue);
+      expect([queued(await store.waitingPhotos()), photos.copied.length], [['next'], 4]);
+    });
+
+    test('photos turned off in the app while a copy is made keep no photo and no copy on the phone', () async {
+      network.current = Link.mobile;
+      photos
+        ..take('IMG_0001', later(1))
+        ..take('IMG_0002', later(2))
+        ..whileCopying = (_) async {
+          // The app turns photos off and drops the queue, while this background round makes its copy.
+          await store.set(settingsKey, const Settings(sending: true).encode());
+          await dropPhotoQueue(store);
+        };
+      expect(await round(), isTrue);
+      final copies = Directory((await store.photoFile('photos')).path);
+      expect([await store.waitingPhotos(), photos.copied, copies.listSync()], [isEmpty, ['IMG_0001'], isEmpty]);
+    });
+
+    test('a refused photo with a key that answers, as on an older server, stops only the photo send', () async {
+      photos.take('IMG_0001', later(1));
+      server.answer = (request) => request.url.path.endsWith('photos') ? FakeServer.json({}, 403) : FakeServer.ok(request);
+      expect(await round(), isTrue);
+      expect([server.routes, queued(await store.waitingPhotos())], [['photos', 'key'], ['IMG_0001']]);
+    });
+
+    test('a turned-off key with only photos waiting fails the round, as for the notes, and keeps the photos', () async {
+      photos.take('IMG_0001', later(1));
+      server.answer = (_) => FakeServer.json({}, 403);
+      expect(await round(), isFalse);
+      expect([server.routes, queued(await store.waitingPhotos())], [['photos', 'key'], ['IMG_0001']]);
+    });
+
+    test('turning off drops the waiting photos and their copies, and forgets where the library was read to', () async {
+      network.current = Link.mobile;
+      photos.take('IMG_0001', later(1));
+      expect(await round(), isTrue);
+      final copy = await store.photoFile((await store.waitingPhotos()).single.path);
+      await dropPhotoQueue(store);
+      expect([await store.waitingPhotos(), copy.existsSync()], [isEmpty, false]);
+      expect([await store.get(photosSince), await store.get(photosAfter), await store.get(photosSeen), await store.get(photosFailed)],
+        [null, null, null, null]);
+      // With no start time, a round queues nothing, even with photos on.
+      expect(await round(), isTrue);
+      expect(await store.waitingPhotos(), isEmpty);
+    });
+
+    test('reads a JPEG\'s own size, and finds none in what is not one', () {
+      expect([jpegSize(jpegOf(1600, 1200)), jpegSize(jpegOf(900, 1600))], [(1600, 1200), (900, 1600)]);
+      expect(jpegSize([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]), isNull);
+      expect(jpegSize([0xFF, 0xD8, 0xFF, 0xD9]), isNull);
+      expect(jpegSize(jpegOf(1600, 1200).sublist(0, 25)), isNull);
+    });
+
+    test('fits a photo to 1,600 px on its long side, keeps its place only when it has one, and names it by a UUID', () {
+      expect([fitBox(4032, 3024), fitBox(3024, 4032), fitBox(800, 600), fitBox(4000, 1)], [(1600, 1200), (1200, 1600), (800, 600), (1600, 1)]);
+      expect(photoPlace(43.65, -79.38), (43.65, -79.38));
+      for (final (lat, lon) in [(0.0, 0.0), (null, 1.0), (1.0, null), (91.0, 0.0), (0.0, 181.0), (double.nan, 1.0)]) {
+        expect(photoPlace(lat, lon), isNull, reason: '$lat, $lon');
+      }
+      final id = newPhotoId(Random(1));
+      expect(id, matches(RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')));
+      expect(id, matches(RegExp(r'^[A-Za-z0-9-]{8,64}$')));
+      expect(newPhotoId(), isNot(newPhotoId()));
     });
   });
 

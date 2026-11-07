@@ -64,8 +64,8 @@ function dbOf(stub: Pick<Stub, "query" | "batch">): Db {
 const encoder = new TextEncoder();
 const IV = 12;
 
-/** A person's recordings in the file store: each under their own folder, sealed with their space's file key and its
- *  own name, so the store alone, or a copy under another name, never opens. */
+/** A person's recordings and photos in the file store: each under their own folder, sealed with their space's file key
+ *  and its own name, so the store alone, or a copy under another name, never opens. */
 function filesOf(bucket: R2Bucket, stub: Pick<Stub, "fileKey">, personId: string) {
   const prefix = `people/${personId}/`;
   let key: Promise<CryptoKey> | undefined;
@@ -81,13 +81,20 @@ function filesOf(bucket: R2Bucket, stub: Pick<Stub, "fileKey">, personId: string
   const files = {
     /** The file store's name for a note's recording. */
     nameOf: (noteId: string) => `${prefix}${noteId}`,
-    /** Seals a recording and stores it under the person's folder; answers its name for the note's row. */
-    async put(noteId: string, bytes: ArrayBuffer): Promise<string> {
-      const name = files.nameOf(noteId);
+    /** The file store's name for a photo, in the folder's own photos/ folder. */
+    photoName: (photoId: string) => `${prefix}photos/${photoId}`,
+    /** Seals a file under its name, from nameOf or photoName, and stores it; answers the name for its row. */
+    async put(name: string, bytes: ArrayBuffer): Promise<string> {
+      if (!name.startsWith(prefix)) throw new Error("A file goes only in its own person's folder.");
       await bucket.put(name, await seal(name, bytes), { httpMetadata: { contentType: "application/octet-stream" } });
       return name;
     },
-    /** A recording's bytes, or null when it is missing, outside the person's folder, or does not open. */
+    /** Deletes these files of the person's folder; a name outside it is left alone. */
+    async remove(names: string[]): Promise<void> {
+      const own = names.filter(name => name.startsWith(prefix));
+      if (own.length) await bucket.delete(own);
+    },
+    /** A file's bytes, or null when it is missing, outside the person's folder, or does not open. */
     async open(name: string): Promise<Uint8Array | null> {
       if (!name.startsWith(prefix)) return null;
       const object = await bucket.get(name);

@@ -1,12 +1,12 @@
-// The connector's eight tools, all read-only, over one person's notes, health, places and chats. Each answer is
-// capped, and none holds a recording's key, a device's id or a chat's session id. Every read goes through queries.ts.
+// The connector's ten tools, all read-only, over one person's notes, health, places, chats and photos. Each answer is
+// capped, and none holds a recording, a file's name, a device's id or a chat's session id. Reads go through queries.ts.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
-import { chatById, chatLines, chatMessages, chatPage, daySummary, healthBuckets, noteById, notePage, placeVisits, type Chat, type HealthType,
-  type Note, type Span } from "../apps/relay/queries.ts";
-import { spaceOf, vouch, type Db, type SpaceEnv } from "../apps/relay/space.ts";
-import type { GrantProps, McpEnv } from "./env.ts";
+import { chatById, chatLines, chatMessages, chatPage, daySummary, healthBuckets, noteById, notePage, photoById, photoPage, placeVisits,
+  type Chat, type HealthType, type Note, type Photo, type Span } from "../apps/relay/queries.ts";
+import { spaceOf, vouch, type Db, type PersonSpace, type SpaceEnv } from "../apps/relay/space.ts";
+import type { GrantProps } from "./env.ts";
 import { dayOf, HOUR, instant, knownZone, local, nextDay, startOfDay, ZONE } from "./time.ts";
 
 const MAX_BUCKETS = 400;
@@ -21,12 +21,27 @@ const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(text => !Number.isNaN
 const cursor = z.string().max(100).optional().describe("The last answer's `nextCursor`, to read the next page.");
 
 class Refusal extends Error {}
-type Answer = { content: { type: "text"; text: string }[]; isError?: boolean };
+/** A tool's answer that is a picture to look at, with a line of text for an app that shows no images. */
+class Picture {
+  readonly data: string;
+  readonly mimeType: string;
+  readonly text: string;
+  constructor(data: string, mimeType: string, text: string) {
+    this.data = data;
+    this.mimeType = mimeType;
+    this.text = text;
+  }
+}
+type Answer = { content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[]; isError?: boolean };
 
 /** Runs a tool, and answers a refusal as a tool error the AI can read and correct. */
 const tool = <Input>(run: (input: Input) => Promise<unknown>) => async (input: Input): Promise<Answer> => {
   try {
-    return { content: [{ type: "text", text: JSON.stringify(await run(input)) }] };
+    const answer = await run(input);
+    if (answer instanceof Picture) {
+      return { content: [{ type: "image", data: answer.data, mimeType: answer.mimeType }, { type: "text", text: answer.text }] };
+    }
+    return { content: [{ type: "text", text: JSON.stringify(answer) }] };
   } catch (error) {
     if (!(error instanceof Refusal)) throw error;
     return { content: [{ type: "text", text: error.message }], isError: true };
@@ -114,13 +129,29 @@ function partAfter(text: string | undefined): number {
   return Number(text);
 }
 
+/** A photo as the AI reads it: the time in the zone. */
+const photoShown = (photo: Photo, timezone: string) => ({ ...photo, takenAt: local(photo.takenAt, timezone) });
+
+/** One line for a photo: when and where it was taken. */
+const photoLine = (photo: Photo, timezone: string) =>
+  `Photo ${photo.id}, taken ${local(photo.takenAt, timezone)}${photo.lat === null ? ", with no place" : ` at ${photo.lat}, ${photo.lon}`}, ` +
+  `${photo.width} × ${photo.height} pixels.`;
+
+/** Bytes as base64, a part at a time, as a photo is too large to spread into one call. */
+function base64(bytes: Uint8Array): string {
+  let text = "";
+  for (let at = 0; at < bytes.length; at += 0x8000) text += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
+  return btoa(text);
+}
+
 const readOnly = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 
 /** A fresh server per request: the connector keeps no session between calls. */
-function relayServer(db: Db): McpServer {
+function relayServer(space: PersonSpace): McpServer {
+  const { db } = space;
   const server = new McpServer({ name: "relay", title: "Relay Everything", version: "1.0.0" }, {
-    instructions: "Relay Everything holds one person's notes from a smart ring and their phone, with health and places, and the Claude Code chats " +
-      "they saved. Every tool only reads. " +
+    instructions: "Relay Everything holds one person's notes from a smart ring and their phone, with health and places, the Claude Code chats " +
+      "they saved, and the photos their phone sent. Every tool only reads. " +
       `Days and times are ${ZONE} unless you pass a timezone.`,
   });
   server.registerTool("search", {
@@ -199,19 +230,44 @@ function relayServer(db: Db): McpServer {
     return { ...chatShown(chat, timezone), saves: chat.saves.map(save => ({ ...save, createdAt: local(save.createdAt, timezone) })),
       messages: messages.map(message => ({ ...message, at: local(message.at, timezone) })), nextCursor: next === null ? null : String(next) };
   }));
+  server.registerTool("photos", {
+    title: "List photos", annotations: readOnly,
+    description: "List the photos the phone sent from one time to another, newest first, with when and where each was taken and its size. " +
+      "Give `near` to keep only photos taken within some kilometres of a point, such as one from `places`. Look at one with read_photo.",
+    inputSchema: { from: when("The first time"), to: when("The time to stop before"),
+      near: z.strictObject({ lat: z.number().min(-90).max(90), lon: z.number().min(-180).max(180),
+        km: z.number().positive().max(500).describe("How far from the point, at most 500 km.") }).optional()
+        .describe("Only photos taken near this point."),
+      limit: z.number().int().min(1).max(50).default(50).describe("How many photos, at most 50."), cursor, timezone: zone },
+  }, tool(async ({ from, to, near, limit, cursor: text, timezone = ZONE }) => {
+    const [after, end] = range(from, to, timezone);
+    const found = await photoPage(db, { after, near, limit, ...pageBefore(text, end) });
+    return { photos: found.photos.map(photo => photoShown(photo, timezone)), nextCursor: nextCursor(found) };
+  }));
+  server.registerTool("read_photo", {
+    title: "Look at one photo", annotations: readOnly,
+    description: "Look at one photo by its id, from `photos`: the photo itself, at most 1,600 pixels on its long side, and when and where it was taken.",
+    inputSchema: { id: z.string().max(64).describe("The photo's id, from photos."), timezone: zone },
+  }, tool(async ({ id, timezone = ZONE }) => {
+    const photo = await photoById(db, id);
+    // A row whose file is gone shows as no photo too.
+    const bytes = photo ? await space.files.open(photo.file) : null;
+    if (!bytes) throw new Refusal("No photo has this id.");
+    return new Picture(base64(bytes), "image/jpeg", photoLine(photo!, timezone));
+  }));
   return server;
 }
 
 /** The connector's /mcp: Streamable HTTP, answered as JSON, with no session. Each token reads only its grant's person's
  *  space; a grant from before spaces names no person, so its app must connect again. */
 export const mcpHandler = {
-  async fetch(request: Request, env: Pick<McpEnv, "SPACES">, ctx: Pick<ExecutionContext, "props">): Promise<Response> {
+  async fetch(request: Request, env: SpaceEnv, ctx: Pick<ExecutionContext, "props">): Promise<Response> {
     const personId = (ctx.props as GrantProps | undefined)?.personId;
     if (!personId) return Response.json({ error: "invalid_token", error_description: "Connect this AI app again." }, { status: 401 });
-    // The tools read no recording, so the connector binds no file store.
-    const space = spaceOf({ SPACES: env.SPACES } as SpaceEnv, vouch("grant", personId));
+    // The file store is there for read_photo, which opens one photo by its row: no tool reads a recording.
+    const space = spaceOf(env, vouch("grant", personId));
     const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
-    await relayServer(space.db).connect(transport);
+    await relayServer(space).connect(transport);
     return transport.handleRequest(request);
   },
 };

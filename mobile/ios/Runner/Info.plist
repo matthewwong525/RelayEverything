@@ -42,6 +42,8 @@
 	<string>With location history on, Relay Everything keeps a point each 100 m you move, so ring notes get a place. Turn it off in Relay Everything settings.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Relay Everything adds where you are to each note you type.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>With Photos on, Relay Everything sends the new photos you take, with when and where you took them, to your own Relay Everything server. It reads no photos while Photos is off.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

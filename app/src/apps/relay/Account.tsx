@@ -24,8 +24,8 @@ function DeleteAccount({ email, onDeleted }: { email: string; onDeleted: () => v
     <DialogContent>
       <DialogHeader>
         <DialogTitle>Delete your account?</DialogTitle>
-        <DialogDescription>This removes your notes, recordings, health, places, chats, devices, webhooks and connected AI apps. This can't be
-          undone.</DialogDescription>
+        <DialogDescription>This removes your notes, recordings, photos, health, places, chats, devices, webhooks and connected AI apps. This
+          can't be undone.</DialogDescription>
       </DialogHeader>
       <div className="grid gap-2"><Label htmlFor="delete-email">Type your email, {email}, to confirm</Label>
         <Input id="delete-email" type="email" autoComplete="off" value={typed} onChange={(event) => setTyped(event.target.value)} /></div>

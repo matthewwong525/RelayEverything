@@ -89,6 +89,42 @@ Send the input as a JSON body.
 | `received` | integer | yes |  |
 | `added` | integer | yes |  |
 
+## Count the photos
+
+`GET /apps/relay/api/photos` · `relay.photos` · reads · called by a signed-in person only, not a device key
+
+Answer how many photos your phones sent. No photo shows.
+
+### Input
+
+It takes no input.
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `count` | integer | yes | How many photos your space holds. |
+
+## Delete all photos
+
+`POST /apps/relay/api/photos/delete` · `relay.photos-delete` · writes · called by a signed-in person only, not a device key
+
+Delete every photo your phones sent, and its time and place. Notes, recordings, health and places stay. It can't be undone.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `confirm` | string | yes | Type "delete" to confirm. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `deleted` | integer | yes | How many photos were deleted. |
+
 ## Check a device key
 
 `GET /apps/relay/api/key` · `relay.key` · reads · called by any device key
@@ -764,7 +800,7 @@ It takes no input.
 | `devices` | array of object | yes |  |
 | `devices[].id` | string | yes |  |
 | `devices[].name` | string | yes |  |
-| `devices[].reaches` | "phone" or "chats" | yes | phone: notes, health and places, from a phone or the Pebble app. chats: Claude Code chats. |
+| `devices[].reaches` | "phone" or "chats" | yes | phone: notes, health, places and photos, from a phone or the Pebble app. chats: Claude Code chats. |
 | `devices[].createdAt` | number | yes |  |
 | `devices[].revokedAt` | number or null | yes |  |
 
@@ -781,7 +817,7 @@ Send the input as a JSON body.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `name` | string | yes | A name you know the device by. |
-| `reaches` | "phone" or "chats" | yes | phone: notes, health and places, from a phone or the Pebble app. chats: Claude Code chats. |
+| `reaches` | "phone" or "chats" | yes | phone: notes, health, places and photos, from a phone or the Pebble app. chats: Claude Code chats. |
 
 ### Output
 
@@ -789,7 +825,7 @@ Send the input as a JSON body.
 |---|---|---|---|
 | `id` | string | yes |  |
 | `name` | string | yes |  |
-| `reaches` | "phone" or "chats" | yes | phone: notes, health and places, from a phone or the Pebble app. chats: Claude Code chats. |
+| `reaches` | "phone" or "chats" | yes | phone: notes, health, places and photos, from a phone or the Pebble app. chats: Claude Code chats. |
 | `key` | string | yes | Shown this once. |
 | `qr` | string | yes | What the phone scans: the server's address and the key. |
 | `pebbleSecret` | string or null | yes | A phone key's Pebble signing secret, shown this once. |
@@ -841,7 +877,7 @@ It takes no input.
 
 `POST /apps/relay/api/account-delete` · `relay.account-delete` · writes · called by a signed-in person only, not a device key
 
-Delete your account: your notes, recordings, health, places, chats, devices, webhooks and AI apps. It can't be undone.
+Delete your account: your notes, recordings, photos, health, places, chats, devices, webhooks and AI apps. It can't be undone.
 
 ### Input
 
@@ -866,5 +902,6 @@ Send the input as a JSON body.
 ## Routes with their own page
 
 - `POST /apps/relay/api/pebble`: [Take a ring note from the Pebble app](../pebble-webhook/)
+- `POST /apps/relay/api/photos`: [Send a photo from the phone, with a phone key](../../app/photos/#what-the-phone-sends)
 - `GET /apps/relay/api/audio`: [Play a note's recording](../recordings/)
 - `POST /apps/relay/api/chats`: [Send a Claude Code chat's new messages, with a chat key](../../connections/claude-code/#what-the-server-receives)

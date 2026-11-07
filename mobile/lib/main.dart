@@ -8,6 +8,7 @@ import 'data/connection.dart';
 import 'sync/background.dart';
 import 'sync/health.dart';
 import 'sync/location.dart';
+import 'sync/photos.dart';
 import 'voice/model.dart';
 import 'voice/recorder.dart';
 import 'voice/transcriber.dart';
@@ -20,10 +21,10 @@ Future<void> main() async {
     excludeFromBackup: excludeFromBackup),
     transcriber: WhisperTranscriber(() async => (await model.file).path), player: PhonePlayer());
   final relay = RelayController(store: openStore(), vault: KeyVault(), places: PhonePlaces(), health: PhoneHealth(), schedule: scheduleSync,
-    voice: voice);
+    voice: voice, photos: PhonePhotos(), network: PhoneNetwork());
   await relay.load();
   runApp(RelayApp(relay: relay));
-  // Each open, and each return to the app, sends what waits.
+  // Each open, and each return to the app, sends what waits and looks for new photos.
   AppLifecycleListener(onResume: relay.sync);
   await relay.sync();
 }

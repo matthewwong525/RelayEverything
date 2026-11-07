@@ -5,7 +5,7 @@ import { defineAction, type ActionCall } from "../../api/contract.ts";
 import { asPerson, CHECKER_PERSON } from "./caller.ts";
 import { directory, hashToken, randomToken } from "./people.ts";
 
-const reaches = z.enum(["phone", "chats"]).describe("phone: notes, health and places, from a phone or the Pebble app. chats: Claude Code chats.");
+const reaches = z.enum(["phone", "chats"]).describe("phone: notes, health, places and photos, from a phone or the Pebble app. chats: Claude Code chats.");
 const device = z.strictObject({ id: z.string(), name: z.string(), reaches, createdAt: z.number(), revokedAt: z.number().nullable() });
 const ERRORS = { not_found: "You have no device with this id." };
 type Row = { id: string; name: string; reaches: "phone" | "chats"; created_at: number; revoked_at: number | null };

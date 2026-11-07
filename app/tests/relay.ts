@@ -185,3 +185,20 @@ export async function call(who: Who, method: string, route: string, input?: Reco
 
 /** A table's rows in a person's space, Ana's when no one is named. */
 export const rows = (table: string, person = ANA) => spaces.sql(person).prepare(`SELECT * FROM ${table} ORDER BY rowid`).all();
+
+/** A made-up JPEG's bytes: its start, an APP0 block, a start-of-frame with this size, and its end. No real picture. */
+export function jpeg(width: number, height: number): Uint8Array<ArrayBuffer> {
+  const app0 = [0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00];
+  const frame = [0xff, 0xc0, 0x00, 0x11, 0x08, height >> 8, height & 0xff, width >> 8, width & 0xff, 0x03, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1];
+  return new Uint8Array([0xff, 0xd8, ...app0, ...frame, 0xff, 0xd9]);
+}
+
+/** A photo as the phone sends it: multipart, with its key; `fields` replaces or, set to null, drops a field. */
+export async function sendPhoto(who: Who, fields: Record<string, string | Blob | null> = {}) {
+  const form = new FormData();
+  const all: Record<string, string | Blob | null> = { clientId: "photo-0001", takenAt: String(NOW - 60_000), lat: "38.7139", lon: "-9.1394",
+    photo: new File([jpeg(1600, 1200)], "photo.jpg", { type: "image/jpeg" }), ...fields };
+  for (const [name, value] of Object.entries(all)) if (value !== null) form.append(name, value);
+  const response = await handleApp(request(who, "POST", "https://relay.example.com/apps/relay/api/photos", { body: form }), env(), identityOf(who));
+  return { status: response.status, json: await body(response) };
+}

@@ -57,3 +57,12 @@ INSERT INTO relay_webhook_attempts (webhook_id, at, first_seq, last_seq, type, s
   ('e0000000-0000-4000-8000-000000000001', 1793797300000, 4, 4, 'note.created', 200, 164, NULL),
   ('e0000000-0000-4000-8000-000000000001', 1793811710000, 5, 5, 'note.created', 200, 171, NULL),
   ('e0000000-0000-4000-8000-000000000001', 1793829510000, 6, 6, 'note.created', 200, 158, NULL);
+-- Relay photos: three made-up photos from the phone that day, two with their place and one with none. tools.test.ts
+-- seals a made-up JPEG under each name; the space's own folder is the test person's.
+INSERT INTO relay_photos (id, device_id, client_id, taken_at, lat, lon, width, height, bytes, file_key, created_at) VALUES
+  ('f0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', 'seed-photo-0001', 1793811900000, 43.6487, -79.3817,
+   1600, 1200, 31, 'people/aaaaaaaa-0000-4000-8000-00000000000a/photos/f0000000-0000-4000-8000-000000000001', 1793812000000),
+  ('f0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', 'seed-photo-0002', 1793820000000, NULL, NULL,
+   1200, 1600, 31, 'people/aaaaaaaa-0000-4000-8000-00000000000a/photos/f0000000-0000-4000-8000-000000000002', 1793820100000),
+  ('f0000000-0000-4000-8000-000000000003', 'd0000000-0000-4000-8000-000000000001', 'seed-photo-0003', 1793830000000, 43.6544, -79.4006,
+   1600, 900, 31, 'people/aaaaaaaa-0000-4000-8000-00000000000a/photos/f0000000-0000-4000-8000-000000000003', 1793830100000);

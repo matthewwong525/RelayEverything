@@ -47,12 +47,18 @@ abstract class Relay extends ChangeNotifier {
   Future<String?> setPinNotes(bool on);
   Future<String?> setHistory(bool on);
   Future<String?> setHealth(bool on);
+  /// Turning on asks for photo access; only photos taken from then on go. Turning off drops the photos still waiting on
+  /// this phone; the ones sent stay on the server.
+  Future<String?> setPhotos(bool on);
+  /// Off: photos wait for Wi-Fi.
+  Future<String?> setPhotosOnMobileData(bool on);
 
   /// How many notes never went to the server: the earlier-notes prompt asks about them when sending turns on.
   Future<int> earlierNotes();
   /// Turns sending on, with a key already kept; [sendEarlier] queues the earlier notes too, oldest first.
   Future<String?> startSending({required bool sendEarlier});
-  /// Turns sending off: stops health and location history and drops what of them did not go. Keeps notes and the key.
+  /// Turns sending off: stops health, location history and photos, and drops what of them did not go. Keeps notes and
+  /// the key.
   Future<void> stopSending();
 
   /// Forgets the key and turns sending off.

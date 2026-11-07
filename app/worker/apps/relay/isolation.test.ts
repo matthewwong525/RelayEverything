@@ -1,7 +1,8 @@
 import { expect, it } from "vitest";
 import { handleApp } from "../index";
+import { photoById, photoPage } from "./queries";
 import { spaceOf, vouch } from "./space";
-import { ANA, BEN, ben, benPhone, bucket, call, env, laptop, matthew, NOW, owner, phone, request, rows, spaces, type Who } from "../../../tests/relay";
+import { ANA, BEN, ben, benPhone, bucket, call, env, laptop, matthew, NOW, owner, phone, request, rows, sendPhoto, spaces, type Who } from "../../../tests/relay";
 
 const ANA_RING = "aaaaaaaa-0000-4000-8000-0000000000a1";
 const BEN_RING = "bbbbbbbb-0000-4000-8000-0000000000b1";
@@ -43,7 +44,7 @@ it("never shows Ben Ana's notes or chats, and lets him delete none of hers", asy
 });
 
 it("answers not found when Ana asks for Ben's recording, by its note id or by its name", async () => {
-  ringNote(BEN, "d-ben", BEN_RING, await filesOf(BEN).put(BEN_RING, new Uint8Array(SOUND).buffer));
+  ringNote(BEN, "d-ben", BEN_RING, await filesOf(BEN).put(filesOf(BEN).nameOf(BEN_RING), new Uint8Array(SOUND).buffer));
   expect((await play(ben, BEN_RING)).status).toBe(200);
   for (const who of [matthew, owner]) expect((await play(who, BEN_RING)).status).toBe(404);
   // A row in Ana's space that names Ben's object still opens nothing: it is outside her folder.
@@ -52,7 +53,7 @@ it("answers not found when Ana asks for Ben's recording, by its note id or by it
 });
 
 it("stores a recording sealed, plays back the bytes sent, and opens no copy under another name", async () => {
-  const name = await filesOf(ANA).put(ANA_RING, new Uint8Array(SOUND).buffer);
+  const name = await filesOf(ANA).put(filesOf(ANA).nameOf(ANA_RING), new Uint8Array(SOUND).buffer);
   ringNote(ANA, "d-pebble", ANA_RING, name);
   expect(name).toBe(`people/${ANA}/${ANA_RING}`);
   const stored = bucket.objects.get(name)!;
@@ -63,4 +64,36 @@ it("stores a recording sealed, plays back the bytes sent, and opens no copy unde
   bucket.objects.set(`people/${ANA}/${copy}`, stored);
   ringNote(ANA, "d-pebble", copy, `people/${ANA}/${copy}`);
   expect((await play(matthew, copy)).status).toBe(404);
+});
+
+it("opens a photo only under the name it was sealed with, and puts no file outside the person's folder", async () => {
+  const files = filesOf(ANA);
+  const name = await files.put(files.photoName(ANA_RING), new Uint8Array(SOUND).buffer);
+  expect(name).toBe(`people/${ANA}/photos/${ANA_RING}`);
+  expect(await files.open(name)).toEqual(new Uint8Array(SOUND));
+  // The same sealed bytes under a recording's name, or another photo's, never open.
+  for (const other of [files.nameOf(ANA_RING), files.photoName("aaaaaaaa-0000-4000-8000-0000000000a2")]) {
+    bucket.objects.set(other, bucket.objects.get(name)!);
+    expect(await files.open(other)).toBeNull();
+  }
+  // A delete names only files in the person's own folder; another person's name, or none, deletes nothing.
+  bucket.objects.set(filesOf(BEN).photoName(ANA_RING), new Uint8Array([1]));
+  await files.remove([filesOf(BEN).photoName(ANA_RING)]);
+  await files.remove([]);
+  expect(bucket.objects.has(filesOf(BEN).photoName(ANA_RING))).toBe(true);
+  bucket.objects.delete(filesOf(BEN).photoName(ANA_RING));
+  await expect(files.put(filesOf(BEN).photoName(ANA_RING), new Uint8Array(SOUND).buffer)).rejects.toThrow("own person's folder");
+  expect(bucket.objects.has(filesOf(BEN).photoName(ANA_RING))).toBe(false);
+});
+
+it("never gives Ana's queries or count Ben's photos", async () => {
+  await sendPhoto(benPhone);
+  const benPhoto = String(rows("relay_photos", BEN)[0].id);
+  const anaDb = spaceOf(env() as never, vouch("grant", ANA)).db;
+  expect((await photoPage(anaDb, { limit: 50 })).photos).toEqual([]);
+  expect(await photoById(anaDb, benPhoto)).toBeNull();
+  expect((await call(matthew, "GET", "photos")).json).toEqual({ count: 0 });
+  expect((await call(matthew, "POST", "photos/delete", { confirm: "delete" })).json).toEqual({ deleted: 0 });
+  expect(rows("relay_photos", BEN)).toHaveLength(1);
+  expect(await photoById(spaceOf(env() as never, vouch("grant", BEN)).db, benPhoto)).toMatchObject({ id: benPhoto });
 });

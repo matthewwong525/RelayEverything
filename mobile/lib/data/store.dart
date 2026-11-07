@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:drift/drift.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// How a note on this phone was made.
 enum NoteKind { typed, voice }
@@ -67,6 +69,34 @@ class OutboxItem {
   final Map<String, dynamic> body;
 }
 
+/// A photo waiting to go: its JPEG copy in the app's support folder, and what the server's `photos` route takes with it.
+class QueuedPhoto {
+  const QueuedPhoto({required this.clientId, required this.assetId, required this.takenAt, this.lat, this.lon,
+    required this.width, required this.height, required this.path});
+
+  /// The phone's own id for this photo, so a resend is stored once.
+  final String clientId;
+  /// The photo's id in the phone's library.
+  final String assetId;
+  final DateTime takenAt;
+  final double? lat;
+  final double? lon;
+  /// The JPEG copy's own size, in pixels.
+  final int width;
+  final int height;
+  /// The JPEG copy, under the app's support folder: `photos/<client id>.jpg`.
+  final String path;
+
+  /// The upload's text fields. A place goes only whole: both numbers, or neither.
+  Map<String, String> get fields => {
+    'clientId': clientId, 'takenAt': '${takenAt.millisecondsSinceEpoch}',
+    if (lat != null && lon != null) ...{'lat': '$lat', 'lon': '$lon'},
+  };
+}
+
+/// Where a queued photo's JPEG copy lives, under the app's support folder.
+String photoPathOf(String clientId) => 'photos/$clientId.jpg';
+
 const _voiceColumns = "kind TEXT NOT NULL DEFAULT 'typed', audio_path TEXT, duration_ms INTEGER, "
   'words_pending INTEGER NOT NULL DEFAULT 0';
 
@@ -79,18 +109,27 @@ const _schema = [
     'queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0, $_voiceColumns)',
   'CREATE TABLE points (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
   'CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+  _photosTable,
 ];
 
-/// The phone's own SQLite file: its typed and voice notes, waiting uploads, location points not yet sent, and small settings.
-/// Written as plain SQL through drift, so the app needs no generated code.
+// Photos wait here, not in the outbox: the outbox stops at the first upload that can not go, so a photo waiting for
+// Wi-Fi would hold back every note.
+const _photosTable = 'CREATE TABLE photos (client_id TEXT PRIMARY KEY, asset_id TEXT NOT NULL, taken_at INTEGER NOT NULL, '
+  'lat REAL, lon REAL, width INTEGER NOT NULL, height INTEGER NOT NULL, path TEXT NOT NULL, created_at INTEGER NOT NULL)';
+
+/// The phone's own SQLite file: its typed and voice notes, waiting uploads, location points not yet sent, photos
+/// waiting to go, and small settings. Written as plain SQL through drift, so the app needs no generated code. A
+/// waiting photo's JPEG copy lives in [folder], the app's support folder unless a test gives its own.
 class Store extends GeneratedDatabase {
-  Store(super.executor);
+  Store(super.executor, {Future<Directory> Function()? folder}) : _folder = folder ?? getApplicationSupportDirectory;
+
+  final Future<Directory> Function() _folder;
 
   @override
   Iterable<TableInfo<Table, dynamic>> get allTables => const [];
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(onCreate: (_) async {
@@ -119,6 +158,8 @@ class Store extends GeneratedDatabase {
         await customStatement('ALTER TABLE notes ADD COLUMN $column');
       }
     }
+    // Version 4 had no photos.
+    if (from < 5) await customStatement(_photosTable);
   });
 
   Future<List<QueryRow>> _rows(String sql, [List<Object?> values = const []]) =>
@@ -253,6 +294,53 @@ class Store extends GeneratedDatabase {
       await _run('DELETE FROM points WHERE at <= ?', [rows.last.read<int>('at')]);
     }
   });
+
+  /// The file of a waiting photo's JPEG copy, from its [path] under the app's support folder.
+  Future<File> photoFile(String path) async => File('${(await _folder()).path}/$path');
+
+  /// Keeps a photo waiting to go, and saves each of [state] in the same step. Its JPEG copy is at [QueuedPhoto.path]
+  /// already.
+  Future<void> addPhoto(QueuedPhoto photo, {Map<String, String> state = const {}}) => transaction(() async {
+    await _run('INSERT INTO photos (client_id, asset_id, taken_at, lat, lon, width, height, path, created_at) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [photo.clientId, photo.assetId, photo.takenAt.millisecondsSinceEpoch, photo.lat, photo.lon, photo.width, photo.height,
+        photo.path, DateTime.now().millisecondsSinceEpoch]);
+    for (final MapEntry(:key, :value) in state.entries) {
+      await set(key, value);
+    }
+  });
+
+  /// Every photo waiting to go, oldest first.
+  Future<List<QueuedPhoto>> waitingPhotos() async => [
+    for (final row in await _rows('SELECT client_id, asset_id, taken_at, lat, lon, width, height, path FROM photos '
+        'ORDER BY taken_at, created_at, client_id'))
+      QueuedPhoto(clientId: row.read<String>('client_id'), assetId: row.read<String>('asset_id'),
+        takenAt: DateTime.fromMillisecondsSinceEpoch(row.read<int>('taken_at')), lat: row.read<double?>('lat'),
+        lon: row.read<double?>('lon'), width: row.read<int>('width'), height: row.read<int>('height'), path: row.read<String>('path')),
+  ];
+
+  /// Ends a photo's wait, once it went or the server turned it down: its row and its JPEG copy go.
+  Future<void> photoDone(String clientId) async {
+    final rows = await _rows('SELECT path FROM photos WHERE client_id = ?', [clientId]);
+    await _run('DELETE FROM photos WHERE client_id = ?', [clientId]);
+    for (final row in rows) {
+      await _delete(row.read<String>('path'));
+    }
+  }
+
+  /// Drops every photo that did not go yet, with its JPEG copy, for when photos or sending turns off.
+  Future<void> dropPhotos() async {
+    final rows = await _rows('SELECT path FROM photos');
+    await _run('DELETE FROM photos');
+    for (final row in rows) {
+      await _delete(row.read<String>('path'));
+    }
+  }
+
+  Future<void> _delete(String path) async {
+    final file = await photoFile(path);
+    if (await file.exists()) await file.delete();
+  }
 
   Future<String?> get(String key) async {
     final rows = await _rows('SELECT value FROM state WHERE key = ?', [key]);

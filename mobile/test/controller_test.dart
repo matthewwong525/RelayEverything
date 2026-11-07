@@ -10,6 +10,7 @@ import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/store.dart';
 import 'package:relay_app/relay.dart';
 import 'package:relay_app/sync/health.dart';
+import 'package:relay_app/sync/photos.dart';
 import 'package:relay_app/voice/model.dart';
 
 import 'fakes.dart';
@@ -228,9 +229,26 @@ void main() {
       expect([const Settings(history: true, health: true).history, const Settings(history: true, health: true).health], [false, false]);
       const on = Settings(sending: true, history: true, health: true);
       expect([on.copyWith(sending: false).history, on.copyWith(sending: false).health], [false, false]);
-      expect(jsonDecode(on.encode()), {'sending': true, 'pinNotes': false, 'history': true, 'health': true});
+      expect(jsonDecode(on.encode()),
+        {'sending': true, 'pinNotes': false, 'history': true, 'health': true, 'photos': false, 'photosOnMobileData': false});
       final back = Settings.decode(on.encode(), hasKey: false);
       expect([back.sending, back.health], [true, true]);
+    });
+
+    test('photos are off unless sending is on, and mobile data is off unless photos is on', () {
+      const fresh = Settings();
+      expect([fresh.photos, fresh.photosOnMobileData], [false, false]);
+      expect([const Settings(photos: true).photos, const Settings(sending: true, photosOnMobileData: true).photosOnMobileData], [false, false]);
+      const on = Settings(sending: true, photos: true, photosOnMobileData: true);
+      expect([on.photos, on.photosOnMobileData], [true, true]);
+      expect([on.copyWith(sending: false).photos, on.copyWith(sending: false).photosOnMobileData], [false, false]);
+      expect([on.copyWith(photos: false).photosOnMobileData, on.copyWith(photosOnMobileData: false).photos], [false, true]);
+      final back = Settings.decode(on.encode(), hasKey: true);
+      expect([back.photos, back.photosOnMobileData], [true, true]);
+      // Settings saved before photos have none of their fields: photos read as off.
+      final old = Settings.decode(jsonEncode({'sending': true, 'pinNotes': true, 'history': true, 'health': true}), hasKey: true);
+      expect([old.sending, old.history, old.health, old.photos, old.photosOnMobileData], [true, true, true, false, false]);
+      expect(Settings.decode(jsonEncode({'pinNotes': true}), hasKey: true).photos, isFalse);
     });
 
     test('an upgrade from the first version keeps sending on for a phone with a key', () {
@@ -249,7 +267,8 @@ void main() {
       final relay = controller();
       await relay.load();
       expect([relay.settings.sending, relay.settings.pinNotes], [false, true]);
-      expect(jsonDecode((await store.get('settings'))!), {'sending': false, 'pinNotes': true, 'history': false, 'health': false});
+      expect(jsonDecode((await store.get('settings'))!),
+        {'sending': false, 'pinNotes': true, 'history': false, 'health': false, 'photos': false, 'photosOnMobileData': false});
     });
 
     test('turn each on only with its permission, and schedule the hourly sync only while sending', () async {
@@ -271,7 +290,8 @@ void main() {
       expect(await relay.setHistory(false), isNull);
       expect(await relay.setPinNotes(true), isNull);
       expect(scheduled, [false, true, true, true, true]);
-      expect(jsonDecode((await store.get('settings'))!), {'sending': true, 'pinNotes': true, 'history': false, 'health': true});
+      expect(jsonDecode((await store.get('settings'))!),
+        {'sending': true, 'pinNotes': true, 'history': false, 'health': true, 'photos': false, 'photosOnMobileData': false});
       expect(places.asked, [false, true, true, false]);
     });
   });
@@ -471,6 +491,161 @@ void main() {
       expect(relay.entries.single.text, 'Kept');
       await relay.sync();
       expect(server.requests.every((request) => request.url.host == 'preview.example.com'), isTrue);
+    });
+  });
+
+  group('photos', () {
+    late FakePhotos photos;
+    late FakeNetwork network;
+    setUp(() {
+      photos = FakePhotos();
+      network = FakeNetwork();
+    });
+
+    RelayController photoController() => RelayController(store: store, vault: KeyVault(storage), places: places, health: health,
+      apiFor: server.api, clock: () => clock, schedule: (on) async => scheduled.add(on), photos: photos, network: network);
+
+    Future<RelayController> sending() async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', const Settings(sending: true).encode());
+      final relay = photoController();
+      await relay.load();
+      return relay;
+    }
+
+    List<String> photoUploads() => [for (final route in server.routes) if (route == 'photos') route];
+    final later = now.add(const Duration(minutes: 1));
+
+    test('never turned on: the app asks for no photo access and reads no library', () async {
+      final relay = await sending();
+      photos.take('IMG_0001', later);
+      await relay.addNote('Lunch idea');
+      await relay.sync();
+      expect([photos.asked, photos.finds, photoUploads(), sentNotes().single['text']], [0, isEmpty, isEmpty, 'Lunch idea']);
+      expect(await relay.setPhotosOnMobileData(true), contains('Photos'));
+      expect(relay.settings.photosOnMobileData, isFalse);
+    });
+
+    test('turns on only with sending and photo access, and sends only photos taken from then on', () async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', const Settings().encode());
+      final relay = photoController();
+      await relay.load();
+      expect(await relay.setPhotos(true), contains('Send to Relay Everything'));
+      expect(photos.asked, 0);
+      await relay.startSending(sendEarlier: false);
+      photos.allowed = false;
+      expect(await relay.setPhotos(true), "Photo access is off. Turn it on in the phone's Settings.");
+      expect([relay.settings.photos, await store.get(photosSince), photos.asked], [false, null, 1]);
+      photos
+        ..allowed = true
+        ..take('before', now.subtract(const Duration(days: 30)));
+      expect(await relay.setPhotos(true), isNull);
+      expect([relay.settings.photos, await store.get(photosSince), await store.get(photosAfter)],
+        [true, '${now.millisecondsSinceEpoch}', '${now.millisecondsSinceEpoch}']);
+      // The hourly round runs while photos alone are on.
+      expect(scheduled.last, isTrue);
+      await relay.sync();
+      expect([photos.copied, photoUploads()], [isEmpty, isEmpty]);
+      // A photo taken after: the next sync, on open or on a return to the app, sends it.
+      clock = now.add(const Duration(minutes: 5));
+      photos.take('after', later, lat: 43.65, lon: -79.38);
+      await relay.sync();
+      expect([photos.copied, photoUploads(), relay.status], [['after'], ['photos'], SyncStatus.synced]);
+      expect(jsonDecode((await store.get('settings'))!), containsPair('photos', true));
+    });
+
+    test('on mobile data, photos wait for Wi-Fi while notes go, and go once mobile data is allowed', () async {
+      final relay = await sending();
+      network.current = Link.mobile;
+      expect(await relay.setPhotos(true), isNull);
+      await relay.sync();
+      clock = now.add(const Duration(minutes: 5));
+      photos.take('IMG_0001', later);
+      await relay.addNote('Lunch idea');
+      await relay.sync();
+      expect([sentNotes().single['text'], photoUploads(), (await store.waitingPhotos()).length], ['Lunch idea', isEmpty, 1]);
+      expect(await relay.setPhotosOnMobileData(true), isNull);
+      await relay.sync();
+      expect([relay.settings.photosOnMobileData, photoUploads(), await store.waitingPhotos()], [true, ['photos'], isEmpty]);
+    });
+
+    test('turning photos off drops the photos waiting and their copies, and a later turn-on starts again from then', () async {
+      final relay = await sending();
+      network.current = Link.mobile;
+      expect(await relay.setPhotos(true), isNull);
+      await relay.sync();
+      clock = now.add(const Duration(minutes: 5));
+      photos.take('IMG_0001', later);
+      await relay.sync();
+      final copy = await store.photoFile((await store.waitingPhotos()).single.path);
+      expect(copy.existsSync(), isTrue);
+      expect(await relay.setPhotos(false), isNull);
+      expect([relay.settings.photos, relay.settings.photosOnMobileData, await store.waitingPhotos(), copy.existsSync()],
+        [false, false, isEmpty, false]);
+      expect([await store.get(photosSince), await store.get(photosAfter), scheduled.last], [null, null, false]);
+      final looks = photos.finds.length;
+      network.current = Link.wifi;
+      await relay.sync();
+      expect([photos.finds.length, photoUploads()], [looks, isEmpty]);
+      // On again: the photo was taken before this turn-on, so it never goes.
+      clock = now.add(const Duration(minutes: 10));
+      expect(await relay.setPhotos(true), isNull);
+      await relay.sync();
+      expect([photoUploads(), await store.get(photosSince), photos.asked], [isEmpty, '${clock.millisecondsSinceEpoch}', 2]);
+    });
+
+    test('a server that refuses photos stops only the photo send: notes go and the key shows no refusal', () async {
+      final relay = await sending();
+      expect(await relay.setPhotos(true), isNull);
+      await relay.sync();
+      clock = now.add(const Duration(minutes: 5));
+      photos.take('IMG_0001', later);
+      // An older server: the phone's key may send notes, but not photos.
+      server.answer = (request) => request.url.path.endsWith('photos') ? FakeServer.json({}, 403) : FakeServer.ok(request);
+      await relay.addNote('Lunch idea');
+      await relay.sync();
+      expect([sentNotes().single['text'], photoUploads(), (await store.waitingPhotos()).length, relay.status],
+        ['Lunch idea', ['photos'], 1, SyncStatus.synced]);
+      // The phone asks about its key, which answers: the server only has no photos.
+      expect(server.routes.last, 'key');
+      server.answer = (request) => request.url.path.endsWith('photos') ? FakeServer.json({}, 403) : FakeServer.json({}, 502);
+      await relay.addNote('Waits');
+      await relay.sync();
+      expect(relay.status, SyncStatus.offline);
+    });
+
+    test('a turned-off key shows refused when only photos are waiting', () async {
+      final relay = await sending();
+      expect(await relay.setPhotos(true), isNull);
+      await relay.sync();
+      expect(relay.status, SyncStatus.synced);
+      clock = now.add(const Duration(minutes: 5));
+      photos.take('IMG_0001', later);
+      server.answer = (_) => FakeServer.json({}, 403);
+      await relay.sync();
+      expect([sentNotes(), server.routes.sublist(server.routes.length - 2), (await store.waitingPhotos()).length, relay.status],
+        [isEmpty, ['photos', 'key'], 1, SyncStatus.refused]);
+    });
+
+    test('stopping sending drops the photos waiting, stops reading the library, and keeps notes and their uploads', () async {
+      final relay = await sending();
+      network.current = Link.mobile;
+      expect(await relay.setPhotos(true), isNull);
+      await relay.sync();
+      clock = now.add(const Duration(minutes: 5));
+      photos.take('IMG_0001', later);
+      server.answer = (_) => FakeServer.json({}, 503);
+      await relay.addNote('Waits');
+      await relay.sync();
+      expect([relay.status, (await store.waitingPhotos()).length], [SyncStatus.offline, 1]);
+      await relay.stopSending();
+      expect([relay.settings.photos, await store.waitingPhotos(), await store.get(photosSince)], [false, isEmpty, null]);
+      expect([for (final item in await store.outbox()) item.route], ['notes']);
+      final looks = photos.finds.length;
+      await relay.startSending(sendEarlier: false);
+      await relay.sync();
+      expect([relay.settings.photos, photos.finds.length], [false, looks]);
     });
   });
 

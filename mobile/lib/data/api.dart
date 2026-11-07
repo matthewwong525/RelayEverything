@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart' show MediaType;
 
 import 'connection.dart';
 
@@ -26,6 +27,8 @@ class RelayApi {
   final Connection connection;
   final http.Client _client;
   static const _timeout = Duration(seconds: 30);
+  // A photo is a few hundred kilobytes, which can take longer than a JSON body on a slow network.
+  static const _uploadTimeout = Duration(seconds: 120);
 
   Uri _uri(String route) => Uri.parse('${connection.server}/apps/relay/api/$route');
 
@@ -35,16 +38,28 @@ class RelayApi {
   Future<Map<String, dynamic>> post(String route, Map<String, dynamic> body) =>
     _call(() => _client.post(_uri(route), headers: {..._headers, 'Content-Type': 'application/json'}, body: jsonEncode(body)));
 
+  /// Sends one multipart body to a POST route: the text [fields], and one file part named [file], with its [bytes],
+  /// [filename] and [contentType]. A refusal is named the same way as for [post].
+  Future<Map<String, dynamic>> upload(String route, Map<String, String> fields,
+    {required String file, required List<int> bytes, required String filename, required String contentType}) =>
+    _call(() async {
+      final request = http.MultipartRequest('POST', _uri(route))
+        ..headers.addAll(_headers)
+        ..fields.addAll(fields)
+        ..files.add(http.MultipartFile.fromBytes(file, bytes, filename: filename, contentType: MediaType.parse(contentType)));
+      return http.Response.fromStream(await _client.send(request));
+    }, timeout: _uploadTimeout);
+
   /// Checks this phone's key and returns the device name it was made for. It reads no data.
   Future<String> key() async {
     final json = await _call(() => _client.get(_uri('key'), headers: _headers));
     return json['device'] as String? ?? '';
   }
 
-  Future<Map<String, dynamic>> _call(Future<http.Response> Function() send) async {
+  Future<Map<String, dynamic>> _call(Future<http.Response> Function() send, {Duration timeout = _timeout}) async {
     final http.Response response;
     try {
-      response = await send().timeout(_timeout);
+      response = await send().timeout(timeout);
     } on Exception {
       throw const ApiException(Failure.offline, null);
     }

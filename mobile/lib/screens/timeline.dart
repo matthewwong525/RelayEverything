@@ -19,7 +19,7 @@ String _time(BuildContext context, DateTime at) {
 /// Opens an address in the phone's own browser, and says if it did.
 typedef Opener = Future<bool> Function(Uri address);
 
-Future<bool> _openInBrowser(Uri address) async {
+Future<bool> openInBrowser(Uri address) async {
   try {
     return await launchUrl(address, mode: LaunchMode.externalApplication);
   } on Exception {
@@ -72,7 +72,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
         final server = relay.server;
         final top = <Widget>[
           // Ring notes and recordings are on the Relay page: a device key can not read them.
-          if (relay.settings.sending && server != null) _PageCard(server: server, opener: widget.opener ?? _openInBrowser),
+          if (relay.settings.sending && server != null) _PageCard(server: server, opener: widget.opener ?? openInBrowser),
           if (model) ModelCard(relay: relay),
         ];
         final listening = relay.listening;
@@ -82,7 +82,8 @@ class _TimelineScreenState extends State<TimelineScreen> {
             IconButton(
               tooltip: 'Settings',
               icon: const Icon(Icons.settings_outlined),
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SettingsScreen(relay: relay, scanner: scanner))),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SettingsScreen(relay: relay, scanner: scanner,
+                opener: widget.opener))),
             ),
           ]),
           floatingActionButton: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, spacing: 8, children: [

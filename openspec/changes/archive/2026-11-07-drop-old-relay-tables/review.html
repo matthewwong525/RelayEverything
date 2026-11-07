@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · drop-old-relay-tables</title>
+<title>Review · 2026-11-07-drop-old-relay-tables</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="drop-old-relay-tables" data-own-back>
+<body data-change="2026-11-07-drop-old-relay-tables" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>drop-old-relay-tables</h1>
+  <h1>2026-11-07-drop-old-relay-tables</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -448,7 +448,7 @@
 <li class="decision card" id="decision-4" data-note="decision-4" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-07</p>Check: the 3 <code>import</code> and <code>counts</code> tests in <code>app/worker/spaces-worker.test.ts</code> deleted, because a space no longer has those calls.</li>
 <li class="decision card" id="decision-5" data-note="decision-5" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-07</p>Check: the move route test in <code>app/worker/relay-only.test.ts</code> deleted, because the route is gone.</li>
 <li class="decision card" id="decision-6" data-note="decision-6" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-07</p>Check: the 2 move tests in <code>self-host/setup.test.mjs</code> deleted, because an update no longer moves old data.</li>
-<li class="decision card" id="decision-7" data-note="decision-7" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-07</p>Check: the test in <code>app/worker/apps/relay/space-schema.test.ts</code> that compared the shared database's tables with a new space's deleted, because the shared database no longer holds a person's tables; the new tests check each side apart. <b>2026-11-07</b> — Assumed: <code>AGENTS.md</code>'s health and location line now says the data lives in each person's own space, because the shared database no longer holds those tables. <b>2026-11-07</b> — Saved for final acceptance inside <code>/ship</code>: the build, the review fixes and the hand deletions are done; the preview check of task 6.2 follows.</li>
+<li class="decision card" id="decision-7" data-note="decision-7" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-07</p>Check: the test in <code>app/worker/apps/relay/space-schema.test.ts</code> that compared the shared database's tables with a new space's deleted, because the shared database no longer holds a person's tables; the new tests check each side apart. <b>2026-11-07</b> — Assumed: <code>AGENTS.md</code>'s health and location line now says the data lives in each person's own space, because the shared database no longer holds those tables. <b>2026-11-07</b> — Saved for final acceptance inside <code>/ship</code>: the build, the review fixes and the hand deletions are done; the preview check of task 6.2 follows. <b>2026-11-07</b> — Preview checked (task 6.2): the staging database lists only the 6 directory tables, the drop migration applied; on app-staging.relayeverything.com a test account made a phone key, the key sent a note that shows in its own space, a read with the key was refused (403), and the test key was turned off. The company app's preview has no spaces, as on main, so the check ran on the preview server. <b>2026-11-07</b> — Archived inside <code>/ship</code>, after the preview check passed.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

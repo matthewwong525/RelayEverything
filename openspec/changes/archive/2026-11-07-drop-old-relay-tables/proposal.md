@@ -1,6 +1,6 @@
 # Remove the old shared Relay Everything tables
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** fancy-dinosaur
 **Open questions:** none
 
@@ -82,3 +82,5 @@ Non-goals: the old device keys, the AI connector's old sign-in apps and the old 
 - **2026-11-07** — Check: the test in `app/worker/apps/relay/space-schema.test.ts` that compared the shared database's tables with a new space's deleted, because the shared database no longer holds a person's tables; the new tests check each side apart.
 **2026-11-07** — Assumed: `AGENTS.md`'s health and location line now says the data lives in each person's own space, because the shared database no longer holds those tables.
 **2026-11-07** — Saved for final acceptance inside `/ship`: the build, the review fixes and the hand deletions are done; the preview check of task 6.2 follows.
+**2026-11-07** — Preview checked (task 6.2): the staging database lists only the 6 directory tables, the drop migration applied; on app-staging.relayeverything.com a test account made a phone key, the key sent a note that shows in its own space, a read with the key was refused (403), and the test key was turned off. The company app's preview has no spaces, as on main, so the check ran on the preview server.
+**2026-11-07** — Archived inside `/ship`, after the preview check passed.

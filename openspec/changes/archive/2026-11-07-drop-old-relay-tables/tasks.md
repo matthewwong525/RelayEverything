@@ -27,4 +27,4 @@
 ## 6. Checks
 
 - [x] 6.1 Run the app, script and self-host tests, `scripts/product-name.test.mjs` and `node scripts/public-check.mjs`
-- [ ] 6.2 `/save`, then check the preview: the staging database lists no old table, and a phone key still sends a note to its space
+- [x] 6.2 `/save`, then check the preview: the staging database lists no old table, and a phone key still sends a note to its space

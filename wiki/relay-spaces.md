@@ -21,13 +21,13 @@ The shared D1 database keeps only who has an account and how they sign in, in [`
 
 ## Space migrations
 
-A space runs [`schema/space-migrations/`](../schema/space-migrations/) in order, in its constructor under `blockConcurrencyWhile`, and records each in its `space_migrations` table. `0001_relay.sql` is the D1 `relay_*` schema as it was before spaces; [`space-schema.test.ts`](../app/worker/apps/relay/space-schema.test.ts) checks that a space holds each person's tables and D1 only the directory. `0002_space.sql` adds what only a space has: its file key, each Pebble device's signing secret, and the person the alarm sends for.
+A space runs [`schema/space-migrations/`](../schema/space-migrations/) in order, in its constructor under `blockConcurrencyWhile`, and records each in its `space_migrations` table. `0001_relay.sql` is the D1 `relay_*` schema as it was before spaces; [`space-schema.test.ts`](../app/worker/apps/relay/space-schema.test.ts) checks that a space holds each person's tables and D1 only the directory. `0002_space.sql` adds what only a space has: its file key, each Pebble device's signing secret, and the person the alarm sends for. `0003_attachments.sql` adds `relay_attachments`, the files listed on each note.
 
 A new space table goes in a new numbered file: never edit one a space already ran.
 
-## Recordings
+## Recordings and note files
 
-A recording's file store key is `people/<person id>/<note id>`. Each is sealed with AES-256-GCM: a fresh 12-byte IV per object, the space's own 256-bit file key from `space_keys`, and the store key as associated data, so a copy under another name fails to open. `audio.ts` opens a recording only through the caller's space; deleting the space deletes the file key, and account deletion also deletes every object under the prefix.
+A recording's file store key is `people/<person id>/<note id>`, and a note file's is `people/<person id>/attachments/<file id>`. Each is sealed with AES-256-GCM: a fresh 12-byte IV per object, the space's own 256-bit file key from `space_keys`, and the store key as associated data, so a copy under another name fails to open. `audio.ts` and [`attachments.ts`](../app/worker/apps/relay/attachments.ts) open a file only through the caller's space; deleting the space deletes the file key, and account deletion also deletes every object under the prefix.
 
 ## Webhooks
 

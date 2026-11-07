@@ -64,3 +64,15 @@ it("stores a recording sealed, plays back the bytes sent, and opens no copy unde
   ringNote(ANA, "d-pebble", copy, `people/${ANA}/${copy}`);
   expect((await play(matthew, copy)).status).toBe(404);
 });
+
+it("never opens Ana's note file for Ben's session, and Ben's key can't add a file to her note", async () => {
+  const file = { id: "file-ana-0001", name: "passport.pdf", type: "application/pdf", size: 4 };
+  await call(phone, "POST", "notes", { ...note("ana-note-01", "Ana's file"), attachments: [file] });
+  const send = (who: Who) => handleApp(request(who, "POST", "https://relay.example.com/apps/relay/api/attachments", { body: new Uint8Array(4),
+    headers: { "X-Note-Client-Id": "ana-note-01", "X-Attachment-Id": file.id } }), env(), null);
+  expect((await send(benPhone)).status).toBe(404);
+  expect((await send(phone)).status).toBe(200);
+  const open = (who: Who) => handleApp(request(who, "GET", `https://relay.example.com/apps/relay/api/attachment?id=${file.id}`), env(), null);
+  expect((await open(matthew)).status).toBe(200);
+  expect((await open(ben)).status).toBe(404);
+});

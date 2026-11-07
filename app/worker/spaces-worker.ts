@@ -3,11 +3,13 @@
 import { DurableObject } from "cloudflare:workers";
 import relay from "../../schema/space-migrations/0001_relay.sql";
 import space from "../../schema/space-migrations/0002_space.sql";
+import attachments from "../../schema/space-migrations/0003_attachments.sql";
 import type { Row, Sql, SqlValue } from "./apps/relay/space.ts";
 import { BEHIND } from "./apps/relay/webhooks/log.ts";
 
 /** The space's migrations, in order. A space runs each once, and keeps the name of each in `space_migrations`. */
-export const MIGRATIONS: readonly [string, string][] = [["0001_relay", relay], ["0002_space", space]];
+export const MIGRATIONS: readonly [string, string][] = [["0001_relay", relay], ["0002_space", space],
+  ["0003_attachments", attachments]];
 
 const SWEEP = 15 * 60_000;
 const KEEP = 30 * 24 * 60 * 60_000;

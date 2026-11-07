@@ -57,3 +57,14 @@ it("publishes the schema the format makes", () => {
   if (process.env.RELAY_API_DOC_WRITE) writeFileSync(schemaFile, jsonSchema());
   expect(readFileSync(schemaFile, "utf8"), "The format changed: run `npm run relay:api-doc` in app/").toBe(jsonSchema());
 });
+
+it("lists a note's files by name, type and size, never their bytes, and leaves the list out of a note with none", () => {
+  const pdf = { id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 245_760 };
+  const built = noteCreated(typed, null, AT, [{ ...pdf, file_key: "people/x/attachments/file-pdf-0001" } as typeof pdf]);
+  const { note } = built.data as { note: Record<string, unknown> };
+  expect(message.parse(built)).toEqual(built);
+  expect(note.attachments).toEqual([pdf]);
+  expect(JSON.stringify(built)).not.toContain("file_key");
+  expect(noteCreated(typed, null, AT).data).not.toHaveProperty("note.attachments");
+  expect(() => message.parse({ ...built, data: { note: { ...note, attachments: [{ ...pdf, base64: "AAAA" }] } } })).toThrow();
+});

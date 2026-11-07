@@ -11,6 +11,7 @@ Relay Everything keeps your notes on your phone. When you turn on sending, it ke
 |---|---|---|
 | Typed notes, with their pin | The phone's own storage, always | Never, while sending is off |
 | Typed notes, with their place | Your space on your Relay Everything server | With sending on: each time you save a note. Notes from before go only if you tap **Send them**. |
+| Files on a note: photos, PDFs and other files | The phone's own storage, always. iPhone backups keep them; Android cloud backup leaves them out. With sending on, also your space's folder of the file store, sealed. | With sending on: after their note. Files of earlier notes go only if you tap **Send them**. |
 | Voice notes from the app: the recording | The phone's own storage, only. iCloud and Google backups leave it out. | Never |
 | Voice notes from the app: the words | The phone's own storage; with sending on, also your space on your Relay Everything server | The same as a typed note, once the phone has written the words |
 | Ring notes: the words and the recording | Your Relay Everything server: the words in your space, the recording sealed in your folder of its file store | Each time you hold the ring and talk, through the Pebble app |
@@ -19,9 +20,9 @@ Relay Everything keeps your notes on your phone. When you turn on sending, it ke
 | The phone's key | The iPhone Keychain or the Android Keystore; the server keeps only its fingerprint | Never sent, except as the key's header |
 | Your email | The server's list of accounts, to sign you in | When you sign up |
 | Your sign-in | A cookie in your browser, for 30 days | With each visit to your Relay Everything page |
-| A copy of what your server stores | [Your own database](../connections/your-database/), through a webhook you add | Notes always; health and location only if you tick them for that webhook |
+| A copy of what your server stores | [Your own database](../connections/your-database/), through a webhook you add | Notes always, with each file's name, type and size but not the file; health and location only if you tick them for that webhook |
 
-With sending off, the app makes no network call, reads no health data, and keeps no location history. The one exception is the speech model for voice notes, and only after you tap **Get it**.
+With sending off, the app makes no network call, reads no health data, and keeps no location history. The one exception is the speech model for voice notes, and only after you tap **Get it**. The same is true when a shortcut adds a note: [Shortcuts](../app/shortcuts/#what-is-sent) follow your sending setting, and **Get notes** reads only the phone.
 
 ## Who can see what
 
@@ -33,17 +34,17 @@ Each person's data is in their own space: a separate store that holds only that 
 - **Your webhooks** send only your data, to the addresses you add.
 - **No one else.** The server opens a space only for the person who signed in, or for that person's own key or AI app. There is no screen, route or tool for the server's owner to open another person's space. [The code is public](https://github.com/matthewwong525/RelayEverything), and a test fails if such a way in is added.
 
-Each recording is in your own folder of the server's file store, sealed with a key that is kept in your space. The file store alone, as in the Cloudflare dashboard, shows only sealed bytes.
+Each recording and each file on a note is in your own folder of the server's file store, sealed with a key that is kept in your space. The file store alone, as in the Cloudflare dashboard, shows only sealed bytes. Only your own sign-in opens a file on your Relay Everything page.
 
 **The limit:** the owner of the Cloudflare account that runs a server could change its code to read a space. Only encryption on the phone stops that, and Relay Everything does not have it yet. On [your own server](../start/run-your-own/), that owner is you.
 
 ## Delete your account
 
-Click **Delete my account** on your Relay Everything page, and type your email to confirm. It deletes your space, your recordings, your keys, your sign-ins and your connected AI apps. You can't undo it. Your notes stay on your phone.
+Click **Delete my account** on your Relay Everything page, and type your email to confirm. It deletes your space, your recordings, the files on your notes, your keys, your sign-ins and your connected AI apps. You can't undo it. Your notes stay on your phone.
 
 ## What is not kept
 
-- The Relay Everything app has no ads and no analytics. It sends your notes, health and places only to your Relay Everything server, and only with sending on. Your server sends them on only to your webhooks.
+- The Relay Everything app has no ads and no analytics. It sends your notes, their files, health and places only to your Relay Everything server, and only with sending on. Your server sends them on only to your webhooks, and sends a file's name, type and size, never the file.
 - To name a place, such as a street, the phone uses its own address lookup from Apple or Google, only with sending on. That lookup gets the place's coordinates, not the note. With sending off, a pinned note shows **Pinned**.
 - The phone writes a voice note's words itself. No speech service on a network hears your voice.
 - The speech model comes from [whisper.cpp's page on Hugging Face](https://huggingface.co/ggerganov/whisper.cpp), one time, after you tap **Get it**. Hugging Face sees the phone's internet address, the same as any download. It gets no note, no recording and no key.

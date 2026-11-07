@@ -19,6 +19,7 @@ const PLACES = [
   'site/public/webhooks',
   'mobile/lib',
   'mobile/ios/Runner/Info.plist',
+  'mobile/ios/Runner/RelayIntents.swift',
   'mobile/android/app/src/main/AndroidManifest.xml',
   'app/src/apps/relay/app.json',
   'app/worker/relay-mcp/auth.ts',

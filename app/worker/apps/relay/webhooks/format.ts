@@ -17,6 +17,12 @@ const note = z.strictObject({
 });
 const audio = z.strictObject({ content_type: z.literal("audio/mp4"), base64: z.string() }).nullable()
   .describe("A ring note's recording, or null for a typed note or a ring note with words only.");
+const attachment = z.strictObject({
+  id: z.string().describe("The file's id, from the phone that sent it."), name: z.string().describe("The file's name, such as warranty.pdf."),
+  content_type: z.string().describe("Such as application/pdf."), size: z.number().int().min(0).describe("In bytes."),
+});
+const attachments = z.array(attachment).min(1).max(10).optional()
+  .describe("The note's files: each one's name, type and size, never its bytes. Only a note with files has this list.");
 const sample = z.strictObject({
   id: z.number().int().describe("Unique in this Relay Everything server."), device, type: z.enum(["steps", "heart_rate", "sleep", "workout"]),
   start: iso, end: iso, value: z.number(), unit: z.string(), source: z.string().describe("The app or watch that counted it."),
@@ -32,7 +38,7 @@ const envelope = <Type extends string, Data extends z.ZodType>(type: Type, data:
     .describe(description);
 
 export const message = z.discriminatedUnion("type", [
-  envelope("note.created", z.strictObject({ note: note.extend({ audio }) }), "A note reached Relay Everything."),
+  envelope("note.created", z.strictObject({ note: note.extend({ audio, attachments }) }), "A note reached Relay Everything."),
   envelope("note.updated", z.strictObject({ note }), "A ring note got its place from a later location batch. It has no audio."),
   envelope("health.samples", z.strictObject({ samples: z.array(sample).min(1).max(BATCH) }), "Health samples, in the order Relay Everything stored them."),
   envelope("location.points", z.strictObject({ points: z.array(point).min(1).max(BATCH) }), "Location points, in the order Relay Everything stored them."),
@@ -45,6 +51,7 @@ type Message = z.infer<typeof message>;
 export type NoteRow = { id: string; source: "ring" | "typed"; text: string; recorded_at: number; created_at: number; device_id: string;
   device_name: string; lat: number | null; lon: number | null; accuracy: number | null; place: string | null;
   place_from: "phone" | "history" | null; audio_key: string | null };
+export type AttachmentRow = { id: string; name: string; content_type: string; size: number };
 export type HealthRow = { id: number; device_id: string; device_name: string; type: "steps" | "heart_rate" | "sleep" | "workout";
   start_at: number; end_at: number; value: number; unit: string; source: string };
 export type LocationRow = { id: number; device_id: string; device_name: string; at: number; lat: number; lon: number; accuracy: number;
@@ -61,9 +68,10 @@ const noteOf = (row: NoteRow) => ({ id: row.id, source: row.source, text: row.te
 const wrap = <Built extends Message>(type: Built["type"], data: Built["data"], at: number) =>
   ({ version: 1, type, timestamp: isoOf(at), data }) as Built;
 
-/** A new note; `audio` is its recording in base64, or null. */
-export const noteCreated = (row: NoteRow, audio: string | null, at: number) =>
-  wrap("note.created", { note: { ...noteOf(row), audio: audio === null ? null : { content_type: "audio/mp4", base64: audio } } }, at);
+/** A new note; `audio` is its recording in base64, or null. `files` are listed only when there are some. */
+export const noteCreated = (row: NoteRow, audio: string | null, at: number, files: AttachmentRow[] = []) =>
+  wrap("note.created", { note: { ...noteOf(row), audio: audio === null ? null : { content_type: "audio/mp4", base64: audio },
+    ...files.length ? { attachments: files.map(({ id, name, content_type, size }) => ({ id, name, content_type, size })) } : {} } }, at);
 
 export const noteUpdated = (row: NoteRow, at: number) => wrap("note.updated", { note: noteOf(row) }, at);
 

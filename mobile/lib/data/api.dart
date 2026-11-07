@@ -26,6 +26,8 @@ class RelayApi {
   final Connection connection;
   final http.Client _client;
   static const _timeout = Duration(seconds: 30);
+  /// A file can be 25 MB, so its upload may take longer on a slow signal.
+  static const _uploadTimeout = Duration(minutes: 5);
 
   Uri _uri(String route) => Uri.parse('${connection.server}/apps/relay/api/$route');
 
@@ -35,16 +37,25 @@ class RelayApi {
   Future<Map<String, dynamic>> post(String route, Map<String, dynamic> body) =>
     _call(() => _client.post(_uri(route), headers: {..._headers, 'Content-Type': 'application/json'}, body: jsonEncode(body)));
 
+  /// Sends one file's bytes to `POST attachments`, after its note. The server answers 404 for a file its note does not
+  /// list, such as against a server from before files: that file can never land, so it counts as turned down.
+  Future<Map<String, dynamic>> upload({required String noteClientId, required String id, required String type,
+    required List<int> bytes}) =>
+    _call(() => _client.post(_uri('attachments'), headers: {..._headers, 'Content-Type': type.isEmpty ? 'application/octet-stream' : type,
+      'X-Note-Client-Id': noteClientId, 'X-Attachment-Id': id}, body: bytes), rejected: const {400, 404, 413},
+      timeout: _uploadTimeout);
+
   /// Checks this phone's key and returns the device name it was made for. It reads no data.
   Future<String> key() async {
     final json = await _call(() => _client.get(_uri('key'), headers: _headers));
     return json['device'] as String? ?? '';
   }
 
-  Future<Map<String, dynamic>> _call(Future<http.Response> Function() send) async {
+  Future<Map<String, dynamic>> _call(Future<http.Response> Function() send, {Set<int> rejected = const {400, 413},
+    Duration timeout = _timeout}) async {
     final http.Response response;
     try {
-      response = await send().timeout(_timeout);
+      response = await send().timeout(timeout);
     } on Exception {
       throw const ApiException(Failure.offline, null);
     }
@@ -54,7 +65,7 @@ class RelayApi {
     if (status == 401 || status == 403 || (status >= 300 && status < 400) || (status == 200 && !json)) {
       throw ApiException(Failure.refused, status);
     }
-    if (status == 400 || status == 413) throw ApiException(Failure.rejected, status);
+    if (rejected.contains(status)) throw ApiException(Failure.rejected, status);
     if (status != 200) throw ApiException(Failure.offline, status);
     return jsonDecode(response.body) as Map<String, dynamic>;
   }

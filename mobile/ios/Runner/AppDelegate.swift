@@ -16,6 +16,11 @@ import workmanager_apple
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    // Shortcuts' actions (RelayIntents.swift) call this engine while the app runs, so the open timeline shows a
+    // shortcut's note at once. Before iOS 16 there are no actions.
+    if #available(iOS 16, *), let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "RelayShortcuts") {
+      ShortcutsEngine.shared.attachApp(registrar.messenger())
+    }
     // iCloud does not back up the speech model (57 MB, and it can be got again) or a recording (it never leaves the
     // phone). lib/voice/model.dart and lib/voice/recorder.dart call this.
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "RelayFiles") {

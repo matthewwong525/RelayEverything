@@ -5,12 +5,14 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import 'data/api.dart';
+import 'data/attachments.dart';
 import 'data/connection.dart';
 import 'data/outbox.dart';
 import 'data/sender.dart';
 import 'data/settings.dart';
 import 'data/store.dart';
 import 'relay.dart';
+import 'shortcuts/inbox.dart';
 import 'sync/health.dart';
 import 'sync/location.dart';
 import 'voice/model.dart';
@@ -30,6 +32,18 @@ class VoiceParts {
   final VoicePlayer player;
 }
 
+/// Opens a file in an app on the phone; false when no app could.
+typedef FileOpener = Future<bool> Function(File file, String type);
+
+/// What [RelayController.keepNote] kept: the note, or null when it kept nothing, and the words to show for what it left
+/// out.
+class Kept {
+  const Kept(this.note, this.problem);
+
+  final LocalNote? note;
+  final String? problem;
+}
+
 /// A random id for a note, so a resend is stored once.
 String newClientId([Random? random]) {
   final source = random ?? Random.secure();
@@ -40,7 +54,7 @@ String newClientId([Random? random]) {
 /// it syncs on open, on a new note, on pull, and every hour in the background.
 class RelayController extends Relay {
   RelayController({required this.store, required this.vault, required this.places, required this.health,
-    RelayApi Function(Connection)? apiFor, DateTime Function()? clock, this.schedule, this.voice})
+    RelayApi Function(Connection)? apiFor, DateTime Function()? clock, this.schedule, this.voice, this.folder, this.opener})
     : _sender = Sender(apiFor), _clock = clock ?? DateTime.now {
     voice?.model.addListener(notifyListeners);
     // A recording at its longest ends as if the person let go.
@@ -59,6 +73,10 @@ class RelayController extends Relay {
   final Future<void> Function(bool on)? schedule;
   /// Voice notes; with none, the app has typed notes only.
   final VoiceParts? voice;
+  /// The app's support folder, where a note's files are kept in `attachments/`; with none, notes take no files.
+  final Future<Directory> Function()? folder;
+  /// Opens a note's file; with none, the app says it can not.
+  final FileOpener? opener;
   final Sender _sender;
   final DateTime Function() _clock;
 
@@ -69,9 +87,12 @@ class RelayController extends Relay {
   Settings _settings = const Settings();
   StreamSubscription<Pin>? _history;
   Future<void>? _syncing;
+  bool _again = false;
   DateTime? _listening;
   Future<bool>? _starting;
   final _writing = <Future<void>>{};
+  final _pinning = <Future<void>>{};
+  String? _root;
 
   @override bool get connected => _connection != null;
   @override String? get server => _connection?.server;
@@ -95,6 +116,14 @@ class RelayController extends Relay {
     if (_settings.history) _startHistory();
     // Nothing waits for a fix yet at start, so a note still waiting lost its wait when the app closed.
     await store.settleWaiting(send: _settings.sending);
+    _root = (await folder?.call())?.path;
+    // A shortcut that ran while the app could not answer left its note in the inbox.
+    final root = _root;
+    if (root != null) {
+      await drainInbox(Directory(root), (request) async {
+        await keepNote(request.text, files: request.files, clientId: request.id, createdAt: request.createdAt, pin: false);
+      });
+    }
     await voice?.model.load();
     await _refreshLocal();
     // A voice note whose words the app's close cut short gets them now, from its kept recording.
@@ -106,7 +135,15 @@ class RelayController extends Relay {
     place: note.pin == null ? null : note.pin!.place ?? 'Pinned',
     sent: note.sentAt != null, waiting: _settings.sending && note.sentAt == null && (note.queued || note.pinning),
     voice: note.kind == NoteKind.voice, writing: note.wordsPending, recording: note.audioPath,
-    length: note.durationMs == null ? null : Duration(milliseconds: note.durationMs!));
+    length: note.durationMs == null ? null : Duration(milliseconds: note.durationMs!),
+    files: [for (final file in note.attachments)
+      EntryFile(name: file.name, type: file.type, size: file.size, path: fullPath(file.path))]);
+
+  /// The app's support folder, once [load] has read it.
+  String? get filesRoot => _root;
+
+  /// A path from the support folder, made full.
+  String fullPath(String path) => _root == null || path.startsWith('/') ? path : '$_root/$path';
 
   /// The list shows this phone's own notes, newest first. Ring notes and recordings are on the person's Relay page.
   Future<void> _refreshLocal() async {
@@ -222,15 +259,98 @@ class RelayController extends Relay {
     return null;
   }
 
+  static const _nothing = 'Give the note words or a file.';
+
   /// Keeps and shows the note at once; Save never waits for a fix. With pins on, the note settles only when the phone
   /// has a fix or gives up (up to 10 s), so a sync meanwhile sends the rest and leaves this note waiting.
   @override
-  Future<void> addNote(String text) async {
-    final note = LocalNote(clientId: newClientId(), text: text.trim(), createdAt: _clock());
-    final pinned = _settings.pinNotes;
+  Future<String?> addNote(String text, {List<NewFile> files = const []}) async => (await keepNote(text, files: files)).problem;
+
+  /// Keeps a note with words, files, or both, as the paperclip and Shortcuts make it. Files past the limits are left out
+  /// with a message. A note with nothing in it is kept not at all. A [clientId] this phone already keeps gives back that
+  /// note, so a shortcut that ran twice keeps one. [pin] false keeps no place, for a note made earlier than now.
+  Future<Kept> keepNote(String text, {List<NewFile> files = const [], String? clientId, DateTime? createdAt,
+    bool pin = true}) async {
+    final id = clientId ?? newClientId();
+    if (await store.hasNote(id)) {
+      return Kept((await store.notes()).firstWhere((note) => note.clientId == id), null);
+    }
+    final check = checkFiles(const [], files);
+    final problems = [?check.problem];
+    final attachments = <Attachment>[];
+    for (final file in check.kept) {
+      final kept = await _keepFile(file);
+      if (kept == null) {
+        problems.add('${file.name} could not be read, so it was not added.');
+      } else {
+        attachments.add(kept);
+      }
+    }
+    final words = text.trim();
+    if (words.isEmpty && attachments.isEmpty) return Kept(null, [...problems, _nothing].join(' '));
+    final note = LocalNote(clientId: id, text: words, createdAt: createdAt ?? _clock(), attachments: attachments);
+    final pinned = pin && _settings.pinNotes;
     await store.addNote(note, waitForPin: pinned, send: _settings.sending);
     await _refreshLocal();
-    unawaited(pinned ? _pinThenSync(note.clientId) : sync());
+    if (pinned) {
+      final job = _pinThenSync(id);
+      _pinning.add(job);
+      job.whenComplete(() => _pinning.remove(job));
+    } else {
+      unawaited(sync());
+    }
+    return Kept(note, problems.isEmpty ? null : problems.join(' '));
+  }
+
+  /// Copies a file into `attachments/<id><.ext>`, or moves the app's own copy there. Null when it could not.
+  Future<Attachment?> _keepFile(NewFile file) async {
+    final root = _root ?? (await folder?.call())?.path;
+    if (root == null) return null;
+    final id = newClientId();
+    final path = 'attachments/$id${extensionOf(file.name)}';
+    final target = File('$root/$path');
+    final source = File(file.path.startsWith('/') ? file.path : '$root/${file.path}');
+    try {
+      await target.parent.create(recursive: true);
+      if (file.move) {
+        try {
+          await source.rename(target.path);
+        } on FileSystemException {
+          await source.copy(target.path);
+          await source.delete();
+        }
+      } else {
+        await source.copy(target.path);
+      }
+      final size = await target.length();
+      if (size > maxFileBytes) {
+        await target.delete();
+        return null;
+      }
+      return Attachment(id: id, name: file.name, type: file.type, size: size, path: path);
+    } on FileSystemException {
+      return null;
+    }
+  }
+
+  /// Ends when each new note has its pin, and the sync after it is done. Shortcuts waits on it, so a note goes before the
+  /// phone puts the app away.
+  Future<void> settled() async {
+    while (_pinning.isNotEmpty) {
+      await Future.wait(List.of(_pinning));
+    }
+    await _syncing;
+  }
+
+  static const _noFile = 'This file is not on this phone.';
+  static const _noApp = 'No app on this phone opens this file.';
+
+  @override
+  Future<void> openFile(EntryFile file) async {
+    final found = File(file.path);
+    if (!await found.exists()) return notice(_noFile);
+    final open = opener;
+    if (open == null || !await open(found, file.type)) notice(_noApp);
   }
 
   Future<void> _pinThenSync(String clientId) async {
@@ -245,13 +365,31 @@ class RelayController extends Relay {
     await sync();
   }
 
-  /// One sync at a time; a second call waits for the one running. With sending off it does nothing.
+  /// One sync at a time; a second call waits for the one running. With sending off it does nothing. A call while a round
+  /// runs asks for one more round after it, because that round read the outbox before the call's note was queued.
   @override
-  Future<void> sync() => _syncing ??= _sync().whenComplete(() => _syncing = null);
+  Future<void> sync() {
+    final running = _syncing;
+    if (running != null) {
+      _again = true;
+      return running;
+    }
+    return _syncing = _rounds().whenComplete(() => _syncing = null);
+  }
 
-  Future<void> _sync() async {
+  /// Runs rounds until no call asked for another, or a round could not send everything.
+  Future<void> _rounds() async {
+    bool emptied;
+    do {
+      _again = false;
+      emptied = await _sync();
+    } while (_again && emptied && _settings.sending);
+  }
+
+  /// One round; true when the outbox emptied.
+  Future<bool> _sync() async {
     final api = _api;
-    if (api == null) return;
+    if (api == null) return false;
     _status = SyncStatus.syncing;
     notifyListeners();
     // Sending can turn off while a round runs: from then on it reads, queues and sends nothing more.
@@ -263,11 +401,12 @@ class RelayController extends Relay {
       }
     }
     if (_settings.sending) await store.queuePoints();
-    final result = await flush(store, api, clock: _clock, keepGoing: () => _settings.sending);
+    final result = await flush(store, api, clock: _clock, keepGoing: () => _settings.sending, folder: folder);
     _status = switch (result.failure) { Failure.refused => SyncStatus.refused, null => SyncStatus.synced, _ => SyncStatus.offline };
     // The stop's own state wins.
     if (!_settings.sending) _status = SyncStatus.idle;
     await _refreshLocal();
+    return result.failure == null;
   }
 
   // Voice notes.

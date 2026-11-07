@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:flutter/widgets.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:workmanager/workmanager.dart';
 
 import '../data/connection.dart';
@@ -25,7 +28,8 @@ void backgroundSync() {
     if (connection == null) return true;
     final store = openStore();
     try {
-      return await backgroundRound(store, connection: connection, health: PhoneHealth(), sender: Sender());
+      return await backgroundRound(store, connection: connection, health: PhoneHealth(), sender: Sender(),
+        folder: getApplicationSupportDirectory);
     } on Exception {
       return false;
     } finally {
@@ -36,13 +40,13 @@ void backgroundSync() {
 
 /// One background round, apart from the plugin that runs it so a test can drive it. True when it is done.
 Future<bool> backgroundRound(Store store, {required Connection? connection, required HealthSource health, required Sender sender,
-  DateTime? now}) async {
+  DateTime? now, Future<Directory> Function()? folder}) async {
   final settings = Settings.decode(await store.get(settingsKey), hasKey: connection != null);
   final api = sender.api(settings, connection);
   if (api == null) return true;
   if (settings.health) await syncHealth(store, health, now: now);
   await store.queuePoints();
-  return (await flush(store, api)).failure == null;
+  return (await flush(store, api, folder: folder)).failure == null;
 }
 
 /// Turns the hourly round on while sending and history or health are on, and off otherwise.

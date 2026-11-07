@@ -54,7 +54,7 @@ it("lists eight tools, each marked read-only", async () => {
 it("finds notes holding every word, in any case, with a title and the time in the zone", async () => {
   expect(await ask("search", { query: "milk" })).toEqual({ nextCursor: null, notes: [{ id: ID(3), source: "ring",
     text: "Buy milk and batteries.", title: "Buy milk and batteries.", recordedAt: "2026-11-04T16:58:20-05:00", device: "Pebble app",
-    audio: false, place: null }] });
+    audio: false, place: null, attachments: [] }] });
   expect(ids(await ask("search", { query: "the" }))).toEqual([ID(2), ID(1)]);
   expect(ids(await ask("search", { query: "THE ring" }))).toEqual([ID(2)]);
   expect(ids(await ask("search", { query: "the", source: "ring" }))).toEqual([ID(1)]);

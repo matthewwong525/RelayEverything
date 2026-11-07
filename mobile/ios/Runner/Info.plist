@@ -32,6 +32,8 @@
 	<false/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Relay Everything records a voice note while you hold Hold to talk. The phone writes its words, and the recording never leaves the phone.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Relay Everything adds the photos you pick to a note.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Relay Everything uses the camera only to scan the QR code of your device key.</string>
 	<key>NSHealthShareUsageDescription</key>

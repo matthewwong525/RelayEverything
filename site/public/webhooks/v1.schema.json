@@ -149,6 +149,42 @@
                     }
                   ],
                   "description": "A ring note's recording, or null for a typed note or a ring note with words only."
+                },
+                "attachments": {
+                  "description": "The note's files: each one's name, type and size, never its bytes. Only a note with files has this list.",
+                  "minItems": 1,
+                  "maxItems": 10,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "description": "The file's id, from the phone that sent it."
+                      },
+                      "name": {
+                        "type": "string",
+                        "description": "The file's name, such as warranty.pdf."
+                      },
+                      "content_type": {
+                        "type": "string",
+                        "description": "Such as application/pdf."
+                      },
+                      "size": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991,
+                        "description": "In bytes."
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "content_type",
+                      "size"
+                    ],
+                    "additionalProperties": false
+                  }
                 }
               },
               "required": [

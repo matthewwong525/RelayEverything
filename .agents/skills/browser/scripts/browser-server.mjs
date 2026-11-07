@@ -25,9 +25,22 @@ const IDLE_MS = 5 * 60_000;
 // The longest one step may hold its tab: a page that never answers would block every later step on it.
 const STEP_MS = 50_000;
 const BODY_LIMIT = 5 * 1024 * 1024;
+// A task's tab opens from the home tab through the browser's own new-tab path: the driver's new page is always a
+// new window. It opens behind the tab shown, so it never takes the person's tab away.
+const OPEN_TAB = "void window.open('about:blank', '_blank')";
+const TAB_PREFS = { 'browser.tabs.loadDivertedInBackground': true };
+const TAB_MS = 15_000;
+// The person's turn holds its tab while the helper renews it; a helper that died lets go after this.
+const TURN_MS = 60_000;
+// How long a click or a resize on another tab waits for the person's turn to end: each shows its own tab.
+const TURN_WAIT_MS = 20_000;
+const BUSY = 'the person is using the browser';
+// The screen a Linux desktop's window needs; the library hands the browser no variable of its own.
+const SCREEN_VARS = ['DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'XDG_RUNTIME_DIR'];
 
 /** A refusal with its HTTP status. */
 const refusal = (status, message) => Object.assign(new Error(message), { status });
+const sleep = wait => new Promise(done => setTimeout(done, wait));
 
 /** The Python library's persistent-context options in the Node driver's names: camelCase keys, a media setting of
  * `no-override` as null, no viewport as `viewport: null`, and every env value a string. */
@@ -40,6 +53,13 @@ export function contextOptions(options) {
   out.env = Object.fromEntries(Object.entries(out.env ?? {}).map(([name, value]) => [name, String(value)]));
   // This process closes the browser itself, after the routes stop.
   return { ...out, handleSIGTERM: false, handleSIGINT: false, handleSIGHUP: false };
+}
+
+/** The persistent context's options for launch-config.py's answer `config`: the library's, with the screen's
+ * variables `screen` and the pref that opens a task's tab behind the one shown. */
+export function persistentOptions(config, screen = {}) {
+  const options = contextOptions(config.options);
+  return { ...options, env: { ...options.env, ...screen }, firefoxUserPrefs: { ...options.firefoxUserPrefs, ...TAB_PREFS }, timeout: LAUNCH_MS };
 }
 
 /** A key as Playwright's `keyboard.press` spells it: `ctrl+a` is `Control+a`. */
@@ -73,6 +93,13 @@ async function aimedAtAddon(page, selector) {
   }
 }
 
+/** Sizes the page with its tab shown: a tab behind sizes the window the shown one is in, and never ends (tried
+ * 2026-11-06). */
+async function showAndSize(page, size) {
+  await page.bringToFront();
+  await page.setViewportSize(size);
+}
+
 /** The size a `viewport` step asks for, rounded; a refusal outside 100..4000 px. */
 function viewportSize({ width, height }) {
   const fits = size => Number.isFinite(size) && size >= 100 && size <= 4000;
@@ -96,7 +123,7 @@ async function openAddonPage(tab, url) {
   const [width, height, outer] = await tab.page.evaluate('[innerWidth, innerHeight, outerHeight]').catch(() => []);
   const size = outer > height ? { width: SCREEN_WIDTH, height: SCREEN_HEIGHT - (outer - height) } : null;
   const own = tab.addon?.own ?? (width > 0 && height > 0 ? { width, height } : null);
-  if (size) await tab.page.setViewportSize(size).then(() => tab.page.waitForTimeout(150), () => {});
+  if (size) await showAndSize(tab.page, size).then(() => tab.page.waitForTimeout(150), () => {});
   tab.addon = { size, own };
   await tab.page.goto(url, { waitUntil: 'commit', timeout: ADDON_OPEN_MS }).catch(() => {});
   return { ok: true, url };
@@ -198,7 +225,7 @@ const ACTIONS = {
   },
   async viewport(tab, body) {
     const size = viewportSize(body);
-    await tab.page.setViewportSize(size);
+    await showAndSize(tab.page, size);
     await tab.page.waitForTimeout(150);
     return { ok: true, ...size };
   },
@@ -212,6 +239,9 @@ const KEEPS_REFS = new Set(['type', 'select', 'evaluate', 'viewport', 'front']);
 // The agent's own steps, which never reach the password manager; only these run while its page shows.
 const GUARDED = new Set(['click', 'type', 'select', 'press']);
 const OPEN_ON_ADDON = new Set(['navigate', 'front']);
+// A click selects its tab (tried 2026-11-06), and a resize shows it first, so both wait for the person's turn; typing,
+// a key, a choice, reading, and a picture stay behind.
+const SHOWS_TAB = new Set(['click', 'viewport']);
 
 /** The request's JSON body, or {} with none. */
 async function readBody(request) {
@@ -234,10 +264,17 @@ function authorized(request, key) {
 }
 
 /** The HTTP handler over one browser `context`: the camofox routes browse.mjs calls, each behind `key`, with one
- * page per userId + sessionKey. A tab unused for `idleMs` closes, as camofox's did. */
-export function routes(context, key, { idleMs = IDLE_MS, stepMs = STEP_MS } = {}) {
+ * tab per userId + sessionKey, all in the home tab's window. A tab unused for `idleMs` closes, as camofox's did. */
+export function routes(context, key, { idleMs = IDLE_MS, stepMs = STEP_MS, turnMs = TURN_MS, turnWaitMs = TURN_WAIT_MS } = {}) {
   const tabs = new Map();
   let made = 0;
+  let home = null;
+  let opening = Promise.resolve();
+  // Each page made for a task's tab: any other page but the home tab is one the person or a site opened.
+  const taskPages = new WeakSet();
+  // The tab of the person's open turn, `{id, until, before}`: no other tab comes to the front while it holds. `before`
+  // holds the pages open when it began.
+  let turn = null;
   const tabOf = (id, userId) => {
     const tab = tabs.get(id);
     if (!tab || tab.page.isClosed() || (userId && tab.userId !== userId)) throw refusal(404, 'Tab not found');
@@ -265,6 +302,41 @@ export function routes(context, key, { idleMs = IDLE_MS, stepMs = STEP_MS } = {}
   }, Math.min(60_000, idleMs));
   reaper.unref();
 
+  /** The kept blank tab no task gets: the browser's first page, else a new window when the person closed it. */
+  const homeTab = async () => {
+    if (home && !home.isClosed()) return home;
+    const first = home ? null : context.pages().find(page => !page.isClosed() && page.url() === 'about:blank');
+    home = first ?? await context.newPage();
+    return home;
+  };
+  /** A new tab in the home tab's window, with no way back to it. One opens at a time, so each gets its own. */
+  const newTab = () => {
+    const made = opening.then(async () => {
+      const from = await homeTab();
+      const [page] = await Promise.all([
+        context.waitForEvent('page', { predicate: async page => (await page.opener()) === from, timeout: TAB_MS }),
+        from.evaluate(OPEN_TAB),
+      ]);
+      taskPages.add(page);
+      await page.evaluate('window.opener = null').catch(() => {});
+      return page;
+    });
+    opening = made.catch(() => {});
+    return made;
+  };
+  /** Whether another tab holds the person's turn; a closed tab or a lapsed lease ends it. */
+  const otherTurn = tab => {
+    if (turn && (Date.now() >= turn.until || tabs.get(turn.id)?.page.isClosed() !== false)) turn = null;
+    return Boolean(turn) && turn.id !== tab.id;
+  };
+  /** Waits for another tab's turn to end; a refusal once `turnWaitMs` passes. */
+  const awaitTurn = async tab => {
+    const end = Date.now() + turnWaitMs;
+    while (otherTurn(tab)) {
+      if (Date.now() >= end) throw refusal(409, `${BUSY} in another tab; try again once their turn ends`);
+      await sleep(Math.min(250, turnWaitMs));
+    }
+  };
   const openTab = async ({ userId, sessionKey, url }) => {
     if (!userId || !sessionKey) throw refusal(400, 'userId and sessionKey required');
     const known = [...tabs].find(([, tab]) => tab.userId === userId && tab.sessionKey === sessionKey && !tab.page.isClosed());
@@ -276,10 +348,10 @@ export function routes(context, key, { idleMs = IDLE_MS, stepMs = STEP_MS } = {}
         return { tabId, url: tab.page.url() };
       });
     }
-    const page = await context.newPage();
+    const page = await newTab();
     try { if (url) await go(page, url); } catch (error) { await page.close().catch(() => {}); throw error; }
     const tabId = `tab-${Date.now().toString(36)}-${++made}`;
-    tabs.set(tabId, { page, userId, sessionKey, refs: null, text: null, lastUse: Date.now(), queue: Promise.resolve() });
+    tabs.set(tabId, { id: tabId, page, userId, sessionKey, refs: null, text: null, lastUse: Date.now(), queue: Promise.resolve() });
     page.on('close', () => { if (tabs.get(tabId)?.page === page) tabs.delete(tabId); });
     return { tabId, url: page.url() };
   };
@@ -296,8 +368,10 @@ export function routes(context, key, { idleMs = IDLE_MS, stepMs = STEP_MS } = {}
     const href = await Promise.race([tab.page.evaluate('document.URL').catch(() => null), new Promise(done => setTimeout(done, ADDON_PROBE_MS, null))]);
     if (typeof href !== 'string' || ADDON_PAGE.test(href)) return true;
     const { own } = tab.addon;
+    // The size comes back once this tab can show: a resize shows it, which another tab's turn forbids.
+    if (own && otherTurn(tab)) return false;
     tab.addon = null;
-    if (own) await tab.page.setViewportSize(own).catch(() => {});
+    if (own) await showAndSize(tab.page, own).catch(() => {});
     return false;
   };
   /** A resize while the password manager's page shows: that page keeps its size, and the size asked for is the one
@@ -313,6 +387,8 @@ export function routes(context, key, { idleMs = IDLE_MS, stepMs = STEP_MS } = {}
     return { url: tab.page.url(), ...windowSnapshot(tab.text, offset), refsCount: tab.refs.size };
   });
   const act = (tab, name, body) => queued(tab, async () => {
+    const addonPage = name === 'navigate' && ADDON_PAGE.test(body.url ?? '');
+    if (SHOWS_TAB.has(name) || addonPage) await awaitTurn(tab);
     if (name === 'viewport' && tab.addon && await onAddon(tab)) return keepForSite(tab, body);
     if (!OPEN_ON_ADDON.has(name) && await onAddon(tab)) throw onAddonPage(tab);
     if (GUARDED.has(name)) await guardAddon(tab.page, body);
@@ -320,6 +396,23 @@ export function routes(context, key, { idleMs = IDLE_MS, stepMs = STEP_MS } = {}
     if (!KEEPS_REFS.has(name)) Object.assign(tab, { refs: null, text: null });
     return result;
   });
+
+  /** Whether a page the person or a site opened during the turn is still open, such as a *Forgot password* tab or a
+   * sign-in window. A page can not tell which tab shows, so the person may be on it. */
+  const ownPageOpen = () => context.pages().some(page => !page.isClosed() && page !== home && !taskPages.has(page) && !turn.before.has(page));
+  /** Brings the tab to the front, unless another tab holds the person's turn: `turn` holds or ends it, `raise: false`
+   * only renews it, `reselect` leaves the person's own page shown. */
+  const front = async (tab, { turn: hold, raise = true, reselect = false }) => {
+    if (hold === false) {
+      if (turn?.id === tab.id) turn = null;
+      return { ok: true };
+    }
+    if (otherTurn(tab)) throw refusal(409, BUSY);
+    if (hold === true) turn = { id: tab.id, until: Date.now() + turnMs, before: turn?.id === tab.id ? turn.before : new Set(context.pages()) };
+    if (reselect && turn?.id === tab.id && ownPageOpen()) return { ok: true };
+    if (!raise) return { ok: true };
+    return act(tab, 'front', {});
+  };
 
   /** The answer to one authorized request: a JSON body, or PNG bytes. */
   const answer = async (method, parts, query, body) => {
@@ -342,6 +435,7 @@ export function routes(context, key, { idleMs = IDLE_MS, stepMs = STEP_MS } = {}
         return tab.page.screenshot({ type: 'png', fullPage: query.get('fullPage') === 'true' });
       });
     }
+    if (top === 'tabs' && method === 'POST' && action === 'front') return front(tabOf(id, userId), body);
     if (top === 'tabs' && method === 'POST' && Object.hasOwn(ACTIONS, action)) return act(tabOf(id, userId), action, body);
     if (top === 'sessions' && id && !action && method === 'DELETE') {
       await Promise.all([...tabs].filter(([, tab]) => tab.userId === id).map(([tabId]) => closeTab(tabId)));
@@ -394,16 +488,19 @@ const starting = response => {
   response.end(JSON.stringify({ ok: false, starting: true }));
 };
 
-/** Off Linux the browser shows in a window unless the person turned it off: its launch flags and server record. */
-export function windowLaunch({ platform, setting }) {
-  const shown = platform !== 'linux' && setting;
-  return { args: shown ? ['--window'] : [], record: shown ? { window: true } : {} };
+/** The browser shows in a window unless the person turned it off, on Linux only where a screen exists; else Linux
+ * draws on Xvfb. Its launch flags, the screen's variables, its server record, and whether Xvfb starts. */
+export function windowLaunch({ platform, setting, env = {} }) {
+  const linux = platform === 'linux';
+  const shown = setting && (!linux || Boolean(env.DISPLAY || env.WAYLAND_DISPLAY));
+  const screen = shown && linux ? Object.fromEntries(SCREEN_VARS.filter(name => env[name]).map(name => [name, env[name]])) : {};
+  return { args: shown ? ['--window'] : [], env: screen, record: shown ? { window: true } : {}, xvfb: linux && !shown };
 }
 
 const record = info => writeFileSync(FILES.server, `${JSON.stringify({ pid: process.pid, ...info })}\n`, { mode: 0o600 });
 
-/** Takes the port, then starts the forwarder, the screen, the browser and the routes; /health says ok only once the
- * browser is up. A failed start leaves its reason in server.json. */
+/** Takes the port, then starts the route forwarder, the screen, the browser and the routes; /health says ok
+ * only once the browser is up. A failed start leaves its reason in server.json. */
 async function main() {
   const port = Number(process.env.BROWSE_SERVER_PORT);
   const stops = [];
@@ -422,22 +519,23 @@ async function main() {
   try {
     await new Promise((resolve, reject) => server.once('error', reject).listen(port, '127.0.0.1', resolve));
     stops.push(() => new Promise(done => { handle?.close(); server.close(done); server.closeAllConnections(); }));
+    // This repo's browser routes: every start goes through the forwarder, with no proxy setting (wiki/development/browser-proxy.md).
     const proxy = await startForwarder({ first: resolveFirst(), upstream: resolveUpstream(), networkFile: NETWORK_FILE, extra: { language: 'english' } });
     stops.push(() => proxy.close());
-    // Only Linux gets Xvfb; a Mac or Windows browser shows in a window, or none when turned off.
-    const screen = process.platform === 'linux' ? await startXvfb() : null;
+    const setting = windowSetting();
+    const windowed = windowLaunch({ platform: process.platform, setting, env: process.env });
+    const screen = windowed.xvfb ? await startXvfb() : null;
     if (screen) stops.push(() => screen.child.kill());
-    const windowed = windowLaunch({ platform: process.platform, setting: windowSetting() });
     // A broken add-on never stops a start: the browser starts without it.
     const addon = await addonArgs().catch(() => []);
     const config = await launchConfig(['--proxy', `http://127.0.0.1:${proxy.port}`, ...(screen ? ['--display', screen.display] : []), ...windowed.args, '--fingerprint', FILES.fingerprint, ...addon]);
     if (config.error) throw new Error(config.error);
     const { firefox } = createRequire(import.meta.url)(join(config.driver, 'index.js'));
-    const context = await firefox.launchPersistentContext(FILES.profile, { ...contextOptions(config.options), timeout: LAUNCH_MS });
+    const context = await firefox.launchPersistentContext(FILES.profile, persistentOptions(config, windowed.env));
     stops.push(() => context.close());
     await moveLogins(context, { profilesDir: OLD_PROFILES, marker: FILES.marker }).catch(() => {});
     handle = routes(context, readFileSync(FILES.key, 'utf8').trim());
-    record({ port, display: screen?.display ?? null, ...windowed.record, library: config.library, build: config.build, locale: config.locale });
+    record({ port, display: screen?.display ?? null, ...windowed.record, windowSetting: setting, library: config.library, build: config.build, locale: config.locale });
     // A browser that quits on its own takes the server with it, so the next command starts a fresh one.
     context.on('close', () => void stop(1));
   } catch (error) {

@@ -23,7 +23,7 @@
     "deploy": "bash ../scripts/cf-deploy.sh",
     "cf-typegen": "wrangler types",
     "test:runtime": "vitest run --config vitest.config.runtime.ts",
-    "relay:api-doc": "RELAY_API_DOC_WRITE=1 vitest run worker/apps/relay/api-doc.test.ts worker/apps/relay/webhooks/format.test.ts"
+    "relay:api-doc": "RELAY_API_DOC_WRITE=1 vitest run worker/apps/relay/api-doc.test.ts worker/apps/relay/webhooks/format.test.ts worker/relay-mcp/openapi.test.ts"
   },
   "dependencies": {
     "@cloudflare/workers-oauth-provider": "^1.2.4",
@@ -43,6 +43,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.62.1",
+    "@seriousme/openapi-schema-validator": "^2.11.0",
     "@shadcn/lint": "^0.2.1",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/react": "^16.3.3",

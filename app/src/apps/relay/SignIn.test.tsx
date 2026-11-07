@@ -202,6 +202,30 @@ it("gives the Pebble app its address, header and signing secret, and Claude Code
   expect(sent("/apps/relay/api/devices")).toEqual([{ name: "Pebble app", reaches: "phone" }, { name: "Laptop", reaches: "chats" }]);
 });
 
+it("gives a script an API key with a curl example and no QR code, and lists it by what it may do", async () => {
+  signedIn = true;
+  devices = () => Response.json({ devices: [PHONE, { id: "d4", name: "Backup script", reaches: "api", createdAt: NOW, revokedAt: null }] });
+  posts["/apps/relay/api/devices"] = ({ name, reaches }) =>
+    Response.json({ id: "d5", name, reaches, key: KEY, qr: QR, pebbleSecret: null, api: name === "Script" ? "https://relay-mcp.example.com/v1" : null });
+  await open();
+  const list = await screen.findByRole("region", { name: "Devices" });
+  expect(await within(list).findByText(/API: reads and adds notes/)).toBeTruthy();
+  for (const [name, api] of [["", "https://relay-mcp.example.com/v1"], ["Old server", "<your-relay-server>/v1"]]) {
+    fireEvent.click(within(list).getByRole("button", { name: "Add a device" }));
+    let dialog = await screen.findByRole("dialog", { name: "Add a device" });
+    fireEvent.change(within(dialog).getByLabelText("Device"), { target: { value: "api" } });
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: name } });
+    await act(async () => { fireEvent.click(within(dialog).getByRole("button", { name: "Make the key" })); });
+    dialog = await screen.findByRole("dialog", { name: `Connect ${name || "Script"}` });
+    const copies = within(dialog).getAllByLabelText("The message to copy").map(field => (field as HTMLTextAreaElement).value);
+    expect(copies).toEqual([KEY, `curl -H "Authorization: Bearer ${KEY}" ${api}/me`]);
+    expect(within(dialog).queryByRole("img")).toBeNull();
+    expect(within(dialog).getByRole("link", { name: "Read the web API's routes" }).getAttribute("href")).toBe("https://relayeverything.com/api/connect-a-service/");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+  }
+  expect(sent("/apps/relay/api/devices")).toEqual([{ name: "Script", reaches: "api" }, { name: "Old server", reaches: "api" }]);
+});
+
 it("says why a key was not made, and lists no devices in words", async () => {
   signedIn = true;
   devices = () => Response.json({ devices: [] });

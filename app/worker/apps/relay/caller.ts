@@ -8,16 +8,17 @@ export type CallerEnv = DirectoryEnv & { RELAY_CHECKER_SHA256?: string };
 
 /** The preview checker's own empty space: it signs in as this fixed test person, never as a real one. */
 export const CHECKER_PERSON = "00000000-0000-4000-8000-000000000000";
-const KEY = /^Bearer (rek_[A-Za-z0-9_-]{43})$/;
+export const KEY = /^Bearer (rek_[A-Za-z0-9_-]{43})$/;
 export const SESSION_COOKIE = "__Host-relay_session";
 /** A browser keeps a `__Host-` cookie only from https, so a local run on http uses the plain name. */
 export const sessionCookie = (url: URL) => url.protocol === "https:" ? SESSION_COOKIE : "relay_session";
 
-/** Each kind of key only adds data, so every reach is POST, plus `GET key`, which answers only the key's own name. A
- *  read such as `GET chats` shares an address with a send, so the method is checked too. */
+/** A key's reach here is POST, plus `GET key`, which answers only its own name; `GET chats` shares an address with a
+ *  send, so the method is checked too. An API key reads only on the connector's web API, so here it has `GET key`. */
 const REACH: Record<Reach, { routes: RegExp; refusal: string }> = {
   phone: { routes: /^\/apps\/relay\/api\/(?:pebble|notes|health|locations)$/, refusal: "A device key can only send to Relay Everything." },
   chats: { routes: /^\/apps\/relay\/api\/(?:chats|chat-saves)$/, refusal: "A chat key can only send chats." },
+  api: { routes: /^$/, refusal: "An API key works only on the web API, at your AI connector's address under /v1/." },
 };
 const KEY_CHECK = "/apps/relay/api/key";
 
@@ -28,12 +29,19 @@ export function reaches(reach: Reach, method: string, pathname: string): boolean
 
 type KeyRow = { person_id: string; email: string; device_id: string; reaches: Reach; revoked_at: number | null };
 
-async function keyCaller(env: CallerEnv, key: string): Promise<Caller | Response> {
+async function keyCaller(env: Pick<CallerEnv, "DB">, key: string): Promise<Caller | Response> {
   const row = await directory(env).prepare(`SELECT k.person_id, p.email, k.device_id, k.reaches, k.revoked_at FROM relay_keys k
     JOIN relay_people p ON p.id = k.person_id WHERE k.key_sha256 = ?`).bind(await hashToken(key)).first<KeyRow>();
   if (!row) return refused(403, "This key is on no list of devices.");
   if (row.revoked_at !== null) return refused(403, "This device key is turned off.");
   return vouch("key", row.person_id, { email: row.email, device: { id: row.device_id, reaches: row.reaches } });
+}
+
+/** The web API's caller from its `rek_` key: only a live API key, never a phone's or a chat's. */
+export async function apiKeyCaller(env: Pick<CallerEnv, "DB">, key: string): Promise<Caller | Response> {
+  const caller = await keyCaller(env, key);
+  if (caller instanceof Response || caller.device?.reaches === "api") return caller;
+  return refused(403, "A phone or chat key only sends. Make an API key on your Relay Everything page.");
 }
 
 /** A cookie's value from the request, or null. */

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Relay Everything's AI connector trial: drives the sign-in an AI app runs, then prints one line per check. It needs
 // no person, except --sign-in, which asks a person to sign in once. wiki/stack/relay-ai-connector.md#try-it
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
@@ -16,7 +16,8 @@ const USAGE = `usage: node scripts/relay-mcp-trial.mjs [--live | --sign-in]
   (none)     the staging connector, with no sign-in: metadata, an app's registration, the consent page, the hand-off
              to the server's sign-in, and each refusal
   --sign-in  the same, then a person signs in once in a browser on this computer; the app's token reads their notes
-  --live     the live connector: it answers its metadata and refuses /mcp with no token`;
+             and adds a made-up note, through /mcp and through the web API
+  --live     the live connector: it answers its metadata and refuses /mcp and /v1/ with no token`;
 
 const APP_NAME = 'Relay Everything trial';
 const WAIT = 10 * 60 * 1000;
@@ -73,13 +74,22 @@ export async function trial({ live, signIn, env, request = fetch, log = console.
     headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', ...headers },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, ...body }) });
   const json = async response => response.ok ? response.json() : {};
+  const api = (path, headers = {}, init = {}) => request(`${origin}/v1/${path}`, { ...init, headers: { ...headers, ...init.headers } });
 
   log(`Trying ${goal.worker} at ${origin}`);
   const metadata = await request(`${origin}/.well-known/oauth-authorization-server`);
   check('answers its OAuth metadata', (await json(metadata)).registration_endpoint === `${origin}/register`, `${metadata.status}`);
   const bare = await mcp();
   check('refuses /mcp with no token', bare.status === 401, `${bare.status}`);
+  const anonymous = await api('me');
+  check('refuses the web API with no token', anonymous.status === 401, `${anonymous.status}`);
   if (live) return passed;
+
+  const described = await api('openapi.json');
+  check('describes the web API with no sign-in', (await json(described)).openapi === '3.1.0', `${described.status}`);
+  // A well-formed key the server never made: the web API refuses it before it reads anything.
+  const unknownKey = await api('me', { Authorization: `Bearer rek_${'x'.repeat(43)}` });
+  check("refuses an unknown key on the web API", unknownKey.status === 403, `${unknownKey.status}`);
 
   const resource = await request(`${origin}/.well-known/oauth-protected-resource/mcp`);
   check('names its /mcp as the resource', (await json(resource)).resource === goal.address, `${resource.status}`);
@@ -139,7 +149,18 @@ export async function trial({ live, signIn, env, request = fetch, log = console.
     if (!token) return false;
     const found = await mcp({ Authorization: `Bearer ${token}` }, { method: 'tools/call', params: { name: 'search', arguments: { query: 'milk' } } });
     check("the token reads the person's notes", !!(await json(found)).result?.content, `${found.status}`);
-    log(`Disconnect "${APP_NAME}" on the preview's AI apps card when you are done.`);
+    const bearer = { Authorization: `Bearer ${token}` };
+    const listed = await api('notes?q=milk', bearer);
+    check("the token reads the person's notes on the web API", Array.isArray((await json(listed)).notes), `${listed.status}`);
+    const note = text => ({ clientId: `trial-${randomUUID()}`, text });
+    const added = await api('notes', bearer, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(note('A made-up note from the Relay Everything trial, through the web API.')) });
+    check('the token adds a note on the web API', added.status === 201, `${added.status}`);
+    const tool = await mcp(bearer, { method: 'tools/call', params: { name: 'add_note',
+      arguments: note('A made-up note from the Relay Everything trial, through add_note.') } });
+    const toolAnswer = (await json(tool)).result;
+    check('the token adds a note with add_note', !!toolAnswer?.content && !toolAnswer.isError, `${tool.status}`);
+    log(`Disconnect "${APP_NAME}" on the preview's AI apps card when you are done. Its two made-up notes stay.`);
     return passed;
   } finally {
     server?.close();

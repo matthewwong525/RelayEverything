@@ -5,9 +5,9 @@ Each person's Relay Everything data lives in their own space: one SQLite-backed 
 ## How a space is opened
 
 1. The Worker's gate asks [`caller.ts`](../app/worker/apps/relay/caller.ts) who calls: a device key (`Authorization: Bearer rek_…`, looked up by SHA-256 in `relay_keys`), the preview checker (its Client ID's SHA-256 is `RELAY_CHECKER_SHA256`), a session cookie (`__Host-relay_session`), or, on a server that signs in with Access, Access's email. The answer is cached per request, so the route gets the same caller.
-2. Only a checked identity becomes a caller, through `vouch` in [`space.ts`](../app/worker/apps/relay/space.ts). A few files may call `vouch`: the caller check, the sign-in, the AI connector's sign-in and tools, and the webhooks' queue consumer.
+2. Only a checked identity becomes a caller, through `vouch` in [`space.ts`](../app/worker/apps/relay/space.ts). A few files may call `vouch`: the caller check, the sign-in, the AI connector's door (`relay-mcp/asker.ts`, for a grant or an API key), and the webhooks' queue consumer.
 3. A route calls `spaceOf(env, caller)`. It names the space by the caller's random person id, never by an id from the request, and gives back a `Db` in D1's shape, so each route keeps its own SQL.
-4. A device key adds data only, to its own person's space: `reaches` in `caller.ts` holds it to its routes. A person's routes refuse a key.
+4. A device key adds data only, to its own person's space: `reaches` in `caller.ts` holds it to its routes. A person's routes refuse a key. An `api` key reaches only `GET key` here; the connector's web API takes it through `apiKeyCaller`, which refuses every other reach ([the connector](stack/relay-ai-connector.md#the-web-api)).
 
 The [`Space`](../app/worker/spaces-worker.ts) class lives in its own Worker, `relay-everything-spaces` (`-staging`, `-local`, and `<name>-spaces` on a self-host), bound as `SPACES` by `script_name`, because a Worker that holds a Durable Object class loses its preview links, as with [the live line](stack/live-line.md). Deploy the spaces Worker before the app, so the binding finds its class.
 
@@ -21,9 +21,9 @@ The shared D1 database keeps only who has an account and how they sign in, in [`
 
 ## Space migrations
 
-A space runs [`schema/space-migrations/`](../schema/space-migrations/) in order, in its constructor under `blockConcurrencyWhile`, and records each in its `space_migrations` table. `0001_relay.sql` is the D1 `relay_*` schema as it was before spaces; [`space-schema.test.ts`](../app/worker/apps/relay/space-schema.test.ts) checks that a space holds each person's tables and D1 only the directory. `0002_space.sql` adds what only a space has: its file key, each Pebble device's signing secret, and the person the alarm sends for.
+A space runs [`schema/space-migrations/`](../schema/space-migrations/) in order, in its constructor under `blockConcurrencyWhile`, and records each in its `space_migrations` table. `0001_relay.sql` is the D1 `relay_*` schema as it was before spaces; [`space-schema.test.ts`](../app/worker/apps/relay/space-schema.test.ts) checks that a space holds each person's tables and D1 only the directory. `0002_space.sql` adds what only a space has: its file key, each Pebble device's signing secret, and the person the alarm sends for. `0003_api_devices.sql` widens `relay_devices.reaches` to `phone`, `chats`, `api` and `app`: an `app` row is a connected AI app's device, made on its first note, hidden from the page's device list, and turned off when the app is disconnected.
 
-A new space table goes in a new numbered file: never edit one a space already ran.
+A new space table goes in a new numbered file: never edit one a space already ran. A step that rebuilds a table other tables point at sets `PRAGMA defer_foreign_keys = ON` first and `OFF` at its end: inside a Durable Object the setting otherwise lasts to the end of its transaction, and a later bad row resets the space. Try such a step on the local runtime with `wrangler dev`, because the tests' `node:sqlite` does not show it. SQLite can't change a CHECK in place, and `relay_devices` is a parent of foreign keys, so `0003` copies the rows out, drops the table, makes it again under its own name and copies them back, with `PRAGMA defer_foreign_keys = ON`, inside the one migration transaction. A rename of a new table fails the foreign keys.
 
 ## Recordings
 

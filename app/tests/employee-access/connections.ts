@@ -24,7 +24,7 @@ export function database() {
   // Relay's own migrations, in their order, after the core's: none touches a core table, so the core's order is free.
   // wiki/stack/d1-pipeline.md#timestamp-migrations-additive-and-order-independent
   for (const file of ["20261105120000_relay.sql", "20261105180000_relay_chats.sql", "20261106120000_relay_webhooks.sql", "20261107120000_relay_people.sql",
-    "20261107180000_relay_drop_old_tables.sql"]) {
+    "20261107180000_relay_drop_old_tables.sql", "20261107200000_relay_api_keys.sql"]) {
     sql.exec(readFileSync(new URL(`../../../schema/migrations/${file}`, import.meta.url), "utf8"));
   }
   const statement = (query: string, values: SQLInputValue[] = []) => ({

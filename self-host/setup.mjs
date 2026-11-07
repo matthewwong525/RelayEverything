@@ -79,7 +79,7 @@ export function configs(templates, { name, email, account, database, subdomain, 
   Object.assign(mcp.vars, { RELAY_MCP_ADDRESS: `${connector}/mcp`, RELAY_SERVER_URL: server });
   Object.assign(mcp.d1_databases[0], { database_name: part.database, database_id: database });
   Object.assign(spaces, { name: part.spaces, account_id: account });
-  spaces.queues.producers[0].queue = part.queue;
+  spaces.queues.producers[0].queue = mcp.queues.producers[0].queue = part.queue;
   for (const config of [app, mcp]) config.durable_objects.bindings[0].script_name = part.spaces;
   return { app, mcp, spaces };
 }

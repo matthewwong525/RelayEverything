@@ -29,6 +29,6 @@ Your account's own settings are on your Relay Everything page, not in the app. S
 
 | Setting | What it does |
 |---|---|
-| **Add a device** | Makes a key for a phone, the Pebble app or a Claude Code computer, and shows it once as a QR code. [Connect a phone](../../start/connect-a-phone/#make-the-key) |
+| **Add a device** | Makes a key for a phone, the Pebble app or a Claude Code computer, and shows it once as a QR code. [Connect a phone](../../start/connect-a-phone/#make-a-key-with-a-qr-code) |
 | The list of devices, with **Turn off** | Shows each device's key. **Turn off** stops that key at once, and the others go on. [Keys](../../api/keys/#make-list-and-turn-off-keys) |
 | **Delete my account** | Deletes your space, recordings, keys, sign-ins and connected AI apps, after you type your email. You can't undo it. [Privacy](../../privacy/#delete-your-account) |

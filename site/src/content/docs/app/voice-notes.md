@@ -3,7 +3,7 @@ title: Voice notes
 description: Hold New note in the Relay Everything app, let go, talk, and tap anywhere to save. The phone writes your words itself, and your voice never leaves the phone.
 ---
 
-Hold **New note** in the Relay Everything app, let go, talk, and tap anywhere to save. The note shows at once, and its words fill in a few seconds later. The phone writes the words itself, with no signal and no server. Your voice never leaves the phone.
+Hold **New note** in the Relay Everything app, let go, talk, and tap anywhere to save. The note opens at once, and its words fill in a few seconds later. The phone writes the words itself, with no signal and no server. Your voice never leaves the phone.
 
 ## Make a voice note
 
@@ -18,7 +18,9 @@ The bars use the sound level only to draw the screen. The app keeps none of it a
 
 A tap shorter than half a second opens the **New note** page to type, and records nothing. If you let go before the ring closes, it empties.
 
-The note shows **Voice** and **Writing the words…**, then its words. A note saves by itself after 5 minutes: the screen says *Saves by itself at 5:00*.
+When you tap to save, the note opens. It shows **Writing the words…**, then its words fill in. Tap the back button to go to the page you were on. In your notes, the note shows **Voice**.
+
+A note saves by itself after 5 minutes: the screen says *Saves by itself at 5:00*. Then it does not open: it shows at the top of your notes.
 
 A recording you give to **Add a note** in Apple Shortcuts becomes a voice note too, with your typed words first. [A voice note from Record audio](../shortcuts/#a-voice-note-from-record-audio)
 
@@ -50,7 +52,7 @@ The app keeps nothing from:
 
 - A press on **New note** shorter than half a second. It opens the **New note** page, and a bump in your pocket makes no voice note.
 - A note you throw away with the **X**.
-- A recording with no words in it. The app says **No speech heard**.
+- A recording with no words in it. The note's page closes, and the app says **No speech heard**.
 
 The Relay Everything ring uses the same rule: [How the ring works](../../ring/how-it-works/#against-bumps).
 

@@ -55,6 +55,7 @@ Non-goals: a separate mic button; a pause button; a waveform kept with the note;
 - **2026-11-08** — Assumed: the recording screen holds the back gesture on whichever page is on top, not through a `PopScope` in Home, because a `PopScope` in Home misses a folder page opened over it. A side swipe on the screen saves too, because the screen covers the page's own edge swipe.
 - **2026-11-08** — Assumed: the hold, a save by tap and a cancel by X are a flow Claude runs by name, `voice-note.yaml`, not a tour step, because a fresh install has no speech model; the tour checks only the *Hold to talk* tip.
 - **2026-11-08** — Assumed: the hold ring still fills with *Reduce motion* on, because it shows how long to hold, not decoration.
+- **2026-11-08** — Assumed: after #73 merged, a save by the back gesture or a side swipe opens the new note too, as a tap does, because all three are the same save.
 
 ## Capabilities
 

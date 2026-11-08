@@ -75,12 +75,25 @@ class _HomeScreenState extends State<HomeScreen> {
   void _showListening() {
     if (!mounted) return;
     if (relay.listening != null && _listening == null) {
-      _listening = OverlayEntry(builder: (_) => RecordingScreen(relay: relay));
+      _listening = OverlayEntry(builder: (_) => RecordingScreen(relay: relay, onSaved: _openVoiceNote));
       Overlay.of(context, rootOverlay: true).insert(_listening!);
     } else if (relay.listening == null && _listening != null) {
       _listening!.remove();
       _listening = null;
     }
+  }
+
+  /// A tap saved the voice note that started [at]: its page opens over any page that is open, and its words fill in
+  /// there. Its back button names Home only when Home is the page under it. The phone keeps a note's time to the
+  /// millisecond. With no such note, such as after a race with *Cancel*, nothing opens.
+  void _openVoiceNote(DateTime at) {
+    if (!mounted) return;
+    final note = relay.entries.where((entry) => entry.voice &&
+      entry.at.millisecondsSinceEpoch == at.millisecondsSinceEpoch).firstOrNull;
+    if (note == null) return;
+    final onHome = ModalRoute.of(context)?.isCurrent ?? true;
+    _open(NoteEditor(entry: note, relay: relay, picker: widget.picker, sharer: widget.sharer, opener: widget.opener,
+      back: onHome ? 'Home' : 'Back'));
   }
 
   @override

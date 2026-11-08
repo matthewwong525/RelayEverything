@@ -161,9 +161,11 @@ Future<void> recordFromShortcut(BuildContext context, Relay relay) async {
 /// to save*. A tap anywhere, a side swipe or the back gesture saves the voice note and writes its words; the X at the
 /// top right keeps nothing. Home shows it whenever [Relay.listening] is set, from a hold or from Shortcuts.
 class RecordingScreen extends StatefulWidget {
-  const RecordingScreen({super.key, required this.relay});
+  const RecordingScreen({super.key, required this.relay, required this.onSaved});
 
   final Relay relay;
+  /// After a tap saved the voice note: gets the time it started, which is its note's time, so the note's page opens.
+  final void Function(DateTime at) onSaved;
 
   @override
   State<RecordingScreen> createState() => _RecordingScreenState();
@@ -228,9 +230,16 @@ class _RecordingScreenState extends State<RecordingScreen> {
     if (_done) return;
     _done = true;
     final messenger = ScaffoldMessenger.of(context);
+    final onSaved = widget.onSaved;
+    // Read first: the save ends the listening, and the note keeps this time.
+    final since = _relay.listening;
     try {
       final problem = await _relay.endVoiceNote();
-      if (problem != null) messenger.showSnackBar(SnackBar(content: Text(problem)));
+      if (problem != null) {
+        messenger.showSnackBar(SnackBar(content: Text(problem)));
+      } else if (since != null) {
+        onSaved(since);
+      }
     } catch (_) {
       // A guard: the app's Relay returns its problems. A screen still listening stays usable: a tap tries again, and
       // the X closes it.

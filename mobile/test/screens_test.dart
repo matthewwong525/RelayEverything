@@ -279,10 +279,21 @@ class FakeRelay extends Relay {
     return startProblem;
   }
 
+  /// How many voice notes a save kept.
+  int voiceNotes = 0;
+
+  /// A save with no problem keeps the note, as the app's Relay does: it shows at once, writing its words, at the time
+  /// the recording started, to the millisecond the phone keeps.
   @override
   Future<String?> endVoiceNote() async {
     calls.add('voice end');
+    final since = listening;
     listening = null;
+    if (endProblem == null && since != null) {
+      voiceNotes++;
+      entries = [Entry(id: 'voice-$voiceNotes', text: '', at: DateTime.fromMillisecondsSinceEpoch(since.millisecondsSinceEpoch),
+        voice: true, writing: true, recording: 'voice/$voiceNotes.wav', length: const Duration(seconds: 4)), ...entries];
+    }
     notifyListeners();
     return endProblem;
   }
@@ -1113,6 +1124,21 @@ void main() {
       expect(find.byType(NoteEditor), findsOneWidget);
       expect(quill(tester).document.toPlainText(), '\n');
       expect(editorFocused(tester), isTrue);
+    });
+
+    testWidgets('compose from an open note holds only the new note, and Back holds none', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Shop\nEggs and milk', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Shop'));
+      await tester.pumpAndSettle();
+      expect(relay.openNote, 'n1');
+      await tester.tap(find.byTooltip('New note'));
+      await tester.pumpAndSettle();
+      expect(relay.openNote, isNot('n1'));
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect([find.byType(NoteEditor).evaluate(), relay.openNote], [isEmpty, isNull]);
     });
 
     testWidgets('Heading styles only the line with the cursor, and Bold only the words picked', (tester) async {
@@ -2119,7 +2145,97 @@ void main() {
       expect(find.text('Listening'), findsOneWidget);
       await tapAnywhere(tester);
       expect(relay.calls, ['voice start', 'voice end']);
-      expect([find.text('Listening'), find.byType(NoteEditor)], [findsNothing, findsNothing]);
+      expect([find.text('Listening'), find.byType(NoteEditor)], [findsNothing, findsOneWidget]);
+    });
+
+    testWidgets('a tap to save opens the new note: Writing the words, then its words fill in; Back shows Home', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await holdNewNote(tester);
+      await tapAnywhere(tester);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect([find.byType(NoteEditor), find.text('Writing the words…'), find.widgetWithText(TextButton, 'Home')],
+        everyElement(findsOneWidget));
+      final saved = relay.entries.single;
+      relay
+        ..entries = [Entry(id: saved.id, text: 'Ask the fab if the flex stiffener can be 0.2 mm', at: saved.at, voice: true,
+          recording: saved.recording, length: saved.length)]
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(find.text('Writing the words…'), findsNothing);
+      expect(quill(tester).document.toPlainText(), 'Ask the fab if the flex stiffener can be 0.2 mm\n');
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect([find.byType(NoteEditor), find.byType(TimelineScreen)], [findsNothing, findsNothing]);
+      expect(newNote, findsOneWidget);
+      // Leaving an unchanged note writes nothing back.
+      expect(relay.calls, ['voice start', 'voice end']);
+    });
+
+    testWidgets('a voice note with no speech: its page closes by itself, keeps nothing, and the page under it says so',
+        (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await holdNewNote(tester);
+      await tapAnywhere(tester);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.widgetWithText(TextButton, 'Back'), findsOneWidget);
+      relay
+        ..entries = []
+        ..changed()
+        ..notice('No speech heard. Nothing was saved.');
+      await tester.pumpAndSettle();
+      expect([find.byType(NoteEditor), find.byType(TimelineScreen)], [findsNothing, findsOneWidget]);
+      expect(find.text('No speech heard. Nothing was saved.'), findsOneWidget);
+      expect(relay.calls, ['voice start', 'voice end']);
+    });
+
+    testWidgets('a note page whose note is gone from the list closes once, and leaving keeps nothing', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Dentist moved to Thursday 3 pm', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Dentist moved to Thursday 3 pm'));
+      await tester.pumpAndSettle();
+      expect(find.byType(NoteEditor), findsOneWidget);
+      // Two changes with the note gone: the page closes once.
+      relay
+        ..entries = []
+        ..changed()
+        ..changed();
+      await tester.pumpAndSettle();
+      expect([find.byType(NoteEditor), find.byType(TimelineScreen)], [findsNothing, findsOneWidget]);
+      expect(relay.calls, isEmpty);
+    });
+
+    /// Opens the page for [opened], as Home does from the note it found, while the list may have moved on since.
+    Future<void> openNoteAsFound(WidgetTester tester, Entry opened) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      Navigator.of(tester.element(newNote)).push(MaterialPageRoute<void>(builder: (_) => NoteEditor(relay: relay, entry: opened)));
+      await tester.pump();
+    }
+
+    testWidgets('a voice note whose words came before its page opened shows them, not Writing the words', (tester) async {
+      final writing = Entry(id: 'v1', text: '', at: now, voice: true, writing: true, recording: 'voice/1.wav',
+        length: const Duration(seconds: 4));
+      relay.entries = [Entry(id: 'v1', text: 'Ask the fab if the flex stiffener can be 0.2 mm', at: now, voice: true,
+        recording: 'voice/1.wav', length: const Duration(seconds: 4))];
+      await openNoteAsFound(tester, writing);
+      await tester.pumpAndSettle();
+      expect([find.byType(NoteEditor), find.text('Writing the words…')], [findsOneWidget, findsNothing]);
+      expect(quill(tester).document.toPlainText(), 'Ask the fab if the flex stiffener can be 0.2 mm\n');
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, isEmpty);
+    });
+
+    testWidgets('a voice note gone before its page opened closes the page at once, and keeps nothing', (tester) async {
+      final writing = Entry(id: 'v1', text: '', at: now, voice: true, writing: true, recording: 'voice/1.wav',
+        length: const Duration(seconds: 4));
+      relay.entries = [];
+      await openNoteAsFound(tester, writing);
+      await tester.pumpAndSettle();
+      expect(find.byType(NoteEditor), findsNothing);
+      expect(newNote, findsOneWidget);
+      expect([relay.calls, relay.openNote], [isEmpty, isNull]);
     });
 
     testWidgets('a voice note and the sound bars wear the spark color; a typed note wears accent soft', (tester) async {
@@ -2150,8 +2266,9 @@ void main() {
       await holdNewNote(tester);
       await tester.tap(cancelX);
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
       expect(relay.calls, ['voice start', 'voice cancel']);
-      expect(find.byType(RecordingScreen), findsNothing);
+      expect([find.byType(RecordingScreen), find.byType(NoteEditor)], [findsNothing, findsNothing]);
     });
 
     testWidgets('the recording covers the whole app; a tap in its middle saves', (tester) async {
@@ -2164,23 +2281,27 @@ void main() {
       expect(find.byType(RecordingScreen), findsNothing);
     });
 
-    testWidgets('the back gesture saves, on Home and on a page over it, and leaves the page open', (tester) async {
+    testWidgets('the back gesture saves on Home and opens the note, as a tap does', (tester) async {
       await tester.pumpWidget(RelayApp(relay: relay));
       await holdNewNote(tester);
       await tester.binding.handlePopRoute();
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
       expect(relay.calls, ['voice start', 'voice end']);
-      expect(find.byType(RecordingScreen), findsNothing);
+      expect([find.byType(RecordingScreen), find.byType(NoteEditor)], [findsNothing, findsOneWidget]);
+    });
+
+    testWidgets('the back gesture saves on a page over Home, and leaves that page under the note', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
       await openFolder(tester, 'Notes');
       await holdNewNote(tester);
       await tester.binding.handlePopRoute();
-      await tester.pumpAndSettle();
-      expect(relay.calls, ['voice start', 'voice end', 'voice start', 'voice end']);
-      expect(find.byType(TimelineScreen), findsOneWidget);
-      // With the recording closed, back leaves the page again.
-      await tester.binding.handlePopRoute();
-      await tester.pumpAndSettle();
-      expect(find.byType(TimelineScreen), findsNothing);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(relay.calls, ['voice start', 'voice end']);
+      expect([find.byType(RecordingScreen), find.byType(NoteEditor), find.widgetWithText(TextButton, 'Back')],
+        [findsNothing, findsOneWidget, findsOneWidget]);
+      expect(find.byType(TimelineScreen, skipOffstage: false), findsOneWidget);
     });
 
     testWidgets('the sound bars follow the level, and a silent microphone keeps them at their floor', (tester) async {
@@ -2289,6 +2410,8 @@ void main() {
       await tapAnywhere(tester);
       expect([find.text('Listening'), find.text('The voice note did not save.')], [findsNothing, findsOneWidget]);
       expect(relay.calls, ['voice start', 'voice end']);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(NoteEditor), findsNothing);
     });
 
     testWidgets('a recording too short to keep says so', (tester) async {
@@ -2298,6 +2421,8 @@ void main() {
       await tapAnywhere(tester);
       expect(find.text('Too short to keep. Nothing was saved.'), findsOneWidget);
       expect(relay.calls, ['voice start', 'voice end']);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(NoteEditor), findsNothing);
     });
 
     testWidgets('a voice note shows Writing the words, then its words, its length and Play', (tester) async {
@@ -2550,17 +2675,20 @@ void main() {
       await tapAnywhere(tester);
       expect(find.text('Listening'), findsNothing);
       expect(relay.calls, ['voice start', 'voice end']);
+      expect(find.byType(NoteEditor), findsOneWidget);
     });
 
     testWidgets('the X keeps nothing', (tester) async {
       await openWithRequest(tester);
       await tester.tap(cancelX);
       await tester.pump();
-      expect(find.text('Listening'), findsNothing);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect([find.text('Listening'), find.byType(NoteEditor)], [findsNothing, findsNothing]);
       expect(relay.calls, ['voice start', 'voice cancel']);
     });
 
-    testWidgets('records over a folder page that is open, and the folder shows again after', (tester) async {
+    testWidgets('records over a folder page that is open; the save opens the note on top, and Back shows the folder',
+        (tester) async {
       final requests = StreamController<void>();
       addTearDown(requests.close);
       await tester.pumpWidget(RelayApp(relay: relay, voiceRequests: requests.stream));
@@ -2571,7 +2699,42 @@ void main() {
       expect([find.text('Listening'), find.byType(HealthPage)], everyElement(findsOneWidget));
       await tapAnywhere(tester);
       expect([relay.calls, find.text('Listening').evaluate()], [['voice start', 'voice end'], isEmpty]);
-      expect(find.byType(HealthPage), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect([find.byType(NoteEditor), find.widgetWithText(TextButton, 'Back')], everyElement(findsOneWidget));
+      expect(find.byType(HealthPage), findsNothing);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect([find.byType(NoteEditor), find.byType(HealthPage)], [findsNothing, findsOneWidget]);
+    });
+
+    testWidgets('a save over a note page opens the voice note on top; Back gives the hold back to the note under it',
+        (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Dentist moved to Thursday 3 pm', at: now)];
+      final requests = StreamController<void>();
+      addTearDown(requests.close);
+      await tester.pumpWidget(RelayApp(relay: relay, voiceRequests: requests.stream));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Dentist moved to Thursday 3 pm'));
+      await tester.pumpAndSettle();
+      expect(relay.openNote, 'n1');
+      requests.add(null);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tapAnywhere(tester);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect([find.byType(NoteEditor), find.text('Writing the words…')], everyElement(findsOneWidget));
+      expect(relay.openNote, 'voice-1');
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      // The note page under it still shows, so a pull leaves that note as it is.
+      expect(find.byType(NoteEditor), findsOneWidget);
+      expect([quill(tester).document.toPlainText(), relay.openNote], ['Dentist moved to Thursday 3 pm\n', 'n1']);
+      // The list under it shows the voice note still writing its words, so the screen never settles.
+      await tester.pageBack();
+      for (var frame = 0; frame < 10; frame++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect([find.byType(NoteEditor).evaluate(), relay.openNote], [isEmpty, isNull]);
     });
 
     testWidgets('with no speech model, it asks to get it first, as a hold on New note does', (tester) async {

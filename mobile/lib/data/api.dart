@@ -37,7 +37,7 @@ abstract class Outbound {
 
 /// Relay's device routes, each call carrying this phone's key: `Authorization: Bearer` for a page-made key, or
 /// Cloudflare Access's two headers for an older one. A device key only adds data: the server refuses it on every
-/// route that reads.
+/// route that reads, but its own key check and the names of what its person connected.
 class RelayApi implements Outbound {
   RelayApi(this.connection, [http.Client? client]) : _client = client ?? http.Client();
 
@@ -114,6 +114,9 @@ class RelayApi implements Outbound {
     final json = await _call(() => _client.get(_uri('key'), headers: _headers));
     return json['device'] as String? ?? '';
   }
+
+  /// The names of the person's AI apps and webhooks: the one read a phone key has, with no data in it.
+  Future<Map<String, dynamic>> connections() => _call(() => _client.get(_uri('connections'), headers: _headers));
 
   /// Trades the sign-in's one-time code, with the secret only this phone holds, for this phone's own key. The call
   /// carries no key: the code and the secret are its proof.

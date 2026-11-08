@@ -10,7 +10,9 @@ import 'package:relay_app/screens/compose.dart';
 import 'package:relay_app/screens/connect.dart';
 import 'package:relay_app/screens/hold_to_talk.dart';
 import 'package:relay_app/screens/note.dart';
-import 'package:relay_app/screens/settings.dart' show SettingsScreen, problemLine, sentLine;
+import 'package:relay_app/screens/folder.dart';
+import 'package:relay_app/screens/settings.dart' show SettingsScreen;
+import 'package:relay_app/screens/timeline.dart' show TimelineScreen;
 
 class FakeRelay extends Relay {
   @override bool connected = false;
@@ -25,11 +27,27 @@ class FakeRelay extends Relay {
   @override List<PhoneCalendar> calendars = const [PhoneCalendar(id: 'work', name: 'Work', account: 'sam@example.com'),
     PhoneCalendar(id: 'holidays', name: 'US Holidays')];
   @override bool locationModes = false;
+  @override Connections? connections;
+  /// How many times a screen asked for [connections]; the fake answers nothing.
+  int refreshes = 0;
+  @override Set<String> folded = {};
   final calls = <String>[];
   String? problem;
   int earlier = 0;
 
   void changed() => notifyListeners();
+
+  @override
+  Future<void> refreshConnections() async {
+    refreshes++;
+  }
+
+  @override
+  Future<void> setFolded(String header, bool folded) async {
+    calls.add('fold $header $folded');
+    this.folded = folded ? {...this.folded, header} : ({...this.folded}..remove(header));
+    notifyListeners();
+  }
 
   @override
   Future<String?> connect(String code) async {
@@ -214,6 +232,27 @@ Future<void> openSettings(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// Scrolls Home until the folder row [title] sits mid-screen, clear of the dock, and opens it.
+Future<void> openFolder(WidgetTester tester, String title) async {
+  final row = find.widgetWithText(ListTile, title);
+  await tester.scrollUntilVisible(row, 100, scrollable: find.byType(Scrollable).first);
+  await Scrollable.ensureVisible(tester.element(row), alignment: 0.5);
+  await tester.pumpAndSettle();
+  await tester.tap(row);
+  await tester.pumpAndSettle();
+}
+
+/// A screen tall enough that all of Home is built at once.
+void tallScreen(WidgetTester tester) {
+  tester.view
+    ..physicalSize = const Size(800, 1600)
+    ..devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+}
+
+/// The count a Home row shows at its right, such as *6* beside *Notes*.
+Finder countOn(String title, int count) => find.descendant(of: find.widgetWithText(ListTile, title), matching: find.text('$count'));
+
 /// Holds *New note* until it turns into the mic, then lets go: the phone keeps listening.
 Future<void> holdNewNote(WidgetTester tester) async {
   final gesture = await tester.startGesture(tester.getCenter(newNote));
@@ -248,13 +287,13 @@ void main() {
 
   SwitchListTile switchOf(WidgetTester tester, String title) => tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, title));
 
-  testWidgets('shows the mark above the large Notes title, in the brand colors that follow the phone', (tester) async {
+  testWidgets('shows the mark above the large Home title, in the brand colors that follow the phone', (tester) async {
     await tester.pumpWidget(RelayApp(relay: relay));
     final bar = find.byType(AppBar);
     expect(find.descendant(of: bar, matching: find.byType(RelayMark)), findsOneWidget);
-    expect(find.descendant(of: bar, matching: find.text('Notes')), findsWidgets);
+    expect(find.descendant(of: bar, matching: find.text('Home')), findsWidgets);
     // The large title; the bar's small one shows only once the list scrolls under it.
-    expect(tester.renderObjectList<RenderParagraph>(find.text('Notes')).map((title) => title.text.style?.fontSize), contains(32));
+    expect(tester.renderObjectList<RenderParagraph>(find.text('Home')).map((title) => title.text.style?.fontSize), contains(32));
     RelayMarkPainter painter() => tester.widget<CustomPaint>(
       find.descendant(of: find.byType(RelayMark).first, matching: find.byType(CustomPaint))).painter! as RelayMarkPainter;
     expect(painter().ink, BrandColors.light.accentText);
@@ -268,13 +307,24 @@ void main() {
     expect(Theme.of(tester.element(bar)).scaffoldBackgroundColor, BrandColors.dark.paper);
   });
 
-  testWidgets('opens on the timeline with no key, and keeps a note on this phone', (tester) async {
+  testWidgets('opens on Home with no key: every folder at 0 or Off, and Notes keeps a note on this phone', (tester) async {
+    tallScreen(tester);
     await tester.pumpWidget(RelayApp(relay: relay));
     expect(find.text('Where should the phone send?'), findsNothing);
-    expect(find.text('On this phone'), findsOneWidget);
+    // The header, and the sync line: nothing leaves the phone.
+    expect(find.text('On this phone'), findsNWidgets(2));
+    for (final title in ['Notes', 'Voice notes', 'Shares']) {
+      expect(countOn(title, 0), findsOneWidget, reason: title);
+    }
+    for (final title in ['Location', 'Health', 'Calendar']) {
+      expect(find.descendant(of: find.widgetWithText(ListTile, title), matching: find.text('Off')), findsOneWidget, reason: title);
+    }
+    expect(find.text('Off: nothing leaves this phone'), findsOneWidget);
+    expect(find.text('Sign in to see'), findsNWidgets(2));
+    await openFolder(tester, 'Notes');
     expect(find.text('No notes yet'), findsOneWidget);
     expect(find.text('Tap New note to write one, or hold it to talk.'), findsOneWidget);
-    expect(find.text('Notes stay on this phone until you turn on sending in Settings.'), findsOneWidget);
+    expect(find.text('Notes stay on this phone until you turn on Sending on Home.'), findsOneWidget);
     await tester.tap(newNote);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Buy milk');
@@ -294,10 +344,7 @@ void main() {
   testWidgets('turns sending on: connects a key first, then asks about earlier notes', (tester) async {
     relay.earlier = 42;
     await tester.pumpWidget(RelayApp(relay: relay, scanner: (_) async => null));
-    await openSettings(tester);
-    expect(switchOf(tester, 'Health').onChanged, isNull);
-    await tester.scrollUntilVisible(find.text('Location history'), 100);
-    expect(switchOf(tester, 'Location history').onChanged, isNull);
+    await openFolder(tester, 'Sending');
     expect(find.text('Disconnect this phone'), findsNothing);
     expect(find.text('Server'), findsNothing);
     await tester.tap(find.text('Send my notes'));
@@ -317,9 +364,7 @@ void main() {
     await tester.tap(find.text('Only new notes'));
     await tester.pumpAndSettle();
     expect(relay.calls, ['connect key', 'start false']);
-    expect(find.byType(SettingsScreen), findsOneWidget);
-    expect(switchOf(tester, 'Location history').onChanged, isNotNull);
-    await tester.scrollUntilVisible(find.text('Disconnect this phone'), 100);
+    expect(find.byType(SendingPage), findsOneWidget);
     expect(find.text('Disconnect this phone'), findsOneWidget);
   });
 
@@ -329,7 +374,7 @@ void main() {
       ..server = 'https://relay.example.com'
       ..earlier = 1;
     await tester.pumpWidget(RelayApp(relay: relay));
-    await openSettings(tester);
+    await openFolder(tester, 'Sending');
     expect(find.text('Off: nothing leaves this phone. On: to your Relay Everything server, or to your own webhook.'), findsOneWidget);
     await tester.tap(find.text('Send my notes'));
     await tester.pumpAndSettle();
@@ -363,7 +408,7 @@ void main() {
 
   testWidgets('connects by a pasted key, and says why one is refused', (tester) async {
     await tester.pumpWidget(RelayApp(relay: relay));
-    await openSettings(tester);
+    await openFolder(tester, 'Sending');
     await tester.tap(find.text('Send my notes'));
     await tester.pumpAndSettle();
     relay.problem = 'That is not a Relay Everything key.';
@@ -377,12 +422,12 @@ void main() {
     await tester.tap(find.text('Connect'));
     await tester.pumpAndSettle();
     expect(relay.calls, ['connect nonsense', 'connect nonsense', 'start false']);
-    expect(find.byType(SettingsScreen), findsOneWidget);
+    expect(find.byType(SendingPage), findsOneWidget);
   });
 
   testWidgets('connects by signing in, to the shared server or another, and stays open when the sign-in is closed', (tester) async {
     await tester.pumpWidget(RelayApp(relay: relay));
-    await openSettings(tester);
+    await openFolder(tester, 'Sending');
     await tester.tap(find.text('Send my notes'));
     await tester.pumpAndSettle();
     relay.signsIn = false;
@@ -404,13 +449,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(relay.calls, ['sign in https://app.relayeverything.com', 'sign in https://relay.example.com',
       'sign in https://app.relayeverything.com', 'start false']);
-    expect(find.byType(SettingsScreen), findsOneWidget);
+    expect(find.byType(SendingPage), findsOneWidget);
   });
 
   testWidgets('connects by a scanned key, and does nothing when the scan is closed', (tester) async {
     String? scanned;
     await tester.pumpWidget(RelayApp(relay: relay, scanner: (_) async => scanned));
-    await openSettings(tester);
+    await openFolder(tester, 'Sending');
     await tester.tap(find.text('Send my notes'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Scan the QR code'));
@@ -433,6 +478,7 @@ void main() {
         Entry(text: 'Buy 0.2 mm steel for the stiffener', at: DateTime(2026, 1, 2, 9), place: 'Harbord St', sent: true),
       ];
     await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Notes');
     expect(find.text('Typed'), findsNWidgets(2));
     expect(find.textContaining('King St W · Waiting to send'), findsOneWidget);
     expect(find.textContaining('Harbord St · Sent'), findsOneWidget);
@@ -460,7 +506,7 @@ void main() {
       return shown;
     }
     Future<void> close() async {
-      await tester.tapAt(const Offset(10, 400));
+      await tester.tapAt(const Offset(300, 110));
       await tester.pumpAndSettle();
     }
 
@@ -491,6 +537,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('The browser did not open. Try again.'), findsOneWidget);
     expect([opened, relay.calls], [hasLength(2), ['sync']]);
+    // The menu lives on Home only.
+    await openFolder(tester, 'Notes');
+    expect(find.byTooltip('More'), findsNothing);
   });
 
   testWidgets('groups notes by day, newest first, under Today, Yesterday and Previous 7 days', (tester) async {
@@ -500,6 +549,7 @@ void main() {
       Entry(text: 'Dentist moved to Thursday', at: now.subtract(const Duration(days: 4))),
     ];
     await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Notes');
     double top(String text) => tester.getTopLeft(find.text(text)).dy;
     expect([for (final heading in ['Today', 'Yesterday', 'Previous 7 days']) find.text(heading).evaluate().length], [1, 1, 1]);
     expect(top('Today') < top('Ask Sam if the trip moves'), isTrue);
@@ -521,7 +571,8 @@ void main() {
     expect(tester.widgetList(find.byType(FilledButton)), isEmpty);
   });
 
-  testWidgets('search shows only the notes that hold the words, in any case; Cancel shows them all again', (tester) async {
+  testWidgets('search in Notes shows only the notes that hold the words, in any case; Cancel shows them all again',
+      (tester) async {
     relay.entries = [
       Entry(text: 'Dentist moved to Thursday 3 pm', at: now),
       Entry(text: 'Paint colours for the hall', at: now, place: 'Home', files: const [
@@ -529,6 +580,7 @@ void main() {
       Entry(text: 'Gift ideas', at: now),
     ];
     await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Notes');
     final search = find.widgetWithText(TextField, 'Search');
     await tester.tap(search);
     await tester.pump();
@@ -557,8 +609,9 @@ void main() {
       ..connected = true
       ..settings = const Settings(sending: true);
     await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Notes');
     expect(find.text('No notes yet'), findsOneWidget);
-    expect(find.text('Notes stay on this phone until you turn on sending in Settings.'), findsNothing);
+    expect(find.text('Notes stay on this phone until you turn on Sending on Home.'), findsNothing);
     expect(find.text('On this phone'), findsNothing);
     for (final (status, waiting, label) in [(SyncStatus.syncing, 0, 'Syncing'), (SyncStatus.refused, 0, 'Key refused'),
       (SyncStatus.offline, 0, 'Offline'), (SyncStatus.offline, 2, '2 waiting'), (SyncStatus.idle, 0, 'Synced')]) {
@@ -667,13 +720,17 @@ void main() {
     await tester.pumpWidget(RelayApp(relay: relay));
     await openSettings(tester);
     await tester.tap(find.text('Pin notes to where I am'));
-    await tester.scrollUntilVisible(find.text('Location history'), 100);
     await tester.pumpAndSettle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await openFolder(tester, 'Location');
     await tester.tap(find.text('Location history'));
-    relay.problem = 'Relay Everything may not read your health data.';
-    await tester.scrollUntilVisible(find.text('Health'), -100);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Health'));
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    relay.problem = 'Relay Everything may not read your health data.';
+    await openFolder(tester, 'Health');
+    await tester.tap(find.widgetWithText(SwitchListTile, 'Health'));
     await tester.pump();
     expect(find.text('Relay Everything may not read your health data.'), findsOneWidget);
     expect(relay.calls, ['pin false', 'history true', 'health true']);
@@ -682,12 +739,29 @@ void main() {
   group('photos', () {
     const denied = "Photo access is off. Turn it on in the phone's Settings.";
 
-    // Scrolls the Photos row to the top, so both photo switches show.
-    Future<void> openPhotos(WidgetTester tester) async {
-      await openSettings(tester);
-      await tester.scrollUntilVisible(find.text('Send photos on mobile data'), 100);
+    final photosSwitch = find.widgetWithText(SwitchListTile, 'Photos');
+
+    // Opens the Photos folder from Home, under On this phone.
+    Future<void> openPhotos(WidgetTester tester) => openFolder(tester, 'Photos');
+
+    testWidgets('Home shows a Photos row that says Off or On, and its page says Photos works with sending on', (tester) async {
+      tallScreen(tester);
+      await tester.pumpWidget(RelayApp(relay: relay, scanner: (_) async => null));
+      expect(find.widgetWithText(ListTile, 'Photos'), findsOneWidget);
+      expect(find.descendant(of: find.widgetWithText(ListTile, 'Photos'), matching: find.text('Off')), findsOneWidget);
+      await openPhotos(tester);
+      expect(find.text('Photos works with sending on. Nothing leaves this phone until you turn it on.'), findsOneWidget);
+      await tester.tap(find.byTooltip('Back'));
       await tester.pumpAndSettle();
-    }
+      relay
+        ..connected = true
+        ..server = 'https://relay.example.com'
+        ..settings = const Settings(sending: true, photos: true)
+        ..changed();
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: find.widgetWithText(ListTile, 'Photos'), matching: find.text('On · Wi-Fi only')), findsOneWidget);
+      expect(relay.calls, isEmpty);
+    });
 
     testWidgets('works only while sending is on, and mobile data only while photos is on', (tester) async {
       await tester.pumpWidget(RelayApp(relay: relay));
@@ -695,7 +769,7 @@ void main() {
       expect(find.text('Sends new photos, with when and where you took them, so your AI can see them.'), findsOneWidget);
       expect(find.text('Off: photos wait for Wi-Fi.'), findsOneWidget);
       expect([switchOf(tester, 'Photos').onChanged, switchOf(tester, 'Send photos on mobile data').onChanged], [isNull, isNull]);
-      await tester.tap(find.text('Photos'));
+      await tester.tap(photosSwitch);
       await tester.pump();
       relay
         ..connected = true
@@ -722,7 +796,7 @@ void main() {
         ..problem = denied;
       await tester.pumpWidget(RelayApp(relay: relay));
       await openPhotos(tester);
-      await tester.tap(find.text('Photos'));
+      await tester.tap(photosSwitch);
       await tester.pump();
       expect(find.text(denied), findsOneWidget);
       expect([relay.calls, switchOf(tester, 'Photos').value], [['photos true'], isFalse]);
@@ -741,7 +815,7 @@ void main() {
         return opens;
       }));
       await openPhotos(tester);
-      await tester.tap(find.text('Photos'));
+      await tester.tap(photosSwitch);
       await tester.pumpAndSettle();
       expect(find.text('Stop sending photos?'), findsOneWidget);
       expect(find.text('Photos already sent stay on your Relay Everything server. Delete them on your page.'), findsOneWidget);
@@ -749,14 +823,14 @@ void main() {
       await tester.pumpAndSettle();
       expect([opened, relay.calls], [[Uri.parse('https://relay.example.com/apps/relay/')], isEmpty]);
       expect(find.text('Stop sending photos?'), findsNothing);
-      await tester.tap(find.text('Photos'));
+      await tester.tap(photosSwitch);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Stop sending photos'));
       await tester.pumpAndSettle();
       expect(relay.calls, ['photos false']);
       // The browser does not open: the app says so, and photos stay on.
       opens = false;
-      await tester.tap(find.text('Photos'));
+      await tester.tap(photosSwitch);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Open my page'));
       await tester.pump();
@@ -770,12 +844,10 @@ void main() {
         ..webhookAddress = 'https://db.example.com/relay'
         ..settings = const Settings(sending: true, place: SendPlace.webhook, photos: true);
       await tester.pumpWidget(RelayApp(relay: relay));
-      await openSettings(tester);
-      await tester.scrollUntilVisible(find.text('Send photos on mobile data'), 100);
-      await tester.pumpAndSettle();
-      expect([find.text('Photos'), find.text('Send photos on mobile data'),
+      await openPhotos(tester);
+      expect([photosSwitch, find.text('Send photos on mobile data'),
         find.text('Sends new photos, with when and where you took them, to your webhook.')], everyElement(findsOneWidget));
-      await tester.tap(find.text('Photos'));
+      await tester.tap(photosSwitch);
       await tester.pumpAndSettle();
       expect([find.text('Stop sending photos?'), find.text('Open my page')], everyElement(findsNothing));
       expect(relay.calls, ['photos false']);
@@ -788,13 +860,12 @@ void main() {
       ..locationModes = true
       ..settings = const Settings(sending: true);
     await tester.pumpWidget(RelayApp(relay: relay));
-    await openSettings(tester);
+    await openFolder(tester, 'Location');
     expect(find.text('Save battery'), findsNothing);
     relay.settings = const Settings(sending: true, history: true);
     relay.changed();
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Every 100 m'), 100);
-    await tester.pumpAndSettle();
+    expect(find.text('How often'), findsOneWidget);
     RadioGroup<LocationMode> group() => tester.widget(find.byType(RadioGroup<LocationMode>));
     expect(group().groupValue, LocationMode.battery);
     await tester.tap(find.text('Every 100 m'));
@@ -812,9 +883,12 @@ void main() {
       ..settings = const Settings(sending: true, health: true, history: true)
       ..healthSent = SendState(at: DateTime(now.year, now.month, now.day, 14, 5), waiting: 3);
     await tester.pumpWidget(RelayApp(relay: relay));
-    await openSettings(tester);
-    await tester.scrollUntilVisible(find.text('Not sent yet · none waiting'), 100);
+    expect(find.text('Sent 14:05 · 3 waiting'), findsOneWidget);
+    await openFolder(tester, 'Health');
     expect(find.text('Sent 14:05 · 3 readings waiting'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await openFolder(tester, 'Location');
     expect(find.text('Not sent yet · none waiting'), findsOneWidget);
     final today = DateTime(2026, 11, 7, 18);
     expect(sentLine(SendState(at: DateTime(2026, 11, 6, 9, 30), waiting: 1), 'point', today), 'Sent 6/11 09:30 · 1 point waiting');
@@ -827,17 +901,15 @@ void main() {
       ..settings = const Settings(sending: true)
       ..calendarSent = SendState(at: DateTime(now.year, now.month, now.day, 10, 42), waiting: 2);
     await tester.pumpWidget(RelayApp(relay: relay));
-    await openSettings(tester);
+    await openFolder(tester, 'Calendar');
     expect(find.text('US Holidays'), findsNothing);
-    await tester.scrollUntilVisible(find.text('Calendar'), 100);
-    await tester.tap(find.text('Calendar'));
+    await tester.tap(find.widgetWithText(SwitchListTile, 'Calendar'));
     await tester.pump();
     expect(relay.calls, ['calendar true']);
     relay
       ..settings = const Settings(sending: true, calendar: true)
       ..changed();
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('US Holidays'), 100);
     expect(find.text('Sent 10:42 · 2 events waiting'), findsOneWidget);
     expect(find.text('sam@example.com'), findsOneWidget);
     expect(switchOf(tester, 'US Holidays').value, isTrue);
@@ -854,15 +926,13 @@ void main() {
   });
 
   testWidgets('changes the server, and disconnects after asking', (tester) async {
+    tallScreen(tester);
     relay
       ..connected = true
       ..server = 'https://relay.example.com'
       ..settings = const Settings(sending: true);
     await tester.pumpWidget(RelayApp(relay: relay));
-    await openSettings(tester);
-    // To the end of Settings: a row scrolled just under the pinned title would not take the tap.
-    await tester.drag(find.byType(CustomScrollView), const Offset(0, -3000));
-    await tester.pumpAndSettle();
+    await openFolder(tester, 'Sending');
     await tester.tap(find.text('https://relay.example.com'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cancel'));
@@ -885,7 +955,7 @@ void main() {
     expect(switchOf(tester, 'Send my notes').value, isFalse);
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('On this phone'), findsOneWidget);
+    expect(find.text('Off: nothing leaves this phone'), findsOneWidget);
   });
 
   testWidgets('sets up a webhook with no key: refuses a bad address, copies the secret, tests it, and saves', (tester) async {
@@ -924,11 +994,11 @@ void main() {
       'webhook https://db.example.com/relay $secret', 'closed webhook']);
   });
 
-  testWidgets('in Settings, picks My own webhook, asks about earlier notes, and shows where it sends and its last problem',
+  testWidgets('in Sending, picks My own webhook, asks about earlier notes, and shows where it sends and its last problem',
     (tester) async {
     relay.earlier = 2;
     await tester.pumpWidget(RelayApp(relay: relay));
-    await openSettings(tester);
+    await openFolder(tester, 'Sending');
     await tester.tap(find.text('Send my notes'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('My own webhook'));
@@ -963,22 +1033,189 @@ void main() {
       'scan.pdf was too large for your receiver (14:05), so it was not sent.');
   });
 
-  testWidgets('Settings shows three groups with no lines, and with sending off one line says what needs it', (tester) async {
+  testWidgets('Settings shows only the Notes and Voice notes groups, with no lines', (tester) async {
+    tallScreen(tester);
     await tester.pumpWidget(RelayApp(relay: relay));
     await openSettings(tester);
     final groups = find.descendant(of: find.byType(SettingsScreen), matching: find.byType(SliverList));
-    for (final heading in ['Notes', 'Voice notes', 'Sending']) {
+    for (final heading in ['Notes', 'Voice notes']) {
       expect(find.descendant(of: groups, matching: find.text(heading)), findsOneWidget, reason: heading);
     }
+    for (final gone in ['Sending', 'Send my notes', 'Health', 'Calendar', 'Location history', 'Send photos on mobile data']) {
+      expect(find.text(gone), findsNothing, reason: gone);
+    }
     expect(find.descendant(of: find.byType(SettingsScreen), matching: find.byType(Divider)), findsNothing);
-    await tester.scrollUntilVisible(find.text('Health, Calendar, Location history and Photos work with Send my notes on.'), 100);
-    expect(switchOf(tester, 'Location history').onChanged, isNull);
-    expect(find.text('Where you go, also while the app is closed.'), findsOneWidget);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.text('Off: nothing leaves this phone'), findsOneWidget);
+  });
+
+  testWidgets('with sending off, a data folder says it needs sending, and Turn on sending asks where to send', (tester) async {
+    await tester.pumpWidget(RelayApp(relay: relay, scanner: (_) async => null));
+    for (final (folder, what) in [('Location', 'Location history'), ('Health', 'Health'), ('Calendar', 'Calendar'),
+      ('Photos', 'Photos')]) {
+      await openFolder(tester, folder);
+      expect(switchOf(tester, what).onChanged, isNull, reason: what);
+      expect(find.text('$what works with sending on. Nothing leaves this phone until you turn it on.'), findsOneWidget);
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+    }
+    await openFolder(tester, 'Health');
+    await tester.tap(find.widgetWithText(FilledButton, 'Turn on sending'));
+    await tester.pumpAndSettle();
+    expect(find.text('Where should the phone send?'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(relay.calls, isEmpty);
+  });
+
+  testWidgets('Home counts each notes folder, and Voice notes lists only voice notes, with Home to go back', (tester) async {
+    const photo = EntryFile(name: 'receipt.jpg', type: 'image/jpeg', size: 1258291, path: '/nowhere/receipt.jpg');
+    relay.entries = [
+      for (final words in ['Buy milk', 'Gift ideas', 'Paint the hall']) Entry(text: words, at: now),
+      for (final words in ['Call the fab', 'Ask Sam']) Entry(text: words, at: now, voice: true),
+      Entry(text: 'Receipt for the lamp', at: now, files: const [photo]),
+    ];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    expect([countOn('Notes', 6), countOn('Voice notes', 2), countOn('Shares', 1)], everyElement(findsOneWidget));
+    await openFolder(tester, 'Voice notes');
+    expect(find.byType(TimelineScreen), findsOneWidget);
+    expect([find.text('Call the fab'), find.text('Ask Sam')], everyElement(findsOneWidget));
+    expect([find.text('Buy milk'), find.text('Receipt for the lamp')], everyElement(findsNothing));
+    expect(find.text('2 notes ·'), findsOneWidget);
+    await tester.tap(find.text('Call the fab'));
+    await tester.pumpAndSettle();
+    // A note opened from a folder goes back to that folder.
+    expect(find.descendant(of: find.byTooltip('Back'), matching: find.text('Voice notes')), findsOneWidget);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: find.byTooltip('Back'), matching: find.text('Home')), findsOneWidget);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(countOn('Notes', 6), findsOneWidget);
+  });
+
+  testWidgets('search on Home finds notes in every folder, on the phone only; Cancel shows the folders again', (tester) async {
+    relay.entries = [
+      Entry(text: 'Call the dentist', at: now),
+      Entry(text: 'Dentist moved to Thursday', at: now, voice: true),
+      Entry(text: 'Gift ideas', at: now),
+    ];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    expect(find.text('Gift ideas'), findsNothing);
+    await tester.enterText(find.widgetWithText(TextField, 'Search'), 'dentist');
+    await tester.pump();
+    expect([find.text('Call the dentist'), find.text('Dentist moved to Thursday')], everyElement(findsOneWidget));
+    expect([find.text('Gift ideas'), find.widgetWithText(ListTile, 'Voice notes')], everyElement(findsNothing));
+    await tester.tap(find.text('Dentist moved to Thursday'));
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: find.byTooltip('Back'), matching: find.text('Home')), findsOneWidget);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect([find.widgetWithText(ListTile, 'Voice notes'), find.text('Call the dentist')], [findsOneWidget, findsNothing]);
+    // In a folder, search finds that folder's notes only.
+    await openFolder(tester, 'Voice notes');
+    await tester.enterText(find.widgetWithText(TextField, 'Search'), 'dentist');
+    await tester.pump();
+    expect([find.text('Dentist moved to Thursday'), find.text('Call the dentist')], [findsOneWidget, findsNothing]);
+    expect(relay.calls, isEmpty);
+  });
+
+  testWidgets('a tap on On this phone or Connections folds it, and the phone keeps it folded', (tester) async {
+    tallScreen(tester);
+    relay.settings = const Settings(sending: true, place: SendPlace.webhook);
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await tester.tap(find.text('On this phone'));
+    await tester.pumpAndSettle();
+    expect([find.text('Location'), find.text('Health')], everyElement(findsNothing));
+    expect(relay.calls, ['fold On this phone true']);
+    await tester.tap(find.text('Connections'));
+    await tester.pumpAndSettle();
+    expect([find.text('Sending'), find.text('AI apps')], everyElement(findsNothing));
+    await tester.tap(find.text('On this phone'));
+    await tester.pumpAndSettle();
+    expect(find.text('Location'), findsOneWidget);
+    expect(relay.folded, {'Connections'});
+    // A new start reads what the phone kept.
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(RelayApp(relay: relay));
+    expect([find.text('Location'), find.text('AI apps')], [findsOneWidget, findsNothing]);
+  });
+
+  testWidgets('AI apps and Webhooks say Sign in to see until the phone sends to a server, then name what is connected',
+      (tester) async {
+    tallScreen(tester);
+    final opened = <Uri>[];
+    await tester.pumpWidget(RelayApp(relay: relay, scanner: (_) async => null, opener: (address) async {
+      opened.add(address);
+      return true;
+    }));
+    expect(relay.refreshes, 1);
+    expect(find.text('Sign in to see'), findsNWidgets(2));
+    await openFolder(tester, 'AI apps');
+    expect(find.text('Where should the phone send?'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    // On the person's own webhook, the phone knows nothing of the server.
+    relay
+      ..connected = true
+      ..server = 'https://relay.example.com'
+      ..settings = const Settings(sending: true, place: SendPlace.webhook)
+      ..changed();
+    await tester.pumpAndSettle();
+    expect(find.text('Sign in to see'), findsNWidgets(2));
     relay
       ..settings = const Settings(sending: true)
       ..changed();
     await tester.pumpAndSettle();
-    expect(find.text('Health, Calendar, Location history and Photos work with Send my notes on.'), findsNothing);
+    expect(find.text('See them on your page'), findsNWidgets(2));
+    relay
+      ..connections = const Connections(aiApps: ['Claude'], webhooks: ['Home server', 'Notion sync'])
+      ..changed();
+    await tester.pumpAndSettle();
+    expect([find.text('Claude'), find.text('Home server, Notion sync'), countOn('Webhooks', 2), countOn('AI apps', 1)],
+      everyElement(findsOneWidget));
+    await openFolder(tester, 'Webhooks');
+    await openFolder(tester, 'AI apps');
+    expect(opened, [Uri.parse('https://relay.example.com/apps/relay/#webhooks'), Uri.parse('https://relay.example.com/apps/relay/#ai-apps')]);
+    relay
+      ..connections = const Connections()
+      ..changed();
+    await tester.pumpAndSettle();
+    expect(find.text('None yet'), findsNWidgets(2));
+    expect(relay.calls, isEmpty);
+  });
+
+  test('each Home row says Off, or what the phone knows', () {
+    final today = DateTime(now.year, now.month, now.day, 18);
+    final fake = FakeRelay();
+    expect([locationLine(fake, today), healthLine(fake, today), calendarLine(fake, today), photosLine(fake), sendingLine(fake)],
+      ['Off', 'Off', 'Off', 'Off', 'Off: nothing leaves this phone']);
+    fake
+      ..locationModes = true
+      ..server = 'https://relay.example.com'
+      ..settings = const Settings(sending: true, history: true, health: true, calendar: true, calendarsOff: {'holidays'})
+      ..pointsSent = SendState(at: DateTime(now.year, now.month, now.day, 14, 5))
+      ..healthSent = SendState(at: DateTime(now.year, now.month, now.day, 14, 2), waiting: 3)
+      ..calendarSent = SendState(at: DateTime(now.year, now.month, now.day, 13, 40));
+    expect([locationLine(fake, today), healthLine(fake, today), calendarLine(fake, today), sendingLine(fake)],
+      ['Save battery · Sent 14:05', 'Sent 14:02 · 3 waiting', '1 calendar · Sent 13:40', 'To Relay Everything · relay.example.com']);
+    fake
+      ..locationModes = false
+      ..pointsSent = const SendState(waiting: 2)
+      ..settings = const Settings(sending: true, place: SendPlace.webhook, history: true, calendar: true)
+      ..webhookAddress = 'https://db.example.com/relay';
+    expect([locationLine(fake, today), calendarLine(fake, today), sendingLine(fake)],
+      ['Not sent yet · 2 waiting', '2 calendars · Sent 13:40', 'To your webhook · db.example.com']);
+    fake.settings = const Settings(sending: true, history: true, mode: LocationMode.move);
+    fake.locationModes = true;
+    expect(locationLine(fake, today), 'Every 100 m · Not sent yet · 2 waiting');
+    fake.settings = const Settings(sending: true, photos: true);
+    expect(photosLine(fake), 'On · Wi-Fi only');
+    fake.settings = const Settings(sending: true, photos: true, photosOnMobileData: true);
+    expect(photosLine(fake), 'On · Wi-Fi and mobile data');
   });
 
   group('voice notes', () {
@@ -1006,6 +1243,7 @@ void main() {
     testWidgets('a voice note and Listening wear the spark color; a typed note wears accent soft', (tester) async {
       relay.entries = [Entry(text: 'Spoken', at: now, voice: true), Entry(text: 'Written', at: now)];
       await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
       expect(tagColors(tester, 'Voice'), (BrandColors.light.spark, BrandColors.light.onSpark));
       expect(tagColors(tester, 'Typed'), (BrandColors.light.accentSoft, BrandColors.light.accentText));
       await holdNewNote(tester);
@@ -1051,9 +1289,14 @@ void main() {
     });
 
     testWidgets('a voice note shows Writing the words, then its words, its length and Play', (tester) async {
-      relay.entries = [Entry(text: '', at: now, voice: true, writing: true, recording: 'voice/a.wav',
-        length: const Duration(seconds: 12))];
       await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      // The bar moves until the words come, so the screen never settles while it shows.
+      relay
+        ..entries = [Entry(text: '', at: now, voice: true, writing: true, recording: 'voice/a.wav',
+          length: const Duration(seconds: 12))]
+        ..changed();
+      await tester.pump();
       expect(find.text('Voice'), findsOneWidget);
       expect(find.text('Writing the words…'), findsOneWidget);
       expect(find.byType(LinearProgressIndicator), findsOneWidget);
@@ -1093,6 +1336,7 @@ void main() {
       relay.entries = [Entry(text: '', at: now, voice: true, failed: true, recording: 'voice/a.wav',
         length: const Duration(seconds: 3))];
       await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Voice notes');
       expect(find.text('The words did not come'), findsOneWidget);
       expect([find.text('Writing the words…'), find.byType(LinearProgressIndicator)], [findsNothing, findsNothing]);
       await tester.tap(find.text('The words did not come'));
@@ -1264,7 +1508,7 @@ void main() {
           files: const [EntryFile(name: 'only.pdf', type: 'application/pdf', size: 512, path: '/nowhere/only.pdf')]),
       ];
       await tester.pumpWidget(RelayApp(relay: relay));
-      await tester.pump();
+      await openFolder(tester, 'Shares');
       expect(find.byTooltip('receipt.jpg'), findsOneWidget);
       // A note of files alone takes its first file's name as its title.
       expect(find.text('only.pdf'), findsOneWidget);
@@ -1305,6 +1549,20 @@ void main() {
       await tester.pump();
       expect(find.text('Listening'), findsNothing);
       expect(relay.calls, ['voice start', 'voice cancel']);
+    });
+
+    testWidgets('records over a folder page that is open, and the folder shows again after', (tester) async {
+      final requests = StreamController<void>();
+      addTearDown(requests.close);
+      await tester.pumpWidget(RelayApp(relay: relay, voiceRequests: requests.stream));
+      await openFolder(tester, 'Health');
+      requests.add(null);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect([find.text('Listening'), find.byType(HealthPage)], everyElement(findsOneWidget));
+      await tapAnywhere(tester);
+      expect([relay.calls, find.text('Listening').evaluate()], [['voice start', 'voice end'], isEmpty]);
+      expect(find.byType(HealthPage), findsOneWidget);
     });
 
     testWidgets('with no speech model, it asks to get it first, as a hold on New note does', (tester) async {

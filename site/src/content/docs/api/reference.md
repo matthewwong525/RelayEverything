@@ -722,6 +722,25 @@ Send the input as a JSON body.
 | `unavailable` | The AI connector is not set up here. |
 | `not_found` | You have no connected AI app with this id. |
 
+## List what you connected, by name
+
+`GET /apps/relay/api/connections` · `relay.connections` · reads · called by a signed-in person or a phone key
+
+The names of your connected AI apps and of your webhooks, for the phone's Home. It holds no address, secret or send state. Where the AI connector is not set up, the AI apps list is empty.
+
+### Input
+
+It takes no input.
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `aiApps` | array of object | yes | Each connected AI app. |
+| `aiApps[].name` | string | yes |  |
+| `webhooks` | array of object | yes | Each webhook, paused ones too. |
+| `webhooks[].name` | string | yes |  |
+
 ## Save the AI's summary of a chat
 
 `POST /apps/relay/api/chat-saves` · `relay.chat-saves-add` · writes · called by a Claude Code chat key only

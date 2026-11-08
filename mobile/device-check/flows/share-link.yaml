@@ -6,7 +6,7 @@ appId: com.matthewwong525.relayApp
 - launchApp:
     clearState: true
 - extendedWaitUntil:
-    visible: "Notes"
+    visible: "Home"
     timeout: 60000
 - openLink:
     link: https://example.com/
@@ -29,6 +29,11 @@ appId: com.matthewwong525.relayApp
 - tapOn: "Save"
 - launchApp:
     stopApp: false
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 20000
+# Home lists the folders; a row's label joins its name and its count, so match its start.
+- tapOn: 'Notes(.|\n)*'
 # Flutter joins a row's lines into one label, so match a word inside it, or its start.
 - extendedWaitUntil:
     visible: '(.|\n)*Typed(.|\n)*'

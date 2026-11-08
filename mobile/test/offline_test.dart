@@ -12,7 +12,7 @@ import 'package:relay_app/sync/background.dart';
 import 'package:relay_app/voice/model.dart';
 
 import 'fakes.dart';
-import 'screens_test.dart' show holdNewNote, newNote, openSettings;
+import 'screens_test.dart' show holdNewNote, newNote, openFolder, openSettings, tallScreen;
 
 /// Pumps, with real time between, until [done]: for file work and the model's checksum, which run outside the test's
 /// fake time.
@@ -66,28 +66,37 @@ void main() {
       await relay.load();
     });
     expect([relay.connected, relay.settings.sending], [true, false]);
+    tallScreen(tester);
     await tester.pumpWidget(RelayApp(relay: relay, scanner: (_) async => null));
 
-    // Settings: pins on (a phone-only fix), and the dependent switches can not turn on.
+    // Home: the rows that need the server ask to sign in.
+    expect(find.text('Sign in to see'), findsNWidgets(2));
+    // Settings: pins on (a phone-only fix).
     await openSettings(tester);
     await tester.tap(find.text('Pin notes to where I am'));
     await tester.runAsync(pumpEventQueue);
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Location history'), 100);
-    await tester.tap(find.text('Location history'));
-    await tester.tap(find.text('Health'));
-    await tester.tap(find.text('Calendar'));
+    await tester.pageBack();
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Photos'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Photos'));
-    await tester.tap(find.text('Send photos on mobile data'));
-    await tester.pumpAndSettle();
-    expect(find.text('Stop sending photos?'), findsNothing);
+    // Each data folder: its switch can not turn on.
+    for (final (folder, what) in [('Location', 'Location history'), ('Health', 'Health'), ('Calendar', 'Calendar'),
+      ('Photos', 'Photos')]) {
+      await openFolder(tester, folder);
+      await tester.tap(find.widgetWithText(SwitchListTile, what));
+      if (folder == 'Photos') await tester.tap(find.text('Send photos on mobile data'));
+      await tester.pumpAndSettle();
+      expect(find.text('Stop sending photos?'), findsNothing);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+    }
+    // AI apps, signed out: the choice of place opens, and nothing is asked of the server.
+    await openFolder(tester, 'AI apps');
+    expect(find.text('Where should the phone send?'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
 
     // A note, pinned.
+    await openFolder(tester, 'Notes');
     await tester.tap(newNote);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Call the PCB fab about the flex stiffener');
@@ -141,6 +150,13 @@ void main() {
     expect(find.text('Ask the fab if the flex stiffener can be 0.2 mm'), findsOneWidget);
     expect(find.text('Voice'), findsOneWidget);
     expect(models.requests, hasLength(1));
+    // Search on Home finds both, from the phone.
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Search'), 'stiffener');
+    await tester.pump();
+    expect([find.text('Call the PCB fab about the flex stiffener'), find.text('Ask the fab if the flex stiffener can be 0.2 mm')],
+      everyElement(findsOneWidget));
 
     expect(server.requests, isEmpty);
     expect([webAuth.opened, swift.drains, places.lookups], [isEmpty, 0, isEmpty]);
@@ -169,6 +185,7 @@ void main() {
       await relay.load();
     });
     await tester.pumpWidget(RelayApp(relay: relay, scanner: (_) async => null));
+    await openFolder(tester, 'Voice notes');
     await holdUntilListening(tester, () => relay.listening != null);
     clock = clock.add(const Duration(seconds: 4));
     await tester.tapAt(const Offset(200, 150));

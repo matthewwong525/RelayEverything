@@ -22,6 +22,7 @@ A device key only adds data, and only to the space of the person who made it. It
 
 - `POST notes`, `POST attachments`, `POST health`, `POST locations`, `POST calendar`, `POST photos`
 - `GET key`, which answers the key's own device name and no data, so a device can check its key
+- `GET connections`, for a phone's key only, which answers the names of your AI apps and webhooks and no address, secret or data, for **Connections** on the app's Home
 
 Any other address or method answers `403` to a device key. To read, a person signs in on the Relay Everything page: `GET timeline`, `GET audio`, `GET attachment`, `GET summary`, `GET photos` and `POST photos/delete` need a signed-in person, and each answers only from that person's own space. [Routes](../reference/) shows who can call each route.
 

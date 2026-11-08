@@ -152,7 +152,8 @@ void main() {
       await relay.sync();
       expect([for (final entry in relay.entries) (entry.text, entry.sent, entry.waiting)],
         [('Sent', true, false), ('Local only', false, false)]);
-      expect(server.routes, ['key', 'notes']);
+      // After each full sync, at most each 10 minutes, the phone reads the names of what the person connected.
+      expect(server.routes, ['key', 'connections', 'notes', 'connections']);
       await relay.stopSending();
       expect(relay.entries, hasLength(2));
     });
@@ -534,8 +535,9 @@ void main() {
       expect(storage.values.values, contains('secret-value'));
       expect(relay.status, SyncStatus.synced);
       expect([relay.entries.single.text, relay.entries.single.sent], ['Lunch idea', true]);
-      // A device key only adds: the one read is the key check.
-      expect([for (final request in server.requests) if (request.method == 'GET') request.url.path.split('/').last], ['key']);
+      // A device key only adds: it reads the key check, and after a full sync the names of what the person connected.
+      expect([for (final request in server.requests) if (request.method == 'GET') request.url.path.split('/').last],
+        ['key', 'connections']);
     });
 
     test('connects with a key from the Relay Everything page, and sends it as Authorization: Bearer', () async {
@@ -547,9 +549,9 @@ void main() {
       await relay.addNote('From a page key');
       await pumpEventQueue();
       await relay.sync();
-      expect(server.routes, ['key', 'notes']);
-      expect([for (final request in server.requests) request.headers['Authorization']], ['Bearer $pageKey', 'Bearer $pageKey']);
-      expect([for (final request in server.requests) request.headers['CF-Access-Client-Id']], [null, null]);
+      expect(server.routes, ['key', 'connections', 'notes']);
+      expect([for (final request in server.requests) request.headers['Authorization']], List.filled(3, 'Bearer $pageKey'));
+      expect([for (final request in server.requests) request.headers['CF-Access-Client-Id']], [null, null, null]);
     });
 
     test('refuses a key the server turns down, and keeps one it could not try', () async {
@@ -713,6 +715,75 @@ void main() {
       expect(relay.entries.single.text, 'Kept');
       await relay.sync();
       expect(server.requests.every((request) => request.url.host == 'preview.example.com'), isTrue);
+    });
+  });
+
+  group('the names of what you connected', () {
+    List<String> reads() => [for (final request in server.requests) if (request.method == 'GET') request.url.path.split('/').last];
+
+    test('are read after a full sync to the server, kept with no signal, and cleared on a new server or with sending off',
+        () async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', const Settings(sending: true).encode());
+      final relay = controller();
+      await relay.load();
+      expect(relay.connections, isNull);
+      await relay.sync();
+      expect(reads(), contains('connections'));
+      expect([relay.connections?.aiApps, relay.connections?.webhooks], [['Claude'], ['Home server']]);
+      // No signal: the last answer stays, also for the next start.
+      server.answer = (_) => throw const SocketException('none');
+      await relay.refreshConnections();
+      final again = controller();
+      await again.load();
+      expect([relay.connections?.aiApps, again.connections?.webhooks], [['Claude'], ['Home server']]);
+      // A server from before the route refuses it: no names show.
+      server.answer = (_) => FakeServer.json({'error': 'A device key can only send to Relay Everything.'}, 403);
+      await relay.refreshConnections();
+      expect(relay.connections, isNull);
+      server.answer = FakeServer.ok;
+      await relay.refreshConnections();
+      expect(relay.connections, isNotNull);
+      expect(await relay.setServer('https://preview.example.com'), isNull);
+      expect([relay.connections, await store.get(connectionsKey)], [null, null]);
+      await relay.refreshConnections();
+      await relay.stopSending();
+      expect([relay.connections, await store.get(connectionsKey)], [null, null]);
+      final asked = server.requests.length;
+      await relay.refreshConnections();
+      expect(server.requests, hasLength(asked));
+      relay.dispose();
+    });
+
+    test('are never read with sending off or to your own webhook, and go when the phone disconnects', () async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', const Settings().encode());
+      final relay = controller();
+      await relay.load();
+      await relay.refreshConnections();
+      expect(server.requests, isEmpty);
+      await relay.saveWebhook(hook.address, fixtureSecret);
+      await relay.startSending(sendEarlier: false, place: SendPlace.webhook);
+      await relay.settled();
+      await relay.refreshConnections();
+      expect([reads(), relay.connections], [isEmpty, isNull]);
+      await relay.startSending(sendEarlier: false, place: SendPlace.server);
+      await relay.settled();
+      expect(relay.connections?.aiApps, ['Claude']);
+      await relay.disconnect();
+      expect([relay.connections, await store.get(connectionsKey)], [null, null]);
+      relay.dispose();
+    });
+
+    test('the Home headers the person folded are kept for the next start', () async {
+      final relay = controller();
+      await relay.load();
+      await relay.setFolded('Connections', true);
+      await relay.setFolded('On this phone', true);
+      await relay.setFolded('On this phone', false);
+      final again = controller();
+      await again.load();
+      expect([relay.folded, again.folded], [{'Connections'}, {'Connections'}]);
     });
   });
 
@@ -1512,7 +1583,7 @@ void main() {
       clock = now.add(const Duration(minutes: 1));
       await relay.addNote('New', files: [picked('new.jpg', [1, 2])]);
       await relay.sync();
-      expect(server.routes, ['key', 'notes', 'attachments', 'notes', 'attachments']);
+      expect(server.routes, ['key', 'notes', 'attachments', 'connections', 'notes', 'attachments']);
       final uploads = [for (final request in server.requests) if (request.url.path.endsWith('attachments')) request];
       expect([for (final upload in uploads) upload.bodyBytes], [[9], [1, 2]]);
       final notes = sentNotes();

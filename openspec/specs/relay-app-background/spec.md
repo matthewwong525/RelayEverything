@@ -34,10 +34,11 @@ With sending or *Location history* off, the app SHALL ask the iPhone for no loca
 - **WHEN** the person turns *Location history* off and later travels
 - **THEN** the iPhone does not wake the app for location, and no point is kept
 
-### Requirement: Settings shows when health and places last went
+### Requirement: The Health and Location folders show when each last went
 
-While sending is on, Settings SHALL show, for *Health* and for *Location history*, when each last reached the person's space and how many of each wait to send.
+While sending is on, the *Health* and *Location* folders SHALL show when each last reached the person's space and how many of each wait to send.
 
 #### Scenario: Sending stalls
+
 - **WHEN** the phone has had no network since morning
-- **THEN** Settings shows the morning time and the number of points and readings waiting
+- **THEN** the *Health* and *Location* folders show the morning time and the number of readings and points waiting

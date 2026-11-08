@@ -8,7 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { get, post, when, type Webhook, type WebhookKind } from './read'
+import { get, post, useOpenedAt, when, type Webhook, type WebhookKind } from './read'
 
 // Where Relay sends your data: each webhook with its state and actions. app/worker/apps/relay/webhooks/routes.ts
 type Changed = (hook: Webhook) => void
@@ -188,7 +188,7 @@ function HookCard({ hook, names, onChange, onRemove }: { hook: Webhook; names: M
 }
 
 /** Where Relay sends your data: each webhook, its state, and its actions. */
-export function Webhooks() {
+export function Webhooks({ ready = true }: { ready?: boolean }) {
   const [hooks, setHooks] = useState<Webhook[] | 'loading' | 'failed'>('loading')
   // The server lists the kinds, so a new kind gets its tick and name here by itself. An older server lists none.
   const [kinds, setKinds] = useState<WebhookKind[]>([])
@@ -198,12 +198,14 @@ export function Webhooks() {
   }, [])
   const names = new Map(kinds.map((kind) => [kind.id, kind.label.toLowerCase()]))
   useEffect(read, [read])
+  useOpenedAt('webhooks', ready)
   const load = () => { setHooks('loading'); read() }
   // From the newest list, as two actions can answer in either order.
   // Only a card or the form calls it, and both show only once the list has loaded.
   const change = (next: (list: Webhook[]) => Webhook[]) => setHooks((now) => next(now as Webhook[]))
   const replace = (hook: Webhook) => change((list) => list.some((other) => other.id === hook.id) ? list.map((other) => other.id === hook.id ? hook : other) : [...list, hook])
-  return <section className="grid gap-3" aria-label="Send to your database">
+  // The phone's *Webhooks* row opens the page at #webhooks.
+  return <section id="webhooks" className="grid scroll-mt-4 gap-3" aria-label="Send to your database">
     <div className="flex flex-wrap items-center gap-2">
       <h2 className="grow">Send to your database</h2>
       {kinds.length > 0 && <AddWebhook kinds={kinds} onAdd={replace} />}

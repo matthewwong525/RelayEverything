@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/app.dart';
 import 'package:relay_app/relay.dart';
 
-import 'screens_test.dart' show FakeRelay, openSettings;
+import 'screens_test.dart' show FakeRelay, openFolder, openSettings;
 
 /// The app's own font, Inter from `assets/fonts/inter/`, so a width here is a width on a phone: the test font draws wider.
 Future<void> loadInter() async {
@@ -25,7 +25,7 @@ void expectOneLine(WidgetTester tester, String text) {
 void main() {
   setUpAll(loadInter);
 
-  testWidgets('at 360 px wide, the large titles and the Settings switches show the whole name', (tester) async {
+  testWidgets('at 360 px wide, the large titles, the Home rows and the switches show the whole name', (tester) async {
     tester.view
       ..physicalSize = const Size(360, 800)
       ..devicePixelRatio = 1;
@@ -36,12 +36,27 @@ void main() {
       ..settings = const Settings(sending: true);
     await tester.pumpWidget(RelayApp(relay: relay));
     await tester.pumpAndSettle();
-    expectOneLine(tester, 'Notes');
-    expectOneLine(tester, 'No notes ·');
-    await openSettings(tester);
-    for (final title in ['Settings', 'Send my notes', 'Health', 'Pin notes to where I am']) {
+    for (final title in ['Home', 'Voice notes', 'On this phone', 'Calendar']) {
       expectOneLine(tester, title);
     }
+    await openSettings(tester);
+    for (final title in ['Settings', 'Pin notes to where I am']) {
+      expectOneLine(tester, title);
+    }
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await openFolder(tester, 'Voice notes');
+    expectOneLine(tester, 'No notes ·');
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await openFolder(tester, 'Sending');
+    for (final title in ['Sending', 'Send my notes', 'Where the phone sends']) {
+      expectOneLine(tester, title);
+    }
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await openFolder(tester, 'Location');
+    expectOneLine(tester, 'Location history');
     expect(tester.takeException(), isNull);
   });
 }

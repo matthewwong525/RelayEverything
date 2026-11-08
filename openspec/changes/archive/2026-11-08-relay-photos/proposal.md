@@ -1,6 +1,6 @@
 # Send photos from the phone to Relay Everything, for your AI to see
 
-**Status:** in-progress
+**Status:** shipped
 **Branch:** relay-feature-ideas
 **Open questions:** none
 
@@ -133,3 +133,5 @@ Non-goals: sending the old library, videos, captions or tags or text read from p
 - **2026-11-08** — Staging webhook check (8.4) passed with the merged branch (`0008_photos`) on staging: a space that had run the first `0007_photos` opened, a webhook ticked for *Photos* got `photo.created` with all 4,908 bytes of the test JPEG and its time and place, a webhook not ticked got no photo, and both cards read working.
 - **2026-11-08** — Assumed: a webhook card that skips a too-large photo says it stays in the person's Relay Everything space, not on the page, because the page shows only a count of photos; a note's file keeps main's *on your Relay Everything page*.
 - **2026-11-08** — Assumed: the phone key's label on *Add a device* and the draft privacy policy's list of what you send name photos, as the server's key text and `privacy.md` already do.
+- **2026-11-08** — Asked: Matthew chose to publish now and check photos from his iPhone on the live app after, so the phone build check (8.3) leaves the plan; the TestFlight and Android builds passed, and the phone tests pass.
+- **2026-11-08** — Archived for publish: built, reviewed three times, staging checks 8.2 and 8.4 passed; the phone check follows on the live app, by Matthew's choice.

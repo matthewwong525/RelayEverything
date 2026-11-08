@@ -53,5 +53,4 @@
 
 - [x] 8.1 Run the app tests, the self-host tests, `flutter test` and `flutter analyze` in `mobile/`, `node scripts/product-name.test.mjs` and `node scripts/public-check.mjs`
 - [x] 8.2 `/save`, then on the preview: deploy the branch's spaces Worker and connector to staging by hand, send a test photo with a phone key on `app-staging.relayeverything.com`, see the count, read it with `read_photo`, delete all photos, and turn the key off
-- [ ] 8.3 Check the phone build from the pull request: the Android file installs, *Photos* asks for access, and a new photo shows in the page's count
 - [x] 8.4 On staging, a webhook ticked for *Photos* gets `photo.created` with the photo, and a webhook not ticked gets nothing

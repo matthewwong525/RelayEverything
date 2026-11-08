@@ -70,6 +70,7 @@ Non-goals: building the apps less often; an Android device check; changing which
 - **2026-11-08** — Archived inside /ship and saved for the gate; the specs for app builds and the device check now hold this change.
 - **2026-11-08** — Took main with #66 (a Settings gear on Home): its `settings.yaml` stays as #66 wrote it, and the one-run tour runs it as its fourth flow.
 - **2026-11-08** — iPhone check on e2267fd (run 42503040787): Claude gave a verdict, works, for all 3 scenarios in 29 logged steps; the Swift tests passed on the second Mac in 13.5 min; the run took 31 min. The tour's `new-note` step failed once: Maestro tapped Search and the app did not open it, while the same flow passed on #66's head and on 9444076, so the check is run again. `scripts/device-check.mjs` said `failed` while the run still went, because `gh run watch` ended early: it now asks GitHub each 30 seconds for the run's status, and the wiki's workaround is gone. Took main with #70.
+- **2026-11-08** — iPhone check on 466baac (run 42505968746): works; all 4 tour steps passed in one Maestro run of 5 min 26 s; Claude gave a verdict for 3 scenarios in 18 logged steps; the Swift tests took 4 min 43 s on the second Mac; the script waited for the run's end; the run took 32.6 min. Booting during the build gave no gain: the build took 10-10.5 min with the boot beside it, against 3-6 min plus a 5-8 min boot after it on earlier runs, about 11 min either way, because the two share one Mac.
 
 ## Capabilities
 

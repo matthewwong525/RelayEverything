@@ -44,3 +44,11 @@ A delete made while the phone is offline, or while sending is off, SHALL wait on
 #### Scenario: Delete with sending off
 - **WHEN** the person deletes a sent note with sending off, then later turns sending on with Relay Everything
 - **THEN** the delete goes to the space first, and the note does not come back on this phone
+
+### Requirement: An open note's page closes when its note is gone
+
+When a note leaves the phone while its page is open, such as a voice note with no speech, the page SHALL close and show the page under it, and leaving SHALL keep nothing of that note.
+
+#### Scenario: A voice note with no speech
+- **WHEN** a voice note's page is open and the phone finds no speech in its recording
+- **THEN** the page closes, the page under it shows, and the app says it heard no speech

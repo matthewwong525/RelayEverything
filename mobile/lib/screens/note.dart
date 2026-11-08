@@ -42,6 +42,11 @@ class NoteScreen extends StatelessWidget {
           return ListView(padding: const EdgeInsets.fromLTRB(20, 4, 20, 30), children: [
             Text(_when(context, note), style: muted, textAlign: TextAlign.center),
             const SizedBox(height: 14),
+            // Words typed with a recording, such as a shortcut's label, show while its own words are written.
+            if (note.text.isNotEmpty && (note.writing || note.failed)) ...[
+              _Words(text: note.text),
+              const SizedBox(height: 14),
+            ],
             if (note.writing) ...[
               Text('Writing the words…', style: TextStyle(color: brand.muted)),
               const SizedBox(height: 8),

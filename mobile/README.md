@@ -24,8 +24,8 @@ Each permission is asked for only when you turn on its setting. With sending off
 
 ## Get the app
 
-- **Android:** download the newest `.apk` file from [Releases](https://github.com/matthewwong525/RelayEverything/releases/latest) and open it on your phone. Android asks once to allow installs from your browser.
-- **iPhone:** install the newest build from TestFlight, from the invite the owner sends you.
+- **Android:** download the `.apk` file from [the newest release](https://github.com/matthewwong525/RelayEverything/releases/latest) and open it on your phone. Android asks once to allow installs from your browser. Test builds from `main` are on [Releases](https://github.com/matthewwong525/RelayEverything/releases), marked *Pre-release*.
+- **iPhone:** install the newest build from TestFlight, from the invite the owner sends you. After the first App Store release, the App Store has it too.
 
 ## Connect it to a server
 
@@ -46,16 +46,40 @@ The key is kept in the iPhone Keychain or the Android Keystore, never in the app
 
 ### Builds on GitHub
 
-Each push that changes `mobile/` runs [`.github/workflows/mobile-ci.yml`](../.github/workflows/mobile-ci.yml): analyze and test, then:
+Each push that changes `mobile/` runs [`.github/workflows/mobile-ci.yml`](../.github/workflows/mobile-ci.yml). Its first job, `plan`, runs [`scripts/app-release.mjs`](../scripts/app-release.mjs) `version` to get the run's version and build number: you never edit the version in `pubspec.yaml`. Then it analyzes and tests, and builds both apps:
 
-- **Android** ([`mobile-android.yml`](../.github/workflows/mobile-android.yml)): on `main`, a release with a signed `.apk`, tagged `mobile-v<version>+<build>`; on any other branch, the `.apk` as a run artifact. It signs with the upload key in these repository secrets, or with a debug key when they are missing:
-  `RELAY_ANDROID_KEYSTORE_BASE64`, `RELAY_ANDROID_KEYSTORE_PASSWORD`, `RELAY_ANDROID_KEY_ALIAS`, `RELAY_ANDROID_KEY_PASSWORD`.
-- **iPhone** ([`mobile-ios.yml`](../.github/workflows/mobile-ios.yml)): on a Mac, fastlane signs the build with one saved Apple Distribution certificate and sends it to TestFlight. Each build gets the app's App Store profiles from Apple, and never makes a certificate. It needs a paid Apple Developer Program membership, the app's record in App Store Connect (bundle id `com.matthewwong525.relayApp`), and these secrets:
-  `ASC_ISSUER_ID`, `ASC_KEY_ID`, `ASC_KEY_P8` (the `.p8` file in base64), `APPLE_TEAM_ID`, and `IOS_DIST_CERT_P12` and `IOS_DIST_CERT_PASSWORD`, which [`scripts/ios-signing-cert.mjs`](../scripts/ios-signing-cert.mjs) makes. Until they are set, the iPhone job ends with a notice that names the missing secret and builds nothing.
+- **A branch or pull request builds and sends nothing.** The `.apk` is kept with the run, and the iPhone app is signed and checked, so a broken build shows before it lands.
+- **A push to `main` sends a beta.** TestFlight gets the iPhone build, and a *Pre-release* tagged `mobile-v<version>+<build>` gets the `.apk`. It is never the latest release. Only the newest change sends: when a newer commit on `main` changes `mobile/`, the older run sends nothing, as the newer run sends its own build. A beta's version is the newest release's with its last number one higher, such as `1.1.1` after `v1.1.0`, because Apple takes no new TestFlight build for a version that is already live. Before the first release, it is the version in `pubspec.yaml`.
+- **A tag `v<major>.<minor>.<patch>` on `main` releases the app.** See [Release the app](#release-the-app).
+
+One counter, the run number, numbers every build on every branch and tag, so each build is higher than all before it.
+
+- **Android** ([`mobile-android.yml`](../.github/workflows/mobile-android.yml)): signs with the upload key in these repository secrets:
+  `RELAY_ANDROID_KEYSTORE_BASE64`, `RELAY_ANDROID_KEYSTORE_PASSWORD`, `RELAY_ANDROID_KEY_ALIAS`, `RELAY_ANDROID_KEY_PASSWORD`. When they are missing, a branch or beta file is signed with a debug key, and a release stops with the names of the missing secrets. A file signed with a debug key can never update to a signed one.
+- **iPhone** ([`mobile-ios.yml`](../.github/workflows/mobile-ios.yml)): on a Mac, fastlane signs the build with one saved Apple Distribution certificate. Its `build` lane stops after the check of the speech parts; its `beta` lane also sends the build to TestFlight. Each build gets the app's App Store profiles from Apple, and never makes a certificate. It needs a paid Apple Developer Program membership, the app's record in App Store Connect (bundle id `com.matthewwong525.relayApp`), and these secrets:
+  `ASC_ISSUER_ID`, `ASC_KEY_ID`, `ASC_KEY_P8` (the `.p8` file in base64), `APPLE_TEAM_ID`, and `IOS_DIST_CERT_P12` and `IOS_DIST_CERT_PASSWORD`, which [`scripts/ios-signing-cert.mjs`](../scripts/ios-signing-cert.mjs) makes. Until they are set, the iPhone job ends with a notice that names the missing secrets and builds nothing; a release or a release check stops with those names instead.
 
 - **iPhone device check** ([`mobile-device-check.yml`](../.github/workflows/mobile-device-check.yml)): only on request, never on a push. It builds the app for the iPhone simulator on a Mac, opens it, runs a fixed tour of the timeline, a new note and Settings, and lets Claude try the change. You get a report, screenshots and a video. Start it with `/verify`, or put the label *check on iPhone* on a pull request. It needs no Apple key; Claude needs the secret `CLAUDE_CODE_OAUTH_TOKEN` (a Claude subscription token) or `ANTHROPIC_API_KEY`. See [the device check](../wiki/development/device-check.md).
 
 Never commit a key, a keystore, a `.p8` file or a signing profile.
+
+### Release the app
+
+1. **Before the first release, fill in the App Store page.** In App Store Connect, add the description, screenshots, support and privacy addresses, age rating and privacy answers, and put the final privacy policy at its address. Apple needs them for its first review. A release changes only the *What's New* text.
+2. **Check the steps with no release.** On GitHub, open *Actions*, then *Mobile CI*, then *Run workflow*, and tick `release_check`. Or run `gh workflow run mobile-ci.yml --ref main -f release_check=true`. Start it from `main` only: from a branch, it stops at once, because its build goes to TestFlight. The run does every step of a release with the next beta's version, and its iPhone build goes to TestFlight with the betas. But it sends nothing to App Store review, makes a draft GitHub release and deletes it, and marks no pull request.
+3. **Tag a commit on `main`**, such as `v1.1.0`. On GitHub, open *Releases*, then *Draft a new release*, type the new tag, pick `main`, and publish: the run then adds the `.apk` and the notes to that release, and if the run fails, delete the release. Or run `git tag v1.1.0 origin/main && git push origin v1.1.0`. The tag sets the version. A tag that is not on `main`, is not in this form, or is not higher than the last release stops the run at once, with the reason.
+
+The tag's run then:
+
+1. Runs the full test: the analyzer and the Flutter tests, both signed builds with the check of the speech parts, and the fixed tour of [the device check](../wiki/development/device-check.md) on an iPhone simulator, each step required, with no Claude. One failure stops the release before anything goes to a store.
+2. Writes the release notes with `app-release.mjs notes`: each pull request since the last `v*` tag that changed `mobile/`, grouped by its label (`enhancement` is *New*, `bug` is *Fixes*, the rest *Changes*). Changes to the server and the website are not listed.
+3. Sends the iPhone build to App Store review with the notes as *What's New* (fastlane's `submit` lane). The first version in the App Store gets no *What's New*, because Apple takes none for it. Apple puts it live as soon as it approves.
+4. Publishes the GitHub release *Relay Everything <version>* with the signed `.apk`, marked latest, so the website's *Android app* link opens it.
+5. Marks each listed pull request with the label *released* and one comment, with `app-release.mjs mark`.
+
+The job `release` can run again for the same tag: it does not send a version that is already in review or live, it edits the GitHub release, and it does not comment twice. To run a failed release again, use *Re-run failed jobs*, or re-run only the job `release`, never *Re-run all jobs*: that builds the iPhone app again with the same build number, and Apple refuses it.
+
+**Apple takes one version in review at a time.** A new tag while the last version is still in review stops at `submit` with Apple's state. Run the job `release` again when that review ends.
 
 ## Where the code is
 

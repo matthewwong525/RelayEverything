@@ -165,6 +165,23 @@ it("logs a note's files when their bytes are sealed, keeping every log entry and
   expect(all(space, "SELECT kind FROM relay_outbox WHERE seq > 6 ORDER BY seq").map(row => row.kind)).toEqual(["health", "location", "calendar", "calendar"]);
 });
 
+it("gives each note a time of its last change, empty for every note stored before, and keeps the log", () => {
+  const space = new DatabaseSync(":memory:");
+  space.exec("PRAGMA foreign_keys = ON");
+  const at = MIGRATIONS.findIndex(([name]) => name === "0008_note_edits");
+  for (const [, text] of MIGRATIONS.slice(0, at)) inTransaction(space, text);
+  space.exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-phone', 'Phone', 'rek:d-phone', '', 1, 'phone');
+    INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at) VALUES ('n-1', 'd-phone', 'typed', 'c-1', 'Hi.', 5, 5);`);
+  const before = all(space, "SELECT * FROM relay_outbox ORDER BY seq");
+  inTransaction(space, MIGRATIONS[at][1]);
+  expect(all(space, "SELECT id, text, edited_at FROM relay_notes")).toEqual([{ id: "n-1", text: "Hi.", edited_at: null }]);
+  expect(all(space, "SELECT * FROM relay_outbox ORDER BY seq")).toEqual(before);
+  space.exec("UPDATE relay_notes SET text = 'Hi again.', edited_at = 9 WHERE id = 'n-1'");
+  expect(all(space, "SELECT edited_at FROM relay_notes")).toEqual([{ edited_at: 9 }]);
+  // A change logs nothing by itself: PATCH notes logs its note.updated.
+  expect(all(space, "SELECT * FROM relay_outbox ORDER BY seq")).toEqual(before);
+});
+
 it("widens the directory's keys to API keys, keeping every key", () => {
   const d1 = new DatabaseSync(":memory:");
   d1.exec("PRAGMA foreign_keys = ON");

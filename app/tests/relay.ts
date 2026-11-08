@@ -163,21 +163,23 @@ beforeEach(async () => {
 export const env = (more: object = {}) =>
   fakeEnv({ DB: directoryDb.DB, SPACES: spaces.SPACES, RELAY_BUCKET: bucket, RELAY_WEBHOOKS: queue, ...more });
 
+const sendsJson = (method: string) => method === "POST" || method === "PATCH";
+
 /** The request a caller makes: its key or cookie in the headers. */
 export function request(who: Who, method: string, url: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
   if (who && "bearer" in who) headers.set("Authorization", `Bearer ${who.bearer}`);
   if (who && "cookie" in who) headers.set("Cookie", `__Host-relay_session=${who.cookie}`);
-  if (method === "POST" && !headers.has("Origin")) headers.set("Origin", new URL(url).origin);
+  if (sendsJson(method) && !headers.has("Origin")) headers.set("Origin", new URL(url).origin);
   return new Request(url, { ...init, method, headers });
 }
 const identityOf = (who: Who) => who && "kind" in who ? who : null;
 
-/** A Relay Everything route called as `who`: JSON for a POST, query fields otherwise; `more` adds bindings. */
+/** A Relay Everything route called as `who`: JSON for a POST or PATCH, query fields otherwise; `more` adds bindings. */
 export async function call(who: Who, method: string, route: string, input?: Record<string, unknown>, more?: object) {
-  const query = method !== "POST" && input ? `?${new URLSearchParams(input as Record<string, string>)}` : "";
+  const query = !sendsJson(method) && input ? `?${new URLSearchParams(input as Record<string, string>)}` : "";
   const response = await handleApp(request(who, method, `https://relay.example.com/apps/relay/api/${route}${query}`,
-    method === "POST" ? { headers: { "content-type": "application/json" }, body: JSON.stringify(input) } : {}), env(more), identityOf(who));
+    sendsJson(method) ? { headers: { "content-type": "application/json" }, body: JSON.stringify(input) } : {}), env(more), identityOf(who));
   return { status: response.status, json: await body(response) };
 }
 

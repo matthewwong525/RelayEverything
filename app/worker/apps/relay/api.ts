@@ -9,6 +9,7 @@ import { calendar } from "./calendar.ts";
 import { chatDelete, chatList, chatRead } from "./chat-read.ts";
 import { chats, chatSaves } from "./chats.ts";
 import { deviceAdd, deviceOff, devices } from "./device.ts";
+import { noteEdit } from "./edit-note.ts";
 import { key } from "./key.ts";
 import { notes } from "./notes.ts";
 import { health, locations } from "./samples.ts";
@@ -19,6 +20,7 @@ import { consume } from "./webhooks/send.ts";
 
 export const routes = new Map<string, Route>([
   ["POST notes", notes],
+  ["PATCH notes", noteEdit],
   ["POST attachments", attachmentAdd],
   ["POST health", health],
   ["POST locations", locations],

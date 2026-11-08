@@ -1,9 +1,11 @@
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../data/connection.dart' show defaultServer;
 import '../relay.dart';
+import 'back_to_notes.dart';
 
 /// Opens the camera and returns the code it read.
 typedef Scanner = Future<String?> Function(BuildContext context);
@@ -94,9 +96,12 @@ class _ConnectScreenState extends State<ConnectScreen> {
   Widget build(BuildContext context) {
     final error = TextStyle(color: Theme.of(context).colorScheme.error);
     return Scaffold(
-      appBar: AppBar(title: const Text('Where should the phone send?')),
+      appBar: AppBar(leading: const BackToNotes(), leadingWidth: backToNotesWidth,
+        title: const Text('Where should the phone send?')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         SegmentedButton<SendPlace>(
+          // Material's check mark is not a Cupertino icon; the filled segment shows the choice.
+          showSelectedIcon: false,
           segments: const [
             ButtonSegment(value: SendPlace.server, label: Text('Relay Everything')),
             ButtonSegment(value: SendPlace.webhook, label: Text('My own webhook')),
@@ -149,7 +154,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
   List<Widget> _server() => [
     const Text('Sign in to Relay Everything, then tap Connect. This phone gets its own key, which can send but not read.'),
     const SizedBox(height: 16),
-    FilledButton.icon(onPressed: _busy ? null : () => _signIn(defaultServer), icon: const Icon(Icons.login),
+    FilledButton.icon(onPressed: _busy ? null : () => _signIn(defaultServer), icon: const Icon(CupertinoIcons.arrow_right_square),
       label: Text(_busy ? 'Connecting…' : 'Sign in to connect')),
     TextButton(onPressed: _busy ? null : _otherServer, child: const Text('Use another server')),
     const SizedBox(height: 24),
@@ -157,7 +162,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
     const SizedBox(height: 8),
     const Text('Use a key from Add a device on your Relay Everything page. The page shows the key once, as a QR code.'),
     const SizedBox(height: 16),
-    OutlinedButton.icon(onPressed: _busy ? null : _scanned, icon: const Icon(Icons.qr_code_scanner), label: const Text('Scan the QR code')),
+    OutlinedButton.icon(onPressed: _busy ? null : _scanned, icon: const Icon(CupertinoIcons.qrcode_viewfinder), label: const Text('Scan the QR code')),
     const SizedBox(height: 24),
     TextField(controller: _code, minLines: 2, maxLines: 4,
       decoration: const InputDecoration(labelText: 'Or paste the key', border: OutlineInputBorder())),
@@ -179,7 +184,7 @@ class _ScanPageState extends State<_ScanPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Scan the QR code')),
+      appBar: AppBar(leading: const BackToNotes(), leadingWidth: backToNotesWidth, title: const Text('Scan the QR code')),
       body: MobileScanner(onDetect: (capture) {
         final code = capture.barcodes.map((barcode) => barcode.rawValue).whereType<String>().firstOrNull;
         if (code == null || _done) return;

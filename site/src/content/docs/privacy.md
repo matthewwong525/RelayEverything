@@ -33,7 +33,7 @@ With sending off, the app makes no network call, reads no health data and no cal
 Each person's data is in their own space: a separate store that holds only that person's notes, health, calendar events, places, chats, devices and webhooks. One shared list holds only who has an account, how they sign in, and a fingerprint of each key.
 
 - **You** see your own space on your Relay Everything page, after you sign in.
-- **Your devices** only add data to your space. A phone's key or a chat key can't read your notes, health, calendar or places back: [Keys](../api/keys/).
+- **Your devices** only add data to your space, and a phone changes only the notes it sent. A phone's key or a chat key can't read your notes, health, calendar or places back: [Keys](../api/keys/).
 - **Your AI apps** read only your space, and add notes to it, only after you connect them: [Connect your AI](../connections/connect-your-ai/).
 - **Your own scripts and services** read your space and add notes through the web API, only with an API key you made or after you connect them: [Connect a service](../api/connect-a-service/).
 - **Your webhooks** send only your data, to the addresses you add.

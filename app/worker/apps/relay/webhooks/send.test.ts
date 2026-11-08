@@ -267,6 +267,21 @@ it("still sends a note.updated row already waiting from before the server stoppe
   expect(webhook()).toMatchObject({ sent_seq: 2 });
 });
 
+it("sends a note changed on its phone as note.updated, after its note.created, with its latest words and files", async () => {
+  hook();
+  await note("note-0001");
+  at(NOW + MINUTE);
+  const file = { id: "file-pdf-0001", name: "list.pdf", type: "application/pdf", size: 3 };
+  await call(phone, "PATCH", "notes", { clientId: "note-0001", text: "# Switches\n- [ ] Order more", attachments: [file] });
+  expect(queue.sent).toEqual([wakeUp("hook-1"), wakeUp("hook-1")]);
+  await deliver(wakeUp("hook-1"));
+  expect(types()).toEqual(["note.created", "note.updated"]);
+  expect(bodies()[1].data.note).toMatchObject({ id: bodies()[0].data.note.id, text: "# Switches\n- [ ] Order more",
+    edited_at: new Date(NOW + MINUTE).toISOString(), attachments: [{ id: file.id, name: file.name, content_type: file.type, size: 3 }] });
+  expect(bodies()[1].data.note).not.toHaveProperty("audio");
+  expect(webhook()).toMatchObject({ sent_seq: 2 });
+});
+
 it("sends changed and removed calendar events only to a webhook that takes the calendar", async () => {
   hook("cal", { kinds: '["notes","calendar"]' });
   hook("health", { kinds: '["notes","health"]' });

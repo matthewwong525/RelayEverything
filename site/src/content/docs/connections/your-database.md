@@ -3,7 +3,7 @@ title: Your own database
 description: Add a webhook, and your Relay Everything server or your phone sends each new note, and the health, calendar and location you pick, to an address you own, in one signed format.
 ---
 
-A webhook copies what your Relay Everything server stores in your space to an address you own, such as a small receiver beside your database. Your server sends each new note there a few seconds after it gets it, then each of its files in a [`note.file`](#notefile) message. Health, calendar and location go only if you tick them.
+A webhook copies what your Relay Everything server stores in your space to an address you own, such as a small receiver beside your database. Your server sends each new note there a few seconds after it gets it, then each of its files in a [`note.file`](#notefile) message. When the phone changes a note, the note goes again as [`note.updated`](#noteupdated). Health, calendar and location go only if you tick them.
 
 Your data lives in your own space: one Durable Object with its own SQLite database, in the spaces Worker (`relay-everything-spaces`, or `<name>-spaces` on [your own server](../../start/run-your-own/)). The server's D1 database holds only the list of accounts: each person, their sign-ins and sessions, and a fingerprint of each key. Each webhook belongs to one person's space, and it sends only that person's data.
 
@@ -43,7 +43,7 @@ What you give up:
 - **Your Relay Everything page and your AI can not read it**, because none of it is on the server.
 - **A failing receiver holds back the rest.** The phone sends in order, so it keeps each item, and all after it, until your receiver answers `2xx`. Settings shows the last answer. It never drops an item for a `400`. Only a file your receiver refuses with `413` is dropped, and Settings names it.
 
-From the phone, `device.id` is the phone's own id, a UUID the app makes once. A note's `created_at` and the message's `timestamp` are when the phone kept it. Health samples and points are numbered on the phone, so save them by `device.id` and `id` together. A calendar event's `id` is made from the phone's id and the event's `key`, so each change of one event has the same `id`. A removed event from the phone has only its `key`, `id` and `start`.
+From the phone, `device.id` is the phone's own id, a UUID the app makes once. A note's `created_at` is the same as its `recorded_at`: the note's own time, which for a voice note is when it was recorded. Its `note.updated` has the same one. The message's `timestamp` is when the phone queued the message. Health samples and points are numbered on the phone, so save them by `device.id` and `id` together. A calendar event's `id` is made from the phone's id and the event's `key`, so each change of one event has the same `id`. A removed event from the phone has only its `key`, `id` and `start`.
 
 ## The message
 
@@ -63,7 +63,7 @@ Every message is a `POST` with a JSON body in one envelope:
 | `type` | When | `data` holds |
 |---|---|---|
 | `note.created` | A note reaches your server. | `note`, with its words, time, place, device, recording, and the names of its files |
-| `note.updated` | No longer sent. It once said a ring note got its place from a later location batch. | `note`, without `audio` |
+| `note.updated` | The phone that sent a note changes it. Always after the note's `note.created`. | `note`, with its latest words, without `audio` |
 | `health.samples` | A phone sends health samples. | `samples`: up to 500 |
 | `location.points` | A phone sends location points. | `points`: up to 500 |
 | `calendar.events` | A phone sends new, changed or removed calendar events. | `events`: up to 500, each with its `status` |
@@ -136,7 +136,31 @@ Files that your server stored before it sent `note.file` go once to each webhook
 
 ### `note.updated`
 
-Relay Everything no longer sends `note.updated`: it gives no note a place after the note arrives. The type stays in version 1, so a receiver that handles it keeps working. It held the same `note` as `note.created`, without `audio`. Update the note's row by its `id`.
+Relay Everything sends `note.updated` when the phone that sent a note changes the note's words or adds a file to it. Your server sends it to every active webhook, and the phone sends it to your own webhook. It always comes after the note's `note.created`. Each new file then comes in its own [`note.file`](#notefile).
+
+```json
+{
+  "version": 1,
+  "type": "note.updated",
+  "timestamp": "2026-11-04T15:20:00.000Z",
+  "data": {
+    "note": {
+      "id": "a0000000-0000-4000-8000-000000000002",
+      "source": "typed",
+      "text": "# Small things to buy\n- [x] Lemons\n- [ ] Green tea",
+      "recorded_at": "2026-11-04T14:01:00.000Z",
+      "created_at": "2026-11-04T14:01:02.000Z",
+      "device": { "id": "d0000000-0000-4000-8000-000000000001", "name": "Android phone" },
+      "place": null,
+      "edited_at": "2026-11-04T15:20:00.000Z"
+    }
+  }
+}
+```
+
+It holds the same `note` as `note.created`, with its latest words and without `audio`. `edited_at` is when the phone changed the note; an older `note.updated` has none. `attachments` lists all the note's files, as in `note.created`, and only a note with files has it. Update the note's row by its `id`, and keep its stored `audio`. A changed note has the same `id`, `recorded_at` and `created_at`.
+
+The words keep their styles as Markdown marks, such as `#` for a title, `- [ ]` and `- [x]` for a checklist, and `<u>…</u>` for underline. A receiver that ignores `note.updated` keeps working: it keeps the words from `note.created`.
 
 ### `health.samples`
 
@@ -260,7 +284,8 @@ CREATE TABLE relay_notes (
   lat double precision,
   lon double precision,
   place text,
-  audio bytea
+  audio bytea,
+  edited_at timestamptz
 );
 CREATE TABLE relay_note_attachments (
   id text PRIMARY KEY,

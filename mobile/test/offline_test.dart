@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:health/health.dart';
 import 'package:relay_app/app.dart';
@@ -12,7 +11,7 @@ import 'package:relay_app/sync/background.dart';
 import 'package:relay_app/voice/model.dart';
 
 import 'fakes.dart';
-import 'screens_test.dart' show holdNewNote, newNote, openSettings;
+import 'screens_test.dart' show holdNewNote, newNote, openSettings, type;
 
 /// Pumps, with real time between, until [done]: for file work and the model's checksum, which run outside the test's
 /// fake time.
@@ -81,9 +80,8 @@ void main() {
     // A note, pinned.
     await tester.tap(newNote);
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'Call the PCB fab about the flex stiffener');
-    await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await type(tester, 'Call the PCB fab about the flex stiffener');
+    await tester.pageBack();
     await tester.runAsync(pumpEventQueue);
     await tester.runAsync(relay.settled);
     await tester.pumpAndSettle();

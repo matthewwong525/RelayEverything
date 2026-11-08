@@ -513,6 +513,19 @@ void main() {
       expect([for (final request in server.requests) if (request.method == 'GET') request.url.path.split('/').last], ['key']);
     });
 
+    test('a note emptied before it went leaves the list and the outbox, and is never sent', () async {
+      final relay = controller();
+      await relay.load();
+      expect(await relay.connect(pageCode), isNull);
+      await relay.startSending(sendEarlier: false);
+      await relay.addNote('# Buy', id: 'n1', sendNow: false);
+      expect([relay.entries.length, relay.waiting], [1, 1]);
+      expect(await relay.dropEmptyNote('n1'), isTrue);
+      expect([relay.entries, relay.waiting], [isEmpty, 0]);
+      await relay.sync();
+      expect(server.routes, ['key']);
+    });
+
     test('connects with a key from the Relay Everything page, and sends it as Authorization: Bearer', () async {
       final relay = controller();
       await relay.load();
@@ -1302,6 +1315,22 @@ void main() {
         [{'id': uploads.first.headers['X-Attachment-Id'], 'name': 'old.pdf', 'type': 'application/pdf', 'size': 1}]);
       expect([for (final upload in uploads) upload.headers['X-Note-Client-Id']], [for (final note in notes) note['clientId']]);
       expect(relay.waiting, 0);
+    });
+
+    test('a change to a sent note sends its words, then its new files; past ten files it says so', () async {
+      final relay = withFiles();
+      await relay.load();
+      expect(await relay.connect(pageCode), isNull);
+      await relay.startSending(sendEarlier: false);
+      await relay.addNote('Desk lamp', id: 'n1', files: [for (var i = 0; i < 9; i++) picked('p$i.png', [i])]);
+      await relay.sync();
+      server.requests.clear();
+      final problem = await relay.editNote('n1', '# Desk lamp', files: [picked('a.pdf', [7]), picked('b.pdf', [8])]);
+      expect(problem, contains('1 file was not added'));
+      await relay.sync();
+      expect(server.routes, ['notes', 'attachments']);
+      expect([server.requests.first.method, jsonDecode(server.requests.first.body)['text']], ['PATCH', '# Desk lamp']);
+      expect([relay.entries.single.text, relay.entries.single.files.length, relay.waiting], ['# Desk lamp', 10, 0]);
     });
 
     test('opens a file with the phone, and says when it is gone or no app opens it', () async {

@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import '../brand.dart';
@@ -131,7 +132,7 @@ class SettingsScreen extends StatelessWidget {
                 if (sending) ListTile(
                   title: const Text('Where the phone sends'),
                   subtitle: Text(settings.place == SendPlace.webhook ? 'My own webhook' : 'Relay Everything'),
-                  trailing: const Icon(Icons.chevron_right),
+                  trailing: const Icon(CupertinoIcons.chevron_forward),
                   onTap: () => _choosePlace(context),
                 ),
                 if (sending && settings.place == SendPlace.webhook) ...[
@@ -148,7 +149,7 @@ class SettingsScreen extends StatelessWidget {
                   ListTile(
                     title: const Text('Server'),
                     subtitle: Text(relay.server ?? ''),
-                    trailing: const Icon(Icons.edit_outlined),
+                    trailing: const Icon(CupertinoIcons.pencil),
                     onTap: () => _editServer(context),
                   ),
                   ListTile(

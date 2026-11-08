@@ -13,17 +13,19 @@ export const SESSION_COOKIE = "__Host-relay_session";
 /** A browser keeps a `__Host-` cookie only from https, so a local run on http uses the plain name. */
 export const sessionCookie = (url: URL) => url.protocol === "https:" ? SESSION_COOKIE : "relay_session";
 
-/** A key's reach here is POST, plus `GET key`, which answers only its own name; `GET chats` shares an address with a
- *  send, so the method is checked too. An API key reads only on the connector's web API, so here it has `GET key`. */
+/** A key's reach is POST, a phone's `PATCH notes`, and `GET key`, which answers only its own name; `GET chats` shares
+ *  an address with a send, so the method is checked too. An API key reads only on the web API: here, `GET key`. */
 const REACH: Record<Reach, { routes: RegExp; refusal: string }> = {
   phone: { routes: /^\/apps\/relay\/api\/(?:notes|attachments|health|locations|calendar)$/, refusal: "A device key can only send to Relay Everything." },
   chats: { routes: /^\/apps\/relay\/api\/(?:chats|chat-saves)$/, refusal: "A chat key can only send chats." },
   api: { routes: /^$/, refusal: "An API key works only on the web API, at your AI connector's address under /v1/." },
 };
 const KEY_CHECK = "/apps/relay/api/key";
+const NOTE_EDIT = "/apps/relay/api/notes";
 
 /** True when a key of this reach may call the method on the address. */
 export function reaches(reach: Reach, method: string, pathname: string): boolean {
+  if (method === "PATCH") return reach === "phone" && pathname === NOTE_EDIT;
   return method === "GET" ? pathname === KEY_CHECK : method === "POST" && REACH[reach].routes.test(pathname);
 }
 

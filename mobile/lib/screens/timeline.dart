@@ -1,16 +1,17 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../brand.dart';
+import '../editor/markdown.dart' show plainText;
 import '../relay.dart';
-import 'compose.dart';
 import 'connect.dart' show Scanner;
 import 'days.dart';
 import 'hold_to_talk.dart';
-import 'note.dart';
+import 'note_editor.dart';
 import 'settings.dart';
 
 const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -38,7 +39,8 @@ Future<bool> _openInBrowser(Uri address) async {
 /// This phone's notes, newest first and grouped by day, as Apple Notes lists them: a large *Notes* title with the count
 /// and the sync state, the ⋯ menu, and at the bottom *Search* and the one main action, *New note*.
 class TimelineScreen extends StatefulWidget {
-  const TimelineScreen({super.key, required this.relay, this.scanner, this.opener, this.picker, this.voiceRequests});
+  const TimelineScreen({super.key, required this.relay, this.scanner, this.opener, this.picker, this.sharer,
+    this.voiceRequests});
 
   final Relay relay;
   /// The QR scanner the connect screen uses; a test passes its own.
@@ -47,6 +49,8 @@ class TimelineScreen extends StatefulWidget {
   final Opener? opener;
   /// The paperclip's picker; a test passes its own.
   final FilesPicker? picker;
+  /// A note's *Share*; a test passes its own.
+  final Sharer? sharer;
   /// *Start a voice note* from Shortcuts: each event starts one in the listening card.
   final Stream<void>? voiceRequests;
 
@@ -111,7 +115,8 @@ class _TimelineScreenState extends State<TimelineScreen> {
 
   void _open(Widget page) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
 
-  void _write() => _open(ComposeScreen(relay: relay, picker: widget.picker));
+  void _write([Entry? entry]) =>
+    _open(NoteEditor(entry: entry, relay: relay, picker: widget.picker, sharer: widget.sharer));
 
   void _settings() => _open(SettingsScreen(relay: relay, scanner: widget.scanner));
 
@@ -165,12 +170,12 @@ class _TimelineScreenState extends State<TimelineScreen> {
       expandedHeight: 140,
       actions: [
         _MoreMenu(items: [
-          ('Settings', Icons.settings_outlined, _settings),
-          if (settings.sending) ('Sync now', Icons.sync, relay.sync),
+          ('Settings', CupertinoIcons.gear, _settings),
+          if (settings.sending) ('Sync now', CupertinoIcons.arrow_2_circlepath, relay.sync),
           // Ring notes and recordings are on the Relay Everything page; nothing of this phone's goes there while it
           // sends to the person's own webhook.
           if (settings.sending && settings.place == SendPlace.server && server != null)
-            ('Open your Relay Everything page', Icons.open_in_new, () => _openPage(server)),
+            ('Open your Relay Everything page', CupertinoIcons.arrow_up_right_square, () => _openPage(server)),
         ]),
         const SizedBox(width: 8),
       ],
@@ -196,7 +201,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
             for (final (name, notes) in groupByDay(shown, DateTime.now()))
               _DayGroup(name: name, children: [
                 for (final entry in notes)
-                  _NoteRow(entry: entry, relay: relay, onTap: () => _open(NoteScreen(entry: entry, relay: relay))),
+                  _NoteRow(entry: entry, relay: relay, onTap: () => _write(entry)),
               ]),
           ]),
         ),
@@ -222,7 +227,7 @@ class _MoreMenu extends StatelessWidget {
       builder: (context, menu, _) => IconButton(
         tooltip: 'More',
         style: IconButton.styleFrom(backgroundColor: brand.card, foregroundColor: brand.ink),
-        icon: const Icon(Icons.more_horiz),
+        icon: const Icon(CupertinoIcons.ellipsis),
         onPressed: () => menu.isOpen ? menu.close() : menu.open(),
       ),
     );
@@ -380,7 +385,7 @@ class _DayGroup extends StatelessWidget {
 
 /// A note's first line: its words' first line, or what stands for it while it has no words.
 String noteTitle(Entry entry) {
-  final first = entry.text.trim().split('\n').first.trim();
+  final first = plainText(entry.text).trim().split('\n').first.trim();
   if (first.isNotEmpty) return first;
   if (entry.writing) return 'Writing the words…';
   if (entry.failed) return 'The words did not come';
@@ -390,7 +395,7 @@ String noteTitle(Entry entry) {
 
 /// What follows the time on a row: the rest of the words, or else the file names the title does not show.
 String _preview(Entry entry) {
-  final rest = entry.text.trim().split('\n').skip(1).map((line) => line.trim()).where((line) => line.isNotEmpty).join(' ');
+  final rest = plainText(entry.text).trim().split('\n').skip(1).map((line) => line.trim()).where((line) => line.isNotEmpty).join(' ');
   if (rest.isNotEmpty || entry.text.trim().isNotEmpty) return rest;
   return entry.files.skip(1).map((file) => file.name).join(', ');
 }
@@ -453,7 +458,7 @@ class _Thumbnail extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         child: Image.file(File(file.path), width: 48, height: 48, fit: BoxFit.cover, cacheWidth: 144,
           errorBuilder: (context, _, _) => Container(width: 48, height: 48, color: brand.accentSoft,
-            child: Icon(Icons.image_outlined, color: brand.muted))),
+            child: Icon(CupertinoIcons.photo, color: brand.muted))),
       ),
     );
   }
@@ -507,9 +512,9 @@ class _SearchField extends StatelessWidget {
           filled: true,
           fillColor: brand.card,
           contentPadding: EdgeInsets.zero,
-          prefixIcon: Icon(Icons.search, size: 20, color: brand.muted),
+          prefixIcon: Icon(CupertinoIcons.search, size: 20, color: brand.muted),
           suffixIcon: controller.text.isEmpty ? null : IconButton(tooltip: 'Clear', onPressed: controller.clear,
-            icon: Icon(Icons.cancel, size: 18, color: brand.muted)),
+            icon: Icon(CupertinoIcons.xmark_circle_fill, size: 18, color: brand.muted)),
           enabledBorder: border(),
           focusedBorder: border(BorderSide(color: brand.accentText, width: 2)),
         ),

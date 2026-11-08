@@ -14,9 +14,12 @@ export 'voice/model.dart' show ModelState, ModelProblem;
 
 /// One row of the timeline: a note typed or said on this phone.
 class Entry {
-  const Entry({required this.text, required this.at, this.place, this.sent = false, this.waiting = false, this.voice = false,
+  const Entry({this.id = '', required this.text, required this.at, this.place, this.sent = false, this.waiting = false, this.voice = false,
     this.writing = false, this.failed = false, this.recording, this.length, this.files = const []});
 
+  /// The phone's own id for the note: [Relay.editNote] takes it.
+  final String id;
+  /// The words, with their styles as Markdown marks: `plainText` gives them bare.
   final String text;
   final DateTime at;
   final String? place;
@@ -132,9 +135,17 @@ abstract class Relay extends ChangeNotifier {
   /// Forgets the key and turns sending off.
   Future<void> disconnect();
   Future<void> sync();
-  /// Keeps a note with words, files, or both. Returns the words to show for files left out, such as one over 25 MB,
-  /// or for a note with nothing in it; null when all of it was kept.
-  Future<String?> addNote(String text, {List<NewFile> files = const []});
+  /// Keeps a note with words, files, or both, as [id] when given. Returns the words to show for files left out, such
+  /// as one over 25 MB, or for a note with nothing in it; null when all of it was kept. With [sendNow] false it waits
+  /// for the next sync, as the editor saves while the person types.
+  Future<String?> addNote(String text, {List<NewFile> files = const [], String? id, bool sendNow = true});
+  /// Keeps the person's change to note [id]: its new words and files added. A sent note's change goes at the next sync,
+  /// and with [sendNow] at once. Returns the words to show for files left out; null when all of it was kept.
+  Future<String?> editNote(String id, String text, {List<NewFile> files = const [], bool sendNow = true});
+  /// Deletes note [id] from this phone, as Apple Notes does when you leave a note with no words: the editor calls it once
+  /// the words are blank. Any upload or change of it still waiting goes too, so it is never sent; a copy the server
+  /// took keeps its last words there. A note with a file or a recording stays: false then.
+  Future<bool> dropEmptyNote(String id);
   /// Opens a note's file in an app on the phone.
   Future<void> openFile(EntryFile file);
 

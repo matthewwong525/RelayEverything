@@ -51,7 +51,7 @@ function saveNote({ note: { id, source, text, recorded_at, created_at, device, p
   attachments.forEach(f => listed.run(f.id, id, f.name, f.content_type, f.size));
 }
 
-// One way to save each type this receiver knows.
+// One way to save each type this receiver knows. A note.updated holds a changed note's latest words.
 const handlers = {
   'note.created': saveNote,
   'note.updated': saveNote,

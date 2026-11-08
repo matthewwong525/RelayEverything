@@ -64,18 +64,18 @@ async function file(files: Files, db: Db, entry: Entry): Promise<Built> {
   return { message: noteFile(row, row.note_id, entry.logged_at), bytes };
 }
 
-/** A note alone; "skip" when it was deleted since. A `note.updated` row logged before the server stopped placing ring
- *  notes still sends. */
+/** A note alone, as it is now; "skip" when it was deleted since. A `note.updated` is a change from the phone that sent
+ *  it, or a ring note's place from before the server stopped placing them. */
 async function note(files: Files, db: Db, [entry]: Entry[]): Promise<Built> {
   if (entry.kind === "note.file") return file(files, db, entry);
   const row = await db.prepare(NOTE).bind(entry.ref).first<NoteRow>();
   if (!row) return "skip";
-  if (entry.kind === "note.updated") return noteUpdated(row, entry.logged_at);
-  const audio = await audioOf(files, row);
-  if (audio === "wait") return "wait";
   // The message names the files and never waits for their bytes, as it carries none.
   const { results } = await db.prepare("SELECT id, name, content_type, size FROM relay_attachments WHERE note_id = ? ORDER BY rowid")
     .bind(row.id).all<AttachmentRow>();
+  if (entry.kind === "note.updated") return noteUpdated(row, entry.logged_at, results);
+  const audio = await audioOf(files, row);
+  if (audio === "wait") return "wait";
   return noteCreated(row, audio, entry.logged_at, results);
 }
 

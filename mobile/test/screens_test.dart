@@ -1,15 +1,19 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart' show CustomSemanticsAction, RenderParagraph, SemanticsAction;
+import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/app.dart';
 import 'package:relay_app/brand.dart';
+import 'package:relay_app/editor/markdown.dart';
 import 'package:relay_app/relay.dart';
-import 'package:relay_app/screens/compose.dart';
 import 'package:relay_app/screens/connect.dart';
 import 'package:relay_app/screens/hold_to_talk.dart';
-import 'package:relay_app/screens/note.dart';
+import 'package:relay_app/screens/note_bars.dart';
+import 'package:relay_app/screens/note_editor.dart';
 import 'package:relay_app/screens/settings.dart' show SettingsScreen, problemLine, sentLine;
 
 class FakeRelay extends Relay {
@@ -125,11 +129,40 @@ class FakeRelay extends Relay {
   }
 
   @override Future<void> sync() async => calls.add('sync');
+
+  /// While set, each add and change waits for it, as a slow phone store does.
+  Completer<void>? slow;
+  /// What [addNote] answers when it keeps nothing, such as for a file over 25 MB alone.
+  String? keepsNothing;
+
   @override
-  Future<String?> addNote(String text, {List<NewFile> files = const []}) async {
-    calls.add('note $text${files.isEmpty ? '' : ' + ${[for (final file in files) file.name].join(', ')}'}');
+  Future<String?> addNote(String text, {List<NewFile> files = const [], String? id, bool sendNow = true}) async {
+    calls.add('note $text${_names(files)}${sendNow ? '' : ' (later)'}');
+    await slow?.future;
+    if (keepsNothing != null) return keepsNothing;
+    entries = [Entry(id: id ?? '', text: text, at: DateTime.now()), ...entries];
+    notifyListeners();
     return null;
   }
+
+  @override
+  Future<String?> editNote(String id, String text, {List<NewFile> files = const [], bool sendNow = true}) async {
+    calls.add('edit $text${_names(files)}${sendNow ? '' : ' (later)'}');
+    await slow?.future;
+    return null;
+  }
+
+  @override
+  Future<bool> dropEmptyNote(String id) async {
+    calls.add('drop $id');
+    final kept = entries.where((entry) => entry.id != id || entry.files.isNotEmpty || entry.voice).toList();
+    if (kept.length == entries.length) return false;
+    entries = kept;
+    notifyListeners();
+    return true;
+  }
+
+  static String _names(List<NewFile> files) => files.isEmpty ? '' : ' + ${[for (final file in files) file.name].join(', ')}';
 
   @override Future<void> openFile(EntryFile file) async => calls.add('open ${file.name}');
 
@@ -236,6 +269,23 @@ Future<void> tapAnywhere(WidgetTester tester) async {
   return ((box.decoration as ShapeDecoration).color, ink);
 }
 
+/// The note page's editor.
+QuillController quill(WidgetTester tester) => tester.widget<QuillEditor>(find.byType(QuillEditor)).controller;
+
+/// The note page's words as it keeps them.
+String markdownOf(WidgetTester tester) => deltaToMarkdown(quill(tester).document.toDelta());
+
+/// Whether the note page has the keyboard up.
+bool editorFocused(WidgetTester tester) => tester.widget<QuillEditor>(find.byType(QuillEditor)).focusNode.hasFocus;
+
+/// Types [words] at the cursor, as the keyboard does.
+Future<void> type(WidgetTester tester, String words) async {
+  final controller = quill(tester);
+  final at = controller.selection.baseOffset;
+  controller.replaceText(at, 0, words, TextSelection.collapsed(offset: at + words.length));
+  await tester.pump();
+}
+
 void main() {
   late FakeRelay relay;
   setUp(() => relay = FakeRelay());
@@ -275,11 +325,10 @@ void main() {
     expect(find.text('Notes stay on this phone until you turn on sending in Settings.'), findsOneWidget);
     await tester.tap(newNote);
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'Buy milk');
-    await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await type(tester, 'Buy milk');
+    await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(relay.calls, ['note Buy milk']);
+    expect(relay.calls, ['note # Buy milk']);
     relay
       ..entries = [Entry(text: 'Buy milk', at: now, place: 'Pinned')]
       ..changed();
@@ -491,6 +540,17 @@ void main() {
     expect([opened, relay.calls], [hasLength(2), ['sync']]);
   });
 
+  testWidgets('lists a note by its words with no marks, and search skips the marks too', (tester) async {
+    relay.entries = [Entry(text: '# Shop\n- [ ] Eggs\n* **Milk**', at: now)];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    expect(find.text('Shop'), findsOneWidget);
+    expect(find.textContaining('Eggs Milk'), findsOneWidget);
+    expect(find.textContaining('#'), findsNothing);
+    await tester.enterText(find.byType(TextField), '# shop');
+    await tester.pump();
+    expect(find.text('Shop'), findsNothing);
+  });
+
   testWidgets('groups notes by day, newest first, under Today, Yesterday and Previous 7 days', (tester) async {
     relay.entries = [
       Entry(text: 'Ask Sam if the trip moves', at: now),
@@ -594,66 +654,268 @@ void main() {
     expect([find.text('Syncing').evaluate().length, tester.hasRunningAnimations], [1, false]);
   });
 
-  testWidgets('saves a typed note once it has words', (tester) async {
-    await tester.pumpWidget(RelayApp(relay: relay));
-    await tester.tap(newNote);
-    await tester.pumpAndSettle();
-    final save = find.widgetWithText(FilledButton, 'Save');
-    expect(tester.widget<FilledButton>(save).onPressed, isNull);
-    await tester.enterText(find.byType(TextField), 'Buy milk');
-    await tester.pump();
-    await tester.tap(save);
-    await tester.pumpAndSettle();
-    expect(relay.calls, ['note Buy milk']);
-    expect(find.byType(ComposeScreen), findsNothing);
-    expect(newNote, findsOneWidget);
-  });
-
-  testWidgets('the New note page draws the first line bold and keeps the words as typed', (tester) async {
-    await tester.pumpWidget(RelayApp(relay: relay));
-    await tester.tap(newNote);
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'Ideas for the birthday\nthe pottery class');
-    await tester.pump();
-    final field = tester.widget<TextField>(find.byType(TextField));
-    final span = field.controller!.buildTextSpan(context: tester.element(find.byType(TextField)), withComposing: false);
-    expect((span.children!.first as TextSpan).style?.fontWeight, FontWeight.w700);
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-    await tester.pumpAndSettle();
-    expect(relay.calls, ['note Ideas for the birthday\nthe pottery class']);
-  });
-
-  group('the New note page keeps the first line bold while the keyboard composes a word', () {
-    /// Each piece of text in [span], and whether it is bold and underlined.
-    List<(String, bool, bool)> runs(TextSpan span, [TextStyle inherited = const TextStyle()]) {
-      final style = inherited.merge(span.style);
-      return [
-        if (span.text != null) (span.text!, style.fontWeight == FontWeight.w700, style.decoration == TextDecoration.underline),
-        for (final child in span.children ?? const <InlineSpan>[]) ...runs(child as TextSpan, style),
-      ];
-    }
-
-    Future<List<(String, bool, bool)>> composing(WidgetTester tester, TextRange range) async {
+  group('the note page', () {
+    testWidgets('a new note opens with the keyboard up and a Title line, and leaving keeps it with no Save', (tester) async {
       await tester.pumpWidget(RelayApp(relay: relay));
       await tester.tap(newNote);
       await tester.pumpAndSettle();
-      final controller = tester.widget<TextField>(find.byType(TextField)).controller!;
-      controller.value = TextEditingValue(text: 'Ideas for the birthday\nthe pottery class',
-        selection: TextSelection.collapsed(offset: range.end), composing: range);
-      await tester.pump();
-      return runs(controller.buildTextSpan(context: tester.element(find.byType(TextField)), withComposing: true));
-    }
-
-    testWidgets('a word in the first line', (tester) async {
-      expect(await composing(tester, const TextRange(start: 10, end: 13)), [
-        ('Ideas for ', true, false), ('the', true, true), (' birthday', true, false), ('\nthe pottery class', false, false),
-      ]);
+      expect(find.text('Save'), findsNothing);
+      expect(editorFocused(tester), isTrue);
+      expect(quill(tester).document.toDelta().toJson(), [{'insert': '\n', 'attributes': {'header': 1}}]);
+      await type(tester, 'Buy milk');
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['note # Buy milk']);
+      expect(find.byType(NoteEditor), findsNothing);
     });
 
-    testWidgets('a range across the line break', (tester) async {
-      expect(await composing(tester, const TextRange(start: 19, end: 26)), [
-        ('Ideas for the birth', true, false), ('day', true, true), ('\nthe', false, true), (' pottery class', false, false),
-      ]);
+    testWidgets('an empty new note adds nothing', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.tap(newNote);
+      await tester.pumpAndSettle();
+      await type(tester, '   ');
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, isEmpty);
+    });
+
+    testWidgets('a new note typed, kept on a pause, then emptied is deleted on leave, and its blank words never go', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.tap(newNote);
+      await tester.pumpAndSettle();
+      await type(tester, 'Buy');
+      await tester.pump(const Duration(seconds: 2));
+      expect(relay.calls, ['note # Buy (later)']);
+      final id = relay.entries.single.id;
+      quill(tester).replaceText(0, 3, '', const TextSelection.collapsed(offset: 0));
+      await tester.pump(const Duration(seconds: 2));
+      expect(relay.calls, ['note # Buy (later)']);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['note # Buy (later)', 'drop $id']);
+      expect([relay.entries, find.text('Buy').evaluate()], [isEmpty, isEmpty]);
+    });
+
+    testWidgets('an old note emptied is deleted on leave', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now), Entry(id: 'n2', text: 'Call Sam', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.tap(find.text('Buy milk'));
+      await tester.pumpAndSettle();
+      // With the keyboard down a change is kept at once: blank words are not.
+      quill(tester).replaceText(0, 8, '', const TextSelection.collapsed(offset: 0));
+      await tester.pump();
+      expect(relay.calls, isEmpty);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['drop n1']);
+      expect([find.text('Buy milk'), find.text('Call Sam')], [findsNothing, findsOneWidget]);
+    });
+
+    testWidgets('a voice note emptied keeps its recording, with no words', (tester) async {
+      relay.entries = [Entry(id: 'v1', text: 'Hello there', at: now, voice: true, recording: 'voice/a.wav')];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.tap(find.text('Hello there'));
+      await tester.pumpAndSettle();
+      quill(tester).replaceText(0, 11, '', const TextSelection.collapsed(offset: 0));
+      await tester.pump();
+      expect(relay.calls, ['edit ']);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect([relay.calls, relay.entries.length], [['edit '], 1]);
+    });
+
+    testWidgets('typing keeps the words on a pause without sending, and leaving sends them', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.tap(newNote);
+      await tester.pumpAndSettle();
+      await type(tester, 'Buy');
+      await tester.pump(const Duration(seconds: 1));
+      expect(relay.calls, isEmpty);
+      await tester.pump(const Duration(seconds: 1));
+      expect(relay.calls, ['note # Buy (later)']);
+      await type(tester, ' milk');
+      await tester.pump(const Duration(seconds: 2));
+      expect(relay.calls, ['note # Buy (later)', 'edit # Buy milk (later)']);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['note # Buy (later)', 'edit # Buy milk (later)', 'sync']);
+    });
+
+    testWidgets('an add that kept nothing is tried again with the words typed after it', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay, picker: ({required photos}) async =>
+        [const NewFile(path: '/picked/big.mov', name: 'big.mov', size: 30 << 20)]));
+      await tester.tap(newNote);
+      await tester.pumpAndSettle();
+      relay.keepsNothing = 'big.mov is over 25 MB, so it was not added. Give the note words or a file.';
+      await tester.tap(find.byTooltip('Attach'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Files'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['note  + big.mov (later)']);
+      expect(find.textContaining('over 25 MB'), findsOneWidget);
+      relay.keepsNothing = null;
+      await type(tester, 'Buy milk');
+      await tester.pump(const Duration(seconds: 2));
+      await type(tester, ' and eggs');
+      await tester.pump(const Duration(seconds: 2));
+      expect(relay.calls, ['note  + big.mov (later)', 'note # Buy milk (later)', 'edit # Buy milk and eggs (later)']);
+    });
+
+    testWidgets('leaving sends only after the save still being written', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.tap(find.text('Buy milk'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(QuillEditor));
+      await tester.pump();
+      quill(tester).updateSelection(const TextSelection.collapsed(offset: 8), ChangeSource.local);
+      relay.slow = Completer();
+      await type(tester, ' now');
+      await tester.pump(const Duration(seconds: 2));
+      expect(relay.calls, ['edit # Buy milk now (later)']);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['edit # Buy milk now (later)']);
+      relay.slow!.complete();
+      await tester.pump();
+      expect(relay.calls, ['edit # Buy milk now (later)', 'sync']);
+    });
+
+    testWidgets('an old note opened and left is not written back', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Buy milk\n* eggs', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.tap(find.text('Buy milk'));
+      await tester.pumpAndSettle();
+      expect(editorFocused(tester), isFalse);
+      expect(find.byType(ReadingBar), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, isEmpty);
+    });
+
+    testWidgets('a fixed word is kept, and the list shows it', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.tap(find.text('Buy milk'));
+      await tester.pumpAndSettle();
+      quill(tester).replaceText(4, 4, 'oat milk', const TextSelection.collapsed(offset: 12));
+      await tester.pump();
+      // With the keyboard down a change is kept and sent at once.
+      expect(relay.calls, ['edit # Buy oat milk']);
+      relay
+        ..entries = [Entry(id: 'n1', text: '# Buy oat milk', at: now)]
+        ..changed();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['edit # Buy oat milk']);
+      expect(find.text('Buy oat milk'), findsOneWidget);
+    });
+
+    testWidgets('Done closes the keyboard and shows the reading bar; compose opens a new note', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.tap(newNote);
+      await tester.pumpAndSettle();
+      expect([find.byType(FloatingToolBar), find.byTooltip('Done')], everyElement(findsOneWidget));
+      await type(tester, 'Ideas');
+      await tester.tap(find.byTooltip('Done'));
+      await tester.pumpAndSettle();
+      expect(editorFocused(tester), isFalse);
+      expect([find.byType(FloatingToolBar), find.byTooltip('Done')], everyElement(findsNothing));
+      expect(find.byType(ReadingBar), findsOneWidget);
+      expect(relay.calls, ['note # Ideas']);
+      await tester.tap(find.byTooltip('New note'));
+      await tester.pumpAndSettle();
+      expect(find.byType(NoteEditor), findsOneWidget);
+      expect(quill(tester).document.toPlainText(), '\n');
+      expect(editorFocused(tester), isTrue);
+    });
+
+    testWidgets('Heading styles only the line with the cursor, and Bold only the words picked', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Shop\nEggs and milk', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.tap(find.text('Shop'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(QuillEditor));
+      await tester.pump();
+      quill(tester).updateSelection(const TextSelection.collapsed(offset: 7), ChangeSource.local);
+      await tester.tap(find.byTooltip('Text styles'));
+      await tester.pumpAndSettle();
+      expect(find.byType(FormatSheet), findsOneWidget);
+      await tester.tap(find.text('Heading'));
+      await tester.pump();
+      quill(tester).updateSelection(const TextSelection(baseOffset: 5, extentOffset: 9), ChangeSource.local);
+      await tester.tap(find.byTooltip('Bold'));
+      await tester.pump();
+      expect(markdownOf(tester), '# Shop\n## **Eggs** and milk');
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
+      expect(find.byType(FormatSheet), findsNothing);
+      expect(find.byType(FloatingToolBar), findsOneWidget);
+    });
+
+    testWidgets('Return on an empty list line ends the list', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Shop\n* Eggs', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.tap(find.text('Shop'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(QuillEditor));
+      await tester.pump();
+      quill(tester).updateSelection(const TextSelection.collapsed(offset: 9), ChangeSource.local);
+      await type(tester, '\n');
+      expect(markdownOf(tester), '# Shop\n* Eggs\n* ');
+      await type(tester, '\n');
+      expect(markdownOf(tester), '# Shop\n* Eggs\n');
+    });
+
+    testWidgets('a checklist circle ticks with one tap while reading and is kept at once', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Shop\n- [ ] Eggs', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.tap(find.text('Shop'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(CupertinoIcons.circle));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(CupertinoIcons.checkmark_circle_fill), findsOneWidget);
+      expect(relay.calls, ['edit # Shop\n- [x] Eggs']);
+    });
+
+    testWidgets('Checklist while reading adds an item at the end and brings the keyboard up', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Shop', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.tap(find.text('Shop'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Checklist'));
+      await tester.pumpAndSettle();
+      expect(editorFocused(tester), isTrue);
+      await type(tester, 'Eggs');
+      expect(markdownOf(tester), '# Shop\n- [ ] Eggs');
+    });
+
+    testWidgets('Share gives the plain words, and the ⋯ menu copies them and plays a voice note', (tester) async {
+      final shared = <String>[];
+      final copied = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') copied.add((call.arguments as Map)['text'] as String);
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+      relay.entries = [Entry(id: 'n1', text: 'Shop\n- [ ] **Eggs**', at: now, voice: true, recording: 'voice/a.wav')];
+      await tester.pumpWidget(RelayApp(relay: relay, sharer: (text) async => shared.add(text)));
+      await tester.tap(find.text('Shop'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Share'));
+      await tester.pump();
+      expect(shared, ['Shop\nEggs']);
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Copy'));
+      await tester.pumpAndSettle();
+      expect(copied, ['Shop\nEggs']);
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Play'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['play voice/a.wav']);
     });
   });
 
@@ -886,7 +1148,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       await tester.pump();
       expect(relay.calls, ['voice start']);
-      expect(find.descendant(of: newNote, matching: find.byIcon(Icons.mic)), findsOneWidget);
+      expect(find.descendant(of: newNote, matching: find.byIcon(CupertinoIcons.mic_fill)), findsOneWidget);
       expect(find.text('Listening'), findsOneWidget);
       expect(find.text('Tap anywhere to save.'), findsOneWidget);
       await gesture.up();
@@ -895,7 +1157,7 @@ void main() {
       expect(find.text('Listening'), findsOneWidget);
       await tapAnywhere(tester);
       expect(relay.calls, ['voice start', 'voice end']);
-      expect([find.text('Listening'), find.byType(ComposeScreen)], [findsNothing, findsNothing]);
+      expect([find.text('Listening'), find.byType(NoteEditor)], [findsNothing, findsNothing]);
     });
 
     testWidgets('a voice note and Listening wear the spark color; a typed note wears accent soft', (tester) async {
@@ -914,7 +1176,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       await gesture.up();
       await tester.pumpAndSettle();
-      expect(find.byType(ComposeScreen), findsOneWidget);
+      expect(find.byType(NoteEditor), findsOneWidget);
       expect(relay.calls, isEmpty);
     });
 
@@ -963,7 +1225,7 @@ void main() {
       expect(find.text('Play'), findsNothing);
       await tester.tap(find.text('Ask the fab if the flex stiffener can be 0.2 mm'));
       await tester.pumpAndSettle();
-      expect(find.byType(NoteScreen), findsOneWidget);
+      expect(find.byType(NoteEditor), findsOneWidget);
       await tester.tap(find.text('Play'));
       expect(relay.calls, ['play voice/a.wav']);
       await tester.pageBack();
@@ -1023,7 +1285,7 @@ void main() {
       await tester.pumpWidget(RelayApp(relay: relay));
       tester.semantics.tap(find.semantics.byLabel('New note'));
       await tester.pumpAndSettle();
-      expect(find.byType(ComposeScreen), findsOneWidget);
+      expect(find.byType(NoteEditor), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
       tester.semantics.performAction(find.semantics.byLabel('New note'), SemanticsAction.customAction,
@@ -1111,40 +1373,35 @@ void main() {
   });
 
   group('files', () {
-    testWidgets('the paperclip adds photos and files as chips: one too big is left out, a chip removes, and Save keeps them',
-        (tester) async {
+    testWidgets('the paperclip adds photos and files to a new note and to an old one', (tester) async {
       final picks = <bool>[];
       Future<List<NewFile>> picker({required bool photos}) async {
         picks.add(photos);
         return photos
           ? [const NewFile(path: '/picked/a.jpg', name: 'receipt.jpg', size: 1258291)]
-          : [const NewFile(path: '/picked/b.pdf', name: 'warranty.pdf', size: 245760),
-              const NewFile(path: '/picked/c.mov', name: 'video.mov', size: 41943040)];
+          : [const NewFile(path: '/picked/b.pdf', name: 'warranty.pdf', size: 245760)];
       }
+      relay.entries = [Entry(id: 'n1', text: 'Desk lamp', at: now)];
       await tester.pumpWidget(RelayApp(relay: relay, picker: picker));
       await tester.tap(newNote);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Add photo or file'));
+      await type(tester, 'Receipt');
+      await tester.tap(find.byTooltip('Attach'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Photos'));
       await tester.pumpAndSettle();
-      expect(find.text('receipt.jpg · 1.2 MB'), findsOneWidget);
-      // A note can be files alone.
-      expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Save')).onPressed, isNotNull);
-      await tester.tap(find.text('Add photo or file'));
+      expect(relay.calls.single, startsWith('note # Receipt + receipt.jpg'));
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      relay.calls.clear();
+      await tester.tap(find.text('Desk lamp'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Attach'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Files'));
       await tester.pumpAndSettle();
-      expect(find.text('warranty.pdf · 240 KB'), findsOneWidget);
-      expect(find.byTooltip('Remove video.mov'), findsNothing);
-      expect(find.text('video.mov is over 25 MB, so it was not added.'), findsOneWidget);
-      await tester.tap(find.byTooltip('Remove receipt.jpg'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('receipt.jpg'), findsNothing);
-      await tester.enterText(find.byType(TextField), 'Receipt for the desk lamp');
-      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-      await tester.pumpAndSettle();
-      expect(relay.calls, ['note Receipt for the desk lamp + warranty.pdf']);
+      // The old note's words are unchanged, so only the file goes with them.
+      expect(relay.calls, ['edit Desk lamp + warranty.pdf']);
       expect(picks, [true, false]);
     });
 

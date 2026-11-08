@@ -63,7 +63,9 @@ class WebhookClient implements Outbound {
   Map<String, dynamic>? message(OutboxItem item, [List<int>? bytes]) {
     final body = item.body;
     final (String type, Map<String, dynamic> data) = switch (item.route) {
-      'notes' => ('note.created', {'note': _note(body, item.createdAt)}),
+      'notes' => ('note.created', {'note': _note(body)}),
+      noteUpdate => ('note.updated', {'note': _note(body)
+        ..remove('audio')..['edited_at'] = _iso(body['editedAt'] ?? item.createdAt.millisecondsSinceEpoch)}),
       'attachment' => ('note.file', {'note_id': body['noteClientId'], 'file': {'id': body['id'], 'name': body['name'],
         'content_type': _type(body['type']), 'size': bytes!.length, 'base64': base64.encode(bytes)}}),
       'health' => ('health.samples', {'samples': [for (final sample in body['samples'] as List) _sample(sample as Map)]}),
@@ -78,11 +80,13 @@ class WebhookClient implements Outbound {
     return {'version': 1, 'type': type, 'timestamp': _iso(item.createdAt.millisecondsSinceEpoch), 'data': data};
   }
 
-  Map<String, dynamic> _note(Map<String, dynamic> body, DateTime queued) {
+  /// A note as `note.created` and `note.updated` both carry it. `created_at` is when the phone kept the note, as the
+  /// phone keeps no time it was first queued, so a change carries the same `created_at` as the note did.
+  Map<String, dynamic> _note(Map<String, dynamic> body) {
     final files = body['attachments'] as List?;
     return {
       'id': body['clientId'], 'source': 'typed', 'text': body['text'], 'recorded_at': _iso(body['createdAt']),
-      'created_at': _iso(queued.millisecondsSinceEpoch), 'device': _device,
+      'created_at': _iso(body['createdAt']), 'device': _device,
       'place': body['lat'] == null ? null
         : {'lat': body['lat'], 'lon': body['lon'], 'accuracy': body['accuracy'], 'name': body['place'], 'from': 'phone'},
       'audio': null,

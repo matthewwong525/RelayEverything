@@ -44,7 +44,7 @@ Anyone can run Relay Everything in their own Cloudflare account: [`self-host/SET
 - **A new Relay Everything binding goes in the install too.** Add it to [`self-host/wrangler.template.jsonc`](../self-host/wrangler.template.jsonc) beside [`app/wrangler.jsonc`](../app/wrangler.jsonc); [`bindings.test.mjs`](../self-host/bindings.test.mjs) fails, by name, on one the install lacks, or else every install breaks at its next update.
 - **A Relay Everything migration reads only `relay_` tables.** An install applies every migration, so WongStack's tables are there but empty.
 - **Relay Everything has no end-to-end encryption.** Data lives on a Relay Everything server or only on the phone. A person who wants more control runs their own server.
-- **A device key only adds data.** It reads nothing on any server, so a person's data stays theirs: [Keys](https://relayeverything.com/api/keys/).
+- **A device key only adds data**, and a phone's key changes only the notes that phone sent. It reads nothing on any server, so a person's data stays theirs: [Keys](https://relayeverything.com/api/keys/).
 
 ## Pull requests from outside
 

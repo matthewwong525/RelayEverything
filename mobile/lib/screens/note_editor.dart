@@ -124,8 +124,13 @@ class _NoteEditorState extends State<NoteEditor> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _messenger = ScaffoldMessenger.maybeOf(context);
-    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
-    if (keyboard > 100) _keyboard = keyboard;
+    _measureKeyboard(MediaQuery.viewInsetsOf(context).bottom);
+  }
+
+  /// The Format panel takes the keyboard's height. Only a keyboard up for the cursor counts: while it slides down for
+  /// the panel, each frame's height is part of the way.
+  void _measureKeyboard(double inset) {
+    if (_focus.hasFocus && inset > 100) _keyboard = inset;
   }
 
   @override
@@ -290,8 +295,7 @@ class _NoteEditorState extends State<NoteEditor> {
   Widget build(BuildContext context) {
     final brand = brandOf(context);
     final editing = _focus.hasFocus || _formatting;
-    final inset = MediaQuery.viewInsetsOf(context).bottom;
-    if (inset > 100) _keyboard = inset;
+    _measureKeyboard(MediaQuery.viewInsetsOf(context).bottom);
     return Scaffold(
       appBar: AppBar(leading: BackTo(widget.back), leadingWidth: BackTo.widthOf(widget.back), actions: [
         ButtonPill(children: [

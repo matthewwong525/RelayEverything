@@ -109,10 +109,10 @@ class FormatSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = brandOf(context);
-    final header = controller.getSelectionStyle().attributes[Attribute.header.key]?.value;
-    final mono = _has(Attribute.codeBlock);
+    // Read on each draw, inside the builder below, so a style tap lights its chip at once.
     Widget lineChip(String label, Attribute? style) {
-      final on = !mono && header == style?.value;
+      final header = controller.getSelectionStyle().attributes[Attribute.header.key]?.value;
+      final on = !_has(Attribute.codeBlock) && header == style?.value;
       return ChoiceChip(label: Text(label), selected: on, showCheckmark: false, onSelected: (_) => _line(style),
         selectedColor: brand.accentSoft);
     }
@@ -137,7 +137,8 @@ class FormatSheet extends StatelessWidget {
               ]),
               Wrap(spacing: 8, runSpacing: 8, children: [
                 for (final (label, style) in _lineStyles) lineChip(label, style),
-                ChoiceChip(label: const Text('Monostyled', style: TextStyle(fontFamily: 'monospace')), selected: mono,
+                ChoiceChip(label: const Text('Monostyled', style: TextStyle(fontFamily: 'monospace')),
+                  selected: _has(Attribute.codeBlock),
                   showCheckmark: false, selectedColor: brand.accentSoft,
                   onSelected: (_) => _toggle(Attribute.codeBlock)),
               ]),

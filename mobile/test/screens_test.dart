@@ -908,6 +908,8 @@ void main() {
       expect(editorFocused(tester), isFalse, reason: 'the panel takes the keyboard\'s place');
       await tester.tap(find.text('Heading'));
       await tester.pumpAndSettle();
+      bool lit(String label) => tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, label)).selected;
+      expect([lit('Heading'), lit('Body')], [true, false], reason: 'the chip of the line\'s style lights at once');
       quill(tester).updateSelection(const TextSelection(baseOffset: 5, extentOffset: 9), ChangeSource.local);
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Bold'));
@@ -921,6 +923,30 @@ void main() {
       expect(find.byType(FormatSheet), findsNothing);
       expect(find.byType(FloatingToolBar), findsOneWidget);
       expect(editorFocused(tester), isTrue);
+    });
+
+    testWidgets('the format panel is the keyboard\'s full height, not a height from while the keyboard slides down', (tester) async {
+      addTearDown(tester.view.resetViewInsets);
+      addTearDown(tester.view.resetPhysicalSize);
+      tester.view.physicalSize = const Size(390, 844) * tester.view.devicePixelRatio;
+      relay.entries = [Entry(id: 'n1', text: 'Shop\nEggs', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Shop'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(QuillEditor));
+      await tester.pump();
+      final ratio = tester.view.devicePixelRatio;
+      tester.view.viewInsets = FakeViewPadding(bottom: 336 * ratio);
+      await tester.pump();
+      await tester.tap(find.byTooltip('Text styles'));
+      await tester.pump();
+      tester.view.viewInsets = FakeViewPadding(bottom: 150 * ratio);
+      await tester.pump();
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await tester.pumpAndSettle();
+      final panel = find.descendant(of: find.byType(FormatSheet), matching: find.byType(SizedBox)).first;
+      expect(tester.getSize(panel).height, 336);
     });
 
     testWidgets('Done on the format panel closes it and sends the change', (tester) async {

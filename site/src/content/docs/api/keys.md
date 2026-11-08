@@ -21,6 +21,7 @@ A call with a wrong key, or a key that is off, answers `403`.
 A device key reaches only the space of the person who made it. It adds data there, and a phone's key also syncs your notes. It reaches only these routes:
 
 - `POST notes`, `POST attachments`, `POST health`, `POST locations`, `POST calendar`, `POST photos`
+- `PATCH notes`, which changes the words of a note that the same phone key sent, and adds its new files. A phone key can not change another device's note: the server answers `404`.
 - `GET key`, which answers the key's own device name and no data, so a device can check its key
 - For a phone's key only:
   - `GET notes`, which answers the notes added or changed since the phone's last sync, from every device and way in, so each signed-in phone shows all your notes

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/gestures.dart' show kLongPressTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
@@ -65,7 +66,7 @@ class _NewNoteButtonState extends State<NewNoteButton> {
           shape: const CircleBorder(),
           elevation: live ? 0 : 3,
           child: SizedBox.square(dimension: 52,
-            child: Icon(live ? Icons.mic : Icons.edit_square, color: live ? brand.onSpark : brand.onAccent)),
+            child: Icon(live ? CupertinoIcons.mic_fill : CupertinoIcons.square_pencil, color: live ? brand.onSpark : brand.onAccent)),
         )),
       ),
     );

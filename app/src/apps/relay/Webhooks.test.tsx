@@ -202,3 +202,20 @@ it("tries a failing webhook again, pauses and resumes, makes a new secret and re
   expect(screen.queryByLabelText("Database 3")).toBeNull();
   expect(posts().at(-1)).toEqual({ route: "webhooks/remove", input: { id: "3" } });
 });
+
+it("is the part the phone's Webhooks row opens, at #webhooks, and scrolls there only when asked", async () => {
+  const scrolled = vi.fn();
+  Element.prototype.scrollIntoView = scrolled;
+  try {
+    await open();
+    expect(document.getElementById("webhooks")).toBe(screen.getByRole("region", { name: "Send to your database" }));
+    expect(scrolled).not.toHaveBeenCalled();
+    cleanup();
+    window.location.hash = "#webhooks";
+    await open();
+    expect(scrolled).toHaveBeenCalledOnce();
+  } finally {
+    window.location.hash = "";
+    delete (Element.prototype as Partial<Element>).scrollIntoView;
+  }
+});

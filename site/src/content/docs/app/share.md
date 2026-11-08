@@ -45,7 +45,7 @@ A note holds up to 10 files, each up to 25 MB, the same as a note you write: [Ad
 
 ## What is sent
 
-The card follows your **Send my notes** setting in [Settings](../settings/). The last line of the card tells you which:
+The card follows your **Send my notes** setting on the [Sending](../settings/#sending) page. The last line of the card tells you which:
 
 | Sending | The card says | What happens |
 |---|---|---|

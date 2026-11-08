@@ -55,6 +55,7 @@ class FakeServer {
   static http.Response ok(http.Request request) => json(switch (request.url.path) {
     '/apps/relay/sign-in/phone/key' => {'server': request.url.origin, 'key': pageKey},
     final path when path.endsWith('/key') => {'device': 'Android phone'},
+    final path when path.endsWith('/connections') => {'aiApps': [{'name': 'Claude'}], 'webhooks': [{'name': 'Home server'}]},
     _ => {'added': 1},
   });
   static http.Response json(Object body, [int status = 200]) =>

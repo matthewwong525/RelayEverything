@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'data/attachments.dart';
 import 'data/settings.dart';
@@ -14,9 +15,12 @@ export 'voice/model.dart' show ModelState, ModelProblem;
 
 /// One row of the timeline: a note typed or said on this phone.
 class Entry {
-  const Entry({required this.text, required this.at, this.place, this.sent = false, this.waiting = false, this.voice = false,
+  const Entry({this.id = '', required this.text, required this.at, this.place, this.sent = false, this.waiting = false, this.voice = false,
     this.writing = false, this.failed = false, this.recording, this.length, this.files = const []});
 
+  /// The phone's own id for the note: [Relay.editNote] takes it.
+  final String id;
+  /// The words, with their styles as Markdown marks: `plainText` gives them bare.
   final String text;
   final DateTime at;
   final String? place;
@@ -74,6 +78,27 @@ class WebhookProblem {
   final String? file;
 }
 
+/// The names of what the person connected on their Relay Everything page, as the server last answered: the one thing a
+/// phone key reads. No address, secret or send state.
+class Connections {
+  const Connections({this.aiApps = const [], this.webhooks = const []});
+
+  final List<String> aiApps;
+  final List<String> webhooks;
+
+  /// Reads `GET connections`' answer, or its copy kept on this phone. A name that is not text is left out.
+  factory Connections.fromJson(Map<String, dynamic> json) {
+    List<String> names(Object? list) =>
+      [for (final item in list is List ? list : const []) if (item is Map && item['name'] is String) item['name'] as String];
+    return Connections(aiApps: names(json['aiApps']), webhooks: names(json['webhooks']));
+  }
+
+  static Connections? decode(String? saved) => saved == null ? null : Connections.fromJson(jsonDecode(saved) as Map<String, dynamic>);
+
+  String encode() => jsonEncode({'aiApps': [for (final name in aiApps) {'name': name}],
+    'webhooks': [for (final name in webhooks) {'name': name}]});
+}
+
 /// What the screens read and do. The app's controller is one; a test's fake is another.
 abstract class Relay extends ChangeNotifier {
   bool get connected;
@@ -83,15 +108,24 @@ abstract class Relay extends ChangeNotifier {
   int get waiting;
   Settings get settings;
 
-  /// Health readings and location points: when each last went, and how many wait. Settings shows them.
+  /// Health readings and location points: when each last went, and how many wait. Their folders show them.
   SendState get healthSent;
   SendState get pointsSent;
   /// Calendar events and removals: when they last went, and how many wait.
   SendState get calendarSent;
-  /// The phone's calendars, while the calendar is on; each has its own switch in Settings.
+  /// The phone's calendars, while the calendar is on; each has its own switch in the Calendar folder.
   List<PhoneCalendar> get calendars;
   /// True on iPhone, where *Location history* has two ways to keep places.
   bool get locationModes;
+
+  /// The names of the person's AI apps and webhooks, as their Relay Everything server last answered; null before an
+  /// answer, and after sending stops.
+  Connections? get connections;
+  /// Asks the server for [connections], only while sending to a Relay Everything server; else it makes no request.
+  Future<void> refreshConnections();
+  /// The Home headers the person folded, such as *Connections*. The phone keeps them.
+  Set<String> get folded;
+  Future<void> setFolded(String header, bool folded);
 
   /// Each returns null on success, or the words to show when it failed.
   Future<String?> connect(String code);
@@ -137,9 +171,17 @@ abstract class Relay extends ChangeNotifier {
   /// Forgets the key and turns sending off.
   Future<void> disconnect();
   Future<void> sync();
-  /// Keeps a note with words, files, or both. Returns the words to show for files left out, such as one over 25 MB,
-  /// or for a note with nothing in it; null when all of it was kept.
-  Future<String?> addNote(String text, {List<NewFile> files = const []});
+  /// Keeps a note with words, files, or both, as [id] when given. Returns the words to show for files left out, such
+  /// as one over 25 MB, or for a note with nothing in it; null when all of it was kept. With [sendNow] false it waits
+  /// for the next sync, as the editor saves while the person types.
+  Future<String?> addNote(String text, {List<NewFile> files = const [], String? id, bool sendNow = true});
+  /// Keeps the person's change to note [id]: its new words and files added. A sent note's change goes at the next sync,
+  /// and with [sendNow] at once. Returns the words to show for files left out; null when all of it was kept.
+  Future<String?> editNote(String id, String text, {List<NewFile> files = const [], bool sendNow = true});
+  /// Deletes note [id] from this phone, as Apple Notes does when you leave a note with no words: the editor calls it once
+  /// the words are blank. Any upload or change of it still waiting goes too, so it is never sent; a copy the server
+  /// took keeps its last words there. A note with a file or a recording stays: false then.
+  Future<bool> dropEmptyNote(String id);
   /// Opens a note's file in an app on the phone.
   Future<void> openFile(EntryFile file);
 

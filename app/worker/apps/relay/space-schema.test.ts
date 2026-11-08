@@ -234,6 +234,43 @@ it("runs the files and photos migrations on a staging space that ran the first 0
     { seq: 3, kind: "note.file", ref: "f-1" }]);
 });
 
+it("gives each note a time of its last change, empty for every note stored before, and keeps the log", () => {
+  const space = new DatabaseSync(":memory:");
+  space.exec("PRAGMA foreign_keys = ON");
+  const at = MIGRATIONS.findIndex(([name]) => name === "0010_note_edits");
+  for (const [, text] of MIGRATIONS.slice(0, at)) inTransaction(space, text);
+  space.exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-phone', 'Phone', 'rek:d-phone', '', 1, 'phone');
+    INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at) VALUES ('n-1', 'd-phone', 'typed', 'c-1', 'Hi.', 5, 5);`);
+  const before = all(space, "SELECT * FROM relay_outbox ORDER BY seq");
+  inTransaction(space, MIGRATIONS[at][1]);
+  expect(all(space, "SELECT id, text, edited_at FROM relay_notes")).toEqual([{ id: "n-1", text: "Hi.", edited_at: null }]);
+  expect(all(space, "SELECT * FROM relay_outbox ORDER BY seq")).toEqual(before);
+  space.exec("UPDATE relay_notes SET text = 'Hi again.', edited_at = 9 WHERE id = 'n-1'");
+  expect(all(space, "SELECT edited_at FROM relay_notes")).toEqual([{ edited_at: 9 }]);
+  // A change logs nothing by itself: PATCH notes logs its note.updated.
+  expect(all(space, "SELECT * FROM relay_outbox ORDER BY seq")).toEqual(before);
+});
+
+it("skips the note edits migration on a staging space that ran it first as 0008_note_edits", () => {
+  const sql = new DatabaseSync(":memory:");
+  sql.exec("PRAGMA foreign_keys = ON");
+  const storage = { sql: { exec: (query: string, ...params: SQLInputValue[]) => {
+    const rows = /^\s*SELECT/i.test(query) ? sql.prepare(query).all(...params) : params.length ? (sql.prepare(query).run(...params), []) : (sql.exec(query), []);
+    return { toArray: () => rows };
+  } }, transactionSync: <T>(run: () => T) => run() } as unknown as Parameters<typeof migrate>[0];
+  sql.exec("CREATE TABLE space_migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)");
+  const at = MIGRATIONS.findIndex(([name]) => name === "0008_photos");
+  const edits = MIGRATIONS.find(([name]) => name === "0010_note_edits")!;
+  for (const [name, text] of [...MIGRATIONS.slice(0, at), ["0008_note_edits", edits[1]] as const]) {
+    inTransaction(sql, text);
+    sql.prepare("INSERT INTO space_migrations VALUES (?, 0)").run(name);
+  }
+  migrate(storage);
+  migrate(storage);
+  expect(tables(sql)).toEqual([...PERSON].sort());
+  expect(all(sql, "SELECT name FROM pragma_table_info('relay_notes') WHERE name = 'edited_at'")).toEqual([{ name: "edited_at" }]);
+});
+
 it("widens the directory's keys to API keys, keeping every key", () => {
   const d1 = new DatabaseSync(":memory:");
   d1.exec("PRAGMA foreign_keys = ON");
@@ -277,7 +314,8 @@ it("drops a space's signing secrets and its late-place trigger, keeping its ring
 });
 
 it("lets a new space and a space made before email take the Email device, keeping every row", () => {
-  for (const before of [MIGRATIONS.length, MIGRATIONS.findIndex(([name]) => name === "0009_inbox")]) {
+  const inbox = MIGRATIONS.findIndex(([name]) => name === "0009_inbox");
+  for (const before of [MIGRATIONS.length, inbox]) {
     const space = new DatabaseSync(":memory:");
     space.exec("PRAGMA foreign_keys = ON");
     for (const [, text] of MIGRATIONS.slice(0, before)) inTransaction(space, text);
@@ -286,8 +324,11 @@ it("lets a new space and a space made before email take the Email device, keepin
       INSERT INTO relay_attachments (id, note_id, name, content_type, size, created_at) VALUES ('f-1', 'n-1', 'a.pdf', 'application/pdf', 3, 5);`);
     const queries = ["SELECT * FROM relay_devices", "SELECT * FROM relay_notes", "SELECT * FROM relay_attachments", "SELECT * FROM relay_outbox"];
     const kept = queries.map(query => all(space, query));
-    for (const [, text] of MIGRATIONS.slice(before)) inTransaction(space, text);
+    // Later migrations may add columns, so the rows are compared right after the inbox step.
+    const done = Math.max(before, inbox + 1);
+    for (const [, text] of MIGRATIONS.slice(before, done)) inTransaction(space, text);
     expect(queries.map(query => all(space, query))).toEqual(kept);
+    for (const [, text] of MIGRATIONS.slice(done)) inTransaction(space, text);
     space.exec("INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-mail', 'Email', 'inbox:email', '', 1, 'inbox')");
     expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
     expect(tables(space)).toEqual([...PERSON].sort());

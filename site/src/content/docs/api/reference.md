@@ -41,6 +41,39 @@ Send the input as a JSON body.
 | `id` | string | yes |  |
 | `added` | boolean | yes |  |
 
+## Change a typed note
+
+`PATCH /apps/relay/api/notes` · `relay.notes-edit` · writes · called by a phone key
+
+Change the words of a note this phone sent before, and list the files added since. Webhooks get it as note.updated.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `clientId` | string | yes | The phone's own id for the note, as POST notes sent it. |
+| `text` | string | yes | What the note says now, in place of its words before. It can be empty only when the note has files. |
+| `attachments` | array of object | no | All of the note's files now, up to 10. A file the server lacks is added: send its bytes after, with POST attachments. |
+| `attachments[].id` | string | yes | The phone's own id for the file: its upload names it. |
+| `attachments[].name` | string | yes | The file's name, such as `warranty.pdf`. |
+| `attachments[].type` | string | yes | The file's content type, such as `application/pdf`; empty when the phone does not know it. |
+| `attachments[].size` | integer | yes | The file's size in bytes, up to 25 MB. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | yes |  |
+| `updated` | boolean | yes | False when the words were the same and no file was new. |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `not_found` | This device sent no note with this clientId. |
+
 ## Store a phone's samples
 
 `POST /apps/relay/api/health` · `relay.samples-add` · writes · called by a phone key
@@ -721,6 +754,25 @@ Send the input as a JSON body.
 |---|---|
 | `unavailable` | The AI connector is not set up here. |
 | `not_found` | You have no connected AI app with this id. |
+
+## List what you connected, by name
+
+`GET /apps/relay/api/connections` · `relay.connections` · reads · called by a signed-in person or a phone key
+
+The names of your connected AI apps and of your webhooks, for the phone's Home. It holds no address, secret or send state. Where the AI connector is not set up, the AI apps list is empty.
+
+### Input
+
+It takes no input.
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `aiApps` | array of object | yes | Each connected AI app. |
+| `aiApps[].name` | string | yes |  |
+| `webhooks` | array of object | yes | Each webhook, paused ones too. |
+| `webhooks[].name` | string | yes |  |
 
 ## Save the AI's summary of a chat
 

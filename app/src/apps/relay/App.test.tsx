@@ -266,6 +266,37 @@ it("tells how to connect Claude Code, that its key only adds chats, and that you
   expect(within(dialog).getByText(/run your own Relay Everything server/)).toBeTruthy();
 });
 
+it("scrolls to #webhooks or #ai-apps only once the notes and chats above have replaced their placeholders", async () => {
+  const scrolled = vi.fn();
+  Element.prototype.scrollIntoView = scrolled;
+  try {
+    for (const id of ["webhooks", "ai-apps"]) {
+      cleanup();
+      scrolled.mockClear();
+      window.location.hash = `#${id}`;
+      let notesLoaded!: () => void, chatsLoaded!: () => void;
+      const timeline = new Promise<Response>((resolve) => { notesLoaded = () => resolve(Response.json(FIRST)); });
+      const chats = new Promise<Response>((resolve) => { chatsLoaded = () => resolve(Response.json(CHATS)); });
+      answer = (route, init) => route === "timeline" ? timeline : route === "chats" ? chats : ordinary(route, init);
+      await open();
+      expect(await screen.findByText("Loading notes")).toBeTruthy();
+      expect(document.getElementById(id)).toBeTruthy();
+      expect(scrolled).not.toHaveBeenCalled();
+      await act(async () => { notesLoaded(); });
+      expect(await screen.findByText("Note 00000000-0000-4000-8000-000000000002")).toBeTruthy();
+      expect(screen.getByText("Loading chats")).toBeTruthy();
+      expect(scrolled).not.toHaveBeenCalled();
+      await act(async () => { chatsLoaded(); });
+      expect(await screen.findByRole("button", { name: "Stiffener plan" })).toBeTruthy();
+      expect(scrolled).toHaveBeenCalledOnce();
+      expect(scrolled.mock.contexts[0]).toBe(document.getElementById(id));
+    }
+  } finally {
+    window.location.hash = "";
+    delete (Element.prototype as Partial<Element>).scrollIntoView;
+  }
+});
+
 it("writes times, places and the day as the page shows them", () => {
   const morning = new Date(2026, 10, 5, 9, 5);
   expect(when(morning.getTime(), morning.getTime())).not.toContain(",");

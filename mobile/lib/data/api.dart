@@ -37,7 +37,7 @@ abstract class Outbound {
 
 /// Relay's device routes, each call carrying this phone's key: `Authorization: Bearer` for a page-made key, or
 /// Cloudflare Access's two headers for an older one. A device key only adds data: the server refuses it on every
-/// route that reads.
+/// route that reads, but its own key check and the names of what its person connected.
 class RelayApi implements Outbound {
   RelayApi(this.connection, [http.Client? client]) : _client = client ?? http.Client();
 
@@ -48,6 +48,7 @@ class RelayApi implements Outbound {
   /// files' uploads then get 404 and are dropped.
   @override
   Future<void> send(OutboxItem item) async {
+    if (item.route == noteUpdate) return _change(item.body);
     final body = _forServer(item.route, item.body);
     try {
       await post(item.route, body);
@@ -56,6 +57,13 @@ class RelayApi implements Outbound {
       await post(item.route, {...body}..remove('attachments'));
     }
   }
+
+  /// A sent note's latest words and its whole file list. The server answers 404 for a note it does not have, such as
+  /// one it turned down, or when it is older than changes: the change can never land, so it is dropped.
+  Future<void> _change(Map<String, dynamic> body) => _call(() => _client.patch(_uri('notes'),
+    headers: {..._headers, 'Content-Type': 'application/json'}, body: jsonEncode({'clientId': body['clientId'],
+      'text': body['text'], if (body['attachments'] != null) 'attachments': body['attachments']})),
+    rejected: const {400, 404, 413});
 
   @override
   Future<void> sendFile(OutboxItem item, List<int> bytes) => upload(noteClientId: item.body['noteClientId'] as String,
@@ -114,6 +122,9 @@ class RelayApi implements Outbound {
     final json = await _call(() => _client.get(_uri('key'), headers: _headers));
     return json['device'] as String? ?? '';
   }
+
+  /// The names of the person's AI apps and webhooks: the one read a phone key has, with no data in it.
+  Future<Map<String, dynamic>> connections() => _call(() => _client.get(_uri('connections'), headers: _headers));
 
   /// Trades the sign-in's one-time code, with the secret only this phone holds, for this phone's own key. The call
   /// carries no key: the code and the secret are its proof.

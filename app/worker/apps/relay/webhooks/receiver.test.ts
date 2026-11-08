@@ -72,12 +72,25 @@ it("keeps each file a note lists, then its bytes beside the note when they come"
   saved.close();
 });
 
+it("keeps a changed note's latest words and its recording, and lists a file added with the change", async () => {
+  const at = Date.now();
+  const note = { ...ring, id: "a0000000-0000-4000-8000-000000000010" };
+  const added = { id: "file-edit-0001", name: "list.pdf", content_type: "application/pdf", size: 3 };
+  expect((await send(noteCreated(note, base64(new Uint8Array([0, 0, 0, 24])), at))).status).toBe(204);
+  expect((await send(noteUpdated({ ...note, text: "# Fab\n- [ ] Call about the second batch", edited_at: at }, at, [added]))).status).toBe(204);
+  const saved = new DatabaseSync(database, { readOnly: true });
+  expect({ ...saved.prepare("SELECT text, hex(audio) AS audio FROM notes WHERE id = ?").get(note.id) })
+    .toEqual({ text: "# Fab\n- [ ] Call about the second batch", audio: "00000018" });
+  expect(saved.prepare("SELECT id FROM files WHERE note_id = ?").all(note.id).map(row => row.id)).toEqual([added.id]);
+  saved.close();
+});
+
 // The phone's own messages, as mobile/test/webhook_test.dart writes them, signed again with this receiver's secret.
 const phone = (type: string) =>
   (JSON.parse(readFileSync(new URL(`../../../../../mobile/test/fixtures/webhook/${type}.json`, import.meta.url), "utf8")) as { body: string }).body;
 
 it("saves what the phone sends to its own webhook, with each file's bytes beside its note", async () => {
-  const types = ["note.created", "note.file", "health.samples", "location.points", "calendar.events", "photo.created", "webhook.test"];
+  const types = ["note.created", "note.file", "note.updated", "health.samples", "location.points", "calendar.events", "photo.created", "webhook.test"];
   for (const type of types) expect((await post(`${address}/`, secret, `phone_${type}`, phone(type))).status, type).toBe(204);
   const note = JSON.parse(phone("note.created")).data.note;
   const saved = new DatabaseSync(database, { readOnly: true });

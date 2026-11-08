@@ -3,7 +3,7 @@
   "headers": {
     "webhook-id": "0f5c2a64-1d6e-4b7a-9c3e-2a8d5b7f6e10:7",
     "webhook-timestamp": "1793801100",
-    "webhook-signature": "v1,6mQce+03ek7bSLtnRbgKbMBFCNDnTtQgwAQxkDL8S9U="
+    "webhook-signature": "v1,vGxO2b8RTUHfI0NLqEye+MVPo7NYAA5lMvre4gG9Rp8="
   },
-  "body": "{\"version\":1,\"type\":\"note.created\",\"timestamp\":\"2026-11-04T14:01:02.000Z\",\"data\":{\"note\":{\"id\":\"3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7\",\"source\":\"typed\",\"text\":\"Receipt for the desk lamp\",\"recorded_at\":\"2026-11-04T14:01:00.000Z\",\"created_at\":\"2026-11-04T14:01:02.000Z\",\"device\":{\"id\":\"0f5c2a64-1d6e-4b7a-9c3e-2a8d5b7f6e10\",\"name\":\"Android phone\"},\"place\":{\"lat\":43.65,\"lon\":-79.38,\"accuracy\":12.0,\"name\":\"King St W\",\"from\":\"phone\"},\"audio\":null,\"attachments\":[{\"id\":\"f1\",\"name\":\"receipt.jpg\",\"content_type\":\"image/jpeg\",\"size\":4}]}}}"
+  "body": "{\"version\":1,\"type\":\"note.created\",\"timestamp\":\"2026-11-04T14:01:02.000Z\",\"data\":{\"note\":{\"id\":\"3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7\",\"source\":\"typed\",\"text\":\"Receipt for the desk lamp\",\"recorded_at\":\"2026-11-04T14:01:00.000Z\",\"created_at\":\"2026-11-04T14:01:00.000Z\",\"device\":{\"id\":\"0f5c2a64-1d6e-4b7a-9c3e-2a8d5b7f6e10\",\"name\":\"Android phone\"},\"place\":{\"lat\":43.65,\"lon\":-79.38,\"accuracy\":12.0,\"name\":\"King St W\",\"from\":\"phone\"},\"audio\":null,\"attachments\":[{\"id\":\"f1\",\"name\":\"receipt.jpg\",\"content_type\":\"image/jpeg\",\"size\":4}]}}}"
 }

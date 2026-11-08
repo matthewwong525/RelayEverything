@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 // Relay's own routes, read in the shapes app/worker/apps/relay/ writes.
 export type Place = { lat: number; lon: number; accuracy: number | null; name: string | null; from: 'phone' | 'history' }
@@ -137,4 +137,15 @@ export function sizeOf(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+/** Scrolls once to `#id` when the page opened there, as the phone's *AI apps* and *Webhooks* rows do: the browser's
+ *  own jump finds nothing yet. It waits for `ready`, so placeholders above it don't push the section down after. */
+export function useOpenedAt(id: string, ready = true) {
+  const done = useRef(false)
+  useEffect(() => {
+    if (!ready || done.current) return
+    done.current = true
+    if (window.location.hash === `#${id}`) document.getElementById(id)?.scrollIntoView?.()
+  }, [id, ready])
 }

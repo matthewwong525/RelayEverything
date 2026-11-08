@@ -15,7 +15,7 @@ enum NoteKind { typed, voice }
 class LocalNote {
   const LocalNote({required this.clientId, required this.text, required this.createdAt, this.pin, this.sentAt,
     this.queued = false, this.pinning = false, this.kind = NoteKind.typed, this.audioPath, this.durationMs,
-    this.wordsPending = false, this.attachments = const []});
+    this.wordsPending = false, this.attachments = const [], this.editedAt});
 
   final String clientId;
   final String text;
@@ -42,6 +42,9 @@ class LocalNote {
 
   /// The note's files, in the order they were added.
   final List<Attachment> attachments;
+
+  /// When the person last changed the note's words or files, or null for never.
+  final DateTime? editedAt;
 
   /// The body the server's `notes` route takes: a voice note goes as its words, the same as a typed note. A note with
   /// files lists them; their bytes go later, one `attachment` upload each.
@@ -93,6 +96,9 @@ class Pin {
     {'at': at.millisecondsSinceEpoch, 'lat': lat, 'lon': lon, 'accuracy': accuracy, if (place != null) 'place': place};
 }
 
+/// The route of a sent note's change: `PATCH notes` on the server, `note.updated` to a webhook.
+const noteUpdate = 'note.update';
+
 /// Where an upload goes: the person's Relay Everything server, or their own webhook. Each waiting upload keeps one.
 const relayServer = 'relay-server', ownWebhook = 'webhook';
 
@@ -107,13 +113,16 @@ const sentHealth = 'sent.health', sentPoints = 'sent.points', sentCalendar = 'se
 
 /// One waiting upload: a route and the JSON body to send it, where it goes, and when the phone queued it.
 class OutboxItem {
-  const OutboxItem(this.id, this.route, this.body, {required this.destination, required this.createdAt});
+  const OutboxItem(this.id, this.route, this.body, {required this.destination, required this.createdAt, this.raw});
 
   final int id;
   final String route;
   final Map<String, dynamic> body;
   final String destination;
   final DateTime createdAt;
+
+  /// [body] as the store keeps it, so [Store.finish] sees a change made while it went.
+  final String? raw;
 }
 
 /// A photo waiting to go: its JPEG copy in the app's support folder, and what the server's `photos` route takes with it.
@@ -155,7 +164,7 @@ const _schema = [
   // queued = 1: the note has its upload. pinning = 1: the note waits for its fix, so no upload can go without its place.
   // words_pending = 1: a voice note still waits for its words, so no upload can go without them.
   'CREATE TABLE notes (client_id TEXT PRIMARY KEY, body TEXT NOT NULL, created_at INTEGER NOT NULL, sent_at INTEGER, '
-    'queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0, $_voiceColumns)',
+    'queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0, $_voiceColumns, edited_at INTEGER)',
   'CREATE TABLE points (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
   'CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
   _attachmentsTable,
@@ -187,7 +196,7 @@ class Store extends GeneratedDatabase {
   Iterable<TableInfo<Table, dynamic>> get allTables => const [];
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(onCreate: (_) async {
@@ -222,6 +231,8 @@ class Store extends GeneratedDatabase {
     if (from < 6) await customStatement(_calendarSentTable);
     // Version 6 had no photos.
     if (from < 7) await customStatement(_photosTable);
+    // Version 7 could not change a note.
+    if (from < 8) await customStatement('ALTER TABLE notes ADD COLUMN edited_at INTEGER');
   });
 
   Future<List<QueryRow>> _rows(String sql, [List<Object?> values = const []]) =>
@@ -249,7 +260,7 @@ class Store extends GeneratedDatabase {
 
   static OutboxItem _outboxItem(QueryRow row) => OutboxItem(row.read<int>('id'), row.read<String>('route'),
     jsonDecode(row.read<String>('body')) as Map<String, dynamic>, destination: row.read<String>('destination'),
-    createdAt: DateTime.fromMillisecondsSinceEpoch(row.read<int>('created_at')));
+    createdAt: DateTime.fromMillisecondsSinceEpoch(row.read<int>('created_at')), raw: row.read<String>('body'));
 
   /// The destination new uploads take.
   Future<String> destination() async => await get(_destination) ?? relayServer;
@@ -305,6 +316,48 @@ class Store extends GeneratedDatabase {
     'SELECT (SELECT count(*) FROM outbox) + (SELECT count(*) FROM notes WHERE pinning = 1) AS n')).single.read<int>('n');
 
   Future<void> done(int id) => _run('DELETE FROM outbox WHERE id = ?', [id]);
+
+  /// Ends an upload that went. One whose body changed while it went stays: a note's upload turns into its change, as
+  /// the server has the old words.
+  Future<void> finish(OutboxItem item) => transaction(() async {
+    final rows = await _rows('SELECT body FROM outbox WHERE id = ?', [item.id]);
+    if (rows.isEmpty) return;
+    if (item.raw == null || rows.single.read<String>('body') == item.raw) return done(item.id);
+    if (item.route == 'notes') await _run("UPDATE outbox SET route = '$noteUpdate' WHERE id = ?", [item.id]);
+  });
+
+  /// Keeps the person's change to a note: its new [text], and [files] added. A note not sent yet changes its waiting
+  /// upload, or none; a sent note with [send] gets one change upload, and a change still waiting takes the new words.
+  /// New files' uploads go after. False when nothing changed, or the note is gone or waits for its words.
+  Future<bool> editNote(String clientId, String text, {List<Attachment> files = const [], required bool send,
+    required DateTime at}) => transaction(() async {
+    final notes = await _rows('SELECT body, sent_at FROM notes WHERE client_id = ? AND words_pending = 0', [clientId]);
+    if (notes.isEmpty) return false;
+    final old = _noteOf(jsonDecode(notes.single.read<String>('body')) as Map<String, dynamic>);
+    if (old.text == text && files.isEmpty) return false;
+    for (final file in files) {
+      await _run('INSERT INTO attachments (id, note_client_id, name, type, size, path) VALUES (?, ?, ?, ?, ?, ?)',
+        [file.id, clientId, file.name, file.type, file.size, file.path]);
+    }
+    final body = LocalNote(clientId: clientId, text: text, createdAt: old.createdAt, pin: old.pin,
+      attachments: await attachmentsOf(clientId)).toJson();
+    final change = {...body, 'editedAt': at.millisecondsSinceEpoch};
+    await _run('UPDATE notes SET body = ?, edited_at = ? WHERE client_id = ?', [jsonEncode(body), at.millisecondsSinceEpoch, clientId]);
+    final waiting = await _rows("SELECT id, route FROM outbox WHERE route IN ('notes', '$noteUpdate') "
+      "AND json_extract(body, '\$.clientId') = ? ORDER BY id DESC LIMIT 1", [clientId]);
+    if (waiting.isNotEmpty) {
+      final route = waiting.single.read<String>('route');
+      await _run('UPDATE outbox SET body = ? WHERE id = ?', [jsonEncode(route == 'notes' ? body : change), waiting.single.read<int>('id')]);
+    } else if (send && notes.single.read<int?>('sent_at') != null) {
+      await enqueue(noteUpdate, change);
+    } else {
+      return true;
+    }
+    for (final file in files) {
+      await enqueue('attachment', file.upload(clientId));
+    }
+    return true;
+  });
 
   /// Keeps the note, and with [send] queues its upload in the same step. With [waitForPin] the note is kept and shown,
   /// but gets its upload only from [settlePin], so a sync meanwhile can not send it bare.
@@ -434,6 +487,18 @@ class Store extends GeneratedDatabase {
     await _run('DELETE FROM attachments WHERE note_client_id = ? AND note_client_id NOT IN (SELECT client_id FROM notes)', [clientId]);
   });
 
+  /// Deletes a note the person left with no words, as Apple Notes does, with each upload or change of it still waiting,
+  /// so it never goes. The caller found its words blank. A note with a file or a recording stays, as one still waiting
+  /// for its words does. A copy the server took keeps its last words there. False when the note stays.
+  Future<bool> dropEmptyNote(String clientId) => transaction(() async {
+    final bare = await _rows("SELECT 1 FROM notes WHERE client_id = ? AND kind = 'typed' AND audio_path IS NULL "
+      'AND words_pending = 0 AND NOT EXISTS (SELECT 1 FROM attachments WHERE note_client_id = ?)', [clientId, clientId]);
+    if (bare.isEmpty) return false;
+    await _run('DELETE FROM notes WHERE client_id = ?', [clientId]);
+    await _run("DELETE FROM outbox WHERE route IN ('notes', '$noteUpdate') AND json_extract(body, '\$.clientId') = ?", [clientId]);
+    return true;
+  });
+
   /// Voice notes still waiting for their words, oldest first.
   Future<List<LocalNote>> pendingWords() async =>
     [for (final note in (await notes()).reversed) if (note.wordsPending) note];
@@ -461,20 +526,20 @@ class Store extends GeneratedDatabase {
       files.putIfAbsent(row.read<String>('note_client_id'), () => []).add(_attachmentOf(row));
     }
     return [
-      for (final row in await _rows('SELECT client_id, body, sent_at, queued, pinning, kind, audio_path, duration_ms, words_pending '
-          'FROM notes ORDER BY created_at DESC, client_id DESC'))
+      for (final row in await _rows('SELECT client_id, body, sent_at, queued, pinning, kind, audio_path, duration_ms, words_pending, '
+          'edited_at FROM notes ORDER BY created_at DESC, client_id DESC'))
         _noteOf(jsonDecode(row.read<String>('body')) as Map<String, dynamic>, sentAt: row.read<int?>('sent_at'),
           queued: row.read<int>('queued') == 1, pinning: row.read<int>('pinning') == 1,
           kind: NoteKind.values.byName(row.read<String>('kind')), audioPath: row.read<String?>('audio_path'),
           durationMs: row.read<int?>('duration_ms'), wordsPending: row.read<int>('words_pending') == 1,
-          attachments: files[row.read<String>('client_id')]),
+          attachments: files[row.read<String>('client_id')], editedAt: row.read<int?>('edited_at')),
     ];
   }
 
   /// A note's body, with its files listed by the body when the table's rows are not given.
   static LocalNote _noteOf(Map<String, dynamic> body, {int? sentAt, bool queued = false, bool pinning = false,
     NoteKind kind = NoteKind.typed, String? audioPath, int? durationMs, bool wordsPending = false,
-    List<Attachment>? attachments}) => LocalNote(
+    List<Attachment>? attachments, int? editedAt}) => LocalNote(
     clientId: body['clientId'] as String, text: body['text'] as String,
     createdAt: DateTime.fromMillisecondsSinceEpoch(body['createdAt'] as int),
     pin: body['lat'] == null ? null : Pin(at: DateTime.fromMillisecondsSinceEpoch(body['createdAt'] as int),
@@ -482,6 +547,7 @@ class Store extends GeneratedDatabase {
       accuracy: (body['accuracy'] as num).toDouble(), place: body['place'] as String?),
     sentAt: sentAt == null ? null : DateTime.fromMillisecondsSinceEpoch(sentAt), queued: queued, pinning: pinning,
     kind: kind, audioPath: audioPath, durationMs: durationMs, wordsPending: wordsPending,
+    editedAt: editedAt == null ? null : DateTime.fromMillisecondsSinceEpoch(editedAt),
     attachments: attachments ?? [
       for (final file in (body['attachments'] as List?) ?? const [])
         Attachment(id: (file as Map)['id'] as String, name: file['name'] as String, type: file['type'] as String,

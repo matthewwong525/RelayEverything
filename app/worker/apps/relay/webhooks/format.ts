@@ -62,7 +62,8 @@ const envelope = <Type extends string, Data extends z.ZodType>(type: Type, data:
 
 export const message = z.discriminatedUnion("type", [
   envelope("note.created", z.strictObject({ note: note.extend({ audio, attachments }) }), "A note reached Relay Everything."),
-  envelope("note.updated", z.strictObject({ note }), "No longer sent: the server gives no note a place later. It once said a ring note got its place from a later location batch. It has no audio."),
+  envelope("note.updated", z.strictObject({ note: note.extend({ edited_at: iso.optional().describe("When the phone that sent the note changed it."), attachments }) }),
+    "The phone that sent a note changed its words: the note with its latest words, after its note.created. Update the note's row by its id. It has no audio."),
   envelope("health.samples", z.strictObject({ samples: z.array(sample).min(1).max(BATCH) }), "Health samples, in the order Relay Everything stored them."),
   envelope("location.points", z.strictObject({ points: z.array(point).min(1).max(BATCH) }), "Location points, in the order Relay Everything stored them."),
   envelope("note.file", z.strictObject({ note_id: z.string().describe("The id of the note this file is on."),
@@ -80,7 +81,7 @@ type Message = z.infer<typeof message>;
 /** Each row as Relay's tables hold it, with its device's name. */
 export type NoteRow = { id: string; source: "ring" | "typed"; text: string; recorded_at: number; created_at: number; device_id: string;
   device_name: string; lat: number | null; lon: number | null; accuracy: number | null; place: string | null;
-  place_from: "phone" | "history" | null; audio_key: string | null };
+  place_from: "phone" | "history" | null; audio_key: string | null; edited_at?: number | null };
 export type AttachmentRow = { id: string; name: string; content_type: string; size: number };
 export type HealthRow = { id: number; device_id: string; device_name: string; type: HealthType;
   start_at: number; end_at: number; value: number; unit: string; source: string };
@@ -104,16 +105,21 @@ const noteOf = (row: NoteRow) => ({ id: row.id, source: row.source, text: row.te
 const wrap = <Built extends Message>(type: Built["type"], data: Built["data"], at: number) =>
   ({ version: 1, type, timestamp: isoOf(at), data }) as Built;
 
+const filesOf = (files: AttachmentRow[]) => files.length
+  ? { attachments: files.map(({ id, name, content_type, size }) => ({ id, name, content_type, size })) } : {};
+
 /** A new note; `audio` is its recording in base64, or null. `files` are listed only when there are some. */
 export const noteCreated = (row: NoteRow, audio: string | null, at: number, files: AttachmentRow[] = []) =>
   wrap("note.created", { note: { ...noteOf(row), audio: audio === null ? null : { content_type: "audio/mp4", base64: audio },
-    ...files.length ? { attachments: files.map(({ id, name, content_type, size }) => ({ id, name, content_type, size })) } : {} } }, at);
+    ...filesOf(files) } }, at);
 
 /** One file of a note, with `base64` empty: the sender writes the bytes into the body, so no long string is made. */
 export const noteFile = (row: AttachmentRow, noteId: string, at: number) => wrap<Extract<Message, { type: "note.file" }>>("note.file", { note_id: noteId,
   file: { id: row.id, name: row.name, content_type: row.content_type, size: row.size, base64: "" } }, at);
 
-export const noteUpdated = (row: NoteRow, at: number) => wrap("note.updated", { note: noteOf(row) }, at);
+/** A changed note, with `edited_at` when it has one; `files` are listed only when there are some. */
+export const noteUpdated = (row: NoteRow, at: number, files: AttachmentRow[] = []) => wrap("note.updated", { note: { ...noteOf(row),
+  ...row.edited_at ? { edited_at: isoOf(row.edited_at) } : {}, ...filesOf(files) } }, at);
 
 export const healthSamples = (rows: HealthRow[], at: number) => wrap("health.samples", { samples: rows.map(row => ({
   id: row.id, device: deviceOf(row), type: row.type, start: isoOf(row.start_at), end: isoOf(row.end_at), value: row.value,

@@ -1,18 +1,23 @@
-# A typed note: tap New note, type, Save, and the note is in the list. Then search finds it.
+# A typed note: open Notes from Home, tap New note, type, Done, Back, and the note is in the list. Then search finds it.
 appId: com.matthewwong525.relayApp
 ---
 - launchApp:
     clearState: true
 - extendedWaitUntil:
-    visible: "Notes"
+    visible: "Home"
     timeout: 60000
-# A short tap on the round New note button opens the New note page. A hold of 0.5 s records.
+# Home lists the folders; a row's label joins its name and its count, so match its start.
+- tapOn: 'Notes(.|\n)*'
+# A short tap on the round New note button opens a new note with the keyboard up. A hold of 0.5 s records.
 - tapOn: "New note"
 - extendedWaitUntil:
-    visible: "Save"
+    visible: "Done"
     timeout: 10000
 - inputText: "Device check note"
-- tapOn: "Save"
+- tapOn: "Done"
+- takeScreenshot: note-reading
+# The back button's label joins its tooltip, Back, and the folder it names, Notes.
+- tapOn: 'Back(.|\n)*'
 # Flutter joins a row's lines into one label, so match a word inside it, or its start.
 - extendedWaitUntil:
     visible: '(.|\n)*Typed(.|\n)*'

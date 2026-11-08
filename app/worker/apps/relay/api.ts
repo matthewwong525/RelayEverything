@@ -8,7 +8,9 @@ import { audio } from "./audio.ts";
 import { calendar } from "./calendar.ts";
 import { chatDelete, chatList, chatRead } from "./chat-read.ts";
 import { chats, chatSaves } from "./chats.ts";
+import { connections } from "./connections.ts";
 import { deviceAdd, deviceOff, devices } from "./device.ts";
+import { noteEdit } from "./edit-note.ts";
 import { inbox, inboxAddress, inboxSweep } from "./inbox/routes.ts";
 import { key } from "./key.ts";
 import { notes } from "./notes.ts";
@@ -21,6 +23,7 @@ import { consume } from "./webhooks/send.ts";
 
 export const routes = new Map<string, Route>([
   ["POST notes", notes],
+  ["PATCH notes", noteEdit],
   ["POST attachments", attachmentAdd],
   ["POST health", health],
   ["POST locations", locations],
@@ -44,6 +47,7 @@ export const routes = new Map<string, Route>([
   ["POST webhooks/sweep", sweepNow],
   ["GET ai-apps", aiApps],
   ["POST ai-apps-disconnect", aiAppDisconnect],
+  ["GET connections", connections],
   ["POST chats", chats],
   ["POST chat-saves", chatSaves],
   ["GET chats", chatList],

@@ -38,7 +38,7 @@
 
 - [x] 7.1 `flutter analyze` and `flutter test` in `mobile/`; `npm test` in `app/`; `node scripts/product-name.test.mjs`; `node scripts/public-check.mjs`.
 - [x] 7.2 `/save`, then on staging: edit a sent note from a phone build and confirm the page shows the new words and a test webhook gets one `note.updated`.
-- [ ] 7.3 The iPhone device check shows the editing, Aa and reading states; compare them to Apple Notes and fix gaps before publishing.
+- [x] 7.3 The iPhone device check shows the editing, Aa and reading states; compare them to Apple Notes and fix gaps before publishing.
 
 ## 8. Review fixes
 
@@ -56,3 +56,4 @@
 - [x] 8.12 The Home and folders redesign, email notes and photos came in from main: Home and each folder open the editor, with the back button naming the page it goes back to; every new icon is a `CupertinoIcons` one; the space step is now `0010_note_edits`, and a staging space that ran it as `0008_note_edits` skips it. Phone, server and schema tests.
 - [x] 8.13 The iPhone tour's Settings flow scrolls *Sending* to the middle of Home before it taps it, because main's new *Photos* folder put it under Search, and the tap opened the search box.
 - [x] 8.14 The iPhone check's fixed tour gains `note-styles`: a new note, *Aa*, Heading and Bold with the Format panel still up after each tap, ✕ brings the bar back, then Done and Back. Claude's hand-run steps each start the test tool again and stall for minutes, so the tour proves *Aa* on every run.
+- [x] 8.15 Gaps from the iPhone check: the Format panel's line chips light the line's style at once, as they read it on each draw, and the panel takes the keyboard's full height, measured only while the cursor is in the note, so Bold, the lists and indent show without a scroll. Widget tests.

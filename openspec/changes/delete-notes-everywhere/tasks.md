@@ -27,4 +27,4 @@
 
 - [x] 5.1 `flutter analyze` and `flutter test` in `mobile/`; `npm test` in `app/`; `node scripts/product-name.test.mjs`; `node scripts/public-check.mjs`; `openspec validate delete-notes-everywhere --strict --no-interactive`.
 - [ ] 5.2 `/save`, then on staging, with the spaces Worker deployed again from this branch: a phone key deletes a note with a file, `GET notes?deleted=1` returns its id, the file is gone, and a test webhook gets one `note.deleted`.
-- [ ] 5.3 After the build reaches TestFlight, Matthew deletes a synced note on his iPhone with a swipe and with ⋯, tries *Undo*, and sees the note gone from his page and his other phone.
+- [ ] 5.3 The iPhone device check on the saved commit, run once by `/verify` during `/ship`: swipe a note away and see *Undo*; ⋯ → *Delete* closes the page; *Undo* brings the note back. Matthew's own TestFlight try comes after publish, as an open thread.

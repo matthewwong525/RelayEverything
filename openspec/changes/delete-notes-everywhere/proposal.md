@@ -1,6 +1,6 @@
 # Delete a note from the phone app, everywhere
 
-**Status:** planned; the build waits for *Your notes on every phone* (PR #64) to be published
+**Status:** built and reviewed; saved for final acceptance (staging check, iPhone device check)
 **Branch:** potent-fox
 **Open questions:** none
 
@@ -102,3 +102,5 @@ Non-goals: a *Delete* button on the web page, a *Recently Deleted* folder, delet
 - **2026-11-08** — Assumed: the delete runs when the *Note deleted* bar closes with no *Undo*, with a 10-second timer (`deleteAfter`) only for when no bar closes, such as after a close, because the bar's own five seconds start only after it slides in and it can wait behind a closing bar, so a fixed five-second timer could delete while *Undo* still shows.
 - **2026-11-08** — Assumed: a pulled delete of a note this phone marked deleted holds the sync place, as the note open in the editor does, because after *Undo* the next pull must still delete it.
 - **2026-11-08** — Assumed: #66 merged during the build, so *Delete* moved into its shared ⋯ menu (`more_menu.dart`) as a new optional `destructive` item, drawn last in the danger color; the old `_MoreMenu` is gone with #66, and no second menu was made.
+- **2026-11-08** — Assumed: task 5.3 became the iPhone device check that `/verify` runs on the saved commit, and Matthew's TestFlight try became an open thread for after publish, because TestFlight gets a build only after the change is on `main`.
+- **2026-11-08** — Saved for final acceptance: #64 (sync) and #66 (shared ⋯ menu) are on `main` and merged in; the review's five findings are fixed; the phone tests and local checks pass. The staging check (5.2) and the iPhone device check (5.3) run on the saved commit.

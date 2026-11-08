@@ -1,6 +1,6 @@
 # Email notes for Relay Everything
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** reach-people-where-they-are
 **Open questions:** none
 
@@ -115,3 +115,6 @@ People already email all day. Today a note gets into Relay Everything only throu
 **2026-11-08** — Asked how to turn on mail for `in.` and `in-staging.`, since the repository's Cloudflare token can't change Email Routing → chose "I'll click it on (Recommended)": the person adds both subdomains in the Cloudflare dashboard, and the build adds the rules and tests them.
 **2026-11-08** — Assumed: live's `in.` mail goes through the zone's one catch-all rule to the live server, and staging uses one literal rule for each test address, because a zone has only one catch-all and Email Routing rules match single addresses.
 **2026-11-08** — Checkpoint: the build, its review fixes and staging's mail setup are saved; the staging mail tests (4.3), the website preview (4.4) and turning on live mail after the publish (4.5) remain.
+**2026-11-08** — Checked on staging: a forwarded invoice to the card's address became a note with its PDF; mail to `notes@in-staging.` from the sign-in Gmail passed the sender check, so Cloudflare's `Authentication-Results` header is the one the check reads; after *New address*, mail to the old address bounced and made no note.
+**2026-11-08** — Assumed: turning on live mail moves from task 4.5 to an after-publish note in `tasks.md`, because a task can't wait for its own publish; the ship report carries it as the next step.
+**2026-11-08** — Archive checkpoint: built, reviewed, checked on staging and archived for publish; live mail turns on after the publish, by the note in `tasks.md`.

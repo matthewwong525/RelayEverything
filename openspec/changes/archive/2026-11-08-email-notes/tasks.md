@@ -23,6 +23,7 @@
 
 - [x] 4.1 Run `npm test` in `app/`, the website tests, `node scripts/public-check.mjs` and `node scripts/product-name.test.mjs`. All pass.
 - [x] 4.2 Set up staging: Email Routing for `in-staging.relayeverything.com` to the staging server, and the secrets. Deploy the staging spaces Worker and server by hand ([the Workers and their order](../../../wiki/relay-spaces.md#the-workers-and-their-order)).
-- [ ] 4.3 `/save`, then on `app-staging.relayeverything.com`: copy the card's address, email a PDF to it from any account, and see the note with the PDF. Write to `notes@in-staging.` from the sign-in email and see the note. Replace the address and see mail to the old one make no note.
-- [ ] 4.4 Preview the website with `node scripts/publish-relay-site.mjs --ref HEAD --staging` and check the new page.
-- [ ] 4.5 After the publish, set Email Routing for `in.relayeverything.com` and the live secrets, then send one mail to a secret address and one to `notes@`, and see both notes.
+- [x] 4.3 `/save`, then on `app-staging.relayeverything.com`: copy the card's address, email a PDF to it from any account, and see the note with the PDF. Write to `notes@in-staging.` from the sign-in email and see the note. Replace the address and see mail to the old one make no note.
+- [x] 4.4 Preview the website with `node scripts/publish-relay-site.mjs --ref HEAD --staging` and check the new page.
+
+After publish, outside this change (not a task, because a task can't wait for its own publish): turn the zone's catch-all rule on with the action *Send to a Worker*, `relay-everything-server`; set `RELAY_INBOX_HMAC_KEY` on the live server from the primary worktree's `.env`; run the live D1 migration and deploy the live server by hand; then send one mail to a secret `in.` address and one to `notes@in.`, and see both notes.

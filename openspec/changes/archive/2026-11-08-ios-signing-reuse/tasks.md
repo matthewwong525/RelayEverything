@@ -17,5 +17,5 @@
 ## 4. Checks
 
 - [x] 4.1 `node scripts/public-check.mjs`, `node scripts/product-name.test.mjs` and the new script test pass
-- [ ] 4.2 `/save`, then run Mobile iOS on the branch with `workflow_dispatch` and see it reach TestFlight; if it says the account is full, ask the person to revoke the *Created via API* certificates and run again
-- [ ] 4.3 After the run, list Apple's certificates and confirm no new development certificate was made
+- [x] 4.2 `/save`, then run Mobile iOS on the branch with `workflow_dispatch` and see it reach TestFlight; if it says the account is full, ask the person to revoke the *Created via API* certificates and run again
+- [x] 4.3 After the run, list Apple's certificates and confirm no new development certificate was made

@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · ios-signing-reuse</title>
+<title>Review · 2026-11-08-ios-signing-reuse</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="ios-signing-reuse" data-own-back>
+<body data-change="2026-11-08-ios-signing-reuse" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>ios-signing-reuse</h1>
+  <h1>2026-11-08-ios-signing-reuse</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -450,6 +450,8 @@
 <li class="decision card" id="decision-9" data-note="decision-9" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: the script checks <code>gh auth status</code> before it asks Apple for a certificate, and writes both <code>.env</code> lines before any GitHub secret, because a failed save after Apple makes one must not leave a <code>.p12</code> with the wrong password.</li>
 <li class="decision card" id="decision-10" data-note="decision-10" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-07</p>Assumed: the build passes <code>DEVELOPMENT_TEAM</code> again, because a CocoaPods resource bundle can need a team, and the two app targets still sign manually.</li>
 <li class="decision card" id="decision-11" data-note="decision-11" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-08</p>Checkpoint: built and reviewed (4 review fixes made); saved to run the iPhone build on the branch for tasks 4.2 and 4.3.</li>
+<li class="decision card" id="decision-12" data-note="decision-12" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-08</p>Checked: run 42429382593 on this branch imported the saved certificate, made the two App Store profiles, and uploaded to TestFlight. Apple then listed 7 <i>Created via API</i> development certificates; the 2 made on 2026-11-08 came from runs 42428573631 (main) and 42428853209 (staging-webhook-catchup), which still used the old Fastfile, and this run never passed <code>-allowProvisioningUpdates</code>. The old ones are left; the account is not full, and no new ones come after the merge.</li>
+<li class="decision card" id="decision-13" data-note="decision-13" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-08</p>Archive checkpoint: tasks all done; archived for publishing.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

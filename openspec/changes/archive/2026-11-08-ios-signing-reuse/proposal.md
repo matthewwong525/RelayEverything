@@ -1,6 +1,6 @@
 # Proposal: Reuse one iPhone signing certificate in each build
 
-**Status:** built; waiting for the first iPhone build on the branch
+**Status:** ready-to-ship
 **Branch:** iphone-build-signing
 **Open questions:** none
 
@@ -56,3 +56,5 @@ Each iPhone build on GitHub starts on an empty Mac, so Xcode makes a new Apple c
 - **2026-11-07** — Assumed: the script checks `gh auth status` before it asks Apple for a certificate, and writes both `.env` lines before any GitHub secret, because a failed save after Apple makes one must not leave a `.p12` with the wrong password.
 - **2026-11-07** — Assumed: the build passes `DEVELOPMENT_TEAM` again, because a CocoaPods resource bundle can need a team, and the two app targets still sign manually.
 - **2026-11-08** — Checkpoint: built and reviewed (4 review fixes made); saved to run the iPhone build on the branch for tasks 4.2 and 4.3.
+- **2026-11-08** — Checked: run 42429382593 on this branch imported the saved certificate, made the two App Store profiles, and uploaded to TestFlight. Apple then listed 7 *Created via API* development certificates; the 2 made on 2026-11-08 came from runs 42428573631 (main) and 42428853209 (staging-webhook-catchup), which still used the old Fastfile, and this run never passed `-allowProvisioningUpdates`. The old ones are left; the account is not full, and no new ones come after the merge.
+- **2026-11-08** — Archive checkpoint: tasks all done; archived for publishing.

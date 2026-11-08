@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:drift/native.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart' show KeychainAccessibility;
 import 'package:flutter_test/flutter_test.dart';
@@ -887,7 +888,8 @@ void main() {
       relay.dispose();
       // A recording the close cut off while the button was still held has no note: it is deleted.
       await File('${folder.path}/voice/stray.wav').writeAsBytes([1]);
-      transcriber.hold = null;
+      // The next open of the app has its own transcriber: the closed one still holds the first words.
+      transcriber = FakeTranscriber();
       final reopened = voiceController();
       await reopened.load();
       await reopened.wordsWritten();
@@ -914,7 +916,7 @@ void main() {
       await relay.load();
       await relay.addNote('Typed one');
       final before = relay.entries.length;
-      expect(await hold(relay, const Duration(milliseconds: 300)), contains('Hold the button'));
+      expect(await hold(relay, const Duration(milliseconds: 300)), 'Too short to keep. Nothing was saved.');
       await relay.wordsWritten();
       expect([relay.entries.length, recordings(), transcriber.heard, notices], [before, isEmpty, isEmpty, isEmpty]);
     });
@@ -937,6 +939,26 @@ void main() {
       await relay.wordsWritten();
       expect([relay.entries, await store.notes(), recordings()], [isEmpty, isEmpty, isEmpty]);
       expect(notices, ['No speech heard. Nothing was saved.']);
+    });
+
+    test('a microphone that does not stop says so, closes the card and keeps nothing; Cancel then does no harm', () async {
+      final relay = voiceController();
+      await relay.load();
+      microphone.stopError = Exception('stuck');
+      expect(await hold(relay, const Duration(seconds: 3)), 'The microphone did not stop right. Nothing was saved.');
+      await relay.cancelVoiceNote();
+      await relay.wordsWritten();
+      expect([relay.listening, relay.entries, await store.notes(), recordings(), transcriber.heard], [null, isEmpty, isEmpty, isEmpty, isEmpty]);
+    });
+
+    test('a voice note the phone cannot keep, such as on a full disk, says so, closes the card and keeps nothing', () async {
+      await store.close();
+      store = _FullStore();
+      final relay = voiceController();
+      await relay.load();
+      expect(await hold(relay, const Duration(seconds: 3)), 'The voice note did not save.');
+      await relay.wordsWritten();
+      expect([relay.listening, relay.entries, await store.notes(), recordings(), transcriber.heard], [null, isEmpty, isEmpty, isEmpty, isEmpty]);
     });
 
     test('a refused microphone says where to allow it, and records nothing', () async {
@@ -973,18 +995,162 @@ void main() {
       expect([player.played, notices], [isEmpty, ['This recording is not on this phone.']]);
     });
 
-    test('words that fail keep the note waiting; the next open tries again', () async {
+    test('words that fail keep the note and its recording, show the failed state, and the next open tries again', () async {
       final relay = voiceController();
       await relay.load();
       transcriber.error = Exception('engine');
       await hold(relay, const Duration(seconds: 2));
       await relay.wordsWritten();
-      expect(relay.entries.single.writing, isTrue);
+      final failed = relay.entries.single;
+      expect([failed.writing, failed.failed, failed.recording, recordings()], [false, true, isNotNull, hasLength(1)]);
+      await pumpEventQueue();
+      expect(notices, ['The words did not come. Tap Try again on the note.']);
       transcriber.error = null;
       final reopened = voiceController();
       await reopened.load();
       await reopened.wordsWritten();
-      expect(reopened.entries.single.writing, isFalse);
+      expect([reopened.entries.single.writing, reopened.entries.single.failed], [false, false]);
+      expect(reopened.entries.single.text, isNotEmpty);
+    });
+
+    test('an Error, not only an Exception, leaves no note on Writing the words, and the notice shows once', () async {
+      final relay = voiceController();
+      await relay.load();
+      // Such as Isolate.run refusing a closure that holds a Future, or a speech part missing from the build.
+      transcriber.error = ArgumentError('Invalid argument: is a regular instance reachable via : Instance of Future');
+      await hold(relay, const Duration(seconds: 3));
+      clock = clock.add(const Duration(seconds: 10));
+      await hold(relay, const Duration(seconds: 2));
+      await relay.wordsWritten();
+      expect([for (final entry in relay.entries) (entry.writing, entry.failed)], [(false, true), (false, true)]);
+      expect(await store.pendingWords(), hasLength(2));
+      await pumpEventQueue();
+      expect(notices, ['The words did not come. Tap Try again on the note.']);
+    });
+
+    test('words that never end stop at the time limit, the writing is cancelled, and the note shows failed', () async {
+      final limits = <Duration>[];
+      final relay = RelayController(store: store, vault: KeyVault(storage), places: places, health: health, apiFor: server.api,
+        clock: () => clock, schedule: (on) async => scheduled.add(on),
+        voice: fakeVoice(folder, models, clock: () => clock, microphone: microphone, transcriber: transcriber, player: player),
+        wordsLimit: (length) {
+          limits.add(length);
+          return const Duration(milliseconds: 20);
+        });
+      relay.notices.listen(notices.add);
+      await relay.load();
+      transcriber.hold = Completer();
+      await hold(relay, const Duration(seconds: 3));
+      await relay.wordsWritten();
+      expect(limits, [const Duration(seconds: 3)]);
+      expect(transcriber.cancelled, 1);
+      expect([relay.entries.single.writing, relay.entries.single.failed], [false, true]);
+      await pumpEventQueue();
+      expect(notices, ['The words did not come. Tap Try again on the note.']);
+    });
+
+    test('the time limit is 2 minutes, or the recording\'s length when it is longer', () {
+      expect(wordsLimitOf(const Duration(seconds: 3)), const Duration(minutes: 2));
+      expect(wordsLimitOf(const Duration(minutes: 2)), const Duration(minutes: 2));
+      expect(wordsLimitOf(const Duration(minutes: 5)), const Duration(minutes: 5));
+    });
+
+    test('Try again writes the words of a failed note from its kept recording', () async {
+      final relay = voiceController();
+      await relay.load();
+      transcriber.error = StateError('engine');
+      await hold(relay, const Duration(seconds: 2));
+      await relay.wordsWritten();
+      expect(relay.entries.single.failed, isTrue);
+      transcriber.error = null;
+      transcriber.hold = Completer();
+      await relay.writeWordsAgain();
+      expect([relay.entries.single.writing, relay.entries.single.failed], [true, false]);
+      transcriber.hold!.complete('Order more TL3312 switches');
+      await relay.wordsWritten();
+      final written = relay.entries.single;
+      expect([written.text, written.writing, written.failed], ['Order more TL3312 switches', false, false]);
+      expect(transcriber.heard, hasLength(2));
+      expect(transcriber.heard.toSet(), hasLength(1));
+      await pumpEventQueue();
+      expect(notices, ['The words did not come. Tap Try again on the note.']);
+    });
+
+    test('two notes at once: the second waits its turn past its own time limit, and cancels neither note', () async {
+      // A 5-minute note, then at once a 3-second one: the short one's limit is short, and starts only at its turn.
+      final relay = RelayController(store: store, vault: KeyVault(storage), places: places, health: health, apiFor: server.api,
+        clock: () => clock, schedule: (on) async => scheduled.add(on),
+        voice: fakeVoice(folder, models, clock: () => clock, microphone: microphone, transcriber: transcriber, player: player),
+        wordsLimit: (length) => length >= const Duration(minutes: 5) ? const Duration(hours: 1) : const Duration(milliseconds: 20));
+      relay.notices.listen(notices.add);
+      await relay.load();
+      final first = transcriber.hold = Completer();
+      await hold(relay, const Duration(minutes: 5));
+      await pumpEventQueue();
+      expect(transcriber.heard, hasLength(1));
+      transcriber.hold = null;
+      clock = clock.add(const Duration(seconds: 10));
+      await hold(relay, const Duration(seconds: 3));
+      // Longer than the second note's limit, while it waits.
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(transcriber.cancelled, 0);
+      expect(transcriber.heard, hasLength(1));
+      expect([for (final entry in relay.entries) (entry.writing, entry.failed)], [(true, false), (true, false)]);
+      first.complete('Order more TL3312 switches');
+      await relay.wordsWritten();
+      expect(transcriber.heard, hasLength(2));
+      expect([for (final entry in relay.entries) (entry.text, entry.writing, entry.failed)], [
+        ('Ask the fab if the flex stiffener can be 0.2 mm', false, false),
+        ('Order more TL3312 switches', false, false),
+      ]);
+      expect([transcriber.cancelled, notices], [0, isEmpty]);
+    });
+
+    test('a stuck job that its cancel does not stop: the note behind it still ends failed, and never starts', () async {
+      final relay = RelayController(store: store, vault: KeyVault(storage), places: places, health: health, apiFor: server.api,
+        clock: () => clock, schedule: (on) async => scheduled.add(on),
+        voice: fakeVoice(folder, models, clock: () => clock, microphone: microphone, transcriber: transcriber, player: player),
+        wordsLimit: (length) => const Duration(milliseconds: 20));
+      relay.notices.listen(notices.add);
+      await relay.load();
+      transcriber.cancelStops = false;
+      final stuck = transcriber.hold = Completer();
+      await hold(relay, const Duration(seconds: 4));
+      await pumpEventQueue();
+      clock = clock.add(const Duration(seconds: 10));
+      await hold(relay, const Duration(seconds: 3));
+      // Past both limits: the first's, then the second's, which starts when the first passes its own.
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(transcriber.cancelled, 1);
+      expect(transcriber.heard, hasLength(1));
+      expect([for (final entry in relay.entries) (entry.writing, entry.failed)], [(false, true), (false, true)]);
+      // The stuck job ends at last: the second note, past its limit, never starts its own job.
+      stuck.complete('Order more TL3312 switches');
+      await relay.wordsWritten();
+      await pumpEventQueue();
+      expect(transcriber.heard, hasLength(1));
+      expect(notices, ['The words did not come. Tap Try again on the note.']);
+    });
+
+    test('Try again writes only the failed notes, not a note whose words are being written now', () async {
+      final relay = voiceController();
+      await relay.load();
+      transcriber.error = StateError('engine');
+      await hold(relay, const Duration(seconds: 2));
+      await relay.wordsWritten();
+      final failed = transcriber.heard.single;
+      transcriber.error = null;
+      final held = transcriber.hold = Completer();
+      clock = clock.add(const Duration(seconds: 10));
+      await hold(relay, const Duration(seconds: 3));
+      await pumpEventQueue();
+      final writing = transcriber.heard.last;
+      expect(writing, isNot(failed));
+      await relay.writeWordsAgain();
+      held.complete('Order more TL3312 switches');
+      await relay.wordsWritten();
+      expect(transcriber.heard, [failed, writing, failed]);
+      expect([for (final entry in relay.entries) (entry.writing, entry.failed)], [(false, false), (false, false)]);
     });
 
     test('first voice note: with no model, the app records nothing and gets nothing until the person says yes', () async {
@@ -1187,4 +1353,12 @@ class _HeldHealth extends FakeHealth {
 
   @override
   Future<bool> allow() => answer.future;
+}
+
+/// A store whose disk is full: it can not keep a voice note.
+class _FullStore extends Store {
+  _FullStore() : super(NativeDatabase.memory());
+
+  @override
+  Future<void> addVoiceNote(LocalNote note) => throw Exception('disk full');
 }

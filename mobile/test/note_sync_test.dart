@@ -177,9 +177,10 @@ void main() {
       notes = [pulledNote('s1', recordedAt: DateTime.now())];
       await tester.drag(find.text('No notes yet'), const Offset(0, 300));
       await tester.pump();
-      await tester.pump(const Duration(seconds: 1));
-      await until(tester, () => relay.entries.isNotEmpty);
+      // The pull-down's pull reads the store in real time: wait for that same pull, which a second call joins.
+      await tester.runAsync(relay.pullNotes);
       await tester.pumpAndSettle();
+      expect(relay.entries, isNotEmpty);
       expect(find.text('Flight moved to 9:40'), findsOneWidget);
       expect(find.textContaining('· Email'), findsOneWidget);
       expect(server.requests.where(_isPull), hasLength(1));

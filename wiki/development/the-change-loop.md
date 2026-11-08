@@ -55,7 +55,7 @@ No offer after a code change you built, or in an unattended run.
 
 ### One task, one workspace
 
-A [Paseo](https://paseo.sh) workspace holds one task. Done, the agent runs [`/close`](../../.agents/skills/close/SKILL.md) unasked, after any [offer](#offer-a-routine-or-an-app); never at a plan's review, mid-build, or on a blocker, failed check, declined publish or open question. A new task opens [a new workspace](../../.agents/skills/plan/references/new-workspace.md#new-task-in-this-chat), unless it is a question on this task or the person says *do it here*. Any chat [closes a finished chat](daily.md#close-finished-chats) you pick.
+A [Paseo](https://paseo.sh) workspace holds one task. Done, the agent asks one question: *Close this chat* (recommended) or *Keep it open*, after any [offer](#offer-a-routine-or-an-app). It runs [`/close`](../../.agents/skills/close/SKILL.md) only when you pick *Close this chat*: nothing closes a chat unasked. It never asks at a plan's review, mid-build, or on a blocker, failed check, declined publish or open question. A new task opens [a new workspace](../../.agents/skills/plan/references/new-workspace.md#new-task-in-this-chat), unless it is a question on this task or the person says *do it here*. Any chat [closes a finished chat](daily.md#close-finished-chats) you pick.
 
 ### Several parts, several workspaces
 

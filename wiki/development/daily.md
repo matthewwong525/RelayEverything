@@ -42,12 +42,14 @@ The chief of staff keeps your chats moving while you are away.
 Each chat checks its own stops, in Claude Code or Codex, in Paseo or not. When a chat stops and your last message there is more than 15 minutes old, one read-only AI run of the same tool reads the chat's last messages and sorts the stop. It never answers a chat you are typing in. The chat waits up to 4 minutes for it. Each stop lands in one bucket:
 
 1. **Keep going.** *Tests pass; next I'll update the wiki page.* It replies *keep going*.
-2. **Obvious pick.** A safe answer that stays inside the work and can be undone, or a safe command.
+2. **Obvious pick.** A safe answer that stays inside the work and can be undone, even to a small question with no recommendation, such as *run the tests?*; or a safe command.
 3. **Needs you.** Everything else waits in its own chat, where you see it.
 
 **It never approves alone** anything that sends or posts, pays or buys, publishes or merges, deletes, accepts terms, changes a business record, or shares a key, even when the agent recommends it. A finished plan waits for you, on its chat's row in [your chat list](#your-chat-list). After five check-ins in a row on one chat with no word from you, that chat waits for you.
 
-**What waits for you:** a question asked with the question tool, which holds the chat until you answer; a risky step; a finished plan; and the sixth check-in in a row. Each check-in writes one line to [the journal](#the-journal).
+**A question typed for you comes back once as tap answers**, recommended first, unless the check-in can pick it. You tap one, or type your own. A risky question gets buttons too. A chat that stops again with no buttons waits for you.
+
+**What waits for you:** a question asked with the question tool; a risky step; a finished plan; and the sixth check-in in a row. Each check-in writes one line to [the journal](#the-journal).
 
 **Turn check-ins off** with *stop check-ins* in any chat, or `D checkins off`: every chat in this checkout then stops for you, and the worker stops too. A background schedule run due then does not start, and the Inbox says *check-ins are off*. The [default schedules](../stack/host-schedules.md#default-schedules) you did not change wait *Paused*, so they add no such runs. *Start check-ins*, or `D checkins on`, turns them back on, and the defaults with them.
 
@@ -55,21 +57,14 @@ Each chat checks its own stops, in Claude Code or Codex, in Paseo or not. When a
 
 ### Your chats in line
 
-When you work in several chats at once, the daily keeps them pointed the same way. **The goal:** no two chats do the same work or work against each other, each chat gets as far as what all your chats know allows, and your recent choices weigh most. How to reach it is the daily's judgment, not a fixed rule.
-
-- **A short map.** A few minutes after a watched chat has something new, one background run reads it and notes, for each chat: what it works on, how far it is, what you decided there and when, and what it waits for. A closed chat stays on the map for 7 days. The map stays on this computer, outside the project.
-- **Notes.** The run tells each chat the news that changes its work, and names the chat and time it came from. A note starts *From the daily:*. It goes straight into a working chat's running step when waiting would waste work, else at the chat's next stop. Nothing stops a step in the middle.
-- **Waits.** When the work, the change or the answer a chat waits for lands, the run tells that chat, so it goes on without you.
-- **Covered.** A chat told that another chat covers its work passes on what only it has, then waits; *what's going on?* offers to [close it](#close-finished-chats).
-
-The [check-ins'](#check-ins) limits hold: risky steps wait for you, no chat closes without your pick, an agent's words are never your yes, and notes count toward the five in a row. Each note writes one journal line. *Stop check-ins* stops it too. It is the *Keep my chats in line* [default schedule](../stack/host-schedules.md#default-schedules): pause it in the Inbox's *Schedules* list to turn off only this.
+When you work in several chats at once, the daily keeps them pointed the same way, in Paseo or any other app that runs Claude Code or Codex: no two chats do the same work or work against each other. [Your chats in line](chats-in-line.md) owns how: the map, the two ways a note goes, and the limits. It is the *Keep my chats in line* [default schedule](../stack/host-schedules.md#default-schedules).
 
 ### Ask in any chat
 
 You keep no chat open for the daily: say these in any chat, and it does them through the daily skill.
 
 - *What's going on?* gives what the background runs did since that chat last asked, and, in Paseo, one line per chat. It then offers to [close finished chats](#close-finished-chats).
-- *Tell flashy-crab: yes, merge* sends your answer to that chat.
+- *Tell flashy-crab: yes, merge* sends your answer to that chat. It needs Paseo, so your words arrive as your own message.
 - *Watch flashy-crab* adds a chat to the watch.
 - *Remind me Friday to …* makes a [reminder](#reminders).
 - *Stop check-ins* and *start check-ins* turn [check-ins](#check-ins) off and on.
@@ -99,7 +94,7 @@ Ask *what's going on?* in any chat, and it marks each chat it watches that is fi
 - The chat's work is merged at its last commit, and its folder has no new work.
 - The chat is stopped and has no open question.
 
-It also marks a stopped chat as covered when [the line-up](#your-chats-in-line) told it another chat covers its work. It asks which ones to close. Each chat you pick gets [`/close`](../../.agents/skills/close/SKILL.md): it saves what it learned, adds what lasts to the wiki, and closes its workspace. A chat you do not pick stays open. Nothing closes a chat by itself because its work went live: a live chat that is still open is usually one you kept open. It never marks a sub-agent or the main checkout. This needs Paseo, which lets a chat see other chats. [The tidy-up](../../.agents/skills/schedule/scripts/tidy.mjs) still closes a saved chat idle for 3 days.
+It also marks a stopped chat as covered when [the line-up](#your-chats-in-line) told it another chat covers its work. It asks which ones to close. Each chat you pick gets [`/close`](../../.agents/skills/close/SKILL.md): it saves what it learned, adds what lasts to the wiki, and closes its workspace. A chat you do not pick stays open. Nothing closes a chat by itself because its work went live: a live chat that is still open is usually one you kept open. It never marks a sub-agent or the main checkout. This needs Paseo, which lets a chat see other chats. [The tidy-up](../../.agents/skills/schedule/scripts/tidy.mjs) closes no chat either: an idle chat stays open until you close it.
 
 ## Add-ons
 

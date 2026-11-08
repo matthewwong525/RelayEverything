@@ -1,6 +1,6 @@
 # Release the phone app with a tag
 
-**Status:** built, publishing
+**Status:** ready-to-ship
 **Branch:** tag-triggered-release-pipeline
 **Open questions:** none
 
@@ -118,3 +118,4 @@ Today every push of the phone app, on any branch, sends an iPhone build to TestF
 - **2026-11-08** — Check: `.github/workflows/mobile-device-check.yml` skips the Claude steps when a release calls it for the tour alone, because the plan chose the fixed tour with no Claude step as the release gate; the tour now fails on any failed step, not only the first.
 - **2026-11-08** — Check: `app/package.json` adds `scripts/app-release.test.mjs` to the test list, because the release script needs its tests to run; nothing is taken out.
 - **2026-11-08** — Assumed: the first main run and the release check are checked right after publish, not as tasks, because both need this change on main first.
+- **2026-11-08** — Archived for publish after the branch run built and signed both apps and sent nothing to TestFlight or a release.

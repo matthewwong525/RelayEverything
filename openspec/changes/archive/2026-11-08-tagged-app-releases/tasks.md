@@ -28,7 +28,7 @@
 ## 6. Checks
 
 - [x] 6.1 Run `npm test` in `app/` and `node scripts/public-check.mjs`
-- [ ] 6.2 `/save`; on the branch's run: the iPhone app builds and nothing reaches TestFlight, and no GitHub release is made
+- [x] 6.2 `/save`; on the branch's run: the iPhone app builds and nothing reaches TestFlight, and no GitHub release is made
 After publish (not tasks, because a task can't wait for its own publish; `/ship` runs them right after the merge):
 
 - The first main run uploads one TestFlight build and one pre-release, and the latest GitHub release does not change.

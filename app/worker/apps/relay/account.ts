@@ -1,5 +1,5 @@
 // GET account and POST account-delete: who is signed in, and *Delete my account*, which removes the person's keys,
-// sign-ins and AI apps, then recordings and space, then their row. It can't be undone.
+// sign-ins and AI apps, then recordings, photos and space, then their row. It can't be undone.
 import { z } from "zod";
 import { defineAction, type ActionCall } from "../../api/contract.ts";
 import { asPerson } from "./caller.ts";
@@ -25,7 +25,7 @@ async function endGrants(env: Env, personId: string) {
 
 export const accountDelete = defineAction({
   operationId: "relay.account-delete", summary: "Delete my account",
-  description: "Delete your account: your notes, recordings, health, places, chats, devices, webhooks and AI apps. It can't be undone.",
+  description: "Delete your account: your notes, recordings, photos, health, places, chats, devices, webhooks and AI apps. It can't be undone.",
   input: z.strictObject({ email: z.string().max(320).describe("Your account's email, typed to confirm.") }),
   output: z.strictObject({ deleted: z.literal(true) }),
   encoding: "json", effect: "write", agentAvailable: false, requiresIdentity: false, errors: { invalid_input: CONFIRM }, examples: [],

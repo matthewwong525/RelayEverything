@@ -834,6 +834,132 @@
         },
         "type": {
           "type": "string",
+          "const": "photo.created"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+          "description": "When Relay Everything, or the phone that sends to its own webhook, stored what this message holds."
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "photo": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "The photo's id: a UUID, or the phone's own photo id when the phone sends to its own webhook."
+                },
+                "device": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "The device key's id in Relay Everything, or the phone's own install id when the phone sends to its own webhook."
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "description": "The phone or other device that sent the item."
+                },
+                "taken_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                  "description": "When the photo was taken, by the phone's photo library."
+                },
+                "place": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "lat": {
+                          "type": "number"
+                        },
+                        "lon": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "lat",
+                        "lon"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Where the photo was taken, or null for a photo with no place."
+                },
+                "width": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991,
+                  "description": "In pixels: at most 1,600 on the long side."
+                },
+                "height": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991,
+                  "description": "In pixels."
+                },
+                "content_type": {
+                  "type": "string",
+                  "const": "image/jpeg"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991,
+                  "description": "The JPEG's size in bytes, up to 3 MB."
+                },
+                "base64": {
+                  "type": "string",
+                  "description": "The JPEG's bytes in base64."
+                }
+              },
+              "required": [
+                "id",
+                "device",
+                "taken_at",
+                "place",
+                "width",
+                "height",
+                "content_type",
+                "size",
+                "base64"
+              ]
+            }
+          },
+          "required": [
+            "photo"
+          ]
+        }
+      },
+      "required": [
+        "version",
+        "type",
+        "timestamp",
+        "data"
+      ],
+      "description": "A new photo from the Photos switch, with its bytes. A photo shared into a note goes as one of the note's files instead."
+    },
+    {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "type": {
+          "type": "string",
           "const": "webhook.test"
         },
         "timestamp": {

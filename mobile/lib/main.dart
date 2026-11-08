@@ -17,6 +17,7 @@ import 'sync/calendar.dart';
 import 'sync/health.dart';
 import 'sync/location.dart';
 import 'sync/native.dart';
+import 'sync/photos.dart';
 import 'sync/wake.dart';
 import 'voice/model.dart';
 import 'voice/recorder.dart';
@@ -47,7 +48,8 @@ Future<void> main() async {
     transcriber: WhisperTranscriber(() async => (await model.file).path), player: PhonePlayer());
   final relay = RelayController(store: openStore(), vault: KeyVault(), places: PhonePlaces(), health: PhoneHealth(), schedule: scheduleSync,
     voice: voice, native: Platform.isIOS ? PhoneBackground() : null, folder: getApplicationSupportDirectory, opener: openWithPhone,
-    share: Platform.isIOS ? PhoneShareGroup() : null, calendar: PhoneCalendarSource());
+    share: Platform.isIOS ? PhoneShareGroup() : null, calendar: PhoneCalendarSource(), photos: PhonePhotos(),
+    network: PhoneNetwork());
   // A Health or place wake while the app runs syncs here, in place of a second engine.
   if (Platform.isIOS) PhoneBackground.onWake(relay.sync);
   await relay.load();
@@ -56,7 +58,7 @@ Future<void> main() async {
   runApp(RelayApp(relay: relay, voiceRequests: voiceRequests.stream));
   // While the app runs, Shortcuts' actions use this engine, so the open timeline shows a shortcut's note at once.
   unawaited(listenForShortcuts(ShortcutsBridge(relay, onVoice: () => voiceRequests.add(null))));
-  // Each open, and each return to the app, keeps what the share card left and sends what waits.
+  // Each open, and each return to the app, keeps what the share card left, sends what waits and looks for new photos.
   AppLifecycleListener(onResume: relay.resume);
   // After an update that reads new health types, the phone asks for them once, before the first round reads.
   await relay.askNewHealthTypes();

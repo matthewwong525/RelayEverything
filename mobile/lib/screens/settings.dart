@@ -5,6 +5,10 @@ import '../relay.dart';
 import '../voice/model.dart' show megabytes;
 import 'back_to_notes.dart';
 import 'connect.dart';
+import 'timeline.dart' show Opener, openInBrowser;
+
+/// What the person picked when turning photos off.
+enum _PhotosChoice { openPage, stop }
 
 String _two(int value) => value.toString().padLeft(2, '0');
 
@@ -44,12 +48,14 @@ String _placeLine(Relay relay) {
 }
 
 /// Each switch acts at once and asks for its permission only when turned on. Sending is off until the person turns it
-/// on; health, the calendar and location history sit under it and work only with it.
+/// on; health, the calendar, location history and photos sit under it and work only with it, and go where it goes.
 class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key, required this.relay, this.scanner});
+  const SettingsScreen({super.key, required this.relay, this.scanner, this.opener});
 
   final Relay relay;
   final Scanner? scanner;
+  /// Opens the Relay Everything page; a test passes its own.
+  final Opener? opener;
 
   Future<void> _apply(BuildContext context, Future<String?> change) async {
     final problem = await change;
@@ -123,9 +129,23 @@ class SettingsScreen extends StatelessWidget {
                       subtitle: Text('A point each 100 m, or each 5 minutes while you stay. It uses more battery.')),
                   ]),
                 ),
+                SwitchListTile(
+                  title: const Text('Photos'),
+                  subtitle: Text(settings.place == SendPlace.webhook
+                    ? 'Sends new photos, with when and where you took them, to your webhook.'
+                    : 'Sends new photos, with when and where you took them, so your AI can see them.'),
+                  value: settings.photos,
+                  onChanged: sending ? ((on) => on ? _apply(context, relay.setPhotos(true)) : _stopPhotos(context)) : null,
+                ),
+                SwitchListTile(
+                  title: const Text('Send photos on mobile data'),
+                  subtitle: const Text('Off: photos wait for Wi-Fi.'),
+                  value: settings.photosOnMobileData,
+                  onChanged: settings.photos ? (on) => _apply(context, relay.setPhotosOnMobileData(on)) : null,
+                ),
                 if (!sending) Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: Text('Health, Calendar and Location history work with Send my notes on.',
+                  child: Text('Health, Calendar, Location history and Photos work with Send my notes on.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 ),
                 if (sending) ListTile(
@@ -191,13 +211,39 @@ class SettingsScreen extends StatelessWidget {
     final there = relay.settings.place == SendPlace.webhook ? 'at your webhook' : 'on your Relay Everything server';
     final sure = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
       title: const Text('Stop sending?'),
-      content: Text('New notes stay on this phone. Notes already $there stay there. Health, the calendar and location stop.'),
+      content: Text('New notes stay on this phone. Notes already $there stay there. '
+        'Health, the calendar, location and photos stop.'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
         FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Stop sending')),
       ],
     ));
     if (sure == true) await relay.stopSending();
+  }
+
+  /// Says where the photos already sent stay, then turns photos off, or opens the page to delete them. Photos sent to
+  /// a webhook are in the person's own database, so with the webhook they turn off with no question.
+  Future<void> _stopPhotos(BuildContext context) async {
+    if (relay.settings.place == SendPlace.webhook) return _apply(context, relay.setPhotos(false));
+    final server = relay.server;
+    final choice = await showDialog<_PhotosChoice>(context: context, builder: (context) => AlertDialog(
+      title: const Text('Stop sending photos?'),
+      content: const Text('Photos already sent stay on your Relay Everything server. Delete them on your page.'),
+      actions: [
+        if (server != null)
+          TextButton(onPressed: () => Navigator.pop(context, _PhotosChoice.openPage), child: const Text('Open my page')),
+        FilledButton(onPressed: () => Navigator.pop(context, _PhotosChoice.stop), child: const Text('Stop sending photos')),
+      ],
+    ));
+    if (!context.mounted) return;
+    if (choice == _PhotosChoice.stop) return _apply(context, relay.setPhotos(false));
+    if (choice == _PhotosChoice.openPage) {
+      // Photos stay on: the person deletes what was sent on the page, then can come back and turn them off.
+      final messenger = ScaffoldMessenger.of(context);
+      if (!await (opener ?? openInBrowser)(Uri.parse('$server/apps/relay/'))) {
+        messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
+      }
+    }
   }
 
   Future<void> _editServer(BuildContext context) async {

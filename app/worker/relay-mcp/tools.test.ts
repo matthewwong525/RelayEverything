@@ -2,10 +2,11 @@ import { readdirSync, readFileSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { beforeAll, expect, it } from "vitest";
-import { ANA, BEN, fakeSpaces, NOW, queue } from "../../tests/relay";
+import { ANA, BEN, bucket, fakeSpaces, jpeg, NOW, queue } from "../../tests/relay";
+import { spaceOf, vouch } from "../apps/relay/space";
 import { APP_DEVICE, RECONNECT } from "./answers";
 import { APP_DEVICE_OFF } from "./asker";
-import type { GrantProps } from "./env";
+import type { GrantProps, McpEnv } from "./env";
 import { mcpHandler } from "./tools";
 
 const spaceRows = readFileSync(new URL("../../tests/relay-space-rows.sql", import.meta.url), "utf8");
@@ -21,6 +22,9 @@ function seeded() {
   return { sql, SPACES: made.SPACES };
 }
 
+/** The connector's spaces, file store and webhooks' queue, as its Worker binds them. */
+const bindings = (SPACES: DurableObjectNamespace) => ({ SPACES, RELAY_BUCKET: bucket, RELAY_WEBHOOKS: queue } as unknown as McpEnv);
+
 /** A grant as /callback makes it now: Ana's space, and adding notes as the app's own device. */
 const GRANT: GrantProps = { personId: ANA, adds: true, deviceId: "e0000000-0000-4000-8000-000000000001", name: "Claude" };
 
@@ -28,7 +32,7 @@ const GRANT: GrantProps = { personId: ANA, adds: true, deviceId: "e0000000-0000-
 async function connect(SPACES: DurableObjectNamespace, props: GrantProps = GRANT) {
   const connected = new Client({ name: "test", version: "1.0.0" });
   await connected.connect(new StreamableHTTPClientTransport(new URL("https://relay-mcp.example.com/mcp"),
-    { fetch: (url, init) => mcpHandler.fetch(new Request(url, init), { SPACES, RELAY_WEBHOOKS: queue as never }, { props }) }));
+    { fetch: (url, init) => mcpHandler.fetch(new Request(url, init), bindings(SPACES), { props }) }));
   return connected;
 }
 
@@ -51,12 +55,12 @@ it("names itself Relay Everything to the AI app", () => {
   expect(client.getInstructions()).toMatch(/^Relay Everything /);
 });
 
-it("lists ten tools, each read-only but add_note, which changes and deletes nothing", async () => {
+it("lists twelve tools, each read-only but add_note, which changes and deletes nothing", async () => {
   const { tools } = await client.listTools();
   expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "places", "calendar", "search_chats",
-    "read_chat", "add_note"]);
-  for (const tool of tools.slice(0, 9)) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
-  expect(tools[9].annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+    "read_chat", "photos", "read_photo", "add_note"]);
+  for (const tool of tools.slice(0, 11)) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+  expect(tools[11].annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
 });
 
 it("finds notes holding every word, in any case, with a title and the time in the zone", async () => {
@@ -230,7 +234,7 @@ it("reads only the grant's own person's space, and asks an app from before space
   const found = JSON.parse((await ben.callTool({ name: "search", arguments: { query: "milk" } }) as { content: { text: string }[] }).content[0].text);
   expect(found.notes.map((note: { id: string }) => note.id)).toEqual([ID(7)]);
   expect(ids(await ask("search", { query: "ring" }))).not.toContain(ID(7));
-  const old = await mcpHandler.fetch(new Request("https://relay-mcp.example.com/mcp", { method: "POST" }), { SPACES, RELAY_WEBHOOKS: queue as never }, { props: {} });
+  const old = await mcpHandler.fetch(new Request("https://relay-mcp.example.com/mcp", { method: "POST" }), bindings(SPACES), { props: {} });
   expect([old.status, await old.json()]).toEqual([401, { error: "invalid_token", error_description: "Connect this AI app again." }]);
 });
 
@@ -273,6 +277,51 @@ it("lets an app connected before adding read, but asks it to connect again to ad
   expect(ids(await ask("search", { query: "milk" }))).toEqual([ID(3)]);
   expect(await ask("add_note", { clientId: "claude-note-0001", text: "Hi" })).toEqual({ refused: RECONNECT });
   expect(sql.prepare("SELECT count(*) AS count FROM relay_notes").get()).toEqual({ count: 3 });
+  client = await connect(seeded().SPACES);
+});
+
+
+const PHOTO = (n: number) => `f0000000-0000-4000-8000-00000000000${n}`;
+const photoIds = (answer: { photos: { id: string }[] }) => answer.photos.map(photo => photo.id);
+
+it("lists photos newest first, a page at a time, and only those near a place when asked", async () => {
+  const all = await ask("photos", { from: "2026-11-04", to: "2026-11-05" });
+  expect(all).toEqual({ nextCursor: null, photos: [
+    { id: PHOTO(3), takenAt: "2026-11-04T17:06:40-05:00", lat: 43.6544, lon: -79.4006, width: 1600, height: 900 },
+    { id: PHOTO(2), takenAt: "2026-11-04T14:20:00-05:00", lat: null, lon: null, width: 1200, height: 1600 },
+    { id: PHOTO(1), takenAt: "2026-11-04T12:05:00-05:00", lat: 43.6487, lon: -79.3817, width: 1600, height: 1200 }] });
+  expect(JSON.stringify(all)).not.toMatch(/people\/|file|seed-photo|d0000000/);
+  const first = await ask("photos", { from: "2026-11-04", to: "2026-11-05", limit: 2 });
+  expect([photoIds(first), first.nextCursor]).toEqual([[PHOTO(3), PHOTO(2)], `1793820000000.${PHOTO(2)}`]);
+  expect(photoIds(await ask("photos", { from: "2026-11-04", to: "2026-11-05", cursor: first.nextCursor }))).toEqual([PHOTO(1)]);
+  // King St W and Kensington Ave are about 1.7 km apart.
+  const near = (km: number) => ask("photos", { from: "2026-11-04", to: "2026-11-05", near: { lat: 43.6487, lon: -79.3817, km } });
+  expect(photoIds(await near(0.5))).toEqual([PHOTO(1)]);
+  expect(photoIds(await near(3))).toEqual([PHOTO(3), PHOTO(1)]);
+  expect((await near(501)).refused).toBeDefined();
+  expect((await ask("photos", { from: "2026-11-04", to: "2026-11-05", limit: 51 })).refused).toBeDefined();
+  expect(photoIds(await ask("photos", { from: "2026-11-05", to: "2026-11-06" }))).toEqual([]);
+});
+
+it("shows one photo as an image with a line of its time and place, and refuses an id it lacks", async () => {
+  const { SPACES } = seeded();
+  const { files } = spaceOf(bindings(SPACES), vouch("grant", ANA));
+  await files.put(`photos/${PHOTO(1)}`, jpeg(1600, 1200).buffer);
+  await files.put(`photos/${PHOTO(2)}`, jpeg(1200, 1600).buffer);
+  client = await connect(SPACES);
+  const { content, isError } = await client.callTool({ name: "read_photo", arguments: { id: PHOTO(1) } }) as
+    { content: { type: string; data?: string; mimeType?: string; text?: string }[]; isError?: boolean };
+  expect(isError).toBeFalsy();
+  expect(content).toEqual([{ type: "image", data: Buffer.from(jpeg(1600, 1200)).toString("base64"), mimeType: "image/jpeg" },
+    { type: "text", text: `Photo ${PHOTO(1)}, taken 2026-11-04T12:05:00-05:00 at 43.6487, -79.3817, 1600 × 1200 pixels.` }]);
+  const placeless = await client.callTool({ name: "read_photo", arguments: { id: PHOTO(2), timezone: "Europe/London" } }) as { content: { text?: string }[] };
+  expect(placeless.content[1].text).toBe(`Photo ${PHOTO(2)}, taken 2026-11-04T19:20:00+00:00, with no place, 1200 × 1600 pixels.`);
+  // A row whose file is gone, an id it lacks, and Ben's grant on Ana's photo all get no photo.
+  expect(await ask("read_photo", { id: PHOTO(3) })).toEqual({ refused: "No photo has this id." });
+  expect(await ask("read_photo", { id: PHOTO(9) })).toEqual({ refused: "No photo has this id." });
+  const ben = await connect(SPACES, { personId: BEN });
+  const refused = await ben.callTool({ name: "read_photo", arguments: { id: PHOTO(1) } }) as { content: { text: string }[]; isError?: boolean };
+  expect([refused.isError, refused.content[0].text]).toEqual([true, "No photo has this id."]);
   client = await connect(seeded().SPACES);
 });
 

@@ -261,3 +261,60 @@ export async function chatLines(db: Db, id: string, words: string[], limit: numb
     (${words.map(() => "text LIKE ? ESCAPE '\\'").join(" OR ")}) ORDER BY seq LIMIT ?`).bind(id, ...words.map(like), limit).all<ChatMessage>();
   return results;
 }
+
+// Photos: each row's time, place and size. Its file's name stays here, for read_photo to open it through space.ts.
+type PhotoRow = { id: string; taken_at: number; lat: number | null; lon: number | null; width: number; height: number; file_key: string };
+
+const photoShaped = (row: PhotoRow) => ({ id: row.id, takenAt: row.taken_at, lat: row.lat, lon: row.lon, width: row.width, height: row.height });
+
+export type Photo = ReturnType<typeof photoShaped>;
+/** A point and a distance from it, in kilometres. */
+export type Near = { lat: number; lon: number; km: number };
+
+const EARTH_KM = 6371;
+const radians = (degrees: number) => degrees * Math.PI / 180;
+
+/** The great-circle distance between two points, in kilometres. */
+export function distanceKm(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
+  const [dLat, dLon] = [radians(b.lat - a.lat), radians(b.lon - a.lon)];
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(radians(a.lat)) * Math.cos(radians(b.lat)) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_KM * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/** The SQL and values for a box around the point that holds every place within `km` of it, across the date line too. */
+function box({ lat, lon, km }: Near): { sql: string; values: number[] } {
+  const dLat = km / 111.2;
+  const south = Math.max(-90, lat - dLat);
+  const north = Math.min(90, lat + dLat);
+  const dLon = km / (111.2 * Math.cos(radians(Math.max(Math.abs(south), Math.abs(north)))));
+  const around = "p.lat BETWEEN ? AND ?";
+  // Near a pole, or far enough, the box goes all the way round.
+  if (!Number.isFinite(dLon) || dLon >= 180) return { sql: around, values: [south, north] };
+  const [west, east] = [lon - dLon, lon + dLon];
+  if (west < -180) return { sql: `${around} AND (p.lon >= ? OR p.lon <= ?)`, values: [south, north, west + 360, east] };
+  if (east > 180) return { sql: `${around} AND (p.lon >= ? OR p.lon <= ?)`, values: [south, north, west, east - 360] };
+  return { sql: `${around} AND p.lon BETWEEN ? AND ?`, values: [south, north, west, east] };
+}
+
+export type PhotoFilter = { before?: number; beforeId?: string; after?: number; near?: Near; limit: number };
+
+/** A page of photos, newest first, from `after` up to `before`; with `near`, only those taken within its distance. The
+ *  cursor is the page's last row, so a page that `near` thinned still reads on from the right place. */
+export async function photoPage(db: Db, filter: PhotoFilter) {
+  const { before = Number.MAX_SAFE_INTEGER, beforeId = "", after = 0, near, limit } = filter;
+  const place = near && box(near);
+  const where = ["(p.taken_at < ? OR (p.taken_at = ? AND p.id < ?))", "p.taken_at >= ?", ...place ? [place.sql] : []];
+  const { results } = await db.prepare(`SELECT p.id, p.taken_at, p.lat, p.lon, p.width, p.height FROM relay_photos p
+      WHERE ${where.join(" AND ")} ORDER BY p.taken_at DESC, p.id DESC LIMIT ?`)
+    .bind(before, before, beforeId, after, ...place ? place.values : [], limit + 1).all<PhotoRow>();
+  const page = results.slice(0, limit);
+  const last = results.length > limit ? page.at(-1)! : null;
+  const kept = near ? page.filter(row => distanceKm(near, { lat: row.lat!, lon: row.lon! }) <= near.km) : page;
+  return { photos: kept.map(photoShaped), next: last?.taken_at ?? null, nextId: last?.id ?? null };
+}
+
+/** One photo and its file's name, or null. */
+export async function photoById(db: Db, id: string): Promise<(Photo & { file: string }) | null> {
+  const row = await db.prepare("SELECT id, taken_at, lat, lon, width, height, file_key FROM relay_photos WHERE id = ?").bind(id).first<PhotoRow>();
+  return row && { ...photoShaped(row), file: row.file_key };
+}

@@ -32,6 +32,10 @@ final calendar = item(13, 'calendar', {'events': [{'key': 'work:a:${Date.recorde
   'title': 'Board meeting', 'start': Date.recorded, 'end': Date.recorded + 3600000, 'allDay': false, 'location': 'Room 4',
   'people': [{'name': 'Sam', 'email': 'sam@example.com', 'organizer': true}]}], 'removed': ['work:b:${Date.recorded}']});
 
+final photo = QueuedPhoto(clientId: '7b2e4c1a-9d3f-4e6a-8b5c-0a1d2e3f4a5b', assetId: 'IMG_0001',
+  takenAt: DateTime.utc(2026, 11, 4, 13, 58), lat: 38.7139, lon: -9.1394, width: 1600, height: 1200,
+  path: 'photos/7b2e4c1a-9d3f-4e6a-8b5c-0a1d2e3f4a5b.jpg', queuedAt: queued);
+
 abstract final class Date {
   static final recorded = DateTime.utc(2026, 11, 4, 14, 1).millisecondsSinceEpoch;
 }
@@ -80,6 +84,13 @@ void main() {
     expect((bare['data'] as Map)['note'], allOf(containsPair('place', null), isNot(contains('attachments'))));
     // An empty batch needs no message.
     expect(webhook.message(item(12, 'health', {'samples': []})), isNull);
+    // A photo from *Photos*: its own client id, time, place and JPEG, in the server's photo.created shape.
+    expect(webhook.photoMessage(photo, [0xff, 0xd8, 0xff, 0xd9]), {'version': 1, 'type': 'photo.created',
+      'timestamp': '2026-11-04T14:01:02.000Z', 'data': {'photo': {'id': photo.clientId, 'device': device,
+        'taken_at': '2026-11-04T13:58:00.000Z', 'place': {'lat': 38.7139, 'lon': -9.1394}, 'width': 1600, 'height': 1200,
+        'content_type': 'image/jpeg', 'size': 4, 'base64': '/9j/2Q=='}}});
+    final placeless = QueuedPhoto(clientId: 'p' * 8, assetId: 'a', takenAt: queued, width: 1, height: 1, path: 'p');
+    expect((webhook.photoMessage(placeless, [1])['data'] as Map)['photo'], containsPair('place', null));
   });
 
   test('signs each message, and a retry sends the same webhook-id and body', () async {
@@ -219,6 +230,7 @@ void main() {
     await webhook.send(samples);
     await webhook.send(points);
     await webhook.send(calendar);
+    await webhook.sendPhoto(photo, [0xff, 0xd8, 0xff, 0xd9]);
     await webhook.test();
     for (final request in server.requests) {
       final type = jsonDecode(request.body)['type'] as String;

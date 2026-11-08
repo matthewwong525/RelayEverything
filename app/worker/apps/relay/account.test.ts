@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { ANA, BEN, ben, benPhone, bucket, call, checker, directoryDb, env, matthew, NOW, owner, phone, request, rows, spaces } from "../../../tests/relay";
+import { ANA, BEN, ben, benPhone, bucket, call, checker, directoryDb, env, matthew, NOW, owner, phone, request, rows, sendPhoto, spaces } from "../../../tests/relay";
 import { handleApp } from "../index";
 import { hashToken } from "./people";
 
@@ -115,6 +115,16 @@ it("leaves no way in when a step fails partway, and a second try finishes the de
   expect([...bucket.objects.keys()]).toEqual([`people/${BEN}/d`]);
   expect(spaces.objects.has(ANA)).toBe(false);
   expect(directoryDb.sql.prepare("SELECT email FROM relay_people").all()).toEqual([{ email: "ben@example.com" }]);
+});
+
+it("deletes Ana's photos with her account, and leaves Ben's", async () => {
+  await sendPhoto(phone);
+  await sendPhoto(benPhone);
+  expect([...bucket.objects.keys()].filter(key => key.includes("/photos/"))).toHaveLength(2);
+  expect((await call(matthew, "POST", "account-delete", { email: "ana@example.com" })).status).toBe(200);
+  expect([...bucket.objects.keys()].filter(key => key.startsWith(`people/${ANA}/`))).toEqual([]);
+  expect([...bucket.objects.keys()].filter(key => key.startsWith(`people/${BEN}/photos/`))).toHaveLength(1);
+  expect(rows("relay_photos", BEN)).toHaveLength(1);
 });
 
 it("deletes a note's files with the account", async () => {

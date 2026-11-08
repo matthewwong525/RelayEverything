@@ -24,7 +24,7 @@ async function consent(request: Request, env: McpEnv): Promise<Response> {
   const about = await env.OAUTH_PROVIDER.describeConsent(authRequest);
   const { handle, headers } = await env.OAUTH_PROVIDER.beginConsent(authRequest);
   return html(`<h1>Connect ${escape(about.clientName)} to Relay Everything?</h1>
-<p>It can then read your Relay Everything notes, health, places and saved chats, and add notes, when you ask it. It can't change or delete them.</p>
+<p>It can then read your Relay Everything notes, health, calendar, places, photos and saved chats, and add notes, when you ask it. It can't change or delete them.</p>
 <p>Its answers go to <b>${escape(about.redirectHost)}</b>.${about.redirectIsLoopback ? " That is an app on this computer." : ""}</p>
 <form method="post"><input type="hidden" name="handle" value="${escape(handle)}">
 <button name="choice" value="approve">Connect</button> <button name="choice" value="deny">Cancel</button></form>`, 200, headers);

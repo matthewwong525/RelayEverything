@@ -81,6 +81,20 @@ export const TOOLS = {
     input: { id: z.string().max(64).describe("The chat's id, from search_chats."), cursor: z.string().max(20).optional()
       .describe("The last answer's `nextCursor`, to read the next part."), timezone: zone },
   },
+  photos: {
+    title: "List photos",
+    description: "List the photos the phone sent from one time to another, newest first, with when and where each was taken and its size. " +
+      "Give `near` to keep only photos taken within some kilometres of a point, such as one from `places`. Look at one with read_photo.",
+    input: { from: when("The first time"), to: when("The time to stop before"),
+      near: z.strictObject({ lat: latitude, lon: longitude, km: z.number().positive().max(500).describe("How far from the point, at most 500 km.") })
+        .optional().describe("Only photos taken near this point."),
+      limit: z.number().int().min(1).max(50).default(50).describe("How many photos, at most 50."), cursor, timezone: zone },
+  },
+  read_photo: {
+    title: "Look at one photo",
+    description: "Look at one photo by its id, from `photos`: the photo itself, at most 1,600 pixels on its long side, and when and where it was taken.",
+    input: { id: z.string().max(64).describe("The photo's id, from photos."), timezone: zone },
+  },
   add_note: {
     title: "Add a note",
     description: "Add a typed note to the person's notes, with this app's name as its device. Only when the person asks to save something. " +

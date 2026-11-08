@@ -6,7 +6,9 @@ import { TOOLS, type ToolName } from "./inputs.ts";
 
 /** One route: its tools, the path fields it fills, and whether `q` is the query. `GET /v1/notes` searches with `q`
  *  and reads a time range without. */
-export type V1Route = { method: "GET" | "POST"; path: string; id: string; summary: string; description: string; tools: ToolName[]; q?: true };
+export type V1Route = { method: "GET" | "POST"; path: string; id: string; summary: string; description: string; tools: WebTool[]; q?: true };
+/** A tool whose answer is JSON: read_photo answers an image, which the web API does not send. */
+export type WebTool = Exclude<ToolName, "read_photo">;
 
 export const ROUTES: readonly V1Route[] = [
   { method: "GET", path: "/v1/notes", id: "listNotes", summary: "Search notes, or read a time range", tools: ["search", "timeline"], q: true,

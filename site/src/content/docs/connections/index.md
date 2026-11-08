@@ -5,6 +5,8 @@ description: Send your Relay Everything data to your own database, let your own 
 
 Connections move your notes, health and location from Relay Everything to the place you choose, where your own AI can read them. Three work today: webhooks to your own database, the AI connector, and the Relay Everything plugin that saves your Claude Code chats. The others are coming, so this page gives no steps for them.
 
+In the app, the **Account** page in Settings lists the names of your AI apps and webhooks. Add or remove one on your Relay Everything page: a tap on **AI apps** or **Webhooks** opens that part of it. [Settings](../app/settings/#account)
+
 Relay Everything does not store your data for your AI, and it gives you no plugin format or access roles. You keep your own database, tables and tools. Relay Everything collects the data and sends it to them.
 
 ## Your own database

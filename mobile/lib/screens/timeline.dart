@@ -320,7 +320,7 @@ class _Empty extends StatelessWidget {
         const RelayMark(size: 56),
         Text(title, style: theme.textTheme.titleLarge),
         Text(how, style: muted, textAlign: TextAlign.center),
-        if (!sending) Text('Notes stay on this phone until you turn on Sending on Home.', style: muted, textAlign: TextAlign.center),
+        if (!sending) Text('Notes stay on this phone until you sign in, in Settings.', style: muted, textAlign: TextAlign.center),
       ]),
     );
   }

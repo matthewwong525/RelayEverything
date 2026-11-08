@@ -59,7 +59,7 @@ With no speech model on the phone yet, the app asks to get it first. [Get the sp
 
 ## What is sent
 
-The actions follow your **Send my notes** setting on the [Sending](../settings/#sending) page:
+The actions follow your sign-in on the [Account](../settings/#account) row in Settings. Signed out, sending is off:
 
 | Sending | Add a note | Get notes | Start a voice note |
 |---|---|---|---|

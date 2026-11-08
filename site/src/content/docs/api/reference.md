@@ -836,7 +836,7 @@ Send the input as a JSON body.
 
 `GET /apps/relay/api/connections` · `relay.connections` · reads · called by a signed-in person or a phone key
 
-The names of your connected AI apps and of your webhooks, for the phone's Home. It holds no address, secret or send state. Where the AI connector is not set up, the AI apps list is empty.
+Your account's email and the names of your connected AI apps and of your webhooks, for the phone's Account page. It holds no address, secret or send state. Where the AI connector is not set up, the AI apps list is empty.
 
 ### Input
 
@@ -846,6 +846,7 @@ It takes no input.
 
 | Field | Type | Required | What it holds |
 |---|---|---|---|
+| `email` | string | yes | The email of the account the key or sign-in belongs to. |
 | `aiApps` | array of object | yes | Each connected AI app. |
 | `aiApps[].name` | string | yes |  |
 | `webhooks` | array of object | yes | Each webhook, paused ones too. |

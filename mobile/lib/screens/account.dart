@@ -1,0 +1,189 @@
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'package:flutter/material.dart';
+
+import '../brand.dart';
+import '../data/connection.dart' show defaultServer;
+import '../relay.dart';
+import 'back_to.dart';
+import 'connect.dart' show ServerDialog;
+import 'folder.dart';
+
+/// Where this phone's account stands: signed in to a Relay Everything server, sending to the person's own webhook, or
+/// signed out. A phone that keeps a key with sending off is signed out: its sign-in offers the key in one tap.
+enum AccountState { signedIn, webhook, signedOut }
+
+AccountState accountOf(Relay relay) {
+  final settings = relay.settings;
+  if (!settings.sending) return AccountState.signedOut;
+  if (settings.place == SendPlace.webhook) return AccountState.webhook;
+  return relay.connected && relay.server != null ? AccountState.signedIn : AccountState.signedOut;
+}
+
+/// *Account*, opened from the Account row in Settings. Signed in: the email and server, *AI apps* and *Webhooks* by
+/// name, *Open your Relay Everything page*, the server to change, and *Sign out*. With the person's own webhook: its
+/// address, *Send a test*, *Notes from elsewhere* and *Stop sending*. Adding or removing an AI app or a webhook is on
+/// the web page.
+class AccountPage extends StatefulWidget {
+  const AccountPage({super.key, required this.relay, this.opener});
+
+  final Relay relay;
+  /// Opens the Relay Everything page; a test passes its own.
+  final Opener? opener;
+
+  @override
+  State<AccountPage> createState() => _AccountPageState();
+}
+
+class _AccountPageState extends State<AccountPage> {
+  Relay get relay => widget.relay;
+
+  @override
+  void initState() {
+    super.initState();
+    // It asks only while the phone sends to a Relay Everything server.
+    relay.refreshConnections();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: ListenableBuilder(
+        listenable: relay,
+        builder: (context, _) => CustomScrollView(slivers: [
+          SliverAppBar.large(leading: const BackTo('Settings'), leadingWidth: BackTo.widthOf('Settings'),
+            title: const Text('Account')),
+          SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 32), sliver: SliverList.list(children: switch (accountOf(relay)) {
+            AccountState.signedIn => _server(context),
+            AccountState.webhook => _webhook(context),
+            // Signed out while the page is open: nothing to show until Settings is back.
+            AccountState.signedOut => const <Widget>[],
+          })),
+        ]),
+      ),
+    );
+  }
+
+  List<Widget> _server(BuildContext context) {
+    final server = relay.server!;
+    final names = relay.connections;
+    final danger = Theme.of(context).colorScheme.error;
+    return [
+      Group(children: [ListTile(
+        leading: const RelayMark(size: 32),
+        title: Text(names?.email ?? hostOf(server), style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: names?.email == null ? null : Text(hostOf(server)),
+      )]),
+      Group(title: 'Connections', children: [
+        _connected(CupertinoIcons.sparkles, 'AI apps', names?.aiApps, '#ai-apps'),
+        _connected(CupertinoIcons.link, 'Webhooks', names?.webhooks, '#webhooks'),
+      ]),
+      Group(children: [
+        ListTile(
+          title: const Text('Open your Relay Everything page'),
+          subtitle: const Text('Your ring notes, recordings and the notes from all your devices.'),
+          trailing: const Icon(CupertinoIcons.arrow_up_right_square),
+          onTap: () => _open(''),
+        ),
+        ListTile(
+          title: const Text('Server'),
+          subtitle: Text(server),
+          trailing: const Icon(CupertinoIcons.pencil),
+          onTap: () => _editServer(context),
+        ),
+      ]),
+      Group(children: [ListTile(
+        title: Text('Sign out', style: TextStyle(color: danger)),
+        subtitle: const Text('Removes this phone\'s key and stops sending. Notes from this phone stay here.'),
+        onTap: () => _signOut(context),
+      )]),
+    ];
+  }
+
+  /// *AI apps* or *Webhooks*: the names the server last gave, and a tap to that [part] of the page, where the person
+  /// adds or removes one.
+  Widget _connected(IconData icon, String title, List<String>? names, String part) => FolderRow(
+    icon: icon, title: title,
+    line: switch (names) { null => 'See them on your page', [] => 'None yet', final names => names.join(', ') },
+    count: names == null || names.isEmpty ? null : names.length,
+    trailing: CupertinoIcons.arrow_up_right_square,
+    onTap: () => _open(part));
+
+  List<Widget> _webhook(BuildContext context) {
+    final danger = Theme.of(context).colorScheme.error;
+    return [
+      Group(children: [
+        ListTile(
+          leading: Icon(CupertinoIcons.link, color: brandOf(context).accentText),
+          title: const Text('My own webhook', style: TextStyle(fontWeight: FontWeight.w600)),
+          subtitle: Text(relay.webhookAddress ?? ''),
+          trailing: TextButton(onPressed: () => _test(context), style: quietButton(context), child: const Text('Send a test')),
+        ),
+        if (relay.webhookProblem case final problem?) ListTile(
+          subtitle: Text(problemLine(problem, DateTime.now()), style: TextStyle(color: danger)),
+        ),
+        ListTile(
+          title: const Text('Notes from elsewhere'),
+          subtitle: const Text('Sync is off while the phone sends to your own webhook. To get notes from your other '
+            'phones and email here, sign in to Relay Everything, then add your webhook on your Relay Everything page.'),
+          trailing: const Icon(CupertinoIcons.arrow_up_right_square),
+          onTap: () => _open('#webhooks'),
+        ),
+      ]),
+      Group(children: [ListTile(
+        title: Text('Stop sending', style: TextStyle(color: danger)),
+        subtitle: const Text('New notes stay on this phone. The phone keeps your webhook\'s address and secret.'),
+        onTap: () => _stopSending(context),
+      )]),
+    ];
+  }
+
+  /// [part] of the person's Relay Everything page, such as `#webhooks`, in the phone's browser.
+  Future<void> _open(String part) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (!await (widget.opener ?? openInBrowser)(Uri.parse('${relay.server ?? defaultServer}/apps/relay/$part'))) {
+      messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
+    }
+  }
+
+  Future<void> _test(BuildContext context) async {
+    final answer = await relay.testWebhook(relay.webhookAddress ?? '', relay.webhookSecret ?? '');
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(answer)));
+  }
+
+  Future<void> _editServer(BuildContext context) async {
+    final address = await showDialog<String>(context: context, builder: (context) => ServerDialog(server: relay.server));
+    if (address != null && context.mounted) await apply(context, relay.setServer(address));
+  }
+
+  /// Asks first, then forgets the key and stops sending, and goes back to Settings, which says *Sign in*.
+  Future<void> _signOut(BuildContext context) async {
+    final sure = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+      title: const Text('Sign out?'),
+      content: const Text('Sending stops and this phone forgets its key. Notes from this phone stay here. Notes from your '
+        'other phones and email leave this phone.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+        TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sign out')),
+      ],
+    ));
+    if (sure != true) return;
+    await relay.disconnect();
+    if (context.mounted) Navigator.of(context).maybePop();
+  }
+
+  /// Asks first, then stops sending to the webhook. The webhook stays kept, so sending there again needs no new secret.
+  Future<void> _stopSending(BuildContext context) async {
+    final sure = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+      title: const Text('Stop sending?'),
+      content: const Text('New notes stay on this phone. Notes already at your webhook stay there. '
+        'Health, the calendar, location and photos stop.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Stop sending')),
+      ],
+    ));
+    if (sure != true) return;
+    await relay.stopSending();
+    if (context.mounted) Navigator.of(context).maybePop();
+  }
+}

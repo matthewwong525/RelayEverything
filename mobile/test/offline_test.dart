@@ -69,10 +69,11 @@ void main() {
     tallScreen(tester);
     await tester.pumpWidget(RelayApp(relay: relay, scanner: (_) async => null));
 
-    // Home: the rows that need the server ask to sign in.
-    expect(find.text('Sign in to see'), findsNWidgets(2));
+    // Home: no Connections, and Settings' Account row asks to sign in: a kept key with sending off is signed out.
+    expect(find.text('Connections'), findsNothing);
     // Settings: pins on (a phone-only fix).
     await openSettings(tester);
+    expect(find.text('Sign in to Relay Everything'), findsOneWidget);
     await tester.tap(find.text('Pin notes to where I am'));
     await tester.runAsync(pumpEventQueue);
     await tester.pumpAndSettle();
@@ -89,9 +90,14 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
     }
-    // AI apps, signed out: the choice of place opens, and nothing is asked of the server.
-    await openFolder(tester, 'AI apps');
-    expect(find.text('Where should the phone send?'), findsOneWidget);
+    // The Account row, signed out: the sign-in opens, and nothing is asked of the server.
+    await openSettings(tester);
+    await tester.tap(find.byKey(const ValueKey('account')));
+    await tester.pumpAndSettle();
+    expect(find.text('Sign in to connect'), findsNothing);
+    expect(find.text('This phone has a key for ${connection.server}.'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await tester.pageBack();
     await tester.pumpAndSettle();
 

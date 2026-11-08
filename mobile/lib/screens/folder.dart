@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../brand.dart';
-import '../data/connection.dart' show defaultServer;
 import '../relay.dart';
 import 'back_to.dart';
 import 'connect.dart';
@@ -67,33 +66,15 @@ String photosLine(Relay relay) {
   return settings.photosOnMobileData ? 'On · Wi-Fi and mobile data' : 'On · Wi-Fi only';
 }
 
-String _hostOf(String? address) => Uri.tryParse(address ?? '')?.host ?? '';
+/// The host of an address, such as *app.relayeverything.com*, or empty.
+String hostOf(String? address) => Uri.tryParse(address ?? '')?.host ?? '';
 
-/// The *Sending* row on Home: off, or where the phone sends.
-String sendingLine(Relay relay) {
-  final settings = relay.settings;
-  if (!settings.sending) return 'Off: nothing leaves this phone';
-  return settings.place == SendPlace.webhook ? 'To your webhook · ${_hostOf(relay.webhookAddress)}'
-    : 'To Relay Everything · ${_hostOf(relay.server)}';
-}
-
-/// What the Sending page says about the webhook's last problem: a refused file, an answer that was not 2xx, or none.
+/// What the Account page says about the webhook's last problem: a refused file, an answer that was not 2xx, or none.
 String problemLine(WebhookProblem problem, DateTime now) {
   final at = _when(problem.at, now);
   if (problem.file != null) return '${problem.file} was too large for your receiver ($at), so it was not sent.';
   if (problem.status == null) return 'No answer from your receiver at $at. Notes wait on this phone until it answers.';
   return 'Your receiver answered ${problem.status} at $at. Notes wait on this phone until it takes them.';
-}
-
-/// The line under *Send my notes*: off, or where the phone sends.
-String _placeLine(Relay relay) {
-  final settings = relay.settings;
-  if (!settings.sending) return 'Off: nothing leaves this phone. On: to your Relay Everything server, or to your own webhook.';
-  if (settings.place == SendPlace.webhook) {
-    return 'To your webhook: ${_hostOf(relay.webhookAddress)}. Nothing goes to Relay Everything, '
-      'so your Relay Everything page and your AI can not read it.';
-  }
-  return 'To Relay Everything: ${_hostOf(relay.server)}. Your server can pass notes to your own database and your AI.';
 }
 
 /// Runs a change and shows why it could not be, if it could not.
@@ -102,9 +83,8 @@ Future<void> apply(BuildContext context, Future<String?> change) async {
   if (problem != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(problem)));
 }
 
-/// Asks where to send, and sets that place up: a key, or a webhook. Then asks about the notes that never went, and
-/// turns sending on there. With sending on already, it moves what waits to the new place. *Send my notes*, *Turn on
-/// sending* and a tap on *AI apps* or *Webhooks* while signed out all start here.
+/// *Sign in*: sets up where to send, a key or the person's own webhook. Then asks about the notes that never went, and
+/// turns sending on there, in the same step. The Account row in Settings and a folder's *Sign in* both start here.
 Future<void> choosePlace(BuildContext context, Relay relay, Scanner? scanner) async {
   final place = await Navigator.of(context).push(MaterialPageRoute<SendPlace>(
     builder: (_) => ConnectScreen(relay: relay, scanner: scanner)));
@@ -143,8 +123,8 @@ class _FolderPage extends StatelessWidget {
   }
 }
 
-/// With sending off: what the folder needs, and the one button that turns sending on, in the same steps as *Send my
-/// notes*.
+/// With sending off: that the folder works once the person signs in, and *Sign in*, the same sign-in as the Account
+/// row in Settings.
 class _NeedsSending extends StatelessWidget {
   const _NeedsSending({required this.relay, required this.what, this.scanner});
 
@@ -158,9 +138,9 @@ class _NeedsSending extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 12, 4, 0),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 12, children: [
-        Text('$what works with sending on. Nothing leaves this phone until you turn it on.',
+        Text('$what works once you sign in. Nothing leaves this phone until you do.',
           style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        FilledButton(onPressed: () => choosePlace(context, relay, scanner), child: const Text('Turn on sending')),
+        FilledButton(onPressed: () => choosePlace(context, relay, scanner), child: const Text('Sign in')),
       ]),
     );
   }
@@ -318,133 +298,6 @@ class PhotosPage extends StatelessWidget {
   }
 }
 
-/// *Sending*: the *Send my notes* switch, where the phone sends, the webhook and its test, *Open your Relay Everything
-/// page*, the server, and *Disconnect this phone*.
-class SendingPage extends StatelessWidget {
-  const SendingPage({super.key, required this.relay, this.scanner, this.opener});
-
-  final Relay relay;
-  final Scanner? scanner;
-  final Opener? opener;
-
-  @override
-  Widget build(BuildContext context) {
-    return _FolderPage(relay: relay, title: 'Sending', groups: (context) {
-      final settings = relay.settings;
-      final sending = settings.sending;
-      final danger = Theme.of(context).colorScheme.error;
-      return [
-        Group(children: [
-          SwitchListTile(
-            title: const Text('Send my notes'),
-            subtitle: Text(_placeLine(relay)),
-            value: sending,
-            onChanged: (on) => on ? choosePlace(context, relay, scanner) : _stopSending(context),
-          ),
-          if (sending) ListTile(
-            title: const Text('Where the phone sends'),
-            subtitle: Text(settings.place == SendPlace.webhook ? 'My own webhook' : 'Relay Everything'),
-            trailing: const Icon(CupertinoIcons.chevron_forward),
-            onTap: () => choosePlace(context, relay, scanner),
-          ),
-        ]),
-        if (sending && settings.place == SendPlace.webhook) Group(children: [
-          ListTile(
-            title: const Text('Webhook'),
-            subtitle: Text(relay.webhookAddress ?? ''),
-            trailing: TextButton(onPressed: () => _test(context), style: quietButton(context), child: const Text('Send a test')),
-          ),
-          if (relay.webhookProblem case final problem?) ListTile(
-            subtitle: Text(problemLine(problem, DateTime.now()), style: TextStyle(color: danger)),
-          ),
-          ListTile(
-            title: const Text('Notes from elsewhere'),
-            subtitle: const Text('Sync is off while the phone sends to your own webhook. To get notes from your other '
-              'phones and email here, send to Relay Everything, then add your webhook on your Relay Everything page.'),
-            trailing: const Icon(CupertinoIcons.arrow_up_right_square),
-            onTap: () => _openWebhooks(context),
-          ),
-        ]),
-        if (relay.connected && settings.place == SendPlace.server) Group(children: [
-          // Ring notes and recordings are on the Relay Everything page; nothing of this phone's goes there while it
-          // sends to the person's own webhook.
-          if (sending && relay.server != null) ListTile(
-            title: const Text('Open your Relay Everything page'),
-            subtitle: const Text('Your ring notes, recordings and the notes from all your devices.'),
-            trailing: const Icon(CupertinoIcons.arrow_up_right_square),
-            onTap: () => _openPage(context),
-          ),
-          ListTile(
-            title: const Text('Server'),
-            subtitle: Text(relay.server ?? ''),
-            trailing: const Icon(CupertinoIcons.pencil),
-            onTap: () => _editServer(context),
-          ),
-          ListTile(
-            title: Text('Disconnect this phone', style: TextStyle(color: danger)),
-            subtitle: const Text('Removes the key from this phone and turns sending off. Notes from this phone stay here. '
-              'Notes from elsewhere go.'),
-            onTap: () => _disconnect(context),
-          ),
-        ]),
-      ];
-    });
-  }
-
-  /// The *Webhooks* part of the person's Relay Everything page, where a webhook gets the notes from every device.
-  Future<void> _openWebhooks(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
-    if (!await (opener ?? openInBrowser)(Uri.parse('${relay.server ?? defaultServer}/apps/relay/#webhooks'))) {
-      messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
-    }
-  }
-
-  Future<void> _test(BuildContext context) async {
-    final answer = await relay.testWebhook(relay.webhookAddress ?? '', relay.webhookSecret ?? '');
-    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(answer)));
-  }
-
-  Future<void> _stopSending(BuildContext context) async {
-    final there = relay.settings.place == SendPlace.webhook ? 'at your webhook' : 'on your Relay Everything server';
-    final sure = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
-      title: const Text('Stop sending?'),
-      content: Text('New notes stay on this phone. Notes already $there stay there. '
-        'Health, the calendar, location and photos stop.'),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Stop sending')),
-      ],
-    ));
-    if (sure == true) await relay.stopSending();
-  }
-
-  /// The person's Relay Everything page, in the phone's browser.
-  Future<void> _openPage(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
-    if (!await (opener ?? openInBrowser)(Uri.parse('${relay.server}/apps/relay/'))) {
-      messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
-    }
-  }
-
-  Future<void> _editServer(BuildContext context) async {
-    final address = await showDialog<String>(context: context, builder: (context) => ServerDialog(server: relay.server));
-    if (address != null && context.mounted) await apply(context, relay.setServer(address));
-  }
-
-  Future<void> _disconnect(BuildContext context) async {
-    final sure = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
-      title: const Text('Disconnect this phone?'),
-      content: const Text('Sending turns off. Notes from your other phones and email leave this phone. '
-        'You need a new key to send again.'),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-        TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Disconnect')),
-      ],
-    ));
-    if (sure == true) await relay.disconnect();
-  }
-}
-
 /// One group of rows: a small muted heading, when it has one, and one card with its rows and no lines between them.
 class Group extends StatelessWidget {
   const Group({super.key, this.title, required this.children});
@@ -485,6 +338,38 @@ class _EarlierDialog extends StatelessWidget {
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Only new notes')),
         FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(count == 1 ? 'Send it' : 'Send them')),
       ],
+    );
+  }
+}
+
+/// One folder: its icon in accent, its name, its status line, its count, and a chevron. [ask] shows the line in accent
+/// text, as a link. Home's folders and the Account page's *AI apps* and *Webhooks* use it.
+class FolderRow extends StatelessWidget {
+  const FolderRow({super.key, required this.icon, required this.title, required this.onTap, this.line, this.count,
+    this.ask = false, this.trailing = CupertinoIcons.chevron_forward});
+
+  final IconData icon;
+  final String title;
+  final String? line;
+  final int? count;
+  final bool ask;
+  final VoidCallback onTap;
+  /// The chevron, or an arrow out for a row that opens the browser.
+  final IconData trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = brandOf(context);
+    return ListTile(
+      leading: Icon(icon, color: brand.accentText),
+      title: Text(title, style: TextStyle(fontSize: 16, color: brand.ink)),
+      subtitle: line == null ? null : Text(line!, maxLines: 1, overflow: TextOverflow.ellipsis,
+        style: TextStyle(fontSize: 13, color: ask ? brand.accentText : brand.muted, fontWeight: ask ? FontWeight.w500 : null)),
+      trailing: Row(mainAxisSize: MainAxisSize.min, spacing: 4, children: [
+        if (count != null) Text('$count', style: TextStyle(fontSize: 16, color: brand.muted)),
+        Icon(trailing, color: brand.muted),
+      ]),
+      onTap: onTap,
     );
   }
 }

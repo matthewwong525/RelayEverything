@@ -27,7 +27,7 @@ A device key reaches only the space of the person who made it. It adds data ther
   - `GET notes`, which answers the notes added or changed since the phone's last sync, from every device and way in, so each signed-in phone shows all your notes
   - `GET attachment` and `GET audio`, which open a note's file and a ring note's recording, when you tap one in the app
   - `PATCH notes`, which changes the words of any note in your space, by its `id`, or of the phone's own note, by its `clientId`. It adds new files only to a note the same phone sent. When the note changed later on another phone, the server keeps the newer words and answers `409`.
-  - `GET connections`, which answers the names of your AI apps and webhooks and no address, secret or data, for **Connections** on the app's Home
+  - `GET connections`, which answers your account's email and the names of your AI apps and webhooks, and no address, secret or data, for the Account row and the **Account** page in the app's Settings
 
 Any other address or method answers `403` to a device key. A phone's key can't read your health, calendar, places, chats or photos, or delete anything: `GET timeline`, `GET summary`, `GET photos` and `POST photos/delete` need a signed-in person, and each answers only from that person's own space. A phone's key reads your notes until you turn it off, so turn off a lost phone's key at once. [Routes](../reference/) shows who can call each route.
 
@@ -49,7 +49,7 @@ You make and turn off your keys on your Relay Everything page, signed in:
 | The list of devices | Shows each key: its name, its kind, when it was made, and whether it is off. |
 | **Turn off** | Turns the key off at once. The other keys go on. |
 
-A phone can also get its key with no QR code: in the Relay Everything app, tap **Sign in to connect**. The app opens your sign-in, the page asks **Connect this phone?**, and **Connect** makes the phone's key. The key goes straight to the phone and never shows. It works like a key from **Add a device**, and the phone shows in your list of devices.
+A phone can also get its key with no QR code: in the Relay Everything app, open Settings, tap **Sign in to Relay Everything**, then **Sign in to connect**. The app opens your sign-in, the page asks **Connect this phone?**, and **Connect** makes the phone's key. The key goes straight to the phone and never shows. It works like a key from **Add a device**, and the phone shows in your list of devices.
 
 The app and the server use these addresses for it. You don't call them yourself:
 

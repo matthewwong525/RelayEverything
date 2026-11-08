@@ -3,7 +3,7 @@
 set -euo pipefail
 here=$(dirname "$0")
 if ! [[ "$MODEL" =~ ^claude-[a-z0-9-]+$ ]]; then echo "::error::model must be a Claude model ID."; exit 1; fi
-mkdir -p "$OUT/claude"
+mkdir -p "$OUT/claude/flows"
 
 what() {
   if [ -n "${SCENARIOS:-}" ]; then printf '%s\n' "$SCENARIOS"; return; fi

@@ -1,5 +1,5 @@
-# The Android app, by mobile-ci.yml's mode: a file to try on a branch; on main, a pre-release tagged
-# mobile-v<version>+<build>; for a release, the signed file that mobile-ci.yml's release job publishes.
+# The Android app, by mobile-ci.yml's mode: a file to try on a branch, for 64-bit ARM phones only; on main, a
+# pre-release tagged mobile-v<version>+<build>; for a release, the signed file that mobile-ci.yml's release job uses.
 name: Mobile Android
 on:
   workflow_call:
@@ -32,12 +32,12 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-          # whisper.cpp builds with the NDK on each run: the Gradle cache keeps what it can between runs.
           cache: gradle
           cache-dependency-path: |
             mobile/android/*.gradle*
             mobile/android/**/gradle-wrapper.properties
       - uses: subosito/flutter-action@v2
+        id: flutter
         with:
           flutter-version-file: mobile/pubspec.yaml
           cache: true
@@ -66,6 +66,30 @@ jobs:
           echo "$KEYSTORE" | base64 -d > android/app/upload.jks
           printf 'storeFile=upload.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > android/key.properties
       - run: flutter pub get
+      # The speech package's CMake objects (its android/.cxx in the pub cache), its libraries, their NDK and Gradle's
+      # build cache stay between runs. They come back after pub get, so pub never finds a half package folder.
+      - name: NDK version and the Gradle build cache
+        id: ndk
+        working-directory: .
+        run: |
+          version=$(grep -oE 'ndkVersion: String = "[0-9.]+"' \
+            "$FLUTTER_ROOT/packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt" | grep -oE '[0-9.]+' | tail -n 1)
+          echo "version=${version:-none}" >> "$GITHUB_OUTPUT"
+          echo "path=$ANDROID_HOME/ndk/${version:-none}" >> "$GITHUB_OUTPUT"
+          echo "org.gradle.caching=true" >> mobile/android/gradle.properties
+      - name: Keep the speech build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache/hosted/pub.dev/whisper_cpp_flutter_plus-*/android/.cxx
+            mobile/build/whisper_cpp_flutter_plus/intermediates/cxx
+            ${{ steps.ndk.outputs.path }}
+            ~/.gradle/caches/build-cache-1
+          key: >-
+            android-native-${{ runner.os }}-${{ steps.flutter.outputs.VERSION }}-ndk${{ steps.ndk.outputs.version }}-${{
+            inputs.mode == 'branch' && 'arm64' || 'all' }}-${{ hashFiles('mobile/pubspec.lock') }}
+          restore-keys: |
+            android-native-${{ runner.os }}-${{ steps.flutter.outputs.VERSION }}-ndk${{ steps.ndk.outputs.version }}-
       - name: Build
         id: apk
         env:
@@ -73,7 +97,10 @@ jobs:
           VERSION: ${{ inputs.version }}
           BUILD: ${{ inputs.build }}
         run: |
-          flutter build apk --release --build-name="$VERSION" --build-number="$BUILD"
+          # A branch's file is for 64-bit ARM phones only, the phones it is tried on; main and a release have every kind.
+          platforms=()
+          if [ "$MODE" = branch ]; then platforms=(--target-platform android-arm64); fi
+          flutter build apk --release "${platforms[@]}" --build-name="$VERSION" --build-number="$BUILD"
           case "$MODE" in
             release | release-check) file="relay-everything-${VERSION}.apk" ;;
             *) file="relay-everything-${VERSION}-${BUILD}.apk" ;;

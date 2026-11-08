@@ -25,4 +25,4 @@
 
 - [x] 4.1 Run the app checks (`cd app && npm test`), the website checks (`cd site && npm test`), `node --test scripts/*.test.mjs` and `node scripts/public-check.mjs`; fix what fails by design.md.
 - [x] 4.2 Run `node app/self-host/setup.mjs check` with no key and confirm it fails cleanly, naming `app/self-host/.env`.
-- [ ] 4.3 `/save`, then confirm CI passes and the staging website shows the *Run your own server* page with the new path.
+- [x] 4.3 `/save`, then confirm CI passes and the staging website shows the *Run your own server* page with the new path.

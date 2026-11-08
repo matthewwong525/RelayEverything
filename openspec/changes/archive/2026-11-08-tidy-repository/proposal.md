@@ -54,6 +54,7 @@ Non-goals: rewriting the project's history to erase the old files; moving or rem
 - **2026-11-08** — Assumed: `.gitignore` also ignores a top-level `/self-host/`, because an old install's settings sit there after a pull until `setup.mjs` moves them, and they must not show as new files to commit.
 - **2026-11-08** — Assumed: `oxlint` now reads `app/self-host/`, and three old comment lines over 120 characters were wrapped rather than the folder ignored, because the fix is two line breaks and keeps every rule on.
 - **2026-11-08** — Built inside /ship; the second look found 3 small problems (a weak old-install test, a failed move missing its `result=` line, one old path in a comment), all fixed; saved for CI and the staging check (task 4.3).
+- **2026-11-08** — Task 4.3 passed: CI passed on f878069 (PR #60), and the staging website shows *Run your own server* naming `app/self-host/SETUP.md`, with no ring file links.
 
 ## Capabilities
 

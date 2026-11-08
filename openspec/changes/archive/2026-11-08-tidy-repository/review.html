@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · tidy-repository</title>
+<title>Review · 2026-11-08-tidy-repository</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="tidy-repository" data-own-back>
+<body data-change="2026-11-08-tidy-repository" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>tidy-repository</h1>
+  <h1>2026-11-08-tidy-repository</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -468,6 +468,7 @@
 <li class="decision card" id="decision-13" data-note="decision-13" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-08</p>Assumed: <code>.gitignore</code> also ignores a top-level <code>/self-host/</code>, because an old install's settings sit there after a pull until <code>setup.mjs</code> moves them, and they must not show as new files to commit.</li>
 <li class="decision card" id="decision-14" data-note="decision-14" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-08</p>Assumed: <code>oxlint</code> now reads <code>app/self-host/</code>, and three old comment lines over 120 characters were wrapped rather than the folder ignored, because the fix is two line breaks and keeps every rule on.</li>
 <li class="decision card" id="decision-15" data-note="decision-15" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-08</p>Built inside /ship; the second look found 3 small problems (a weak old-install test, a failed move missing its <code>result=</code> line, one old path in a comment), all fixed; saved for CI and the staging check (task 4.3).</li>
+<li class="decision card" id="decision-16" data-note="decision-16" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-08</p>Task 4.3 passed: CI passed on f878069 (PR #60), and the staging website shows <i>Run your own server</i> naming <code>app/self-host/SETUP.md</code>, with no ring file links.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

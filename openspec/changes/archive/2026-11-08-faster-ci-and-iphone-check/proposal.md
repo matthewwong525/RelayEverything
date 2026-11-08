@@ -69,6 +69,7 @@ Non-goals: building the apps less often; an Android device check; changing which
 - **2026-11-08** — Assumed after that check: the iPhone starts after the 2 GB Flutter download, not before it, because the two at once took the download from under 1 min to 4 min 9 s and the build from 3-4 min to 7 min; `flow.sh` waits 120 s, not 90 s, because a finished 10-step flow ran past 90 s; Claude may run `mkdir -p` anywhere and `out/claude/flows/` is made for it, because `mkdir -p out/claude/flows` was refused by the narrower rule.
 - **2026-11-08** — Archived inside /ship and saved for the gate; the specs for app builds and the device check now hold this change.
 - **2026-11-08** — Took main with #66 (a Settings gear on Home): its `settings.yaml` stays as #66 wrote it, and the one-run tour runs it as its fourth flow.
+- **2026-11-08** — iPhone check on e2267fd (run 42503040787): Claude gave a verdict, works, for all 3 scenarios in 29 logged steps; the Swift tests passed on the second Mac in 13.5 min; the run took 31 min. The tour's `new-note` step failed once: Maestro tapped Search and the app did not open it, while the same flow passed on #66's head and on 9444076, so the check is run again. `scripts/device-check.mjs` said `failed` while the run still went, because `gh run watch` ended early: it now asks GitHub each 30 seconds for the run's status, and the wiki's workaround is gone. Took main with #70.
 
 ## Capabilities
 

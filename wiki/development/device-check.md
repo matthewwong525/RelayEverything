@@ -55,7 +55,7 @@ A release uses the fixed tour and the Swift tests as a gate: [`mobile-ci.yml`](.
 
 The check never runs on a push. Start it in one of three ways:
 
-- **From [`/verify`](staging-walkthrough.md).** For a change to `mobile/`, [the rule for the phone app](../../.agents/rules/mobile.md) runs `node scripts/device-check.mjs run --ref <branch> --sha <commit> --pr <n> --scenarios-file <file>`. The script starts the check, waits up to 50 minutes, downloads the results to a temporary folder (the Swift tests' in `swift/`) and prints `result=`, `run=`, `folder=` and `reason=`. A check that a newer one stopped prints `result=cancelled`. It can print `result=failed` while the run on GitHub still goes: then wait for the run with `gh run watch <run>`, and get its results with `gh run download <run> -n device-check-iphone`.
+- **From [`/verify`](staging-walkthrough.md).** For a change to `mobile/`, [the rule for the phone app](../../.agents/rules/mobile.md) runs `node scripts/device-check.mjs run --ref <branch> --sha <commit> --pr <n> --scenarios-file <file>`. The script starts the check, waits up to 50 minutes, downloads the results to a temporary folder (the Swift tests' in `swift/`) and prints `result=`, `run=`, `folder=` and `reason=`. A check that a newer one stopped prints `result=cancelled`. It asks GitHub each 30 seconds whether the run has ended, so a read that fails once does not end the wait.
 - **With the label.** Put the label *check on iPhone* on a pull request. The check runs on the pull request's newest commit, then posts its report there. To run it again, take the label off and put it on again.
 - **By hand on GitHub**, with the inputs `sha`, `pr`, `scenarios` and `model`.
 

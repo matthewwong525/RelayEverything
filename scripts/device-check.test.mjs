@@ -1,7 +1,7 @@
 // Run with: node --test scripts/device-check.test.mjs
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { cancelReason, checkValues, dispatchMissing, findRun, readVerdict, resultOf, swiftOutcome } from './device-check.mjs';
+import { cancelReason, checkValues, dispatchMissing, findRun, readVerdict, resultOf, swiftOutcome, waitDone } from './device-check.mjs';
 
 const SHA = 'a'.repeat(40);
 const OTHER = 'b'.repeat(40);
@@ -90,4 +90,11 @@ test('the command takes a branch, a full SHA, a pull request number, a platform 
   assert.match(checkValues({ ...good, pr: '#19' }, ['run']), /--pr/);
   assert.match(checkValues({ ...good, platform: 'windows' }, ['run']), /--platform/);
   assert.match(checkValues({ ...good, model: 'x; rm -rf /' }, ['run']), /--model/);
+});
+
+test('waitDone waits through a run still going and a failed read, and stops at the limit', async () => {
+  const answers = ['in_progress', '', 'completed'];
+  assert.equal(await waitDone(() => answers.shift(), { until: Date.now() + 1000, every: 1 }), true);
+  assert.deepEqual(answers, []);
+  assert.equal(await waitDone(() => 'in_progress', { until: Date.now() + 20, every: 5 }), false);
 });

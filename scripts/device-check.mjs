@@ -123,9 +123,25 @@ function readResult(folder, name) {
   }
 }
 
-function collect(run, { platform, ref }) {
-  const watch = gh(['run', 'watch', String(run.databaseId), '--exit-status', '--interval', '30'], { stdio: 'ignore', timeout: WATCH_MS });
-  if (watch.error?.code === 'ETIMEDOUT') return { result: resultOf({ timedOut: true }) };
+/** True once `status()` says completed, false at `until` (ms). A failed read waits and asks again. */
+export async function waitDone(status, { until, every = 30_000 }) {
+  while (Date.now() < until) {
+    if (status() === 'completed') return true;
+    await sleep(every);
+  }
+  return false;
+}
+
+// Not `gh run watch`: it once ended with the run still going, and the check said failed.
+function runStatus(id) {
+  const viewed = gh(['run', 'view', String(id), '--json', 'status']);
+  return viewed.status === 0 ? JSON.parse(viewed.stdout).status : '';
+}
+
+async function collect(run, { platform, ref }) {
+  if (!await waitDone(() => runStatus(run.databaseId), { until: Date.now() + WATCH_MS })) {
+    return { result: resultOf({ timedOut: true }) };
+  }
   const viewed = gh(['run', 'view', String(run.databaseId), '--json', 'jobs']);
   const jobs = viewed.status === 0 ? JSON.parse(viewed.stdout).jobs : [];
   const cancelled = jobs.some(job => job.name === platform && job.conclusion === 'cancelled');
@@ -152,7 +168,7 @@ export async function main(values, positionals) {
   const kind = started.event === 'workflow_dispatch' ? 'by-hand' : 'label';
   const run = await waitForRun(values, started.event, after);
   if (!run) return { result: 'failed', start: kind, reason: 'no run of this commit showed on GitHub' };
-  return { start: kind, run: run.url, ...collect(run, values) };
+  return { start: kind, run: run.url, ...await collect(run, values) };
 }
 
 if (isMain(import.meta.url)) {

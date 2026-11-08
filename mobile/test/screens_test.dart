@@ -1491,6 +1491,10 @@ void main() {
     tallScreen(tester);
     relay.settings = const Settings(sending: true, place: SendPlace.webhook);
     await tester.pumpWidget(RelayApp(relay: relay));
+    // A section name folds with no grey highlight: no ink sits behind it.
+    for (final name in ['On this phone', 'Connections']) {
+      expect(find.ancestor(of: find.text(name), matching: find.byType(InkWell)), findsNothing);
+    }
     await tester.tap(find.text('On this phone'));
     await tester.pumpAndSettle();
     expect([find.text('Location'), find.text('Health')], everyElement(findsNothing));

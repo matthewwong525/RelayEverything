@@ -35,7 +35,7 @@ END;
 
 The copy keeps `sqlite_sequence` at the highest `seq`, so the next number is still higher than every phone's last one.
 
-`noteChanges` joins `relay_notes` with `LEFT JOIN` and, for a caller that asks with `deleted=1`, returns a deleted row as `{ id, deleted: true }`, in the same `seq` order; without it, deleted rows are skipped (see the migration plan). `GET notes` adds `deleted` to `syncedNote` as a second shape: a phone takes each change in order, so a note made and deleted between two syncs comes as one deleted id.
+`noteChanges` joins `relay_notes` with `LEFT JOIN` and, for a caller that asks with `deleted=1`, returns a deleted row as `{ id, clientId, deleted: true }`, in the same `seq` order; without it, deleted rows are skipped (see the migration plan). `GET notes` adds `deleted` to `syncedNote` as a second shape: a phone takes each change in order, so a note made and deleted between two syncs comes as one deleted id.
 
 *Why not a `deleted_at` column on `relay_notes`?* Every read of notes (timeline, search, summary, `/v1/notes`, the AI connector, webhooks) would need a filter, and one missed read shows a deleted note. A real delete needs no filter. The rows left in `relay_note_changes` are an id and two numbers each.
 

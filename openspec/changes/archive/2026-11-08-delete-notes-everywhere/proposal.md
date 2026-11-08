@@ -1,6 +1,6 @@
 # Delete a note from the phone app, everywhere
 
-**Status:** built and reviewed; saved for final acceptance (staging check, iPhone device check)
+**Status:** shipped: archived and publishing
 **Branch:** potent-fox
 **Open questions:** none
 
@@ -104,3 +104,6 @@ Non-goals: a *Delete* button on the web page, a *Recently Deleted* folder, delet
 - **2026-11-08** — Assumed: #66 merged during the build, so *Delete* moved into its shared ⋯ menu (`more_menu.dart`) as a new optional `destructive` item, drawn last in the danger color; the old `_MoreMenu` is gone with #66, and no second menu was made.
 - **2026-11-08** — Assumed: task 5.3 became the iPhone device check that `/verify` runs on the saved commit, and Matthew's TestFlight try became an open thread for after publish, because TestFlight gets a build only after the change is on `main`.
 - **2026-11-08** — Saved for final acceptance: #64 (sync) and #66 (shared ⋯ menu) are on `main` and merged in; the review's five findings are fixed; the phone tests and local checks pass. The staging check (5.2) and the iPhone device check (5.3) run on the saved commit.
+- **2026-11-08** — Staging check (5.2) passed on 6766c7d: a phone key deleted a note with a file (200, then 404 again), `GET notes?deleted=1` gave its id, the file was gone from storage, the webhook got one signed `note.deleted`, and chat, API and page callers were refused. Test keys, webhook and account were removed.
+- **2026-11-08** — iPhone device check (5.3) on 6766c7d, run 42504581500: works. The tour passed; Claude saw *Delete* last and red in the shared ⋯ menu, the page close with *Note deleted · Undo*, *Undo* bring the note back, a swipe delete it, the delete stay after a restart, and an emptied unsent note go. The red bin during the swipe was not caught on a picture.
+- **2026-11-08** — Archived for publish: tasks all done, specs already reconciled at the last save, so the archive kept `main`'s specs as they were.

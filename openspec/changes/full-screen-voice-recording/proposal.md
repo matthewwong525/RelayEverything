@@ -58,6 +58,7 @@ Non-goals: a separate mic button; a pause button; a waveform kept with the note;
 - **2026-11-08** — Assumed: after #73 merged, a save by the back gesture or a side swipe opens the new note too, as a tap does, because all three are the same save.
 - **2026-11-08** — Assumed: built and merged with main after #73, all 495 phone tests pass locally; saved for the online checks, with the iPhone check (task 4.2) next.
 - **2026-11-08** — Assumed: after #72 merged, took main into this change before the iPhone check, and stopped the check already running on the older commit, because a pass on the older code would not prove the merged one.
+- **2026-11-08** — Assumed: the iPhone check's crash on save (whisper.cpp's Metal model load on the simulator) is fixed here by running the model on the CPU on the simulator only, because it blocks the check of this change's save and cancel, and a real phone is unchanged.
 
 ## Capabilities
 

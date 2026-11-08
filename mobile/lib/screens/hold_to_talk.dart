@@ -272,7 +272,8 @@ class _RecordingScreenState extends State<RecordingScreen> {
         behavior: HitTestBehavior.opaque,
         onTap: _save,
         onHorizontalDragEnd: (_) => _save(),
-        child: SafeArea(child: Stack(children: [
+        // Expand, so the column fills the screen and centres; a loose Stack shrinks it to its widest line, at the left.
+        child: SafeArea(child: Stack(fit: StackFit.expand, children: [
           Positioned.fill(child: Semantics(label: 'Save the voice note', button: true, onTap: _save,
             child: const SizedBox.expand())),
           Column(children: [

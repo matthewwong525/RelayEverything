@@ -29,3 +29,5 @@
 - [x] 5.1 Give the hold ring's `AnimationController` in `hold_to_talk.dart` `AnimationBehavior.preserve`, so with *Reduce motion* on it still fills over the whole hold, not in 25 ms; test that it is at about 0.5 after 250 ms of holding with `disableAnimations: true`.
 - [x] 5.2 Test that a side swipe on `RecordingScreen` saves: the fake's calls are `['voice start', 'voice end']`.
 - [x] 5.3 Make `LevelBars` draw all 17 bars from the current level, tallest in the middle, with a small per-bar difference set by the count of levels, as in the approved prototype; update the bar tests, keep the silent-stream test, and update design.md's *Level stream* and the Decision log.
+- [x] 5.4 Centre the recording screen: its `Stack` expands, so the column fills the screen; a test checks the time, the bars and the save line sit mid-screen (found by the iPhone check, content hugged the left edge).
+- [x] 5.5 Load whisper.cpp on the CPU on the iPhone simulator, where the Metal driver traps on model load and the app crashed after a save and at each launch; a real phone keeps the default; with a test of `whisperConfig`.

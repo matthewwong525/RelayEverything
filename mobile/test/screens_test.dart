@@ -2318,6 +2318,11 @@ void main() {
       await tester.pumpWidget(RelayApp(relay: relay));
       await holdNewNote(tester);
       expect(tester.getSize(find.byType(RecordingScreen)), tester.view.physicalSize / tester.view.devicePixelRatio);
+      // The time, the bars and the save line sit in the middle of the screen, not at its left edge.
+      final middle = tester.getCenter(find.byType(RecordingScreen)).dx;
+      for (final part in [find.text('0:00'), find.byType(LevelBars), find.text('Tap anywhere to save')]) {
+        expect(tester.getCenter(part).dx, closeTo(middle, 1));
+      }
       expect(find.text('Home').hitTestable(), findsNothing);
       await tapAnywhere(tester);
       expect(relay.calls, ['voice start', 'voice end']);

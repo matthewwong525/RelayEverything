@@ -6,10 +6,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/voice/model.dart';
 import 'package:relay_app/voice/recorder.dart';
 import 'package:relay_app/voice/transcriber.dart';
+import 'package:whisper_cpp_flutter_plus/whisper_cpp_flutter_plus.dart' show WhisperBackend, WhisperConfig;
 
 import 'fakes.dart';
 
 void main() {
+  test('the iPhone simulator loads whisper.cpp on the CPU; a phone keeps the default', () {
+    expect(whisperConfig(environment: {'SIMULATOR_DEVICE_NAME': 'iPhone 17'}).backend, WhisperBackend.cpu);
+    expect(whisperConfig(environment: {}).backend, const WhisperConfig().backend);
+  });
+
   group('the words', () {
     test('drop whisper.cpp\'s marks for sounds with no speech', () {
       expect(cleanWords([' [BLANK_AUDIO]']), '');

@@ -108,3 +108,4 @@ Non-goals: tables, drawing on a note, Apple Intelligence tools, pinning, folders
 - **2026-11-08** — Saved for final acceptance: built and reviewed in two rounds, local checks pass; the staging check (7.2) and the iPhone device check (7.3) run on the saved commit.
 - **2026-11-08** — Assumed: *Aa* takes the cursor away while its panel is open, not keeps it with the keyboard hidden, because on the iPhone check the editor brought the keyboard back each time it was hidden and the tap hung.
 - **2026-11-08** — Assumed: renumbered to 0010 because email notes and photos took 0008 and 0009 first; a staging space that ran it as `0008_note_edits` skips it by that name.
+- **2026-11-08** — Asked what to do when the iPhone check showed editing, ✓ and the reading bar working but froze before *Aa* → chose: find why taps into the note's words freeze the test tool, fix it, and run the check once more.

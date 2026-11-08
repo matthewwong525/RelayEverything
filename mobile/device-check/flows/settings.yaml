@@ -1,4 +1,4 @@
-# Settings: open it from the ⋯ menu on Home; it holds only the Notes and Voice notes groups. Sending has its own
+# Settings: open it from the gear on Home; it holds the Appearance, Notes and Voice notes groups. Sending has its own
 # folder on Home.
 appId: com.matthewwong525.relayApp
 ---
@@ -7,13 +7,15 @@ appId: com.matthewwong525.relayApp
 - extendedWaitUntil:
     visible: "Home"
     timeout: 60000
-# The round ⋯ button has no visible words: Maestro finds it by its tooltip, More.
-- tapOn: "More"
+# The round gear has no visible words: Maestro finds it by its tooltip, Settings.
 - tapOn: "Settings"
+# Home has a Voice notes folder too, so wait for a word only Settings shows.
 - extendedWaitUntil:
-    visible: "Voice notes"
+    visible: "Appearance"
     timeout: 10000
-- assertVisible: "Notes"
+- assertVisible: "System"
+- assertVisible: "Dark"
+- assertVisible: "Voice notes"
 # Flutter joins a row's title and subtitle into one label, so match its start.
 - assertVisible: 'Pin notes to where I am(.|\n)*'
 - assertNotVisible: 'Send my notes(.|\n)*'

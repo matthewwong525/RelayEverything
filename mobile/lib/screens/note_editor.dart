@@ -14,6 +14,8 @@ import '../editor/markdown.dart';
 import '../relay.dart';
 import 'back_to.dart';
 import 'days.dart';
+import 'folder.dart' show Opener, openInBrowser;
+import 'more_menu.dart';
 import 'note_bars.dart';
 import 'note_blocks.dart';
 import 'round_button.dart';
@@ -41,13 +43,15 @@ const savePause = Duration(milliseconds: 1500);
 /// One note's page, as Apple Notes has it: the note to read, and a tap in its words edits it in place. A new note
 /// opens with the keyboard up and a Title first line. Each change is kept on a pause and on leave, with no *Save*.
 class NoteEditor extends StatefulWidget {
-  const NoteEditor({super.key, required this.relay, this.entry, this.picker, this.sharer, this.back = 'Notes'});
+  const NoteEditor({super.key, required this.relay, this.entry, this.picker, this.sharer, this.opener, this.back = 'Notes'});
 
   final Relay relay;
   /// The note to open, or null for a new one.
   final Entry? entry;
   final FilesPicker? picker;
   final Sharer? sharer;
+  /// Opens a link in the note in the phone's browser; a test passes its own.
+  final Opener? opener;
   /// The page it opened from, *Home* or a folder, which its back button names.
   final String back;
 
@@ -112,7 +116,7 @@ class _NoteEditorState extends State<NoteEditor> {
 
   static Document _documentOf(Entry? entry) => Document.fromDelta(entry == null
     ? (Delta()..insert('\n', Attribute.h1.toJson()))
-    : markdownToDelta(entry.text, title: true));
+    : withLinks(markdownToDelta(entry.text, title: true)));
 
   void _listen() {
     _saved = _controller.document.toDelta();
@@ -146,10 +150,12 @@ class _NoteEditorState extends State<NoteEditor> {
     super.dispose();
   }
 
-  /// The format panel lets go of the cursor, but the person is still editing; the cursor coming back closes it.
+  /// The format panel lets go of the cursor, but the person is still editing; the cursor coming back closes it. When
+  /// editing ends, an address typed meanwhile becomes a link.
   void _focusChanged() {
     if (_focus.hasFocus) _formatting = false;
     _typing = _focus.hasFocus || _formatting;
+    if (!_typing && mounted) _markLinks();
     if (mounted) setState(() {});
   }
 
@@ -192,6 +198,7 @@ class _NoteEditorState extends State<NoteEditor> {
     if (!_stored && _adds == 0 && empty && files.isEmpty) return;
     _saved = delta;
     _savedText = text;
+    if (!leaving) _markLinks();
     final unsent = _unsent;
     _unsent = !sendNow;
     final adding = !_stored;
@@ -214,6 +221,22 @@ class _NoteEditorState extends State<NoteEditor> {
       if (adding) _adds--;
       if (problem != null) _messenger?.showSnackBar(SnackBar(content: Text(problem)));
     });
+  }
+
+  /// Marks the links in the shown note again, as [withLinks] does when the note opens, so an address typed in this
+  /// visit opens too, and an edited one opens what its words now say. The marks change no stored words, because the
+  /// Markdown codec writes no link. A note kept as it is stays kept, so the marks alone never write it back.
+  void _markLinks() {
+    final before = _controller.document.toDelta();
+    if (withLinks(before) == before) return;
+    // The marks change no words, so the editor must not bring the keyboard back for them.
+    _controller.ignoreFocusOnTextChange = true;
+    _controller.formatText(0, _controller.document.length - 1, const LinkAttribute(null));
+    for (final range in linkRanges(_controller.document.toPlainText())) {
+      _controller.formatText(range.start, range.address.length, LinkAttribute(range.address));
+    }
+    _controller.ignoreFocusOnTextChange = false;
+    if (before == _saved) _saved = _controller.document.toDelta();
   }
 
   void _say(String message) => _messenger?.showSnackBar(SnackBar(content: Text(message)));
@@ -278,7 +301,23 @@ class _NoteEditorState extends State<NoteEditor> {
   }
 
   void _compose() => Navigator.of(context).pushReplacement(MaterialPageRoute<void>(
-    builder: (_) => NoteEditor(relay: relay, picker: widget.picker, sharer: widget.sharer, back: widget.back)));
+    builder: (_) => NoteEditor(relay: relay, picker: widget.picker, sharer: widget.sharer, opener: widget.opener,
+      back: widget.back)));
+
+  /// A tap on a link while reading opens it in the browser, and the keyboard stays down. While editing, the tap places
+  /// the cursor, as in Apple Notes: it returns false, so the editor handles it.
+  bool _tapUp(TapUpDetails details, TextPosition Function(Offset) positionOf) {
+    if (_focus.hasFocus || _formatting) return false;
+    final link = linkAtPosition(_controller.document, positionOf(details.globalPosition));
+    if (link == null) return false;
+    _openLink(link);
+    return true;
+  }
+
+  Future<void> _openLink(String link) async {
+    final address = Uri.tryParse(link.contains('://') ? link : 'https://$link');
+    if (address == null || !await (widget.opener ?? openInBrowser)(address)) _say('The browser did not open. Try again.');
+  }
 
   /// *Yesterday at 18:05 · Home*, and *From Email* for a note from elsewhere.
   String _when(BuildContext context, DateTime at, String? place, String? from) {
@@ -300,7 +339,13 @@ class _NoteEditorState extends State<NoteEditor> {
       appBar: AppBar(leading: BackTo(widget.back), leadingWidth: BackTo.widthOf(widget.back), actions: [
         ButtonPill(children: [
           PillIconButton(icon: CupertinoIcons.square_arrow_up, tooltip: 'Share', onPressed: _share),
-          _MoreMenu(copy: _copy, play: _current?.recording == null ? null : () => relay.play(_current!.recording!)),
+          MoreMenu(
+            items: [
+              ('Copy', CupertinoIcons.doc_on_doc, _copy),
+              if (_current?.recording case final recording?) ('Play', CupertinoIcons.play_fill, () => relay.play(recording)),
+            ],
+            builder: (context, toggle) => PillIconButton(icon: CupertinoIcons.ellipsis, tooltip: 'More', onPressed: toggle),
+          ),
         ]),
         if (editing) Padding(padding: const EdgeInsets.only(left: 8),
           child: RoundIconButton(icon: CupertinoIcons.checkmark_alt, tooltip: 'Done', onPressed: _done, accent: true)),
@@ -357,6 +402,9 @@ class _NoteEditorState extends State<NoteEditor> {
               autoFocus: widget.entry == null,
               placeholder: recording != null ? 'No words, only the recording.' : 'What do you want to keep?',
               customStyles: noteStyles(context),
+              onTapUp: _tapUp,
+              // A long press on a link offers Open; it goes to the same browser.
+              onLaunchUrl: _openLink,
               // The only way to draw Apple's round checklist circles and dashed lists; pinned by pubspec.lock.
               // ignore: experimental_member_use
               customLeadingBlockBuilder: (_, config) => _leading(config, brand),
@@ -369,7 +417,10 @@ class _NoteEditorState extends State<NoteEditor> {
           child: PlayRow(length: note?.length, onPlay: () => relay.play(recording))),
         if (note != null) Padding(padding: const EdgeInsets.only(top: 14), child: Row(spacing: 8, children: [
           BrandTag(note.voice ? 'Voice' : 'Typed', spark: note.voice, large: true),
-          if (state != null) Text(state, style: muted),
+          if (note.waiting && !note.sent)
+            _SendNow(relay: relay)
+          else if (state != null)
+            Text(state, style: muted),
         ])),
       ]),
     );
@@ -398,7 +449,8 @@ class _NoteEditorState extends State<NoteEditor> {
 
 /// The note's text styles, as Apple Notes draws them: Title, Heading and Subheading larger and bold, Body at 17.
 DefaultStyles noteStyles(BuildContext context) {
-  final ink = brandOf(context).ink;
+  final brand = brandOf(context);
+  final ink = brand.ink;
   DefaultTextBlockStyle block(double size, FontWeight weight, double top) => DefaultTextBlockStyle(
     TextStyle(fontFamily: brandFont, fontSize: size, fontWeight: weight, height: 1.3, color: ink), HorizontalSpacing.zero,
     VerticalSpacing(top, 4), VerticalSpacing.zero, null);
@@ -408,24 +460,63 @@ DefaultStyles noteStyles(BuildContext context) {
     h3: block(19, FontWeight.w600, 8),
     paragraph: DefaultTextBlockStyle(TextStyle(fontFamily: brandFont, fontSize: 17, height: 1.5, color: ink), HorizontalSpacing.zero,
       VerticalSpacing.zero, VerticalSpacing.zero, null),
+    link: TextStyle(color: brand.accentText, decoration: TextDecoration.underline, decorationColor: brand.accentText),
   );
 }
 
-/// ⋯ on the note's page: *Copy*, and *Play* for a voice note.
-class _MoreMenu extends StatelessWidget {
-  const _MoreMenu({required this.copy, this.play});
+/// A web address in a note's words: `https://…`, `http://…` or `www.…`, up to a space, less the stop or bracket that
+/// ends a sentence.
+final _webAddress = RegExp(r'(?:https?://|www\.)[^\s<>"]+', caseSensitive: false);
+final _endPunctuation = RegExp(r'''[.,;:!?)\]}'"]+$''');
 
-  final VoidCallback copy;
-  final VoidCallback? play;
+/// [delta] with each web address in its words marked as a link, for the page to show. Only the shown note gets the
+/// marks: the Markdown codec writes no link, so the stored words never change, and an old note is never sent again.
+/// Each old mark goes first: the editor's own marks can take a stop at an address's end, and an edited address keeps
+/// the mark of what it was.
+Delta withLinks(Delta delta) {
+  final document = Document.fromDelta(delta);
+  document.format(0, document.length - 1, const LinkAttribute(null));
+  for (final range in linkRanges(document.toPlainText())) {
+    document.format(range.start, range.address.length, LinkAttribute(range.address));
+  }
+  return document.toDelta();
+}
+
+/// Each web address in [words], with where it starts.
+Iterable<({int start, String address})> linkRanges(String words) sync* {
+  for (final match in _webAddress.allMatches(words)) {
+    final address = match[0]!.replaceFirst(_endPunctuation, '');
+    if (address.contains('.') && !address.endsWith('://')) yield (start: match.start, address: address);
+  }
+}
+
+/// The link on the letter at [offset] in [document], or null. A tap in the space after a line's end gives that line's
+/// end, which is no link, so it places the cursor.
+String? linkAt(Document document, int offset) => offset < 0 || offset >= document.length - 1 ? null
+  : document.collectStyle(offset, 1).attributes[Attribute.link.key]?.value as String?;
+
+/// The link under a tap at [position], or null. A tap on a letter's right half gives the place after that letter,
+/// upstream, so the letter before it is the one tapped: the link's last letter opens it, and the space before a link
+/// does not.
+String? linkAtPosition(Document document, TextPosition position) =>
+  linkAt(document, position.affinity == TextAffinity.upstream ? position.offset - 1 : position.offset);
+
+/// *Waiting to send · Send now* on a note's page: a tap sends what waits, and it says *Sending…* while it goes.
+class _SendNow extends StatelessWidget {
+  const _SendNow({required this.relay});
+
+  final Relay relay;
 
   @override
-  Widget build(BuildContext context) => MenuAnchor(
-    menuChildren: [
-      MenuItemButton(leadingIcon: const Icon(CupertinoIcons.doc_on_doc, size: 20), onPressed: copy, child: const Text('Copy')),
-      if (play != null)
-        MenuItemButton(leadingIcon: const Icon(CupertinoIcons.play_fill, size: 20), onPressed: play, child: const Text('Play')),
-    ],
-    builder: (context, menu, _) => PillIconButton(icon: CupertinoIcons.ellipsis, tooltip: 'More',
-      onPressed: () => menu.isOpen ? menu.close() : menu.open()),
-  );
+  Widget build(BuildContext context) {
+    final sending = relay.status == SyncStatus.syncing;
+    return TextButton(
+      onPressed: sending ? null : relay.sync,
+      style: quietButton(context).copyWith(
+        textStyle: const WidgetStatePropertyAll(TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+        visualDensity: VisualDensity.compact,
+      ),
+      child: Text(sending ? 'Sending…' : 'Waiting to send · Send now'),
+    );
+  }
 }

@@ -433,7 +433,7 @@ void main() {
       expect([on.copyWith(sending: false).history, on.copyWith(sending: false).health], [false, false]);
       expect(jsonDecode(on.encode()), {'sending': true, 'pinNotes': false, 'history': true, 'health': true, 'calendar': false,
         'calendarsOff': [], 'mode': 'battery', 'place': 'server',
-        'photos': false, 'photosOnMobileData': false});
+        'photos': false, 'photosOnMobileData': false, 'appearance': 'system'});
       final back = Settings.decode(on.encode(), hasKey: false);
       expect([back.sending, back.health], [true, true]);
     });
@@ -456,6 +456,27 @@ void main() {
       final hooked = on.copyWith(place: SendPlace.webhook);
       expect([hooked.photos, hooked.photosOnMobileData], [true, true]);
       expect(Settings.decode(hooked.encode(), hasKey: false).photos, isTrue);
+    });
+
+    test('keep the appearance by name, and settings from before it read as System', () {
+      expect(const Settings().appearance, Appearance.system);
+      for (final appearance in Appearance.values) {
+        expect(Settings.decode(const Settings().copyWith(appearance: appearance).encode(), hasKey: false).appearance, appearance);
+      }
+      expect(Settings.decode(jsonEncode({'sending': false, 'pinNotes': true}), hasKey: false).appearance, Appearance.system);
+      expect(Settings.decode(jsonEncode({'sending': false, 'appearance': 'sepia'}), hasKey: false).appearance, Appearance.system);
+      // Turning sending off keeps the look.
+      expect(const Settings(sending: true, appearance: Appearance.dark).copyWith(sending: false).appearance, Appearance.dark);
+    });
+
+    test('a picked appearance is kept on the phone and read again on the next start', () async {
+      final relay = controller();
+      await relay.load();
+      await relay.setAppearance(Appearance.light);
+      expect(relay.settings.appearance, Appearance.light);
+      final reopened = controller();
+      await reopened.load();
+      expect(reopened.settings.appearance, Appearance.light);
     });
 
     test('keep the calendar and the calendars turned off, and sending off forces the calendar off', () {
@@ -487,7 +508,7 @@ void main() {
       expect([relay.settings.sending, relay.settings.pinNotes], [false, true]);
       expect(jsonDecode((await store.get('settings'))!), {'sending': false, 'pinNotes': true, 'history': false, 'health': false,
         'calendar': false, 'calendarsOff': [], 'mode': 'battery', 'place': 'server',
-        'photos': false, 'photosOnMobileData': false});
+        'photos': false, 'photosOnMobileData': false, 'appearance': 'system'});
     });
 
     test('turn each on only with its permission, and schedule the hourly sync only while sending', () async {
@@ -511,7 +532,7 @@ void main() {
       expect(scheduled, [false, true, true, true, true]);
       expect(jsonDecode((await store.get('settings'))!), {'sending': true, 'pinNotes': true, 'history': false, 'health': true,
         'calendar': false, 'calendarsOff': [], 'mode': 'battery', 'place': 'server',
-        'photos': false, 'photosOnMobileData': false});
+        'photos': false, 'photosOnMobileData': false, 'appearance': 'system'});
       expect(places.asked, [false, true, true, false]);
       // Each change started a sync; the last round ends before the store closes.
       await relay.settled();

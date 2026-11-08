@@ -92,3 +92,4 @@ None: this update changes WongStack's shared tools and this repo's own chat rule
 - **2026-11-08** — Assumed: `CLAUDE.md` needs no move, because it already links to `AGENTS.md`.
 - **2026-11-08** — Check: `app/package.json` adds `tidy.test.mjs` to the `node --test` list, because the new test must run in `npm test`. This makes the check stricter: nothing is turned off.
 - **2026-11-08** — Built: 51.4.0 copied and merged; no chat closes by itself (close question in the rules and Lesson 2, idle close removed from the tidy-up, new `tidy.test.mjs`). Merge check: one hunk dropped on purpose, `asking-the-user.md`'s *finished work that closes* line. Local checks pass; saving inside `/ship`.
+- **2026-11-08** — Archived for publish: task 4.3 passed (PR #74 checks SUCCESS at 4133e52).

@@ -21,7 +21,7 @@
 
 - [x] 4.1 Run `node /root/.cache/wong-stack/WongStack/.claude/skills/wong-sync/scripts/merge-check.mjs --target /root/.paseo/worktrees/11511sre/calm-fly --source /root/.cache/wong-stack/WongStack --from 57208cc11cf518670ca7dcfeeba6c73ffd9d2c3a`; take every missing hunk, or name each one this repo drops on purpose (the auto-close lines), until no other remains.
 - [x] 4.2 Run `npm test` in `app/` and `node scripts/public-check.mjs --tree`; verify all pass with no check loosened.
-- [ ] 4.3 Run `/save`; verify the pull request's checks pass.
+- [x] 4.3 Run `/save`; verify the pull request's checks pass.
 
 ## 5. Install record
 

@@ -107,6 +107,7 @@ class _NoteEditorState extends State<NoteEditor> {
     _listen();
     _focus.addListener(_focusChanged);
     relay.addListener(_relayChanged);
+    relay.openNote = _id;
   }
 
   static Document _documentOf(Entry? entry) => Document.fromDelta(entry == null
@@ -130,6 +131,7 @@ class _NoteEditorState extends State<NoteEditor> {
   @override
   void dispose() {
     _save(sendNow: true, leaving: true);
+    if (relay.openNote == _id) relay.openNote = null;
     relay.removeListener(_relayChanged);
     _changes?.cancel();
     _pause?.cancel();
@@ -273,12 +275,16 @@ class _NoteEditorState extends State<NoteEditor> {
   void _compose() => Navigator.of(context).pushReplacement(MaterialPageRoute<void>(
     builder: (_) => NoteEditor(relay: relay, picker: widget.picker, sharer: widget.sharer, back: widget.back)));
 
-  /// *Yesterday at 18:05 · Home*.
-  String _when(BuildContext context, DateTime at, String? place) {
+  /// *Yesterday at 18:05 · Home*, and *From Email* for a note from elsewhere.
+  String _when(BuildContext context, DateTime at, String? place, String? from) {
     final days = daysAgo(at, DateTime.now());
     final day = days <= 0 ? 'Today' : days == 1 ? 'Yesterday' : MaterialLocalizations.of(context).formatMediumDate(at);
-    return ['$day at ${TimeOfDay.fromDateTime(at).format(context)}', place].whereType<String>().join(' · ');
+    return ['$day at ${TimeOfDay.fromDateTime(at).format(context)}', place, if (from != null) 'From $from']
+      .whereType<String>().join(' · ');
   }
+
+  /// The server takes new files only from the phone that made the note, so a note from elsewhere offers none.
+  VoidCallback? get _attachOrNull => _current?.from == null ? _attach : null;
 
   @override
   Widget build(BuildContext context) {
@@ -303,8 +309,8 @@ class _NoteEditorState extends State<NoteEditor> {
             top: false,
             minimum: const EdgeInsets.only(bottom: 12),
             child: editing
-              ? Center(child: FloatingToolBar(onStyles: _styles, onChecklist: _checklist, onAttach: _attach))
-              : ReadingBar(onChecklist: _checklist, onAttach: _attach, onCompose: _compose),
+              ? Center(child: FloatingToolBar(onStyles: _styles, onChecklist: _checklist, onAttach: _attachOrNull))
+              : ReadingBar(onChecklist: _checklist, onAttach: _attachOrNull, onCompose: _compose),
           )),
         ])),
         if (_formatting) FormatSheet(controller: _controller, height: _keyboard, onClose: _closeStyles),
@@ -321,7 +327,7 @@ class _NoteEditorState extends State<NoteEditor> {
       controller: _scroll,
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 120),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text(_when(context, note?.at ?? DateTime.now(), note?.place), style: muted, textAlign: TextAlign.center),
+        Text(_when(context, note?.at ?? DateTime.now(), note?.place, note?.from), style: muted, textAlign: TextAlign.center),
         const SizedBox(height: 14),
         // Words typed with a recording, such as a shortcut's label, show while its own words are written.
         if (note != null && note.text.isNotEmpty && (note.writing || note.failed)) ...[
@@ -354,7 +360,7 @@ class _NoteEditorState extends State<NoteEditor> {
           ),
         for (final file in note?.files ?? const <EntryFile>[])
           Padding(padding: const EdgeInsets.only(top: 14),
-            child: file.picture ? NotePicture(file: file, relay: relay) : NoteFileRow(file: file, relay: relay)),
+            child: file.picture && file.onPhone ? NotePicture(file: file, relay: relay) : NoteFileRow(file: file, relay: relay)),
         if (recording != null) Padding(padding: const EdgeInsets.only(top: 14),
           child: PlayRow(length: note?.length, onPlay: () => relay.play(recording))),
         if (note != null) Padding(padding: const EdgeInsets.only(top: 14), child: Row(spacing: 8, children: [

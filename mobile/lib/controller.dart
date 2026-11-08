@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'data/api.dart';
 import 'data/attachments.dart';
 import 'data/connection.dart';
+import 'data/note_sync.dart';
 import 'data/outbox.dart';
 import 'data/sender.dart';
 import 'data/settings.dart';
@@ -130,6 +131,7 @@ class RelayController extends Relay {
   DateTime? _namesAt;
   Set<String> _folded = const {};
   Future<void>? _syncing;
+  Future<void>? _pulling;
   bool _again = false;
   DateTime? _listening;
   Future<bool>? _starting;
@@ -227,18 +229,19 @@ class RelayController extends Relay {
   Future<void> resume() async {
     await _drainShare(refresh: false);
     await _refreshLocal();
-    await sync();
+    await pullNotes();
   }
 
   Entry _entryOfLocal(LocalNote note) => Entry(id: note.clientId, text: note.text, at: note.createdAt,
     // With sending off the phone looks up no place name, so a pin with no name reads as Pinned.
     place: note.pin == null ? null : note.pin!.place ?? 'Pinned',
-    sent: note.sentAt != null, waiting: _settings.sending && note.sentAt == null && (note.queued || note.pinning),
+    sent: note.mine && note.sentAt != null, waiting: _settings.sending && note.sentAt == null && (note.queued || note.pinning),
     voice: note.kind == NoteKind.voice, writing: note.wordsPending && !_wordsFailed.contains(note.clientId),
     failed: note.wordsPending && _wordsFailed.contains(note.clientId), recording: note.audioPath,
     length: note.durationMs == null ? null : Duration(milliseconds: note.durationMs!),
-    files: [for (final file in note.attachments)
-      EntryFile(name: file.name, type: file.type, size: file.size, path: fullPath(file.path))]);
+    files: [for (final file in note.attachments) EntryFile(id: file.id, name: file.name, type: file.type, size: file.size,
+      path: file.path.isEmpty ? '' : fullPath(file.path))],
+    from: note.mine ? null : note.device ?? 'elsewhere');
 
   /// The app's support folder, once [load] has read it.
   String? get filesRoot => _root;
@@ -246,7 +249,7 @@ class RelayController extends Relay {
   /// A path from the support folder, made full.
   String fullPath(String path) => _root == null || path.startsWith('/') ? path : '$_root/$path';
 
-  /// The list shows this phone's own notes, newest first. Ring notes and recordings are on the person's Relay page.
+  /// The list shows this phone's notes and those a pull brought, newest first.
   Future<void> _refreshLocal() async {
     final notes = await store.notes();
     _waiting = await store.waiting();
@@ -315,9 +318,13 @@ class RelayController extends Relay {
     _connection = _connection!.withServer(server);
     await vault.save(_connection!);
     await _tellShare();
-    // The names came from the server before, which may be another person's space.
+    // The names and the notes from elsewhere came from the server before, which may be another person's space.
     _namesAt = null;
     await _keepConnections(null);
+    // A pull already reading the old server finishes first, so nothing it read lands after the delete.
+    await _pulling;
+    await store.dropSynced();
+    await _refreshLocal();
     return null;
   }
 
@@ -400,8 +407,11 @@ class RelayController extends Relay {
     await stopSending();
     await vault.forget();
     _connection = null;
+    // A pull already reading finishes first, so nothing it read lands after the delete.
+    await _pulling;
+    await store.dropSynced();
     await _tellShare();
-    notifyListeners();
+    await _refreshLocal();
   }
 
   Future<void> _saveSettings(Settings settings) async {
@@ -749,13 +759,41 @@ class RelayController extends Relay {
 
   static const _noFile = 'This file is not on this phone.';
   static const _noApp = 'No app on this phone opens this file.';
+  static const _sendToDownload = 'Turn on Send my notes to Relay Everything to download this file.';
+  static const _notDownloaded = 'The file did not download. Try again.';
 
   @override
   Future<void> openFile(EntryFile file) async {
-    final found = File(file.path);
+    final found = file.onPhone ? File(file.path) : await _download(file);
+    if (found == null) return;
     if (!await found.exists()) return notice(_noFile);
     final open = opener;
     if (open == null || !await open(found, file.type)) notice(_noApp);
+  }
+
+  /// Downloads one file of a note from elsewhere into `attachments/`, or a ring note's recording, and keeps its place.
+  Future<File?> _download(EntryFile file) async {
+    final root = _root, api = _sender.reader(_settings, connection: _connection);
+    if (root == null || api == null) {
+      notice(_sendToDownload);
+      return null;
+    }
+    final audio = file.id.startsWith(recordingPrefix);
+    final path = 'attachments/${file.id.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '-')}${extensionOf(file.name)}';
+    try {
+      final bytes = await api.download(audio ? file.id.substring(recordingPrefix.length) : file.id, audio: audio);
+      final target = File('$root/$path');
+      await target.parent.create(recursive: true);
+      await target.writeAsBytes(bytes);
+      await store.fileKept(file.id, path);
+      await _refreshLocal();
+      return target;
+    } on ApiException {
+      notice(_notDownloaded);
+    } on FileSystemException {
+      notice(_notDownloaded);
+    }
+    return null;
   }
 
   Future<void> _pinThenSync(String clientId) async {
@@ -780,6 +818,22 @@ class RelayController extends Relay {
       return running;
     }
     return _syncing = _rounds().whenComplete(() => _syncing = null);
+  }
+
+  /// One pull at a time: a second call waits for the one running.
+  @override
+  Future<void> pullNotes() => _pulling ??= _pull().whenComplete(() => _pulling = null);
+
+  Future<void> _pull() async {
+    await sync();
+    // Only after the outbox emptied, so this phone's own changes are on the server before it reads.
+    if (_status != SyncStatus.synced) return;
+    try {
+      await syncNotes(store, _sender, settings: _settings, connection: _connection, editing: openNote, onPage: _refreshLocal);
+    } on ApiException catch (error) {
+      _status = error.failure == Failure.refused ? SyncStatus.refused : SyncStatus.offline;
+      notifyListeners();
+    }
   }
 
   /// Runs rounds until no call asked for another, or a round could not send everything. After a full send, the names of

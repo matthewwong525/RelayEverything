@@ -1,6 +1,6 @@
 # Your notes on every phone you sign in on
 
-**Status:** planned; the build starts after *Edit notes like Apple Notes* is published
+**Status:** building on top of *Edit notes like Apple Notes*; publishing waits until it is published
 **Branch:** funny-warthog
 **Open questions:** none
 
@@ -78,6 +78,7 @@ Non-goals: deleting a note everywhere, sync on the web page as a phone app, sync
 
 ### Modified Capabilities
 - `relay-device-keys`: a phone key reads its person's notes and their files, and changes any note in that space; it still reads no health, place, calendar event, chat or photo.
+- `relay-note-editing`: a phone key changes any note in its person's space, not only the notes it sent, and the newer change wins.
 
 ## Impact
 
@@ -99,3 +100,11 @@ Non-goals: deleting a note everywhere, sync on the web page as a phone app, sync
 - **2026-11-08** — Assumed: a note emptied and deleted on one phone stays on the others and on the page, because the page can't delete a note yet, and deleting everywhere is a non-goal.
 - **2026-11-08** — Assumed: old ring recordings open on tap like files, and a phone's voice recordings stay on their phone, because the server never got those recordings.
 - **2026-11-08** — Assumed: sync pulls on app open, return to the app, pull-down and the hourly round, with no live push, because the phone has no push channel today and a minute's delay is fine for notes.
+- **2026-11-08** — Asked how to go on while the editing change is still unpublished → chose: build now on top of the editing branch, and publish only after the editing change is on `main`.
+- **2026-11-08** — Assumed: an edit that never went, such as one made with sending off, still goes on a pull only when its edit time is later than the pulled one, because newer wins for it as for any change; the new mark only stops a sent or dropped edit from going again.
+- **2026-11-08** — Assumed: a `409` answer holds no note, because the action contract passes on only an error's code and message; the phone drops the change, and its pull right after the outbox takes the newer words.
+- **2026-11-08** — Assumed: a phone adds files only to a note it sent, and a new file on a note from elsewhere answers `400`, because `POST attachments` takes bytes only for the sending device's own note; the editor offers no paperclip on a note from elsewhere.
+- **2026-11-08** — Assumed: a ring recording shows on a synced note as a file, and opens on tap through `GET audio`, so files and recordings share one tap-to-open path.
+- **2026-11-08** — Assumed: changing the server on a phone deletes the notes from elsewhere, as signing out does, because they came from the old server's space.
+- **2026-11-08** — Assumed: a change on the phone with nothing waiting to send, such as one made while sending was off, keeps its words when its `edited_at` is later than the pulled `editedAt`, and the pull queues its `note.update`, because the newer change wins wherever it waits.
+- **2026-11-08** — Assumed: a note emptied and deleted on this phone comes back on a pull from `0`, such as after a new sign-in, because the server keeps its last words and deleting everywhere is a non-goal.

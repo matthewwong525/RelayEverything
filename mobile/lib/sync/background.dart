@@ -5,7 +5,9 @@ import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:workmanager/workmanager.dart';
 
+import '../data/api.dart';
 import '../data/connection.dart';
+import '../data/note_sync.dart';
 import '../data/outbox.dart';
 import '../data/sender.dart';
 import '../data/settings.dart';
@@ -35,7 +37,7 @@ void backgroundSync() {
       return await savedRound(store, KeyVault(), health: PhoneHealth(), sender: Sender(),
         native: Platform.isIOS ? PhoneBackground() : null, places: PhonePlaces(), folder: getApplicationSupportDirectory,
         share: Platform.isIOS ? PhoneShareGroup() : null, calendar: PhoneCalendarSource(), photos: PhonePhotos(),
-        network: PhoneNetwork());
+        network: PhoneNetwork(), pull: true);
     } on Exception {
       return false;
     } finally {
@@ -48,10 +50,10 @@ void backgroundSync() {
 /// here, so each sends to the place the settings name, the webhook too.
 Future<bool> savedRound(Store store, KeyVault vault, {required HealthSource health, required Sender sender,
   NativeBackground? native, Places? places, DateTime? now, Future<Directory> Function()? folder, ShareGroup? share,
-  CalendarSource? calendar, PhotoSource? photos, Network? network}) async =>
+  CalendarSource? calendar, PhotoSource? photos, Network? network, bool pull = false}) async =>
   backgroundRound(store, connection: await vault.read(), webhook: await vault.readWebhook(), health: health, sender: sender,
     native: native, places: places, now: now, folder: folder, share: share, calendar: calendar, photos: photos,
-    network: network);
+    network: network, pull: pull);
 
 /// One background round, apart from the plugin that runs it so a test can drive it: the hourly task and an iPhone
 /// wake share it. With [share], it first keeps the notes the iPhone's share card left. With [native], it moves the
@@ -59,10 +61,10 @@ Future<bool> savedRound(Store store, KeyVault vault, {required HealthSource heal
 /// engine has no calendar, does not hold the round back.
 /// It sends to the place the settings name: the server with [connection], or the person's own [webhook], which needs no
 /// key. The photo step runs after the outbox, so a photo waiting for Wi-Fi holds back no note; it runs only with
-/// [photos] and [network] given, and sends to the same place.
+/// [photos] and [network] given, and sends to the same place. With [pull], it ends by reading notes changed elsewhere.
 Future<bool> backgroundRound(Store store, {required Connection? connection, Webhook? webhook, required HealthSource health,
   required Sender sender, NativeBackground? native, Places? places, DateTime? now, Future<Directory> Function()? folder,
-  ShareGroup? share, CalendarSource? calendar, PhotoSource? photos, Network? network}) async {
+  ShareGroup? share, CalendarSource? calendar, PhotoSource? photos, Network? network, bool pull = false}) async {
   final settings = Settings.decode(await store.get(settingsKey), hasKey: connection != null);
   final api = sender.api(settings, connection: connection, webhook: webhook,
     installId: settings.place == SendPlace.webhook ? await store.installId() : null);
@@ -94,13 +96,23 @@ Future<bool> backgroundRound(Store store, {required Connection? connection, Webh
   }
   await store.queuePoints();
   final notes = await flush(store, api, folder: folder);
-  if (photos == null || network == null || !settings.photos) return notes.failure == null && read;
-  // The app can turn photos off while this round runs: it reads the switch again before each photo.
-  final failure = await syncPhotos(store, api, photos, network, settings: settings, send: notes.failure == null, now: now,
-    keepGoing: () async {
-      final now = Settings.decode(await store.get(settingsKey), hasKey: true);
-      return now.photos && now.place == settings.place;
-    });
+  Failure? failure;
+  if (photos != null && network != null && settings.photos) {
+    // The app can turn photos off while this round runs: it reads the switch again before each photo.
+    failure = await syncPhotos(store, api, photos, network, settings: settings, send: notes.failure == null, now: now,
+      keepGoing: () async {
+        final now = Settings.decode(await store.get(settingsKey), hasKey: true);
+        return now.photos && now.place == settings.place;
+      });
+  }
+  // Only after the outbox emptied, so this phone's own changes are on the server before it reads.
+  if (pull && notes.failure == null) {
+    try {
+      await syncNotes(store, sender, settings: settings, connection: connection);
+    } on ApiException {
+      return false;
+    }
+  }
   // A refused photo from a key that still answers, such as on an older server with no photos, comes back as null; a
   // turned-off key fails the round, as for the notes.
   return notes.failure == null && read && failure == null;

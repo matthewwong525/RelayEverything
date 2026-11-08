@@ -15,7 +15,7 @@ enum NoteKind { typed, voice }
 class LocalNote {
   const LocalNote({required this.clientId, required this.text, required this.createdAt, this.pin, this.sentAt,
     this.queued = false, this.pinning = false, this.kind = NoteKind.typed, this.audioPath, this.durationMs,
-    this.wordsPending = false, this.attachments = const [], this.editedAt});
+    this.wordsPending = false, this.attachments = const [], this.editedAt, this.serverId, this.device, this.mine = true});
 
   final String clientId;
   final String text;
@@ -45,6 +45,15 @@ class LocalNote {
 
   /// When the person last changed the note's words or files, or null for never.
   final DateTime? editedAt;
+
+  /// The server's id for the note, once a pull read it.
+  final String? serverId;
+
+  /// Where the note was made, as the server names it, such as `Email` or another phone.
+  final String? device;
+
+  /// False for a note from elsewhere, which only a pull brings: sign-out deletes it.
+  final bool mine;
 
   /// The body the server's `notes` route takes: a voice note goes as its words, the same as a typed note. A note with
   /// files lists them; their bytes go later, one `attachment` upload each.
@@ -108,6 +117,12 @@ String destinationOf(SendPlace place) => place == SendPlace.webhook ? ownWebhook
 /// The `state` keys: the destination new uploads take, this install's own id, and the next health or point id.
 const _destination = 'outbox.destination', _installId = 'install.id', _nextId = 'ids.next';
 
+/// The last change number a pull of notes read, in the store's `state`: the next pull asks for the changes after it.
+const noteSyncSeq = 'note_sync_seq';
+
+/// A ring note's recording shows as a file of its note with this id prefix and the note's server id.
+const recordingPrefix = 'audio:';
+
 /// When an upload of health, of location points, or of calendar events last reached the server, in the store's `state`.
 const sentHealth = 'sent.health', sentPoints = 'sent.points', sentCalendar = 'sent.calendar';
 
@@ -158,13 +173,20 @@ String photoPathOf(String clientId) => 'photos/$clientId.jpg';
 const _voiceColumns = "kind TEXT NOT NULL DEFAULT 'typed', audio_path TEXT, duration_ms INTEGER, "
   'words_pending INTEGER NOT NULL DEFAULT 0';
 
+// mine = 0: a note from elsewhere, which a pull brought. SQLite can not add a UNIQUE column, so an index keeps
+// server_id unique. edit_unsent = 1: this phone kept a change to the note and queued no upload for it, as with sending
+// off, so the server never got it. The edit time can not say so: the server keeps a fast phone's edit at its own now.
+const _syncColumns = 'server_id TEXT, device TEXT, mine INTEGER NOT NULL DEFAULT 1, edit_unsent INTEGER NOT NULL DEFAULT 0';
+const _serverIdIndex = 'CREATE UNIQUE INDEX notes_server_id ON notes (server_id)';
+
 const _schema = [
   'CREATE TABLE outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, destination TEXT NOT NULL DEFAULT \'$relayServer\', route TEXT NOT NULL, '
     'body TEXT NOT NULL, created_at INTEGER NOT NULL)',
   // queued = 1: the note has its upload. pinning = 1: the note waits for its fix, so no upload can go without its place.
   // words_pending = 1: a voice note still waits for its words, so no upload can go without them.
   'CREATE TABLE notes (client_id TEXT PRIMARY KEY, body TEXT NOT NULL, created_at INTEGER NOT NULL, sent_at INTEGER, '
-    'queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0, $_voiceColumns, edited_at INTEGER)',
+    'queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0, $_voiceColumns, edited_at INTEGER, $_syncColumns)',
+  _serverIdIndex,
   'CREATE TABLE points (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
   'CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
   _attachmentsTable,
@@ -172,7 +194,8 @@ const _schema = [
   _photosTable,
 ];
 
-// A note's files: one row each, in the order they were added. sent_at: when the server took the file.
+// A note's files: one row each, in the order they were added. sent_at: when the server took the file. path is null for
+// a file from elsewhere until the person opens it.
 const _attachmentsTable = 'CREATE TABLE attachments (id TEXT PRIMARY KEY, note_client_id TEXT NOT NULL, name TEXT, type TEXT, '
   'size INTEGER, path TEXT, sent_at INTEGER)';
 
@@ -196,7 +219,7 @@ class Store extends GeneratedDatabase {
   Iterable<TableInfo<Table, dynamic>> get allTables => const [];
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(onCreate: (_) async {
@@ -233,6 +256,13 @@ class Store extends GeneratedDatabase {
     if (from < 7) await customStatement(_photosTable);
     // Version 7 could not change a note.
     if (from < 8) await customStatement('ALTER TABLE notes ADD COLUMN edited_at INTEGER');
+    // Version 8 had only this phone's notes.
+    if (from < 9) {
+      for (final column in _syncColumns.split(', ')) {
+        await customStatement('ALTER TABLE notes ADD COLUMN $column');
+      }
+      await customStatement(_serverIdIndex);
+    }
   });
 
   Future<List<QueryRow>> _rows(String sql, [List<Object?> values = const []]) =>
@@ -329,9 +359,11 @@ class Store extends GeneratedDatabase {
   /// Keeps the person's change to a note: its new [text], and [files] added. A note not sent yet changes its waiting
   /// upload, or none; a sent note with [send] gets one change upload, and a change still waiting takes the new words.
   /// New files' uploads go after. False when nothing changed, or the note is gone or waits for its words.
+  /// A note changes by its server id once a pull saved one, and a note from elsewhere's new files stay on this phone.
   Future<bool> editNote(String clientId, String text, {List<Attachment> files = const [], required bool send,
     required DateTime at}) => transaction(() async {
-    final notes = await _rows('SELECT body, sent_at FROM notes WHERE client_id = ? AND words_pending = 0', [clientId]);
+    final notes = await _rows('SELECT body, sent_at, server_id, mine FROM notes WHERE client_id = ? AND words_pending = 0',
+      [clientId]);
     if (notes.isEmpty) return false;
     final old = _noteOf(jsonDecode(notes.single.read<String>('body')) as Map<String, dynamic>);
     if (old.text == text && files.isEmpty) return false;
@@ -341,8 +373,10 @@ class Store extends GeneratedDatabase {
     }
     final body = LocalNote(clientId: clientId, text: text, createdAt: old.createdAt, pin: old.pin,
       attachments: await attachmentsOf(clientId)).toJson();
-    final change = {...body, 'editedAt': at.millisecondsSinceEpoch};
-    await _run('UPDATE notes SET body = ?, edited_at = ? WHERE client_id = ?', [jsonEncode(body), at.millisecondsSinceEpoch, clientId]);
+    final mine = notes.single.read<int>('mine') == 1;
+    final change = _changeOf(body, at.millisecondsSinceEpoch, serverId: notes.single.read<String?>('server_id'), mine: mine);
+    await _run('UPDATE notes SET body = ?, edited_at = ?, edit_unsent = 0 WHERE client_id = ?',
+      [jsonEncode(body), at.millisecondsSinceEpoch, clientId]);
     final waiting = await _rows("SELECT id, route FROM outbox WHERE route IN ('notes', '$noteUpdate') "
       "AND json_extract(body, '\$.clientId') = ? ORDER BY id DESC LIMIT 1", [clientId]);
     if (waiting.isNotEmpty) {
@@ -351,13 +385,23 @@ class Store extends GeneratedDatabase {
     } else if (send && notes.single.read<int?>('sent_at') != null) {
       await enqueue(noteUpdate, change);
     } else {
+      await _run('UPDATE notes SET edit_unsent = 1 WHERE client_id = ?', [clientId]);
       return true;
     }
-    for (final file in files) {
+    for (final file in mine ? files : const <Attachment>[]) {
       await enqueue('attachment', file.upload(clientId));
     }
     return true;
   });
+
+  /// A sent note's change upload. It names the note by its server id when a pull saved one: a new key is a new device
+  /// on the server, which then knows this phone's older notes by id only. A note from elsewhere lists no files, as the
+  /// server takes new files only from the phone that sent the note.
+  static Map<String, dynamic> _changeOf(Map<String, dynamic> body, int editedAt, {String? serverId, required bool mine}) => {
+    for (final entry in body.entries) if (mine || entry.key != 'attachments') entry.key: entry.value,
+    'editedAt': editedAt,
+    if (serverId != null) 'id': serverId,
+  };
 
   /// Keeps the note, and with [send] queues its upload in the same step. With [waitForPin] the note is kept and shown,
   /// but gets its upload only from [settlePin], so a sync meanwhile can not send it bare.
@@ -404,6 +448,7 @@ class Store extends GeneratedDatabase {
   Future<void> _queue(Map<String, dynamic> body) async {
     final clientId = body['clientId'] as String;
     await enqueue('notes', body);
+    await _run('UPDATE notes SET edit_unsent = 0 WHERE client_id = ?', [clientId]);
     for (final file in await attachmentsOf(clientId)) {
       if (file.sentAt == null) await enqueue('attachment', file.upload(clientId));
     }
@@ -519,6 +564,103 @@ class Store extends GeneratedDatabase {
   Future<void> noteSent(String clientId, DateTime at) =>
     _run('UPDATE notes SET sent_at = ? WHERE client_id = ?', [at.millisecondsSinceEpoch, clientId]);
 
+  /// Keeps the notes a pull read, in change order; gives false when it left out [editing], the note open in the editor.
+  /// A note matches by server id, then by client id against this phone's own notes, whatever the server's `mine` says:
+  /// a new key makes a new device on the server, which then calls this phone's older notes not its own. Phone ids are
+  /// 32 random hex characters and email ids start `email:`, so no other note matches. One from elsewhere is kept as
+  /// `srv:<id>`.
+  Future<bool> applyPulled(List<Map<String, dynamic>> notes, {String? editing}) => transaction(() async {
+    var all = true;
+    for (final note in notes) {
+      if (!await _applyPulled(note, editing)) all = false;
+    }
+    return all;
+  });
+
+  /// Newer wins: this phone's words stay when its waiting change, or its own last edit that never went, is later than
+  /// the pulled edit time; else the pulled words are kept and any waiting change of the note is dropped. An edit that
+  /// never went, such as one made while sending was off, gets its change queued: a pull runs only while sending is on.
+  /// An edit that went, or was dropped, is never queued again: the server may keep it at an earlier time than the phone.
+  Future<bool> _applyPulled(Map<String, dynamic> note, String? editing) async {
+    final serverId = note['id'] as String;
+    final clientId = note['clientId'] as String?;
+    const columns = 'SELECT client_id, body, edited_at, mine, edit_unsent FROM notes';
+    var rows = await _rows('$columns WHERE server_id = ?', [serverId]);
+    if (rows.isEmpty && clientId != null) rows = await _rows('$columns WHERE client_id = ? AND mine = 1', [clientId]);
+    final mine = rows.isNotEmpty ? rows.single.read<int>('mine') == 1 : note['mine'] == true && clientId != null;
+    final id = rows.isNotEmpty ? rows.single.read<String>('client_id') : mine ? clientId! : 'srv:$serverId';
+    if (id == editing) return false;
+    final recordedAt = note['recordedAt'] as int;
+    final editedAt = note['editedAt'] as int?;
+    final serverAt = editedAt ?? recordedAt;
+    final text = note['text'] as String? ?? '';
+    final change = await _rows("SELECT json_extract(body, '\$.editedAt') AS at FROM outbox WHERE route = '$noteUpdate' "
+      "AND json_extract(body, '\$.clientId') = ? ORDER BY id DESC LIMIT 1", [id]);
+    final local = rows.isEmpty ? null : jsonDecode(rows.single.read<String>('body')) as Map<String, dynamic>;
+    final localAt = rows.isEmpty ? null : rows.single.read<int?>('edited_at');
+    final waits = change.isNotEmpty && (change.single.read<int?>('at') ?? 0) > serverAt;
+    // Same words need no change: a phone clock that runs ahead of the server's would otherwise send one on each pull.
+    final neverWent = rows.isNotEmpty && rows.single.read<int>('edit_unsent') == 1;
+    final unsent = change.isEmpty && neverWent && local != null && localAt != null && localAt > serverAt && local['text'] != text;
+    final keep = waits || unsent;
+    final ring = note['source'] == 'ring' && note['audio'] == true;
+    final files = [
+      for (final file in (note['attachments'] as List?) ?? const [])
+        if (file is Map<String, dynamic>) Attachment(id: file['id'] as String, name: file['name'] as String? ?? '',
+          type: file['type'] as String? ?? '', size: file['size'] as int? ?? 0, path: ''),
+      if (ring) Attachment(id: '$recordingPrefix$serverId', name: 'Recording.m4a', type: 'audio/mp4', size: 0, path: ''),
+    ];
+    final body = jsonEncode(LocalNote(clientId: id, text: text,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(recordedAt), pin: _pinOf(note['place'], recordedAt), attachments: files).toJson());
+    if (rows.isEmpty) {
+      await _run('INSERT INTO notes (client_id, body, created_at, sent_at, queued, kind, edited_at, server_id, device, mine) '
+        'VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)', [id, body, recordedAt, recordedAt, ring ? NoteKind.voice.name : NoteKind.typed.name,
+          editedAt, serverId, note['device'], mine ? 1 : 0]);
+    } else {
+      await _run('UPDATE notes SET server_id = ?, device = ?, sent_at = coalesce(sent_at, ?) WHERE client_id = ?',
+        [serverId, note['device'], recordedAt, id]);
+      if (!keep) await _run('UPDATE notes SET body = ?, edited_at = ?, edit_unsent = 0 WHERE client_id = ?', [body, editedAt, id]);
+    }
+    if (!keep) {
+      await _run("DELETE FROM outbox WHERE route = '$noteUpdate' AND json_extract(body, '\$.clientId') = ?", [id]);
+    } else if (unsent) {
+      await enqueue(noteUpdate, _changeOf(local!, localAt!, serverId: serverId, mine: mine));
+      await _run('UPDATE notes SET edit_unsent = 0 WHERE client_id = ?', [id]);
+    } else {
+      // A change queued before this pull saved the server id goes by it now.
+      await _run("UPDATE outbox SET body = json_set(body, '\$.id', ?) WHERE route = '$noteUpdate' "
+        "AND json_extract(body, '\$.clientId') = ?", [serverId, id]);
+    }
+    for (final file in files) {
+      await _run('INSERT OR IGNORE INTO attachments (id, note_client_id, name, type, size, sent_at) VALUES (?, ?, ?, ?, ?, ?)',
+        [file.id, id, file.name, file.type, file.size, recordedAt]);
+    }
+    return true;
+  }
+
+  static Pin? _pinOf(Object? place, int at) => place is! Map<String, dynamic> ? null : Pin(
+    at: DateTime.fromMillisecondsSinceEpoch(at), lat: (place['lat'] as num).toDouble(), lon: (place['lon'] as num).toDouble(),
+    accuracy: (place['accuracy'] as num?)?.toDouble() ?? 0, place: place['name'] as String?);
+
+  /// Keeps where a downloaded file of a note now is, from the app's support folder.
+  Future<void> fileKept(String id, String path) => _run('UPDATE attachments SET path = ? WHERE id = ?', [path, id]);
+
+  /// For sign-out: deletes the notes from elsewhere, their files and waiting changes, and the pull's place, so a later
+  /// sign-in pulls from the start.
+  Future<void> dropSynced() async {
+    const synced = 'SELECT client_id FROM notes WHERE mine = 0';
+    final files = await _rows("SELECT path FROM attachments WHERE path IS NOT NULL AND path != '' AND note_client_id IN ($synced)");
+    await transaction(() async {
+      await _run('DELETE FROM attachments WHERE note_client_id IN ($synced)');
+      await _run("DELETE FROM outbox WHERE route = '$noteUpdate' AND json_extract(body, '\$.clientId') IN ($synced)");
+      await _run('DELETE FROM notes WHERE mine = 0');
+      await remove(noteSyncSeq);
+    });
+    for (final row in files) {
+      await _delete(row.read<String>('path'));
+    }
+  }
+
   /// Every note made on this phone, newest first, each with its files.
   Future<List<LocalNote>> notes() async {
     final files = <String, List<Attachment>>{};
@@ -527,19 +669,20 @@ class Store extends GeneratedDatabase {
     }
     return [
       for (final row in await _rows('SELECT client_id, body, sent_at, queued, pinning, kind, audio_path, duration_ms, words_pending, '
-          'edited_at FROM notes ORDER BY created_at DESC, client_id DESC'))
+          'edited_at, server_id, device, mine FROM notes ORDER BY created_at DESC, client_id DESC'))
         _noteOf(jsonDecode(row.read<String>('body')) as Map<String, dynamic>, sentAt: row.read<int?>('sent_at'),
           queued: row.read<int>('queued') == 1, pinning: row.read<int>('pinning') == 1,
           kind: NoteKind.values.byName(row.read<String>('kind')), audioPath: row.read<String?>('audio_path'),
           durationMs: row.read<int?>('duration_ms'), wordsPending: row.read<int>('words_pending') == 1,
-          attachments: files[row.read<String>('client_id')], editedAt: row.read<int?>('edited_at')),
+          attachments: files[row.read<String>('client_id')], editedAt: row.read<int?>('edited_at'),
+          serverId: row.read<String?>('server_id'), device: row.read<String?>('device'), mine: row.read<int>('mine') == 1),
     ];
   }
 
   /// A note's body, with its files listed by the body when the table's rows are not given.
   static LocalNote _noteOf(Map<String, dynamic> body, {int? sentAt, bool queued = false, bool pinning = false,
     NoteKind kind = NoteKind.typed, String? audioPath, int? durationMs, bool wordsPending = false,
-    List<Attachment>? attachments, int? editedAt}) => LocalNote(
+    List<Attachment>? attachments, int? editedAt, String? serverId, String? device, bool mine = true}) => LocalNote(
     clientId: body['clientId'] as String, text: body['text'] as String,
     createdAt: DateTime.fromMillisecondsSinceEpoch(body['createdAt'] as int),
     pin: body['lat'] == null ? null : Pin(at: DateTime.fromMillisecondsSinceEpoch(body['createdAt'] as int),
@@ -548,6 +691,7 @@ class Store extends GeneratedDatabase {
     sentAt: sentAt == null ? null : DateTime.fromMillisecondsSinceEpoch(sentAt), queued: queued, pinning: pinning,
     kind: kind, audioPath: audioPath, durationMs: durationMs, wordsPending: wordsPending,
     editedAt: editedAt == null ? null : DateTime.fromMillisecondsSinceEpoch(editedAt),
+    serverId: serverId, device: device, mine: mine,
     attachments: attachments ?? [
       for (final file in (body['attachments'] as List?) ?? const [])
         Attachment(id: (file as Map)['id'] as String, name: file['name'] as String, type: file['type'] as String,

@@ -149,6 +149,7 @@ class FakeRelay extends Relay {
   }
 
   @override Future<void> sync() async => calls.add('sync');
+  @override Future<void> pullNotes() async => calls.add('pull');
 
   /// While set, each add and change waits for it, as a slow phone store does.
   Completer<void>? slow;
@@ -685,7 +686,7 @@ void main() {
     }
     await tester.drag(find.text('No notes yet'), const Offset(0, 300));
     await tester.pumpAndSettle();
-    expect(relay.calls, ['sync']);
+    expect(relay.calls, ['pull']);
   });
 
   testWidgets('the Syncing dot pulses, the Synced dot is still, and with reduced motion Syncing is still too', (tester) async {
@@ -1292,6 +1293,43 @@ void main() {
     await tester.pumpAndSettle();
     expect(relay.calls, ['test https://db.example.com/relay', 'webhook https://db.example.com/relay $secret',
       'webhook https://db.example.com/relay $secret', 'closed webhook']);
+  });
+
+  testWidgets('in Sending, My own webhook says sync is off there, and opens Webhooks on the Relay Everything page', (tester) async {
+    final opened = <Uri>[];
+    tallScreen(tester);
+    relay
+      ..settings = const Settings(sending: true, place: SendPlace.webhook)
+      ..webhookAddress = 'https://db.example.com/relay';
+    await tester.pumpWidget(RelayApp(relay: relay, opener: (address) async {
+      opened.add(address);
+      return true;
+    }));
+    await openFolder(tester, 'Sending');
+    await tester.scrollUntilVisible(find.text('Notes from elsewhere'), 100);
+    expect(find.textContaining('Sync is off while the phone sends to your own webhook.'), findsOneWidget);
+    await tester.tap(find.text('Notes from elsewhere'));
+    await tester.pumpAndSettle();
+    expect(opened, [Uri.parse('https://app.relayeverything.com/apps/relay/#webhooks')]);
+  });
+
+  testWidgets('a note from elsewhere names where it came from, offers no paperclip, and lists files to download',
+      (tester) async {
+    relay.entries = [Entry(id: 'srv:s1', text: 'Flight moved to 9:40', at: now, from: 'Email', files: const [
+      EntryFile(id: 'f1', name: 'ticket.pdf', type: 'application/pdf', size: 3, path: ''),
+      EntryFile(id: 'f2', name: 'boarding.png', type: 'image/png', size: 2048, path: ''),
+    ])];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Notes');
+    expect(find.textContaining('· Email'), findsOneWidget);
+    await tester.tap(find.text('Flight moved to 9:40'));
+    await tester.pumpAndSettle();
+    expect([find.textContaining('From Email'), find.text('3 B · Download'), find.text('2 KB · Download')],
+      [findsOneWidget, findsOneWidget, findsOneWidget]);
+    expect(tester.widget<IconButton>(find.ancestor(of: find.byTooltip('Attach'), matching: find.byType(IconButton))).onPressed,
+      isNull);
+    await tester.tap(find.text('ticket.pdf'));
+    expect(relay.calls, ['open ticket.pdf']);
   });
 
   testWidgets('in Sending, picks My own webhook, asks about earlier notes, and shows where it sends and its last problem',

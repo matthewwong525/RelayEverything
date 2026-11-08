@@ -111,7 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
         listenable: Listenable.merge([relay, _search, _searchFocus]),
         builder: (context, _) => Stack(children: [
           RefreshIndicator(
-            onRefresh: relay.sync,
+            onRefresh: relay.pullNotes,
             edgeOffset: 140,
             child: CustomScrollView(physics: const AlwaysScrollableScrollPhysics(), slivers: [
               _bar(),
@@ -176,7 +176,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ]),
       ..._section('Connections', [
         _FolderRow(icon: CupertinoIcons.paperplane, title: 'Sending', line: sendingLine(relay),
-          onTap: () => _open(SendingPage(relay: relay, scanner: scanner))),
+          onTap: () => _open(SendingPage(relay: relay, scanner: scanner, opener: widget.opener))),
         _connected(CupertinoIcons.sparkles, 'AI apps', (names) => names.aiApps, '#ai-apps'),
         _connected(CupertinoIcons.link, 'Webhooks', (names) => names.webhooks, '#webhooks'),
       ]),

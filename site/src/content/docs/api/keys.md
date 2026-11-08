@@ -18,14 +18,17 @@ A call with a wrong key, or a key that is off, answers `403`.
 
 ## What a device key reaches
 
-A device key only adds data, and only to the space of the person who made it. It reaches only these routes:
+A device key reaches only the space of the person who made it. It adds data there, and a phone's key also syncs your notes. It reaches only these routes:
 
 - `POST notes`, `POST attachments`, `POST health`, `POST locations`, `POST calendar`, `POST photos`
-- `PATCH notes`, which changes the words of a note that the same phone key sent, and adds its new files. A phone key can not change another device's note: the server answers `404`.
 - `GET key`, which answers the key's own device name and no data, so a device can check its key
-- `GET connections`, for a phone's key only, which answers the names of your AI apps and webhooks and no address, secret or data, for **Connections** on the app's Home
+- For a phone's key only:
+  - `GET notes`, which answers the notes added or changed since the phone's last sync, from every device and way in, so each signed-in phone shows all your notes
+  - `GET attachment` and `GET audio`, which open a note's file and a ring note's recording, when you tap one in the app
+  - `PATCH notes`, which changes the words of any note in your space, by its `id`, or of the phone's own note, by its `clientId`. It adds new files only to a note the same phone sent. When the note changed later on another phone, the server keeps the newer words and answers `409`.
+  - `GET connections`, which answers the names of your AI apps and webhooks and no address, secret or data, for **Connections** on the app's Home
 
-Any other address or method answers `403` to a device key. To read, a person signs in on the Relay Everything page: `GET timeline`, `GET audio`, `GET attachment`, `GET summary`, `GET photos` and `POST photos/delete` need a signed-in person, and each answers only from that person's own space. [Routes](../reference/) shows who can call each route.
+Any other address or method answers `403` to a device key. A phone's key can't read your health, calendar, places, chats or photos, or delete anything: `GET timeline`, `GET summary`, `GET photos` and `POST photos/delete` need a signed-in person, and each answers only from that person's own space. A phone's key reads your notes until you turn it off, so turn off a lost phone's key at once. [Routes](../reference/) shows who can call each route.
 
 ## A chat key
 

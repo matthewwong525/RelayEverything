@@ -1,8 +1,8 @@
 // POST attachments: a note's file, its raw bytes sent by the phone after the note that lists it, sealed into the
-// person's folder once per file. GET attachment?id=: the file, opened for its signed-in person, for the page.
+// person's folder once per file. GET attachment?id=: the file, for its person's page and phones.
 import { boundedBytes } from "../../api/body.ts";
 import type { ActionCall } from "../../api/contract.ts";
-import { asDevice, asPerson } from "./caller.ts";
+import { asDevice, asPersonOrPhone } from "./caller.ts";
 import { CLIENT_ID, MAX_FILE_BYTES } from "./notes.ts";
 import type { PersonSpace } from "./space.ts";
 import { refused, type Env } from "./store.ts";
@@ -52,7 +52,7 @@ function disposition(type: string, name: string): string {
   return `${type.startsWith("image/") ? "inline" : "attachment"}; filename="${plain}"; filename*=UTF-8''${encoded}`;
 }
 
-export const attachment: (request: Request, env: Env, call: Call) => Promise<Response> = asPerson<Call>(async ({ space, call }) => {
+export const attachment: (request: Request, env: Env, call: Call) => Promise<Response> = asPersonOrPhone<Call>(async ({ space, call }) => {
   const id = call.url.searchParams.get("id") ?? "";
   if (!CLIENT_ID.test(id)) return refused(400, "Give a file's id");
   const row = await space.db.prepare("SELECT name, content_type, file_key FROM relay_attachments WHERE id = ?").bind(id).first<Stored>();

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../brand.dart';
+import '../data/connection.dart' show defaultServer;
 import '../relay.dart';
 import 'back_to.dart';
 import 'connect.dart';
@@ -320,10 +321,11 @@ class PhotosPage extends StatelessWidget {
 /// *Sending*: the *Send my notes* switch, where the phone sends, the webhook and its test, the server, and
 /// *Disconnect this phone*.
 class SendingPage extends StatelessWidget {
-  const SendingPage({super.key, required this.relay, this.scanner});
+  const SendingPage({super.key, required this.relay, this.scanner, this.opener});
 
   final Relay relay;
   final Scanner? scanner;
+  final Opener? opener;
 
   @override
   Widget build(BuildContext context) {
@@ -355,6 +357,13 @@ class SendingPage extends StatelessWidget {
           if (relay.webhookProblem case final problem?) ListTile(
             subtitle: Text(problemLine(problem, DateTime.now()), style: TextStyle(color: danger)),
           ),
+          ListTile(
+            title: const Text('Notes from elsewhere'),
+            subtitle: const Text('Sync is off while the phone sends to your own webhook. To get notes from your other '
+              'phones and email here, send to Relay Everything, then add your webhook on your Relay Everything page.'),
+            trailing: const Icon(CupertinoIcons.arrow_up_right_square),
+            onTap: () => _openWebhooks(context),
+          ),
         ]),
         if (relay.connected && settings.place == SendPlace.server) Group(children: [
           ListTile(
@@ -365,12 +374,21 @@ class SendingPage extends StatelessWidget {
           ),
           ListTile(
             title: Text('Disconnect this phone', style: TextStyle(color: danger)),
-            subtitle: const Text('Removes the key from this phone and turns sending off. Your notes stay here.'),
+            subtitle: const Text('Removes the key from this phone and turns sending off. Notes from this phone stay here. '
+              'Notes from elsewhere go.'),
             onTap: () => _disconnect(context),
           ),
         ]),
       ];
     });
+  }
+
+  /// The *Webhooks* part of the person's Relay Everything page, where a webhook gets the notes from every device.
+  Future<void> _openWebhooks(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (!await (opener ?? openInBrowser)(Uri.parse('${relay.server ?? defaultServer}/apps/relay/#webhooks'))) {
+      messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
+    }
   }
 
   Future<void> _test(BuildContext context) async {
@@ -400,7 +418,8 @@ class SendingPage extends StatelessWidget {
   Future<void> _disconnect(BuildContext context) async {
     final sure = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
       title: const Text('Disconnect this phone?'),
-      content: const Text('Sending turns off. You need a new key to send again.'),
+      content: const Text('Sending turns off. Notes from your other phones and email leave this phone. '
+        'You need a new key to send again.'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
         TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Disconnect')),

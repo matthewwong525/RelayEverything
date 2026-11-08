@@ -61,7 +61,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
           final notes = [for (final entry in relay.entries) if (entryIn(widget.folder, entry)) entry];
           return Stack(children: [
             RefreshIndicator(
-              onRefresh: relay.sync,
+              onRefresh: relay.pullNotes,
               edgeOffset: 140,
               child: CustomScrollView(physics: const AlwaysScrollableScrollPhysics(), slivers: [
                 SliverAppBar.large(
@@ -294,8 +294,8 @@ String _preview(Entry entry) {
   return entry.files.skip(1).map((file) => file.name).join(', ');
 }
 
-/// One note in its day's card: the first line in bold; the time and the rest of the words; then its kind, length,
-/// place and send state. A first picture shows small at the right. A tap opens the note.
+/// One note in its day's card: the first line in bold; the time, where a note from elsewhere came from, and the rest of
+/// the words; then its kind, length, place and send state. A first picture shows small at the right. A tap opens it.
 class _NoteRow extends StatelessWidget {
   const _NoteRow({required this.entry, required this.relay, required this.onTap});
 
@@ -308,7 +308,7 @@ class _NoteRow extends StatelessWidget {
     final brand = brandOf(context);
     final muted = TextStyle(fontSize: 13, color: brand.muted);
     final meta = [if (entry.length != null) clockOf(entry.length!), entry.place, sendState(entry)].whereType<String>();
-    final picture = entry.files.where((file) => file.picture).firstOrNull;
+    final picture = entry.files.where((file) => file.picture && file.onPhone).firstOrNull;
     return InkWell(
       onTap: onTap,
       child: Padding(
@@ -319,6 +319,7 @@ class _NoteRow extends StatelessWidget {
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight(650))),
             Text.rich(TextSpan(children: [
               TextSpan(text: rowTime(context, entry.at, DateTime.now()), style: TextStyle(fontWeight: FontWeight.w500, color: brand.ink)),
+              if (entry.from != null) TextSpan(text: ' · ${entry.from}'),
               TextSpan(text: '  ${_preview(entry)}'),
             ]), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, color: brand.muted)),
             if (entry.writing) const Padding(padding: EdgeInsets.symmetric(vertical: 4), child: LinearProgressIndicator()),

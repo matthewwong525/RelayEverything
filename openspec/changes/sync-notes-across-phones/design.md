@@ -26,7 +26,7 @@ Today, as owned by [person spaces](../../../wiki/relay-spaces.md):
 CREATE TABLE relay_note_changes (seq INTEGER PRIMARY KEY AUTOINCREMENT, note_id TEXT NOT NULL UNIQUE REFERENCES relay_notes(id) ON DELETE CASCADE);
 ```
 
-Triggers run `INSERT OR REPLACE INTO relay_note_changes (note_id) VALUES (…)` after an insert on `relay_notes`, after an update of `text`, `place` or `edited_at`, and after an insert on `relay_attachments` or an update of its ready column. `REPLACE` deletes the old row and `AUTOINCREMENT` gives the new one a higher `seq`, so each note has one row, at its newest change. A step at the end fills one row per existing note, ordered by `recorded_at`.
+Triggers delete the note's row and insert it again after an insert on `relay_notes`, after an update of `text`, `lat`, `place`, `edited_at` or `audio_key`, and after an insert on `relay_attachments` or an update that makes its file ready. `AUTOINCREMENT` gives the new row a higher `seq`, so each note has one row, at its newest change. They delete and insert, not `INSERT OR REPLACE`, because an outer statement's conflict clause replaces a trigger's own. A step at the end fills one row per existing note, ordered by `recorded_at`.
 
 `GET notes?since=<seq>&limit=<n>` returns `{ notes, next, more }`: the notes whose row has `seq > since`, in `seq` order, up to 100, and the last `seq` as `next`. A phone stores `next` and asks again while `more` is true.
 
@@ -40,19 +40,21 @@ The route uses `asPersonOrPhone`. `caller.ts` lets a `phone` reach `GET notes`, 
 
 ### Changing any note, and the newer change wins
 
-`PATCH notes` takes either `clientId` (this device's note, as today) or `id` (any note in the space), and a new `editedAt`, the time the phone made the change. When the stored `edited_at` is later than `editedAt`, the server changes nothing and answers `409` with the stored note. Otherwise it writes the words with `edited_at = editedAt`, logs `note.updated` as the editing change does, and the trigger moves the note's change row.
+`PATCH notes` takes either `clientId` (this device's note, as today) or `id` (any note in the space), and a new `editedAt`, the time the phone made the change. When the stored `edited_at` is later than `editedAt`, the server changes nothing and answers `409`. New files go only on the phone's own note: `POST attachments` takes bytes only for a note the same device sent, so a new file on another device's note answers `400`. Otherwise it writes the words with `edited_at = editedAt`, logs `note.updated` as the editing change does, and the trigger moves the note's change row.
 
 *Why the phone's time, not arrival order?* Arrival order lets a phone that was offline overwrite newer words. A phone clock can be wrong. The server clamps `editedAt` to its own now, so a clock set in the future can't lock a note.
 
-The editing change drops a `PATCH` answered `404` or `400`. A `409` is dropped the same way, and the phone takes the stored note from the answer, so the outbox never stalls.
+The editing change drops a `PATCH` answered `404` or `400`. A `409` is dropped the same way, so the outbox never stalls. The answer holds no note, because the action contract passes on only an error's code and message; the pull that runs right after the outbox gets the newer words.
 
 ### The phone's store
 
-A new store version adds to `notes`: `server_id TEXT UNIQUE`, `device TEXT`, `mine INTEGER NOT NULL DEFAULT 1` and a nullable `path` in `attachments`, empty for a synced file until it is opened. `state` holds `note_sync_seq`.
+A new store version adds to `notes`: `server_id TEXT UNIQUE`, `device TEXT`, `mine INTEGER NOT NULL DEFAULT 1`, `edit_unsent INTEGER NOT NULL DEFAULT 0`, and a nullable `path` in `attachments`, empty for a synced file until it is opened. `state` holds `note_sync_seq`.
 
-A pulled note matches a local note by `server_id`, then by `client_id` when `mine`, so a phone's own note never shows twice. A note from elsewhere gets `client_id = 'srv:' || id`, and is never sent by `POST notes`; changes to it go as `PATCH notes` with `id`.
+A pulled note matches a local note by `server_id`, then by `client_id` against this phone's own notes, whatever `mine` says, so a phone's own note never shows twice. A new key is a new device on the server, which then calls the phone's older notes not its own. Phone ids are 32 random hex characters and email ids start `email:`, so no other note matches. A change goes by `id` once a pull saved one. A note from elsewhere gets `client_id = 'srv:' || id`, and is never sent by `POST notes`; changes to it go as `PATCH notes` with `id`.
 
-Applying a pulled note: when the local note has a waiting `note.update` with a later `editedAt`, keep the local words; else take the pulled words and drop any waiting update.
+Applying a pulled note: when the local note has a waiting `note.update` with a later `editedAt`, or nothing waits but it has an edit that never went with a later `edited_at` and other words, keep the local words; the second case queues a `note.update`. Else take the pulled words and drop any waiting update.
+
+*Why a mark, not the edit time alone?* The server keeps `min(editedAt, now)`, so it keeps a fast phone's sent edit at an earlier time than the phone does. The time alone then reads a sent edit as unsent, and sends the old words again over a newer change from another phone. It also sends again a change the server dropped with `404`, `413` or `400`. So `edit_unsent` is set when `editNote` keeps a change and queues none, as with sending off, and is cleared when a change is queued or pulled words are taken.
 
 ### When the phone pulls
 
@@ -84,6 +86,7 @@ The list keeps its one primary action, *New note*. A note from elsewhere names i
 
 - [A lost phone reads every note until *Turn off*] → The privacy and keys pages say so, and say to turn off a lost phone at once.
 - [A first sync of thousands of notes is slow] → Pages of 100; the list shows each page as it lands.
+- [The hourly background round reads the key and server at its start] → A server change or sign-out in the app while that round runs can't stop its pull, so the old server's notes and pull place can land after the delete. The round lasts seconds, so this is rare; the app's own pull is awaited before the delete.
 - [An edit in the editor while a pull changes the same note] → The pull skips the note open in the editor, and takes it at the next pull.
 - [Two branches' space steps on staging] → As [the Workers and their order](../../../wiki/relay-spaces.md#the-workers-and-their-order) says: deploy this branch's spaces Worker again before the staging check.
 

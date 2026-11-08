@@ -9,7 +9,7 @@
 
 ### Requirement: A device key adds to its own person's space, and a phone key also syncs its notes
 
-A person SHALL make each device's key on their Relay Everything page, which SHALL show it once, or, for a phone, by signing in from the Relay Everything app and confirming that phone on the page. A key made from the app SHALL go to that phone only, through a code that works once and only for a few minutes, and SHALL never show. A phone key or a chat key SHALL reach the routes that add data, and a key check that answers only that key's own device name. A phone key SHALL also read its person's notes, their files and old ring recordings, and change any note in that space. A key SHALL reach only the space of the person who made it, and SHALL NOT list, read or delete any health sample, place, calendar event, chat or photo, nor delete a note. This SHALL hold on every Relay Everything server.
+A person SHALL make each device's key on their Relay Everything page, which SHALL show it once, or, for a phone, by signing in from the Relay Everything app and confirming that phone on the page. A key made from the app SHALL go to that phone only, through a code that works once and only for a few minutes, and SHALL never show. A phone key or a chat key SHALL reach the routes that add data, and a key check that answers only that key's own device name. A phone key SHALL also read its person's notes, their files and old ring recordings, and change any note in that space. It SHALL also read the names of its person's connected AI apps and webhooks, and nothing else about them: no webhook address, secret or send state. A key SHALL reach only the space of the person who made it, and SHALL NOT list, read or delete any health sample, place, calendar event, chat or photo, nor delete a note. This SHALL hold on every Relay Everything server.
 
 #### Scenario: A phone key reads notes
 - **WHEN** a request with a phone's key asks for the notes changed since its last sync
@@ -42,3 +42,7 @@ A person SHALL make each device's key on their Relay Everything page, which SHAL
 #### Scenario: A phone key tries to delete photos
 - **WHEN** a request with a phone's key asks to count or delete photos
 - **THEN** it is refused, and the photos stay
+
+#### Scenario: A phone reads its person's connections
+- **WHEN** a phone's key asks for its person's connections
+- **THEN** the server answers with the AI apps' and webhooks' names only, from that person's space, and a chat key or an API key asking the same is refused

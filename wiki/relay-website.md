@@ -21,6 +21,12 @@ A page's folder can't be named `notes/`: [the public check](open-source.md#the-p
 
 The ring pictures in `site/src/assets/ring/` are rendered from `cad/`: run `npm run render-ring` in `site/` when a model changes.
 
+## Legal pages and the contact address
+
+The terms and policies for the shared server are pages in `site/src/content/docs/`. A page whose text is not in force yet opens with a `:::caution[Draft: not in force]` box and marks each gap, such as the company's name, as `[LEGAL-TODO: …]`. `site/tests/site.test.mjs` fails when a page in the menu, or a page the home page links to, holds a gap, and when a page with a gap has no draft box. So fill every gap before you add a legal page to the menu. The rules are in [the legal pages spec](../openspec/specs/relay-legal-pages/spec.md).
+
+The site guard refuses every email address, so the contact address lives on the server, not here: `RELAY_CONTACT_EMAIL` in [`app/wrangler.relay.jsonc`](../app/wrangler.relay.jsonc) puts it on the sign-in screen and the account card. A page tells people to write to the address on the shared server's sign-in page. Never weaken the guard to put the address on the site.
+
 ## The API pages
 
 [Routes](../site/src/content/docs/api/reference.md) is made from the server's own route list by [`api-doc.ts`](../app/worker/apps/relay/api-doc.ts): each described route's method, path, fields, errors and example, and who can call it. After a route change, run `npm run relay:api-doc` in `app/`: it also writes the webhook format's public schema, `site/public/webhooks/v1.schema.json`, from [`format.ts`](../app/worker/apps/relay/webhooks/format.ts). The main app's checks fail when the page or the schema differs from what the code makes. A route with no description in the contract, such as `GET audio`, needs its own page and an entry in `HAND_PAGES` in `api-doc.ts`.

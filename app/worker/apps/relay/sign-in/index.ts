@@ -16,7 +16,9 @@ export type SignInEnv = DirectoryEnv & {
   RELAY_MCP_CALLBACK?: string;
 };
 
-type Handler = (request: Request, env: SignInEnv, identity: Identity) => Promise<Response>;
+/** The Worker's `waitUntil`: work that goes on after the answer. */
+export type Wait = (work: Promise<unknown>) => void;
+type Handler = (request: Request, env: SignInEnv, identity: Identity, wait?: Wait) => Promise<Response>;
 
 const PREFIX = "/apps/relay/sign-in/";
 const ROUTES = new Map<string, Handler>([
@@ -38,7 +40,7 @@ const ROUTES = new Map<string, Handler>([
 const CROSS_SITE = new Set(["POST apple/callback", "POST phone/key"]);
 
 /** A sign-in route's answer, or null for an address outside the sign-in. */
-export async function signIn(request: Request, env: SignInEnv, identity: Identity): Promise<Response | null> {
+export async function signIn(request: Request, env: SignInEnv, identity: Identity, wait?: Wait): Promise<Response | null> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith(PREFIX)) return null;
   const name = `${request.method} ${url.pathname.slice(PREFIX.length)}`;
@@ -47,5 +49,5 @@ export async function signIn(request: Request, env: SignInEnv, identity: Identit
   if (request.method === "POST" && !CROSS_SITE.has(name) && request.headers.get("Origin") !== url.origin) {
     return answer(403, "forbidden", "This request did not come from the Relay Everything page.");
   }
-  return route(request, env, identity);
+  return route(request, env, identity, wait);
 }

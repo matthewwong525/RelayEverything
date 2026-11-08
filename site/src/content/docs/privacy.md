@@ -19,6 +19,8 @@ Relay Everything keeps your notes on your phone. When you turn on sending, it ke
 | Health: steps, heart rate, sleep, workouts, weight, resting heart rate, heart rate variability, blood oxygen, blood pressure, cycle, mindful minutes and water, only the types you allow | Your space on your Relay Everything server | On open and every hour, with sending and **Health** on. The first time, the last 90 days. |
 | Calendar events: title, times, place, notes, link, calendar name and people, from the calendars you leave on | Your space on your Relay Everything server | On open and with the hourly round, with sending and **Calendar** on. The first time, 90 days back and 90 days ahead; then only changes. |
 | Location history: a point each 100 m you move | Your space on your Relay Everything server | With sending and **Location history** on |
+| Email notes: mail to your notes address, or to `notes@` from your sign-in email, with its files | Your space on your Relay Everything server, the files sealed. The server's list finds you by a fingerprint (an HMAC) of your address, and keeps the address itself to show it on your card. If your address leaks, [replace it](../app/email/#replace-your-address). | When the mail comes. On the way, the sender's mail service and Cloudflare can read it: [Email notes](../app/email/#what-is-sent). |
+| Mail to `notes@` from an email with no account yet | The server, sealed with a key made from that email, which the server does not keep. It finds the mail by a fingerprint of the email. | Kept 30 days, then deleted. If that email signs up first, the mail becomes notes in its space. |
 | The phone's key | The iPhone Keychain or the Android Keystore; the server keeps only its fingerprint | Never sent, except as the key's header |
 | Your email | The server's list of accounts, to sign you in | When you sign up |
 | Your sign-in | A cookie in your browser, for 30 days | With each visit to your Relay Everything page |
@@ -45,7 +47,7 @@ Each recording and each file on a note is in your own folder of the server's fil
 
 ## Delete your account
 
-Click **Delete my account** on your Relay Everything page, and type your email to confirm. It deletes your space, your recordings, the files on your notes, your keys, your sign-ins and your connected AI apps. You can't undo it. Your notes stay on your phone.
+Click **Delete my account** on your Relay Everything page, and type your email to confirm. It deletes your space, your recordings, the files on your notes, your keys, your notes address, your sign-ins and your connected AI apps. You can't undo it. Your notes stay on your phone.
 
 ## What is not kept
 
@@ -66,6 +68,7 @@ Click **Delete my account** on your Relay Everything page, and type your email t
 | Health | Turn off **Health** in Settings, and take back the permission in Apple Health or Health Connect. To keep one type back, such as cycle, turn off only that type there. |
 | Calendar | Turn off **Calendar** in Settings, or one calendar under it, and take back the permission in the phone's settings. A calendar you turn off is removed from your space at the next send. |
 | One phone | Tap **Disconnect this phone** in Settings, or click **Turn off** beside it on your Relay Everything page: [Keys](../api/keys/#make-list-and-turn-off-keys). |
+| Email notes | Don't give out your notes address. If it leaks, click **New address** on the **Email** card: [Email notes](../app/email/#replace-your-address). |
 | A webhook to your database | **Pause** or **Remove** it on the Relay Everything page: [Your own database](../connections/your-database/). |
 
 Turning a part off stops new data. Data already in your space stays there until you [delete your account](#delete-your-account), and your notes stay on your phone.

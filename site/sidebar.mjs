@@ -9,7 +9,7 @@ export const sidebar = [
     { label: 'Install the app', slug: 'start/install' },
     { label: 'Connect a phone', slug: 'start/connect-a-phone' },
   ] },
-  { label: 'Use the app', items: ['app/your-notes', 'app/voice-notes', 'app/share', 'app/shortcuts', 'app/health', 'app/calendar', 'app/location', 'app/settings'] },
+  { label: 'Use the app', items: ['app/your-notes', 'app/voice-notes', 'app/share', 'app/shortcuts', 'app/email', 'app/health', 'app/calendar', 'app/location', 'app/settings'] },
   { label: 'Connections', items: [
     { label: 'Your own database', slug: 'connections/your-database' },
     'connections/connect-your-ai',

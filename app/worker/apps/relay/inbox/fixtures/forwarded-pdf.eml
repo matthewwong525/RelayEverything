@@ -1,0 +1,26 @@
+Received: from mail.example.net by mx.cloudflare.net
+From: Corner Shop <receipts@shop.example.net>
+To: notes-placeholder@in.example.com
+Subject: Fwd: Your receipt
+Date: Wed, 04 Nov 2026 15:30:00 +0000
+Message-ID: <receipt-0001@shop.example.net>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=utf-8
+
+---------- Forwarded message ---------
+From: Corner Shop <receipts@shop.example.net>
+
+Thank you for your order of 2 TL3312 switches.
+
+--b1
+Content-Type: application/pdf; name="receipt.pdf"
+Content-Disposition: attachment; filename="receipt.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQKMSAwIG9iaiA8PCAvVHlwZSAvQ2F0YWxvZyA+PiBlbmRvYmoKdHJhaWxlciA8PCAv
+Um9vdCAxIDAgUiA+PgolJUVPRgo=
+
+--b1--

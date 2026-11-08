@@ -257,6 +257,16 @@ it("adds a note as the app's own device, once on a resend, and wakes the webhook
   client = await connect(seeded().SPACES);
 });
 
+it("names an emailed note's device Email", async () => {
+  const { sql, SPACES } = seeded();
+  sql.exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-mail', 'Email', 'inbox:email', '', 0, 'inbox');
+    INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at)
+    VALUES ('${ID(9)}', 'd-mail', 'typed', 'email:seed-mail-0001', 'Fwd: Your receipt', 1793900000000, 0)`);
+  client = await connect(SPACES);
+  expect(await ask("fetch", { id: ID(9) })).toMatchObject({ text: "Fwd: Your receipt", source: "typed", device: "Email" });
+  client = await connect(seeded().SPACES);
+});
+
 it("lets an app connected before adding read, but asks it to connect again to add", async () => {
   const { sql, SPACES } = seeded();
   client = await connect(SPACES, { personId: ANA });

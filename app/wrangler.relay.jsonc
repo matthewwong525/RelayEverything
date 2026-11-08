@@ -17,7 +17,8 @@
     "RELAY_SIGN_IN_FROM": "sign-in@relayeverything.com",
     "RELAY_APPLE_SERVICES_ID": "com.matthewwong525.relayeverything.signin",
     "RELAY_GOOGLE_CLIENT_ID": "20665982462-kf2e6v2vd3jofia52g0d9p5vn1gt4hfu.apps.googleusercontent.com",
-    "RELAY_MCP_CALLBACK": "https://relay-everything-mcp.matthewwong525.workers.dev/callback"
+    "RELAY_MCP_CALLBACK": "https://relay-everything-mcp.matthewwong525.workers.dev/callback",
+    "RELAY_INBOX_MAIL_DOMAIN": "in.relayeverything.com"
   },
   // Relay Everything's own address; the company app answers at admin.relayeverything.com: wiki/relay-spaces.md
   "routes": [{ "pattern": "app.relayeverything.com", "custom_domain": true }],
@@ -28,6 +29,9 @@
   "ratelimits": [{ "name": "RELAY_SIGN_IN_LIMIT", "namespace_id": "2101", "simple": { "limit": 10, "period": 60 } }],
   "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces" }] },
   "services": [{ "binding": "RELAY_MCP", "service": "relay-everything-mcp", "entrypoint": "Grants" }],
+  // The daily sweep of mail kept for emails with no account. Email Routing sends the mail domain's mail to email(),
+  // which takes it once the RELAY_INBOX_HMAC_KEY secret is set: app/.dev.vars.example. wiki/relay-spaces.md#ways-in
+  "triggers": { "crons": ["17 4 * * *"] },
   "env": {
     "staging": {
       "name": "relay-everything-server-staging",
@@ -38,7 +42,8 @@
         "RELAY_SIGN_IN_FROM": "sign-in@relayeverything.com",
         "RELAY_APPLE_SERVICES_ID": "com.matthewwong525.relayeverything.signin",
         "RELAY_GOOGLE_CLIENT_ID": "20665982462-kf2e6v2vd3jofia52g0d9p5vn1gt4hfu.apps.googleusercontent.com",
-        "RELAY_MCP_CALLBACK": "https://relay-everything-mcp-staging.matthewwong525.workers.dev/callback"
+        "RELAY_MCP_CALLBACK": "https://relay-everything-mcp-staging.matthewwong525.workers.dev/callback",
+        "RELAY_INBOX_MAIL_DOMAIN": "in-staging.relayeverything.com"
       },
       "routes": [{ "pattern": "app-staging.relayeverything.com", "custom_domain": true }],
       "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db-staging", "database_id": "4f8edf18-ad51-4325-bb98-ec3ca6cc80b0", "migrations_dir": "../schema/migrations" }],
@@ -51,7 +56,8 @@
       "send_email": [{ "name": "RELAY_EMAIL" }],
       "ratelimits": [{ "name": "RELAY_SIGN_IN_LIMIT", "namespace_id": "2102", "simple": { "limit": 10, "period": 60 } }],
       "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces-staging" }] },
-      "services": [{ "binding": "RELAY_MCP", "service": "relay-everything-mcp-staging", "entrypoint": "Grants" }]
+      "services": [{ "binding": "RELAY_MCP", "service": "relay-everything-mcp-staging", "entrypoint": "Grants" }],
+      "triggers": { "crons": ["17 4 * * *"] }
     }
   }
 }

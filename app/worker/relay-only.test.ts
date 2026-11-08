@@ -1,6 +1,9 @@
 import { expect, it, vi } from "vitest";
 import type { AccessIdentity } from "./access";
-import { ANA, env, matthew, owner, phone, request, type Who } from "../tests/relay";
+import { ANA, directoryDb, env, matthew, NOW, owner, phone, request, rows, type Who } from "../tests/relay";
+import { fixture, inboxEnv, mailTo } from "../tests/relay-inbox";
+import { hold, KEEP_MS } from "./apps/relay/inbox/held";
+import { addressOf } from "./apps/relay/inbox/links";
 
 const who = vi.hoisted(() => ({ current: null as AccessIdentity | null }));
 vi.mock("./access.ts", async (original) => ({ ...await original<object>(), getAccessIdentity: async () => who.current }));
@@ -62,4 +65,28 @@ it("hands every queue batch to the webhooks, which drop a message from before sp
   const batch = { queue: "relay-everything-webhooks", messages, ackAll: vi.fn() } as unknown as MessageBatch;
   await worker.queue!(batch, env() as never);
   for (const message of messages) expect(message.ack).toHaveBeenCalledOnce();
+});
+
+it("makes mail from Email Routing a note, and sweeps old kept mail each day", async () => {
+  const address = (await addressOf(inboxEnv(), ANA))!;
+  await worker.email!(mailTo(address, fixture("forwarded-pdf.eml")) as unknown as ForwardableEmailMessage, inboxEnv() as never);
+  expect(rows("relay_notes").map(row => row.text)).toEqual([expect.stringMatching(/^Fwd: Your receipt/)]);
+  await hold(inboxEnv(), "cy@example.com", { channel: "email", id: "m-1", sentAt: NOW, text: "Old", files: [] });
+  vi.setSystemTime(NOW + KEEP_MS + 1);
+  await worker.scheduled!({} as ScheduledController, inboxEnv() as never);
+  expect(directoryDb.sql.prepare("SELECT count(*) AS count FROM relay_inbox_held").get()).toEqual({ count: 0 });
+});
+
+it("hands a new person's kept mail to the Worker to finish after the sign-in answers", async () => {
+  const mail = { sent: [] as { text: string }[], send: vi.fn(async (message: { text: string }) => { mail.sent.push(message); return { messageId: "m" }; }) };
+  const more = inboxEnv({ ASSETS: assets, RELAY_EMAIL: mail, RELAY_SIGN_IN_FROM: "sign-in@example.com", RELAY_SIGN_UP: "open",
+    RELAY_SIGN_IN_LIMIT: { limit: async () => ({ success: true }) } });
+  const post = (path: string, body: object) => new Request(`https://relay.example.com/apps/relay/sign-in/${path}`, { method: "POST",
+    body: JSON.stringify(body), headers: { Origin: "https://relay.example.com", "content-type": "application/json" } });
+  const ctx = { waitUntil: vi.fn((_work: Promise<unknown>) => undefined) };
+  const signed = worker.fetch as (request: Request, env: object, ctx: object) => Promise<Response>;
+  await signed(post("email", { email: "cy@example.com" }), more, ctx);
+  expect((await signed(post("code", { email: "cy@example.com", code: /\d{6}/.exec(mail.sent[0].text)![0] }), more, ctx)).status).toBe(200);
+  expect(ctx.waitUntil).toHaveBeenCalledOnce();
+  await ctx.waitUntil.mock.calls[0][0];
 });

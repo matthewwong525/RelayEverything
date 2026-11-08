@@ -24,7 +24,7 @@ export const devices = defineAction({
   input: z.strictObject({}), output: z.strictObject({ devices: z.array(device) }),
   encoding: "none", effect: "read", agentAvailable: false, requiresIdentity: false, errors: {}, examples: [],
   handler: asPerson<ActionCall>(async ({ space }) => {
-    const { results } = await space.db.prepare(`SELECT id, name, reaches, created_at, revoked_at FROM relay_devices WHERE reaches != 'app'
+    const { results } = await space.db.prepare(`SELECT id, name, reaches, created_at, revoked_at FROM relay_devices WHERE reaches NOT IN ('app', 'inbox')
       ORDER BY created_at, id`).all<Row>();
     return Response.json({ devices: results.map(row => ({ id: row.id, name: row.name, reaches: row.reaches,
       createdAt: row.created_at, revokedAt: row.revoked_at })) });

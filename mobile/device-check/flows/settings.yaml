@@ -21,6 +21,11 @@ appId: com.matthewwong525.relayApp
 # Back on Home, Sending opens its own page, with the sending switch off.
 # The back button's label joins its tooltip, Back, and the page it names, Home.
 - tapOn: '(.|\n)*Home(.|\n)*'
+# Sending sits low on Home, under Search and New note on a small screen: scroll it to the middle first.
+- scrollUntilVisible:
+    element: 'Sending(.|\n)*'
+    direction: DOWN
+    centerElement: true
 - tapOn: 'Sending(.|\n)*'
 - extendedWaitUntil:
     visible: 'Send my notes(.|\n)*'

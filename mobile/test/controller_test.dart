@@ -76,8 +76,8 @@ void main() {
       expect([relay.status, relay.waiting], [SyncStatus.idle, 0]);
       expect(await store.outbox(), isEmpty);
       expect(await relay.earlierNotes(), 2);
-      expect(await relay.setHealth(true), contains('Send my notes'));
-      expect(await relay.setHistory(true), contains('Send my notes'));
+      expect(await relay.setHealth(true), contains('Sign in'));
+      expect(await relay.setHistory(true), contains('Sign in'));
       expect([places.asked, health.reads, scheduled], [[false], isEmpty, [false]]);
       expect(server.requests, isEmpty);
     });
@@ -231,6 +231,21 @@ void main() {
       await next.sync();
       expect([hookTypes(), next.entries, next.waiting], [['note.created', 'note.deleted'], isEmpty, 0]);
       expect(jsonDecode(server.requests.last.body)['data'], {'note': {'id': 'n1', 'deleted_at': isA<String>()}});
+      next.dispose();
+    });
+
+    test('Stop sending keeps the webhook on the phone, so sending there again needs no new secret', () async {
+      final relay = controller();
+      await relay.load();
+      expect(await relay.saveWebhook(hook.address, fixtureSecret), isNull);
+      expect(await relay.startSending(sendEarlier: false, place: SendPlace.webhook), isNull);
+      await relay.stopSending();
+      relay.dispose();
+      final next = controller();
+      await next.load();
+      expect([next.settings.sending, next.webhookAddress, next.webhookSecret], [false, hook.address, fixtureSecret]);
+      expect(await next.startSending(sendEarlier: false, place: SendPlace.webhook), isNull);
+      await next.settled();
       next.dispose();
     });
 
@@ -409,7 +424,7 @@ void main() {
       calendar.items = [meeting('a', now.add(const Duration(hours: 1))), meeting('h', now.add(const Duration(days: 3)), calendar: 'holidays')];
       final relay = controller();
       await relay.load();
-      expect(await relay.setCalendar(true), contains('Send my notes'));
+      expect(await relay.setCalendar(true), contains('Sign in'));
       expect(await relay.startSending(sendEarlier: false), isNull);
       await relay.settled();
       calendar.allowed = false;
@@ -803,13 +818,15 @@ void main() {
       expect(relay.connections, isNull);
       await relay.sync();
       expect(reads(), contains('connections'));
-      expect([relay.connections?.aiApps, relay.connections?.webhooks], [['Claude'], ['Home server']]);
+      expect([relay.connections?.email, relay.connections?.aiApps, relay.connections?.webhooks],
+        ['ana@example.com', ['Claude'], ['Home server']]);
       // No signal: the last answer stays, also for the next start.
       server.answer = (_) => throw const SocketException('none');
       await relay.refreshConnections();
       final again = controller();
       await again.load();
-      expect([relay.connections?.aiApps, again.connections?.webhooks], [['Claude'], ['Home server']]);
+      expect([relay.connections?.aiApps, again.connections?.webhooks, again.connections?.email],
+        [['Claude'], ['Home server'], 'ana@example.com']);
       // A server from before the route refuses it: no names show.
       server.answer = (_) => FakeServer.json({'error': 'A device key can only send to Relay Everything.'}, 403);
       await relay.refreshConnections();
@@ -851,12 +868,23 @@ void main() {
     test('the Home headers the person folded are kept for the next start', () async {
       final relay = controller();
       await relay.load();
-      await relay.setFolded('Connections', true);
+      await relay.setFolded('Notes', true);
       await relay.setFolded('On this phone', true);
-      await relay.setFolded('On this phone', false);
+      await relay.setFolded('Notes', false);
       final again = controller();
       await again.load();
-      expect([relay.folded, again.folded], [{'Connections'}, {'Connections'}]);
+      expect([relay.folded, again.folded], [{'On this phone'}, {'On this phone'}]);
+    });
+
+    test('a copy of the names kept before the email still reads, with no email', () async {
+      await store.set(connectionsKey, '{"aiApps":[{"name":"Claude"}],"webhooks":[]}');
+      final relay = controller();
+      await relay.load();
+      expect([relay.connections?.email, relay.connections?.aiApps], [null, ['Claude']]);
+      final kept = Connections.decode(const Connections(email: 'ana@example.com', webhooks: ['Home server']).encode())!;
+      expect([kept.email, kept.aiApps, kept.webhooks], ['ana@example.com', isEmpty, ['Home server']]);
+      expect(Connections.fromJson({'email': '', 'aiApps': []}).email, isNull);
+      relay.dispose();
     });
   });
 
@@ -896,7 +924,7 @@ void main() {
       await store.set('settings', const Settings().encode());
       final relay = photoController();
       await relay.load();
-      expect(await relay.setPhotos(true), contains('Send my notes'));
+      expect(await relay.setPhotos(true), contains('Sign in'));
       expect(photos.asked, 0);
       await relay.startSending(sendEarlier: false);
       photos.allowed = false;

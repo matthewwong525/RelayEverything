@@ -15,8 +15,8 @@ import 'timeline.dart';
 
 export 'folder.dart' show Opener;
 
-/// The first screen, as Apple Notes' *Folders*: the notes folders, *On this phone* and *Connections*, the Settings gear, and
-/// at the bottom *Search*, which finds notes in every folder, and *New note*. It also holds what each page needs once:
+/// The first screen, as Apple Notes' *Folders*: the notes folders, *On this phone*, the Settings gear, and at the bottom
+/// *Search*, which finds notes in every folder, and *New note*. It also holds what each page needs once:
 /// the notices, the listening card and *Start a voice note* from Shortcuts.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.relay, this.scanner, this.opener, this.picker, this.sharer,
@@ -57,6 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     _voice = widget.voiceRequests?.listen((_) => _record());
     relay.addListener(_showListening);
+    // The account's email and names, for Settings' Account row and the Account page.
     relay.refreshConnections();
   }
 
@@ -113,14 +114,6 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Pull to refresh and *Sync now* do the same: send what waits and take notes from the person's other devices.
   Future<void> _refresh() => relay.pullNotes();
 
-  /// Opens [part] of the Relay Everything page, such as `#webhooks`, in the browser.
-  Future<void> _openPage(String server, [String part = '']) async {
-    final messenger = ScaffoldMessenger.of(context);
-    if (!await (widget.opener ?? openInBrowser)(Uri.parse('$server/apps/relay/$part'))) {
-      messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -160,7 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
           tooltip: 'Settings',
           style: IconButton.styleFrom(backgroundColor: brand.card, foregroundColor: brand.ink),
           icon: const Icon(CupertinoIcons.gear),
-          onPressed: () => _open(SettingsScreen(relay: relay)),
+          onPressed: () => _open(SettingsScreen(relay: relay, scanner: widget.scanner, opener: widget.opener)),
         ),
         const SizedBox(width: 8),
       ],
@@ -178,25 +171,19 @@ class _HomeScreenState extends State<HomeScreen> {
       _Card(rows: [
         for (final (folder, icon) in const [(NotesFolder.all, CupertinoIcons.doc_text), (NotesFolder.voice, CupertinoIcons.mic),
           (NotesFolder.shares, CupertinoIcons.paperclip)])
-          _FolderRow(icon: icon, title: folder.title, count: count(folder),
+          FolderRow(icon: icon, title: folder.title, count: count(folder),
             onTap: () => _open(TimelineScreen(relay: relay, folder: folder, picker: widget.picker, sharer: widget.sharer,
               opener: widget.opener))),
       ]),
       ..._section('On this phone', [
-        _FolderRow(icon: CupertinoIcons.location, title: 'Location', line: locationLine(relay, now),
+        FolderRow(icon: CupertinoIcons.location, title: 'Location', line: locationLine(relay, now),
           onTap: () => _open(LocationPage(relay: relay, scanner: scanner))),
-        _FolderRow(icon: CupertinoIcons.heart, title: 'Health', line: healthLine(relay, now),
+        FolderRow(icon: CupertinoIcons.heart, title: 'Health', line: healthLine(relay, now),
           onTap: () => _open(HealthPage(relay: relay, scanner: scanner))),
-        _FolderRow(icon: CupertinoIcons.calendar, title: 'Calendar', line: calendarLine(relay, now),
+        FolderRow(icon: CupertinoIcons.calendar, title: 'Calendar', line: calendarLine(relay, now),
           onTap: () => _open(CalendarPage(relay: relay, scanner: scanner))),
-        _FolderRow(icon: CupertinoIcons.photo, title: 'Photos', line: photosLine(relay),
+        FolderRow(icon: CupertinoIcons.photo, title: 'Photos', line: photosLine(relay),
           onTap: () => _open(PhotosPage(relay: relay, scanner: scanner, opener: widget.opener))),
-      ]),
-      ..._section('Connections', [
-        _FolderRow(icon: CupertinoIcons.paperplane, title: 'Sending', line: sendingLine(relay),
-          onTap: () => _open(SendingPage(relay: relay, scanner: scanner, opener: widget.opener))),
-        _connected(CupertinoIcons.sparkles, 'AI apps', (names) => names.aiApps, '#ai-apps'),
-        _connected(CupertinoIcons.link, 'Webhooks', (names) => names.webhooks, '#webhooks'),
       ]),
     ];
   }
@@ -208,22 +195,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _FoldHeader(name: name, folded: folded, onTap: () => relay.setFolded(name, !folded)),
       if (!folded) _Card(rows: rows),
     ];
-  }
-
-  /// *AI apps* or *Webhooks*: the names the server last gave and a tap to that [part] of the page, or, until the phone
-  /// sends to a Relay Everything server, *Sign in to see* and a tap to the choice of place.
-  Widget _connected(IconData icon, String title, List<String> Function(Connections names) of, String part) {
-    final settings = relay.settings;
-    final server = relay.server;
-    if (!settings.sending || settings.place != SendPlace.server || !relay.connected || server == null) {
-      return _FolderRow(icon: icon, title: title, line: 'Sign in to see', ask: true,
-        onTap: () => choosePlace(context, relay, widget.scanner));
-    }
-    final names = switch (relay.connections) { final known? => of(known), null => null };
-    return _FolderRow(icon: icon, title: title,
-      line: switch (names) { null => 'See them on your page', [] => 'None yet', final names => names.join(', ') },
-      count: names == null || names.isEmpty ? null : names.length,
-      onTap: () => _openPage(server, part));
   }
 }
 
@@ -276,35 +247,6 @@ class _Card extends StatelessWidget {
           row,
         ],
       ]),
-    );
-  }
-}
-
-/// One folder: its icon in accent, its name, its status line, its count, and a chevron. [ask] shows the line in accent
-/// text, as a link.
-class _FolderRow extends StatelessWidget {
-  const _FolderRow({required this.icon, required this.title, required this.onTap, this.line, this.count, this.ask = false});
-
-  final IconData icon;
-  final String title;
-  final String? line;
-  final int? count;
-  final bool ask;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = brandOf(context);
-    return ListTile(
-      leading: Icon(icon, color: brand.accentText),
-      title: Text(title, style: TextStyle(fontSize: 16, color: brand.ink)),
-      subtitle: line == null ? null : Text(line!, maxLines: 1, overflow: TextOverflow.ellipsis,
-        style: TextStyle(fontSize: 13, color: ask ? brand.accentText : brand.muted, fontWeight: ask ? FontWeight.w500 : null)),
-      trailing: Row(mainAxisSize: MainAxisSize.min, spacing: 4, children: [
-        if (count != null) Text('$count', style: TextStyle(fontSize: 16, color: brand.muted)),
-        Icon(CupertinoIcons.chevron_forward, color: brand.muted),
-      ]),
-      onTap: onTap,
     );
   }
 }

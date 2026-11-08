@@ -1,70 +1,69 @@
 # relay-home-screen Specification
 
 ## Purpose
-The phone app opens on Home: the notes folders, a folder for each kind of phone data, and what the person connected, with search, *New note* and the ⋯ menu.
+The phone app opens on Home: the notes folders and a folder for each kind of phone data, with search, *New note* and a Settings button; Settings opens on the account.
 
 ## Requirements
 
-### Requirement: The app opens on Home
+### Requirement: Home holds the notes folders and the phone's data
 
-The phone app SHALL open on a *Home* screen with three groups of folders: the notes folders *Notes*, *Voice notes* and *Shares*; *On this phone*, with *Location*, *Health* and *Calendar*; and *Connections*, with *Sending*, *AI apps* and *Webhooks*. Each notes folder SHALL show how many notes it holds. *Notes* SHALL hold every note, *Voice notes* only voice notes, and *Shares* only notes with a photo, a file or a link. Home SHALL show no folder for a feature that does not work yet. A person SHALL be able to fold *On this phone* and *Connections*, and the phone SHALL remember it. A tap on a section name SHALL fold or open it with no highlight behind the name, as in Apple Notes.
+The phone app SHALL open on a *Home* screen with two groups of folders: the notes folders *Notes*, *Voice notes* and *Shares*; and *On this phone*, with *Location*, *Health*, *Calendar* and *Photos*. Home SHALL have no *Connections* section and no row for sending, AI apps or webhooks. Each notes folder SHALL show how many notes it holds. *Notes* SHALL hold every note, *Voice notes* only voice notes, and *Shares* only notes with a photo, a file or a link. Home SHALL show no folder for a feature that does not work yet. A person SHALL be able to fold *On this phone*, and the phone SHALL remember it. A tap on a section name SHALL fold or open it with no highlight behind the name, as in Apple Notes.
 
 #### Scenario: Opening the app
 
 - **WHEN** the person opens the app with 3 typed notes, 2 voice notes and 1 note with a photo
-- **THEN** Home shows *Notes* 6, *Voice notes* 2 and *Shares* 1, and a tap on *Voice notes* lists only the 2 voice notes
+- **THEN** Home shows *Notes* 6, *Voice notes* 2 and *Shares* 1, *On this phone* below them, and no *Connections* section
 
 #### Scenario: A first open
 
 - **WHEN** a new install opens with sending off
-- **THEN** Home shows every notes folder at 0, *Location*, *Health*, *Calendar* and *Sending* as *Off*, and no request leaves the phone
+- **THEN** Home shows every notes folder at 0 and *Location*, *Health*, *Calendar* and *Photos* as *Off*, and no request leaves the phone
 
-#### Scenario: Folding a section with no highlight
+### Requirement: Each kind of phone data has its own folder that asks to sign in
 
-- **WHEN** the person taps *Connections* on Home
-- **THEN** the section folds, its chevron turns, and no grey box shows behind the name
-
-### Requirement: Each kind of phone data has its own folder
-
-*Location*, *Health* and *Calendar* SHALL each open a page with that data's switch. Location SHALL also hold *Save battery* and *Every 100 m*, and Calendar the phone's calendars, each with its own switch. Each row on Home SHALL say *Off*, or its status while on. The phone SHALL keep no new copy of places, readings or events to show them. While sending is off, each folder SHALL say it works only with sending on, and SHALL offer one button that turns sending on in the same steps as before.
-
-#### Scenario: Location from Home
-
-- **WHEN** sending and location history are on, in *Save battery*, and the last point went at 14:05
-- **THEN** the *Location* row says *Save battery · Sent 14:05*, and its page shows the switch, both modes, and that time
+*Location*, *Health*, *Calendar* and *Photos* SHALL each open a page with that data's switch. Each row on Home SHALL say *Off*, or its status while on. The phone SHALL keep no new copy of places, readings or events to show them. While sending is off, each folder SHALL say it works once the person signs in, and SHALL offer one *Sign in* button that opens the same sign-in as the Account row.
 
 #### Scenario: A folder with sending off
 
 - **WHEN** sending is off and the person opens *Health*
-- **THEN** the switch can not be turned on, the page says Health works with sending on, and *Turn on sending* asks where to send
+- **THEN** the switch can not be turned on, the page says Health works once you sign in, and *Sign in* opens the sign-in
 
-### Requirement: Connections show what the person connected once signed in
+### Requirement: Home writes, talks, searches and opens Settings in one tap
 
-*Sending* SHALL say where the phone sends: *Off*, the Relay Everything server, or the person's own webhook, and its page SHALL hold the sending switch, the choice of place, the webhook test, the server, and *Disconnect this phone*. While the phone sends to a Relay Everything server, *AI apps* and *Webhooks* SHALL show the names of the person's connected AI apps and webhooks, as the server last answered, and a tap SHALL open that part of the person's Relay Everything page. Otherwise each SHALL say *Sign in to see*, and a tap SHALL open the screen that asks where to send. The phone SHALL ask the server for these names only while sending is on to a Relay Everything server.
-
-#### Scenario: Signed in
-
-- **WHEN** the phone sends to a Relay Everything server and the person connected Claude and two webhooks
-- **THEN** *AI apps* shows *Claude* and *Webhooks* shows both names and 2, and a tap on *Webhooks* opens the webhooks part of the person's page in the browser
-
-#### Scenario: Not signed in
-
-- **WHEN** sending is off, or the phone sends to the person's own webhook
-- **THEN** *AI apps* and *Webhooks* say *Sign in to see*, the phone asks the server nothing, and a tap opens the screen that asks where to send
-
-### Requirement: Home writes, talks, searches and opens Settings
-
-Home SHALL have the one *New note* button, which writes on a tap and talks on a hold, as the notes screen requirements say, and a search field that finds notes in every folder on the phone only. At the top right, Home SHALL have one Settings button that opens Settings in one tap, and no ⋯ menu. While the phone sends to a Relay Everything server, the *Sending* page SHALL offer *Open your Relay Everything page*, which opens the person's page in the browser. A voice note started from Shortcuts SHALL record whatever page is open.
+Home SHALL have the one *New note* button, which writes on a tap and talks on a hold, and a search field that finds notes in every folder on the phone only. At the top right, Home SHALL have one Settings button that opens Settings in one tap, and no ⋯ menu. A voice note started from Shortcuts SHALL record whatever page is open.
 
 #### Scenario: Settings in one tap
 
 - **WHEN** the person taps the Settings button on Home
 - **THEN** Settings opens, with no menu first
 
-#### Scenario: The page link is on Sending
+### Requirement: Settings opens on the account
 
-- **WHEN** the phone sends to a Relay Everything server and the person opens *Sending*
-- **THEN** it shows *Open your Relay Everything page*, and a tap opens the person's page in the browser; with sending off or to the person's own webhook, it does not show
+Settings SHALL show an Account row first, then *Appearance*, *Pin notes to where I am*, the speech model, and at the bottom the app's version and build number. Signed in to a Relay Everything server, the row SHALL show the account's email and the server. With sending to the person's own webhook, it SHALL say *My own webhook* and the webhook's address. Otherwise it SHALL say *Sign in to Relay Everything* and that notes stay on the phone until the person signs in. Health, the calendar, location history and photos SHALL NOT be in Settings.
+
+#### Scenario: Signed out
+
+- **WHEN** the person opens Settings on a new install
+- **THEN** the first row says *Sign in to Relay Everything*, then the *Appearance*, *Notes* and *Voice notes* groups and the version, and no request leaves the phone
+
+#### Scenario: Signed in
+
+- **WHEN** the person signed in as you@example.com on app.relayeverything.com and opens Settings
+- **THEN** the first row shows you@example.com and app.relayeverything.com, and a tap opens the Account page
+
+### Requirement: The Account page shows the connection
+
+Signed in to a Relay Everything server, the Account page SHALL show the account's email and server, *AI apps* and *Webhooks* with the names the server last gave, *Open your Relay Everything page*, the server to change, and *Sign out*. A tap on *AI apps* or *Webhooks* SHALL open that part of the person's Relay Everything page. *Sign out* SHALL ask first, then remove the phone's key and stop sending; notes from this phone SHALL stay on it. With sending to the person's own webhook, the page SHALL show its address, *Send a test* and *Stop sending*, and SHALL show no AI apps or webhooks list. The phone SHALL ask the server for the names and email only while it sends to a Relay Everything server.
+
+#### Scenario: Signed in with connections
+
+- **WHEN** the phone sends to a Relay Everything server and the person connected Claude and two webhooks
+- **THEN** the Account page shows *AI apps* with *Claude*, *Webhooks* with both names and 2, and a tap on *Webhooks* opens the webhooks part of the person's page in the browser
+
+#### Scenario: Signing out
+
+- **WHEN** the person taps *Sign out* and confirms
+- **THEN** the phone forgets its key, sending stops, the notes written on this phone stay, and Settings shows *Sign in to Relay Everything*
 
 ### Requirement: Sync now sits beside the sync state
 
@@ -79,12 +78,3 @@ While sending is on, the sync state under the title of Home and of each notes fo
 
 - **WHEN** sending is off
 - **THEN** the line says *On this phone*, with no *Sync now* button
-
-### Requirement: Settings holds appearance, notes and voice settings
-
-Settings SHALL hold *Appearance*, *Pin notes to where I am* and the speech model, and at the bottom the app's version and build number. Sending, health, the calendar and location history SHALL NOT be in Settings.
-
-#### Scenario: Open Settings
-
-- **WHEN** the person opens Settings from Home
-- **THEN** it shows the *Appearance*, *Notes* and *Voice notes* groups only, and the version and build, such as *Relay Everything 1.4.0 (91)*

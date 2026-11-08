@@ -10,7 +10,7 @@ Relay Everything can send the photos you take on your phone to your own space, w
 ## Turn it on
 
 1. On Home, open the **Photos** folder, under **On this phone**.
-2. If sending is off, tap **Turn on sending**, and pick **Relay Everything** or **My own webhook**: [Connect a phone](../../start/connect-a-phone/). Photos work only with sending on, and the app reads no photo while it is off.
+2. If you are signed out, tap **Sign in**, and sign in to Relay Everything or tap **Send to my own webhook instead**: [Connect a phone](../../start/connect-a-phone/). Photos work only once you sign in, and the app reads no photo while you are signed out.
 3. Turn on **Photos**.
 4. Allow the app to read your photos. On Android, also allow it to read the place in your photos.
 
@@ -55,7 +55,7 @@ Each copy is at most 3 MB. The original stays on your phone, and the app never d
 
 ## Turn it off
 
-Turn off **Photos** in the **Photos** folder. The phone stops sending, and deletes the copies that did not go yet. Turning off **Send my notes** also stops photos. The photos already sent stay on your server, or in your own database.
+Turn off **Photos** in the **Photos** folder. The phone stops sending, and deletes the copies that did not go yet. Signing out also stops photos. The photos already sent stay on your server, or in your own database.
 
 ## Delete all photos
 

@@ -27,7 +27,7 @@ Relay Everything keeps your notes on your phone. When you turn on sending, it ke
 | Your email | The server's list of accounts, to sign you in | When you sign up |
 | Your sign-in | A cookie in your browser, for 30 days | With each visit to your Relay Everything page |
 | A copy of what your server stores | [Your own database](../connections/your-database/), through a webhook you add | Notes always, with each file's name, type and size but not the file; health, calendar, location and photos only if you tick them for that webhook. Each photo goes with its picture, when and where you took it |
-| Everything the phone sends, when you pick **My own webhook** | Only [your own database](../connections/your-database/#send-from-the-phone), straight from the phone; nothing on your Relay Everything server | With sending on, the same as above: notes, then each file with its bytes; health, calendar, location and photos only with their switches on. Each photo goes with its picture, when and where you took it |
+| Everything the phone sends, when you pick **Send to my own webhook instead** | Only [your own database](../connections/your-database/#send-from-the-phone), straight from the phone; nothing on your Relay Everything server | With sending on, the same as above: notes, then each file with its bytes; health, calendar, location and photos only with their switches on. Each photo goes with its picture, when and where you took it |
 | Your webhook's address and secret | The iPhone Keychain or the Android Keystore | Never sent: the secret signs each message |
 
 With sending off, the app makes no network call, reads no health data, no calendar and no photos, and keeps no location history. The one exception is the speech model for voice notes, and only after you tap **Get it**. The same is true when a shortcut adds a note: [Shortcuts](../app/shortcuts/#what-is-sent) follow your sending setting, and **Get notes** reads only the phone. The share card also follows it: with sending off it makes no network call: [Share from any app](../app/share/#what-is-sent).
@@ -64,7 +64,7 @@ Click **Delete my account** on your Relay Everything page, and type your email t
 
 | Part | How |
 |---|---|
-| Everything sent | Turn off **Send my notes** on the app's [Sending](../app/settings/#sending) page. Health, the calendar, location and photos stop, and what of them did not go yet is deleted. |
+| Everything sent | Tap **Sign out**, or **Stop sending** for your own webhook, on the app's [Account](../app/settings/#account) page. Health, the calendar, location and photos stop, and what of them did not go yet is deleted. |
 | A note | [Delete it](../app/your-notes/#delete-a-note) with a swipe or **⋯** → **Delete**. With sending on, your server deletes the note, its files and its recording too, and each webhook gets `note.deleted`. A copy your webhook already saved stays in your own database until your receiver deletes it. |
 | Voice notes | Do not tap **Get it**, or tap **Remove** in Settings to delete the speech model. Delete a recording by deleting its note, or by removing the app. |
 | Pins on typed notes | Turn off **Pin notes to where I am** in Settings. |
@@ -72,7 +72,7 @@ Click **Delete my account** on your Relay Everything page, and type your email t
 | Photos | Turn off **Photos** in the app's **Photos** folder: the copies that did not go yet are deleted. To delete the photos already sent, click **Delete all photos** on your Relay Everything page: [Photos](../app/photos/#delete-all-photos). |
 | Health | Turn off **Health** in the app's **Health** folder, and take back the permission in Apple Health or Health Connect. To keep one type back, such as cycle, turn off only that type there. |
 | Calendar | Turn off **Calendar** in the app's **Calendar** folder, or one calendar under it, and take back the permission in the phone's settings. A calendar you turn off is removed from your space at the next send. |
-| One phone | Tap **Disconnect this phone** on the app's **Sending** page, or click **Turn off** beside it on your Relay Everything page: [Keys](../api/keys/#make-list-and-turn-off-keys). |
+| One phone | Tap **Sign out** on the app's **Account** page, or click **Turn off** beside it on your Relay Everything page: [Keys](../api/keys/#make-list-and-turn-off-keys). |
 | Email notes | Don't give out your notes address. If it leaks, click **New address** on the **Email** card: [Email notes](../app/email/#replace-your-address). |
 | A webhook to your database | **Pause** or **Remove** it on the Relay Everything page: [Your own database](../connections/your-database/). |
 

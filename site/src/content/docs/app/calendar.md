@@ -8,7 +8,7 @@ Relay Everything can keep your phone's calendar events beside your notes, so you
 ## Turn it on
 
 1. Open **Calendar**, under **On this phone** on Home.
-2. If sending is off, tap **Turn on sending**: [Connect a phone](../../start/connect-a-phone/). The calendar works only with sending on, and the app reads no calendar while it is off.
+2. If you are signed out, tap **Sign in**: [Connect a phone](../../start/connect-a-phone/). The calendar works only once you sign in, and the app reads no calendar while you are signed out.
 3. Turn on **Calendar**.
 4. Allow the phone to read your calendars. On an iPhone, pick **Allow Full Access**.
 
@@ -41,7 +41,7 @@ The **Calendar** folder shows when the events last went, such as *Sent 10:42 · 
 
 ## Where your events go
 
-Your events go only to the place you pick in **Send my notes**. With **My own webhook**, the phone sends them straight to your receiver as [`calendar.events`](../../connections/your-database/#send-from-the-phone), and your server gets none. When you change the place, the phone sends the whole window to the new place.
+Your events go only to the place you pick when you sign in. With **My own webhook**, the phone sends them straight to your receiver as [`calendar.events`](../../connections/your-database/#send-from-the-phone), and your server gets none. When you change the place, the phone sends the whole window to the new place.
 
 With **Relay Everything**, your events go only to your own space on your server. From there:
 
@@ -51,4 +51,4 @@ With **Relay Everything**, your events go only to your own space on your server.
 
 ## Turn it off
 
-Turn off **Calendar** in the **Calendar** folder. The phone stops reading and sending, and deletes the events that did not go yet. When you turn it on again, the app sends the whole window again. Turning off **Send my notes** also stops the calendar. To take back the phone's permission, use the phone's settings. [Privacy](../../privacy/) says what the server keeps.
+Turn off **Calendar** in the **Calendar** folder. The phone stops reading and sending, and deletes the events that did not go yet. When you turn it on again, the app sends the whole window again. Signing out also stops the calendar. To take back the phone's permission, use the phone's settings. [Privacy](../../privacy/) says what the server keeps.

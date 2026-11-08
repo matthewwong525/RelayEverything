@@ -22,7 +22,7 @@ This policy is for the shared Relay Everything server at [app.relayeverything.co
 The [Privacy](../privacy/#what-is-kept-and-where) page lists each kind of data, where it is kept, and when it is sent. It is the one list: this policy does not copy it. In short:
 
 - **Your account:** your email, how you sign in, and a fingerprint of each key and sign-in.
-- **What you send:** your notes and their files, voice note words, health, calendar events, location history and photos, only with **Send my notes** on, and only the parts you turn on.
+- **What you send:** your notes and their files, voice note words, health, calendar events, location history and photos, only once you sign in in the app, and only the parts you turn on.
 - **What you set:** your devices, webhooks, connected AI apps and chats.
 
 We keep no ads data, no analytics, and no record of your visits to this website.
@@ -75,7 +75,7 @@ You have these rights wherever you live. Canada's privacy law for companies, the
 - **See your data:** your Relay Everything page shows it, and your webhooks and API keys get a copy of it. You can also ask us for a copy.
 - **Correct it:** ask us to correct your account's data.
 - **Delete it:** [delete your whole account](../privacy/#delete-your-account), or ask us to delete a part of your data.
-- **Take back your consent:** turn off a part in its folder on the app's Home ([Health, Calendar, Location and Photos](../app/settings/#health-calendar-location-and-photos)), or turn off **Send my notes**. The [Privacy](../privacy/#turn-each-part-off) page shows how.
+- **Take back your consent:** turn off a part in its folder on the app's Home ([Health, Calendar, Location and Photos](../app/settings/#health-calendar-location-and-photos)), or **Sign out** on the app's [Account](../app/settings/#account) page. The [Privacy](../privacy/#turn-each-part-off) page shows how.
 - **Complain:** write to us first. If our answer does not satisfy you, you can complain to the [Office of the Privacy Commissioner of Canada](https://www.priv.gc.ca/en/report-a-concern/), or to the privacy office where you live.
 
 To ask, write to the contact address on the shared server's sign-in screen. We answer within 30 days. We can ask you to show that the account is yours, such as by writing from its email.

@@ -492,7 +492,7 @@ class RelayController extends Relay {
   }
 
   static const _noLocation = 'Relay Everything may not read your location. Allow it in the phone\'s settings.';
-  static const _sendFirst = 'Turn on Send my notes first.';
+  static const _sendFirst = 'Sign in first, in Settings.';
 
   @override
   Future<String?> setPinNotes(bool on) async {
@@ -825,7 +825,7 @@ class RelayController extends Relay {
 
   static const _noFile = 'This file is not on this phone.';
   static const _noApp = 'No app on this phone opens this file.';
-  static const _sendToDownload = 'Turn on Send my notes to Relay Everything to download this file.';
+  static const _sendToDownload = 'Sign in to Relay Everything to download this file.';
   static const _notDownloaded = 'The file did not download. Try again.';
 
   @override

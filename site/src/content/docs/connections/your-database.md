@@ -29,19 +29,19 @@ Each card shows the webhook's state: **Working**, **Paused**, **Failing** or **S
 The phone app can send to your own webhook itself, with no Relay Everything account, sign-in or key. Your receiver gets the same messages, signed the same way, so one receiver works for both. The phone sends to your server or to your webhook, never both.
 
 1. Start your receiver at an `https://` address. A home address, such as your own computer on your Wi-Fi, is allowed. The phone does not take a self-made certificate.
-2. In the app, open **Sending** on Home and turn on **Send my notes**.
-3. Pick **My own webhook**, and type your receiver's address.
+2. In the app, open Settings and tap **Sign in to Relay Everything**, the first row.
+3. Tap **Send to my own webhook instead**, and type your receiver's address.
 4. Click **Copy**, and give the secret to your receiver. You can also paste your receiver's own `whsec_` secret.
 5. Click **Send a test**. The app shows your receiver's answer, such as *Your receiver answered 204. It works.*
 6. Click **Save**. The app asks if your earlier notes go too.
 
-The **Sending** row on Home then says *To your webhook*, with your receiver's address. Turn on **Health**, **Calendar**, **Location history** or **Photos** to send them too. The phone sends each new note, then each of its files in a [`note.file`](#notefile) message. With **Photos** on, it sends each new photo in a [`photo.created`](#photocreated) message, after the notes: [Photos](../../app/photos/).
+The first row of Settings then says **My own webhook**, with your receiver's address. Turn on **Health**, **Calendar**, **Location history** or **Photos** to send them too. The phone sends each new note, then each of its files in a [`note.file`](#notefile) message. With **Photos** on, it sends each new photo in a [`photo.created`](#photocreated) message, after the notes: [Photos](../../app/photos/).
 
 What you give up:
 
 - **Data comes in groups, not live.** The phone sends only while it is on and has signal, and the phone's own limits choose when the app runs in the background.
 - **Your Relay Everything page and your AI can not read it**, because none of it is on the server.
-- **A failing receiver holds back the rest.** The phone sends in order, so it keeps each item, and all after it, until your receiver answers `2xx`. The **Sending** page shows the last answer. It never drops an item for a `400`. Only a file your receiver refuses with `413` is dropped, and the **Sending** page names it. A photo your receiver refuses with `413` is dropped too. A photo that waits does not hold back your notes.
+- **A failing receiver holds back the rest.** The phone sends in order, so it keeps each item, and all after it, until your receiver answers `2xx`. The **Account** page in Settings shows the last answer. It never drops an item for a `400`. Only a file your receiver refuses with `413` is dropped, and the **Account** page names it. A photo your receiver refuses with `413` is dropped too. A photo that waits does not hold back your notes.
 
 From the phone, `device.id` is the phone's own id, a UUID the app makes once. A note's `created_at` is the same as its `recorded_at`: the note's own time, which for a voice note is when it was recorded. Its `note.updated` has the same one. The message's `timestamp` is when the phone queued the message. Health samples and points are numbered on the phone, so save them by `device.id` and `id` together. A calendar event's `id` is made from the phone's id and the event's `key`, so each change of one event has the same `id`. A removed event from the phone has only its `key`, `id` and `start`. A photo's `id` is the phone's own id for it, a UUID.
 
@@ -132,7 +132,7 @@ Your server sends it when it stores a file of a note, and the phone sends it whe
 }
 ```
 
-A 25 MB file makes a body of about 33 MB. Accept bodies that large, or answer `413`: Relay Everything, or the phone, then skips that file and sends the rest. The webhook's card, or the phone's **Sending** page, names the skipped file. A file your receiver skips stays on your Relay Everything page. Every other failed answer is tried again, as for every message.
+A 25 MB file makes a body of about 33 MB. Accept bodies that large, or answer `413`: Relay Everything, or the phone, then skips that file and sends the rest. The webhook's card, or the phone's **Account** page, names the skipped file. A file your receiver skips stays on your Relay Everything page. Every other failed answer is tried again, as for every message.
 
 Files that your server stored before it sent `note.file` go once to each webhook, in the order of their notes.
 

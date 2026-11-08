@@ -5,6 +5,29 @@ Keep every Relay note on the phone unless the person chooses to send, and send o
 
 ## Requirements
 
+### Requirement: Signing in sends to one place the person picks
+
+Sending SHALL start in one step: when the person signs in to their Relay Everything server, connects with a key, or saves their own webhook, the phone SHALL send there, after the question about earlier notes. The app SHALL have no separate switch for sending. It SHALL send to that one place only, never both. The offline default, the earlier-notes question, and health and location only while sending SHALL work the same for both places.
+
+#### Scenario: Signing in starts sending
+
+- **WHEN** the person taps *Sign in to Relay Everything* in Settings, signs in, and picks *Only new notes*
+- **THEN** the phone sends new notes to their server, and Settings shows their email
+
+#### Scenario: Earlier notes with a webhook
+
+- **WHEN** the person picks *Send to my own webhook instead* with 12 notes that never left the phone
+- **THEN** the app asks whether to send the 12, sends them to the webhook only on a yes, and Settings says *My own webhook*
+
+### Requirement: Signing out keeps what exists
+
+*Sign out* and, for the person's own webhook, *Stop sending* SHALL stop all sending, keep every note written on the phone, and leave the server's copy untouched. *Stop sending* SHALL keep the webhook's address and secret on the phone, so the person can send there again without a new secret.
+
+#### Scenario: Sign out and back in
+
+- **WHEN** the person signs out and later signs in again
+- **THEN** the server still holds the notes sent before, and the phone sends again with its new key
+
 ### Requirement: The app works offline by default
 
 A newly installed Relay phone app SHALL let the person write and read notes with no key, no server and no connection, and SHALL make no network request while sending is off, except to get the speech model after the person agrees to it.
@@ -44,27 +67,3 @@ When the person turns sending on and notes exist that never went to the server, 
 #### Scenario: Turned on again later
 - **WHEN** the person turns sending on again after a time with it off
 - **THEN** the app asks again about every note that never went to the server and was not already waiting to send
-
-### Requirement: Turning sending off keeps what exists
-
-Turning sending off SHALL stop all sending, keep every note on the phone, and leave the server's copy untouched.
-
-#### Scenario: Off and on again
-- **WHEN** the person turns sending off and later back on
-- **THEN** the server still holds the notes sent before, and the phone sends again without a new key
-
-### Requirement: Sending goes to one place the person picks
-
-When the person turns sending on, the app SHALL ask where to send: their Relay Everything server or their own webhook. It SHALL send to that one place only, never both. The offline default, the earlier-notes question, health and location only while sending, and turning sending off SHALL work the same for both places.
-
-#### Scenario: Switching from the server to a webhook
-- **WHEN** the person sends to the server, then picks their own webhook with items still waiting
-- **THEN** the waiting items go to the webhook, and nothing more goes to the server
-
-#### Scenario: Earlier notes with a webhook
-- **WHEN** the person picks their own webhook with 12 notes that never left the phone
-- **THEN** the app asks whether to send the 12, and sends them to the webhook only on a yes
-
-#### Scenario: Settings names the place
-- **WHEN** the person opens Settings with sending on
-- **THEN** Settings shows where the phone sends, and in webhook mode says that nothing goes to Relay Everything

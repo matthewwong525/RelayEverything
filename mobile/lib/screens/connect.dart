@@ -10,9 +10,10 @@ import 'back_to.dart';
 /// Opens the camera and returns the code it read.
 typedef Scanner = Future<String?> Function(BuildContext context);
 
-/// *Where should the phone send?*: the person's Relay Everything server, or their own webhook. For the server: sign in
-/// to connect, or scan or paste a key from *Add a device*. For a webhook: its address and a secret to copy, with *Send a
-/// test*. The sending switch opens it, and it closes with the place once that place is set up.
+/// *Sign in*: *Sign in to connect* to the person's Relay Everything server, and below it the quiet other ways: *Scan a
+/// key* from *Add a device*, *Use another server*, and *Send to my own webhook instead*, which opens the webhook's
+/// address and a secret to copy, with *Send a test*. A phone that keeps a key offers it in one tap. The Account row in
+/// Settings and a folder's *Sign in* open it, and it closes with the place once that place is set up.
 class ConnectScreen extends StatefulWidget {
   const ConnectScreen({super.key, required this.relay, Scanner? scanner, Future<void> Function(String text)? copy})
     : scanner = scanner ?? _scan, copy = copy ?? _copy;
@@ -33,7 +34,8 @@ Future<String?> _scan(BuildContext context) => Navigator.of(context).push(Materi
 
 class _ConnectScreenState extends State<ConnectScreen> {
   final _code = TextEditingController();
-  late SendPlace _place = widget.relay.settings.place;
+  /// True once the person picked *Send to my own webhook instead*.
+  bool _webhookOpen = false;
   late final _address = TextEditingController(text: widget.relay.webhookAddress ?? 'https://');
   late final _secret = TextEditingController(text: widget.relay.webhookSecret ?? widget.relay.newWebhookSecret());
   String? _problem;
@@ -97,34 +99,35 @@ class _ConnectScreenState extends State<ConnectScreen> {
     final error = TextStyle(color: Theme.of(context).colorScheme.error);
     return Scaffold(
       appBar: AppBar(leading: const BackTo('Back'), leadingWidth: BackTo.widthOf('Back'),
-        title: const Text('Where should the phone send?')),
+        title: Text(_webhookOpen ? 'My own webhook' : 'Sign in')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
-        SegmentedButton<SendPlace>(
-          // Material's check mark is not a Cupertino icon; the filled segment shows the choice.
-          showSelectedIcon: false,
-          segments: const [
-            ButtonSegment(value: SendPlace.server, label: Text('Relay Everything')),
-            ButtonSegment(value: SendPlace.webhook, label: Text('My own webhook')),
-          ],
-          selected: {_place},
-          onSelectionChanged: _busy ? null : (chosen) => setState(() { _place = chosen.single; _problem = null; }),
-        ),
-        const SizedBox(height: 16),
-        ...switch ((_place, widget.relay.connected)) {
-          (SendPlace.webhook, _) => _webhook(),
-          (SendPlace.server, true) => _kept(),
-          (SendPlace.server, false) => _server(),
+        ...switch ((_webhookOpen, widget.relay.connected)) {
+          (true, _) => _webhook(),
+          (false, true) => _kept(),
+          (false, false) => _server(),
         },
         if (_problem != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_problem!, style: error)),
       ]),
     );
   }
 
+  void _pick(bool webhook) => setState(() { _webhookOpen = webhook; _problem = null; _answer = null; });
+
+  /// A quiet way in, below the one primary button.
+  Widget _quiet(String label, VoidCallback onPressed, [IconData? icon]) => Align(
+    alignment: Alignment.centerLeft,
+    child: icon == null
+      ? TextButton(onPressed: _busy ? null : onPressed, child: Text(label))
+      : TextButton.icon(onPressed: _busy ? null : onPressed, icon: Icon(icon), label: Text(label)),
+  );
+
   /// A key is kept already: the server it sends to, and one tap to send there.
   List<Widget> _kept() => [
     Text('This phone has a key for ${widget.relay.server ?? 'your server'}.'),
     const SizedBox(height: 16),
     FilledButton(onPressed: () => Navigator.of(context).pop(SendPlace.server), child: const Text('Send to Relay Everything')),
+    const SizedBox(height: 16),
+    _quiet('Send to my own webhook instead', () => _pick(true), CupertinoIcons.link),
   ];
 
   List<Widget> _webhook() => [
@@ -149,21 +152,24 @@ class _ConnectScreenState extends State<ConnectScreen> {
     const SizedBox(height: 16),
     Text('The phone sends only while it is on and has signal, so your data comes in groups. Your Relay Everything page '
       'and your AI can not read it.', style: Theme.of(context).textTheme.bodySmall),
+    const SizedBox(height: 16),
+    _quiet('Sign in to Relay Everything instead', () => _pick(false)),
   ];
 
   List<Widget> _server() => [
-    const Text('Sign in to Relay Everything, then tap Connect. This phone gets its own key, which can send but not read.'),
+    const Text('Sign in to Relay Everything, then tap Connect. This phone gets its own key. It sends your notes and keeps '
+      'them the same as on your other devices. Notes stay on this phone until you sign in.'),
     const SizedBox(height: 16),
     FilledButton.icon(onPressed: _busy ? null : () => _signIn(defaultServer), icon: const Icon(CupertinoIcons.arrow_right_square),
       label: Text(_busy ? 'Connecting…' : 'Sign in to connect')),
-    TextButton(onPressed: _busy ? null : _otherServer, child: const Text('Use another server')),
-    const SizedBox(height: 24),
-    Text('Or', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
-    const SizedBox(height: 8),
-    const Text('Use a key from Add a device on your Relay Everything page. The page shows the key once, as a QR code.'),
     const SizedBox(height: 16),
-    OutlinedButton.icon(onPressed: _busy ? null : _scanned, icon: const Icon(CupertinoIcons.qrcode_viewfinder), label: const Text('Scan the QR code')),
+    _quiet('Scan a key', _scanned, CupertinoIcons.qrcode_viewfinder),
+    _quiet('Use another server', _otherServer, CupertinoIcons.globe),
+    _quiet('Send to my own webhook instead', () => _pick(true), CupertinoIcons.link),
     const SizedBox(height: 24),
+    Text('A key comes from Add a device on your Relay Everything page, which shows it once, as a QR code. On this same '
+      'phone, copy the key and paste it here.', style: Theme.of(context).textTheme.bodySmall),
+    const SizedBox(height: 8),
     TextField(controller: _code, minLines: 2, maxLines: 4,
       decoration: const InputDecoration(labelText: 'Or paste the key', border: OutlineInputBorder())),
     const SizedBox(height: 8),

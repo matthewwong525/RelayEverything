@@ -3,9 +3,36 @@ title: Settings
 description: Each setting in the Relay Everything app, and what it does.
 ---
 
-Open **Settings** with the round gear button at the top right of Home. Tap **Home** at the top left to go back. Each switch acts at once, and asks for its permission only when you turn it on. On a new phone, every switch is off: your notes stay on the phone, and the app sends nothing.
+Open **Settings** with the round gear button at the top right of Home. Tap **Home** at the top left to go back. Each switch acts at once, and asks for its permission only when you turn it on. On a new phone, you are signed out and every switch is off: your notes stay on the phone, and the app sends nothing.
 
-Settings has three groups: **Appearance**, **Notes** and **Voice notes**. At the bottom, it shows the [version](#version) of the app. Sending, and each kind of phone data, have their own folder on Home: [Sending](#sending) and [Health, Calendar, Location and Photos](#health-calendar-location-and-photos). The website's pages, linked below, give the details.
+Settings starts with the [Account](#account) row, as the Apple Account row on an iPhone. Then it has three groups: **Appearance**, **Notes** and **Voice notes**. At the bottom, it shows the [version](#version) of the app. Each kind of phone data has its own folder on Home: [Health, Calendar, Location and Photos](#health-calendar-location-and-photos). The website's pages, linked below, give the details.
+
+## Account
+
+The first row of Settings shows your account:
+
+| The row says | When |
+|---|---|
+| **Sign in to Relay Everything**, and *Your notes stay on this phone until you sign in.* | You are signed out. Nothing leaves this phone. |
+| Your email and your server, such as `app.relayeverything.com` | The phone sends to your Relay Everything server. |
+| **My own webhook**, and its address | The phone sends to [your own webhook](../../connections/your-database/#send-from-the-phone), with nothing on Relay Everything. |
+
+Signed out, tap the row to open **Sign in**. **Sign in to connect** is first. Below it, **Scan a key**, **Use another server** and **Send to my own webhook instead** are the other ways. Signing in starts sending at once, after the app asks about your earlier notes. There is no separate switch. [Connect a phone](../../start/connect-a-phone/)
+
+Signed in, tap the row to open the **Account** page:
+
+| Row | What it does |
+|---|---|
+| Your email and server | The account this phone's key belongs to. |
+| **AI apps** | The names of the AI apps you connected, such as *Claude*. Tap it to add or remove one on your Relay Everything page. [Connect your AI](../../connections/connect-your-ai/) |
+| **Webhooks** | The names of the webhooks you added, such as *My database*. Tap it to add or remove one on your Relay Everything page. [Your own database](../../connections/your-database/) |
+| **Open your Relay Everything page** | Opens `<your-relay-server>/apps/relay/` in the phone's browser, with your ring notes, their recordings, and the notes from all your devices. [Notes](../your-notes/#the-gear-and-your-relay-everything-page) |
+| **Server** | The server this phone sends to. Change it to try a preview. [Connect a phone](../../start/connect-a-phone/#try-a-preview) |
+| **Sign out** | In red. Asks first, then removes this phone's key and stops sending. Your notes from this phone stay here. Notes from your other devices leave this phone. You sign in again to send again. [Connect a phone](../../start/connect-a-phone/#sign-out) |
+
+With your own webhook, the Account page shows its address with **Send a test**, the last answer that was not `2xx` or a file too large for your receiver, **Notes from elsewhere**, and **Stop sending** in red. **Stop sending** asks first. It keeps the webhook's address and secret on the phone, so you can send there again with no new secret.
+
+Signing out or stopping stops health, the calendar, location history and photos, and deletes what of them did not go yet.
 
 ## Appearance
 
@@ -33,21 +60,6 @@ This group shows if the speech model is on this phone, and its size. Your voice 
 
 The last line of Settings gives the app's version and build number, such as *Relay Everything 1.4.0 (91)*. Use it to know which TestFlight build you have.
 
-## Sending
-
-Open **Sending**, under **Connections** on Home. On Home, its row says where the phone sends: *Off: nothing leaves this phone*, *To Relay Everything* and your server, or *To your webhook* and its address.
-
-| Setting | What it does |
-|---|---|
-| **Send my notes** | Sends your notes to one place: your space on your Relay Everything server, which can pass them to your own database and your AI, or [your own webhook](../../connections/your-database/#send-from-the-phone), with nothing on Relay Everything. Turning it on asks which place. The line under it names the place. Off: nothing leaves this phone. [Connect a phone](../../start/connect-a-phone/) |
-| **Where the phone sends** | Moves sending to the other place. What waits to send goes to the new place. Shows while sending is on. |
-| **Webhook** | Your webhook's address, with **Send a test**. Under it, the last answer that was not `2xx`, or a file too large for your receiver. Shows while the phone sends to your webhook. [Your own database](../../connections/your-database/#send-from-the-phone) |
-| **Open your Relay Everything page** | Opens `<your-relay-server>/apps/relay/` in the phone's browser, with your ring notes, their recordings, and the notes from all your devices. Shows while the phone sends to your server. [Notes](../your-notes/#the-gear-and-your-relay-everything-page) |
-| **Server** | The server this phone sends to. Change it to try a preview. Shows when a key is kept and the phone sends to your server. [Connect a phone](../../start/connect-a-phone/#try-a-preview) |
-| **Disconnect this phone** | In red. Removes the key from this phone and turns sending off. Your notes stay here. You need a new key to send again. Shows when a key is kept and the phone sends to your server. |
-
-Turning sending off asks first, then stops health, the calendar, location history and photos, and deletes what of them did not go yet. Your notes, the key and the webhook stay on the phone. [Connect a phone](../../start/connect-a-phone/#stop-sending)
-
 ## Health, Calendar, Location and Photos
 
 Each has its own folder under **On this phone** on Home. Its row on Home says *Off*, or when the data last went and how many wait.
@@ -59,13 +71,13 @@ Each has its own folder under **On this phone** on Home. Its row on Home says *O
 | **Calendar** | **Calendar**: sends the events of your phone's calendars, the last 90 days and the next 90 days, then each change. Under **Calendars**, a switch for each calendar turns that one off. [Calendar](../calendar/) |
 | **Photos** | **Photos**: sends the new photos you take, with when and where you took them, to the place sending goes: your server, so your AI can see them, or your own webhook. **Send photos on mobile data** is off at first: photos wait for Wi-Fi. Its row on Home says *Off*, *On · Wi-Fi only* or *On · Wi-Fi and mobile data*. [Photos](../photos/) |
 
-Each works only with sending on. With sending off, its switch is dim, and the page says, for example, *Health works with sending on. Nothing leaves this phone until you turn it on.* Tap **Turn on sending** to choose where the phone sends, in the same steps as **Send my notes**. With sending on, the Location, Health and Calendar switches say when they last sent, and how many wait.
+Each works only once you sign in. Signed out, its switch is dim, and the page says, for example, *Health works once you sign in. Nothing leaves this phone until you do.* Tap **Sign in** to open the same sign-in as the [Account](#account) row. Once you sign in, the Location, Health and Calendar switches say when they last sent, and how many wait.
 
 The key, and your webhook's address and secret, stay in the iPhone Keychain or the Android Keystore, never in the app's own files.
 
 ## Settings on your Relay Everything page
 
-Your account's own settings are on your Relay Everything page, not in the app. Sign in there first: [Sign up](../../start/sign-up/).
+Your account's own settings are on your Relay Everything page, not in the app: the app only shows their names. Sign in there first: [Sign up](../../start/sign-up/).
 
 | Setting | What it does |
 |---|---|

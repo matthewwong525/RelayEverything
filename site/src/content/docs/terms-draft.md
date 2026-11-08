@@ -64,7 +64,7 @@ The exact words of each reply are on the [Texting](../texting/#the-replies) page
 
 ## Leaving and ending
 
-You can stop at any time: turn off **Send my notes** in the app, or [delete your account](../privacy/#delete-your-account). We give 30 days' notice on this website before we shut the shared server down, so you can get your data out.
+You can stop at any time: sign out in the app, or [delete your account](../privacy/#delete-your-account). We give 30 days' notice on this website before we shut the shared server down, so you can get your data out.
 
 ## Limits, law and changes
 

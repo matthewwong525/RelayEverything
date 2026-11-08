@@ -1,6 +1,6 @@
 # Open the phone app on a Home screen of folders, like Apple Notes
 
-**Status:** building
+**Status:** ready-to-ship
 **Branch:** rethink-relay-app-ui
 **Open questions:** none
 
@@ -101,3 +101,4 @@ Non-goals: syncing the photo album (planned next, as its own *Photos* folder und
 - **2026-11-08** — Assumed: a data folder with sending off says *Location history works with sending on. Nothing leaves this phone until you turn it on.*, with one *Turn on sending* button.
 - **2026-11-08** — Assumed: the tests for the names read sit in `controller_test.dart`, beside the other sending tests, not in `sync_test.dart`.
 - **2026-11-08** — Assumed: the Relay Everything page waits for the day summary, the notes and the chat list before it scrolls to *AI apps* or *Webhooks*, because a list that loads above the card after the scroll pushes it out of view.
+- **2026-11-08** — Archived for publishing; every task ticked. The iPhone check on e75a25a passed all 8 Home, folder and Connections scenarios; the day groups in a full notes list and the signed-in names were not seen on the phone, because it had no notes and sending was off.

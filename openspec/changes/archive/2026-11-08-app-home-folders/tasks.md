@@ -25,4 +25,4 @@
 
 ## 4. Checks
 
-- [ ] 4.1 Run `/save`, then the iPhone device check on the saved commit with the Home, folder and Connections scenarios, and verify each scenario that the phone can show passes.
+- [x] 4.1 Run `/save`, then the iPhone device check on the saved commit with the Home, folder and Connections scenarios, and verify each scenario that the phone can show passes.

@@ -119,7 +119,7 @@ class OutboxItem {
 /// A photo waiting to go: its JPEG copy in the app's support folder, and what the server's `photos` route takes with it.
 class QueuedPhoto {
   const QueuedPhoto({required this.clientId, required this.assetId, required this.takenAt, this.lat, this.lon,
-    required this.width, required this.height, required this.path});
+    required this.width, required this.height, required this.path, this.queuedAt});
 
   /// The phone's own id for this photo, so a resend is stored once.
   final String clientId;
@@ -133,6 +133,8 @@ class QueuedPhoto {
   final int height;
   /// The JPEG copy, under the app's support folder: `photos/<client id>.jpg`.
   final String path;
+  /// When the phone queued it: a webhook message's `timestamp`. The store sets it.
+  final DateTime? queuedAt;
 
   /// The upload's text fields. A place goes only whole: both numbers, or neither.
   Map<String, String> get fields => {
@@ -550,11 +552,12 @@ class Store extends GeneratedDatabase {
 
   /// Every photo waiting to go, oldest first.
   Future<List<QueuedPhoto>> waitingPhotos() async => [
-    for (final row in await _rows('SELECT client_id, asset_id, taken_at, lat, lon, width, height, path FROM photos '
+    for (final row in await _rows('SELECT client_id, asset_id, taken_at, lat, lon, width, height, path, created_at FROM photos '
         'ORDER BY taken_at, created_at, client_id'))
       QueuedPhoto(clientId: row.read<String>('client_id'), assetId: row.read<String>('asset_id'),
         takenAt: DateTime.fromMillisecondsSinceEpoch(row.read<int>('taken_at')), lat: row.read<double?>('lat'),
-        lon: row.read<double?>('lon'), width: row.read<int>('width'), height: row.read<int>('height'), path: row.read<String>('path')),
+        lon: row.read<double?>('lon'), width: row.read<int>('width'), height: row.read<int>('height'), path: row.read<String>('path'),
+        queuedAt: DateTime.fromMillisecondsSinceEpoch(row.read<int>('created_at'))),
   ];
 
   /// Ends a photo's wait, once it went or the server turned it down: its row and its JPEG copy go.

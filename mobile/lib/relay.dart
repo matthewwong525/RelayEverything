@@ -105,8 +105,8 @@ abstract class Relay extends ChangeNotifier {
   Future<String?> setCalendar(bool on);
   /// Turns one of the phone's calendars on or off. Its events leave the space at the next send.
   Future<void> setCalendarShown(String id, bool on);
-  /// Turning on asks for photo access; only photos taken from then on go. Turning off drops the photos still waiting on
-  /// this phone; the ones sent stay on the server. Photos go only to Relay Everything, never to a webhook.
+  /// Turning on asks for photo access; only photos taken from then on go, to the server or the webhook, as the rest.
+  /// Turning off drops the photos still waiting on this phone; the ones sent stay where they went.
   Future<String?> setPhotos(bool on);
   /// Off: photos wait for Wi-Fi.
   Future<String?> setPhotosOnMobileData(bool on);

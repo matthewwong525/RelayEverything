@@ -3,7 +3,8 @@ import { Webhook } from "standardwebhooks";
 import { afterEach, expect, it, vi } from "vitest";
 import { z } from "zod";
 import * as format from "./format.ts";
-import { calendarEvents, healthSamples, jsonSchema, locationPoints, message, noteCreated, noteUpdated, webhookTest, type NoteRow } from "./format.ts";
+import { calendarEvents, healthSamples, jsonSchema, locationPoints, message, noteCreated, noteUpdated, photoCreated, webhookTest,
+  type NoteRow } from "./format.ts";
 import { base64, newSecret, signedHeaders } from "./sign.ts";
 
 const schemaFile = new URL("../../../../../site/public/webhooks/v1.schema.json", import.meta.url);
@@ -93,6 +94,18 @@ it("sends calendar events with their status, people and times in ISO 8601", () =
   expect(() => message.parse({ ...built, data: { events: [{ ...events[0], status: "moved" }] } })).toThrow();
 });
 
+it("sends a photo with its bytes, its time and its place, and null for a photo with no place", () => {
+  const row = { id: "p0000000-0000-4000-8000-000000000001", ...device, taken_at: Date.UTC(2026, 10, 4, 13, 0), lat: 38.7139, lon: -9.1394,
+    width: 1600, height: 1200, bytes: 4 };
+  const built = photoCreated(row, "/9j/2Q==", AT);
+  expect(message.parse(built)).toEqual(built);
+  expect(built).toEqual({ version: 1, type: "photo.created", timestamp: "2026-11-04T14:01:02.000Z", data: { photo: {
+    id: row.id, device: { id: device.device_id, name: "iPad" }, taken_at: "2026-11-04T13:00:00.000Z", place: { lat: 38.7139, lon: -9.1394 },
+    width: 1600, height: 1200, content_type: "image/jpeg", size: 4, base64: "/9j/2Q==" } } });
+  expect(photoCreated({ ...row, lat: null, lon: null }, "", AT).data).toMatchObject({ photo: { place: null } });
+  expect(() => message.parse({ ...built, data: { photo: { ...(built.data as { photo: object }).photo, content_type: "image/png" } } })).toThrow();
+});
+
 it("lists a note's files by name, type and size, never their bytes, and leaves the list out of a note with none", () => {
   const pdf = { id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 245_760 };
   const built = noteCreated(typed, null, AT, [{ ...pdf, file_key: "people/x/attachments/file-pdf-0001" } as typeof pdf]);
@@ -110,7 +123,7 @@ it("takes a note's file with its bytes, which only the phone sends: no server bu
   expect(message.parse(file)).toEqual(file);
   expect(() => message.parse({ ...file, data: { ...file.data, file: { ...file.data.file, base64: undefined } } })).toThrow();
   expect(Object.keys(format).sort()).toEqual(["calendarEvents", "healthSamples", "jsonSchema", "locationPoints", "message", "noteCreated", "noteUpdated",
-    "webhookTest"]);
+    "photoCreated", "webhookTest"]);
   for (const name of ["send.ts", "routes.ts", "sweep.ts"]) {
     expect(readFileSync(new URL(name, import.meta.url), "utf8"), name).not.toContain("note.file");
   }
@@ -121,7 +134,8 @@ const fixtures = new URL("../../../../../mobile/test/fixtures/webhook/", import.
 
 it("takes each message the phone builds, and its signature passes the server's own signing", async () => {
   const names = readdirSync(fixtures).filter(name => name.endsWith(".json")).sort();
-  expect(names).toEqual(["calendar.events.json", "health.samples.json", "location.points.json", "note.created.json", "note.file.json", "webhook.test.json"]);
+  expect(names).toEqual(["calendar.events.json", "health.samples.json", "location.points.json", "note.created.json", "note.file.json",
+    "photo.created.json", "webhook.test.json"]);
   for (const name of names) {
     const { secret, headers, body } = JSON.parse(readFileSync(new URL(name, fixtures), "utf8")) as
       { secret: string; headers: Record<string, string>; body: string };

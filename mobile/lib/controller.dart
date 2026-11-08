@@ -307,13 +307,8 @@ class RelayController extends Relay {
     if (!_ready(to)) return to == SendPlace.server ? 'Connect a key first.' : 'Set your webhook first.';
     await store.moveOutbox(destinationOf(to));
     if (sendEarlier) await store.queueEarlier();
-    final hadPhotos = _settings.photos;
+    // The photos waiting on this phone go to the new place too, as the outbox does.
     await _saveSettings(_settings.copyWith(sending: true, place: to));
-    // Photos never go to a webhook: a move there turns them off and drops the photos still waiting on this phone.
-    if (hadPhotos && !_settings.photos) {
-      await _syncing;
-      await dropPhotoQueue(store);
-    }
     await _refreshLocal();
     final running = _syncing;
     unawaited(running == null ? sync() : running.then((_) => sync()));
@@ -518,7 +513,6 @@ class RelayController extends Relay {
   }
 
   static const _noPhotos = 'Photo access is off. Turn it on in the phone\'s Settings.';
-  static const _photosToServer = 'Photos go only to Relay Everything. They do not go to a webhook.';
 
   @override
   Future<String?> setPhotos(bool on) async {
@@ -531,7 +525,6 @@ class RelayController extends Relay {
       return null;
     }
     if (!_settings.sending) return _sendFirst;
-    if (_settings.place != SendPlace.server) return _photosToServer;
     final source = photos;
     if (source == null || network == null || !await source.allow()) return _noPhotos;
     // Photos start from now: the library from before never goes.
@@ -701,14 +694,14 @@ class RelayController extends Relay {
     final result = await flush(store, api, clock: _clock, keepGoing: () => _settings.sending && _settings.place == place,
       folder: folder);
     // New photos, as in the background round: after the outbox, so a photo waiting for Wi-Fi holds back no note. They go
-    // only to the server, never to a webhook. A refused photo with a key that still answers, such as on an older server
-    // with no photos, comes back as null.
+    // to the same place, the server or the webhook. A refused photo with a key that still answers, such as on an older
+    // server with no photos, comes back as null.
     Failure? photoFailure;
     final library = photos;
     final kind = network;
-    if (_settings.photos && api is RelayApi && library != null && kind != null) {
+    if (_settings.photos && library != null && kind != null) {
       photoFailure = await syncPhotos(store, api, library, kind, settings: _settings, send: result.failure == null, now: _clock(),
-        keepGoing: () async => _settings.photos);
+        keepGoing: () async => _settings.photos && _settings.place == place);
     }
     _status = switch (result.failure ?? photoFailure) {
       Failure.refused => SyncStatus.refused, null => SyncStatus.synced, _ => SyncStatus.offline };

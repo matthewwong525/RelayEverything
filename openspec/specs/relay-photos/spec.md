@@ -7,19 +7,31 @@ Lets a person send the photos they take on their phone to their own Relay Everyt
 
 ### Requirement: Photos go only while the person has them on
 
-The phone app SHALL read the photo library and send photos only while *Photos* is on and the phone sends to Relay Everything. When the phone sends straight to the person's own webhook instead, *Photos* SHALL hide and no photo SHALL be read or sent. *Photos* SHALL be off by default and SHALL ask for photo access only when turned on. Turning either switch off SHALL stop reading the library and delete the photos still waiting on the phone.
+The phone app SHALL read the photo library and send photos only while *Photos* is on and the phone sends, to Relay Everything or straight to the person's own webhook. Photos SHALL go to the same place the phone sends its notes. *Photos* SHALL be off by default and SHALL ask for photo access only when turned on. Turning *Photos* or sending off SHALL stop reading the library and delete the photos still waiting on the phone.
 
 #### Scenario: Photos never turned on
 - **WHEN** a person sends notes, health and location but never turns *Photos* on
 - **THEN** the app asks for no photo access and no photo leaves the phone
 
 #### Scenario: The phone sends to its own webhook
-- **WHEN** a person picks their own webhook as the place the phone sends
-- **THEN** *Photos* is not in Settings, the photos waiting on the phone are deleted, and no photo leaves the phone
+- **WHEN** a person who sends to their own webhook turns *Photos* on and takes a photo
+- **THEN** the webhook gets the photo, and nothing goes to a Relay Everything server
 
 #### Scenario: Photos turned off with uploads waiting
 - **WHEN** the person turns *Photos* off while photos are still waiting to go
 - **THEN** the app deletes the waiting copies, sends no more photos, and leaves the photos already sent on the server
+
+### Requirement: A photo goes to a webhook only when the person allows it
+
+The server SHALL send each new photo, as one `photo.created` message, only to the webhooks the person ticked for Photos. A phone that sends straight to the person's own webhook SHALL send each new photo there in the same message. Each message SHALL carry the photo itself, the time and place it was taken, and its size. Photos SHALL be a sensitive kind, unticked on a new webhook. A photo shared into a note SHALL go as one of the note's files, not as a `photo.created`.
+
+#### Scenario: A webhook not ticked for Photos
+- **WHEN** a photo reaches the server and a webhook takes notes only
+- **THEN** that webhook gets no message for the photo
+
+#### Scenario: A webhook ticked for Photos
+- **WHEN** a photo reaches the server and a webhook is ticked for Photos
+- **THEN** that webhook gets one `photo.created` message with the photo, its time and its place
 
 ### Requirement: Only new photos, small, with their time and place
 

@@ -14,15 +14,13 @@ enum SendPlace { server, webhook }
 ///
 /// Sending is off by default: notes stay on this phone. Health, location history, the calendar and photos exist only to
 /// send, so they are off whenever sending is off. [calendarsOff] holds the ids of the phone's calendars the person turned
-/// off. Photos go only to Relay Everything, never to a webhook, so they are also off while [place] is the webhook.
-/// Photos on mobile data is off whenever photos is off.
+/// off. Photos go to the place sending goes, as the rest does. Photos on mobile data is off whenever photos is off.
 class Settings {
   const Settings({this.sending = false, this.pinNotes = false, bool history = false, bool health = false,
     bool calendar = false, this.calendarsOff = const {}, this.mode = LocationMode.battery, this.place = SendPlace.server,
     bool photos = false, bool photosOnMobileData = false})
     : history = sending && history, health = sending && health, calendar = sending && calendar,
-      photos = sending && place == SendPlace.server && photos,
-      photosOnMobileData = sending && place == SendPlace.server && photos && photosOnMobileData;
+      photos = sending && photos, photosOnMobileData = sending && photos && photosOnMobileData;
 
   final bool sending;
   final bool pinNotes;

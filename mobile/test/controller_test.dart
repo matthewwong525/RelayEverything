@@ -450,10 +450,10 @@ void main() {
       final old = Settings.decode(jsonEncode({'sending': true, 'pinNotes': true, 'history': true, 'health': true}), hasKey: true);
       expect([old.sending, old.history, old.health, old.photos, old.photosOnMobileData], [true, true, true, false, false]);
       expect(Settings.decode(jsonEncode({'pinNotes': true}), hasKey: true).photos, isFalse);
-      // Photos go only to Relay Everything: with the webhook they read as off, and come back with the server.
+      // Photos go where sending goes: with the webhook they stay on.
       final hooked = on.copyWith(place: SendPlace.webhook);
-      expect([hooked.photos, hooked.photosOnMobileData], [false, false]);
-      expect(const Settings(sending: true, place: SendPlace.webhook, photos: true).photos, isFalse);
+      expect([hooked.photos, hooked.photosOnMobileData], [true, true]);
+      expect(Settings.decode(hooked.encode(), hasKey: false).photos, isTrue);
     });
 
     test('keep the calendar and the calendars turned off, and sending off forces the calendar off', () {
@@ -869,7 +869,7 @@ void main() {
       expect([relay.settings.photos, photos.finds.length], [false, looks]);
     });
 
-    test('a move to your own webhook turns photos off, drops the photos waiting, and sends no photo there', () async {
+    test('a move to your own webhook keeps photos on, and sends the photos waiting there as photo.created', () async {
       final relay = await sending();
       network.current = Link.mobile;
       expect(await relay.setPhotos(true), isNull);
@@ -877,22 +877,33 @@ void main() {
       clock = now.add(const Duration(minutes: 5));
       photos.take('IMG_0001', later);
       await relay.sync();
-      final copy = await store.photoFile((await store.waitingPhotos()).single.path);
-      expect(copy.existsSync(), isTrue);
+      expect((await store.waitingPhotos()).length, 1);
       await relay.saveWebhook(hook.address, fixtureSecret);
       expect(await relay.startSending(sendEarlier: false, place: SendPlace.webhook), isNull);
       await relay.settled();
-      expect([relay.settings.place, relay.settings.photos, relay.settings.photosOnMobileData], [SendPlace.webhook, false, false]);
-      expect([await store.waitingPhotos(), copy.existsSync(), await store.get(photosSince)], [isEmpty, false, null]);
-      // With the webhook, photos can not turn on, and a round reads no library.
-      expect(await relay.setPhotos(true), contains('only to Relay Everything'));
-      final looks = photos.finds.length;
+      // On mobile data the photo still waits for Wi-Fi, at the new place too.
+      expect([relay.settings.place, relay.settings.photos, (await store.waitingPhotos()).length], [SendPlace.webhook, true, 1]);
       network.current = Link.wifi;
       photos.take('IMG_0002', later.add(const Duration(minutes: 1)));
       await relay.addNote('To my database');
       await relay.settled();
-      expect([relay.settings.photos, photos.finds.length, photoUploads(), photos.asked], [false, looks, isEmpty, 1]);
-      expect(server.requests.where((request) => request.url.path.endsWith('/photos')), isEmpty);
+      final messages = [
+        for (final request in server.requests) if (request.url.toString() == hook.address) jsonDecode(request.body) as Map<String, dynamic>];
+      expect([for (final message in messages) message['type']], ['note.created', 'photo.created', 'photo.created']);
+      expect((messages[1]['data'] as Map)['photo'], containsPair('content_type', 'image/jpeg'));
+      expect([await store.waitingPhotos(), photoUploads(), photos.asked], [isEmpty, isEmpty, 1]);
+      relay.dispose();
+    });
+
+    test('with your own webhook, photos turn on and off with no question about the page', () async {
+      final relay = photoController();
+      await relay.load();
+      await relay.saveWebhook(hook.address, fixtureSecret);
+      expect(await relay.startSending(sendEarlier: false, place: SendPlace.webhook), isNull);
+      expect(await relay.setPhotos(true), isNull);
+      expect([relay.settings.photos, photos.asked, scheduled.last], [true, 1, true]);
+      expect(await relay.setPhotos(false), isNull);
+      expect([relay.settings.photos, await store.get(photosSince)], [false, null]);
       relay.dispose();
     });
   });

@@ -53,9 +53,9 @@ const owners = (values: string[], owned: (kind: DataKind) => string[]) =>
 
 it("has every part of every kind, or lists the part as missing", () => {
   expect(KINDS.flatMap(problemsOf)).toEqual([]);
-  expect(WEBHOOK_KINDS.map(kind => kind.id)).toEqual(["notes", "health", "locations", "calendar"]);
+  expect(WEBHOOK_KINDS.map(kind => kind.id)).toEqual(["notes", "health", "locations", "calendar", "photos"]);
   expect(KINDS.filter(kind => kind.missing).map(kind => [kind.id, Object.keys(kind.missing!)])).toEqual([
-    ["files", ["webhook", "api", "tool"]], ["photos", ["webhook", "api"]], ["chats", ["webhook"]]]);
+    ["files", ["webhook", "api", "tool"]], ["photos", ["api"]], ["chats", ["webhook"]]]);
 });
 
 it("names the kind and the part a check finds missing", () => {

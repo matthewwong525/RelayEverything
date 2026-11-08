@@ -579,25 +579,20 @@ void main() {
       expect([opened, relay.calls], [hasLength(2), ['photos false']]);
     });
 
-    testWidgets('sending to your own webhook hides both photo switches, as photos go only to Relay Everything', (tester) async {
+    testWidgets('sending to your own webhook shows both photo switches, says photos go there, and turns off with no page dialog', (tester) async {
       relay
         ..webhookAddress = 'https://db.example.com/relay'
-        ..settings = const Settings(sending: true, place: SendPlace.webhook);
+        ..settings = const Settings(sending: true, place: SendPlace.webhook, photos: true);
       await tester.pumpWidget(RelayApp(relay: relay));
       await openSettings(tester);
-      await tester.scrollUntilVisible(find.text('Where the phone sends'), 100);
+      await tester.scrollUntilVisible(find.text('Send photos on mobile data'), 100);
       await tester.pumpAndSettle();
-      expect([find.text('Photos'), find.text('Send photos on mobile data'), find.text('Off: photos wait for Wi-Fi.')],
-        everyElement(findsNothing));
-      expect(find.text('Location history'), findsOneWidget);
-      relay
-        ..connected = true
-        ..server = 'https://relay.example.com'
-        ..settings = const Settings(sending: true)
-        ..changed();
+      expect([find.text('Photos'), find.text('Send photos on mobile data'),
+        find.text('Sends new photos, with when and where you took them, to your webhook.')], everyElement(findsOneWidget));
+      await tester.tap(find.text('Photos'));
       await tester.pumpAndSettle();
-      expect([find.text('Photos'), find.text('Send photos on mobile data')], everyElement(findsOneWidget));
-      expect(relay.calls, isEmpty);
+      expect([find.text('Stop sending photos?'), find.text('Open my page')], everyElement(findsNothing));
+      expect(relay.calls, ['photos false']);
     });
   });
 

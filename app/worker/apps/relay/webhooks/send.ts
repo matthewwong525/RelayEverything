@@ -59,14 +59,14 @@ const release = (db: Db, id: string, lease: number) =>
 const behind = async (db: Db, id: string) =>
   !!await db.prepare(`SELECT 1 FROM relay_webhooks w WHERE w.id = ? AND ${BEHIND}`).bind(id, Date.now()).first();
 
-/** The next group: a note alone, or up to 500 health samples, location points or calendar events in a row. A frozen
- *  group ends at `pending_seq`, so every retry sends the same one. */
+/** The next group: a note or a photo alone, or up to 500 health samples, location points or calendar events in a row.
+ *  A frozen group ends at `pending_seq`, so every retry sends the same one. */
 async function groupOf(db: Db, hook: Hook): Promise<Entry[]> {
   const { results } = await db.prepare(`SELECT o.seq, o.kind, o.ref, o.logged_at FROM relay_outbox o, relay_webhooks w
     WHERE w.id = ? AND o.seq > w.sent_seq AND (w.pending_seq IS NULL OR o.seq <= w.pending_seq) AND ${TAKES}
     ORDER BY o.seq LIMIT ${BATCH}`).bind(hook.id).all<Entry>();
   const [first] = results;
-  if (!first || first.kind.startsWith("note.")) return results.slice(0, 1);
+  if (!first || ownerOf(first.kind)?.alone) return results.slice(0, 1);
   const other = results.findIndex(entry => entry.kind !== first.kind);
   return other === -1 ? results : results.slice(0, other);
 }

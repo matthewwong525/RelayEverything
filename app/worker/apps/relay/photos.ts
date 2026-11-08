@@ -1,10 +1,11 @@
-// POST photos from a phone's key, once per device and clientId, sealed like a recording; GET photos and POST
-// photos/delete for the page only. The phone sends the final small JPEG: the server reads only its size.
+// POST photos from a phone's key, once per device and clientId, sealed like a recording, then woken to ticked webhooks;
+// GET photos and POST photos/delete for the page only. The phone sends the final small JPEG: the server reads its size.
 import { z } from "zod";
 import { boundedBytes } from "../../api/body.ts";
 import { defineAction, type ActionCall } from "../../api/contract.ts";
 import { asDevice, asPerson } from "./caller.ts";
 import { refused } from "./store.ts";
+import { wake } from "./webhooks/send.ts";
 
 const MAX_PHOTO = 3 * 1024 * 1024;
 /** The multipart body around the photo: its fields and boundaries. */
@@ -65,7 +66,7 @@ async function fieldsOf(body: Uint8Array, type: string): Promise<Fields | Respon
 }
 
 /** Stores a photo once per device and clientId: a resend after a lost answer adds nothing. */
-export const photoAdd = asDevice<Pick<ActionCall, "identity">>("Only a Relay Everything device key can send photos", async ({ space, device, request }) => {
+export const photoAdd = asDevice<Pick<ActionCall, "identity">>("Only a Relay Everything device key can send photos", async ({ space, device, request, env }) => {
   let body: Uint8Array;
   try {
     body = await boundedBytes(request.body ?? new Blob().stream(), MAX_BODY, () => new Error("too large"));
@@ -92,6 +93,8 @@ export const photoAdd = asDevice<Pick<ActionCall, "identity">>("Only a Relay Eve
     await db.prepare("DELETE FROM relay_photos WHERE id = ?").bind(id).run();
     return refused(503, "The photo could not be saved. The phone sends it again.");
   }
+  // The row logged the photo for the webhooks; with its file stored, they can send it now.
+  await wake(env, space, ["photos"]);
   return Response.json({ ok: true, added: 1 });
 });
 

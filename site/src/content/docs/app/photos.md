@@ -1,6 +1,6 @@
 ---
 title: Photos
-description: Send the new photos you take to your Relay Everything server, so your AI can see them.
+description: Send the new photos you take to your Relay Everything server, so your AI can see them, or straight to your own webhook.
 ---
 
 Relay Everything can send the photos you take on your phone to your own space, with when and where you took them. Your AI then finds them and looks at them through the [AI connector](../../connections/connect-your-ai/), for example: *show me the photos from the trip to Lisbon*. Relay Everything adds no captions or tags.
@@ -10,15 +10,20 @@ Relay Everything can send the photos you take on your phone to your own space, w
 ## Turn it on
 
 1. Open **Settings**.
-2. Turn on **Send my notes**, if it is off, and pick **Relay Everything**: [Connect a phone](../../start/connect-a-phone/). Photos work only with sending on, and the app reads no photo while it is off.
+2. Turn on **Send my notes**, if it is off, and pick **Relay Everything** or **My own webhook**: [Connect a phone](../../start/connect-a-phone/). Photos work only with sending on, and the app reads no photo while it is off.
 3. Turn on **Photos**.
 4. Allow the app to read your photos. On Android, also allow it to read the place in your photos.
 
 The phone asks for photo access only when you turn on **Photos**. If you say no, the switch stays off: allow photos for Relay Everything in the phone's own Settings, then try again.
 
-## Photos go only to Relay Everything
+## Photos and your own database
 
-Photos go only to your Relay Everything server, never to a webhook, because each photo carries where you took it. When the phone sends to [your own webhook](../../connections/your-database/#send-from-the-phone) instead, **Photos** and **Send photos on mobile data** are not in **Settings**, and the app reads and sends no photo. If you move sending to your webhook, the copies that did not go yet are deleted. Photos on a note still go to your webhook, as the note's files.
+Each photo carries when and where you took it, so a webhook gets photos only when you ask:
+
+- **From your server**, photos go only to a webhook you tick **Photos** for. Tick it only for a database you control. [Your own database](../../connections/your-database/#add-a-webhook)
+- **From the phone**, when it sends to [your own webhook](../../connections/your-database/#send-from-the-phone) with no Relay Everything account, **Photos** sends each new photo straight to that webhook. Nothing goes to Relay Everything, so your AI can't see these photos.
+
+Each photo goes in its own [`photo.created`](../../connections/your-database/#photocreated) message, with the JPEG copy, when and where you took it, and its size. If you move sending between your server and your webhook, the copies that did not go yet go to the new place.
 
 ## Only new photos
 
@@ -50,11 +55,11 @@ Each copy is at most 3 MB. The original stays on your phone, and the app never d
 
 ## Turn it off
 
-Turn off **Photos** in **Settings**. The phone stops sending, and deletes the copies that did not go yet. Turning off **Send my notes** also stops photos. The photos already sent stay on your server.
+Turn off **Photos** in **Settings**. The phone stops sending, and deletes the copies that did not go yet. Turning off **Send my notes** also stops photos. The photos already sent stay on your server, or in your own database.
 
 ## Delete all photos
 
 1. Open your Relay Everything page, and sign in: [Sign up](../../start/sign-up/).
 2. On the **Photos** card, click **Delete all photos**, then confirm.
 
-It deletes every photo your phones sent, and your AI can't see them any more. Your ring recordings, notes, health and places stay. You can't undo it. The card shows how many photos your space holds, but not the photos.
+It deletes every photo your phones sent, and your AI can't see them any more. Your ring recordings, notes, health and places stay. The copies a webhook already got stay in your own database. You can't undo it. The card shows how many photos your space holds, but not the photos.

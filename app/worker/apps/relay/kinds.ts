@@ -2,8 +2,8 @@
 // not in `missing`. How to add a kind: wiki/relay-webhook-changes.md.
 import type { Files } from "./space.ts";
 import { MINUTE, type Db } from "./store.ts";
-import { calendarEvents, healthSamples, locationPoints, noteCreated, noteUpdated, type AttachmentRow, type EventRow, type HealthRow,
-  type LocationRow, type NoteRow } from "./webhooks/format.ts";
+import { calendarEvents, healthSamples, locationPoints, noteCreated, noteUpdated, photoCreated, type AttachmentRow, type EventRow,
+  type HealthRow, type LocationRow, type NoteRow, type PhotoRow } from "./webhooks/format.ts";
 import { base64 } from "./webhooks/sign.ts";
 
 type Part = "webhook" | "api" | "tool" | "docs";
@@ -21,6 +21,8 @@ export type DataKind = {
   always?: true;
   /** The form warns to tick it only for a database you control. */
   sensitive?: true;
+  /** Each of its log rows goes in a message of its own, as a note with its recording or a photo with its bytes. */
+  alone?: true;
   /** The `relay_outbox` kinds it owns. */
   log: string[];
   /** The webhook message types it owns, from webhooks/format.ts. */
@@ -35,7 +37,8 @@ export type DataKind = {
   missing?: Partial<Record<Part, string>>;
 };
 
-const AUDIO_WAIT = 2 * MINUTE;
+/** How long a recording or a photo, stored after its row, may still be saving. */
+const FILE_WAIT = 2 * MINUTE;
 const NOTE = `SELECT n.*, d.name AS device_name FROM relay_notes n JOIN relay_devices d ON d.id = n.device_id WHERE n.id = ?`;
 const ids = (group: Entry[]) => JSON.stringify(group.map(entry => Number(entry.ref)));
 const inOrder = `IN (SELECT value FROM json_each(?)) ORDER BY 1`;
@@ -50,7 +53,7 @@ async function audioOf(files: Files, row: NoteRow): Promise<string | null | "wai
   if (!row.audio_key) return null;
   const bytes = await files.open(row.audio_key);
   if (bytes) return base64(bytes);
-  return Date.now() - row.created_at < AUDIO_WAIT ? "wait" : null;
+  return Date.now() - row.created_at < FILE_WAIT ? "wait" : null;
 }
 
 /** A note alone; "skip" when it was deleted since. A `note.updated` row logged before the server stopped placing ring
@@ -67,10 +70,22 @@ async function note(files: Files, db: Db, [entry]: Entry[]): Promise<Built> {
   return noteCreated(row, audio, entry.logged_at, results);
 }
 
+const PHOTO = `SELECT p.*, d.name AS device_name FROM relay_photos p JOIN relay_devices d ON d.id = p.device_id WHERE p.id = ?`;
+
+/** A photo alone, with its bytes: "wait" while its file may still be saving, and "skip" when it was deleted since, or
+ *  its file never came, as when the store failed and the phone sends it again under the same clientId. */
+async function photo(files: Files, db: Db, [entry]: Entry[]): Promise<Built> {
+  const row = await db.prepare(PHOTO).bind(entry.ref).first<PhotoRow & { file_key: string; created_at: number }>();
+  if (!row) return "skip";
+  const bytes = await files.open(row.file_key);
+  if (bytes) return photoCreated(row, base64(bytes), entry.logged_at);
+  return Date.now() - row.created_at < FILE_WAIT ? "wait" : "skip";
+}
+
 const NO_WEBHOOK = "No webhook message yet: a later plan adds one.";
 
 export const KINDS: DataKind[] = [
-  { id: "notes", label: "Notes", detail: "with their words, recording and place", always: true,
+  { id: "notes", label: "Notes", detail: "with their words, recording and place", always: true, alone: true,
     log: ["note.created", "note.updated"], messages: ["note.created", "note.updated", "note.file"], build: note,
     api: ["/v1/notes", "/v1/notes/{id}"], tools: ["search", "fetch", "timeline", "add_note"], docs: "app/your-notes" },
   { id: "health", label: "Health", detail: "steps, heart rate, sleep, weight and more", sensitive: true,
@@ -90,9 +105,9 @@ export const KINDS: DataKind[] = [
     missing: { webhook: NO_WEBHOOK + " A note.created lists a note's files, and a phone that sends to its own webhook sends note.file.",
       api: "No /v1/ route opens a file yet.", tool: "No AI connector tool opens a file yet." } },
   // The Photos switch's photos: a photo shared into a note goes as one of the note's files instead.
-  { id: "photos", label: "Photos", detail: "", log: [], messages: [], api: [], tools: ["photos", "read_photo"], docs: "app/photos",
-    missing: { webhook: "No webhook takes photos: each carries its place, and stays in the person's sealed space.",
-      api: "No /v1/ route reads photos yet: read_photo answers an image, and `near` is no query field." } },
+  { id: "photos", label: "Photos", detail: "each with the picture, when and where you took it", sensitive: true, alone: true,
+    log: ["photo"], messages: ["photo.created"], build: photo, api: [], tools: ["photos", "read_photo"], docs: "app/photos",
+    missing: { api: "No /v1/ route reads photos yet: read_photo answers an image, and `near` is no query field." } },
   { id: "chats", label: "Claude Code chats", detail: "", log: [], messages: [], api: ["/v1/chats", "/v1/chats/{id}"],
     tools: ["search_chats", "read_chat"], docs: "connections/claude-code", missing: { webhook: NO_WEBHOOK } },
 ];

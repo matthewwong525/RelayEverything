@@ -124,6 +124,34 @@ it("frees health types and adds the calendar, keeping every health row, log entr
     .toThrow(/FOREIGN KEY/);
 });
 
+it("adds photos and logs each new one for the webhooks, keeping every log entry, webhook place and log trigger", () => {
+  const space = new DatabaseSync(":memory:");
+  space.exec("PRAGMA foreign_keys = ON");
+  const at = MIGRATIONS.findIndex(([name]) => name === "0007_photos");
+  for (const [, text] of MIGRATIONS.slice(0, at)) inTransaction(space, text);
+  space.exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-phone', 'Phone', 'rek:d-phone', '', 1, 'phone');
+    INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at) VALUES ('n-1', 'd-phone', 'typed', 'c-1', 'Hi.', 5, 5);
+    INSERT INTO relay_webhooks (id, name, url, secret, kinds, sent_seq, created_at) VALUES ('w-1', 'DB', 'https://db.example.com', 's', '["notes"]', 1, 1);`);
+  const queries = ["SELECT * FROM relay_outbox ORDER BY seq", "SELECT * FROM relay_webhooks"];
+  const before = queries.map(query => all(space, query));
+  expect(before[0]).toEqual([{ seq: 1, kind: "note.created", ref: "n-1", at: 5, logged_at: 5 }]);
+  inTransaction(space, MIGRATIONS[at][1]);
+  expect(queries.map(query => all(space, query))).toEqual(before);
+  space.exec(`INSERT INTO relay_photos (id, device_id, client_id, taken_at, width, height, bytes, file_key, created_at) VALUES ('p-2', 'd-phone', 'c-2', 6, 1, 1, 1, 'k2', 7);
+    INSERT INTO relay_photos (id, device_id, client_id, taken_at, width, height, bytes, file_key, created_at) VALUES ('p-3', 'd-phone', 'c-2', 6, 1, 1, 1, 'k3', 7)
+      ON CONFLICT (device_id, client_id) DO NOTHING;
+    INSERT INTO relay_health (device_id, type, start_at, end_at, value, unit, source, created_at) VALUES ('d-phone', 'steps', 8, 9, 9, 'count', 'fit', 9);
+    INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at) VALUES ('n-2', 'd-phone', 'typed', 'c-2', 'Again.', 10, 10);
+    INSERT INTO relay_locations (device_id, at, lat, lon, accuracy, created_at) VALUES ('d-phone', 11, 43, -79, 5, 11);
+    INSERT INTO relay_calendar_events (device_id, event_key, title, start_at, end_at, updated_at, created_at) VALUES ('d-phone', 'k', 'Lunch', 12, 13, 12, 12);
+    UPDATE relay_calendar_events SET removed_at = 14, updated_at = 14;`);
+  expect(all(space, "SELECT seq, kind, ref, at FROM relay_outbox WHERE seq > 1 ORDER BY seq")).toEqual([{ seq: 2, kind: "photo", ref: "p-2", at: 6 },
+    { seq: 3, kind: "health", ref: "1", at: 8 }, { seq: 4, kind: "note.created", ref: "n-2", at: 10 }, { seq: 5, kind: "location", ref: "1", at: 11 },
+    { seq: 6, kind: "calendar", ref: "1", at: 12 }, { seq: 7, kind: "calendar", ref: "1", at: 12 }]);
+  expect(() => space.exec("INSERT INTO relay_outbox (kind, ref, at, logged_at) VALUES ('video', 'v', 1, 1)")).toThrow(/CHECK/);
+  expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
+});
+
 it("widens the directory's keys to API keys, keeping every key", () => {
   const d1 = new DatabaseSync(":memory:");
   d1.exec("PRAGMA foreign_keys = ON");

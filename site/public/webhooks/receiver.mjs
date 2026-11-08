@@ -19,6 +19,8 @@ db.exec(`
     bytes BLOB);
   CREATE TABLE IF NOT EXISTS calendar_events (id INTEGER PRIMARY KEY, device_id TEXT, key TEXT, status TEXT, calendar TEXT,
     title TEXT, start TEXT, "end" TEXT, all_day INTEGER, location TEXT, notes TEXT, url TEXT, people TEXT);
+  CREATE TABLE IF NOT EXISTS photos (id TEXT PRIMARY KEY, device_id TEXT, device_name TEXT, taken_at TEXT, lat REAL,
+    lon REAL, width INTEGER, height INTEGER, content_type TEXT, size INTEGER, bytes BLOB);
   CREATE TABLE IF NOT EXISTS other_messages (webhook_id TEXT PRIMARY KEY, type TEXT, body TEXT, received_at TEXT);`);
 
 /** True when the body is signed with this secret and sent in the last 5 minutes. */
@@ -40,6 +42,7 @@ const point = db.prepare('INSERT OR REPLACE INTO location_points VALUES (?, ?, ?
 // Only a phone that sends to its own webhook sends note.file: one file of a note, after the note.
 const file = db.prepare('INSERT OR REPLACE INTO files VALUES (?, ?, ?, ?, ?, ?)');
 const event = db.prepare('INSERT OR REPLACE INTO calendar_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+const photo = db.prepare('INSERT OR REPLACE INTO photos VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
 // The same webhook-id again is a retry: it keeps the first row.
 const other = db.prepare('INSERT OR IGNORE INTO other_messages VALUES (?, ?, ?, ?)');
 
@@ -57,6 +60,8 @@ const handlers = {
   'location.points': ({ points }) => points.forEach(p => point.run(p.id, p.device.id, p.at, p.lat, p.lon, p.accuracy, p.place)),
   'calendar.events': ({ events }) => events.forEach(e => event.run(e.id, e.device.id, e.key, e.status, e.calendar, e.title, e.start,
     e.end, Number(e.all_day), e.location, e.notes, e.url, JSON.stringify(e.people))),
+  'photo.created': ({ photo: p }) => photo.run(p.id, p.device.id, p.device.name, p.taken_at, p.place?.lat ?? null, p.place?.lon ?? null,
+    p.width, p.height, p.content_type, p.size, Buffer.from(p.base64, 'base64')),
   'webhook.test': () => {},
 };
 

@@ -13,7 +13,7 @@ Open **Settings** from the gear at the top of your notes. Each switch acts at on
 | **Health: steps, heart rate, sleep and more** | Sends steps, heart rate, sleep, workouts, weight, blood pressure and more every hour, and the last 90 days the first time. Only with sending on. [Health](../health/) |
 | **Calendar** | Sends the events of your phone's calendars: the last 90 days and the next 90 days, then each change. Under it, a switch for each calendar turns that one off. Only with sending on. [Calendar](../calendar/) |
 | **Location history** | Keeps a point each 100 m you move, so you can see where you went. Only with sending on. [Location](../location/#location-history) |
-| **Photos** | Sends the new photos you take, with when and where you took them, so your AI can see them. Only with sending on to Relay Everything: it hides while the phone sends to your webhook. [Photos](../photos/) |
+| **Photos** | Sends the new photos you take, with when and where you took them, to the place sending goes: your server, so your AI can see them, or your own webhook. Only with sending on. [Photos](../photos/) |
 | **Send photos on mobile data** | Off: photos wait for Wi-Fi. Only with **Photos** on. [Photos](../photos/#wi-fi-or-mobile-data) |
 | **Where the phone sends** | Moves sending to the other place. What waits to send goes to the new place. Shows while sending is on. |
 | **Webhook** | Your webhook's address, with **Send a test**. Under it, the last answer that was not `2xx`, or a file too large for your receiver. Shows while the phone sends to your webhook. [Your own database](../../connections/your-database/#send-from-the-phone) |

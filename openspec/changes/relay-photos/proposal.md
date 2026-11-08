@@ -43,9 +43,10 @@ Your AI can't see the photos on your phone. iCloud Photos has no way in for othe
     <div class="row gap"><button class="btn-ghost danger">Delete all photos</button></div>
   </div>
   ```
+- **Photos can go to your own webhook too.** On the server, each new photo goes to the webhooks you tick for *Photos*, which is a sensitive tick, like health and location. With no account, a phone that sends straight to your own webhook sends each new photo there itself. Each message holds the photo, when and where you took it, and its size.
 - **The website explains photos.** A new *Photos* page under *Use the app*. The privacy page says photos carry when and where you took them. The settings, AI and API pages list the new switch, tools and routes.
 
-Non-goals: sending the old library, videos, sending photos to webhooks, captions or tags or text read from photos, a photo grid on the page, and deleting photos from the phone.
+Non-goals: sending the old library, videos, captions or tags or text read from photos, a photo grid on the page, and deleting photos from the phone.
 
 ## What the build needs
 
@@ -59,6 +60,8 @@ Non-goals: sending the old library, videos, sending photos to webhooks, captions
 ### Modified Capabilities
 - `relay-ai-connector`: the tools also read chats and photos, and one tool returns one photo as an image; recordings still never go out.
 - `relay-device-keys`: a phone key may add photos, and may not list, read or delete them.
+- `relay-webhooks`: photos go to a webhook ticked for them, one photo a message; only files and chats still have no webhook message.
+- `relay-phone-webhook`: a phone that sends to its own webhook sends new photos there too, apart from its notes.
 
 ## Impact
 
@@ -70,6 +73,7 @@ Non-goals: sending the old library, videos, sending photos to webhooks, captions
 - Website: new `site/src/content/docs/app/photos.md`, `site/sidebar.mjs`, `privacy.md`, `app/settings.md`, `connections/connect-your-ai.md`, `api/reference.md` from `npm run relay:api-doc`.
 - Wiki: `wiki/relay-spaces.md` (photos beside recordings), `wiki/stack/relay-ai-connector.md` (the file store binding).
 - `scripts/product-name.test.mjs`: the new user-facing files join its list.
+- Photos to webhooks: the photos migration also rebuilds `relay_outbox` with the `photo` kind and logs each photo; `kinds.ts`, `webhooks/format.ts` and `webhooks/send.ts` build and send `photo.created`; `photos.ts` wakes the sender; the phone's `data/webhook.dart` and `sync/photos.dart` send it; `site/public/webhooks/receiver.mjs`, `v1.schema.json` and `connections/your-database.md` describe it.
 
 ## Decision log
 
@@ -112,3 +116,13 @@ Non-goals: sending the old library, videos, sending photos to webhooks, captions
 - **2026-11-07** — Assumed: iOS has one `NSPhotoLibraryUsageDescription` that covers both photos picked for a note and *Photos* sending.
 - **2026-11-07** — Assumed: the photo upload call on the phone is `RelayApi.multipart`, because main's `RelayApi.upload` already sends note files.
 - **2026-11-07** — Saved after bringing in main: the 48 overlapping files are resolved with main's designs kept, photos are a data kind with no webhook, *Photos* hides in phone-webhook mode, and the Privacy page limits its no-webhook lines to the *Photos* switch, because a photo shared into a note is a note's file; the staging check (7.2) and the phone build check (7.3) remain.
+- **2026-11-07** — Staging check (7.2) passed on `app-staging.relayeverything.com` with the branch's spaces Worker, connector and shared server deployed by hand: a phone key sent a test photo once (a resend added none), the key could not read the count, the page count read 1, the connector's `photos` found it by place and `read_photo` gave back the JPEG and its text line, *Delete all photos* left 0, and the key off was refused.
+- **2026-11-07** — Assumed: the connector's consent page names calendar and photos among what an AI app can read, because the staging check showed it still read *notes, health, places and saved chats*.
+- **2026-11-08** — Asked: Matthew said photos should also go to a webhook, because a webhook is his own secured place. He chose both ways, ticked: with no account the phone sends new photos straight to its webhook, and on the server photos go only to webhooks ticked for *Photos*, marked sensitive, each message holding the photo and its time and place. This replaces the earlier no-webhook decisions; tasks 7.1–7.3 and 8.4 carry it, and the checks move to 8.
+- **2026-11-08** — Assumed: the photo log trigger goes in the photos migration, not a migration of its own, because main's note files take the next number and the photos migration is renumbered anyway. It rebuilds `relay_outbox` to allow `photo`, and keeps every log entry and webhook place.
+- **2026-11-08** — Assumed: each `photo.created` holds one photo, because a photo is up to 3 MB, about 4 MB in base64. The server waits for a photo's file a short time, because the row is stored before the file; a photo deleted since, or whose file never came, is skipped.
+- **2026-11-08** — Assumed: a photo's `place` has only `lat` and `lon`, with no place name, because the server does no place lookup. The phone's message uses the phone's own id for the photo, and its `timestamp` is when the phone queued it, so a resend has the same body.
+- **2026-11-08** — Assumed: photos waiting on the phone follow a move between Relay Everything and the person's own webhook, as notes do, and go to the new place.
+- **2026-11-08** — Assumed: a photo the webhook refuses with `413` is dropped, and Settings does not name it, because a photo has no name the person gave it.
+- **2026-11-08** — Assumed: with the person's own webhook, turning *Photos* off shows no question about the page, because no photo is on a Relay Everything page.
+- **2026-11-08** — Assumed: the webhook tick reads *Photos: each with the picture, when and where you took it*, as the other ticks name what they send.

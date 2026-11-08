@@ -299,7 +299,7 @@ It takes no input.
 | `webhooks[].id` | string | yes |  |
 | `webhooks[].name` | string | yes |  |
 | `webhooks[].url` | string | yes |  |
-| `webhooks[].kinds` | array of "notes" or "health" or "locations" or "calendar" | yes |  |
+| `webhooks[].kinds` | array of "notes" or "health" or "locations" or "calendar" or "photos" | yes |  |
 | `webhooks[].state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
 | `webhooks[].waiting` | integer | yes | How many stored items wait to be sent. |
 | `webhooks[].lastStatus` | number or null | yes |  |
@@ -317,7 +317,7 @@ It takes no input.
 | `webhooks[].attempts[].first` | number or null | yes |  |
 | `webhooks[].attempts[].last` | number or null | yes |  |
 | `kinds` | array of object | yes |  |
-| `kinds[].id` | "notes" or "health" or "locations" or "calendar" | yes |  |
+| `kinds[].id` | "notes" or "health" or "locations" or "calendar" or "photos" | yes |  |
 | `kinds[].label` | string | yes |  |
 | `kinds[].detail` | string | yes |  |
 | `kinds[].always` | boolean | yes |  |
@@ -348,7 +348,7 @@ Send the input as a JSON body.
 |---|---|---|---|
 | `name` | string | yes | A name for the webhook, such as the database's. |
 | `url` | string | yes | The https address Relay Everything sends to. |
-| `kinds` | array of "notes" or "health" or "locations" or "calendar" | yes | What it takes besides notes, which always go: any of health, locations, calendar. |
+| `kinds` | array of "notes" or "health" or "locations" or "calendar" or "photos" | yes | What it takes besides notes, which always go: any of health, locations, calendar, photos. |
 
 ### Output
 
@@ -358,7 +358,7 @@ Send the input as a JSON body.
 | `webhook.id` | string | yes |  |
 | `webhook.name` | string | yes |  |
 | `webhook.url` | string | yes |  |
-| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" | yes |  |
+| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" or "photos" | yes |  |
 | `webhook.state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
 | `webhook.waiting` | integer | yes | How many stored items wait to be sent. |
 | `webhook.lastStatus` | number or null | yes |  |
@@ -403,7 +403,7 @@ Send the input as a JSON body.
 | `id` | string | yes | The webhook's id. |
 | `name` | string | no | A name for the webhook, such as the database's. |
 | `url` | string | no | The https address Relay Everything sends to. |
-| `kinds` | array of "notes" or "health" or "locations" or "calendar" | no | What it takes besides notes, which always go: any of health, locations, calendar. |
+| `kinds` | array of "notes" or "health" or "locations" or "calendar" or "photos" | no | What it takes besides notes, which always go: any of health, locations, calendar, photos. |
 | `active` | boolean | no | False pauses it; true sends again from where it stopped. |
 
 ### Output
@@ -414,7 +414,7 @@ Send the input as a JSON body.
 | `webhook.id` | string | yes |  |
 | `webhook.name` | string | yes |  |
 | `webhook.url` | string | yes |  |
-| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" | yes |  |
+| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" or "photos" | yes |  |
 | `webhook.state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
 | `webhook.waiting` | integer | yes | How many stored items wait to be sent. |
 | `webhook.lastStatus` | number or null | yes |  |
@@ -561,7 +561,7 @@ Send the input as a JSON body.
 | `webhook.id` | string | yes |  |
 | `webhook.name` | string | yes |  |
 | `webhook.url` | string | yes |  |
-| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" | yes |  |
+| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" or "photos" | yes |  |
 | `webhook.state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
 | `webhook.waiting` | integer | yes | How many stored items wait to be sent. |
 | `webhook.lastStatus` | number or null | yes |  |
@@ -612,7 +612,7 @@ Send the input as a JSON body.
 | `webhook.id` | string | yes |  |
 | `webhook.name` | string | yes |  |
 | `webhook.url` | string | yes |  |
-| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" | yes |  |
+| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" or "photos" | yes |  |
 | `webhook.state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
 | `webhook.waiting` | integer | yes | How many stored items wait to be sent. |
 | `webhook.lastStatus` | number or null | yes |  |

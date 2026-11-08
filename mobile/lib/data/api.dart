@@ -19,8 +19,8 @@ class ApiException implements Exception {
   String toString() => 'ApiException($failure, $status)';
 }
 
-/// Where the outbox sends: the Relay Everything server, or the person's own webhook. Each call throws [ApiException]:
-/// [Failure.rejected] drops the upload, and any other failure stops the round with it kept.
+/// Where the outbox and the photos send: the Relay Everything server, or the person's own webhook. Each call throws
+/// [ApiException]: [Failure.rejected] drops the upload, and any other failure stops the round with it kept.
 abstract class Outbound {
   /// The outbox destination this client sends to.
   String get destination;
@@ -30,6 +30,9 @@ abstract class Outbound {
 
   /// Sends one file of a note: [item] is its `attachment` upload.
   Future<void> sendFile(OutboxItem item, List<int> bytes);
+
+  /// Sends one photo from *Photos*: its JPEG copy's [bytes], with its time and place.
+  Future<void> sendPhoto(QueuedPhoto photo, List<int> bytes);
 }
 
 /// Relay's device routes, each call carrying this phone's key: `Authorization: Bearer` for a page-made key, or
@@ -57,6 +60,11 @@ class RelayApi implements Outbound {
   @override
   Future<void> sendFile(OutboxItem item, List<int> bytes) => upload(noteClientId: item.body['noteClientId'] as String,
     id: item.body['id'] as String, type: item.body['type'] as String? ?? '', bytes: bytes);
+
+  /// To `POST photos`, once per photo however often it goes: the server keeps a photo by its client id.
+  @override
+  Future<void> sendPhoto(QueuedPhoto photo, List<int> bytes) => multipart('photos', photo.fields, file: 'photo', bytes: bytes,
+    filename: '${photo.clientId}.jpg', contentType: 'image/jpeg');
 
   /// The server numbers its own rows, and its routes take no `id` on a reading or point: the ids are for webhooks.
   static Map<String, dynamic> _forServer(String route, Map<String, dynamic> body) {

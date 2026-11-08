@@ -7,7 +7,7 @@ Send the Relay data the server holds to addresses the owner adds, in one version
 
 ### Requirement: Stored data goes to each active webhook
 
-After Relay Everything's server stores a note, a health batch, a location batch or calendar events, it SHALL send one message for it to each active webhook that takes that kind of data. Notes SHALL go to every active webhook. Health, location and calendar SHALL go only to webhooks the owner ticked for them. A changed or removed calendar event SHALL be sent again, marked as changed or removed. Only data that reached the server SHALL be sent: a note kept offline on a phone never goes out. The server SHALL send no `note.updated` message; format version 1 SHALL still describe it, as no longer sent, so a receiver that handles it keeps working.
+After Relay Everything's server stores a note, a health batch, a location batch, calendar events or a photo, it SHALL send one message for it to each active webhook that takes that kind of data. Notes SHALL go to every active webhook. Health, location, calendar and photos SHALL go only to webhooks the owner ticked for them. Each photo SHALL go alone, in one message with its bytes. A changed or removed calendar event SHALL be sent again, marked as changed or removed. Only data that reached the server SHALL be sent: a note kept offline on a phone never goes out. The server SHALL send no `note.updated` message; format version 1 SHALL still describe it, as no longer sent, so a receiver that handles it keeps working.
 
 #### Scenario: A note with one webhook
 - **WHEN** a phone's note is stored and one active webhook exists
@@ -102,7 +102,7 @@ Each kind of data a person's space holds SHALL have one entry that names its web
 - **THEN** the checks fail and name the kind and the missing page
 
 #### Scenario: Known gaps
-- **WHEN** files, photos and chats have no webhook messages and their entries list webhooks as missing
+- **WHEN** files and chats have no webhook messages and their entries list webhooks as missing
 - **THEN** the checks pass, and the list shows what a later change must add
 
 ### Requirement: A new kind reaches a webhook only when ticked

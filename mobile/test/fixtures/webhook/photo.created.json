@@ -1,0 +1,9 @@
+{
+  "secret": "whsec_cmVsYXktZXZlcnl0aGluZy13ZWJob29rLWZpeHR1cmU=",
+  "headers": {
+    "webhook-id": "0f5c2a64-1d6e-4b7a-9c3e-2a8d5b7f6e10:photo-7b2e4c1a-9d3f-4e6a-8b5c-0a1d2e3f4a5b",
+    "webhook-timestamp": "1793801100",
+    "webhook-signature": "v1,2nAlOm3+dIL4kCNZa4XIDciuh/0v6TaijIHE4OTqxZo="
+  },
+  "body": "{\"version\":1,\"type\":\"photo.created\",\"timestamp\":\"2026-11-04T14:01:02.000Z\",\"data\":{\"photo\":{\"id\":\"7b2e4c1a-9d3f-4e6a-8b5c-0a1d2e3f4a5b\",\"device\":{\"id\":\"0f5c2a64-1d6e-4b7a-9c3e-2a8d5b7f6e10\",\"name\":\"Android phone\"},\"taken_at\":\"2026-11-04T13:58:00.000Z\",\"place\":{\"lat\":38.7139,\"lon\":-9.1394},\"width\":1600,\"height\":1200,\"content_type\":\"image/jpeg\",\"size\":4,\"base64\":\"/9j/2Q==\"}}}"
+}

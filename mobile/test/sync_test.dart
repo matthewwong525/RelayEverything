@@ -12,6 +12,7 @@ import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/sender.dart';
 import 'package:relay_app/data/settings.dart';
 import 'package:relay_app/data/store.dart';
+import 'package:relay_app/data/webhook.dart';
 import 'package:relay_app/sync/background.dart';
 import 'package:relay_app/sync/calendar.dart';
 import 'package:relay_app/sync/health.dart';
@@ -480,17 +481,35 @@ void main() {
       expect([server.routes, photos.copied], [['notes', 'photos'], ['IMG_0001']]);
     });
 
-    test('in webhook mode, a round reads no library and sends no photo, also with photos saved as on', () async {
-      // Photos read as off with the webhook, even from settings saved with them on, so nothing of them runs.
+    test('in webhook mode, a round sends each new photo to the webhook as a signed photo.created, after the notes', () async {
       await store.set(settingsKey, const Settings(sending: true, photos: true).copyWith(place: SendPlace.webhook).encode());
+      await store.set(photosSince, '${start.millisecondsSinceEpoch}');
       await store.moveOutbox(ownWebhook);
-      photos.take('IMG_0001', later(1));
+      photos.take('IMG_0001', later(1), lat: 43.65, lon: -79.38);
       await store.addNote(LocalNote(clientId: 'note-0001', text: 'Lunch idea', createdAt: later(2)), send: true);
       final hookServer = FakeServer((_) => http.Response('', 204));
-      expect(await backgroundRound(store, connection: connection, webhook: hook, health: FakeHealth(),
-        sender: Sender(server.api, null, hookServer.webhook), photos: photos, network: network, now: later(600)), isTrue);
-      expect([for (final request in hookServer.requests) jsonDecode(request.body)['type']], ['note.created']);
-      expect([server.requests, photos.finds, photos.copied, await store.waitingPhotos()], [isEmpty, isEmpty, isEmpty, isEmpty]);
+      Future<bool> hookRound() => backgroundRound(store, connection: connection, webhook: hook, health: FakeHealth(),
+        sender: Sender(server.api, null, hookServer.webhook), photos: photos, network: network, now: later(600));
+      expect(await hookRound(), isTrue);
+      final bodies = [for (final request in hookServer.requests) jsonDecode(request.body) as Map<String, dynamic>];
+      expect([for (final body in bodies) body['type']], ['note.created', 'photo.created']);
+      final photo = (bodies[1]['data'] as Map)['photo'] as Map;
+      expect([photo['taken_at'], photo['place'], photo['content_type'], base64.decode(photo['base64'] as String).length],
+        [later(1).toUtc().toIso8601String(), {'lat': 43.65, 'lon': -79.38}, 'image/jpeg', photo['size']]);
+      final request = hookServer.requests.last;
+      expect(request.headers['webhook-id'], endsWith(':photo-${photo['id']}'));
+      expect(request.headers['webhook-signature'],
+        signedHeaders(fixtureSecret, request.headers['webhook-id']!, request.body,
+          DateTime.fromMillisecondsSinceEpoch(int.parse(request.headers['webhook-timestamp']!) * 1000))['webhook-signature']);
+      expect([server.requests, await store.waitingPhotos()], [isEmpty, isEmpty]);
+      // A receiver that answers 503 keeps the next photo for a later round; a 413 drops it, and the notes still go.
+      photos.take('IMG_0002', later(3));
+      hookServer.answer = (_) => http.Response('', 503);
+      expect(await hookRound(), isFalse);
+      expect(queued(await store.waitingPhotos()), ['IMG_0002']);
+      hookServer.answer = (_) => http.Response('', 413);
+      expect(await hookRound(), isTrue);
+      expect([await store.waitingPhotos(), server.requests], [isEmpty, isEmpty]);
     });
 
     test('an iPhone wake sends the points Swift kept first, then photos, also when a locked iPhone refuses Health', () async {

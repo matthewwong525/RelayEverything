@@ -207,7 +207,7 @@ bool photosMayGo(Settings settings, Link link) => link == Link.wifi || (settings
 /// use, sends the queue oldest first. Returns why the photo send stopped early, or null. With photos or sending off
 /// it reads no library and sends nothing. [keepGoing] is asked before each photo; when it says no, such as after
 /// *Photos* turns off, the step stops there.
-Future<Failure?> syncPhotos(Store store, RelayApi api, PhotoSource source, Network network,
+Future<Failure?> syncPhotos(Store store, Outbound api, PhotoSource source, Network network,
   {required Settings settings, bool send = true, Future<bool> Function()? keepGoing, DateTime? now}) async {
   if (!settings.sending || !settings.photos) return null;
   final Link link;
@@ -305,20 +305,20 @@ Future<int> queuePhotos(Store store, PhotoSource source, {required bool network,
   return queued;
 }
 
-/// Sends the waiting photos oldest first, to the server's `photos` route. A photo the server turns down (400 or 413)
-/// is dropped with its copy: it would never land. Any other failure stops the photo send there and keeps the rest. A
-/// refused photo asks the server about the key (`GET key`): a refused key is [Failure.refused], as for the notes; a key
-/// that answers is an older server whose phone keys may not send photos, so only the photo send stops, with no failure.
-Future<Failure?> sendPhotos(Store store, RelayApi api, {Future<bool> Function()? keepGoing}) async {
+/// Sends the waiting photos oldest first: to the server's `photos` route, or as `photo.created` messages to the
+/// person's own webhook. A photo turned down (400 or 413 from the server, 413 from a webhook) is dropped with its copy:
+/// it would never land. Any other failure stops the photo send there and keeps the rest. A photo the server refuses
+/// asks it about the key (`GET key`): a refused key is [Failure.refused], as for the notes; a key that answers is an
+/// older server whose phone keys may not send photos, so only the photo send stops, with no failure.
+Future<Failure?> sendPhotos(Store store, Outbound api, {Future<bool> Function()? keepGoing}) async {
   for (final photo in await store.waitingPhotos()) {
     if (keepGoing != null && !await keepGoing()) break;
     final file = await store.photoFile(photo.path);
     if (await file.exists()) {
       try {
-        await api.multipart('photos', photo.fields, file: 'photo', bytes: await file.readAsBytes(),
-          filename: '${photo.clientId}.jpg', contentType: 'image/jpeg');
+        await api.sendPhoto(photo, await file.readAsBytes());
       } on ApiException catch (error) {
-        if (error.failure == Failure.refused) return _keyFailure(api);
+        if (error.failure == Failure.refused) return api is RelayApi ? _keyFailure(api) : error.failure;
         if (error.failure != Failure.rejected) return error.failure;
       }
     }

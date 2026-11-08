@@ -17,7 +17,17 @@ Each kind of data in a person's space, such as notes, health or the calendar, ha
 - A message type or a send log kind has no owner, or two. Only `webhook.test` is shared.
 - The `relay_outbox` CHECK list in the newest space migration is not the same as the kinds' `log` lists.
 
-So add the entry first, and let the check list what the kind still needs. Files and Claude Code chats list their webhook part as missing until a plan adds it. Photos list it as missing for good: each photo carries its place, so it goes to no webhook.
+So add the entry first, and let the check list what the kind still needs. Files and Claude Code chats list their webhook part as missing until a plan adds it.
+
+## A kind with a file
+
+A kind whose message carries a file's bytes, as photos do with `photo.created`, follows the ring recording in `note.created`:
+
+- Mark the kind `alone`, so each log row goes in a message of its own. A photo can be 3 MB, which is about 4 MB in base64.
+- Read the bytes in its `build` through `files.open`, and send them with `base64` from [`webhooks/sign.ts`](../app/worker/apps/relay/webhooks/sign.ts).
+- The route stores the row before the file, so the log row comes first. `build` answers "wait" while the file can still be saving, and "skip" when the row is gone or the file never came.
+- Mark the kind `sensitive` when its data shows where a person was, as health, places, the calendar and photos do.
+- The phone's own webhook mode sends the same message from [`mobile/lib/data/webhook.dart`](../mobile/lib/data/webhook.dart), and `mobile/test/webhook_test.dart` writes it to the fixtures that [`format.test.ts`](../app/worker/apps/relay/webhooks/format.test.ts) and the example receiver's test read.
 
 ## Rules for a new message
 

@@ -1,6 +1,6 @@
 import { Webhook } from "standardwebhooks";
 import { afterEach, beforeEach, expect, it, vi, type Mock } from "vitest";
-import { ANA, ben, BEN, benPhone, call, db, env, matthew, NOW, phone, queue, rows, spaces } from "../../../../tests/relay";
+import { ANA, ben, BEN, benPhone, call, db, env, jpeg, matthew, NOW, phone, queue, rows, sendPhoto, spaces } from "../../../../tests/relay";
 import { spaceOf, vouch, type SqlValue } from "../space.ts";
 import { consume, DELAYS, post, run } from "./send.ts";
 
@@ -277,6 +277,42 @@ it("sends changed and removed calendar events only to a webhook that takes the c
   expect(bodies()[0].data.events.map((item: { title: string; status: string }) => [item.title, item.status]))
     .toEqual([["Board meeting, moved", "changed"], ["Sync", "removed"]]);
   expect(webhook("health").sent_seq).toBe(0);
+});
+
+it("sends each photo alone, with its bytes, only to a webhook ticked for photos", async () => {
+  hook("photos", { kinds: '["notes","photos"]' });
+  hook("notes");
+  expect((await sendPhoto(phone)).json).toEqual({ ok: true, added: 1 });
+  expect((await sendPhoto(phone, { clientId: "photo-0002", lat: null, lon: null })).json).toEqual({ ok: true, added: 1 });
+  // A resend adds no row, so it logs nothing and wakes no webhook.
+  expect((await sendPhoto(phone)).json).toEqual({ ok: true, added: 0 });
+  expect(queue.sent).toEqual([wakeUp("photos"), wakeUp("photos")]);
+  await deliver(wakeUp("photos"), wakeUp("notes"));
+  expect(types()).toEqual(["photo.created", "photo.created"]);
+  const [first, second] = rows("relay_photos");
+  expect(bodies()[0].data.photo).toEqual({ id: first.id, device: { id: "d-phone", name: "Android phone" }, taken_at: new Date(NOW - MINUTE).toISOString(),
+    place: { lat: 38.7139, lon: -9.1394 }, width: 1600, height: 1200, content_type: "image/jpeg", size: jpeg(1600, 1200).byteLength,
+    base64: Buffer.from(jpeg(1600, 1200)).toString("base64") });
+  expect(bodies()[1].data.photo).toMatchObject({ id: second.id, place: null });
+  expect(sent.map(item => item.headers["webhook-id"])).toEqual(["msg_photos_1_1", "msg_photos_2_2"]);
+  expect([webhook("photos").sent_seq, webhook("notes").sent_seq]).toEqual([2, 0]);
+});
+
+it("waits for a photo's file, and skips a photo deleted since or one whose file never came", async () => {
+  hook("photos", { kinds: '["photos"]' });
+  const photo = (id: string, createdAt: number) => db.sql.prepare(`INSERT INTO relay_photos (id, device_id, client_id, taken_at, width, height,
+    bytes, file_key, created_at) VALUES (?, 'd-phone', ?, ?, 1600, 1200, 4, ?, ?)`).run(id, `client-${id}`, NOW - MINUTE, anaSpace().files.nameOf(`photos/${id}`), createdAt);
+  photo("p-saving", NOW);
+  const [early] = await deliver(wakeUp("photos"));
+  expect(early.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+  expect(sent).toEqual([]);
+  await anaSpace().files.put("photos/p-saving", new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer);
+  photo("p-lost", NOW - 3 * MINUTE);
+  photo("p-deleted", NOW);
+  db.sql.prepare("DELETE FROM relay_photos WHERE id = 'p-deleted'").run();
+  await deliver(wakeUp("photos"));
+  expect(bodies().map(item => [item.data.photo.id, item.data.photo.base64])).toEqual([["p-saving", "/9j/2Q=="]]);
+  expect(webhook("photos")).toMatchObject({ sent_seq: 3, last_status: 204 });
 });
 
 it("sends a webhook made for notes only no health or calendar stored later, until its owner ticks them", async () => {

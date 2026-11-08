@@ -46,8 +46,7 @@ String _placeLine(Relay relay) {
 }
 
 /// Each switch acts at once and asks for its permission only when turned on. Sending is off until the person turns it
-/// on; health, the calendar, location history and photos sit under it and work only with it. Photos go only to Relay
-/// Everything, so their switches hide while the phone sends to a webhook.
+/// on; health, the calendar, location history and photos sit under it and work only with it, and go where it goes.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.relay, this.scanner, this.opener});
 
@@ -126,20 +125,20 @@ class SettingsScreen extends StatelessWidget {
                   subtitle: Text('A point each 100 m, or each 5 minutes while you stay. It uses more battery.')),
               ]),
             ),
-            if (settings.place == SendPlace.server) ...[
-              SwitchListTile(
-                title: const Text('Photos'),
-                subtitle: const Text('Sends new photos, with when and where you took them, so your AI can see them.'),
-                value: settings.photos,
-                onChanged: sending ? ((on) => on ? _apply(context, relay.setPhotos(true)) : _stopPhotos(context)) : null,
-              ),
-              SwitchListTile(
-                title: const Text('Send photos on mobile data'),
-                subtitle: const Text('Off: photos wait for Wi-Fi.'),
-                value: settings.photosOnMobileData,
-                onChanged: settings.photos ? (on) => _apply(context, relay.setPhotosOnMobileData(on)) : null,
-              ),
-            ],
+            SwitchListTile(
+              title: const Text('Photos'),
+              subtitle: Text(settings.place == SendPlace.webhook
+                ? 'Sends new photos, with when and where you took them, to your webhook.'
+                : 'Sends new photos, with when and where you took them, so your AI can see them.'),
+              value: settings.photos,
+              onChanged: sending ? ((on) => on ? _apply(context, relay.setPhotos(true)) : _stopPhotos(context)) : null,
+            ),
+            SwitchListTile(
+              title: const Text('Send photos on mobile data'),
+              subtitle: const Text('Off: photos wait for Wi-Fi.'),
+              value: settings.photosOnMobileData,
+              onChanged: settings.photos ? (on) => _apply(context, relay.setPhotosOnMobileData(on)) : null,
+            ),
             if (sending) ListTile(
               title: const Text('Where the phone sends'),
               subtitle: Text(settings.place == SendPlace.webhook ? 'My own webhook' : 'Relay Everything'),
@@ -213,8 +212,10 @@ class SettingsScreen extends StatelessWidget {
     if (sure == true) await relay.stopSending();
   }
 
-  /// Says where the photos already sent stay, then turns photos off, or opens the page to delete them.
+  /// Says where the photos already sent stay, then turns photos off, or opens the page to delete them. Photos sent to
+  /// a webhook are in the person's own database, so with the webhook they turn off with no question.
   Future<void> _stopPhotos(BuildContext context) async {
+    if (relay.settings.place == SendPlace.webhook) return _apply(context, relay.setPhotos(false));
     final server = relay.server;
     final choice = await showDialog<_PhotosChoice>(context: context, builder: (context) => AlertDialog(
       title: const Text('Stop sending photos?'),

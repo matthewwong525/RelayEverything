@@ -18,7 +18,7 @@ See [proposal.md](proposal.md), *Why*. The pieces this change builds on:
 
 **Non-Goals:**
 - No server-side image work: no resize, no EXIF read, no thumbnail. The phone sends the final file.
-- No change to webhooks, the timeline, or `day_summary`.
+- No change to the timeline or `day_summary`.
 
 ## Decisions
 
@@ -87,12 +87,21 @@ Settings → *Photos* on → the system's photo-access prompt → on. Denied →
 ### Components
 Phone: `SwitchListTile`, `AlertDialog` and `SnackBar`, as in `screens/settings.dart`. Page: `Card`, `Button variant="destructive"` and `Dialog`, as in `Account.tsx`. Nothing new.
 
+### Photos go to a webhook as one `photo.created` each
+
+The `photos` kind gets a webhook part, marked `sensitive`, so a new webhook does not take it until the person ticks it. A trigger on `relay_photos` logs each new row in `relay_outbox`, as the other kinds do. Because `relay_outbox` lists its kinds in a `CHECK`, the photos migration rebuilds the table and keeps every row, place and trigger, as main's note-files migration does; one migration holds all of photos, so a renumber moves one file. `POST photos` wakes the sender after it stores the file.
+
+The builder reads the photo row and its sealed file, and answers `photo.created` with the JPEG in base64. The row is written before the file, so a missing file waits a short time, then the entry is skipped; a deleted photo is skipped. A kind marked `alone` goes one log entry per message, so a message never holds more than one photo. *Alternative:* a link to fetch the photo keeps messages small, but needs a new route that reads with a webhook's secret, and a phone with no server has no such route.
+
+On the phone, `WebhookClient` gets `sendPhoto`, so `sendPhotos` works for both places through `Outbound`. It signs a format v1 `photo.created` with the same shape, and its `webhook-id` holds the photo's id, so a resend keeps its id and body. Photos keep their own queue, so a photo the receiver refuses does not hold back notes. A `413` drops the photo.
+
 ## Risks / Trade-offs
 
 - [iOS runs background work when it likes] → the app also runs a round on every open; the website page says photos can arrive hours late.
 - [A large photo burst on mobile data allowed] → 50 photos a round at about 300 KB each is about 15 MB an hour at most.
 - [MCP clients differ on image results] → `read_photo` also answers a text line with the time and place, so a client that drops images still gets something; the Claude apps show the image.
-- [Photo GPS is private] → it stays in the person's sealed space, goes to no webhook, and the privacy page says photos carry their place.
+- [Photo GPS is private] → it stays in the person's sealed space, goes only to a webhook the person ticked for *Photos* or set on the phone, and the privacy page says photos carry their place.
+- [A photo is a large webhook body] → one photo a message, at most about 4 MB in base64, under the 16 MB the docs tell a receiver to accept.
 - [App Store review asks why the app reads photos] → `NSPhotoLibraryUsageDescription` says it sends new photos to the person's own server only when they turn it on.
 
 ## Migration Plan

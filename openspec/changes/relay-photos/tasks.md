@@ -43,8 +43,15 @@
 - [x] 6.3 When Settings sends straight to one webhook instead of Relay Everything, hide *Photos* and *Send photos on mobile data*, and send no photo; widget and sync tests cover it
 - [x] 6.4 Keep shared photos (a note's files, from the share window) and photo sending (the *Photos* switch) apart in `site/src/content/docs/app/photos.md` and the share page: each says what the other does and links to it
 
-## 7. Checks
+## 7. Photos to webhooks
 
-- [x] 7.1 Run the app tests, the self-host tests, `flutter test` and `flutter analyze` in `mobile/`, `node scripts/product-name.test.mjs` and `node scripts/public-check.mjs`
-- [ ] 7.2 `/save`, then on the preview: deploy the branch's spaces Worker and connector to staging by hand, send a test photo with a phone key on `app-staging.relayeverything.com`, see the count, read it with `read_photo`, delete all photos, and turn the key off
-- [ ] 7.3 Check the phone build from the pull request: the Android file installs, *Photos* asks for access, and a new photo shows in the page's count
+- [x] 7.1 Server: give the `photos` kind in `kinds.ts` a webhook part, marked `sensitive`: log each added photo in `relay_outbox` as the other kinds do, build a `photo.created` message (id, device, taken time, place, width, height, content type, size, and the JPEG in base64, read from the sealed store), drop its `missing.webhook`, and let the webhook form tick *Photos*; update the public schema and the example receiver; tests for a ticked and an unticked webhook
+- [x] 7.2 Phone: in webhook mode, show *Photos* and *Send photos on mobile data*, and send each queued photo to the webhook as a signed format v1 `photo.created` with the server's shape; remove the webhook-mode refusal and the drop of waiting photos; controller, sync and widget tests
+- [x] 7.3 Docs and specs: say on `privacy.md`, `app/photos.md`, `app/settings.md` and the webhook pages that photos go to a webhook ticked for them, or straight from the phone with no account; update `wiki/relay-webhook-changes.md` if it lists kinds, the design, and the spec deltas (photos webhook requirement, the webhooks capability)
+
+## 8. Checks
+
+- [x] 8.1 Run the app tests, the self-host tests, `flutter test` and `flutter analyze` in `mobile/`, `node scripts/product-name.test.mjs` and `node scripts/public-check.mjs`
+- [x] 8.2 `/save`, then on the preview: deploy the branch's spaces Worker and connector to staging by hand, send a test photo with a phone key on `app-staging.relayeverything.com`, see the count, read it with `read_photo`, delete all photos, and turn the key off
+- [ ] 8.3 Check the phone build from the pull request: the Android file installs, *Photos* asks for access, and a new photo shows in the page's count
+- [ ] 8.4 On staging, a webhook ticked for *Photos* gets `photo.created` with the photo, and a webhook not ticked gets nothing

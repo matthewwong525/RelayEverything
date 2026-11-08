@@ -5,7 +5,6 @@ import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:workmanager/workmanager.dart';
 
-import '../data/api.dart';
 import '../data/connection.dart';
 import '../data/outbox.dart';
 import '../data/sender.dart';
@@ -25,8 +24,8 @@ const syncTask = 'com.matthewwong525.relay.sync';
 Store openStore() => Store(driftDatabase(name: 'relay', native: const DriftNativeOptions(shareAcrossIsolates: true)));
 
 /// The background round: health since the last read, the calendar's changes, the location points kept, then every
-/// waiting upload, to the server or the person's own webhook, then new photos, to the server only. With sending off it
-/// reads, keeps and sends nothing.
+/// waiting upload, then new photos, each to the server or the person's own webhook. With sending off it reads, keeps and
+/// sends nothing.
 @pragma('vm:entry-point')
 void backgroundSync() {
   Workmanager().executeTask((task, input) async {
@@ -60,7 +59,7 @@ Future<bool> savedRound(Store store, KeyVault vault, {required HealthSource heal
 /// engine has no calendar, does not hold the round back.
 /// It sends to the place the settings name: the server with [connection], or the person's own [webhook], which needs no
 /// key. The photo step runs after the outbox, so a photo waiting for Wi-Fi holds back no note; it runs only with
-/// [photos] and [network] given, and only to the server: a photo never goes to a webhook.
+/// [photos] and [network] given, and sends to the same place.
 Future<bool> backgroundRound(Store store, {required Connection? connection, Webhook? webhook, required HealthSource health,
   required Sender sender, NativeBackground? native, Places? places, DateTime? now, Future<Directory> Function()? folder,
   ShareGroup? share, CalendarSource? calendar, PhotoSource? photos, Network? network}) async {
@@ -95,10 +94,13 @@ Future<bool> backgroundRound(Store store, {required Connection? connection, Webh
   }
   await store.queuePoints();
   final notes = await flush(store, api, folder: folder);
-  if (photos == null || network == null || !settings.photos || api is! RelayApi) return notes.failure == null && read;
+  if (photos == null || network == null || !settings.photos) return notes.failure == null && read;
   // The app can turn photos off while this round runs: it reads the switch again before each photo.
   final failure = await syncPhotos(store, api, photos, network, settings: settings, send: notes.failure == null, now: now,
-    keepGoing: () async => Settings.decode(await store.get(settingsKey), hasKey: true).photos);
+    keepGoing: () async {
+      final now = Settings.decode(await store.get(settingsKey), hasKey: true);
+      return now.photos && now.place == settings.place;
+    });
   // A refused photo from a key that still answers, such as on an older server with no photos, comes back as null; a
   // turned-off key fails the round, as for the notes.
   return notes.failure == null && read && failure == null;

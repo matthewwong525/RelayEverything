@@ -1,9 +1,9 @@
 ---
 title: Your own database
-description: Add a webhook, and your Relay Everything server or your phone sends each new note, and the health, calendar and location you pick, to an address you own, in one signed format.
+description: Add a webhook, and your Relay Everything server or your phone sends each new note, and the health, calendar, location and photos you pick, to an address you own, in one signed format.
 ---
 
-A webhook copies what your Relay Everything server stores in your space to an address you own, such as a small receiver beside your database. Your server sends each new note there a few seconds after it gets it, then each of its files in a [`note.file`](#notefile) message. Health, calendar and location go only if you tick them.
+A webhook copies what your Relay Everything server stores in your space to an address you own, such as a small receiver beside your database. Your server sends each new note there a few seconds after it gets it, then each of its files in a [`note.file`](#notefile) message. Health, calendar, location and photos go only if you tick them.
 
 Your data lives in your own space: one Durable Object with its own SQLite database, in the spaces Worker (`relay-everything-spaces`, or `<name>-spaces` on [your own server](../../start/run-your-own/)). The server's D1 database holds only the list of accounts: each person, their sign-ins and sessions, and a fingerprint of each key. Each webhook belongs to one person's space, and it sends only that person's data.
 
@@ -16,7 +16,7 @@ To keep your data off Relay Everything completely, [send from the phone](#send-f
 1. Open your Relay Everything page, `https://<your-relay-server>/apps/relay/`, and sign in.
 2. Under **Send to your database**, click **Add a webhook**.
 3. Give it a name and its address. The address must start with `https://`. It can't be this computer, a private network, or your Relay Everything server itself.
-4. Tick **Health**, **Calendar** or **Location history** only for a database you control: they are sensitive. Notes always go.
+4. Tick **Health**, **Calendar**, **Location history** or **Photos** only for a database you control: they are sensitive. Notes always go.
 5. Click **Add**, then copy the secret. Relay Everything shows it once. Your receiver uses it to check each message.
 6. Click **Send a test**. The card shows the answer, such as *Answered 200 in 180 ms*.
 
@@ -35,15 +35,15 @@ The phone app can send to your own webhook itself, with no Relay Everything acco
 5. Click **Send a test**. The app shows your receiver's answer, such as *Your receiver answered 204. It works.*
 6. Click **Save**. The app asks if your earlier notes go too.
 
-Settings then says *To your webhook*, with your receiver's address. Turn on **Health**, **Calendar** or **Location history** to send them too. The phone sends each new note, then each of its files in a [`note.file`](#notefile) message.
+Settings then says *To your webhook*, with your receiver's address. Turn on **Health**, **Calendar**, **Location history** or **Photos** to send them too. The phone sends each new note, then each of its files in a [`note.file`](#notefile) message. With **Photos** on, it sends each new photo in a [`photo.created`](#photocreated) message, after the notes: [Photos](../../app/photos/).
 
 What you give up:
 
 - **Data comes in groups, not live.** The phone sends only while it is on and has signal, and the phone's own limits choose when the app runs in the background.
 - **Your Relay Everything page and your AI can not read it**, because none of it is on the server.
-- **A failing receiver holds back the rest.** The phone sends in order, so it keeps each item, and all after it, until your receiver answers `2xx`. Settings shows the last answer. It never drops an item for a `400`. Only a file your receiver refuses with `413` is dropped, and Settings names it.
+- **A failing receiver holds back the rest.** The phone sends in order, so it keeps each item, and all after it, until your receiver answers `2xx`. Settings shows the last answer. It never drops an item for a `400`. Only a file your receiver refuses with `413` is dropped, and Settings names it. A photo your receiver refuses with `413` is dropped too. A photo that waits does not hold back your notes.
 
-From the phone, `device.id` is the phone's own id, a UUID the app makes once. A note's `created_at` and the message's `timestamp` are when the phone kept it. Health samples and points are numbered on the phone, so save them by `device.id` and `id` together. A calendar event's `id` is made from the phone's id and the event's `key`, so each change of one event has the same `id`. A removed event from the phone has only its `key`, `id` and `start`.
+From the phone, `device.id` is the phone's own id, a UUID the app makes once. A note's `created_at` and the message's `timestamp` are when the phone kept it. Health samples and points are numbered on the phone, so save them by `device.id` and `id` together. A calendar event's `id` is made from the phone's id and the event's `key`, so each change of one event has the same `id`. A removed event from the phone has only its `key`, `id` and `start`. A photo's `id` is the phone's own id for it, a UUID.
 
 ## The message
 
@@ -68,6 +68,7 @@ Every message is a `POST` with a JSON body in one envelope:
 | `location.points` | A phone sends location points. | `points`: up to 500 |
 | `calendar.events` | A phone sends new, changed or removed calendar events. | `events`: up to 500, each with its `status` |
 | `note.file` | A file of a note reaches your server, or the phone sends it: one message for each file, after the note. | `note_id`, and `file` with its bytes |
+| `photo.created` | A new photo from the **Photos** switch reaches your server, or the phone sends it. | `photo`, with its bytes, time and place |
 | `webhook.test` | You click **Send a test**. | `webhook`: its `id` and `name` |
 
 ### `note.created`
@@ -208,6 +209,28 @@ A blood pressure reading is two samples with the same `start`: the upper and the
 
 `status` is `changed` for a new or changed event, and `removed` for an event deleted on the phone or in a calendar turned off. Each time of a repeating event has its own `key`, and a resend of the same event has the same `key`. Save each event by its `id` as an upsert, and delete or mark the row when `status` is `removed`.
 
+### `photo.created`
+
+```json
+{
+  "version": 1,
+  "type": "photo.created",
+  "timestamp": "2026-11-04T14:01:02.000Z",
+  "data": {
+    "photo": {
+      "id": "7b2e4c1a-9d3f-4e6a-8b5c-0a1d2e3f4a5b",
+      "device": { "id": "d0000000-0000-4000-8000-000000000001", "name": "iPhone" },
+      "taken_at": "2026-11-04T13:58:00.000Z",
+      "place": { "lat": 38.7139, "lon": -9.1394 },
+      "width": 1600, "height": 1200, "content_type": "image/jpeg", "size": 412345,
+      "base64": "/9j/4AAQSkZJRg..."
+    }
+  }
+}
+```
+
+One message holds one photo from the [**Photos**](../../app/photos/) switch: the phone's JPEG copy, at most 1,600 pixels on its long side and 3 MB. `taken_at` is when you took it. `place` is where you took it, or null for a photo with no place. A photo you share into a note is not a `photo.created`: it is one of the note's files. Save each photo by its `id`, as an upsert. Answer `413` to skip a photo, as for a `note.file`: the webhook's card names it by when you took it, and it stays on your Relay Everything page.
+
 ## Check the signature
 
 Relay Everything signs each message by [Standard Webhooks](https://www.standardwebhooks.com/), which has ready libraries for most languages. Each message has three headers:
@@ -228,11 +251,11 @@ const payload = new Webhook(process.env.RELAY_WEBHOOK_SECRET).verify(body, heade
 
 ## Order, retries and repeats
 
-- Each webhook gets every item it takes, in the order Relay Everything stored them, with none skipped but a file your receiver refuses with `413`.
+- Each webhook gets every item it takes, in the order Relay Everything stored them, with none skipped but a file or a photo your receiver refuses with `413`.
 - Answer with a `2xx` status within 15 seconds. Relay Everything does not follow a redirect.
 - After any other answer, Relay Everything tries the same message again after 30 s, 2 min, 10 min, 30 min, 1 h, 2 h, 4 h, 6 h and 8 h: about a day. Then the card shows **Failing**, with the last answer and how many items wait. If a send is lost, your space wakes itself every 15 minutes while it has a webhook, and sends what waits. **Try again now** sends them all, in order, from where it stopped.
 - A retry can send a message you already saved, when your answer was lost. Its id and body are the same. So save each note, sample, point and event by its `id`, as an upsert.
-- From your server, accept bodies up to 34 MB. A ring note's recording is about 100 KB a minute, a file is up to 25 MB, and base64 makes each a third larger. To accept less, answer `413` to a `note.file` that is too large.
+- From your server, accept bodies up to 34 MB. A ring note's recording is about 100 KB a minute, a file is up to 25 MB, a photo is up to 3 MB, and base64 makes each a third larger. To accept less, answer `413` to a `note.file` or a `photo.created` that is too large.
 
 ## When the format changes
 
@@ -303,6 +326,18 @@ CREATE TABLE relay_calendar_events (
   people jsonb NOT NULL,
   removed boolean NOT NULL DEFAULT false
 );
+CREATE TABLE relay_photos (
+  id text PRIMARY KEY,
+  device_id text NOT NULL,
+  taken_at timestamptz NOT NULL,
+  lat double precision,
+  lon double precision,
+  width integer NOT NULL,
+  height integer NOT NULL,
+  content_type text NOT NULL,
+  size bigint NOT NULL,
+  bytes bytea NOT NULL
+);
 CREATE TABLE relay_location_points (
   id bigint NOT NULL,
   device_id text NOT NULL,
@@ -319,7 +354,7 @@ Save a note with `INSERT ... ON CONFLICT (id) DO UPDATE`, and keep the stored `a
 
 ## An example receiver
 
-[`receiver.mjs`](../../webhooks/receiver.mjs) is about 80 lines of Node with no packages. It checks each signature and saves notes, their files, samples, points and calendar events in a SQLite file, so it needs no database server. It keeps a message of a type it does not know in its `other_messages` table, by its `webhook-id`, and answers `204`. It needs Node 22.13 or later.
+[`receiver.mjs`](../../webhooks/receiver.mjs) is about 80 lines of Node with no packages. It checks each signature and saves notes, their files, samples, points, calendar events and photos in a SQLite file, so it needs no database server. It keeps a message of a type it does not know in its `other_messages` table, by its `webhook-id`, and answers `204`. It needs Node 22.13 or later.
 
 ```bash
 curl -O https://relayeverything.com/webhooks/receiver.mjs

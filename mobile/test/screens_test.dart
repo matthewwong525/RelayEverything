@@ -66,6 +66,8 @@ class FakeRelay extends Relay {
   @override Future<String?> setPinNotes(bool on) async { calls.add('pin $on'); return problem; }
   @override Future<String?> setHistory(bool on) async { calls.add('history $on'); return problem; }
   @override Future<String?> setHealth(bool on) async { calls.add('health $on'); return problem; }
+  @override Future<String?> setPhotos(bool on) async { calls.add('photos $on'); return problem; }
+  @override Future<String?> setPhotosOnMobileData(bool on) async { calls.add('mobile data $on'); return problem; }
   @override Future<String?> setCalendar(bool on) async { calls.add('calendar $on'); return problem; }
 
   @override
@@ -677,6 +679,109 @@ void main() {
     expect(relay.calls, ['pin false', 'history true', 'health true']);
   });
 
+  group('photos', () {
+    const denied = "Photo access is off. Turn it on in the phone's Settings.";
+
+    // Scrolls the Photos row to the top, so both photo switches show.
+    Future<void> openPhotos(WidgetTester tester) async {
+      await openSettings(tester);
+      await tester.scrollUntilVisible(find.text('Send photos on mobile data'), 100);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('works only while sending is on, and mobile data only while photos is on', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openPhotos(tester);
+      expect(find.text('Sends new photos, with when and where you took them, so your AI can see them.'), findsOneWidget);
+      expect(find.text('Off: photos wait for Wi-Fi.'), findsOneWidget);
+      expect([switchOf(tester, 'Photos').onChanged, switchOf(tester, 'Send photos on mobile data').onChanged], [isNull, isNull]);
+      await tester.tap(find.text('Photos'));
+      await tester.pump();
+      relay
+        ..connected = true
+        ..server = 'https://relay.example.com'
+        ..settings = const Settings(sending: true)
+        ..changed();
+      await tester.pump();
+      expect([switchOf(tester, 'Photos').onChanged, switchOf(tester, 'Send photos on mobile data').onChanged], [isNotNull, isNull]);
+      relay
+        ..settings = const Settings(sending: true, photos: true)
+        ..changed();
+      await tester.pump();
+      expect([switchOf(tester, 'Photos').value, switchOf(tester, 'Send photos on mobile data').onChanged], [isTrue, isNotNull]);
+      await tester.tap(find.text('Send photos on mobile data'));
+      await tester.pump();
+      expect(relay.calls, ['mobile data true']);
+    });
+
+    testWidgets('refused photo access keeps photos off and says where to turn it on', (tester) async {
+      relay
+        ..connected = true
+        ..server = 'https://relay.example.com'
+        ..settings = const Settings(sending: true)
+        ..problem = denied;
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openPhotos(tester);
+      await tester.tap(find.text('Photos'));
+      await tester.pump();
+      expect(find.text(denied), findsOneWidget);
+      expect([relay.calls, switchOf(tester, 'Photos').value], [['photos true'], isFalse]);
+      expect(find.text('Stop sending photos?'), findsNothing);
+    });
+
+    testWidgets('turning off says where the photos sent stay, and opens the page or stops', (tester) async {
+      final opened = <Uri>[];
+      var opens = true;
+      relay
+        ..connected = true
+        ..server = 'https://relay.example.com'
+        ..settings = const Settings(sending: true, photos: true);
+      await tester.pumpWidget(RelayApp(relay: relay, opener: (address) async {
+        opened.add(address);
+        return opens;
+      }));
+      await openPhotos(tester);
+      await tester.tap(find.text('Photos'));
+      await tester.pumpAndSettle();
+      expect(find.text('Stop sending photos?'), findsOneWidget);
+      expect(find.text('Photos already sent stay on your Relay Everything server. Delete them on your page.'), findsOneWidget);
+      await tester.tap(find.text('Open my page'));
+      await tester.pumpAndSettle();
+      expect([opened, relay.calls], [[Uri.parse('https://relay.example.com/apps/relay/')], isEmpty]);
+      expect(find.text('Stop sending photos?'), findsNothing);
+      await tester.tap(find.text('Photos'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Stop sending photos'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['photos false']);
+      // The browser does not open: the app says so, and photos stay on.
+      opens = false;
+      await tester.tap(find.text('Photos'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open my page'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('The browser did not open. Try again.'), findsOneWidget);
+      expect([opened, relay.calls], [hasLength(2), ['photos false']]);
+    });
+
+    testWidgets('sending to your own webhook shows both photo switches, says photos go there, and turns off with no page dialog', (tester) async {
+      relay
+        ..webhookAddress = 'https://db.example.com/relay'
+        ..settings = const Settings(sending: true, place: SendPlace.webhook, photos: true);
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openSettings(tester);
+      await tester.scrollUntilVisible(find.text('Send photos on mobile data'), 100);
+      await tester.pumpAndSettle();
+      expect([find.text('Photos'), find.text('Send photos on mobile data'),
+        find.text('Sends new photos, with when and where you took them, to your webhook.')], everyElement(findsOneWidget));
+      await tester.tap(find.text('Photos'));
+      await tester.pumpAndSettle();
+      expect([find.text('Stop sending photos?'), find.text('Open my page')], everyElement(findsNothing));
+      expect(relay.calls, ['photos false']);
+    });
+  });
+
   testWidgets('on iPhone, location history offers Save battery or Every 100 m; Android offers no choice', (tester) async {
     relay
       ..connected = true
@@ -866,14 +971,14 @@ void main() {
       expect(find.descendant(of: groups, matching: find.text(heading)), findsOneWidget, reason: heading);
     }
     expect(find.descendant(of: find.byType(SettingsScreen), matching: find.byType(Divider)), findsNothing);
-    await tester.scrollUntilVisible(find.text('Health, Calendar and Location history work with Send my notes on.'), 100);
+    await tester.scrollUntilVisible(find.text('Health, Calendar, Location history and Photos work with Send my notes on.'), 100);
     expect(switchOf(tester, 'Location history').onChanged, isNull);
     expect(find.text('Where you go, also while the app is closed.'), findsOneWidget);
     relay
       ..settings = const Settings(sending: true)
       ..changed();
     await tester.pumpAndSettle();
-    expect(find.text('Health, Calendar and Location history work with Send my notes on.'), findsNothing);
+    expect(find.text('Health, Calendar, Location history and Photos work with Send my notes on.'), findsNothing);
   });
 
   group('voice notes', () {

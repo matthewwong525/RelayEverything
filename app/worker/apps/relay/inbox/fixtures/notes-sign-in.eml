@@ -1,0 +1,18 @@
+Authentication-Results: mx.cloudflare.net;
+ dkim=pass header.d=example.com header.s=s1 header.b=AbCd;
+ dmarc=pass (policy=none) header.from=example.com;
+ spf=pass (mx.cloudflare.net: domain of ana@example.com designates 192.0.2.10 as permitted sender) smtp.mailfrom=ana@example.com
+From: Ana <ana@example.com>
+To: notes@in.example.com
+Subject: Re: Ring charger
+Date: Wed, 04 Nov 2026 16:00:00 +0000
+Message-ID: <ana-0001@mail.example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Order the pogo pins too.
+
+On Tue, Nov 3, 2026 at 9:00 AM Ana <ana@example.com>
+wrote:
+> Ring charger: a cradle with pogo pins.
+> Two of them.

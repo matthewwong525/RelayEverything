@@ -27,7 +27,7 @@ String rowTime(BuildContext context, DateTime at, DateTime now) {
 /// Opens an address in the phone's own browser, and says if it did.
 typedef Opener = Future<bool> Function(Uri address);
 
-Future<bool> _openInBrowser(Uri address) async {
+Future<bool> openInBrowser(Uri address) async {
   try {
     return await launchUrl(address, mode: LaunchMode.externalApplication);
   } on Exception {
@@ -113,11 +113,11 @@ class _TimelineScreenState extends State<TimelineScreen> {
 
   void _write() => _open(ComposeScreen(relay: relay, picker: widget.picker));
 
-  void _settings() => _open(SettingsScreen(relay: relay, scanner: widget.scanner));
+  void _settings() => _open(SettingsScreen(relay: relay, scanner: widget.scanner, opener: widget.opener));
 
   Future<void> _openPage(String server) async {
     final messenger = ScaffoldMessenger.of(context);
-    if (!await (widget.opener ?? _openInBrowser)(Uri.parse('$server/apps/relay/'))) {
+    if (!await (widget.opener ?? openInBrowser)(Uri.parse('$server/apps/relay/'))) {
       messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
     }
   }

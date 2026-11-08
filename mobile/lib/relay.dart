@@ -107,6 +107,11 @@ abstract class Relay extends ChangeNotifier {
   Future<String?> setCalendar(bool on);
   /// Turns one of the phone's calendars on or off. Its events leave the space at the next send.
   Future<void> setCalendarShown(String id, bool on);
+  /// Turning on asks for photo access; only photos taken from then on go, to the server or the webhook, as the rest.
+  /// Turning off drops the photos still waiting on this phone; the ones sent stay where they went.
+  Future<String?> setPhotos(bool on);
+  /// Off: photos wait for Wi-Fi.
+  Future<String?> setPhotosOnMobileData(bool on);
 
   /// How many notes never went to the server: the earlier-notes prompt asks about them when sending turns on.
   Future<int> earlierNotes();
@@ -125,8 +130,8 @@ abstract class Relay extends ChangeNotifier {
   Future<String?> saveWebhook(String address, String secret);
   /// *Send a test*: a signed test message to [address]. Returns the words to show: the receiver's answer, or why not.
   Future<String> testWebhook(String address, String secret);
-  /// Turns sending off: stops health, the calendar and location history and drops what of them did not go. Keeps notes
-  /// and the key.
+  /// Turns sending off: stops health, the calendar, location history and photos, and drops what of them did not go.
+  /// Keeps notes and the key.
   Future<void> stopSending();
 
   /// Forgets the key and turns sending off.

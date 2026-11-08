@@ -49,7 +49,7 @@ export async function phone(request: Request, env: SignInEnv, identity: Identity
   return page(`<h1>Connect this phone?</h1>
 <form method="post"><input type="hidden" name="challenge" value="${challenge}">
 <label for="name">Name</label><input id="name" name="name" maxlength="60" value="${escape(nameOf(url.searchParams.get("name")))}" style="${FIELD}">
-<p>It can add notes, health and places to your space. It can't read them. You can turn it off on your Relay Everything page.</p>
+<p>It can add notes, health, places and photos to your space. It can't read them. You can turn it off on your Relay Everything page.</p>
 <button name="choice" value="connect" style="${BUTTON};background:#3f51b5;color:#fff">Connect</button>
 <button name="choice" value="cancel" style="${BUTTON};background:none;color:#3f51b5">Cancel</button></form>`);
 }

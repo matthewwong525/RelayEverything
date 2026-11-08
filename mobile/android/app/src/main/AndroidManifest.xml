@@ -11,6 +11,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Photos: new images only, read while Photos is on. ACCESS_MEDIA_LOCATION gives each photo its place. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION"/>
     <!-- Health Connect: read only, and in the background for the hourly sync. -->
     <uses-permission android:name="android.permission.health.READ_STEPS"/>
     <uses-permission android:name="android.permission.health.READ_HEART_RATE"/>
@@ -28,9 +33,8 @@
     <!-- Your calendar, read only. The calendar plugin asks for both, as one calendar permission; the app never writes an event. -->
     <uses-permission android:name="android.permission.READ_CALENDAR"/>
     <uses-permission android:name="android.permission.WRITE_CALENDAR"/>
-    <!-- The file opener adds these; the app opens only its own files, so it needs no storage or media reads. -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove"/>
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove"/>
+    <!-- The file opener adds these; the app opens only its own files, so it needs no video or audio reads. Photos (above)
+         keeps READ_MEDIA_IMAGES and READ_EXTERNAL_STORAGE up to Android 12. -->
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove"/>
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" tools:node="remove"/>
     <application

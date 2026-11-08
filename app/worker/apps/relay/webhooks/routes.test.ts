@@ -47,7 +47,8 @@ it("answers the kinds a webhook can take, notes always, and refuses one it can't
   const { json } = await call(matthew, "GET", "webhooks");
   expect(json.kinds.map(({ id, always, sensitive }: Record<string, unknown>) => ({ id, always, sensitive }))).toEqual([
     { id: "notes", always: true, sensitive: false }, { id: "health", always: false, sensitive: true },
-    { id: "locations", always: false, sensitive: true }, { id: "calendar", always: false, sensitive: true }]);
+    { id: "locations", always: false, sensitive: true }, { id: "calendar", always: false, sensitive: true },
+    { id: "photos", always: false, sensitive: true }]);
   expect(json.kinds[2]).toMatchObject({ label: "Location history", detail: "" });
   expect((await add({ kinds: ["calendar", "health"] })).json.webhook.kinds).toEqual(["notes", "health", "calendar"]);
   expect((await add({ kinds: ["files"] })).status).toBe(400);

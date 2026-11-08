@@ -130,6 +130,42 @@ Send the input as a JSON body.
 | `changed` | integer | yes |  |
 | `removed` | integer | yes |  |
 
+## Count the photos
+
+`GET /apps/relay/api/photos` · `relay.photos` · reads · called by a signed-in person only, not a device key
+
+Answer how many photos your phones sent. No photo shows.
+
+### Input
+
+It takes no input.
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `count` | integer | yes | How many photos your space holds. |
+
+## Delete all photos
+
+`POST /apps/relay/api/photos/delete` · `relay.photos-delete` · writes · called by a signed-in person only, not a device key
+
+Delete every photo your phones sent, and its time and place. Notes, recordings, health and places stay. It can't be undone.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `confirm` | string | yes | Type "delete" to confirm. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `deleted` | integer | yes | How many photos were deleted. |
+
 ## Check a device key
 
 `GET /apps/relay/api/key` · `relay.key` · reads · called by any device key
@@ -263,7 +299,7 @@ It takes no input.
 | `webhooks[].id` | string | yes |  |
 | `webhooks[].name` | string | yes |  |
 | `webhooks[].url` | string | yes |  |
-| `webhooks[].kinds` | array of "notes" or "health" or "locations" or "calendar" | yes |  |
+| `webhooks[].kinds` | array of "notes" or "health" or "locations" or "calendar" or "photos" | yes |  |
 | `webhooks[].state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
 | `webhooks[].waiting` | integer | yes | How many stored items wait to be sent. |
 | `webhooks[].lastStatus` | number or null | yes |  |
@@ -281,7 +317,7 @@ It takes no input.
 | `webhooks[].attempts[].first` | number or null | yes |  |
 | `webhooks[].attempts[].last` | number or null | yes |  |
 | `kinds` | array of object | yes |  |
-| `kinds[].id` | "notes" or "health" or "locations" or "calendar" | yes |  |
+| `kinds[].id` | "notes" or "health" or "locations" or "calendar" or "photos" | yes |  |
 | `kinds[].label` | string | yes |  |
 | `kinds[].detail` | string | yes |  |
 | `kinds[].always` | boolean | yes |  |
@@ -312,7 +348,7 @@ Send the input as a JSON body.
 |---|---|---|---|
 | `name` | string | yes | A name for the webhook, such as the database's. |
 | `url` | string | yes | The https address Relay Everything sends to. |
-| `kinds` | array of "notes" or "health" or "locations" or "calendar" | yes | What it takes besides notes, which always go: any of health, locations, calendar. |
+| `kinds` | array of "notes" or "health" or "locations" or "calendar" or "photos" | yes | What it takes besides notes, which always go: any of health, locations, calendar, photos. |
 
 ### Output
 
@@ -322,7 +358,7 @@ Send the input as a JSON body.
 | `webhook.id` | string | yes |  |
 | `webhook.name` | string | yes |  |
 | `webhook.url` | string | yes |  |
-| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" | yes |  |
+| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" or "photos" | yes |  |
 | `webhook.state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
 | `webhook.waiting` | integer | yes | How many stored items wait to be sent. |
 | `webhook.lastStatus` | number or null | yes |  |
@@ -367,7 +403,7 @@ Send the input as a JSON body.
 | `id` | string | yes | The webhook's id. |
 | `name` | string | no | A name for the webhook, such as the database's. |
 | `url` | string | no | The https address Relay Everything sends to. |
-| `kinds` | array of "notes" or "health" or "locations" or "calendar" | no | What it takes besides notes, which always go: any of health, locations, calendar. |
+| `kinds` | array of "notes" or "health" or "locations" or "calendar" or "photos" | no | What it takes besides notes, which always go: any of health, locations, calendar, photos. |
 | `active` | boolean | no | False pauses it; true sends again from where it stopped. |
 
 ### Output
@@ -378,7 +414,7 @@ Send the input as a JSON body.
 | `webhook.id` | string | yes |  |
 | `webhook.name` | string | yes |  |
 | `webhook.url` | string | yes |  |
-| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" | yes |  |
+| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" or "photos" | yes |  |
 | `webhook.state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
 | `webhook.waiting` | integer | yes | How many stored items wait to be sent. |
 | `webhook.lastStatus` | number or null | yes |  |
@@ -525,7 +561,7 @@ Send the input as a JSON body.
 | `webhook.id` | string | yes |  |
 | `webhook.name` | string | yes |  |
 | `webhook.url` | string | yes |  |
-| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" | yes |  |
+| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" or "photos" | yes |  |
 | `webhook.state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
 | `webhook.waiting` | integer | yes | How many stored items wait to be sent. |
 | `webhook.lastStatus` | number or null | yes |  |
@@ -576,7 +612,7 @@ Send the input as a JSON body.
 | `webhook.id` | string | yes |  |
 | `webhook.name` | string | yes |  |
 | `webhook.url` | string | yes |  |
-| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" | yes |  |
+| `webhook.kinds` | array of "notes" or "health" or "locations" or "calendar" or "photos" | yes |  |
 | `webhook.state` | "working" or "paused" or "failing" or "backfilling" | yes | backfilling: sending past data. |
 | `webhook.waiting` | integer | yes | How many stored items wait to be sent. |
 | `webhook.lastStatus` | number or null | yes |  |
@@ -837,7 +873,7 @@ It takes no input.
 | `devices` | array of object | yes |  |
 | `devices[].id` | string | yes |  |
 | `devices[].name` | string | yes |  |
-| `devices[].reaches` | "phone" or "chats" or "api" | yes | phone: notes, files, health and places, from a phone. chats: Claude Code chats. api: the web API, which reads and adds notes. |
+| `devices[].reaches` | "phone" or "chats" or "api" | yes | phone: notes, files, health, places and photos, from a phone. chats: Claude Code chats. api: the web API, which reads and adds notes. |
 | `devices[].createdAt` | number | yes |  |
 | `devices[].revokedAt` | number or null | yes |  |
 
@@ -854,7 +890,7 @@ Send the input as a JSON body.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `name` | string | yes | A name you know the device by. |
-| `reaches` | "phone" or "chats" or "api" | yes | phone: notes, files, health and places, from a phone. chats: Claude Code chats. api: the web API, which reads and adds notes. |
+| `reaches` | "phone" or "chats" or "api" | yes | phone: notes, files, health, places and photos, from a phone. chats: Claude Code chats. api: the web API, which reads and adds notes. |
 
 ### Output
 
@@ -862,7 +898,7 @@ Send the input as a JSON body.
 |---|---|---|---|
 | `id` | string | yes |  |
 | `name` | string | yes |  |
-| `reaches` | "phone" or "chats" or "api" | yes | phone: notes, files, health and places, from a phone. chats: Claude Code chats. api: the web API, which reads and adds notes. |
+| `reaches` | "phone" or "chats" or "api" | yes | phone: notes, files, health, places and photos, from a phone. chats: Claude Code chats. api: the web API, which reads and adds notes. |
 | `key` | string | yes | Shown this once. |
 | `qr` | string | yes | What the phone scans: the server's address and the key. |
 | `api` | string or null | yes | An API key's web API address, or null when this server has no AI connector. |
@@ -894,6 +930,60 @@ Send the input as a JSON body.
 |---|---|
 | `not_found` | You have no device with this id. |
 
+## Read your notes addresses
+
+`GET /apps/relay/api/inbox` · `relay.inbox` · reads · called by a signed-in person only, not a device key
+
+Answer your secret notes address, made on first read, and the shared address for your sign-in email.
+
+### Input
+
+It takes no input.
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `email` | object | yes | Email notes: whether this server takes email, and your addresses. |
+| `email.on` | boolean | yes | True when this server takes email: its owner set a mail domain. |
+| `email.address` | string or null | yes | Your secret notes address: any mail to it becomes a note. Null when email is off. |
+| `email.shared` | string or null | yes | The shared address: mail to it from your sign-in email becomes a note. Null when email is off. |
+
+## Make a new notes address
+
+`POST /apps/relay/api/inbox/address` · `relay.inbox-address` · writes · called by a signed-in person only, not a device key
+
+Replace your secret notes address with a new one. Mail to the old address makes no note from now on.
+
+### Input
+
+Send the input as a JSON body.
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `email` | object | yes | Email notes: whether this server takes email, and your addresses. |
+| `email.on` | boolean | yes | True when this server takes email: its owner set a mail domain. |
+| `email.address` | string or null | yes | Your secret notes address: any mail to it becomes a note. Null when email is off. |
+| `email.shared` | string or null | yes | The shared address: mail to it from your sign-in email becomes a note. Null when email is off. |
+
+## Run the kept mail's sweep (previews only)
+
+`POST /apps/relay/api/inbox/sweep` · `relay.inbox-sweep` · writes · called by a signed-in person only, not a device key
+
+Run what the server runs each day: delete mail kept for emails with no account that is older than 30 days.
+
+### Input
+
+Send the input as a JSON body.
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `deleted` | integer | yes | How many kept messages it deleted. |
+
 ## Read the account
 
 `GET /apps/relay/api/account` · `relay.account` · reads · called by a signed-in person only, not a device key
@@ -914,7 +1004,7 @@ It takes no input.
 
 `POST /apps/relay/api/account-delete` · `relay.account-delete` · writes · called by a signed-in person only, not a device key
 
-Delete your account: your notes, recordings, health, places, chats, devices, webhooks and AI apps. It can't be undone.
+Delete your account: your notes, recordings, photos, health, places, chats, devices, webhooks and AI apps. It can't be undone.
 
 ### Input
 
@@ -939,6 +1029,7 @@ Send the input as a JSON body.
 ## Routes with their own page
 
 - `POST /apps/relay/api/attachments`: [Send a note's file, after its note](../files/#send-a-file)
+- `POST /apps/relay/api/photos`: [Send a photo from the phone, with a phone key](../../app/photos/#what-the-phone-sends)
 - `GET /apps/relay/api/audio`: [Play a note's recording](../recordings/)
 - `GET /apps/relay/api/attachment`: [Open a note's file](../files/#open-a-file)
 - `POST /apps/relay/api/chats`: [Send a Claude Code chat's new messages, with a chat key](../../connections/claude-code/#what-the-server-receives)

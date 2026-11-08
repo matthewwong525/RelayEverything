@@ -7,7 +7,7 @@ import { asDevice } from "./caller.ts";
 import { accuracy, latitude, longitude, placeName, time } from "./store.ts";
 
 /** A note holds up to 10 files, each up to 25 MB. */
-const MAX_FILES = 10;
+export const MAX_FILES = 10;
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
 /** The phone's own id for a note or a file. */
 export const CLIENT_ID = /^[A-Za-z0-9-]{8,64}$/;
@@ -35,7 +35,7 @@ const noteInput = z.strictObject({
 
 const MIME = /^[\w.+-]+\/[\w.+-]+$/;
 /** A file whose type the phone does not know, or sent in a shape no header holds, is kept as plain bytes. */
-const typeOf = (type: string) => MIME.test(type.trim()) ? type.trim().toLowerCase() : "application/octet-stream";
+export const typeOf = (type: string) => MIME.test(type.trim()) ? type.trim().toLowerCase() : "application/octet-stream";
 
 export const notes = defineAction({
   operationId: "relay.notes-add", summary: "Store a typed note", description: "Store a note typed on a Relay Everything phone, once per phone and clientId.",

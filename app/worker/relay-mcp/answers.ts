@@ -1,8 +1,8 @@
 // Each connector question's answer, shared by the MCP tools and the web API so one input answers the same through
-// either. Reads are capped; a note is added only through add-note.ts. No answer holds a key or a device's id.
+// either. Reads are capped; a note is added only through add-note.ts. No answer holds a key, file name or device id.
 import { addNote, type TypedNote } from "../apps/relay/add-note.ts";
-import { chatById, chatLines, chatMessages, chatPage, daySummary, eventPage, healthBuckets, noteById, notePage, placeVisits, type CalendarEvent,
-  type Chat, type HealthType, type Note, type Span } from "../apps/relay/queries.ts";
+import { chatById, chatLines, chatMessages, chatPage, daySummary, eventPage, healthBuckets, noteById, notePage, photoById, photoPage,
+  placeVisits, type CalendarEvent, type Chat, type HealthType, type Note, type Photo, type Span } from "../apps/relay/queries.ts";
 import type { Db, PersonSpace } from "../apps/relay/space.ts";
 import type { McpEnv } from "./env.ts";
 import { LINES, MAX_BUCKETS, PART, type Input, type ToolName } from "./inputs.ts";
@@ -111,6 +111,41 @@ function partAfter(text: string | undefined): number {
   return Number(text);
 }
 
+/** A photo as the caller reads it: the time in the zone. */
+const photoShown = (photo: Photo, timezone: string) => ({ ...photo, takenAt: local(photo.takenAt, timezone) });
+
+/** One line for a photo: when and where it was taken. */
+const photoLine = (photo: Photo, timezone: string) =>
+  `Photo ${photo.id}, taken ${local(photo.takenAt, timezone)}${photo.lat === null ? ", with no place" : ` at ${photo.lat}, ${photo.lon}`}, ` +
+  `${photo.width} × ${photo.height} pixels.`;
+
+/** Bytes as base64, a part at a time, as a photo is too large to spread into one call. */
+function base64(bytes: Uint8Array): string {
+  let text = "";
+  for (let at = 0; at < bytes.length; at += 0x8000) text += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
+  return btoa(text);
+}
+
+/** An answer that is a picture to look at, with a line of text for an app that shows no images. */
+export class Picture {
+  readonly data: string;
+  readonly mimeType: string;
+  readonly text: string;
+  constructor(data: string, mimeType: string, text: string) {
+    this.data = data;
+    this.mimeType = mimeType;
+    this.text = text;
+  }
+}
+
+/** One photo from the person's sealed file store; a row whose file is gone shows as no photo too. */
+async function readPhoto(space: PersonSpace, { id, timezone = ZONE }: Input<"read_photo">): Promise<Picture> {
+  const photo = await photoById(space.db, id);
+  const bytes = photo ? await space.files.open(photo.file) : null;
+  if (!bytes) throw new Refusal("No photo has this id.", 404);
+  return new Picture(base64(bytes), "image/jpeg", photoLine(photo!, timezone));
+}
+
 /** Who adds a note: an API key's own device, or a connected app's, made on its first note. Null for an app connected
  *  before the consent page said it can add. */
 type Adder = { deviceId: string; name: string; kind: "api" | "app" } | null;
@@ -156,7 +191,12 @@ const READS = {
     return { ...chatShown(chat, timezone), saves: chat.saves.map(save => ({ ...save, createdAt: local(save.createdAt, timezone) })),
       messages: messages.map(message => ({ ...message, at: local(message.at, timezone) })), nextCursor: next === null ? null : String(next) };
   },
-} satisfies { [Name in Exclude<ToolName, "add_note">]: (db: Db, input: Input<Name>) => Promise<unknown> };
+  photos: async (db, { from, to, near, limit, cursor: text, timezone = ZONE }) => {
+    const [after, end] = range(from, to, timezone);
+    const found = await photoPage(db, { after, near, limit, ...pageBefore(text, end) });
+    return { photos: found.photos.map(photo => photoShown(photo, timezone)), nextCursor: nextCursor(found) };
+  },
+} satisfies { [Name in Exclude<ToolName, "add_note" | "read_photo">]: (db: Db, input: Input<Name>) => Promise<unknown> };
 
 /** A connected app's device row: its notes name the app, and a disconnect turns it off. */
 export const APP_DEVICE = "INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at, reaches) " +
@@ -177,6 +217,7 @@ async function add({ space, adder, env }: Asker, { timezone = ZONE, createdAt, .
 /** The answer to one question, for the caller's own space. */
 export function answer<Name extends ToolName>(name: Name, asker: Asker, input: Input<Name>): Promise<unknown> {
   if (name === "add_note") return add(asker, input as Input<"add_note">);
-  const read = READS[name as Exclude<ToolName, "add_note">] as (db: Db, input: unknown) => Promise<unknown>;
+  if (name === "read_photo") return readPhoto(asker.space, input as Input<"read_photo">);
+  const read = READS[name as Exclude<ToolName, "add_note" | "read_photo">] as (db: Db, input: unknown) => Promise<unknown>;
   return read(asker.space.db, input);
 }

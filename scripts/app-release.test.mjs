@@ -178,3 +178,28 @@ test('mark labels each pull request and comments once, skipping one that has the
     repo.done();
   }
 });
+
+/** Each job's `needs` and one-line `if` in a workflow file, read from its two-space job keys. */
+function readJobs(file) {
+  const jobs = readFileSync(new URL(`../.github/workflows/${file}`, import.meta.url), 'utf8').split(/^jobs:\n/m)[1];
+  return Object.fromEntries(jobs.split(/^(?=  [a-z][\w-]*:\n)/m).filter(block => /^  [a-z]/.test(block)).map(block => {
+    const needs = block.match(/^    needs: (.+)$/m)?.[1] ?? '';
+    return [block.match(/^  ([\w-]+):/)[1], {
+      needs: needs.replace(/[[\]]/g, '').split(',').map(name => name.trim()).filter(Boolean),
+      if: block.match(/^    if: (.+)$/m)?.[1] ?? '',
+    }];
+  }));
+}
+
+test("a branch's builds start with the tests, and main's and a release's wait for them", () => {
+  const jobs = readJobs('mobile-ci.yml');
+  for (const job of ['android-branch', 'ios-branch']) {
+    assert.deepEqual(jobs[job].needs, ['plan'], job);
+    assert.match(jobs[job].if, /needs\.plan\.outputs\.mode == 'branch'/, job);
+  }
+  for (const job of ['android', 'ios']) {
+    assert.deepEqual(jobs[job].needs, ['plan', 'flutter'], job);
+    assert.match(jobs[job].if, /needs\.plan\.outputs\.mode != 'branch'/, job);
+  }
+  assert.ok(jobs.release.needs.includes('android') && jobs.release.needs.includes('ios'));
+});

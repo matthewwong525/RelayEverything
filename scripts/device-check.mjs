@@ -14,12 +14,12 @@ const USAGE = `usage: node scripts/device-check.mjs run --ref <branch> --sha <co
 Starts .github/workflows/mobile-device-check.yml on the branch for the saved commit, waits up to 50 minutes, and
 downloads the report, pictures and video to a new temporary folder. Until the workflow is on the default branch,
 GitHub can't start it by hand: with --pr, the check then starts by the "check on iPhone" label, and Claude reads the
-open change's specs in place of --scenarios-file. Prints result=works|broken|could-not-check|timeout|failed,
-start=, run= and folder=. Exits 0 only on works.`;
+open change's specs in place of --scenarios-file. Prints result=works|broken|could-not-check|no-verdict|cancelled|
+timeout|failed, start=, run=, folder= and reason=. Exits 0 only on works.`;
 
 export const WORKFLOW = 'mobile-device-check.yml';
 export const LABEL = 'check on iPhone';
-export const VERDICTS = ['works', 'broken', 'could-not-check'];
+export const VERDICTS = ['works', 'broken', 'could-not-check', 'no-verdict'];
 const PLATFORMS = ['iphone'];
 const WATCH_MS = 50 * 60 * 1000;
 const FIND_MS = 3 * 60 * 1000;
@@ -44,8 +44,28 @@ export function readVerdict(text) {
   return VERDICTS.includes(word) ? word : null;
 }
 
-/** The one result this script reports. */
-export const resultOf = ({ timedOut, verdict }) => (timedOut ? 'timeout' : verdict ?? 'failed');
+/** The one result this script reports. A failed Swift test makes the check broken, as it did on one Mac. */
+export function resultOf({ timedOut, cancelled, verdict, swift }) {
+  if (timedOut) return 'timeout';
+  if (cancelled) return 'cancelled';
+  if (swift === 'failed' && verdict !== 'broken') return 'broken';
+  return verdict ?? 'failed';
+}
+
+/** The Swift tests' outcome: `failed` unless job swift-tests was cancelled or timed out, which is no fault. */
+export function swiftOutcome(conclusion, text) {
+  // No conclusion (GitHub did not answer) trusts the file: the job writes failed only when xcodebuild fails.
+  if (text === 'failed') return !conclusion || conclusion === 'failure' ? 'failed' : '';
+  return text === 'passed' ? 'passed' : '';
+}
+
+/** Why a run was cancelled: a newer check of the branch replaced it, or it ran out of time. A skipped run, such as
+ * the start by another label, replaces nothing. */
+export function cancelReason(runs, run) {
+  const newer = runs.some(other => other.databaseId !== run.databaseId && other.conclusion !== 'skipped'
+    && Date.parse(other.createdAt) > Date.parse(run.createdAt));
+  return newer ? 'a newer check of this branch replaced it' : 'the run was stopped before it ended, such as when it ran out of time';
+}
 
 export function checkValues(values, positionals) {
   if (positionals[0] !== 'run' || positionals.length !== 1) return 'give the command run';
@@ -78,30 +98,48 @@ function start(values, scenarios) {
   return label(values.pr) ? { event: 'pull_request' } : { error: `could not put the "${LABEL}" label on the pull request` };
 }
 
+function listRuns(ref, event) {
+  const listed = gh(['run', 'list', '--workflow', WORKFLOW, '--branch', ref, ...(event ? ['--event', event] : []),
+    '--limit', '20', '--json', 'databaseId,headSha,event,createdAt,url,conclusion']);
+  return listed.status === 0 ? JSON.parse(listed.stdout) : [];
+}
+
 async function waitForRun({ ref, sha }, event, after) {
   const until = Date.now() + FIND_MS;
   while (Date.now() < until) {
-    const listed = gh(['run', 'list', '--workflow', WORKFLOW, '--branch', ref, '--event', event, '--limit', '20',
-      '--json', 'databaseId,headSha,event,createdAt,url']);
-    const run = listed.status === 0 ? findRun(JSON.parse(listed.stdout), { sha, event, after }) : null;
+    const run = findRun(listRuns(ref, event), { sha, event, after });
     if (run) return run;
     await sleep(10_000);
   }
   return null;
 }
 
-function collect(run, platform) {
+/** A file of the downloaded results, or '' when the run made none. */
+function readResult(folder, name) {
+  try {
+    return readFileSync(join(folder, name), 'utf8').trim();
+  } catch {
+    return '';
+  }
+}
+
+function collect(run, { platform, ref }) {
   const watch = gh(['run', 'watch', String(run.databaseId), '--exit-status', '--interval', '30'], { stdio: 'ignore', timeout: WATCH_MS });
   if (watch.error?.code === 'ETIMEDOUT') return { result: resultOf({ timedOut: true }) };
+  const viewed = gh(['run', 'view', String(run.databaseId), '--json', 'jobs']);
+  const jobs = viewed.status === 0 ? JSON.parse(viewed.stdout).jobs : [];
+  const cancelled = jobs.some(job => job.name === platform && job.conclusion === 'cancelled');
   const folder = mkdtempSync(join(tmpdir(), 'device-check-'));
-  const downloaded = gh(['run', 'download', String(run.databaseId), '-n', `device-check-${platform}`, '-D', folder]).status === 0;
-  let verdict = null;
-  try {
-    verdict = downloaded ? readVerdict(readFileSync(join(folder, 'verdict.txt'), 'utf8')) : null;
-  } catch {
-    // No verdict file: the run ended before its report step.
-  }
-  return { result: resultOf({ timedOut: false, verdict }), folder };
+  gh(['run', 'download', String(run.databaseId), '-n', `device-check-${platform}`, '-D', folder]);
+  gh(['run', 'download', String(run.databaseId), '-n', 'device-check-swift', '-D', join(folder, 'swift')]);
+  const verdict = readVerdict(readResult(folder, 'verdict.txt'));
+  const swiftJob = jobs.find(job => job.name === 'swift-tests');
+  const swift = swiftOutcome(swiftJob?.conclusion, readResult(join(folder, 'swift'), 'swift-tests.txt'));
+  const result = resultOf({ timedOut: false, cancelled, verdict, swift });
+  const reason = result === 'cancelled' ? cancelReason(listRuns(ref), run)
+    : result === 'broken' && verdict !== 'broken' ? "the share card's Swift tests fail: swift/swift-tests.log"
+      : readResult(folder, 'reason.txt');
+  return { result, folder, ...(reason && { reason }) };
 }
 
 export async function main(values, positionals) {
@@ -114,7 +152,7 @@ export async function main(values, positionals) {
   const kind = started.event === 'workflow_dispatch' ? 'by-hand' : 'label';
   const run = await waitForRun(values, started.event, after);
   if (!run) return { result: 'failed', start: kind, reason: 'no run of this commit showed on GitHub' };
-  return { start: kind, run: run.url, ...collect(run, values.platform) };
+  return { start: kind, run: run.url, ...collect(run, values) };
 }
 
 if (isMain(import.meta.url)) {

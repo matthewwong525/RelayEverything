@@ -72,11 +72,12 @@ jobs:
           ruby-version: "3.3"
           bundler-cache: true
           working-directory: mobile/ios
-      - name: Build
+      # Writes the version, the build number and the pods, and compiles nothing: fastlane's archive compiles the app once.
+      - name: Set up the build
         if: steps.key.outputs.ready == 'true'
         run: |
           flutter pub get
-          flutter build ios --release --no-codesign --build-name="$VERSION" --build-number="$BUILD_NUMBER"
+          flutter build ios --config-only --release --no-codesign --build-name="$VERSION" --build-number="$BUILD_NUMBER"
       # A newer commit on main that changes the app has its own run, which sends: TestFlight never gets an older build
       # after a newer one. A newer change outside mobile/ does not count.
       - name: Newest on main

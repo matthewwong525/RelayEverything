@@ -1,4 +1,4 @@
-# The phone app in mobile/: test, then build both apps. A branch sends nothing, main sends its newest build as a beta,
+# The phone app in mobile/: test and build both apps. A branch sends nothing, main sends its newest build as a beta,
 # and a v<x.y.z> tag on main releases the app (mobile/README.md). A pull request from a fork runs the tests only.
 name: Mobile CI
 on:
@@ -72,9 +72,34 @@ jobs:
       - run: flutter analyze
       - run: flutter test
 
+  # A branch publishes nothing, so its builds start with the tests; main and a release build after them. GitHub's
+  # needs can't depend on the mode, so each build has two jobs.
+  android-branch:
+    needs: plan
+    if: ${{ needs.plan.outputs.mode == 'branch' && github.event_name != 'pull_request' }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/mobile-android.yml
+    with:
+      mode: ${{ needs.plan.outputs.mode }}
+      version: ${{ needs.plan.outputs.version }}
+      build: ${{ needs.plan.outputs.build }}
+    secrets: inherit
+
+  ios-branch:
+    needs: plan
+    if: ${{ needs.plan.outputs.mode == 'branch' && github.event_name != 'pull_request' }}
+    uses: ./.github/workflows/mobile-ios.yml
+    with:
+      mode: ${{ needs.plan.outputs.mode }}
+      upload: false
+      version: ${{ needs.plan.outputs.version }}
+      build: ${{ needs.plan.outputs.build }}
+    secrets: inherit
+
   android:
     needs: [plan, flutter]
-    if: ${{ github.event_name != 'pull_request' }}
+    if: ${{ needs.plan.outputs.mode != 'branch' && github.event_name != 'pull_request' }}
     permissions:
       contents: write
     uses: ./.github/workflows/mobile-android.yml
@@ -86,11 +111,11 @@ jobs:
 
   ios:
     needs: [plan, flutter]
-    if: ${{ github.event_name != 'pull_request' }}
+    if: ${{ needs.plan.outputs.mode != 'branch' && github.event_name != 'pull_request' }}
     uses: ./.github/workflows/mobile-ios.yml
     with:
       mode: ${{ needs.plan.outputs.mode }}
-      upload: ${{ needs.plan.outputs.mode != 'branch' }}
+      upload: true
       version: ${{ needs.plan.outputs.version }}
       build: ${{ needs.plan.outputs.build }}
     secrets: inherit

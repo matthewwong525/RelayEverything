@@ -1,12 +1,12 @@
 // Run with: node --test scripts/device-check.test.mjs
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { checkValues, dispatchMissing, findRun, readVerdict, resultOf } from './device-check.mjs';
+import { cancelReason, checkValues, dispatchMissing, findRun, readVerdict, resultOf, swiftOutcome } from './device-check.mjs';
 
 const SHA = 'a'.repeat(40);
 const OTHER = 'b'.repeat(40);
 const after = Date.parse('2026-11-06T10:00:00Z');
-// The shape `gh run list --json databaseId,headSha,event,createdAt,url` prints.
+// The shape `gh run list --json databaseId,headSha,event,createdAt,url,conclusion` prints.
 const runs = [
   { databaseId: 1, headSha: SHA, event: 'workflow_dispatch', createdAt: '2026-11-06T09:59:00Z', url: 'u1' },
   { databaseId: 2, headSha: SHA, event: 'workflow_dispatch', createdAt: '2026-11-06T10:00:05Z', url: 'u2' },
@@ -26,10 +26,11 @@ test('an older run, or a run of another commit, is never taken', () => {
   assert.equal(findRun([], { sha: SHA, event: 'pull_request', after }), null);
 });
 
-test('the verdict file gives one of three verdicts, and anything else is no verdict', () => {
+test('the verdict file gives one of four verdicts, and anything else is no verdict', () => {
   assert.equal(readVerdict('works\n'), 'works');
   assert.equal(readVerdict('  could-not-check '), 'could-not-check');
   assert.equal(readVerdict('broken'), 'broken');
+  assert.equal(readVerdict('no-verdict\n'), 'no-verdict');
   for (const text of ['', 'Works', 'works fine', 'passed', undefined]) assert.equal(readVerdict(text), null);
 });
 
@@ -38,6 +39,40 @@ test('the result is the verdict, a timeout, or failed when no verdict came back'
   assert.equal(resultOf({ timedOut: false, verdict: 'broken' }), 'broken');
   assert.equal(resultOf({ timedOut: false, verdict: null }), 'failed');
   assert.equal(resultOf({ timedOut: true, verdict: 'works' }), 'timeout');
+  assert.equal(resultOf({ timedOut: false, verdict: 'no-verdict' }), 'no-verdict');
+});
+
+test('a cancelled run is cancelled, whatever its verdict file says', () => {
+  assert.equal(resultOf({ timedOut: false, cancelled: true, verdict: 'no-verdict' }), 'cancelled');
+  assert.equal(resultOf({ timedOut: false, cancelled: true, verdict: null }), 'cancelled');
+});
+
+test('failed Swift tests on the second Mac make the check broken', () => {
+  assert.equal(resultOf({ timedOut: false, verdict: 'works', swift: 'failed' }), 'broken');
+  assert.equal(resultOf({ timedOut: false, verdict: 'works', swift: 'passed' }), 'works');
+  assert.equal(resultOf({ timedOut: false, verdict: 'works', swift: '' }), 'works');
+});
+
+test('Swift tests that never finished are no failure: only a failed swift-tests job is', () => {
+  assert.equal(swiftOutcome('failure', 'failed'), 'failed');
+  assert.equal(swiftOutcome('cancelled', 'failed'), '');
+  assert.equal(swiftOutcome('timed_out', 'failed'), '');
+  assert.equal(swiftOutcome('success', 'passed'), 'passed');
+  assert.equal(swiftOutcome('failure', ''), '');
+  assert.equal(swiftOutcome(undefined, ''), '');
+  assert.equal(swiftOutcome(undefined, 'failed'), 'failed');
+  assert.equal(resultOf({ timedOut: false, verdict: 'works', swift: swiftOutcome('cancelled', 'failed') }), 'works');
+});
+
+test('a cancelled run says whether a newer check replaced it', () => {
+  assert.match(cancelReason(runs, runs[2]), /newer check/);
+  assert.match(cancelReason(runs, runs[4]), /stopped before it ended/);
+});
+
+test('a newer skipped run, such as a start by another label, replaced nothing', () => {
+  const skipped = { databaseId: 99, createdAt: '2099-01-01T00:00:00Z', conclusion: 'skipped' };
+  assert.match(cancelReason([runs[4], skipped], runs[4]), /stopped before it ended/);
+  assert.match(cancelReason([runs[4], { ...skipped, conclusion: '' }], runs[4]), /newer check/);
 });
 
 test('a refused start by hand is told apart from other failures', () => {

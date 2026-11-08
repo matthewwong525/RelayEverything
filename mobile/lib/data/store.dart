@@ -400,7 +400,7 @@ class Store extends GeneratedDatabase {
   static Map<String, dynamic> _changeOf(Map<String, dynamic> body, int editedAt, {String? serverId, required bool mine}) => {
     for (final entry in body.entries) if (mine || entry.key != 'attachments') entry.key: entry.value,
     'editedAt': editedAt,
-    if (serverId != null) 'id': serverId,
+    'id': ?serverId,
   };
 
   /// Keeps the note, and with [send] queues its upload in the same step. With [waitForPin] the note is kept and shown,
@@ -624,7 +624,7 @@ class Store extends GeneratedDatabase {
     if (!keep) {
       await _run("DELETE FROM outbox WHERE route = '$noteUpdate' AND json_extract(body, '\$.clientId') = ?", [id]);
     } else if (unsent) {
-      await enqueue(noteUpdate, _changeOf(local!, localAt!, serverId: serverId, mine: mine));
+      await enqueue(noteUpdate, _changeOf(local, localAt, serverId: serverId, mine: mine));
       await _run('UPDATE notes SET edit_unsent = 0 WHERE client_id = ?', [id]);
     } else {
       // A change queued before this pull saved the server id goes by it now.

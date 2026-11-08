@@ -13,7 +13,7 @@ The Relay Everything phone app reads health and calendar events only while sendi
 3. **An updated phone.** A phone with `health.since` and no `health.backfill` starts its backfill at the first read of `health.since`, so the 90 days also fill the new types.
 4. **New types.** The state key `health.types` holds the types the phone asked for. When the app knows more types than that list, it asks once at the next open. A type the person refused reads as empty, not as an error.
 
-Each type maps to one server name and one unit in [`health.dart`](../mobile/lib/sync/health.dart), and the server checks the name against `HEALTH_TYPES` in [`queries.ts`](../app/worker/apps/relay/queries.ts), never in SQL ([person spaces](relay-spaces.md#space-migrations)). The server keeps each sample once, so a resend after a lost answer is harmless. Heart rate variability stays two types, `hrv_sdnn` (iPhone) and `hrv_rmssd` (Android): the two measures can't be averaged together.
+Each type maps to one server name and one unit in [`health.dart`](../mobile/lib/sync/health.dart), and the server checks the name against `HEALTH_TYPES` in [`queries.ts`](../app/worker/apps/relay/queries.ts), never in SQL ([person spaces](relay-space-migrations.md)). The server keeps each sample once, so a resend after a lost answer is harmless. Heart rate variability stays two types, `hrv_sdnn` (iPhone) and `hrv_rmssd` (Android): the two measures can't be averaged together.
 
 ## Calendar: send only what changed
 
@@ -24,7 +24,7 @@ Each type maps to one server name and one unit in [`health.dart`](../mobile/lib/
 5. **The past edge.** A key that leaves the window's past edge is dropped from `calendar_sent` with no removal: the event happened, and the space keeps it.
 6. **Off.** A calendar turned off has its keys removed at the next round, by the diff. Turning the calendar or sending off deletes waiting `calendar` uploads and empties `calendar_sent`, so turning it on again sends the window again.
 
-A full copy each hour is wrong: a few hundred events pass the 256 KB body cap, and every webhook gets every event each hour. The server's `POST calendar` upserts only when a field differs ([person spaces](relay-spaces.md#space-migrations)), so a resend changes nothing and wakes no webhook.
+A full copy each hour is wrong: a few hundred events pass the 256 KB body cap, and every webhook gets every event each hour. The server's `POST calendar` upserts only when a field differs ([person spaces](relay-space-migrations.md)), so a resend changes nothing and wakes no webhook.
 
 ## See also
 

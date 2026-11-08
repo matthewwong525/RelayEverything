@@ -9,7 +9,7 @@ import 'days.dart';
 import 'hold_to_talk.dart' show clockOf;
 
 /// One note, to read: when and where, all of its words, its pictures and files, *Play* for a recording, and its kind
-/// and send state. It changes nothing.
+/// and send state. It changes nothing, but *Try again* writes the words of a note whose words failed.
 class NoteScreen extends StatelessWidget {
   const NoteScreen({super.key, required this.entry, required this.relay});
 
@@ -46,6 +46,11 @@ class NoteScreen extends StatelessWidget {
               Text('Writing the words…', style: TextStyle(color: brand.muted)),
               const SizedBox(height: 8),
               const LinearProgressIndicator(),
+            ] else if (note.failed) ...[
+              Text('The words did not come. Your recording is safe.', style: TextStyle(color: brand.muted)),
+              const SizedBox(height: 8),
+              Align(alignment: Alignment.centerLeft,
+                child: FilledButton(onPressed: relay.writeWordsAgain, child: const Text('Try again'))),
             ] else if (note.text.isNotEmpty)
               _Words(text: note.text)
             else if (recording != null)

@@ -383,6 +383,7 @@ String noteTitle(Entry entry) {
   final first = entry.text.trim().split('\n').first.trim();
   if (first.isNotEmpty) return first;
   if (entry.writing) return 'Writing the words…';
+  if (entry.failed) return 'The words did not come';
   if (entry.files.isNotEmpty) return entry.files.first.name;
   return entry.voice ? 'Voice note' : '';
 }

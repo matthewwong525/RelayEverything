@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/voice/model.dart';
@@ -25,6 +26,27 @@ void main() {
       // Round brackets inside spoken words stay: only a segment wholly in them is a sound.
       expect(cleanWords([' Buy milk (two liters).']), 'Buy milk (two liters).');
     });
+  });
+
+  test('the transcriber reads a WAV in a background isolate: a silent one has no words and loads no model', () async {
+    final folder = tempFolder();
+    final wav = File('${folder.path}/silent.wav');
+    // A 16 kHz mono 16-bit header with no samples.
+    final header = ByteData(44)
+      ..setUint32(0, 0x46464952, Endian.little)..setUint32(4, 36, Endian.little)..setUint32(8, 0x45564157, Endian.little)
+      ..setUint32(12, 0x20746d66, Endian.little)..setUint32(16, 16, Endian.little)..setUint16(20, 1, Endian.little)
+      ..setUint16(22, 1, Endian.little)..setUint32(24, 16000, Endian.little)..setUint32(28, 32000, Endian.little)
+      ..setUint16(32, 2, Endian.little)..setUint16(34, 16, Endian.little)
+      ..setUint32(36, 0x61746164, Endian.little)..setUint32(40, 0, Endian.little);
+    await wav.writeAsBytes(header.buffer.asUint8List());
+    var asked = 0;
+    final transcriber = WhisperTranscriber(() async {
+      asked++;
+      return '${folder.path}/model.bin';
+    });
+    expect(await transcriber.words(wav), '');
+    expect(await transcriber.words(wav), '');
+    expect(asked, 0);
   });
 
   group('the speech model', () {

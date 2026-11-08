@@ -15,7 +15,7 @@ export 'voice/model.dart' show ModelState, ModelProblem;
 /// One row of the timeline: a note typed or said on this phone.
 class Entry {
   const Entry({required this.text, required this.at, this.place, this.sent = false, this.waiting = false, this.voice = false,
-    this.writing = false, this.recording, this.length, this.files = const []});
+    this.writing = false, this.failed = false, this.recording, this.length, this.files = const []});
 
   final String text;
   final DateTime at;
@@ -29,6 +29,8 @@ class Entry {
   final bool voice;
   /// True while the phone writes its words.
   final bool writing;
+  /// True when its words failed or took too long: the recording is kept, and *Try again* writes them again.
+  final bool failed;
   /// The recording on this phone, to play: [Relay.play] takes it.
   final String? recording;
   final Duration? length;
@@ -161,6 +163,8 @@ abstract class Relay extends ChangeNotifier {
   Future<String?> endVoiceNote();
   /// *Cancel*: keeps nothing.
   Future<void> cancelVoiceNote();
+  /// *Try again* on a note whose words failed: writes the words of each such note again, from its kept recording.
+  Future<void> writeWordsAgain();
   /// Plays a voice note's recording, from this phone.
   Future<void> play(String recording);
 

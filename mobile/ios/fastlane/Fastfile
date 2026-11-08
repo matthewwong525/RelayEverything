@@ -1,7 +1,32 @@
 # Signs the iPhone build with automatic signing and sends it to TestFlight. ios.yml runs it with the App Store
 # Connect key in ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_P8 (the .p8 file, base64), and the team in APPLE_TEAM_ID.
 require "base64"
+require "shellwords"
 require "tmpdir"
+
+# The speech package looks up these functions in the app when it runs. An archive that left one out, or stripped it,
+# writes no words on the phone. Runner keeps them with -Wl,-u and STRIP_STYLE = non-global in project.pbxproj.
+SPEECH_PARTS = %w[_wf_run _wf_context_create _wf_job_create _wf_last_error].freeze
+
+# Stops the lane before TestFlight when the app in the exported .ipa, or one of its frameworks, lacks a speech part.
+# The export can strip the app again after the archive, so the check reads the exact file TestFlight gets.
+def check_speech_parts(ipa)
+  UI.user_error!("No .ipa to check for speech parts.") if ipa.nil? || !File.file?(ipa)
+  Dir.mktmpdir("speech-parts") do |dir|
+    UI.user_error!("Could not unzip #{ipa}.") unless system("unzip", "-q", ipa, "-d", dir)
+    app = File.join(dir, "Payload", "Runner.app")
+    binaries = [File.join(app, "Runner")] +
+      Dir[File.join(app, "Frameworks", "*.framework")].map { |framework| File.join(framework, File.basename(framework, ".framework")) }
+    found = binaries.select { |binary| File.file?(binary) }.flat_map { |binary|
+      `nm -gU #{binary.shellescape} 2>/dev/null`.lines.map { |line| line.split.last }.compact
+    }
+    missing = SPEECH_PARTS - found
+    unless missing.empty?
+      UI.user_error!("The iPhone build left out speech parts: #{missing.join(' ')}. Voice notes would get no words.")
+    end
+  end
+  UI.success("All speech parts are in the build.")
+end
 
 default_platform(:ios)
 
@@ -38,6 +63,8 @@ platform :ios do
     ensure
       File.delete(key_path) if File.exist?(key_path)
     end
+    # The .ipa exported from the archive is the file TestFlight gets, so the check reads it, not an earlier build.
+    check_speech_parts(lane_context[SharedValues::IPA_OUTPUT_PATH])
     upload_to_testflight(api_key: api_key, skip_waiting_for_build_processing: true)
   end
 end

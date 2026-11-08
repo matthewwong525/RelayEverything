@@ -18,6 +18,12 @@ The note shows **Voice** and **Writing the words…**, then its words. A note en
 
 The first time you hold **New note**, the phone asks for the microphone. If you said no, allow the microphone for Relay Everything in the phone's settings.
 
+## When the words do not come
+
+If the phone can not write the words, or they take longer than 2 minutes (or the recording's length, if it is longer), the note shows **The words did not come** in your notes. Open it, and it says **The words did not come. Your recording is safe.** The app tells you once. The note keeps its recording, and **Play** still works.
+
+Tap **Try again** on the open note to write the words again. The next time you open the app, it also tries again by itself.
+
 ## Get the speech model
 
 Voice notes need a speech model: a 57 MB file, one time. The first time you hold **New note**, the app asks before it gets it, and records nothing:

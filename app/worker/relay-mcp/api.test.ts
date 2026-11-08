@@ -1,19 +1,19 @@
 import { readFileSync } from "node:fs";
 import { beforeEach, expect, it } from "vitest";
 import { z } from "zod";
-import { ANA, BEN, fakeSpaces, queue } from "../../tests/relay";
+import { ANA, BEN, bucket, fakeSpaces, queue } from "../../tests/relay";
 import { answer, RECONNECT, type Asker } from "./answers";
-import { v1 } from "./api";
+import { v1, type WebTool } from "./api";
 import { vouch } from "../apps/relay/space";
 import { grantAsker, keyAsker } from "./asker";
-import { TOOLS, type ToolName } from "./inputs";
+import { TOOLS } from "./inputs";
 import { ANSWERS } from "./openapi";
 
 // The web API over Ana's made-up day: each route answers what its tool answers, for the caller's own space only.
 const spaceRows = readFileSync(new URL("../../tests/relay-space-rows.sql", import.meta.url), "utf8");
 const ID = (n: number) => `a0000000-0000-4000-8000-00000000000${n}`;
 const CHAT = (n: number) => `c0000000-0000-4000-8000-00000000000${n}`;
-const env = (SPACES: DurableObjectNamespace) => ({ SPACES, RELAY_WEBHOOKS: queue as never });
+const env = (SPACES: DurableObjectNamespace) => ({ SPACES, RELAY_BUCKET: bucket as never, RELAY_WEBHOOKS: queue as never });
 
 let spaces: ReturnType<typeof fakeSpaces>;
 let script: Asker;
@@ -34,7 +34,7 @@ async function call(path: string, asker = script, init: RequestInit = {}) {
 }
 const post = (body: string, asker = script) => call("notes", asker, { method: "POST", body, headers: { "Content-Type": "application/json" } });
 
-const SAME: [string, ToolName, Record<string, unknown>][] = [
+const SAME: [string, WebTool, Record<string, unknown>][] = [
   ["notes?q=the&limit=1", "search", { query: "the", limit: 1 }],
   ["notes?q=the&source=ring", "search", { query: "the", source: "ring" }],
   ["notes?from=2026-11-04&to=2026-11-05&limit=2", "timeline", { from: "2026-11-04", to: "2026-11-05", limit: 2 }],

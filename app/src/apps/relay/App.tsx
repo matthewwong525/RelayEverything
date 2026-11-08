@@ -8,6 +8,7 @@ import { Chats } from './Chats'
 import { Devices } from './Devices'
 import { Failed } from './Failed'
 import { Notes } from './Notes'
+import { Photos } from './Photos'
 import { SIGNED_OUT, today, useGet, when, type Summary, type Timeline } from './read'
 import { SignIn } from './SignIn'
 import { Webhooks } from './Webhooks'
@@ -91,6 +92,7 @@ function Home({ email, onSignedOut }: { email: string; onSignedOut: () => void }
     <Chats />
     <Webhooks />
     <AiCard />
+    <Photos />
     <Devices />
     <Account email={email} onSignedOut={onSignedOut} />
   </div>

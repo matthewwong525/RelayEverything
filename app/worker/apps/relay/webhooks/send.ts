@@ -61,14 +61,14 @@ const release = (db: Db, id: string, lease: number) =>
 const behind = async (db: Db, id: string) =>
   !!await db.prepare(`SELECT 1 FROM relay_webhooks w WHERE w.id = ? AND ${BEHIND}`).bind(id, Date.now()).first();
 
-/** The next group: a note alone, or up to 500 health samples, location points or calendar events in a row. A frozen
- *  group ends at `pending_seq`, so every retry sends the same one. */
+/** The next group: a note or a photo alone, or up to 500 health samples, location points or calendar events in a row.
+ *  A frozen group ends at `pending_seq`, so every retry sends the same one. */
 async function groupOf(db: Db, hook: Hook): Promise<Entry[]> {
   const { results } = await db.prepare(`SELECT o.seq, o.kind, o.ref, o.logged_at FROM relay_outbox o, relay_webhooks w
     WHERE w.id = ? AND o.seq > w.sent_seq AND (w.pending_seq IS NULL OR o.seq <= w.pending_seq) AND ${TAKES}
     ORDER BY o.seq LIMIT ${BATCH}`).bind(hook.id).all<Entry>();
   const [first] = results;
-  if (!first || first.kind.startsWith("note.")) return results.slice(0, 1);
+  if (!first || ownerOf(first.kind)?.alone) return results.slice(0, 1);
   const other = results.findIndex(entry => entry.kind !== first.kind);
   return other === -1 ? results : results.slice(0, other);
 }
@@ -125,9 +125,16 @@ const advance = (db: Db, hook: Hook, lease: number, seq: number, answer?: Answer
   .run();
 
 const sizeOf = (bytes: number) => bytes < 1_000_000 ? `${Math.ceil(bytes / 1000)} KB` : `${(bytes / 1_000_000).toFixed(1)} MB`;
+/** What the card names: a note's file by its name, a photo by when it was taken. */
+const fileOf = ({ data }: WithFile["message"]) => "file" in data ? data.file
+  : { name: `the photo taken ${data.photo.taken_at.slice(0, 16).replace("T", " ")} UTC`, size: data.photo.size };
 /** Why a file was skipped, for the card: the address refused it as too large, as the phone's own-webhook mode does. */
-const tooLarge = ({ message: { data: { file } } }: WithFile) =>
-  `Too large for this address: ${file.name} (${sizeOf(file.size)}). It stays on your Relay Everything page.`;
+const tooLarge = ({ message }: WithFile) => {
+  const file = fileOf(message);
+  // The page shows a note's files but only a count of photos.
+  const where = "file" in message.data ? "on your Relay Everything page" : "in your Relay Everything space";
+  return `Too large for this address: ${file.name} (${sizeOf(file.size)}). It stays ${where}.`;
+};
 
 /** After a failed try: the wait before the next, or null once the webhook shows as failing. */
 async function failed(db: Db, hook: Hook, lease: number, error: string, status: number | null = null): Promise<Wait> {

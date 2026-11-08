@@ -22,7 +22,7 @@ This policy is for the shared Relay Everything server at [app.relayeverything.co
 The [Privacy](../privacy/#what-is-kept-and-where) page lists each kind of data, where it is kept, and when it is sent. It is the one list: this policy does not copy it. In short:
 
 - **Your account:** your email, how you sign in, and a fingerprint of each key and sign-in.
-- **What you send:** your notes and their files, voice note words, health, calendar events and location history, only with **Send my notes** on, and only the parts you turn on.
+- **What you send:** your notes and their files, voice note words, health, calendar events, location history and photos, only with **Send my notes** on, and only the parts you turn on.
 - **What you set:** your devices, webhooks, connected AI apps and chats.
 
 We keep no ads data, no analytics, and no record of your visits to this website.

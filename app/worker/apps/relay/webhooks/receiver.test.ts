@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { healthSamples, locationPoints, noteCreated, noteFile, noteUpdated, webhookTest, type NoteRow } from "./format.ts";
+import { healthSamples, locationPoints, noteCreated, noteFile, noteUpdated, photoCreated, webhookTest, type NoteRow } from "./format.ts";
 import { base64, newSecret } from "./sign.ts";
 import { bodyWithFile, post } from "./send.ts";
 
@@ -39,6 +39,10 @@ it("saves what Relay sends, once each, and refuses a message signed with another
     healthSamples([{ id: 2, ...device, type: "steps", start_at: at, end_at: at + 1000, value: 5210, unit: "count", source: "fitness" }], at),
     locationPoints([{ id: 1, ...device, at, lat: 43.6629, lon: -79.3957, accuracy: 15, place: null }], at)];
   for (const message of messages) expect((await send(message)).status, message.type).toBe(204);
+  const photo = photoCreated({ id: "p0000000-0000-4000-8000-000000000001", ...device, taken_at: at, lat: 38.7139, lon: -9.1394, width: 1600,
+    height: 1200, bytes: 4 }, at);
+  expect((await post(`${address}/`, secret, "msg_photo", bodyWithFile({ message: photo, bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]) }))).status)
+    .toBe(204);
   expect((await send(messages[0], newSecret())).status).toBe(401);
   expect((await fetch(address)).status).toBe(401);
   const saved = new DatabaseSync(database, { readOnly: true });
@@ -46,6 +50,8 @@ it("saves what Relay sends, once each, and refuses a message signed with another
     { id: ring.id, place: "Harbord St", lat: 43.6629, audio: "00000018" }]);
   expect(saved.prepare("SELECT id, type, value FROM health_samples").all().map(row => ({ ...row }))).toEqual([{ id: 2, type: "steps", value: 5210 }]);
   expect(saved.prepare("SELECT id, place FROM location_points").all().map(row => ({ ...row }))).toEqual([{ id: 1, place: null }]);
+  expect(saved.prepare("SELECT id, lat, width, hex(bytes) AS bytes FROM photos").all().map(row => ({ ...row }))).toEqual([
+    { id: "p0000000-0000-4000-8000-000000000001", lat: 38.7139, width: 1600, bytes: "FFD8FFD9" }]);
   saved.close();
 });
 
@@ -71,7 +77,7 @@ const phone = (type: string) =>
   (JSON.parse(readFileSync(new URL(`../../../../../mobile/test/fixtures/webhook/${type}.json`, import.meta.url), "utf8")) as { body: string }).body;
 
 it("saves what the phone sends to its own webhook, with each file's bytes beside its note", async () => {
-  const types = ["note.created", "note.file", "health.samples", "location.points", "calendar.events", "webhook.test"];
+  const types = ["note.created", "note.file", "health.samples", "location.points", "calendar.events", "photo.created", "webhook.test"];
   for (const type of types) expect((await post(`${address}/`, secret, `phone_${type}`, phone(type))).status, type).toBe(204);
   const note = JSON.parse(phone("note.created")).data.note;
   const saved = new DatabaseSync(database, { readOnly: true });
@@ -81,6 +87,9 @@ it("saves what the phone sends to its own webhook, with each file's bytes beside
   expect(saved.prepare("SELECT count(*) AS n FROM health_samples WHERE device_id = ?").get(note.device.id)).toEqual({ n: 1 });
   expect(saved.prepare("SELECT status, title, all_day FROM calendar_events WHERE device_id = ? ORDER BY status").all(note.device.id)
     .map(row => ({ ...row }))).toEqual([{ status: "changed", title: "Board meeting", all_day: 0 }, { status: "removed", title: null, all_day: 0 }]);
+  const photo = JSON.parse(phone("photo.created")).data.photo;
+  expect(saved.prepare("SELECT device_id, taken_at, size FROM photos WHERE id = ?").get(photo.id))
+    .toEqual({ device_id: note.device.id, taken_at: photo.taken_at, size: photo.size });
   expect(saved.prepare("SELECT count(*) AS n FROM other_messages").get()).toEqual({ n: 0 });
   saved.close();
 });

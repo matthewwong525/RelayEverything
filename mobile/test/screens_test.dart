@@ -173,14 +173,45 @@ class FakeRelay extends Relay {
     return null;
   }
 
+  /// A sent note is deleted everywhere, with *Undo*, as the controller does; a note never sent is dropped.
   @override
-  Future<bool> dropEmptyNote(String id) async {
+  Future<Emptied> dropEmptyNote(String id) async {
     calls.add('drop $id');
     final kept = entries.where((entry) => entry.id != id || entry.files.isNotEmpty || entry.voice).toList();
-    if (kept.length == entries.length) return false;
+    if (kept.length == entries.length) return Emptied.kept;
+    for (final entry in entries) {
+      if (entry.id == id && entry.sent) deleted[id] = entry;
+    }
     entries = kept;
     notifyListeners();
-    return true;
+    return deleted.containsKey(id) ? Emptied.deleting : Emptied.dropped;
+  }
+
+  /// The notes deleted and not yet undone, so that [undoDelete] puts each back.
+  final deleted = <String, Entry>{};
+
+  @override
+  Future<void> deleteNote(String id) async {
+    calls.add('delete $id');
+    for (final entry in entries) {
+      if (entry.id == id) deleted[id] = entry;
+    }
+    entries = [for (final entry in entries) if (entry.id != id) entry];
+    notifyListeners();
+  }
+
+  @override
+  Future<void> undoDelete(String id) async {
+    calls.add('undo $id');
+    final entry = deleted.remove(id);
+    if (entry != null) entries = [...entries, entry]..sort((a, b) => b.at.compareTo(a.at));
+    notifyListeners();
+  }
+
+  @override
+  Future<void> endUndo(String id) async {
+    calls.add('end $id');
+    deleted.remove(id);
   }
 
   static String _names(List<NewFile> files) => files.isEmpty ? '' : ' + ${[for (final file in files) file.name].join(', ')}';
@@ -592,6 +623,74 @@ void main() {
     expect(find.byTooltip('More'), findsNothing);
   });
 
+  testWidgets('a swipe to the left deletes a note at once, and Undo in the bar brings it back', (tester) async {
+    relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now), Entry(id: 'n2', text: 'Call Sam', at: now)];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Notes');
+    await tester.drag(find.text('Buy milk'), const Offset(-500, 0));
+    await tester.pumpAndSettle();
+    expect(relay.calls, ['delete n1']);
+    expect([find.text('Buy milk'), find.text('Call Sam'), find.text('Note deleted')], [findsNothing, findsOneWidget, findsOneWidget]);
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+    expect(relay.calls, ['delete n1', 'undo n1']);
+    expect(find.text('Buy milk'), findsOneWidget);
+  });
+
+  testWidgets('the delete runs only once the Undo bar has closed, its five seconds counted from when it is in', (tester) async {
+    relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now), Entry(id: 'n2', text: 'Call Sam', at: now)];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Notes');
+    await tester.drag(find.text('Buy milk'), const Offset(-500, 0));
+    for (var frame = 0; frame < 100 && relay.calls.isEmpty; frame++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    expect(relay.calls, ['delete n1']);
+    // Five seconds after the delete, the bar that slid in after it has had less than its five seconds: Undo still shows.
+    for (var step = 0; step < 50; step++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect([relay.calls, find.text('Undo').evaluate().length], [['delete n1'], 1]);
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    expect([relay.calls, find.text('Undo').evaluate()], [['delete n1', 'end n1'], isEmpty]);
+  });
+
+  testWidgets('a second delete closes the first bar, and the first delete runs once it is gone', (tester) async {
+    relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now), Entry(id: 'n2', text: 'Call Sam', at: now)];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Notes');
+    await tester.drag(find.text('Buy milk'), const Offset(-500, 0));
+    await tester.pumpAndSettle();
+    await tester.drag(find.text('Call Sam'), const Offset(-500, 0));
+    await tester.pumpAndSettle();
+    expect([relay.calls, find.text('Note deleted').evaluate().length], [['delete n1', 'delete n2', 'end n1'], 1]);
+  });
+
+  testWidgets('a swipe to the right deletes nothing', (tester) async {
+    relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now)];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Notes');
+    await tester.drag(find.text('Buy milk'), const Offset(500, 0));
+    await tester.pumpAndSettle();
+    expect([relay.calls, find.text('Buy milk').evaluate().length], [isEmpty, 1]);
+  });
+
+  testWidgets('with a screen reader, each note row has its own Delete action', (tester) async {
+    final semantics = tester.ensureSemantics();
+    relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now), Entry(id: 'n2', text: 'Call Sam', at: now)];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Notes');
+    expect(tester.getSemantics(find.text('Call Sam')),
+      isSemantics(customActions: [const CustomSemanticsAction(label: 'Delete')]));
+    tester.semantics.performAction(find.semantics.byLabel(RegExp('Call Sam')), SemanticsAction.customAction,
+      args: CustomSemanticsAction.getIdentifier(const CustomSemanticsAction(label: 'Delete')));
+    await tester.pumpAndSettle();
+    expect(relay.calls, ['delete n2']);
+    expect([find.text('Buy milk'), find.text('Call Sam'), find.text('Note deleted')], [findsOneWidget, findsNothing, findsOneWidget]);
+    semantics.dispose();
+  });
+
   testWidgets('lists a note by its words with no marks, and search skips the marks too', (tester) async {
     relay.entries = [Entry(text: '# Shop\n- [ ] Eggs\n* **Milk**', at: now)];
     await tester.pumpWidget(RelayApp(relay: relay));
@@ -768,6 +867,24 @@ void main() {
       await tester.pumpAndSettle();
       expect(relay.calls, ['drop n1']);
       expect([find.text('Buy milk'), find.text('Call Sam')], [findsNothing, findsOneWidget]);
+    });
+
+    testWidgets('a sent note emptied is deleted on leave, with Note deleted and Undo on the list', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now, sent: true), Entry(id: 'n2', text: 'Call Sam', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Buy milk'));
+      await tester.pumpAndSettle();
+      quill(tester).replaceText(0, 8, '', const TextSelection.collapsed(offset: 0));
+      await tester.pump();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['drop n1']);
+      expect([find.text('Buy milk'), find.text('Call Sam'), find.text('Note deleted'), find.text('Undo')],
+        [findsNothing, findsOneWidget, findsOneWidget, findsOneWidget]);
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+      expect([relay.calls, find.text('Buy milk').evaluate().length], [['drop n1', 'undo n1'], 1]);
     });
 
     testWidgets('a voice note emptied keeps its recording, with no words', (tester) async {
@@ -1036,6 +1153,39 @@ void main() {
       await tester.tap(find.widgetWithText(MenuItemButton, 'Play'));
       await tester.pumpAndSettle();
       expect(relay.calls, ['play voice/a.wav']);
+    });
+
+    testWidgets('⋯ → Delete, last in the menu, closes the page and deletes the note, with Undo on the list', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now), Entry(id: 'n2', text: 'Call Sam', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Buy milk'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      final items = tester.widgetList<MenuItemButton>(find.byType(MenuItemButton)).toList();
+      expect((items.last.child! as Text).data, 'Delete');
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Delete'));
+      await tester.pumpAndSettle();
+      expect(find.byType(NoteEditor), findsNothing);
+      expect(relay.calls, ['delete n1']);
+      expect([find.text('Buy milk'), find.text('Call Sam'), find.text('Note deleted'), find.text('Undo')],
+        [findsNothing, findsOneWidget, findsOneWidget, findsOneWidget]);
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['delete n1', 'undo n1']);
+      expect(find.text('Buy milk'), findsOneWidget);
+    });
+
+    testWidgets('⋯ → Delete on a new note not kept yet keeps nothing and deletes nothing', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.tap(newNote);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Delete'));
+      await tester.pumpAndSettle();
+      expect([relay.calls, find.byType(NoteEditor).evaluate(), find.text('Note deleted').evaluate()], [isEmpty, isEmpty, isEmpty]);
     });
   });
 

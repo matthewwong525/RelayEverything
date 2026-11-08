@@ -278,8 +278,8 @@ void main() {
   });
 
   group('a note left with no words', () {
-    test('not sent yet is deleted with its waiting upload, and other notes stay', () async {
-      await store.addNote(note('n1'), send: true);
+    test('never sent and never queued is deleted, and other notes stay', () async {
+      await store.addNote(note('n1'));
       await store.addNote(note('n2', 'Call Sam'), send: true);
       expect(await store.dropEmptyNote('n1'), isTrue);
       expect([for (final kept in await store.notes()) kept.clientId], ['n2']);
@@ -287,16 +287,21 @@ void main() {
       expect(await store.dropEmptyNote('n1'), isFalse);
     });
 
-    test('already sent is deleted with its waiting change, so the server keeps its last words', () async {
+    test('with its first upload waiting or on its way stays for a delete everywhere, as the upload may land', () async {
       await store.addNote(note('n1'), send: true);
-      final server = FakeServer();
-      await flush(store, server.api(connection), clock: () => at);
+      expect([await store.isBare('n1'), await store.dropEmptyNote('n1')], [isTrue, isFalse]);
+      expect([for (final kept in await store.notes()) kept.clientId], ['n1']);
+      expect(await store.deleteNote('n1'), isTrue);
+      final outbox = await store.outbox();
+      expect([[for (final item in outbox) item.route], outbox.single.body], [[noteDelete], {'clientId': 'n1'}]);
+    });
+
+    test('already sent stays for a delete everywhere, as the server has it', () async {
+      await store.addNote(note('n1'), send: true);
+      await flush(store, FakeServer().api(connection), clock: () => at);
       await store.editNote('n1', 'Buy oat milk', send: true, at: later);
-      expect([for (final item in await store.outbox()) item.route], [noteUpdate]);
-      expect(await store.dropEmptyNote('n1'), isTrue);
-      expect([await store.notes(), await store.waiting()], [isEmpty, 0]);
-      await flush(store, server.api(connection), clock: () => at);
-      expect(server.requests, hasLength(1));
+      expect([await store.isBare('n1'), await store.dropEmptyNote('n1')], [isTrue, isFalse]);
+      expect([for (final kept in await store.notes()) kept.clientId], ['n1']);
     });
 
     test('with a file, a recording, or words still coming stays', () async {
@@ -312,6 +317,91 @@ void main() {
       }
       expect((await store.notes()).length, 3);
       expect([for (final item in await store.outbox()) item.route], ['notes', 'attachment', 'notes']);
+    });
+  });
+
+  group('a deleted note', () {
+    test('marked is hidden from the list, the count and earlier notes, and Undo brings it back as it was', () async {
+      await store.addNote(note('n1'));
+      await store.addNote(note('n2', 'Call Sam'));
+      await store.markDeleted('n1', at);
+      expect([[for (final kept in await store.notes()) kept.clientId], await store.earlierCount()], [['n2'], 1]);
+      expect(await store.marked(), [('n1', at)]);
+      await store.undoDelete('n1');
+      expect([[for (final kept in await store.notes()) kept.clientId]..sort(), await store.earlierCount(), await store.marked()],
+        [['n1', 'n2'], 2, isEmpty]);
+    });
+
+    test('never sent goes from the phone with its files and queues nothing', () async {
+      final copy = await store.photoFile('attachments/f1.pdf');
+      await copy.parent.create(recursive: true);
+      await copy.writeAsString('pdf');
+      const file = Attachment(id: 'f1', name: 'a.pdf', type: 'application/pdf', size: 3, path: 'attachments/f1.pdf');
+      await store.addNote(LocalNote(clientId: 'n1', text: 'Ticket', createdAt: at, attachments: const [file]));
+      expect(await store.deleteNote('n1'), isFalse);
+      expect([await store.notes(), await store.outbox(), await store.attachmentsOf('n1'), await copy.exists()],
+        [isEmpty, isEmpty, isEmpty, false]);
+      expect(await store.deleteNote('gone'), isFalse);
+    });
+
+    test('sent queues one note.delete by its server id, and its waiting change and files go', () async {
+      await store.addNote(note('n1'), send: true);
+      await flush(store, FakeServer().api(connection), clock: () => at);
+      await store.applyPulled([pulledNote('s1', clientId: 'n1', mine: true, text: 'Buy milk', recordedAt: at)]);
+      const file = Attachment(id: 'f1', name: 'a.pdf', type: 'application/pdf', size: 1, path: 'attachments/f1');
+      await store.editNote('n1', 'Buy oat milk', files: const [file], send: true, at: later);
+      expect([for (final item in await store.outbox()) item.route], [noteUpdate, 'attachment']);
+      expect(await store.deleteNote('n1'), isTrue);
+      final outbox = await store.outbox();
+      expect([[for (final item in outbox) item.route], outbox.single.body], [[noteDelete], {'clientId': 'n1', 'id': 's1'}]);
+      expect([await store.notes(), await store.attachmentsOf('n1'), await store.waiting()], [isEmpty, isEmpty, 1]);
+    });
+
+    test('with its upload still waiting queues a note.delete by its clientId, as the upload may be on its way', () async {
+      await store.addNote(note('n1'), send: true);
+      expect(await store.deleteNote('n1'), isTrue);
+      final outbox = await store.outbox();
+      expect([[for (final item in outbox) item.route], outbox.single.body], [[noteDelete], {'clientId': 'n1'}]);
+    });
+
+    test('from elsewhere, pulled as deleted, goes with its files, and an unknown id changes nothing', () async {
+      await store.applyPulled([pulledNote('s1', files: [{'id': 'f1', 'name': 'ticket.pdf', 'type': 'application/pdf', 'size': 3}])]);
+      final copy = await store.photoFile('attachments/f1.pdf');
+      await copy.parent.create(recursive: true);
+      await copy.writeAsString('pdf');
+      await store.fileKept('f1', 'attachments/f1.pdf');
+      await store.editNote('srv:s1', 'Seen', send: true, at: later);
+      expect(await store.applyPulled([{'id': 's1', 'clientId': 'email:m-1', 'deleted': true}, {'id': 's9', 'clientId': null, 'deleted': true}]),
+        isTrue);
+      expect([await store.notes(), await store.outbox(), await store.attachmentsOf('srv:s1'), await copy.exists()],
+        [isEmpty, isEmpty, isEmpty, false]);
+    });
+
+    test('of this phone, pulled as deleted before a pull gave its server id, is found by its clientId', () async {
+      await store.addNote(note('n1'), send: true);
+      await flush(store, FakeServer().api(connection), clock: () => at);
+      await store.applyPulled([{'id': 's1', 'clientId': 'n1', 'deleted': true}]);
+      expect([await store.notes(), await store.outbox()], [isEmpty, isEmpty]);
+    });
+
+    test('pulled as deleted while open in the editor, or marked deleted here, stays for now', () async {
+      await store.applyPulled([pulledNote('s1'), pulledNote('s2')]);
+      await store.markDeleted('srv:s2', at);
+      expect(await store.applyPulled([{'id': 's1', 'clientId': null, 'deleted': true}, {'id': 's2', 'clientId': null, 'deleted': true}],
+        editing: 'srv:s1'), isFalse);
+      expect([for (final kept in await store.notes()) kept.clientId], ['srv:s1']);
+      expect(await store.marked(), [('srv:s2', at)]);
+    });
+
+    test('pulled as deleted while marked here holds the sync place, so after Undo the next pull deletes it', () async {
+      await store.applyPulled([pulledNote('s1'), pulledNote('s2')]);
+      await store.markDeleted('srv:s1', at);
+      final gone = {'id': 's1', 'clientId': null, 'deleted': true};
+      expect(await store.applyPulled([gone]), isFalse);
+      expect(await store.marked(), [('srv:s1', at)]);
+      await store.undoDelete('srv:s1');
+      expect(await store.applyPulled([gone]), isTrue);
+      expect([[for (final kept in await store.notes()) kept.clientId], await store.marked()], [['srv:s2'], isEmpty]);
     });
   });
 
@@ -373,5 +463,40 @@ void main() {
     await old.applyPulled([pulledNote('s1', clientId: 'kept', mine: true, text: 'Buy milk'), pulledNote('s2'), pulledNote('s2')]);
     expect([for (final kept in await old.notes()) (kept.clientId, kept.serverId)]..sort((a, b) => a.$1.compareTo(b.$1)),
       [('kept', 's1'), ('srv:s2', 's2')]);
+  });
+
+  test('upgrades a phone from version 9: it can delete a note, and its next pull starts again from 0', () async {
+    driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+    addTearDown(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = false);
+    final old = Store(NativeDatabase.memory(setup: (db) {
+      for (final statement in [
+        "CREATE TABLE outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, destination TEXT NOT NULL DEFAULT 'relay-server', "
+          'route TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL)',
+        'CREATE TABLE notes (client_id TEXT PRIMARY KEY, body TEXT NOT NULL, created_at INTEGER NOT NULL, sent_at INTEGER, '
+          "queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0, kind TEXT NOT NULL DEFAULT 'typed', "
+          'audio_path TEXT, duration_ms INTEGER, words_pending INTEGER NOT NULL DEFAULT 0, edited_at INTEGER, '
+          'server_id TEXT, device TEXT, mine INTEGER NOT NULL DEFAULT 1, edit_unsent INTEGER NOT NULL DEFAULT 0)',
+        'CREATE UNIQUE INDEX notes_server_id ON notes (server_id)',
+        'CREATE TABLE points (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
+        'CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+        'CREATE TABLE attachments (id TEXT PRIMARY KEY, note_client_id TEXT NOT NULL, name TEXT, type TEXT, size INTEGER, '
+          'path TEXT, sent_at INTEGER)',
+        'CREATE TABLE calendar_sent (key TEXT PRIMARY KEY, hash TEXT NOT NULL)',
+        'CREATE TABLE photos (client_id TEXT PRIMARY KEY, asset_id TEXT NOT NULL, taken_at INTEGER NOT NULL, lat REAL, lon REAL, '
+          'width INTEGER NOT NULL, height INTEGER NOT NULL, path TEXT NOT NULL, created_at INTEGER NOT NULL)',
+      ]) {
+        db.execute(statement);
+      }
+      db.execute('INSERT INTO notes (client_id, body, created_at, sent_at, queued, server_id) VALUES (?, ?, 1, 2, 1, ?)',
+        ['kept', jsonEncode(note('kept').toJson()), 's1']);
+      db.execute("INSERT INTO state (key, value) VALUES ('$noteSyncSeq', '42')");
+      db.execute('PRAGMA user_version = 9');
+    }));
+    addTearDown(old.close);
+    expect([for (final kept in await old.notes()) kept.clientId], ['kept']);
+    expect(await old.get(noteSyncSeq), isNull);
+    await old.markDeleted('kept', at);
+    expect(await old.notes(), isEmpty);
+    expect(await old.deleteNote('kept'), isTrue);
   });
 }

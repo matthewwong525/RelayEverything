@@ -17,6 +17,7 @@ import 'days.dart';
 import 'note_bars.dart';
 import 'note_blocks.dart';
 import 'round_button.dart';
+import 'timeline.dart' show showDeleted;
 
 /// Picks photos ([photos] true) or files from the phone. The app's is `file_picker`; a test passes its own.
 typedef FilesPicker = Future<List<NewFile>> Function({required bool photos});
@@ -74,6 +75,8 @@ class _NoteEditorState extends State<NoteEditor> {
   ScaffoldMessengerState? _messenger;
   /// Kept with no send yet, as typing saves: leaving sends it.
   bool _unsent = false;
+  /// Set by ⋯ → *Delete*: no save runs after it, so leaving keeps nothing.
+  bool _deleted = false;
   /// A voice note still writing its words, or one whose words failed: the page shows that until the words come.
   late bool _waiting = _wordsMissing(widget.entry);
   bool _formatting = false;
@@ -176,6 +179,7 @@ class _NoteEditorState extends State<NoteEditor> {
   /// on leave goes after them.
   void _save({required bool sendNow, List<NewFile> files = const [], bool leaving = false}) {
     _pause?.cancel();
+    if (_deleted) return;
     final delta = _controller.document.toDelta();
     final text = delta == _saved ? _savedText : deltaToMarkdown(delta);
     // Blank words, such as only an empty Title line, are kept as none, so a note of files alone is not `#`.
@@ -199,7 +203,9 @@ class _NoteEditorState extends State<NoteEditor> {
     _writing = _writing.then((_) async {
       String? problem;
       if (_stored && empty && files.isEmpty && _bare) {
-        if (leaving && await relay.dropEmptyNote(_id)) _stored = false;
+        final emptied = leaving ? await relay.dropEmptyNote(_id) : Emptied.kept;
+        if (emptied != Emptied.kept) _stored = false;
+        if (emptied == Emptied.deleting) showDeleted(_messenger, relay, _id);
       } else if (_stored && !changed) {
         // Left unchanged with blank words, yet a file or a recording keeps it: only what waits still goes.
         if (unsent) await relay.sync();
@@ -277,6 +283,20 @@ class _NoteEditorState extends State<NoteEditor> {
     _say('Copied');
   }
 
+  /// ⋯ → *Delete*: the page closes, and the note goes after any save still running, with *Undo* on the list. A new
+  /// note not kept yet keeps nothing.
+  void _delete() {
+    _pause?.cancel();
+    _deleted = true;
+    final messenger = _messenger;
+    _writing = _writing.then((_) async {
+      if (!_stored) return;
+      await relay.deleteNote(_id);
+      showDeleted(messenger, relay, _id);
+    });
+    Navigator.of(context).maybePop();
+  }
+
   void _compose() => Navigator.of(context).pushReplacement(MaterialPageRoute<void>(
     builder: (_) => NoteEditor(relay: relay, picker: widget.picker, sharer: widget.sharer, back: widget.back)));
 
@@ -300,7 +320,8 @@ class _NoteEditorState extends State<NoteEditor> {
       appBar: AppBar(leading: BackTo(widget.back), leadingWidth: BackTo.widthOf(widget.back), actions: [
         ButtonPill(children: [
           PillIconButton(icon: CupertinoIcons.square_arrow_up, tooltip: 'Share', onPressed: _share),
-          _MoreMenu(copy: _copy, play: _current?.recording == null ? null : () => relay.play(_current!.recording!)),
+          _MoreMenu(copy: _copy, play: _current?.recording == null ? null : () => relay.play(_current!.recording!),
+            delete: _delete),
         ]),
         if (editing) Padding(padding: const EdgeInsets.only(left: 8),
           child: RoundIconButton(icon: CupertinoIcons.checkmark_alt, tooltip: 'Done', onPressed: _done, accent: true)),
@@ -411,12 +432,13 @@ DefaultStyles noteStyles(BuildContext context) {
   );
 }
 
-/// ⋯ on the note's page: *Copy*, and *Play* for a voice note.
+/// ⋯ on the note's page: *Copy*, *Play* for a voice note, and *Delete* last, in the danger color.
 class _MoreMenu extends StatelessWidget {
-  const _MoreMenu({required this.copy, this.play});
+  const _MoreMenu({required this.copy, this.play, required this.delete});
 
   final VoidCallback copy;
   final VoidCallback? play;
+  final VoidCallback delete;
 
   @override
   Widget build(BuildContext context) => MenuAnchor(
@@ -424,6 +446,9 @@ class _MoreMenu extends StatelessWidget {
       MenuItemButton(leadingIcon: const Icon(CupertinoIcons.doc_on_doc, size: 20), onPressed: copy, child: const Text('Copy')),
       if (play != null)
         MenuItemButton(leadingIcon: const Icon(CupertinoIcons.play_fill, size: 20), onPressed: play, child: const Text('Play')),
+      MenuItemButton(leadingIcon: const Icon(CupertinoIcons.trash, size: 20), onPressed: delete,
+        style: MenuItemButton.styleFrom(foregroundColor: brandOf(context).danger, iconColor: brandOf(context).danger),
+        child: const Text('Delete')),
     ],
     builder: (context, menu, _) => PillIconButton(icon: CupertinoIcons.ellipsis, tooltip: 'More',
       onPressed: () => menu.isOpen ? menu.close() : menu.open()),

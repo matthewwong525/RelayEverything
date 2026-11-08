@@ -3,8 +3,8 @@ import { Webhook } from "standardwebhooks";
 import { afterEach, expect, it, vi } from "vitest";
 import { z } from "zod";
 import * as format from "./format.ts";
-import { calendarEvents, healthSamples, jsonSchema, locationPoints, message, noteCreated, noteFile, noteUpdated, photoCreated, webhookTest,
-  type NoteRow } from "./format.ts";
+import { calendarEvents, healthSamples, jsonSchema, locationPoints, message, noteCreated, noteDeleted, noteFile, noteUpdated, photoCreated,
+  webhookTest, type NoteRow } from "./format.ts";
 import { base64, newSecret, signedHeaders } from "./sign.ts";
 
 const schemaFile = new URL("../../../../../site/public/webhooks/v1.schema.json", import.meta.url);
@@ -23,6 +23,7 @@ it("builds each type in the published format, with times in ISO 8601 and a recor
     locationPoints([{ id: 1, ...device, at: AT, lat: 43.6629, lon: -79.3957, accuracy: 15, place: null }], AT),
     webhookTest({ id: "e0000000-0000-4000-8000-000000000001", name: "Example database" }, AT),
     noteFile({ id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 245_760 }, typed.id, AT),
+    noteDeleted(typed.id, AT),
   ];
   for (const item of built) expect(message.parse(item), item.type).toEqual(item);
   expect(built[0]).toEqual({ version: 1, type: "note.created", timestamp: "2026-11-04T14:01:02.000Z", data: { note: {
@@ -37,6 +38,8 @@ it("builds each type in the published format, with times in ISO 8601 and a recor
   // The sender writes the bytes into the empty base64.
   expect(built[6].data).toEqual({ note_id: typed.id, file: { id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf",
     size: 245_760, base64: "" } });
+  // A deleted note's row is gone: the message names it by its id alone.
+  expect(built[7].data).toEqual({ note: { id: typed.id, deleted_at: "2026-11-04T14:01:02.000Z" } });
 });
 
 afterEach(() => vi.useRealTimers());
@@ -139,8 +142,8 @@ it("takes a note's file with its bytes, which the server and the phone both send
     file: { id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 4, base64: "AAAAGA==" } } };
   expect(message.parse(file)).toEqual(file);
   expect(() => message.parse({ ...file, data: { ...file.data, file: { ...file.data.file, base64: undefined } } })).toThrow();
-  expect(Object.keys(format).sort()).toEqual(["calendarEvents", "healthSamples", "jsonSchema", "locationPoints", "message", "noteCreated", "noteFile",
-    "noteUpdated", "photoCreated", "webhookTest"]);
+  expect(Object.keys(format).sort()).toEqual(["calendarEvents", "healthSamples", "jsonSchema", "locationPoints", "message", "noteCreated",
+    "noteDeleted", "noteFile", "noteUpdated", "photoCreated", "webhookTest"]);
 });
 
 // The phone writes these from mobile/test/webhook_test.dart: one of each message it builds, signed with a fixed secret.
@@ -148,8 +151,8 @@ const fixtures = new URL("../../../../../mobile/test/fixtures/webhook/", import.
 
 it("takes each message the phone builds, and its signature passes the server's own signing", async () => {
   const names = readdirSync(fixtures).filter(name => name.endsWith(".json")).sort();
-  expect(names).toEqual(["calendar.events.json", "health.samples.json", "location.points.json", "note.created.json", "note.file.json",
-    "note.updated.json", "photo.created.json", "webhook.test.json"]);
+  expect(names).toEqual(["calendar.events.json", "health.samples.json", "location.points.json", "note.created.json", "note.deleted.json",
+    "note.file.json", "note.updated.json", "photo.created.json", "webhook.test.json"]);
   for (const name of names) {
     const { secret, headers, body } = JSON.parse(readFileSync(new URL(name, fixtures), "utf8")) as
       { secret: string; headers: Record<string, string>; body: string };

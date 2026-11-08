@@ -49,6 +49,7 @@ class RelayApi implements Outbound {
   @override
   Future<void> send(OutboxItem item) async {
     if (item.route == noteUpdate) return _change(item.body);
+    if (item.route == noteDelete) return _delete(item.body);
     final body = _forServer(item.route, item.body);
     try {
       await post(item.route, body);
@@ -77,6 +78,12 @@ class RelayApi implements Outbound {
       'text': body['text'], if (body['editedAt'] != null) 'editedAt': body['editedAt'],
       if (withFiles && body['attachments'] != null) 'attachments': body['attachments']})),
     rejected: const {400, 404, 409, 413});
+
+  /// A note deleted on the phone, by its server `id` once a pull saved one, else by its `clientId`. A 404 (deleted
+  /// already, never landed, or an old server) is dropped: the note is gone either way.
+  Future<void> _delete(Map<String, dynamic> body) => _call(() => _client.delete(_uri('notes').replace(queryParameters: {
+      if (body['id'] != null) 'id': body['id'] as String else 'clientId': body['clientId'] as String}), headers: _headers),
+    rejected: const {400, 404});
 
   @override
   Future<void> sendFile(OutboxItem item, List<int> bytes) => upload(noteClientId: item.body['noteClientId'] as String,
@@ -140,9 +147,9 @@ class RelayApi implements Outbound {
   Future<Map<String, dynamic>> connections() => _call(() => _client.get(_uri('connections'), headers: _headers));
 
   /// One page of the person's notes that changed after change number [since], oldest change first:
-  /// `{notes, next, more}`.
+  /// `{notes, next, more}`. A deleted note comes as `{id, clientId, deleted: true}`.
   Future<Map<String, dynamic>> getNotes(int since, {int limit = 100}) => _call(() => _client.get(
-    _uri('notes').replace(queryParameters: {'since': '$since', 'limit': '$limit'}), headers: _headers));
+    _uri('notes').replace(queryParameters: {'since': '$since', 'limit': '$limit', 'deleted': '1'}), headers: _headers));
 
   /// The bytes of a note's file [id], or with [audio] the recording of the ring note [id]. A file the server does not
   /// have, such as one still on its way, is [Failure.rejected].

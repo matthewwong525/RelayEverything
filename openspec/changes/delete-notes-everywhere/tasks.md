@@ -1,0 +1,30 @@
+# Tasks
+
+## 1. Start from the two changes it builds on
+
+- [x] 1.1 Wait until `sync-notes-across-phones` (PR #64) is on `main`; the daily line-up says when. Then bring `main` into this branch. Copy or redo no sync work. Verify: `schema/space-migrations/0011_note_sync.sql`, `note-sync.ts` and `mobile/lib/data/note_sync.dart` exist here, and `openspec/specs/relay-note-sync/` and the synced `relay-device-keys` spec are on `main`. Write `specs/relay-device-keys/spec.md` here, modifying the synced requirement so a phone key also deletes any note in its own space and still deletes nothing else; add a `relay-note-sync` delta if its text still says a note deleted on one phone stays on the others. If either change renamed a file or route this plan names, update design.md first. Verify: `openspec validate delete-notes-everywhere --strict --no-interactive` passes.
+
+## 2. The server
+
+- [x] 2.1 Write `schema/space-migrations/0012_note_deletes.sql` by design.md (rebuild `relay_note_changes` with `deleted`, no foreign key, its triggers again plus `relay_note_changes_deleted`) and register it in `spaces-worker.ts`. Tests in `space-schema.test.ts`: rows and `seq` survive the rebuild; a delete of a note moves its row to a higher `seq` with `deleted = 1`; the next insert gets a higher `seq` than every copied row.
+- [x] 2.2 `queries.ts` and `note-sync.ts`: with `deleted=1`, a deleted row comes back as `{ id, deleted: true }` in `seq` order; without it, deleted rows are skipped. Tests in `note-sync.test.ts`: a note added and deleted between two pulls comes as one deleted id; no deleted id without `deleted=1`; a page edge neither repeats nor misses a delete.
+- [x] 2.3 Write `app/worker/apps/relay/delete-note.ts` (`DELETE notes` by `id` or `clientId`, phone key only): remove files and recording from storage, delete the row, log `note.deleted`, wake the sender; register it in `api.ts`; let a `phone` reach `DELETE` on notes in `caller.ts`. Tests: a phone deletes an email note by `id` and its files are gone from storage; `404` for a note not there; Ana's key can't delete Ben's note; a chat key, an API key and a session are refused; a `PATCH notes` to a deleted note answers `404`.
+- [x] 2.4 `webhooks/format.ts` and `kinds.ts`: add `note.deleted` (`{ note: { id, deleted_at } }`), built from the send log alone; write `site/public/webhooks/v1.schema.json` again. Tests in `format.test.ts` and `send.test.ts`: one `note.deleted` per active webhook; a `note.created` still waiting for the note is skipped; the schema file matches.
+- [x] 2.5 Run `npm run relay:api-doc` in `app/`. Update `wiki/relay-spaces.md` (`0012`, `DELETE notes`, `note.deleted`) and the *Device keys* rule in `AGENTS.md` (a phone changes or deletes any note in its space). Verify: `npm test` in `app/` passes for the touched files.
+
+## 3. The phone
+
+- [x] 3.1 `mobile/lib/data/store.dart`: a new store version with `deleting_at` and `note_sync_seq` reset to `0` once; every list and count leaves out marked notes; `markDeleted`, `undoDelete` and `deleteNote` by design.md, which drops waiting uploads of the note and queues `note.delete` only for a sent note, also with sending off. Tests in `mobile/test/store_test.dart`: a marked note leaves the list and comes back on undo; a never-sent note queues nothing; a sent note queues one `note.delete` with its server id and no waiting `notes` or `note.update`.
+- [x] 3.2 Send it: `data/api.dart` maps `note.delete` to `DELETE notes` (`404` counts as done); `data/webhook.dart` maps it to `note.deleted`; `note_sync.dart` asks with `deleted=1`; `applyPulled()` deletes a local note for a deleted id, skipping the note open in the editor and a note already marked, both of which hold the sync place. Tests: a delete with sending off waits, then goes first when sending turns on; the own webhook gets `note.deleted`; a pulled deleted id removes the note and its files.
+- [x] 3.3 `controller.dart`: `deleteNote` marks and refreshes, and finishes when the *Undo* bar closes with no *Undo* (`endUndo`), or after `deleteAfter` with no bar; `undoDelete` stops it; app start finishes marks older than `deleteAfter`; `dropEmptyNote` for a sent note, or one whose first upload waits, goes the same way. Tests with a fake clock for each.
+- [x] 3.4 Screens: look at `main` first. *Delete* goes last in the shared ⋯ menu widget when *Phone app small UI improvements* has landed it (no second menu, no edit to the old `_MoreMenu`); else in `_MoreMenu`, with a line in the build report that the two may clash at merge, and none of that chat's work copied. The item is in the danger color with `CupertinoIcons.trash`; a swipe left (`Dismissible`) on `_NoteRow` in `timeline.dart`, with no edit to `home.dart` or `folder.dart`; one *Note deleted · Undo* snack bar for both. Widget tests in `mobile/test/screens_test.dart`: ⋯ → *Delete* pops the page and shows *Undo*; a swipe removes the row; *Undo* brings it back; a screen reader says *Delete*.
+
+## 4. The website
+
+- [x] 4.1 Update `site/src/content/docs/app/your-notes.md` (delete with ⋯ or a swipe, *Undo*, gone everywhere, can't be undone after), `site/src/content/docs/connections/your-database.md` and `site/public/webhooks/receiver.mjs` (`note.deleted` deletes the note and its files), and the privacy page (a deleted note, its files and recording leave the server). Verify: `node scripts/product-name.test.mjs` passes and the docs name no private address.
+
+## 5. Checks
+
+- [x] 5.1 `flutter analyze` and `flutter test` in `mobile/`; `npm test` in `app/`; `node scripts/product-name.test.mjs`; `node scripts/public-check.mjs`; `openspec validate delete-notes-everywhere --strict --no-interactive`.
+- [ ] 5.2 `/save`, then on staging, with the spaces Worker deployed again from this branch: a phone key deletes a note with a file, `GET notes?deleted=1` returns its id, the file is gone, and a test webhook gets one `note.deleted`.
+- [ ] 5.3 After the build reaches TestFlight, Matthew deletes a synced note on his iPhone with a swipe and with ⋯, tries *Undo*, and sees the note gone from his page and his other phone.

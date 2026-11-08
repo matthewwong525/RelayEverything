@@ -1,4 +1,4 @@
-// Format v1 of what a webhook receives: one envelope, eight types; mobile/lib/data/webhook.dart builds it too. The
+// Format v1 of what a webhook receives: one envelope, nine types; mobile/lib/data/webhook.dart builds it too. The
 // source of the public site/public/webhooks/v1.schema.json, which takes fields and values it does not list.
 import { z } from "zod";
 import { HEALTH_TYPES, type HealthType } from "../queries.ts";
@@ -64,6 +64,9 @@ export const message = z.discriminatedUnion("type", [
   envelope("note.created", z.strictObject({ note: note.extend({ audio, attachments }) }), "A note reached Relay Everything."),
   envelope("note.updated", z.strictObject({ note: note.extend({ edited_at: iso.optional().describe("When the phone that sent the note changed it."), attachments }) }),
     "The phone that sent a note changed its words: the note with its latest words, after its note.created. Update the note's row by its id. It has no audio."),
+  envelope("note.deleted", z.strictObject({ note: z.strictObject({
+    id: z.string().describe("The deleted note's id, as its note.created gave it."), deleted_at: iso.describe("When it was deleted.") }) }),
+    "A note was deleted on a phone, with its files and recording: delete the note's row and its files by its id. It can't be undone."),
   envelope("health.samples", z.strictObject({ samples: z.array(sample).min(1).max(BATCH) }), "Health samples, in the order Relay Everything stored them."),
   envelope("location.points", z.strictObject({ points: z.array(point).min(1).max(BATCH) }), "Location points, in the order Relay Everything stored them."),
   envelope("note.file", z.strictObject({ note_id: z.string().describe("The id of the note this file is on."),
@@ -120,6 +123,9 @@ export const noteFile = (row: AttachmentRow, noteId: string, at: number) => wrap
 /** A changed note, with `edited_at` when it has one; `files` are listed only when there are some. */
 export const noteUpdated = (row: NoteRow, at: number, files: AttachmentRow[] = []) => wrap("note.updated", { note: { ...noteOf(row),
   ...row.edited_at ? { edited_at: isoOf(row.edited_at) } : {}, ...filesOf(files) } }, at);
+
+/** A deleted note: the row is gone, so the message holds only its id and when it went. */
+export const noteDeleted = (id: string, at: number) => wrap("note.deleted", { note: { id, deleted_at: isoOf(at) } }, at);
 
 export const healthSamples = (rows: HealthRow[], at: number) => wrap("health.samples", { samples: rows.map(row => ({
   id: row.id, device: deviceOf(row), type: row.type, start: isoOf(row.start_at), end: isoOf(row.end_at), value: row.value,

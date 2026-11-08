@@ -405,6 +405,59 @@
         },
         "type": {
           "type": "string",
+          "const": "note.deleted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+          "description": "When Relay Everything, or the phone that sends to its own webhook, stored what this message holds."
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "note": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "The deleted note's id, as its note.created gave it."
+                },
+                "deleted_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                  "description": "When it was deleted."
+                }
+              },
+              "required": [
+                "id",
+                "deleted_at"
+              ]
+            }
+          },
+          "required": [
+            "note"
+          ]
+        }
+      },
+      "required": [
+        "version",
+        "type",
+        "timestamp",
+        "data"
+      ],
+      "description": "A note was deleted on a phone, with its files and recording: delete the note's row and its files by its id. It can't be undone."
+    },
+    {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "type": {
+          "type": "string",
           "const": "health.samples"
         },
         "timestamp": {

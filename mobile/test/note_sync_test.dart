@@ -78,12 +78,33 @@ void main() {
       expect([server.requests.length, await store.get(noteSyncSeq), await store.hasNote('srv:s1')], [2, '5', isTrue]);
     });
 
+    test('asks for deleted notes too, and a note deleted elsewhere leaves the phone', () async {
+      await store.applyPulled([pulledNote('s1'), pulledNote('s2')]);
+      final server = FakeServer((_) => notesPage([{'id': 's1', 'clientId': null, 'deleted': true}], next: 3));
+      await syncNotes(store, Sender(server.api), settings: _on, connection: bearer);
+      expect(server.requests.single.url.queryParameters, {'since': '0', 'limit': '100', 'deleted': '1'});
+      expect([[for (final note in await store.notes()) note.clientId], await store.get(noteSyncSeq)], [['srv:s2'], '3']);
+    });
+
     test('leaves the note open in the editor, and keeps its place so the next pull reads it again', () async {
       await store.applyPulled([pulledNote('s1', text: 'One')]);
       final server = FakeServer((_) => notesPage([pulledNote('s1', text: 'Two'), pulledNote('s2')], next: 7));
       expect(await syncNotes(store, Sender(server.api), settings: _on, connection: bearer, editing: 'srv:s1'), 2);
       expect([await store.get(noteSyncSeq), await store.hasNote('srv:s2')], [null, isTrue]);
       expect((await store.notes()).firstWhere((note) => note.clientId == 'srv:s1').text, 'One');
+    });
+
+    test('keeps its place for a note deleted elsewhere while marked deleted here, so after Undo the next pull deletes it',
+        () async {
+      await store.applyPulled([pulledNote('s1')]);
+      await store.markDeleted('srv:s1', DateTime(2026, 11, 5));
+      final server = FakeServer((_) => notesPage([{'id': 's1', 'clientId': null, 'deleted': true}], next: 3));
+      await syncNotes(store, Sender(server.api), settings: _on, connection: bearer);
+      expect([await store.get(noteSyncSeq), await store.hasNote('srv:s1')], [null, isTrue]);
+      await store.undoDelete('srv:s1');
+      await syncNotes(store, Sender(server.api), settings: _on, connection: bearer);
+      expect([server.requests.last.url.queryParameters['since'], await store.get(noteSyncSeq), await store.notes()],
+        ['0', '3', isEmpty]);
     });
   });
 
@@ -120,6 +141,19 @@ void main() {
       expect([for (final request in server.requests) (request.method, request.url.path.split('/').last)],
         [('POST', 'notes'), ('GET', 'connections'), ('GET', 'notes')]);
       expect([for (final entry in relay.entries) entry.from], containsAll([null, 'Email']));
+    });
+
+    test('a note deleted on another phone leaves the list at the next pull', () async {
+      var deleted = false;
+      final server = FakeServer((request) => !_isPull(request) ? FakeServer.ok(request)
+        : notesPage(deleted ? [{'id': 's1', 'clientId': null, 'deleted': true}] : [pulledNote('s1')], next: deleted ? 2 : 1));
+      final relay = relayFor(server);
+      await sendToServer(relay);
+      await relay.pullNotes();
+      expect([for (final entry in relay.entries) entry.text], ['Flight moved to 9:40']);
+      deleted = true;
+      await relay.pullNotes();
+      expect(relay.entries, isEmpty);
     });
 
     test('a first pull of several pages shows each page in the list as it lands', () async {

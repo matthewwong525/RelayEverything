@@ -66,7 +66,7 @@ Non-goals: sending the old library, videos, captions or tags or text read from p
 ## Impact
 
 - `mobile/`: `pubspec.yaml` adds `photo_manager` and `connectivity_plus`; `lib/data/settings.dart` (`photos`, `photosOnMobileData`); `lib/data/store.dart` (schema version 5, a `photos` queue table); new `lib/sync/photos.dart`; `lib/sync/background.dart`, `lib/controller.dart`, `lib/relay.dart` and `lib/screens/settings.dart`; `lib/data/api.dart` gains a multipart upload. `ios/Runner/Info.plist` adds `NSPhotoLibraryUsageDescription`; `android/app/src/main/AndroidManifest.xml` adds `READ_MEDIA_IMAGES`, `READ_EXTERNAL_STORAGE` (API ≤ 32) and `ACCESS_MEDIA_LOCATION`.
-- `schema/space-migrations/0007_photos.sql`: a new `relay_photos` table in each space.
+- `schema/space-migrations/0008_photos.sql`: a new `relay_photos` table in each space.
 - `app/worker/apps/relay/`: new `photos.ts` (`POST photos`, `GET photos`, `POST photos/delete`); `api.ts` routes; `caller.ts` phone reach adds `photos`; `space.ts` file names for photos; `queries.ts` photo reads; `account.ts` delete text.
 - `app/worker/relay-mcp/tools.ts`: `photos` and `read_photo` tools; `index.ts`/`tools.ts` pass the file store; `app/wrangler.relay-mcp.jsonc` and `self-host/mcp.template.jsonc` bind `RELAY_BUCKET`.
 - `app/src/apps/relay/`: new `Photos.tsx` card; `Account.tsx` delete text.
@@ -126,3 +126,7 @@ Non-goals: sending the old library, videos, captions or tags or text read from p
 - **2026-11-08** — Assumed: a photo the webhook refuses with `413` is dropped, and Settings does not name it, because a photo has no name the person gave it.
 - **2026-11-08** — Assumed: with the person's own webhook, turning *Photos* off shows no question about the page, because no photo is on a Relay Everything page.
 - **2026-11-08** — Assumed: the webhook tick reads *Photos: each with the picture, when and where you took it*, as the other ticks name what they send.
+- **2026-11-08** — Assumed: after main's note files (`0007_note_files.sql`), the photo migration is `0008_photos.sql`. Its outbox rebuild allows `note.file` too and makes main's `relay_outbox_note_file` trigger again, and each step is safe to run again, because a staging space ran it once as `0007_photos`.
+- **2026-11-08** — Assumed: `photo.created` takes main's `WithFile` shape, with `base64` empty, so the sender writes the photo's bytes into the body as it does a note's file, and a `413` skips the photo. The card names it as *the photo taken <date and time> UTC*, because a photo has no name. The `alone` flag in `kinds.ts` stays the one grouping rule, and Notes, with `note.file`, is marked `alone`.
+- **2026-11-08** — Assumed: on main's new Settings screen, *Photos* and *Send photos on mobile data* sit in the *Sending* group after *Location history*, and *Stop sending?* says photos stop with either place, because photos now go to a webhook too.
+- **2026-11-08** — Assumed: main's `0007_note_files.sql` stays as shipped, because the first `0007_photos` that staging ran never touched the outbox; the test fixture is that deployed file.

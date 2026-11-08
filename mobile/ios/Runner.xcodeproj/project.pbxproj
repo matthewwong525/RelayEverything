@@ -25,6 +25,9 @@
 		5E1A7D152F00B00100AA0001 /* ShareSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7D052F00B00100AA0001 /* ShareSender.swift */; };
 		5E1A7D162F00B00100AA0001 /* ShareNote.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7D022F00B00100AA0001 /* ShareNote.swift */; };
 		5E1A7D172F00B00100AA0001 /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5E1A7D082F00B00100AA0001 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		5E1A7D182F00B00100AA0001 /* Brand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7D092F00B00100AA0001 /* Brand.swift */; };
+		5E1A7D192F00B00100AA0001 /* InterVariable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 5E1A7D0A2F00B00100AA0001 /* InterVariable.ttf */; };
+		5E1A7D1A2F00B00100AA0001 /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 5E1A7D0B2F00B00100AA0001 /* OFL.txt */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -96,6 +99,9 @@
 		5E1A7D062F00B00100AA0001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		5E1A7D072F00B00100AA0001 /* ShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShareExtension.entitlements; sourceTree = "<group>"; };
 		5E1A7D082F00B00100AA0001 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		5E1A7D092F00B00100AA0001 /* Brand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Brand.swift; sourceTree = "<group>"; };
+		5E1A7D0A2F00B00100AA0001 /* InterVariable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = InterVariable.ttf; path = ../assets/fonts/inter/InterVariable.ttf; sourceTree = SOURCE_ROOT; };
+		5E1A7D0B2F00B00100AA0001 /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = OFL.txt; path = ../assets/fonts/inter/OFL.txt; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -184,6 +190,9 @@
 				5E1A7D032F00B00100AA0001 /* SharedItems.swift */,
 				5E1A7D042F00B00100AA0001 /* ShareInbox.swift */,
 				5E1A7D052F00B00100AA0001 /* ShareSender.swift */,
+				5E1A7D092F00B00100AA0001 /* Brand.swift */,
+				5E1A7D0A2F00B00100AA0001 /* InterVariable.ttf */,
+				5E1A7D0B2F00B00100AA0001 /* OFL.txt */,
 				5E1A7D062F00B00100AA0001 /* Info.plist */,
 				5E1A7D072F00B00100AA0001 /* ShareExtension.entitlements */,
 			);
@@ -321,6 +330,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5E1A7D192F00B00100AA0001 /* InterVariable.ttf in Resources */,
+				5E1A7D1A2F00B00100AA0001 /* OFL.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -391,6 +402,7 @@
 				5E1A7D132F00B00100AA0001 /* SharedItems.swift in Sources */,
 				5E1A7D142F00B00100AA0001 /* ShareInbox.swift in Sources */,
 				5E1A7D152F00B00100AA0001 /* ShareSender.swift in Sources */,
+				5E1A7D182F00B00100AA0001 /* Brand.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -500,9 +512,32 @@
 					"$(inherited)",
 					"-weak_framework",
 					AppIntents,
+					"-Wl,-u,_wf_benchmark",
+					"-Wl,-u,_wf_context_create",
+					"-Wl,-u,_wf_context_free",
+					"-Wl,-u,_wf_job_cancel",
+					"-Wl,-u,_wf_job_create",
+					"-Wl,-u,_wf_job_free",
+					"-Wl,-u,_wf_job_progress",
+					"-Wl,-u,_wf_job_set_double",
+					"-Wl,-u,_wf_job_set_int",
+					"-Wl,-u,_wf_job_set_string",
+					"-Wl,-u,_wf_last_error",
+					"-Wl,-u,_wf_model_info",
+					"-Wl,-u,_wf_run",
+					"-Wl,-u,_wf_string_free",
+					"-Wl,-u,_wf_system_info",
+					"-Wl,-u,_wf_tokenize",
+					"-Wl,-u,_wf_vad_create",
+					"-Wl,-u,_wf_vad_free",
+					"-Wl,-u,_wf_vad_is_speech",
+					"-Wl,-u,_wf_vad_reset",
+					"-Wl,-u,_wf_vad_segments",
+					"-Wl,-u,_wf_version",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.matthewwong525.relayApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRIP_STYLE = "non-global";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -715,9 +750,32 @@
 					"$(inherited)",
 					"-weak_framework",
 					AppIntents,
+					"-Wl,-u,_wf_benchmark",
+					"-Wl,-u,_wf_context_create",
+					"-Wl,-u,_wf_context_free",
+					"-Wl,-u,_wf_job_cancel",
+					"-Wl,-u,_wf_job_create",
+					"-Wl,-u,_wf_job_free",
+					"-Wl,-u,_wf_job_progress",
+					"-Wl,-u,_wf_job_set_double",
+					"-Wl,-u,_wf_job_set_int",
+					"-Wl,-u,_wf_job_set_string",
+					"-Wl,-u,_wf_last_error",
+					"-Wl,-u,_wf_model_info",
+					"-Wl,-u,_wf_run",
+					"-Wl,-u,_wf_string_free",
+					"-Wl,-u,_wf_system_info",
+					"-Wl,-u,_wf_tokenize",
+					"-Wl,-u,_wf_vad_create",
+					"-Wl,-u,_wf_vad_free",
+					"-Wl,-u,_wf_vad_is_speech",
+					"-Wl,-u,_wf_vad_reset",
+					"-Wl,-u,_wf_vad_segments",
+					"-Wl,-u,_wf_version",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.matthewwong525.relayApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRIP_STYLE = "non-global";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";

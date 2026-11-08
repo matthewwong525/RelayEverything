@@ -9,7 +9,7 @@ To send straight to your own database, with no account and nothing on Relay Ever
 
 ## Connect by signing in
 
-1. Open the Relay Everything app, then open **Settings** from the gear at the top.
+1. Open the Relay Everything app. Tap the round **⋯** button at the top right, then **Settings**.
 2. Turn on **Send my notes**. The app shows **Where should the phone send?**, with **Relay Everything** picked.
 3. Tap **Sign in to connect**. A sign-in page opens in the app. Sign in, if you are not signed in on the phone already.
 4. The page asks **Connect this phone?**, with a name for the phone. Change the name if you want, and tap **Connect**.
@@ -31,9 +31,9 @@ The key starts with `rek_`. It adds data only to your own space. [Keys](../../ap
 
 ## Connect with a QR code
 
-1. Open the Relay Everything app, then open **Settings** from the gear at the top.
+1. Open the Relay Everything app. Tap the round **⋯** button at the top right, then **Settings**.
 2. Turn on **Send my notes**. The app shows **Where should the phone send?**, with **Relay Everything** picked.
-3. Under **Or use a key from Add a device**, tap **Scan the QR code**, and point the camera at the key's QR code. The key holds the server's address, so you type no address.
+3. Under **Or**, below **Use a key from Add a device on your Relay Everything page**, tap **Scan the QR code**, and point the camera at the key's QR code. The key holds the server's address, so you type no address.
    Or tap **Or paste the key**, paste it, and tap **Connect**.
 4. If you wrote notes before, the app asks **Send your earlier notes too?** Tap **Send them** to send them, or **Only new notes** to keep them only on the phone. The app asks again each time you turn sending on.
 

@@ -2,7 +2,7 @@
 
 ## 1. Space and server
 
-- [x] 1.1 Add `schema/space-migrations/0007_photos.sql` with `relay_photos` and its index, by the design; extend `space-schema.test.ts` so a new space holds `relay_photos` and D1 does not
+- [x] 1.1 Add `schema/space-migrations/0008_photos.sql` with `relay_photos` and its index, by the design; extend `space-schema.test.ts` so a new space holds `relay_photos` and D1 does not
 - [x] 1.2 In `app/worker/apps/relay/space.ts`, add `photoName(id)` under `people/<person id>/photos/` and let `put` take a name; `space-access.test.ts` and the recording tests still pass, and a new test shows a photo sealed under one name fails to open under another
 - [x] 1.3 Add `photos.ts` with `POST photos` (multipart, `asDevice`, JPEG only, at most 3 MB and 1,600 px long side, once per device and `clientId`), `GET photos` (`{ count }`) and `POST photos/delete` (`asPerson`, deletes photo files and rows, keeps recordings); register them in `api.ts`, add `photos` to `REACH.phone` in `caller.ts`; tests in `photos.test.ts`: a resend adds 0, a PNG or 2,000 px JPEG gets 400, a phone key gets 403 on `GET photos` and `POST photos/delete`, Ana's session never counts or deletes Ben's photos, and delete keeps a ring recording
 - [x] 1.4 Add the photo reads to `queries.ts` (page by `taken_at` and id, optional bounding box) with tests for paging and the place filter; extend `isolation.test.ts` so Ana's queries never return Ben's photos

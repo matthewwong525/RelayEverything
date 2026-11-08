@@ -17,7 +17,9 @@
     "staging": {
       "name": "relay-everything-spaces-staging",
       "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space" }] },
-      "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks-staging" }] }
+      // The staging shared server's queue: the company app's staging Worker has no SPACES, so it can't send a
+      // space's catch-up. worker/queue-pairing.test.ts checks each environment's pairing.
+      "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-server-webhooks-staging" }] }
     },
     "local": {
       "name": "relay-everything-spaces-local",

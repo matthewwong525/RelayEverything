@@ -39,16 +39,19 @@ const note = db.prepare(`INSERT INTO notes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
   lat = excluded.lat, lon = excluded.lon, place = excluded.place, audio = coalesce(excluded.audio, notes.audio)`);
 const sample = db.prepare('INSERT OR REPLACE INTO health_samples VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
 const point = db.prepare('INSERT OR REPLACE INTO location_points VALUES (?, ?, ?, ?, ?, ?, ?)');
-// Only a phone that sends to its own webhook sends note.file: one file of a note, after the note.
-const file = db.prepare('INSERT OR REPLACE INTO files VALUES (?, ?, ?, ?, ?, ?)');
+// A note lists its files, then each file's bytes come in their own note.file: a file that never comes stays listed.
+const listed = db.prepare('INSERT INTO files VALUES (?, ?, ?, ?, ?, NULL) ON CONFLICT (id) DO NOTHING');
+const file = db.prepare(`INSERT INTO files VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET note_id = excluded.note_id,
+  name = excluded.name, content_type = excluded.content_type, size = excluded.size, bytes = excluded.bytes`);
 const event = db.prepare('INSERT OR REPLACE INTO calendar_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
 const photo = db.prepare('INSERT OR REPLACE INTO photos VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
 // The same webhook-id again is a retry: it keeps the first row.
 const other = db.prepare('INSERT OR IGNORE INTO other_messages VALUES (?, ?, ?, ?)');
 
-function saveNote({ note: { id, source, text, recorded_at, created_at, device, place, audio } }) {
+function saveNote({ note: { id, source, text, recorded_at, created_at, device, place, audio, attachments = [] } }) {
   note.run(id, source, text, recorded_at, created_at, device.id, device.name, place?.lat ?? null, place?.lon ?? null,
     place?.name ?? null, audio ? Buffer.from(audio.base64, 'base64') : null);
+  attachments.forEach(f => listed.run(f.id, id, f.name, f.content_type, f.size));
 }
 
 // One way to save each type this receiver knows.

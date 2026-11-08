@@ -2,7 +2,7 @@
 // not in `missing`. How to add a kind: wiki/relay-webhook-changes.md.
 import type { Files } from "./space.ts";
 import { MINUTE, type Db } from "./store.ts";
-import { calendarEvents, healthSamples, locationPoints, noteCreated, noteUpdated, photoCreated, type AttachmentRow, type EventRow,
+import { calendarEvents, healthSamples, locationPoints, noteCreated, noteFile, noteUpdated, photoCreated, type AttachmentRow, type EventRow,
   type HealthRow, type LocationRow, type NoteRow, type PhotoRow } from "./webhooks/format.ts";
 import { base64 } from "./webhooks/sign.ts";
 
@@ -10,8 +10,10 @@ type Part = "webhook" | "api" | "tool" | "docs";
 export type KindId = "notes" | "health" | "locations" | "calendar" | "files" | "photos" | "chats";
 /** One row of the send log, `relay_outbox`. */
 export type Entry = { seq: number; kind: string; ref: string; logged_at: number };
+/** A message whose file's bytes the sender writes into its empty `base64`, so no long string is made. */
+export type WithFile = { message: ReturnType<typeof noteFile> | ReturnType<typeof photoCreated>; bytes: Uint8Array };
 /** What a group becomes: a message body, "skip" for a row deleted since, or "wait" for one still saving. */
-type Built = { type: string } | "skip" | "wait";
+type Built = { type: string } | WithFile | "skip" | "wait";
 
 export type DataKind = {
   id: KindId;
@@ -56,9 +58,19 @@ async function audioOf(files: Files, row: NoteRow): Promise<string | null | "wai
   return Date.now() - row.created_at < FILE_WAIT ? "wait" : null;
 }
 
+/** One stored file of a note; "skip" when the note, and so the file, was deleted since. */
+async function file(files: Files, db: Db, entry: Entry): Promise<Built> {
+  const row = await db.prepare("SELECT id, note_id, name, content_type, size, file_key FROM relay_attachments WHERE id = ?").bind(entry.ref)
+    .first<AttachmentRow & { note_id: string; file_key: string | null }>();
+  const bytes = row?.file_key ? await files.open(row.file_key) : null;
+  if (!row || !bytes) return "skip";
+  return { message: noteFile(row, row.note_id, entry.logged_at), bytes };
+}
+
 /** A note alone; "skip" when it was deleted since. A `note.updated` row logged before the server stopped placing ring
  *  notes still sends. */
 async function note(files: Files, db: Db, [entry]: Entry[]): Promise<Built> {
+  if (entry.kind === "note.file") return file(files, db, entry);
   const row = await db.prepare(NOTE).bind(entry.ref).first<NoteRow>();
   if (!row) return "skip";
   if (entry.kind === "note.updated") return noteUpdated(row, entry.logged_at);
@@ -78,7 +90,7 @@ async function photo(files: Files, db: Db, [entry]: Entry[]): Promise<Built> {
   const row = await db.prepare(PHOTO).bind(entry.ref).first<PhotoRow & { file_key: string; created_at: number }>();
   if (!row) return "skip";
   const bytes = await files.open(row.file_key);
-  if (bytes) return photoCreated(row, base64(bytes), entry.logged_at);
+  if (bytes) return { message: photoCreated(row, entry.logged_at), bytes };
   return Date.now() - row.created_at < FILE_WAIT ? "wait" : "skip";
 }
 
@@ -86,7 +98,7 @@ const NO_WEBHOOK = "No webhook message yet: a later plan adds one.";
 
 export const KINDS: DataKind[] = [
   { id: "notes", label: "Notes", detail: "with their words, recording and place", always: true, alone: true,
-    log: ["note.created", "note.updated"], messages: ["note.created", "note.updated", "note.file"], build: note,
+    log: ["note.created", "note.updated", "note.file"], messages: ["note.created", "note.updated", "note.file"], build: note,
     api: ["/v1/notes", "/v1/notes/{id}"], tools: ["search", "fetch", "timeline", "add_note"], docs: "app/your-notes" },
   { id: "health", label: "Health", detail: "steps, heart rate, sleep, weight and more", sensitive: true,
     log: ["health"], messages: ["health.samples"],
@@ -102,7 +114,7 @@ export const KINDS: DataKind[] = [
     build: async (_files, db, group) => calendarEvents(await rowsOf<EventRow>(db, "relay_calendar_events", group), loggedAt(group)),
     api: ["/v1/calendar"], tools: ["calendar"], docs: "app/calendar" },
   { id: "files", label: "Files", detail: "", log: [], messages: [], api: [], tools: [], docs: "api/files",
-    missing: { webhook: NO_WEBHOOK + " A note.created lists a note's files, and a phone that sends to its own webhook sends note.file.",
+    missing: { webhook: "A file goes with its note as note.file, under Notes.",
       api: "No /v1/ route opens a file yet.", tool: "No AI connector tool opens a file yet." } },
   // The Photos switch's photos: a photo shared into a note goes as one of the note's files instead.
   { id: "photos", label: "Photos", detail: "each with the picture, when and where you took it", sensitive: true, alone: true,

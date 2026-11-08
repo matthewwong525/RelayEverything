@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { healthSamples, locationPoints, noteCreated, noteUpdated, photoCreated, webhookTest, type NoteRow } from "./format.ts";
+import { healthSamples, locationPoints, noteCreated, noteFile, noteUpdated, photoCreated, webhookTest, type NoteRow } from "./format.ts";
 import { base64, newSecret } from "./sign.ts";
-import { post } from "./send.ts";
+import { bodyWithFile, post } from "./send.ts";
 
 // The example receiver the website offers, run as a person runs it, and fed by the real sender.
 const receiver = new URL("../../../../../site/public/webhooks/receiver.mjs", import.meta.url);
@@ -37,10 +37,12 @@ it("saves what Relay sends, once each, and refuses a message signed with another
   const messages = [noteCreated(ring, base64(new Uint8Array([0, 0, 0, 24])), at), noteCreated(ring, base64(new Uint8Array([0, 0, 0, 24])), at),
     noteUpdated(placed, at), webhookTest({ id: "hook", name: "Mine" }, at),
     healthSamples([{ id: 2, ...device, type: "steps", start_at: at, end_at: at + 1000, value: 5210, unit: "count", source: "fitness" }], at),
-    locationPoints([{ id: 1, ...device, at, lat: 43.6629, lon: -79.3957, accuracy: 15, place: null }], at),
-    photoCreated({ id: "p0000000-0000-4000-8000-000000000001", ...device, taken_at: at, lat: 38.7139, lon: -9.1394, width: 1600, height: 1200,
-      bytes: 4 }, base64(new Uint8Array([0xff, 0xd8, 0xff, 0xd9])), at)];
+    locationPoints([{ id: 1, ...device, at, lat: 43.6629, lon: -79.3957, accuracy: 15, place: null }], at)];
   for (const message of messages) expect((await send(message)).status, message.type).toBe(204);
+  const photo = photoCreated({ id: "p0000000-0000-4000-8000-000000000001", ...device, taken_at: at, lat: 38.7139, lon: -9.1394, width: 1600,
+    height: 1200, bytes: 4 }, at);
+  expect((await post(`${address}/`, secret, "msg_photo", bodyWithFile({ message: photo, bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]) }))).status)
+    .toBe(204);
   expect((await send(messages[0], newSecret())).status).toBe(401);
   expect((await fetch(address)).status).toBe(401);
   const saved = new DatabaseSync(database, { readOnly: true });
@@ -50,6 +52,23 @@ it("saves what Relay sends, once each, and refuses a message signed with another
   expect(saved.prepare("SELECT id, place FROM location_points").all().map(row => ({ ...row }))).toEqual([{ id: 1, place: null }]);
   expect(saved.prepare("SELECT id, lat, width, hex(bytes) AS bytes FROM photos").all().map(row => ({ ...row }))).toEqual([
     { id: "p0000000-0000-4000-8000-000000000001", lat: 38.7139, width: 1600, bytes: "FFD8FFD9" }]);
+  saved.close();
+});
+
+it("keeps each file a note lists, then its bytes beside the note when they come", async () => {
+  const at = Date.now();
+  const listed = { id: "file-list-0001", name: "warranty.pdf", content_type: "application/pdf", size: 3 };
+  const typed = { ...ring, id: "a0000000-0000-4000-8000-000000000009", source: "typed" as const, audio_key: null };
+  const files = [listed, { ...listed, id: "file-list-0002", name: "never.pdf" }];
+  for (let tries = 0; tries < 2; tries++) expect((await send(noteCreated(typed, null, at, files))).status).toBe(204);
+  const bytes = new Uint8Array([1, 2, 3]);
+  expect((await post(`${address}/`, secret, "msg_file", bodyWithFile({ message: noteFile(listed, typed.id, at), bytes }))).status).toBe(204);
+  // A resent note.created keeps the bytes that came.
+  expect((await send(noteCreated(typed, null, at, files))).status).toBe(204);
+  const saved = new DatabaseSync(database, { readOnly: true });
+  expect(saved.prepare("SELECT id, note_id, name, iif(bytes IS NULL, NULL, hex(bytes)) AS bytes FROM files WHERE note_id = ? ORDER BY id").all(typed.id)
+    .map(row => ({ ...row }))).toEqual([{ id: "file-list-0001", note_id: typed.id, name: "warranty.pdf", bytes: "010203" },
+    { id: "file-list-0002", note_id: typed.id, name: "never.pdf", bytes: null }]);
   saved.close();
 });
 

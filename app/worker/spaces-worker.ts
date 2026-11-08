@@ -7,13 +7,15 @@ import apiDevices from "../../schema/space-migrations/0003_api_devices.sql";
 import attachments from "../../schema/space-migrations/0004_attachments.sql";
 import noPebble from "../../schema/space-migrations/0005_no_pebble.sql";
 import phoneData from "../../schema/space-migrations/0006_phone_data.sql";
-import photos from "../../schema/space-migrations/0007_photos.sql";
+import noteFiles from "../../schema/space-migrations/0007_note_files.sql";
+import photos from "../../schema/space-migrations/0008_photos.sql";
 import type { Row, Sql, SqlValue } from "./apps/relay/space.ts";
 import { BEHIND } from "./apps/relay/webhooks/log.ts";
 
 /** The space's migrations, in order. A space runs each once, and keeps the name of each in `space_migrations`. */
 export const MIGRATIONS: readonly [string, string][] = [["0001_relay", relay], ["0002_space", space], ["0003_api_devices", apiDevices],
-  ["0004_attachments", attachments], ["0005_no_pebble", noPebble], ["0006_phone_data", phoneData], ["0007_photos", photos]];
+  ["0004_attachments", attachments], ["0005_no_pebble", noPebble], ["0006_phone_data", phoneData],
+  ["0007_note_files", noteFiles], ["0008_photos", photos]];
 
 const SWEEP = 15 * 60_000;
 const KEEP = 30 * 24 * 60 * 60_000;

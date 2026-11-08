@@ -19,6 +19,10 @@ VALUES
    'Lunch idea: test the ring on the streetcar.', NULL, 1793811700000, 43.6487, -79.3817, 12, 'King St W', 'phone', 1793811705000),
   ('a0000000-0000-4000-8000-000000000003', 'd0000000-0000-4000-8000-000000000002', 'ring', 'seed-delivery-0002', NULL,
    'Buy milk and batteries.', NULL, 1793829500000, NULL, NULL, NULL, NULL, NULL, 1793829502000);
+-- The typed lunch note's photo, stored: its bytes went to every webhook as note.file.
+INSERT INTO relay_attachments (id, note_id, name, content_type, size, file_key, created_at) VALUES
+  ('f0000000000040008000000000000001', 'a0000000-0000-4000-8000-000000000002', 'streetcar.jpg', 'image/jpeg', 184320,
+   'people/seed/attachments/f0000000000040008000000000000001', 1793811705000);
 INSERT INTO relay_health (device_id, type, start_at, end_at, value, unit, source, created_at) VALUES
   ('d0000000-0000-4000-8000-000000000001', 'sleep', 1793768400000, 1793795400000, 450, 'min', 'com.google.android.apps.fitness', 1793833200000),
   ('d0000000-0000-4000-8000-000000000001', 'steps', 1793797200000, 1793811600000, 5210, 'count', 'com.google.android.apps.fitness', 1793833200000),

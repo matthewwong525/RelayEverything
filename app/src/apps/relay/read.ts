@@ -38,6 +38,19 @@ export type Webhook = {
 
 export const API = '/apps/relay/api/'
 export const SIGN_IN = '/apps/relay/sign-in/'
+
+/** The ways in that the server has set up, and its contact address when it has one: sign-in/email.ts `methods`. */
+export type Methods = { email: boolean; apple: boolean; google: boolean; signUp: boolean; contact?: string }
+
+/** The server's sign-in methods, or `none` where Access signs people in and the route answers 404. */
+export function useMethods() {
+  const [methods, setMethods] = useState<Methods | 'loading' | 'none'>('loading')
+  useEffect(() => {
+    fetch(`${SIGN_IN}methods`).then(async (response): Promise<Methods | 'none'> => response.ok ? await response.json() as Methods : 'none')
+      .then(setMethods, () => setMethods('none'))
+  }, [])
+  return methods
+}
 /** The page's own event when a route answers 401: the session ended, so the page shows the sign-in again. */
 export const SIGNED_OUT = 'relay-signed-out'
 

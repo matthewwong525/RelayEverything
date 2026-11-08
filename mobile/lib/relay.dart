@@ -15,7 +15,7 @@ export 'voice/model.dart' show ModelState, ModelProblem;
 /// One row of the timeline: a note typed or said on this phone.
 class Entry {
   const Entry({required this.text, required this.at, this.place, this.sent = false, this.waiting = false, this.voice = false,
-    this.writing = false, this.recording, this.length, this.files = const []});
+    this.writing = false, this.failed = false, this.recording, this.length, this.files = const []});
 
   final String text;
   final DateTime at;
@@ -25,10 +25,12 @@ class Entry {
   /// It has an upload in the outbox, or waits for its pin, while sending is on.
   final bool waiting;
 
-  /// Said into this phone's *Hold to talk*.
+  /// Said into this phone, by a hold on *New note* or from Shortcuts.
   final bool voice;
   /// True while the phone writes its words.
   final bool writing;
+  /// True when its words failed or took too long: the recording is kept, and *Try again* writes them again.
+  final bool failed;
   /// The recording on this phone, to play: [Relay.play] takes it.
   final String? recording;
   final Duration? length;
@@ -157,13 +159,17 @@ abstract class Relay extends ChangeNotifier {
 
   /// When the phone started listening, or null when it is not.
   DateTime? get listening;
-  /// Hold: starts a voice note. Returns the words to show when it can not, such as a refused microphone or one that
+  /// A hold on *New note*: starts a voice note. Returns the words to show when it can not, such as a refused microphone or one that
   /// did not start; it does not throw.
   Future<String?> startVoiceNote();
-  /// Let go: keeps the note and writes its words. Returns the words to show for a press too short to keep.
+  /// A tap anywhere: keeps the note and writes its words. Returns the words to show for one too short to keep, for a
+  /// microphone that did not stop, or for a note the phone could not keep; then nothing is kept. [listening] is null
+  /// after it in every case.
   Future<String?> endVoiceNote();
-  /// Slide off: keeps nothing.
+  /// *Cancel*: keeps nothing.
   Future<void> cancelVoiceNote();
+  /// *Try again* on a note whose words failed: writes the words of each such note again, from its kept recording.
+  Future<void> writeWordsAgain();
   /// Plays a voice note's recording, from this phone.
   Future<void> play(String recording);
 

@@ -27,7 +27,7 @@ const attachment = z.strictObject({
   content_type: z.string().describe("Such as application/pdf."), size: z.number().int().min(0).describe("In bytes."),
 });
 const attachments = z.array(attachment).min(1).max(10).optional()
-  .describe("The note's files: each one's name, type and size, never its bytes. Only a note with files has this list.");
+  .describe("The note's files: each one's name, type and size, never its bytes; each file's bytes follow in its own note.file. Only a note with files has this list.");
 const ownId = "Unique in this Relay Everything server, or on the phone when the phone sends to its own webhook.";
 const sample = z.strictObject({
   id: z.number().int().describe(ownId), device, type: z.enum(HEALTH_TYPES).meta(GROWS),
@@ -67,7 +67,7 @@ export const message = z.discriminatedUnion("type", [
   envelope("location.points", z.strictObject({ points: z.array(point).min(1).max(BATCH) }), "Location points, in the order Relay Everything stored them."),
   envelope("note.file", z.strictObject({ note_id: z.string().describe("The id of the note this file is on."),
     file: attachment.extend({ base64: z.string().describe("The file's bytes in base64.") }) }),
-    "One file of a note, with its bytes. Only a phone that sends to its own webhook sends it, after the note's note.created."),
+    "One file of a note, with its bytes, after the note's note.created. Relay Everything sends it once it stores the file, and a phone that sends to its own webhook sends it too. A file can be 25 MB, about 33 MB as base64: answer 413 to skip a file too large for you."),
   envelope("calendar.events", z.strictObject({ events: z.array(event).min(1).max(BATCH) }),
     "Calendar events that are new, changed or removed, in the order Relay Everything stored them. A removed event from a phone that sends to its own webhook has only its key, id and start."),
   envelope("photo.created", z.strictObject({ photo }),
@@ -109,6 +109,10 @@ export const noteCreated = (row: NoteRow, audio: string | null, at: number, file
   wrap("note.created", { note: { ...noteOf(row), audio: audio === null ? null : { content_type: "audio/mp4", base64: audio },
     ...files.length ? { attachments: files.map(({ id, name, content_type, size }) => ({ id, name, content_type, size })) } : {} } }, at);
 
+/** One file of a note, with `base64` empty: the sender writes the bytes into the body, so no long string is made. */
+export const noteFile = (row: AttachmentRow, noteId: string, at: number) => wrap<Extract<Message, { type: "note.file" }>>("note.file", { note_id: noteId,
+  file: { id: row.id, name: row.name, content_type: row.content_type, size: row.size, base64: "" } }, at);
+
 export const noteUpdated = (row: NoteRow, at: number) => wrap("note.updated", { note: noteOf(row) }, at);
 
 export const healthSamples = (rows: HealthRow[], at: number) => wrap("health.samples", { samples: rows.map(row => ({
@@ -123,10 +127,10 @@ export const calendarEvents = (rows: EventRow[], at: number) => wrap("calendar.e
   calendar: row.calendar, title: row.title, start: isoOf(row.start_at), end: isoOf(row.end_at), all_day: row.all_day === 1,
   location: row.location, notes: row.notes, url: row.url, people: JSON.parse(row.people) })) }, at);
 
-/** A new photo; `jpeg` is its bytes in base64. lat and lon are stored together: POST photos checks it. */
-export const photoCreated = (row: PhotoRow, jpeg: string, at: number) => wrap("photo.created", { photo: { id: row.id, device: deviceOf(row),
-  taken_at: isoOf(row.taken_at), place: row.lat === null ? null : { lat: row.lat, lon: row.lon! }, width: row.width, height: row.height,
-  content_type: "image/jpeg", size: row.bytes, base64: jpeg } }, at);
+/** A new photo, with `base64` empty as in noteFile. lat and lon are stored together: POST photos checks it. */
+export const photoCreated = (row: PhotoRow, at: number) => wrap<Extract<Message, { type: "photo.created" }>>("photo.created", {
+  photo: { id: row.id, device: deviceOf(row), taken_at: isoOf(row.taken_at), place: row.lat === null ? null : { lat: row.lat, lon: row.lon! },
+    width: row.width, height: row.height, content_type: "image/jpeg", size: row.bytes, base64: "" } }, at);
 
 export const webhookTest = (webhook: { id: string; name: string }, at: number) => wrap("webhook.test", { webhook }, at);
 

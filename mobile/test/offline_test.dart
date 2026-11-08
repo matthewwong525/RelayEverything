@@ -7,10 +7,12 @@ import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/sender.dart';
 import 'package:relay_app/data/settings.dart';
 import 'package:relay_app/data/store.dart';
+import 'package:relay_app/screens/hold_to_talk.dart';
 import 'package:relay_app/sync/background.dart';
 import 'package:relay_app/voice/model.dart';
 
 import 'fakes.dart';
+import 'screens_test.dart' show holdNewNote, newNote, openSettings;
 
 /// Pumps, with real time between, until [done]: for file work and the model's checksum, which run outside the test's
 /// fake time.
@@ -20,6 +22,14 @@ Future<void> until(WidgetTester tester, bool Function() done) async {
     await tester.pump();
   }
   expect(done(), isTrue);
+}
+
+/// Holds *New note* past [holdToTalk] and lets go, then waits for the real recorder to start.
+Future<void> holdUntilListening(WidgetTester tester, bool Function() listening) async {
+  final gesture = await tester.startGesture(tester.getCenter(newNote));
+  await tester.pump(holdToTalk);
+  await gesture.up();
+  await until(tester, listening);
 }
 
 // With sending off, the app's promise is that nothing leaves the phone. This drives every screen and job, with a key
@@ -59,14 +69,13 @@ void main() {
     await tester.pumpWidget(RelayApp(relay: relay, scanner: (_) async => null));
 
     // Settings: pins on (a phone-only fix), and the dependent switches can not turn on.
-    await tester.tap(find.byTooltip('Settings'));
-    await tester.pumpAndSettle();
+    await openSettings(tester);
     await tester.tap(find.text('Pin notes to where I am'));
     await tester.runAsync(pumpEventQueue);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.text('Location history'), 100);
     await tester.tap(find.text('Location history'));
-    await tester.tap(find.text('Health: steps, heart rate, sleep and more'));
+    await tester.tap(find.text('Health'));
     await tester.tap(find.text('Calendar'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Photos'));
@@ -79,7 +88,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // A note, pinned.
-    await tester.tap(find.text('New note'));
+    await tester.tap(newNote);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Call the PCB fab about the flex stiffener');
     await tester.pump();
@@ -105,8 +114,8 @@ void main() {
       expect(Settings.decode(await store.get(settingsKey), hasKey: true).sending, isFalse);
     });
 
-    // Voice notes: the first press asks, and *Not now* gets nothing.
-    await tester.tap(find.text('Hold to talk'));
+    // Voice notes: the first hold asks, and *Not now* gets nothing.
+    await holdNewNote(tester);
     await tester.pumpAndSettle();
     expect(find.text('Get the speech model?'), findsOneWidget);
     await tester.tap(find.text('Not now'));
@@ -114,7 +123,7 @@ void main() {
     await tester.runAsync(pumpEventQueue);
     expect(models.requests, isEmpty);
     // *Get it*: the model's address, and nothing else.
-    await tester.tap(find.text('Hold to talk'));
+    await holdNewNote(tester);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Get it'));
     await tester.pump();
@@ -122,12 +131,11 @@ void main() {
     await tester.pumpAndSettle();
     expect([for (final request in models.requests) request.url], [modelUrl]);
     expect(models.requests.single.headers.keys.map((key) => key.toLowerCase()), isNot(contains(startsWith('cf-access'))));
-    // Hold, talk, let go: the words are written here, and go nowhere.
-    final gesture = await tester.startGesture(tester.getCenter(find.text('Hold to talk')));
-    await until(tester, () => relay.listening != null);
+    // Hold, let go, talk, tap the screen: the words are written here, and go nowhere.
+    await holdUntilListening(tester, () => relay.listening != null);
     expect(find.text('Listening'), findsOneWidget);
     clock = clock.add(const Duration(seconds: 10));
-    await gesture.up();
+    await tester.tapAt(const Offset(200, 150));
     await until(tester, () => relay.entries.any((entry) => entry.voice && !entry.writing));
     await tester.pumpAndSettle();
     expect(find.text('Ask the fab if the flex stiffener can be 0.2 mm'), findsOneWidget);
@@ -161,10 +169,9 @@ void main() {
       await relay.load();
     });
     await tester.pumpWidget(RelayApp(relay: relay, scanner: (_) async => null));
-    final gesture = await tester.startGesture(tester.getCenter(find.text('Hold to talk')));
-    await until(tester, () => relay.listening != null);
+    await holdUntilListening(tester, () => relay.listening != null);
     clock = clock.add(const Duration(seconds: 4));
-    await gesture.up();
+    await tester.tapAt(const Offset(200, 150));
     await until(tester, () => relay.entries.any((entry) => !entry.writing));
     await tester.pumpAndSettle();
     expect(find.text('Ask the fab if the flex stiffener can be 0.2 mm'), findsOneWidget);

@@ -42,7 +42,7 @@ A photo's item is `photos/<id>`: `space.ts` `filesOf` names it with `nameOf`, as
 
 ### The space table
 
-`schema/space-migrations/0007_photos.sql`:
+`schema/space-migrations/0008_photos.sql`:
 
 ```sql
 CREATE TABLE relay_photos (

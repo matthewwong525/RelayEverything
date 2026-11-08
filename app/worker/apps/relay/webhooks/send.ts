@@ -2,10 +2,10 @@
 // 2xx. A queue message only says "look now" for one webhook; the lease keeps one sender per webhook at a time.
 import { spaceOf, vouch, type Files, type PersonSpace, type SpaceEnv } from "../space.ts";
 import { MINUTE, type Db, type Env } from "../store.ts";
-import { ownerOf, type Entry, type KindId } from "../kinds.ts";
+import { ownerOf, type Entry, type KindId, type WithFile } from "../kinds.ts";
 import { checkAddress } from "./address.ts";
 import { BEHIND, TAKES } from "./log.ts";
-import { signedHeaders } from "./sign.ts";
+import { base64, signedHeaders } from "./sign.ts";
 export type Hook = { id: string; name: string; url: string; secret: string; kinds: string; active: number; sent_seq: number;
   pending_seq: number | null; backfill_seq: number | null; lease_until: number | null; tries: number; next_try_at: number | null;
   failing_since: number | null; last_status: number | null; last_error: string | null; last_sent_at: number | null; created_at: number };
@@ -19,6 +19,8 @@ const LEASE = 2 * MINUTE;
 const TIMEOUT = 15_000;
 const SLACK = 5_000;
 const AUDIO_RETRY = 30;
+/** A multiple of 3, so each piece's base64 joins the next with no padding between. */
+const PIECE = 3 * 0x2000;
 /** Seconds before each retry after a failed send, about 22 hours in all; then the webhook shows as failing. */
 export const DELAYS = [30, 120, 600, 1800, 3600, 7200, 14_400, 21_600, 28_800];
 
@@ -74,8 +76,25 @@ async function groupOf(db: Db, hook: Hook): Promise<Entry[]> {
 /** The message body for a group, built by the kind that owns its log rows. */
 const bodyOf = (files: Files, db: Db, group: Entry[]) => ownerOf(group[0].kind)!.build!(files, db, group);
 
+/** A message with its file's bytes as base64 in its empty `base64`, written into one array of exact size. A 25 MB file
+ *  as one string, and its copies, could pass a Worker's 128 MB. */
+export function bodyWithFile({ message, bytes }: WithFile): Uint8Array {
+  const text = JSON.stringify(message);
+  const at = text.lastIndexOf('"base64":""') + '"base64":"'.length;
+  const encoder = new TextEncoder();
+  const [prefix, suffix] = [encoder.encode(text.slice(0, at)), encoder.encode(text.slice(at))];
+  const body = new Uint8Array(prefix.length + 4 * Math.ceil(bytes.length / 3) + suffix.length);
+  body.set(prefix);
+  let offset = prefix.length;
+  for (let start = 0; start < bytes.length; start += PIECE) {
+    offset += encoder.encodeInto(base64(bytes.subarray(start, start + PIECE)), body.subarray(offset)).written;
+  }
+  body.set(suffix, offset);
+  return body;
+}
+
 /** One POST, with no redirects followed and 15 seconds to answer. */
-export async function post(url: string, secret: string, id: string, body: string): Promise<Answer> {
+export async function post(url: string, secret: string, id: string, body: string | Uint8Array): Promise<Answer> {
   const started = Date.now();
   try {
     const response = await fetch(url, { method: "POST", headers: await signedHeaders(secret, id, body), body, redirect: "manual",
@@ -98,11 +117,17 @@ export const record = (db: Db, id: string, type: string, answer: Answer, first: 
     SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM relay_webhooks WHERE id = ?)`)
     .bind(id, Date.now(), first, last, type, answer.status, answer.ms, answer.error, id).run();
 
-/** Moves the webhook's place to `seq`: the address took the group, or its note is gone. */
-const advance = (db: Db, hook: Hook, lease: number, seq: number, answer?: Answer) => db.prepare(`UPDATE relay_webhooks
+/** Moves the webhook's place to `seq`: the address took the group, skipped a file with `error`, or its note is gone. */
+const advance = (db: Db, hook: Hook, lease: number, seq: number, answer?: Answer, error: string | null = null) => db.prepare(`UPDATE relay_webhooks
   SET sent_seq = ?, pending_seq = NULL, tries = 0, next_try_at = NULL, last_status = coalesce(?, last_status),
-    last_error = CASE WHEN ? IS NULL THEN last_error END, last_sent_at = coalesce(?, last_sent_at)
-  WHERE id = ? AND lease_until = ?`).bind(seq, answer?.status ?? null, answer?.status ?? null, answer ? Date.now() : null, hook.id, lease).run();
+    last_error = CASE WHEN ? IS NULL THEN last_error ELSE ? END, last_sent_at = coalesce(?, last_sent_at)
+  WHERE id = ? AND lease_until = ?`).bind(seq, answer?.status ?? null, answer?.status ?? null, error, answer ? Date.now() : null, hook.id, lease)
+  .run();
+
+const sizeOf = (bytes: number) => bytes < 1_000_000 ? `${Math.ceil(bytes / 1000)} KB` : `${(bytes / 1_000_000).toFixed(1)} MB`;
+/** Why a file was skipped, for the card: the address refused it as too large, as the phone's own-webhook mode does. */
+const tooLarge = ({ message: { data: { file } } }: WithFile) =>
+  `Too large for this address: ${file.name} (${sizeOf(file.size)}). It stays on your Relay Everything page.`;
 
 /** After a failed try: the wait before the next, or null once the webhook shows as failing. */
 async function failed(db: Db, hook: Hook, lease: number, error: string, status: number | null = null): Promise<Wait> {
@@ -128,8 +153,17 @@ async function step(files: Files, db: Db, hook: Hook, lease: number): Promise<"n
   }
   if (body === "wait") return { wait: AUDIO_RETRY };
   await db.prepare("UPDATE relay_webhooks SET pending_seq = ? WHERE id = ? AND lease_until = ?").bind(last, hook.id, lease).run();
-  const answer = await post(hook.url, hook.secret, `msg_${hook.id}_${group[0].seq}_${last}`, JSON.stringify(body));
-  await record(db, hook.id, body.type, answer, group[0].seq, last);
+  const withFile = "bytes" in body ? body : null;
+  const { type } = withFile?.message ?? body as { type: string };
+  const answer = await post(hook.url, hook.secret, `msg_${hook.id}_${group[0].seq}_${last}`,
+    withFile ? bodyWithFile(withFile) : JSON.stringify(body));
+  // One file too large for the address must not hold back every note after it.
+  const skipped = withFile && answer.status === 413 ? tooLarge(withFile) : null;
+  await record(db, hook.id, type, skipped ? { ...answer, error: skipped } : answer, group[0].seq, last);
+  if (skipped) {
+    await advance(db, hook, lease, last, answer, skipped);
+    return "next";
+  }
   if (!succeeded(answer)) return { wait: await failed(db, hook, lease, answer.error ?? `Answered ${answer.status}.`, answer.status) };
   await advance(db, hook, lease, last, answer);
   return "next";

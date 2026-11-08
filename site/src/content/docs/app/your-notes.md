@@ -76,7 +76,7 @@ Where the files go:
 - **On this phone**, always. iPhone backups keep them, because a file you added may be nowhere else. Android cloud backup leaves them out, because it holds at most 25 MB for an app.
 - **In your space**, only with sending on. Each file goes after its note, sealed with your space's own key. When you turn sending on, [**Send them**](../../start/connect-a-phone/) sends the files of earlier notes too. [Privacy](../../privacy/)
 - **On your Relay Everything page**, a picture shows in its note, and another file is a link that downloads it. A file that has not arrived yet shows *Waiting for the file*.
-- **To your webhooks**, only each file's name, type and size, never the file: [Your own database](../../connections/your-database/#a-notes-files).
+- **To your webhooks**, each file after its note, with its bytes: [Your own database](../../connections/your-database/#notefile). A receiver that refuses a file as too large skips it, and the file stays in your space.
 
 [Shortcuts](../shortcuts/) can also add a note with files, with no tap in the app.
 

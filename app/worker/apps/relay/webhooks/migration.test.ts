@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { expect, it } from "vitest";
-import { call, db, NOW, phone, rows } from "../../../../tests/relay";
+import { handleApp } from "../../index";
+import { call, db, env, NOW, phone, queue, request, rows } from "../../../../tests/relay";
 
 const migration = (file: string) => readFileSync(new URL(`../../../../../schema/migrations/${file}`, import.meta.url), "utf8");
 const log = () => rows("relay_outbox").map(row => [row.kind, row.ref, row.at]);
@@ -43,4 +44,21 @@ it("logs what was stored before the migration, in time order", () => {
     { seq: 2, kind: "location", ref: "1", at: 1500000000000, logged_at: 1500000000009 },
     { seq: 3, kind: "health", ref: "1", at: 2000000000000, logged_at: 2000000000005 },
     { seq: 4, kind: "note.created", ref: "note-late", at: 3000000000000, logged_at: 3000000000001 }]);
+});
+
+it("logs a note's file once its bytes are stored, after the note, and wakes the webhooks for it", async () => {
+  const files = [{ id: "file-pdf-0001", name: "warranty.pdf", type: "application/pdf", size: 3 },
+    { id: "file-png-0001", name: "receipt.png", type: "image/png", size: 3 }];
+  await call(phone, "POST", "notes", { clientId: "note-files-01", text: "Receipt", createdAt: NOW - MINUTE, attachments: files });
+  queue.sent = [];
+  db.sql.prepare(`INSERT INTO relay_webhooks (id, name, url, secret, kinds, sent_seq, created_at)
+    VALUES ('hook-1', 'DB', 'https://db.example.com', 's', '["notes"]', 1, ?)`).run(NOW);
+  const upload = () => handleApp(request(phone, "POST", "https://relay.example.com/apps/relay/api/attachments", { body: new Uint8Array([1, 2, 3]),
+    headers: { "Content-Type": "application/pdf", "X-Note-Client-Id": "note-files-01", "X-Attachment-Id": "file-pdf-0001" } }), env(), null);
+  expect((await upload()).status).toBe(200);
+  expect((await upload()).status).toBe(200);
+  const note = rows("relay_notes")[0].id;
+  // The second file is listed but never sent, so it logs nothing.
+  expect(log()).toEqual([["note.created", note, NOW - MINUTE], ["note.file", "file-pdf-0001", NOW - MINUTE]]);
+  expect(queue.sent).toEqual([{ webhook: "hook-1", person: expect.any(String) }]);
 });

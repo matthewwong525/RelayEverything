@@ -5,6 +5,7 @@ import type { ActionCall } from "../../api/contract.ts";
 import { asDevice, asPerson } from "./caller.ts";
 import { CLIENT_ID, MAX_FILE_BYTES } from "./notes.ts";
 import { refused, type Env } from "./store.ts";
+import { wake } from "./webhooks/send.ts";
 
 type Call = Pick<ActionCall, "url" | "identity">;
 type Listed = { id: string; file_key: string | null };
@@ -12,7 +13,7 @@ type Listed = { id: string; file_key: string | null };
 const notFound = () => Response.json({ error: "Not found" }, { status: 404 });
 
 export const attachmentAdd: (request: Request, env: Env, call: Call) => Promise<Response> =
-  asDevice<Call>("Only a Relay Everything device key can send files", async ({ space, device, request }) => {
+  asDevice<Call>("Only a Relay Everything device key can send files", async ({ space, device, request, env }) => {
     const noteClientId = request.headers.get("X-Note-Client-Id") ?? "";
     const id = request.headers.get("X-Attachment-Id") ?? "";
     if (!CLIENT_ID.test(noteClientId) || !CLIENT_ID.test(id)) return refused(400, "Name the file and its note: X-Note-Client-Id and X-Attachment-Id.");
@@ -31,6 +32,8 @@ export const attachmentAdd: (request: Request, env: Env, call: Call) => Promise<
     const key = await space.files.put(`attachments/${id}`, bytes.buffer as ArrayBuffer);
     // Two uploads of one file at once seal the same bytes under the same name, so the second changes nothing.
     await space.db.prepare("UPDATE relay_attachments SET file_key = ?, size = ? WHERE id = ? AND file_key IS NULL").bind(key, bytes.byteLength, id).run();
+    // The seal logs a note.file, which goes to every webhook with the note.
+    await wake(env, space, ["notes"]);
     return Response.json({ ok: true, added: true });
   });
 

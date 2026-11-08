@@ -148,7 +148,7 @@
                   "description": "A ring note's recording, or null for a typed note or a ring note with words only."
                 },
                 "attachments": {
-                  "description": "The note's files: each one's name, type and size, never its bytes. Only a note with files has this list.",
+                  "description": "The note's files: each one's name, type and size, never its bytes; each file's bytes follow in its own note.file. Only a note with files has this list.",
                   "minItems": 1,
                   "maxItems": 10,
                   "type": "array",
@@ -646,7 +646,7 @@
         "timestamp",
         "data"
       ],
-      "description": "One file of a note, with its bytes. Only a phone that sends to its own webhook sends it, after the note's note.created."
+      "description": "One file of a note, with its bytes, after the note's note.created. Relay Everything sends it once it stores the file, and a phone that sends to its own webhook sends it too. A file can be 25 MB, about 33 MB as base64: answer 413 to skip a file too large for you."
     },
     {
       "type": "object",

@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { healthSamples, locationPoints, noteCreated, noteUpdated, webhookTest, type NoteRow } from "./format.ts";
+import { healthSamples, locationPoints, noteCreated, noteFile, noteUpdated, webhookTest, type NoteRow } from "./format.ts";
 import { base64, newSecret } from "./sign.ts";
-import { post } from "./send.ts";
+import { bodyWithFile, post } from "./send.ts";
 
 // The example receiver the website offers, run as a person runs it, and fed by the real sender.
 const receiver = new URL("../../../../../site/public/webhooks/receiver.mjs", import.meta.url);
@@ -46,6 +46,23 @@ it("saves what Relay sends, once each, and refuses a message signed with another
     { id: ring.id, place: "Harbord St", lat: 43.6629, audio: "00000018" }]);
   expect(saved.prepare("SELECT id, type, value FROM health_samples").all().map(row => ({ ...row }))).toEqual([{ id: 2, type: "steps", value: 5210 }]);
   expect(saved.prepare("SELECT id, place FROM location_points").all().map(row => ({ ...row }))).toEqual([{ id: 1, place: null }]);
+  saved.close();
+});
+
+it("keeps each file a note lists, then its bytes beside the note when they come", async () => {
+  const at = Date.now();
+  const listed = { id: "file-list-0001", name: "warranty.pdf", content_type: "application/pdf", size: 3 };
+  const typed = { ...ring, id: "a0000000-0000-4000-8000-000000000009", source: "typed" as const, audio_key: null };
+  const files = [listed, { ...listed, id: "file-list-0002", name: "never.pdf" }];
+  for (let tries = 0; tries < 2; tries++) expect((await send(noteCreated(typed, null, at, files))).status).toBe(204);
+  const bytes = new Uint8Array([1, 2, 3]);
+  expect((await post(`${address}/`, secret, "msg_file", bodyWithFile({ message: noteFile(listed, typed.id, at), bytes }))).status).toBe(204);
+  // A resent note.created keeps the bytes that came.
+  expect((await send(noteCreated(typed, null, at, files))).status).toBe(204);
+  const saved = new DatabaseSync(database, { readOnly: true });
+  expect(saved.prepare("SELECT id, note_id, name, iif(bytes IS NULL, NULL, hex(bytes)) AS bytes FROM files WHERE note_id = ? ORDER BY id").all(typed.id)
+    .map(row => ({ ...row }))).toEqual([{ id: "file-list-0001", note_id: typed.id, name: "warranty.pdf", bytes: "010203" },
+    { id: "file-list-0002", note_id: typed.id, name: "never.pdf", bytes: null }]);
   saved.close();
 });
 

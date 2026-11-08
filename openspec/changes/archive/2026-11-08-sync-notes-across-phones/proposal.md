@@ -1,6 +1,6 @@
 # Your notes on every phone you sign in on
 
-**Status:** built and reviewed; saved for final acceptance (CI phone tests, staging, iPhone check)
+**Status:** ready-to-ship
 **Branch:** explain-data-storage
 **Open questions:** none
 
@@ -109,3 +109,5 @@ Non-goals: deleting a note everywhere, sync on the web page as a phone app, sync
 - **2026-11-08** — Assumed: a change on the phone with nothing waiting to send, such as one made while sending was off, keeps its words when its `edited_at` is later than the pulled `editedAt`, and the pull queues its `note.update`, because the newer change wins wherever it waits.
 - **2026-11-08** — Assumed: a note emptied and deleted on this phone comes back on a pull from `0`, such as after a new sign-in, because the server keeps its last words and deleting everywhere is a non-goal.
 - **2026-11-08** — Saved for final acceptance: *Edit notes like Apple Notes* was published (#61), and main was merged in with only this change's work on top; the phone tests (5.1), the staging check (5.2) and the iPhone check (5.3) run on the saved commit.
+- **2026-11-08** — Staging check (5.2) passed on `baedaca` with two phone keys: B saw A's note, changed it by `id`, A's older change got `409 older`, the test webhook got one `note.created` and one `note.updated`, B got `403` on timeline, summary and day; the test account was deleted.
+- **2026-11-08** — Check: the iPhone check (5.3, run 42494210887) ended *broken* because Maestro's iOS driver did not start in time on two tour steps; the app opened on Home, the notes-style and Settings steps passed, and Claude did not start. Asked whether to run it again → chose: publish now.

@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · sync-notes-across-phones</title>
+<title>Review · 2026-11-08-sync-notes-across-phones</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="sync-notes-across-phones" data-own-back>
+<body data-change="2026-11-08-sync-notes-across-phones" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>sync-notes-across-phones</h1>
+  <h1>2026-11-08-sync-notes-across-phones</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -474,6 +474,8 @@
 <li class="decision card" id="decision-18" data-note="decision-18" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-08</p>Assumed: a change on the phone with nothing waiting to send, such as one made while sending was off, keeps its words when its <code>edited_at</code> is later than the pulled <code>editedAt</code>, and the pull queues its <code>note.update</code>, because the newer change wins wherever it waits.</li>
 <li class="decision card" id="decision-19" data-note="decision-19" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-08</p>Assumed: a note emptied and deleted on this phone comes back on a pull from <code>0</code>, such as after a new sign-in, because the server keeps its last words and deleting everywhere is a non-goal.</li>
 <li class="decision card" id="decision-20" data-note="decision-20" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-08</p>Saved for final acceptance: <i>Edit notes like Apple Notes</i> was published (#61), and main was merged in with only this change's work on top; the phone tests (5.1), the staging check (5.2) and the iPhone check (5.3) run on the saved commit.</li>
+<li class="decision card" id="decision-21" data-note="decision-21" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-08</p>Staging check (5.2) passed on <code>baedaca</code> with two phone keys: B saw A's note, changed it by <code>id</code>, A's older change got <code>409 older</code>, the test webhook got one <code>note.created</code> and one <code>note.updated</code>, B got <code>403</code> on timeline, summary and day; the test account was deleted.</li>
+<li class="decision card" id="decision-22" data-note="decision-22" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-08</p>Check: the iPhone check (5.3, run 42494210887) ended <i>broken</i> because Maestro's iOS driver did not start in time on two tour steps; the app opened on Home, the notes-style and Settings steps passed, and Claude did not start. Asked whether to run it again → chose: publish now.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

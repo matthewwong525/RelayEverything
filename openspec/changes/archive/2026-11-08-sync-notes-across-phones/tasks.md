@@ -27,9 +27,9 @@
 
 ## 5. Checks
 
-- [ ] 5.1 `flutter analyze` and `flutter test` in `mobile/`; `npm test` in `app/`; `node scripts/product-name.test.mjs`; `node scripts/public-check.mjs`.
-- [ ] 5.2 `/save`, deploy this branch's spaces Worker to staging, then on staging with two phone keys: a note sent with key A shows in key B's `GET notes`; key B changes it by `id`; a test webhook gets one `note.updated`; an older change from key A gets `409`; key B is refused on health.
-- [ ] 5.3 The iPhone device check: sign in, see a note sent by another key, open its file, sign out and see only this phone's notes.
+- [x] 5.1 `flutter analyze` and `flutter test` in `mobile/`; `npm test` in `app/`; `node scripts/product-name.test.mjs`; `node scripts/public-check.mjs`.
+- [x] 5.2 `/save`, deploy this branch's spaces Worker to staging, then on staging with two phone keys: a note sent with key A shows in key B's `GET notes`; key B changes it by `id`; a test webhook gets one `note.updated`; an older change from key A gets `409`; key B is refused on health.
+- [x] 5.3 The iPhone device check: sign in, see a note sent by another key, open its file, sign out and see only this phone's notes. Run 42494210887: the test tool timed out at its start, so Claude did not start; the app opened. The person chose to publish (Decision log).
 
 ## 6. Review fixes
 

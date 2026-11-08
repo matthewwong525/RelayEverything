@@ -98,9 +98,11 @@ Future<void> recordFromShortcut(BuildContext context, Relay relay) async {
 /// Over the whole app while the phone listens: a tap anywhere saves the voice note and writes its words; *Cancel*
 /// keeps nothing. The timeline shows it whenever [Relay.listening] is set, from a hold or from Shortcuts.
 class ListeningOverlay extends StatefulWidget {
-  const ListeningOverlay({super.key, required this.relay});
+  const ListeningOverlay({super.key, required this.relay, required this.onSaved});
 
   final Relay relay;
+  /// After a tap saved the voice note: gets the time it started, which is its note's time, so the note's page opens.
+  final void Function(DateTime at) onSaved;
 
   @override
   State<ListeningOverlay> createState() => _ListeningOverlayState();
@@ -128,9 +130,16 @@ class _ListeningOverlayState extends State<ListeningOverlay> {
     if (_done) return;
     _done = true;
     final messenger = ScaffoldMessenger.of(context);
+    final onSaved = widget.onSaved;
+    // Read first: the save ends the listening, and the note keeps this time.
+    final since = _relay.listening;
     try {
       final problem = await _relay.endVoiceNote();
-      if (problem != null) messenger.showSnackBar(SnackBar(content: Text(problem)));
+      if (problem != null) {
+        messenger.showSnackBar(SnackBar(content: Text(problem)));
+      } else if (since != null) {
+        onSaved(since);
+      }
     } catch (_) {
       // A guard: the app's Relay returns its problems. A card still listening stays usable: a tap tries again, and
       // Cancel closes it.

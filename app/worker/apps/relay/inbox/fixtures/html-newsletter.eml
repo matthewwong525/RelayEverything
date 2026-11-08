@@ -1,0 +1,20 @@
+From: Weekly <news@letter.example.org>
+To: notes-placeholder@in.example.com
+Subject: This week in rings
+Date: Thu, 05 Nov 2026 08:00:00 +0000
+Message-ID: <weekly-0001@letter.example.org>
+MIME-Version: 1.0
+Content-Type: multipart/related; boundary="r1"
+
+--r1
+Content-Type: text/html; charset=utf-8
+
+<html><head><style>p { color: red }</style></head><body><img src="cid:logo@letter"><h1>Rings &amp; things</h1><p>Smart rings got&nbsp;smaller.</p><ul><li>One</li><li>Two &#8211; three</li></ul></body></html>
+--r1
+Content-Type: image/png
+Content-ID: <logo@letter>
+Content-Disposition: inline; filename="logo.png"
+Content-Transfer-Encoding: base64
+
+iVBORw0KGgpsb2dv
+--r1--

@@ -4,10 +4,11 @@ import { spaceOf, vouch, type Caller, type SpaceEnv } from "../apps/relay/space.
 import type { Asker } from "./answers.ts";
 import type { GrantProps, McpEnv } from "./env.ts";
 
-type Bindings = Pick<McpEnv, "SPACES" | "RELAY_WEBHOOKS">;
+/** The spaces, the file store and the webhooks' queue. */
+export type Bindings = SpaceEnv & Pick<McpEnv, "RELAY_WEBHOOKS">;
 
-// The connector reads no recording, so it binds no file store.
-const open = (env: Bindings, caller: Caller) => spaceOf({ SPACES: env.SPACES } as SpaceEnv, caller);
+// The file store is there for read_photo, which opens one photo by its row: no answer reads a recording.
+const open = (env: Bindings, caller: Caller) => spaceOf(env, caller);
 
 /** A grant's person and, for an app whose consent page said it can add notes, its device. Null for a grant from
  *  before spaces, which names no person: its app must connect again. */

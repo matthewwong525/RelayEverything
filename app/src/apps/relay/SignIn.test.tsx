@@ -32,6 +32,7 @@ function api(route: string): Response {
   if (route.startsWith("summary?")) return Response.json(EMPTY_DAY);
   if (route === "timeline" || route === "chats") return Response.json({ notes: [], chats: [], next: null, nextId: null });
   if (route === "webhooks") return Response.json({ webhooks: [] });
+  if (route === "photos") return Response.json({ count: 0 });
   if (route === "ai-apps") return Response.json({ address: "https://relay-mcp.example.com/mcp", apps: [] });
   throw new Error(`Unexpected route: ${route}`);
 }
@@ -293,7 +294,7 @@ it("deletes the account only after the email is typed, then shows the sign-in", 
   fireEvent.click(screen.getByRole("button", { name: "Delete my account" }));
   const dialog = await screen.findByRole("dialog", { name: "Delete your account?" });
   expect(within(dialog).getByLabelText(/Type your email/)).toHaveProperty("value", "");
-  expect(within(dialog).getByText(/notes, recordings, health, places, chats, devices, webhooks and connected AI apps/)).toBeTruthy();
+  expect(within(dialog).getByText(/notes, recordings, photos, health, places, chats, devices, webhooks and connected AI apps/)).toBeTruthy();
   const remove = within(dialog).getByRole("button", { name: "Delete everything" });
   expect(remove.hasAttribute("disabled")).toBe(true);
   fireEvent.change(within(dialog).getByLabelText(/Type your email/), { target: { value: "ben@example.com" } });

@@ -1,6 +1,6 @@
 # Relay Everything's AI connector
 
-Relay Everything's AI connector lets an AI chat app, such as the Claude app or ChatGPT, read your Relay Everything notes, health, calendar, places and saved chats when you ask it a question, and add a note when you ask it to save one. It can't change or delete a note. The same Worker answers the [web API](#the-web-api) under `/v1/`, for scripts and services. It is part of [the Cloudflare stack](README.md): its own Worker, `relay-everything-mcp`, beside the main app.
+Relay Everything's AI connector lets an AI chat app, such as the Claude app or ChatGPT, read your Relay Everything notes, health, calendar, places, saved chats and photos when you ask it a question, and add a note when you ask it to save one. It can't change or delete a note. The same Worker answers the [web API](#the-web-api) under `/v1/`, for scripts and services. It is part of [the Cloudflare stack](README.md): its own Worker, `relay-everything-mcp`, beside the main app.
 
 | Where | Address to add |
 | --- | --- |
@@ -19,11 +19,11 @@ You connect each app one time. Each app opens a sign-in page: you click **Connec
 - **ChatGPT**: open **Settings → Apps & Connectors → Advanced settings** and turn on **Developer mode**. Then click **Create**, type `Relay Everything`, paste the address and pick **OAuth** for the sign-in. Click **Create**, then sign in. In a chat, pick Relay Everything from the developer-mode tools.
 - **Claude Code**: run `claude mcp add --transport http relay <address>`, then type `/mcp` in Claude Code and pick `relay` to sign in.
 
-Then ask, for example: *What did I note on 4 November?* or *How many steps did I walk last week?* Days are Toronto days unless you name another time zone.
+Then ask, for example: *What did I note on 4 November?*, *How many steps did I walk last week?* or *Show me the photos from the trip to Lisbon.* Days are Toronto days unless you name another time zone.
 
 ## What the app can read and add
 
-The connector has ten tools: nine read, and `add_note` adds. Each answer has a limit, so one question can't copy all of Relay Everything.
+The connector has twelve tools: eleven read, and `add_note` adds. Each answer has a limit, so one question can't copy all of Relay Everything.
 
 - **search**: notes that hold every word you give, newest first.
 - **fetch**: one note, the places near it in time, and its day's health totals.
@@ -34,11 +34,15 @@ The connector has ten tools: nine read, and `add_note` adds. Each answer has a l
 - **places**: each stay at a place, with when you arrived and left.
 - **search_chats**: saved Claude Code chats that hold every word you give, with the lines that match ([Relay Everything's Claude Code chats](relay-chats.md)).
 - **read_chat**: one saved chat, a part at a time, with the AI's saved summaries.
+- **photos**: photos the phones sent, from one time to another, newest first: each one's id, time taken, place (`lat`, `lon`), width and height, with `nextCursor` for the next page. `near` (`lat`, `lon`, `km` up to 500) keeps only photos near a point; `limit` is at most 50.
+- **read_photo**: one photo by its id, as an image (`image/jpeg`), plus a text line with its time and place, for an app that drops images. An unknown id is a tool error.
 - **add_note**: a typed note, under the app's own device row (`reaches = 'app'`, named for the app), made on its first note. The app's `clientId` keeps a resend to one note, and the note wakes the webhooks that take notes, as a phone's does. An app connected before adding has no `adds` in its grant: it reads, and `add_note` asks it to connect again.
+
+To read a photo, the connector binds the same file store as the app, `RELAY_BUCKET`, in each environment of `app/wrangler.relay-mcp.jsonc` and in `self-host/mcp.template.jsonc`. It opens a photo only through the space's own seal, as the page opens a recording ([recordings, note files and photos](../relay-spaces.md#recordings-note-files-and-photos)). No tool reads a recording or a note file. The web API has no photo route: `read_photo` answers an image, and `near` is no query field.
 
 ## What leaves Relay Everything
 
-When an app uses a tool, the answer goes to that app's company: Anthropic for Claude, OpenAI for ChatGPT. Their own terms then apply to it. An answer can hold a note's words, its time, the place name and coordinates, the device name, health totals, calendar events with their people, and a chat's messages.
+When an app uses a tool, the answer goes to that app's company: Anthropic for Claude, OpenAI for ChatGPT. Their own terms then apply to it. An answer can hold a note's words, its time, the place name and coordinates, the device name, health totals, calendar events with their people, a chat's messages, and one photo with its time and place.
 
 An answer never holds a recording, a device key, or a device's or delivery's id. The app gets only what a tool answers for one question, not a copy of the database.
 
@@ -76,7 +80,7 @@ node scripts/relay-mcp-setup.mjs                    # the live connector
 
 A second run changes nothing. When `--check` names a missing permission, widen the token as [Cloudflare credentials](cloudflare-credentials.md#how-two-permission-rows-become-enough) says, then run it again.
 
-Deploy the spaces Worker (`app/wrangler.spaces.jsonc`), then run setup for an environment, **before** the main app deploys there. The connector binds `SPACES`, the main app binds the connector as `RELAY_MCP`, and Cloudflare refuses a deploy whose bound Worker does not exist. For the first change that adds the connector:
+Deploy the spaces Worker (`app/wrangler.spaces.jsonc`), then run setup for an environment, **before** the main app deploys there. The connector binds `SPACES` and `RELAY_BUCKET`, the main app binds the connector as `RELAY_MCP`, and Cloudflare refuses a deploy whose bound Worker does not exist. For the first change that adds the connector:
 
 1. Run setup with `--staging`, then [try it](#try-it), before the change is saved: the preview binds `relay-everything-mcp-staging`.
 2. Run setup for the live connector just before the change is published: the publish deploys `relay-everything-mcp`.

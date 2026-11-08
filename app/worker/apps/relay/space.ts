@@ -9,9 +9,9 @@ export type Row = Record<string, SqlValue>;
 
 const checked = Symbol("checked caller");
 
-/** How the caller proved who they are: a signed-in browser, a device key, an AI app's grant, a phone's one-time sign-in
- *  code, Access on a self-host, the preview checker, or a queue message the server itself sent. */
-export type CallerKind = "session" | "key" | "grant" | "code" | "access" | "checker" | "queue";
+/** How the caller proved who they are: a signed-in browser, a device key, an AI app's grant, a phone's sign-in code,
+ *  Access on a self-host, the preview checker, the server's own queue message, or mail found by the inbox. */
+export type CallerKind = "session" | "key" | "grant" | "code" | "access" | "checker" | "queue" | "inbox";
 /** A key's reach: a phone, a chat sender, or an API key, which reaches only the web API. */
 export type Reach = "phone" | "chats" | "api";
 export type Caller = {
@@ -65,8 +65,8 @@ function dbOf(stub: Pick<Stub, "query" | "batch">): Db {
 const encoder = new TextEncoder();
 const IV = 12;
 
-/** A person's recordings and note files in the file store: each under their own folder, sealed with their space's
- *  file key and its own name, so the store alone, or a copy under another name, never opens. */
+/** A person's recordings, note files and photos in the file store: each under their own folder, sealed with their
+ *  space's file key and its own name, so the store alone, or a copy under another name, never opens. */
 function filesOf(bucket: R2Bucket, stub: Pick<Stub, "fileKey">, personId: string) {
   const prefix = `people/${personId}/`;
   let key: Promise<CryptoKey> | undefined;
@@ -80,15 +80,21 @@ function filesOf(bucket: R2Bucket, stub: Pick<Stub, "fileKey">, personId: string
     return out;
   };
   const files = {
-    /** The file store's name for a note's recording (its note id), or a note's file (`attachments/<id>`). */
+    /** The file store's name for a note's recording (its note id), a note's file (`attachments/<id>`), or a photo
+     *  (`photos/<id>`). */
     nameOf: (item: string) => `${prefix}${item}`,
-    /** Seals a recording or a file and stores it under the person's folder; answers its name for the row. */
+    /** Seals a recording, a file or a photo and stores it under the person's folder; answers its name for the row. */
     async put(item: string, bytes: ArrayBuffer): Promise<string> {
       const name = files.nameOf(item);
       await bucket.put(name, await seal(name, bytes), { httpMetadata: { contentType: "application/octet-stream" } });
       return name;
     },
-    /** A recording's bytes, or null when it is missing, outside the person's folder, or does not open. */
+    /** Deletes these files of the person's folder; a name outside it is left alone. */
+    async remove(names: string[]): Promise<void> {
+      const own = names.filter(name => name.startsWith(prefix));
+      if (own.length) await bucket.delete(own);
+    },
+    /** A file's bytes, or null when it is missing, outside the person's folder, or does not open. */
     async open(name: string): Promise<Uint8Array | null> {
       if (!name.startsWith(prefix)) return null;
       const object = await bucket.get(name);
@@ -102,19 +108,43 @@ function filesOf(bucket: R2Bucket, stub: Pick<Stub, "fileKey">, personId: string
       }
     },
     /** Deletes every object in the person's folder, a page at a time; answers how many. */
-    async removeAll(): Promise<number> {
-      let removed = 0;
-      for (let cursor: string | undefined, more = true; more;) {
-        const page = await bucket.list({ prefix, cursor });
-        if (page.objects.length) await bucket.delete(page.objects.map(object => object.key));
-        removed += page.objects.length;
-        more = page.truncated;
-        cursor = page.truncated ? page.cursor : undefined;
-      }
-      return removed;
-    },
+    removeAll: (): Promise<number> => removePrefix(bucket, prefix),
   };
   return files;
+}
+
+/** Deletes every object under the prefix, a page at a time; answers how many. */
+async function removePrefix(bucket: R2Bucket, prefix: string): Promise<number> {
+  let removed = 0;
+  for (let cursor: string | undefined, more = true; more;) {
+    const page = await bucket.list({ prefix, cursor });
+    if (page.objects.length) await bucket.delete(page.objects.map(object => object.key));
+    removed += page.objects.length;
+    more = page.truncated;
+    cursor = page.truncated ? page.cursor : undefined;
+  }
+  return removed;
+}
+
+const HELD = "held/";
+
+/** Mail kept for an email with no account yet, under `held/` and nowhere else: inbox/held.ts seals each object with
+ *  a key made from the sender's email, so this store holds nothing it can open. */
+export type HeldFilesEnv = Pick<SpaceEnv, "RELAY_BUCKET">;
+
+export function heldFiles(env: HeldFilesEnv) {
+  const inside = (name: string) => {
+    if (!name.startsWith(HELD)) throw new Error("Kept mail stays under held/.");
+    return name;
+  };
+  return {
+    put: async (name: string, bytes: Uint8Array) => { await env.RELAY_BUCKET.put(inside(name), bytes); },
+    async get(name: string): Promise<Uint8Array | null> {
+      const object = await env.RELAY_BUCKET.get(inside(name));
+      return object ? new Uint8Array(await object.arrayBuffer()) : null;
+    },
+    removeAll: (prefix: string) => removePrefix(env.RELAY_BUCKET, inside(prefix)),
+  };
 }
 
 export type Files = ReturnType<typeof filesOf>;

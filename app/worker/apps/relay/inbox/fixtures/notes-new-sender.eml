@@ -1,0 +1,26 @@
+Authentication-Results: mx.cloudflare.net;
+ dkim=pass header.d=example.com header.s=s1 header.b=AbCd;
+ dmarc=pass (policy=none) header.from=example.com;
+ spf=pass (mx.cloudflare.net: domain of cy@example.com designates 192.0.2.10 as permitted sender) smtp.mailfrom=cy@example.com
+From: Cy <cy@example.com>
+To: notes@in.example.com
+Subject: Idea: ring charger
+Date: Mon, 02 Nov 2026 10:00:00 +0000
+Message-ID: <cy-0001@mail.example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="c1"
+
+--c1
+Content-Type: text/plain; charset=utf-8
+
+A cradle with pogo pins.
+
+--c1
+Content-Type: application/pdf; name="sketch.pdf"
+Content-Disposition: attachment; filename="sketch.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQKMSAwIG9iaiA8PCAvVHlwZSAvQ2F0YWxvZyA+PiBlbmRvYmoKdHJhaWxlciA8PCAv
+Um9vdCAxIDAgUiA+PgolJUVPRgo=
+
+--c1--

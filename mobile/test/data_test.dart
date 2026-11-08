@@ -267,6 +267,43 @@ void main() {
       await expectLater(api.key(), throwsA(isA<ApiException>().having((error) => error.failure, 'failure', Failure.offline)));
       expect(const ApiException(Failure.offline, 503).toString(), contains('503'));
     });
+
+    test('uploads a photo as a multipart body: its fields, and the JPEG with its content type', () async {
+      final server = FakeServer((_) => FakeServer.json({'ok': true, 'added': 1}));
+      final jpeg = jpegOf(1600, 1200);
+      expect(await server.api(bearer).multipart('photos', {'clientId': 'photo-0001', 'takenAt': '1793797200000'},
+        file: 'photo', bytes: jpeg, filename: 'photo-0001.jpg', contentType: 'image/jpeg'), {'ok': true, 'added': 1});
+      final request = server.requests.single;
+      expect([request.method, request.url.toString()], ['POST', 'https://relay.example.com/apps/relay/api/photos']);
+      expect(request.headers['Authorization'], 'Bearer $pageKey');
+      expect(request.headers['content-type'], startsWith('multipart/form-data; boundary='));
+      final parts = formParts(request);
+      expect(parts.keys, ['clientId', 'takenAt', 'photo']);
+      expect([parts['clientId'], parts['takenAt']], [(null, 'photo-0001'), (null, '1793797200000')]);
+      expect(parts['photo']!.$1, 'image/jpeg');
+      expect(latin1.encode(parts['photo']!.$2), jpeg);
+    });
+
+    test('names an upload\'s failure the same way as a JSON body\'s', () async {
+      Future<Failure?> failureOf(http.Response Function(http.Request) answer) async {
+        try {
+          await FakeServer(answer).api(connection).multipart('photos', {'clientId': 'photo-0001'}, file: 'photo', bytes: jpegOf(10, 10),
+            filename: 'photo-0001.jpg', contentType: 'image/jpeg');
+          return null;
+        } on ApiException catch (error) {
+          return error.failure;
+        }
+      }
+      expect(await failureOf((_) => FakeServer.json({'ok': true, 'added': 0})), isNull);
+      expect(await failureOf((_) => FakeServer.json({'error': 'not a JPEG'}, 400)), Failure.rejected);
+      expect(await failureOf((_) => FakeServer.json({}, 413)), Failure.rejected);
+      expect(await failureOf((_) => FakeServer.json({}, 403)), Failure.refused);
+      expect(await failureOf((_) => FakeServer.json({}, 401)), Failure.refused);
+      expect(await failureOf((_) => FakeServer.json({}, 502)), Failure.offline);
+      final api = RelayApi(connection, MockClient((_) => throw const SocketException('no signal')));
+      await expectLater(api.multipart('photos', {}, file: 'photo', bytes: [1], filename: 'x.jpg', contentType: 'image/jpeg'),
+        throwsA(isA<ApiException>().having((error) => error.failure, 'failure', Failure.offline)));
+    });
   });
 
   group('the store and outbox', () {
@@ -504,6 +541,51 @@ void main() {
       expect([for (final note in await store.notes()) note.clientId], ['v']);
     });
 
+    QueuedPhoto photo(String id, int minute, {double? lat, double? lon}) => QueuedPhoto(clientId: id, assetId: 'asset-$id',
+      takenAt: at.add(Duration(minutes: minute)), lat: lat, lon: lon, width: 1600, height: 1200, path: photoPathOf(id));
+
+    Future<File> copyOf(QueuedPhoto photo) async {
+      final file = await store.photoFile(photo.path);
+      await file.parent.create(recursive: true);
+      await file.writeAsBytes(jpegOf(photo.width, photo.height));
+      return file;
+    }
+
+    test('keeps photos in their own queue, oldest first, and a photo done loses its row and its copy', () async {
+      final late = photo('late', 5), early = photo('early', 1, lat: 43.65, lon: -79.38);
+      final files = [await copyOf(late), await copyOf(early)];
+      await store.addPhoto(late);
+      await store.addPhoto(early);
+      await store.addNote(note('note-0001'), send: true);
+      final waiting = await store.waitingPhotos();
+      expect([for (final kept in waiting) kept.clientId], ['early', 'late']);
+      expect([waiting.first.assetId, waiting.first.takenAt, waiting.first.lat, waiting.first.lon, waiting.first.width,
+        waiting.first.height, waiting.first.path], ['asset-early', at.add(const Duration(minutes: 1)), 43.65, -79.38, 1600, 1200,
+        'photos/early.jpg']);
+      expect(waiting.first.fields, {'clientId': 'early', 'takenAt': '${at.millisecondsSinceEpoch + 60000}', 'lat': '43.65', 'lon': '-79.38'});
+      expect(waiting.last.fields.keys, ['clientId', 'takenAt']);
+      // The outbox is apart: a photo waiting for Wi-Fi holds back no note.
+      expect([for (final item in await store.outbox()) item.route], ['notes']);
+      await store.photoDone('early');
+      expect([for (final kept in await store.waitingPhotos()) kept.clientId], ['late']);
+      expect([files.first.existsSync(), files.last.existsSync()], [true, false]);
+    });
+
+    test('drops every waiting photo with its copy, and keeps notes and their uploads', () async {
+      final files = [for (final (index, id) in ['a', 'b'].indexed) await copyOf(photo(id, index))];
+      for (final (index, id) in ['a', 'b'].indexed) {
+        await store.addPhoto(photo(id, index));
+      }
+      await store.addNote(note('note-0001'), send: true);
+      await store.dropPhotos();
+      expect([await store.waitingPhotos(), [for (final file in files) file.existsSync()]], [isEmpty, [false, false]]);
+      expect([for (final item in await store.outbox()) item.route], ['notes']);
+      // A photo whose copy is gone already is dropped too.
+      await store.addPhoto(photo('c', 3));
+      await store.dropPhotos();
+      expect(await store.waitingPhotos(), isEmpty);
+    });
+
     group('files', () {
       late Directory folder;
       setUp(() {
@@ -694,6 +776,46 @@ void main() {
       expect([await old.waitingReadings(), await old.get('health.since'), await old.calendarSent()], [1, '5', isEmpty]);
       await old.queueCalendar([{'events': [{'key': 'k'}], 'removed': ['gone']}], {'k': 'hash'}, const ['gone']);
       expect([await old.waitingEvents(), await old.calendarSent()], [2, {'k': 'hash'}]);
+    });
+
+    test('upgrades a phone from before photos: its notes and uploads stay, and photos can wait', () async {
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+      addTearDown(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = false);
+      final folder = tempFolder();
+      final old = Store(NativeDatabase.memory(setup: (db) {
+        for (final statement in [
+          "CREATE TABLE outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, destination TEXT NOT NULL DEFAULT 'relay-server', "
+            'route TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL)',
+          'CREATE TABLE notes (client_id TEXT PRIMARY KEY, body TEXT NOT NULL, created_at INTEGER NOT NULL, sent_at INTEGER, '
+            "queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0, kind TEXT NOT NULL DEFAULT 'typed', "
+            'audio_path TEXT, duration_ms INTEGER, words_pending INTEGER NOT NULL DEFAULT 0)',
+          'CREATE TABLE points (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
+          'CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+          'CREATE TABLE attachments (id TEXT PRIMARY KEY, note_client_id TEXT NOT NULL, name TEXT, type TEXT, size INTEGER, '
+            'path TEXT, sent_at INTEGER)',
+          'CREATE TABLE calendar_sent (key TEXT PRIMARY KEY, hash TEXT NOT NULL)',
+        ]) {
+          db.execute(statement);
+        }
+        final body = jsonEncode(note('queued').toJson());
+        db.execute('INSERT INTO notes (client_id, body, created_at, queued) VALUES (?, ?, 1, 1)', ['queued', body]);
+        db.execute("INSERT INTO outbox (route, body, created_at) VALUES ('notes', ?, 1)", [body]);
+        db.execute("INSERT INTO state VALUES ('settings', '{\"sending\":true}')");
+        db.execute("INSERT INTO calendar_sent VALUES ('k', 'hash')");
+        db.execute('PRAGMA user_version = 6');
+      }), folder: () async => folder);
+      addTearDown(old.close);
+      expect([for (final kept in await old.notes()) (kept.clientId, kept.queued)], [('queued', true)]);
+      expect([for (final item in await old.outbox()) item.body['clientId']], ['queued']);
+      expect([await old.get('settings'), await old.calendarSent()], ['{"sending":true}', {'k': 'hash'}]);
+      expect(await old.waitingPhotos(), isEmpty);
+      final file = File('${folder.path}/photos/p.jpg');
+      await file.parent.create(recursive: true);
+      await file.writeAsBytes(jpegOf(4, 3));
+      await old.addPhoto(QueuedPhoto(clientId: 'p', assetId: 'asset-p', takenAt: at, width: 4, height: 3, path: photoPathOf('p')));
+      expect([for (final kept in await old.waitingPhotos()) (kept.clientId, kept.lat, kept.width)], [('p', null, 4)]);
+      await old.dropPhotos();
+      expect([await old.waitingPhotos(), file.existsSync()], [isEmpty, false]);
     });
 
     test('keeps small values by name', () async {

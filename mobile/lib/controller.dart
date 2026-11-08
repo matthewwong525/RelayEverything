@@ -22,6 +22,7 @@ import 'sync/calendar.dart';
 import 'sync/health.dart';
 import 'sync/location.dart';
 import 'sync/native.dart';
+import 'sync/photos.dart';
 import 'voice/model.dart';
 import 'voice/recorder.dart';
 import 'voice/transcriber.dart';
@@ -73,7 +74,7 @@ class RelayController extends Relay {
   RelayController({required this.store, required this.vault, required this.places, required this.health,
     RelayApi Function(Connection)? apiFor, http.Client Function()? signInClient, WebAuth? webAuth, DateTime Function()? clock,
     WebhookClient Function(Webhook webhook, String installId)? webhookFor, this.schedule, this.voice, this.native, this.folder,
-    this.opener, this.share, this.calendar, Duration Function(Duration length)? wordsLimit})
+    this.opener, this.share, this.calendar, this.photos, this.network, Duration Function(Duration length)? wordsLimit})
     : _sender = Sender(apiFor, signInClient, webhookFor), _webAuth = webAuth ?? phoneWebAuth, _clock = clock ?? DateTime.now,
       _wordsLimit = wordsLimit ?? wordsLimitOf {
     voice?.model.addListener(notifyListeners);
@@ -104,6 +105,9 @@ class RelayController extends Relay {
   final FileOpener? opener;
   /// The App Group the iPhone's share card writes to; null on Android, where the share card is this app's own window.
   final ShareGroup? share;
+  /// The photo library and the network kind; with either missing, *Photos* can not turn on.
+  final PhotoSource? photos;
+  final Network? network;
   final Sender _sender;
   final WebAuth _webAuth;
   final DateTime Function() _clock;
@@ -335,6 +339,7 @@ class RelayController extends Relay {
     if (!_ready(to)) return to == SendPlace.server ? 'Connect a key first.' : 'Set your webhook first.';
     await store.moveOutbox(destinationOf(to));
     if (sendEarlier) await store.queueEarlier();
+    // The photos waiting on this phone go to the new place too, as the outbox does.
     await _saveSettings(_settings.copyWith(sending: true, place: to));
     await _refreshLocal();
     final running = _syncing;
@@ -385,6 +390,7 @@ class RelayController extends Relay {
     // A round already sending finishes first, so nothing it read lands after the drop.
     await _syncing;
     await store.dropReadings();
+    await dropPhotoQueue(store);
     _status = SyncStatus.idle;
     await _refreshLocal();
   }
@@ -406,7 +412,7 @@ class RelayController extends Relay {
       _namesAt = null;
       if (_connections != null) await _keepConnections(null);
     }
-    await schedule?.call(settings.history || settings.health || settings.calendar);
+    await schedule?.call(settings.history || settings.health || settings.calendar || settings.photos);
     await _tellNative();
     await _tellShare();
     notifyListeners();
@@ -569,6 +575,39 @@ class RelayController extends Relay {
       _calendars = const [];
       await _refreshLocal();
     }
+    return null;
+  }
+
+  static const _noPhotos = 'Photo access is off. Turn it on in the phone\'s Settings.';
+
+  @override
+  Future<String?> setPhotos(bool on) async {
+    if (on == _settings.photos) return null;
+    if (!on) {
+      await _saveSettings(_settings.copyWith(photos: false, photosOnMobileData: false));
+      // A round already reading or sending finishes first, so nothing it queued stays after the drop.
+      await _syncing;
+      await dropPhotoQueue(store);
+      return null;
+    }
+    if (!_settings.sending) return _sendFirst;
+    final source = photos;
+    if (source == null || network == null || !await source.allow()) return _noPhotos;
+    // Photos start from now: the library from before never goes.
+    await dropPhotoQueue(store);
+    final since = '${_clock().millisecondsSinceEpoch}';
+    await store.set(photosSince, since);
+    await store.set(photosAfter, since);
+    await _saveSettings(_settings.copyWith(photos: true));
+    unawaited(sync());
+    return null;
+  }
+
+  @override
+  Future<String?> setPhotosOnMobileData(bool on) async {
+    if (on && !_settings.photos) return 'Turn on Photos first.';
+    await _saveSettings(_settings.copyWith(photosOnMobileData: on));
+    if (on) unawaited(sync());
     return null;
   }
 
@@ -759,7 +798,18 @@ class RelayController extends Relay {
     final place = _settings.place;
     final result = await flush(store, api, clock: _clock, keepGoing: () => _settings.sending && _settings.place == place,
       folder: folder);
-    _status = switch (result.failure) { Failure.refused => SyncStatus.refused, null => SyncStatus.synced, _ => SyncStatus.offline };
+    // New photos, as in the background round: after the outbox, so a photo waiting for Wi-Fi holds back no note. They go
+    // to the same place, the server or the webhook. A refused photo with a key that still answers, such as on an older
+    // server with no photos, comes back as null.
+    Failure? photoFailure;
+    final library = photos;
+    final kind = network;
+    if (_settings.photos && library != null && kind != null) {
+      photoFailure = await syncPhotos(store, api, library, kind, settings: _settings, send: result.failure == null, now: _clock(),
+        keepGoing: () async => _settings.photos && _settings.place == place);
+    }
+    _status = switch (result.failure ?? photoFailure) {
+      Failure.refused => SyncStatus.refused, null => SyncStatus.synced, _ => SyncStatus.offline };
     // The stop's own state wins.
     if (!_settings.sending) _status = SyncStatus.idle;
     await _refreshLocal();

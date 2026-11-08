@@ -19,6 +19,7 @@ Home has a large **Home** title, the [sync state](#the-sync-state) under it, and
 | **On this phone** | **Location** | Location history: *Off*, or its mode and when the points last went, such as *Save battery · Sent 14:05*. [Location](../location/) |
 | | **Health** | *Off*, or when the readings last went and how many wait. [Health](../health/) |
 | | **Calendar** | *Off*, or how many calendars and when the events last went. [Calendar](../calendar/) |
+| | **Photos** | *Off*, or *On* and if photos also go on mobile data. [Photos](../photos/) |
 | **Connections** | **Sending** | Where the phone sends: *Off*, your Relay Everything server, or your own webhook. [Sending](../settings/#sending) |
 | | **AI apps** | The AI apps you connected on your Relay Everything page, such as *Claude*. [Connections on Home](#connections-on-home) |
 | | **Webhooks** | The webhooks you added on your Relay Everything page. [Connections on Home](#connections-on-home) |

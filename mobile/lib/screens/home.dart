@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../brand.dart';
 import '../relay.dart';
@@ -13,16 +12,7 @@ import 'hold_to_talk.dart';
 import 'settings.dart';
 import 'timeline.dart';
 
-/// Opens an address in the phone's own browser, and says if it did.
-typedef Opener = Future<bool> Function(Uri address);
-
-Future<bool> _openInBrowser(Uri address) async {
-  try {
-    return await launchUrl(address, mode: LaunchMode.externalApplication);
-  } on Exception {
-    return false;
-  }
-}
+export 'folder.dart' show Opener;
 
 /// The first screen, as Apple Notes' *Folders*: the notes folders, *On this phone* and *Connections*, the ⋯ menu, and
 /// at the bottom *Search*, which finds notes in every folder, and *New note*. It also holds what each page needs once:
@@ -105,7 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Opens [part] of the Relay Everything page, such as `#webhooks`, in the browser.
   Future<void> _openPage(String server, [String part = '']) async {
     final messenger = ScaffoldMessenger.of(context);
-    if (!await (widget.opener ?? _openInBrowser)(Uri.parse('$server/apps/relay/$part'))) {
+    if (!await (widget.opener ?? openInBrowser)(Uri.parse('$server/apps/relay/$part'))) {
       messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
     }
   }
@@ -177,6 +167,8 @@ class _HomeScreenState extends State<HomeScreen> {
           onTap: () => _open(HealthPage(relay: relay, scanner: scanner))),
         _FolderRow(icon: Icons.calendar_today_outlined, title: 'Calendar', line: calendarLine(relay, now),
           onTap: () => _open(CalendarPage(relay: relay, scanner: scanner))),
+        _FolderRow(icon: Icons.photo_outlined, title: 'Photos', line: photosLine(relay),
+          onTap: () => _open(PhotosPage(relay: relay, scanner: scanner, opener: widget.opener))),
       ]),
       ..._section('Connections', [
         _FolderRow(icon: Icons.send_outlined, title: 'Sending', line: sendingLine(relay),

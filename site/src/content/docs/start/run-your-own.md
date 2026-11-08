@@ -40,6 +40,16 @@ Your server keeps Cloudflare Access, the login it was made with: `RELAY_SIGN_IN`
 
 Your server shows no contact address until you set one. To give the people on your server an address for questions and privacy requests, set `RELAY_CONTACT_EMAIL` to it in your server's settings. Each person's account card then shows it. Your Cloudflare Access login comes before the page, so the sign-in screen does not. Relay Everything's own terms and policies cover only the shared server: on your server, you answer those requests.
 
+## Take email
+
+Your server can make [email notes](../../app/email/) too. It is off until you set it up, and it needs a domain on Cloudflare. Ask your AI *turn on email notes for my Relay Everything server*, or do these steps:
+
+1. Pick a mail domain on Cloudflare for your server, such as a subdomain of your own domain.
+2. In the Cloudflare dashboard, turn on **Email Routing** for that domain, and add a catch-all rule that sends each mail to your server's Worker.
+3. Set two secrets on your server's Worker: `RELAY_INBOX_MAIL_DOMAIN`, the mail domain, and `RELAY_INBOX_HMAC_KEY`, a key made with `openssl rand -base64 32`. Keep a copy of the key: a new key stops every notes address. An update keeps both.
+
+Old kept mail is deleted when new mail comes, because your server has no daily job.
+
 ## Update it
 
 Ask your AI *update my Relay Everything*. It gets the newest version of Relay Everything, applies its database changes, then puts it live. Your data stays. If a database change fails, your server stays as it was.

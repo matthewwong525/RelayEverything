@@ -43,8 +43,6 @@
 	<false/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Relay Everything records a voice note while you hold Hold to talk. The phone writes its words, and the recording never leaves the phone.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Relay Everything adds the photos you pick to a note.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Relay Everything uses the camera only to scan the QR code of your device key.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
@@ -59,6 +57,8 @@
 	<string>With location history on, Relay Everything keeps where you go, also while the app is closed, so ring notes get a place. Turn it off in Relay Everything settings.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Relay Everything adds where you are to each note you type.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Relay Everything adds the photos you pick to a note. With Photos on, it also sends the new photos you take, with when and where you took them, to your own Relay Everything server. It reads no photos while Photos is off.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

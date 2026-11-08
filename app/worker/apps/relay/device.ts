@@ -7,7 +7,7 @@ import { directory, hashToken, randomToken, type DirectoryEnv } from "./people.t
 import type { Caller, PersonSpace, Reach } from "./space.ts";
 
 const reaches = z.enum(["phone", "chats", "api"])
-  .describe("phone: notes, files, health and places, from a phone. chats: Claude Code chats. api: the web API, which reads and adds notes.");
+  .describe("phone: notes, files, health, places and photos, from a phone. chats: Claude Code chats. api: the web API, which reads and adds notes.");
 type Reaches = z.infer<typeof reaches>;
 const device = z.strictObject({ id: z.string(), name: z.string(), reaches, createdAt: z.number(), revokedAt: z.number().nullable() });
 const ERRORS = { not_found: "You have no device with this id." };
@@ -24,7 +24,7 @@ export const devices = defineAction({
   input: z.strictObject({}), output: z.strictObject({ devices: z.array(device) }),
   encoding: "none", effect: "read", agentAvailable: false, requiresIdentity: false, errors: {}, examples: [],
   handler: asPerson<ActionCall>(async ({ space }) => {
-    const { results } = await space.db.prepare(`SELECT id, name, reaches, created_at, revoked_at FROM relay_devices WHERE reaches != 'app'
+    const { results } = await space.db.prepare(`SELECT id, name, reaches, created_at, revoked_at FROM relay_devices WHERE reaches NOT IN ('app', 'inbox')
       ORDER BY created_at, id`).all<Row>();
     return Response.json({ devices: results.map(row => ({ id: row.id, name: row.name, reaches: row.reaches,
       createdAt: row.created_at, revokedAt: row.revoked_at })) });

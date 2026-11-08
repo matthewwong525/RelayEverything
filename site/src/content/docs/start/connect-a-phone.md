@@ -41,7 +41,7 @@ To connect, the phone checks its key with the server, and reads no data. Once co
 
 ## Stop sending
 
-Turn off **Send my notes** on the **Sending** page, and tap **Stop sending**. New notes stay on the phone. Notes already on your server stay there. Health and location stop, and what of them did not go yet is deleted. The key stays on the phone, so you can turn sending on again with no new key: tap **Send to Relay Everything** on **Where should the phone send?**.
+Turn off **Send my notes** on the **Sending** page, and tap **Stop sending**. New notes stay on the phone. Notes already on your server stay there. Health, location and photos stop, and what of them did not go yet is deleted. The key stays on the phone, so you can turn sending on again with no new key: tap **Send to Relay Everything** on **Where should the phone send?**.
 
 ## Turn a phone off
 

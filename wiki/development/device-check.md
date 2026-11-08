@@ -36,6 +36,8 @@ A *works* is evidence, not a gate. The pictures and the video are always there t
 A release uses the fixed tour alone as a gate: [`mobile-ci.yml`](../../.github/workflows/mobile-ci.yml) calls the check with `tour_only`, Claude does not start, and the run fails unless each step of `tour.json` passed. [Builds on GitHub](../../mobile/README.md#builds-on-github) says how a release runs.
 
 - **To see the launch screen, read the first seconds of `run.mp4`**: the video starts before the app opens, and no picture shows it. Take frames with `ffmpeg -i run.mp4 -t 12 -vf fps=4 f%03d.png`.
+- **Prove a key flow in the fixed tour, not through Claude.** Each `maestro test` Claude starts by hand can stall for minutes, and its taps by screen position miss. A flow in [`tour.sh`](../../mobile/device-check/tour.sh) runs in seconds each time and also gates a release. *Aa* on the note page is checked this way, in `note-styles.yaml`.
+- **A row low on Home sits under Search and New note**: scroll it to the middle (`scrollUntilVisible` with `centerElement: true`) before a tap, or the tap opens the search box.
 - **The home-screen icon is never shown**: the tour and Claude stay inside the app. Check a new icon on a real phone after the next TestFlight build.
 
 ## Start it

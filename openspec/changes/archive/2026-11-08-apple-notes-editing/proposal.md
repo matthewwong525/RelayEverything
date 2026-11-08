@@ -1,6 +1,6 @@
 # Edit notes like Apple Notes, with sleeker icons
 
-**Status:** built and checked on staging and an iPhone; ready to publish
+**Status:** ready-to-ship
 **Branch:** apple-style-notes-editor
 **Open questions:** none
 
@@ -110,3 +110,4 @@ Non-goals: tables, drawing on a note, Apple Intelligence tools, pinning, folders
 - **2026-11-08** — Assumed: renumbered to 0010 because email notes and photos took 0008 and 0009 first; a staging space that ran it as `0008_note_edits` skips it by that name.
 - **2026-11-08** — Asked what to do when the iPhone check showed editing, ✓ and the reading bar working but froze before *Aa* → chose: find why taps into the note's words freeze the test tool, fix it, and run the check once more.
 - **2026-11-08** — Check: the iPhone check on 0c41dc2 showed the editing and reading states and, in its fixed tour, *Aa* keeping the Format panel up after Heading and Bold. Its two gaps, an unlit chip and a short panel, are fixed after it with widget tests, not a new iPhone run.
+- **2026-11-08** — Archived to publish: all tasks done; the device check tour now styles a line with *Aa*, and the wiki says to prove key flows there.

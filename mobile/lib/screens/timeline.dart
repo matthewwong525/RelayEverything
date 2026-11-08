@@ -8,6 +8,7 @@ import '../editor/markdown.dart' show plainText;
 import '../relay.dart';
 import 'back_to.dart';
 import 'days.dart';
+import 'folder.dart' show Opener;
 import 'hold_to_talk.dart';
 import 'note_editor.dart';
 
@@ -25,7 +26,7 @@ String rowTime(BuildContext context, DateTime at, DateTime now) {
 /// One notes folder's notes, newest first and grouped by day, as Apple Notes lists them: *‹ Home*, a large title with the
 /// count and the sync state, and at the bottom *Search*, which finds notes in this folder only, and *New note*.
 class TimelineScreen extends StatefulWidget {
-  const TimelineScreen({super.key, required this.relay, this.folder = NotesFolder.all, this.picker, this.sharer});
+  const TimelineScreen({super.key, required this.relay, this.folder = NotesFolder.all, this.picker, this.sharer, this.opener});
 
   final Relay relay;
   final NotesFolder folder;
@@ -33,6 +34,8 @@ class TimelineScreen extends StatefulWidget {
   final FilesPicker? picker;
   /// A note's *Share*; a test passes its own.
   final Sharer? sharer;
+  /// Opens a link in a note; a test passes its own.
+  final Opener? opener;
 
   @override
   State<TimelineScreen> createState() => _TimelineScreenState();
@@ -44,6 +47,9 @@ class _TimelineScreenState extends State<TimelineScreen> {
 
   Relay get relay => widget.relay;
   String get _title => widget.folder.title;
+
+  /// What pulling the list down does, and *Sync now* too.
+  Future<void> _refresh() => relay.sync();
 
   @override
   void dispose() {
@@ -61,7 +67,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
           final notes = [for (final entry in relay.entries) if (entryIn(widget.folder, entry)) entry];
           return Stack(children: [
             RefreshIndicator(
-              onRefresh: relay.sync,
+              onRefresh: _refresh,
               edgeOffset: 140,
               child: CustomScrollView(physics: const AlwaysScrollableScrollPhysics(), slivers: [
                 SliverAppBar.large(
@@ -69,18 +75,21 @@ class _TimelineScreenState extends State<TimelineScreen> {
                   leadingWidth: BackTo.widthOf('Home'),
                   title: Text(_title),
                   expandedHeight: 140,
-                  bottom: PreferredSize(preferredSize: const Size.fromHeight(28), child: SyncLine(relay: relay, count: countOf(notes.length))),
+                  bottom: PreferredSize(preferredSize: const Size.fromHeight(SyncLine.height),
+                    child: SyncLine(relay: relay, count: countOf(notes.length), onSync: _refresh)),
                 ),
                 if (modelShows(relay)) modelSliver(relay),
                 if (notes.isEmpty)
                   SliverFillRemaining(hasScrollBody: false, child: _Empty(folder: widget.folder, sending: relay.settings.sending))
                 else
-                  noteSliver(context, relay, notes, _search.text, back: _title, picker: widget.picker, sharer: widget.sharer),
+                  noteSliver(context, relay, notes, _search.text, back: _title, picker: widget.picker, sharer: widget.sharer,
+                    opener: widget.opener),
                 const SliverPadding(padding: EdgeInsets.only(bottom: 110)),
               ]),
             ),
             NotesDock(relay: relay, search: _search, focus: _searchFocus,
-              onWrite: () => openPage(context, NoteEditor(relay: relay, picker: widget.picker, sharer: widget.sharer, back: _title))),
+              onWrite: () => openPage(context, NoteEditor(relay: relay, picker: widget.picker, sharer: widget.sharer,
+                opener: widget.opener, back: _title))),
           ]);
         },
       ),
@@ -103,7 +112,7 @@ Widget modelSliver(Relay relay) =>
 /// [notes] that hold [query], grouped by day, or a line that says none does. A tap opens a note, whose back button
 /// says [back].
 Widget noteSliver(BuildContext context, Relay relay, List<Entry> notes, String query,
-  {required String back, FilesPicker? picker, Sharer? sharer}) {
+  {required String back, FilesPicker? picker, Sharer? sharer, Opener? opener}) {
   final shown = [for (final entry in notes) if (entryMatches(entry, query)) entry];
   if (shown.isEmpty) {
     return SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(32), child: Text('No notes with "${query.trim()}"',
@@ -116,19 +125,25 @@ Widget noteSliver(BuildContext context, Relay relay, List<Entry> notes, String q
         _DayGroup(name: name, children: [
           for (final entry in group)
             _NoteRow(entry: entry, relay: relay, onTap: () => openPage(context,
-              NoteEditor(entry: entry, relay: relay, picker: picker, sharer: sharer, back: back))),
+              NoteEditor(entry: entry, relay: relay, picker: picker, sharer: sharer, opener: opener, back: back))),
         ]),
     ]),
   );
 }
 
-/// *5 notes · ● Synced* under a title, or the state alone on Home. While sending, the state is a button that syncs now.
+/// *5 notes · ● Synced ↻* under a title, or the state alone on Home. While sending, *Sync now* follows the state, and a
+/// tap on the state syncs too.
 class SyncLine extends StatelessWidget {
-  const SyncLine({super.key, required this.relay, this.count});
+  const SyncLine({super.key, required this.relay, required this.onSync, this.count});
 
   final Relay relay;
+  /// What *Sync now* and a tap on the state do: the same as the page's pull to refresh.
+  final Future<void> Function() onSync;
   /// Such as *5 notes*; null on Home.
   final String? count;
+
+  /// The line's height under an app bar: room for *Sync now*'s 32-point tap target.
+  static const height = 36.0;
 
   @override
   Widget build(BuildContext context) {
@@ -142,18 +157,73 @@ class SyncLine extends StatelessWidget {
       _ => relay.waiting > 0 ? (_Dot.waiting, '${relay.waiting} waiting') : (_Dot.synced, 'Synced'),
     };
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Row(spacing: 6, children: [
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      child: SizedBox(height: 32, child: Row(spacing: 6, children: [
         if (count != null) Text('$count ·', style: muted),
         if (!relay.settings.sending)
           Text('On this phone', style: strong)
-        else
-          Tooltip(message: 'Sync now', child: InkWell(
-            onTap: relay.sync,
+        else ...[
+          InkWell(
+            onTap: onSync,
             borderRadius: BorderRadius.circular(8),
             child: Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: [_SyncDot(state: state), Text(label, style: strong)]),
-          )),
-      ]),
+          ),
+          _SyncNow(syncing: relay.status == SyncStatus.syncing, onSync: onSync),
+        ],
+      ])),
+    );
+  }
+}
+
+/// *Sync now*: small muted arrows after the state, which turn while the phone syncs, and stay still when the phone asks
+/// for less motion.
+class _SyncNow extends StatefulWidget {
+  const _SyncNow({required this.syncing, required this.onSync});
+
+  final bool syncing;
+  final Future<void> Function() onSync;
+
+  @override
+  State<_SyncNow> createState() => _SyncNowState();
+}
+
+class _SyncNowState extends State<_SyncNow> with SingleTickerProviderStateMixin {
+  late final _turn = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
+
+  void _run() {
+    final moves = widget.syncing && !MediaQuery.disableAnimationsOf(context);
+    if (moves && !_turn.isAnimating) _turn.repeat();
+    if (!moves) _turn.reset();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _run();
+  }
+
+  @override
+  void didUpdateWidget(_SyncNow old) {
+    super.didUpdateWidget(old);
+    _run();
+  }
+
+  @override
+  void dispose() {
+    _turn.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Sync now',
+      onPressed: widget.onSync,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+      style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+      icon: RotationTransition(turns: _turn,
+        child: Icon(CupertinoIcons.arrow_2_circlepath, size: 16, color: brandOf(context).muted)),
     );
   }
 }

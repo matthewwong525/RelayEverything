@@ -317,13 +317,14 @@ class PhotosPage extends StatelessWidget {
   }
 }
 
-/// *Sending*: the *Send my notes* switch, where the phone sends, the webhook and its test, the server, and
-/// *Disconnect this phone*.
+/// *Sending*: the *Send my notes* switch, where the phone sends, the webhook and its test, *Open your Relay Everything
+/// page*, the server, and *Disconnect this phone*.
 class SendingPage extends StatelessWidget {
-  const SendingPage({super.key, required this.relay, this.scanner});
+  const SendingPage({super.key, required this.relay, this.scanner, this.opener});
 
   final Relay relay;
   final Scanner? scanner;
+  final Opener? opener;
 
   @override
   Widget build(BuildContext context) {
@@ -357,6 +358,14 @@ class SendingPage extends StatelessWidget {
           ),
         ]),
         if (relay.connected && settings.place == SendPlace.server) Group(children: [
+          // Ring notes and recordings are on the Relay Everything page; nothing of this phone's goes there while it
+          // sends to the person's own webhook.
+          if (sending && relay.server != null) ListTile(
+            title: const Text('Open your Relay Everything page'),
+            subtitle: const Text('Your ring notes, recordings and the notes from all your devices.'),
+            trailing: const Icon(CupertinoIcons.arrow_up_right_square),
+            onTap: () => _openPage(context),
+          ),
           ListTile(
             title: const Text('Server'),
             subtitle: Text(relay.server ?? ''),
@@ -390,6 +399,14 @@ class SendingPage extends StatelessWidget {
       ],
     ));
     if (sure == true) await relay.stopSending();
+  }
+
+  /// The person's Relay Everything page, in the phone's browser.
+  Future<void> _openPage(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (!await (opener ?? openInBrowser)(Uri.parse('${relay.server}/apps/relay/'))) {
+      messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
+    }
   }
 
   Future<void> _editServer(BuildContext context) async {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../brand.dart';
 import '../relay.dart';
@@ -6,8 +7,8 @@ import '../voice/model.dart' show megabytes;
 import 'back_to.dart';
 import 'folder.dart' show Group, apply;
 
-/// What is about notes on this phone alone: *Pin notes to where I am* and the speech model. Sending and each kind of
-/// phone data have their own folder on Home.
+/// What is about this phone alone: *Appearance*, *Pin notes to where I am*, the speech model, and at the bottom the
+/// app's version and build. Sending and each kind of phone data have their own folder on Home.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.relay});
 
@@ -21,6 +22,7 @@ class SettingsScreen extends StatelessWidget {
         builder: (context, _) => CustomScrollView(slivers: [
           SliverAppBar.large(leading: const BackTo('Home'), leadingWidth: BackTo.widthOf('Home'), title: const Text('Settings')),
           SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 32), sliver: SliverList.list(children: [
+            Group(title: 'Appearance', children: [_AppearanceRow(relay: relay)]),
             Group(title: 'Notes', children: [
               SwitchListTile(
                 title: const Text('Pin notes to where I am'),
@@ -30,6 +32,7 @@ class SettingsScreen extends StatelessWidget {
               ),
             ]),
             Group(title: 'Voice notes', children: [_VoiceRow(relay: relay)]),
+            const _Version(),
           ])),
         ]),
       ),
@@ -59,6 +62,57 @@ class _VoiceRow extends StatelessWidget {
       trailing: relay.speechModel == ModelState.ready
         ? TextButton(onPressed: relay.removeSpeechModel, style: quietButton(context), child: const Text('Remove'))
         : null,
+    );
+  }
+}
+
+/// *System*, *Light* and *Dark*. The picked one has the quiet accent fill, so *New note* stays the one filled accent.
+class _AppearanceRow extends StatelessWidget {
+  const _AppearanceRow({required this.relay});
+
+  final Relay relay;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = brandOf(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: SegmentedButton<Appearance>(
+        segments: const [
+          ButtonSegment(value: Appearance.system, label: Text('System')),
+          ButtonSegment(value: Appearance.light, label: Text('Light')),
+          ButtonSegment(value: Appearance.dark, label: Text('Dark')),
+        ],
+        selected: {relay.settings.appearance},
+        showSelectedIcon: false,
+        onSelectionChanged: (picked) => relay.setAppearance(picked.single),
+        style: SegmentedButton.styleFrom(selectedBackgroundColor: brand.accentSoft, selectedForegroundColor: brand.ink,
+          foregroundColor: brand.ink, side: BorderSide(color: brand.line)),
+      ),
+    );
+  }
+}
+
+/// *Relay Everything 1.4.0 (91)*: the version and build, so the person knows which build they have.
+class _Version extends StatefulWidget {
+  const _Version();
+
+  @override
+  State<_Version> createState() => _VersionState();
+}
+
+class _VersionState extends State<_Version> {
+  late final _info = PackageInfo.fromPlatform();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<PackageInfo>(
+      future: _info,
+      builder: (context, info) => Padding(
+        padding: const EdgeInsets.only(top: 24),
+        child: Text(switch (info.data) { final info? => 'Relay Everything ${info.version} (${info.buildNumber})', null => '' },
+          textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: brandOf(context).muted)),
+      ),
     );
   }
 }

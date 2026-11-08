@@ -15,7 +15,7 @@ import 'timeline.dart';
 
 export 'folder.dart' show Opener;
 
-/// The first screen, as Apple Notes' *Folders*: the notes folders, *On this phone* and *Connections*, the ⋯ menu, and
+/// The first screen, as Apple Notes' *Folders*: the notes folders, *On this phone* and *Connections*, the Settings gear, and
 /// at the bottom *Search*, which finds notes in every folder, and *New note*. It also holds what each page needs once:
 /// the notices, the listening card and *Start a voice note* from Shortcuts.
 class HomeScreen extends StatefulWidget {
@@ -96,6 +96,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _open(Widget page) => openPage(context, page);
 
+  /// What pulling Home down does, and *Sync now* too.
+  Future<void> _refresh() => relay.sync();
+
   /// Opens [part] of the Relay Everything page, such as `#webhooks`, in the browser.
   Future<void> _openPage(String server, [String part = '']) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -111,44 +114,44 @@ class _HomeScreenState extends State<HomeScreen> {
         listenable: Listenable.merge([relay, _search, _searchFocus]),
         builder: (context, _) => Stack(children: [
           RefreshIndicator(
-            onRefresh: relay.sync,
+            onRefresh: _refresh,
             edgeOffset: 140,
             child: CustomScrollView(physics: const AlwaysScrollableScrollPhysics(), slivers: [
               _bar(),
               if (modelShows(relay)) modelSliver(relay),
               if (_search.text.trim().isNotEmpty)
-                noteSliver(context, relay, relay.entries, _search.text, back: 'Home', picker: widget.picker, sharer: widget.sharer)
+                noteSliver(context, relay, relay.entries, _search.text, back: 'Home', picker: widget.picker, sharer: widget.sharer,
+                  opener: widget.opener)
               else
                 SliverPadding(padding: const EdgeInsets.symmetric(horizontal: 16), sliver: SliverList.list(children: _folders())),
               const SliverPadding(padding: EdgeInsets.only(bottom: 110)),
             ]),
           ),
           NotesDock(relay: relay, search: _search, focus: _searchFocus,
-            onWrite: () => _open(NoteEditor(relay: relay, picker: widget.picker, sharer: widget.sharer, back: 'Home'))),
+            onWrite: () => _open(NoteEditor(relay: relay, picker: widget.picker, sharer: widget.sharer, opener: widget.opener,
+              back: 'Home'))),
         ]),
       ),
     );
   }
 
   Widget _bar() {
-    final settings = relay.settings;
-    final server = relay.server;
+    final brand = brandOf(context);
     return SliverAppBar.large(
       leading: const Center(child: RelayMark(size: 24)),
       title: const Text('Home'),
       expandedHeight: 140,
       actions: [
-        _MoreMenu(items: [
-          ('Settings', CupertinoIcons.gear, () => _open(SettingsScreen(relay: relay))),
-          if (settings.sending) ('Sync now', CupertinoIcons.arrow_2_circlepath, relay.sync),
-          // Ring notes and recordings are on the Relay Everything page; nothing of this phone's goes there while it
-          // sends to the person's own webhook.
-          if (settings.sending && settings.place == SendPlace.server && server != null)
-            ('Open your Relay Everything page', CupertinoIcons.arrow_up_right_square, () => _openPage(server)),
-        ]),
+        IconButton(
+          tooltip: 'Settings',
+          style: IconButton.styleFrom(backgroundColor: brand.card, foregroundColor: brand.ink),
+          icon: const Icon(CupertinoIcons.gear),
+          onPressed: () => _open(SettingsScreen(relay: relay)),
+        ),
         const SizedBox(width: 8),
       ],
-      bottom: PreferredSize(preferredSize: const Size.fromHeight(28), child: SyncLine(relay: relay)),
+      bottom: PreferredSize(preferredSize: const Size.fromHeight(SyncLine.height),
+        child: SyncLine(relay: relay, onSync: _refresh)),
     );
   }
 
@@ -162,7 +165,8 @@ class _HomeScreenState extends State<HomeScreen> {
         for (final (folder, icon) in const [(NotesFolder.all, CupertinoIcons.doc_text), (NotesFolder.voice, CupertinoIcons.mic),
           (NotesFolder.shares, CupertinoIcons.paperclip)])
           _FolderRow(icon: icon, title: folder.title, count: count(folder),
-            onTap: () => _open(TimelineScreen(relay: relay, folder: folder, picker: widget.picker, sharer: widget.sharer))),
+            onTap: () => _open(TimelineScreen(relay: relay, folder: folder, picker: widget.picker, sharer: widget.sharer,
+              opener: widget.opener))),
       ]),
       ..._section('On this phone', [
         _FolderRow(icon: CupertinoIcons.location, title: 'Location', line: locationLine(relay, now),
@@ -176,7 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ]),
       ..._section('Connections', [
         _FolderRow(icon: CupertinoIcons.paperplane, title: 'Sending', line: sendingLine(relay),
-          onTap: () => _open(SendingPage(relay: relay, scanner: scanner))),
+          onTap: () => _open(SendingPage(relay: relay, scanner: scanner, opener: widget.opener))),
         _connected(CupertinoIcons.sparkles, 'AI apps', (names) => names.aiApps, '#ai-apps'),
         _connected(CupertinoIcons.link, 'Webhooks', (names) => names.webhooks, '#webhooks'),
       ]),
@@ -287,31 +291,6 @@ class _FolderRow extends StatelessWidget {
         Icon(CupertinoIcons.chevron_forward, color: brand.muted),
       ]),
       onTap: onTap,
-    );
-  }
-}
-
-/// The ⋯ button and its menu: each item a word, an icon and what it does.
-class _MoreMenu extends StatelessWidget {
-  const _MoreMenu({required this.items});
-
-  final List<(String, IconData, VoidCallback)> items;
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = brandOf(context);
-    return MenuAnchor(
-      menuChildren: [
-        for (final (label, icon, act) in items)
-          MenuItemButton(leadingIcon: Icon(icon, size: 20, color: brand.muted), onPressed: act,
-            child: Padding(padding: const EdgeInsets.only(right: 16), child: Text(label, style: const TextStyle(fontSize: 16)))),
-      ],
-      builder: (context, menu, _) => IconButton(
-        tooltip: 'More',
-        style: IconButton.styleFrom(backgroundColor: brand.card, foregroundColor: brand.ink),
-        icon: const Icon(CupertinoIcons.ellipsis),
-        onPressed: () => menu.isOpen ? menu.close() : menu.open(),
-      ),
     );
   }
 }

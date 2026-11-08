@@ -1,5 +1,5 @@
-# Signs the iPhone build with automatic signing and sends it to TestFlight. ios.yml runs it with the App Store
-# Connect key in ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_P8 (the .p8 file, base64), and the team in APPLE_TEAM_ID.
+# Signs the iPhone build with the one saved certificate (scripts/ios-signing-cert.mjs) and sends it to TestFlight.
+# mobile-ios.yml gives it the secrets; it never makes a certificate, as Apple's account holds only a few.
 require "base64"
 require "shellwords"
 require "tmpdir"
@@ -30,6 +30,12 @@ end
 
 default_platform(:ios)
 
+# Each signed part of the app: its Xcode target and its bundle id.
+SIGNED_TARGETS = {
+  "Runner" => "com.matthewwong525.relayApp",
+  "ShareExtension" => "com.matthewwong525.relayApp.share"
+}.freeze
+
 platform :ios do
   desc "Build, sign and upload to TestFlight"
   lane :beta do
@@ -41,28 +47,46 @@ platform :ios do
       is_key_content_base64: true,
       in_house: false
     )
-    # xcodebuild signs on its own with the same key, from a file that lives only for this run.
-    key_path = File.join(Dir.tmpdir, "AuthKey_#{ENV.fetch('ASC_KEY_ID')}.p8")
-    File.write(key_path, Base64.decode64(ENV.fetch("ASC_KEY_P8")))
+    team_id = ENV.fetch("APPLE_TEAM_ID")
+
+    # The .p12 lives only for this run, in setup_ci's own keychain.
+    p12_path = File.join(Dir.tmpdir, "relay-distribution.p12")
+    File.binwrite(p12_path, Base64.decode64(ENV.fetch("IOS_DIST_CERT_P12")))
     begin
-      build_app(
-        workspace: "Runner.xcworkspace",
-        scheme: "Runner",
-        configuration: "Release",
-        export_method: "app-store",
-        xcargs: [
-          "-allowProvisioningUpdates",
-          "-authenticationKeyPath #{key_path}",
-          "-authenticationKeyID #{ENV.fetch('ASC_KEY_ID')}",
-          "-authenticationKeyIssuerID #{ENV.fetch('ASC_ISSUER_ID')}",
-          "DEVELOPMENT_TEAM=#{ENV.fetch('APPLE_TEAM_ID')}",
-          "CODE_SIGN_STYLE=Automatic"
-        ].join(" "),
-        export_options: { signingStyle: "automatic", teamID: ENV.fetch("APPLE_TEAM_ID") }
+      import_certificate(
+        certificate_path: p12_path,
+        certificate_password: ENV.fetch("IOS_DIST_CERT_PASSWORD"),
+        keychain_name: ENV.fetch("MATCH_KEYCHAIN_NAME"),
+        keychain_password: ENV.fetch("MATCH_KEYCHAIN_PASSWORD", "")
       )
     ensure
-      File.delete(key_path) if File.exist?(key_path)
+      File.delete(p12_path) if File.exist?(p12_path)
     end
+
+    # sigh takes only the certificate in this keychain: it reuses Apple's valid profile for it, or makes one.
+    profiles = SIGNED_TARGETS.to_h do |target, bundle_id|
+      get_provisioning_profile(api_key: api_key, app_identifier: bundle_id, team_id: team_id)
+      profile_name = lane_context[SharedValues::SIGH_NAME]
+      update_code_signing_settings(
+        path: "Runner.xcodeproj",
+        targets: [target],
+        use_automatic_signing: false,
+        team_id: team_id,
+        code_sign_identity: "Apple Distribution",
+        profile_name: profile_name
+      )
+      [bundle_id, profile_name]
+    end
+
+    build_app(
+      workspace: "Runner.xcworkspace",
+      scheme: "Runner",
+      configuration: "Release",
+      export_method: "app-store",
+      # A CocoaPods resource bundle can need a team; the two app targets above sign manually all the same.
+      xcargs: "DEVELOPMENT_TEAM=#{team_id}",
+      export_options: { signingStyle: "manual", teamID: team_id, provisioningProfiles: profiles }
+    )
     # The .ipa exported from the archive is the file TestFlight gets, so the check reads it, not an earlier build.
     check_speech_parts(lane_context[SharedValues::IPA_OUTPUT_PATH])
     upload_to_testflight(api_key: api_key, skip_waiting_for_build_processing: true)

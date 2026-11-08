@@ -1,5 +1,5 @@
-# The iPhone app: built on a Mac and sent to TestFlight. It waits, with a notice, until the App Store Connect key
-# is in this repository's secrets.
+# The iPhone app: built on a Mac, signed with the saved certificate and sent to TestFlight. It waits, with a notice,
+# until the App Store Connect key and the certificate are in this repository's secrets.
 name: Mobile iOS
 on:
   workflow_call:
@@ -16,14 +16,24 @@ jobs:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      IOS_DIST_CERT_P12: ${{ secrets.IOS_DIST_CERT_P12 }}
+      IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
       BUILD_NUMBER: ${{ github.run_number }}
     steps:
-      - name: App Store Connect key
+      - name: App Store Connect key and certificate
         id: key
         working-directory: .
         run: |
           if [ -z "$ASC_KEY_ID" ] || [ -z "$ASC_ISSUER_ID" ] || [ -z "$ASC_KEY_P8" ] || [ -z "$APPLE_TEAM_ID" ]; then
             echo "::notice::No App Store Connect key in this repository's secrets yet, so no iPhone build. See mobile/README.md."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          missing=""
+          if [ -z "$IOS_DIST_CERT_P12" ]; then missing="$missing IOS_DIST_CERT_P12"; fi
+          if [ -z "$IOS_DIST_CERT_PASSWORD" ]; then missing="$missing IOS_DIST_CERT_PASSWORD"; fi
+          if [ -n "$missing" ]; then
+            echo "::notice::No saved iPhone signing certificate, so no iPhone build: add${missing} to this repository's secrets with node scripts/ios-signing-cert.mjs. See mobile/README.md."
             echo "ready=false" >> "$GITHUB_OUTPUT"
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"

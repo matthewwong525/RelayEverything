@@ -1,7 +1,7 @@
 # A voice note records on its own full screen, and New note shows you can hold it to talk
 
-**Status:** planned
-**Branch:** wicked-termite
+**Status:** in-progress
+**Branch:** voice-note-full-screen-recording
 **Open questions:** none
 
 ## Why
@@ -56,6 +56,7 @@ Non-goals: a separate mic button; a pause button; a waveform kept with the note;
 - **2026-11-08** — Assumed: the hold, a save by tap and a cancel by X are a flow Claude runs by name, `voice-note.yaml`, not a tour step, because a fresh install has no speech model; the tour checks only the *Hold to talk* tip.
 - **2026-11-08** — Assumed: the hold ring still fills with *Reduce motion* on, because it shows how long to hold, not decoration.
 - **2026-11-08** — Assumed: after #73 merged, a save by the back gesture or a side swipe opens the new note too, as a tap does, because all three are the same save.
+- **2026-11-08** — Assumed: built and merged with main after #73, all 495 phone tests pass locally; saved for the online checks, with the iPhone check (task 4.2) next.
 
 ## Capabilities
 

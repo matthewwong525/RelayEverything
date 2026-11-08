@@ -3,9 +3,21 @@ title: Settings
 description: Each setting in the Relay Everything app, and what it does.
 ---
 
-Open **Settings** from the round **⋯** button at the top right of Home. Tap **Home** at the top left to go back. Each switch acts at once, and asks for its permission only when you turn it on. On a new phone, every switch is off: your notes stay on the phone, and the app sends nothing.
+Open **Settings** with the round gear button at the top right of Home. Tap **Home** at the top left to go back. Each switch acts at once, and asks for its permission only when you turn it on. On a new phone, every switch is off: your notes stay on the phone, and the app sends nothing.
 
-Settings has two groups: **Notes** and **Voice notes**. Sending, and each kind of phone data, have their own folder on Home: [Sending](#sending) and [Health, Calendar, Location and Photos](#health-calendar-location-and-photos). The website's pages, linked below, give the details.
+Settings has three groups: **Appearance**, **Notes** and **Voice notes**. At the bottom, it shows the [version](#version) of the app. Sending, and each kind of phone data, have their own folder on Home: [Sending](#sending) and [Health, Calendar, Location and Photos](#health-calendar-location-and-photos). The website's pages, linked below, give the details.
+
+## Appearance
+
+Pick how the app looks:
+
+| Choice | What it does |
+|---|---|
+| **System** | Follows the phone: light in light mode, dark in dark mode. The app starts on **System**. |
+| **Light** | Keeps the app light, also when the phone is in dark mode. |
+| **Dark** | Keeps the app dark, also when the phone is in light mode. |
+
+The phone remembers your choice. The share card from other apps follows the phone's own setting.
 
 ## Notes
 
@@ -17,6 +29,10 @@ Settings has two groups: **Notes** and **Voice notes**. Sending, and each kind o
 
 This group shows if the speech model is on this phone, and its size. Your voice is written into words on this phone, and recordings never leave it. Tap **Remove** to delete the model and free 57 MB. The voice notes you made stay, with their words and recordings. The next voice note asks to get the model again. [Voice notes](../voice-notes/#get-the-speech-model)
 
+## Version
+
+The last line of Settings gives the app's version and build number, such as *Relay Everything 1.4.0 (91)*. Use it to know which TestFlight build you have.
+
 ## Sending
 
 Open **Sending**, under **Connections** on Home. On Home, its row says where the phone sends: *Off: nothing leaves this phone*, *To Relay Everything* and your server, or *To your webhook* and its address.
@@ -26,6 +42,7 @@ Open **Sending**, under **Connections** on Home. On Home, its row says where the
 | **Send my notes** | Sends your notes to one place: your space on your Relay Everything server, which can pass them to your own database and your AI, or [your own webhook](../../connections/your-database/#send-from-the-phone), with nothing on Relay Everything. Turning it on asks which place. The line under it names the place. Off: nothing leaves this phone. [Connect a phone](../../start/connect-a-phone/) |
 | **Where the phone sends** | Moves sending to the other place. What waits to send goes to the new place. Shows while sending is on. |
 | **Webhook** | Your webhook's address, with **Send a test**. Under it, the last answer that was not `2xx`, or a file too large for your receiver. Shows while the phone sends to your webhook. [Your own database](../../connections/your-database/#send-from-the-phone) |
+| **Open your Relay Everything page** | Opens `<your-relay-server>/apps/relay/` in the phone's browser, with your ring notes, their recordings, and the notes from all your devices. Shows while the phone sends to your server. [Notes](../your-notes/#the-gear-and-your-relay-everything-page) |
 | **Server** | The server this phone sends to. Change it to try a preview. Shows when a key is kept and the phone sends to your server. [Connect a phone](../../start/connect-a-phone/#try-a-preview) |
 | **Disconnect this phone** | In red. Removes the key from this phone and turns sending off. Your notes stay here. You need a new key to send again. Shows when a key is kept and the phone sends to your server. |
 

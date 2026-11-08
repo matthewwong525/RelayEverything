@@ -7,7 +7,7 @@ The Relay Everything app opens on **Home**, a screen of folders. Your notes are 
 
 ## Home
 
-Home has a large **Home** title, the [sync state](#the-sync-state) under it, and the [⋯ menu](#the--menu) at the top right. Then three cards of folders. Each row shows a name, its status or its count, and a chevron. Tap a row to open it.
+Home has a large **Home** title, the [sync state](#the-sync-state) under it, and the round [gear button](#the-gear-and-your-relay-everything-page) at the top right. Then three cards of folders. Each row shows a name, its status or its count, and a chevron. Tap a row to open it.
 
 | Card | Folder | What it holds |
 |---|---|---|
@@ -55,14 +55,16 @@ Tap a note's row to open it on its own page:
 - Each picture, full width. Tap a picture to open it.
 - Each other file, as a row with its name and size. Tap it to open it.
 - **Play** on a voice note: its recording, from this phone. [Play a note back](../voice-notes/#play-a-note-back)
-- **Voice** or **Typed**, and **Sent** or **Waiting to send**.
+- **Voice** or **Typed**, and **Sent** or **Waiting to send · Send now**. Tap **Waiting to send · Send now** to send what waits now. It says **Sending…** while it goes.
+
+A web address in the words, such as `https://example.com` or `www.example.com`, shows in green and underlined. Tap it to open it in the phone's browser. This works for an address that you typed or pasted as plain text too. While you type, a tap on a link puts the cursor there, as in Apple Notes. The note's words do not change: the link shows only on the phone.
 
 The page works as in Apple Notes: you change the note in place. Tap the words where you want to type. The cursor goes there and the keyboard comes up. There is no **Save** button: the phone keeps each change as you type, and when you leave the page. You can change a voice note's words too. Its recording stays as it was.
 
 At the top of the page:
 
 - **‹** and the folder's name, such as **Voice notes**, at the left, go back to the folder.
-- **Share** and **⋯**, in a round button at the right.
+- **Share** and **⋯**, in a round button at the right. **⋯** opens a menu under it with **Copy**, which copies the words without their style marks, and **Play** on a voice note.
 - **✓**, while you type, closes the keyboard. The change stays.
 
 While you type, a round bar floats above the keyboard: **Aa** for [text styles](#text-styles-and-checklists), the checklist button, and the paperclip to [add photos and files](#add-photos-and-files). With the keyboard closed, a bar at the bottom holds the checklist button, the paperclip, and the round compose button, which starts a new note.
@@ -129,15 +131,11 @@ With sending off, the phone gets no notes and makes no network call. Notes it go
 
 Search reads only the notes on this phone, so it works with no signal and sends nothing. With no match, the list says *No notes with "<your words>"*.
 
-## The ⋯ menu
+## The gear and your Relay Everything page
 
-The round **⋯** button at the top right of Home holds:
+Tap the round gear button at the top right of Home to open [Settings](../settings/).
 
-| Item | Shows | What it does |
-|---|---|---|
-| **Settings** | Always | Opens [Settings](../settings/). |
-| **Sync now** | With sending on | Sends what waits, now. |
-| **Open your Relay Everything page** | With sending to your Relay Everything server | Opens `<your-relay-server>/apps/relay/` in the phone's browser. Sign in with your email. Your ring notes, their recordings, and the notes from all your devices are there. |
+To open your Relay Everything page, tap **Sending** on Home, then **Open your Relay Everything page**. It shows while the phone sends to your Relay Everything server. It opens `<your-relay-server>/apps/relay/` in the phone's browser. Sign in with your email. Your ring notes, their recordings, and the notes from all your devices are there. [Sending](../settings/#sending)
 
 ## Write a note
 
@@ -183,7 +181,7 @@ A ring note keeps the place it already has, which you see on your Relay Everythi
 
 ## The sync state
 
-The line under the **Home** title gives the sync state, such as *Synced*. Under a folder's name, it also gives how many notes the folder holds, such as *5 notes · Synced*. With sending on, a small dot is beside the state, and you can tap the state to sync now. You can also pull Home or a folder down, or tap **Sync now** in the ⋯ menu.
+The line under the **Home** title gives the sync state, such as *Synced*. Under a folder's name, it also gives how many notes the folder holds, such as *5 notes · Synced*. With sending on, a small dot is beside the state, and **Sync now**, a small ↻ button, follows it. Tap **Sync now** to sync now. You can also tap the state, or pull Home or a folder down: each does the same. The ↻ turns while the phone syncs. If the phone is set to reduce motion, it stays still. With sending off, **Sync now** does not show.
 
 | State | Dot | What it means |
 |---|---|---|

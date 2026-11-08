@@ -9,7 +9,7 @@ import 'sync/calendar.dart';
 import 'voice/model.dart';
 
 export 'data/attachments.dart' show NewFile, sizeLabel;
-export 'data/settings.dart' show LocationMode, SendPlace, Settings;
+export 'data/settings.dart' show Appearance, LocationMode, SendPlace, Settings;
 export 'sync/calendar.dart' show PhoneCalendar;
 export 'voice/model.dart' show ModelState, ModelProblem;
 
@@ -142,6 +142,8 @@ abstract class Relay extends ChangeNotifier {
   Future<String?> setLocationMode(LocationMode mode);
   Future<String?> setServer(String server);
   Future<String?> setPinNotes(bool on);
+  /// *System*, *Light* or *Dark*: the app's look, which the phone keeps.
+  Future<void> setAppearance(Appearance appearance);
   Future<String?> setHistory(bool on);
   Future<String?> setHealth(bool on);
   /// Turns the calendar on, after the phone's permission, or off, which drops what of it did not go.

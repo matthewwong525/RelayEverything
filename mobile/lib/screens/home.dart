@@ -209,7 +209,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-/// A section name with a chevron that turns as it folds, as in Apple Notes.
+/// A section name with a chevron that turns as it folds, as in Apple Notes: a tap shows no highlight.
 class _FoldHeader extends StatelessWidget {
   const _FoldHeader({required this.name, required this.folded, required this.onTap});
 
@@ -223,9 +223,9 @@ class _FoldHeader extends StatelessWidget {
     return Semantics(
       button: true,
       expanded: !folded,
-      child: InkWell(
+      child: GestureDetector(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
+        behavior: HitTestBehavior.opaque,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(2, 18, 2, 6),
           child: Row(children: [

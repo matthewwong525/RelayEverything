@@ -1,6 +1,6 @@
 # Proposal: A voice note opens its own page when it saves
 
-**Status:** built
+**Status:** ready-to-ship
 **Branch:** voice-note-opens-note
 **Open questions:** none
 
@@ -57,6 +57,7 @@ When you tap to save a voice note, the listening card closes and you stay on the
 - **2026-11-08** — Assumed: the note's page starts from the note as the phone has it when the page opens, and closes at once if the note is already gone, because the words, or the *No speech* result, can come between the tap and the page.
 - **2026-11-08** — Assumed: the spec drops the *Deleted on another phone* scenario, because a sync never removes the note that is open on its page; that note goes at the first sync after the page closes. A change to that hold is outside this plan.
 - **2026-11-08** — Built and saved inside `/ship`; 482 phone tests pass. The second look found that a page opened over another note gave up that note's sync hold, and that *New note* inside a note kept a closed note held; both are fixed and tested.
+- **2026-11-08** — Archive checkpoint inside `/ship`. The first save's wait lost its GitHub connection (TLS handshake timeout); `gh pr checks 73` then showed every check passing, both phone builds included, so task 3.2 is ticked.
 
 ## Capabilities
 

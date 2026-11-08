@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · open-voice-note-after-save</title>
+<title>Review · 2026-11-08-open-voice-note-after-save</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="open-voice-note-after-save" data-own-back>
+<body data-change="2026-11-08-open-voice-note-after-save" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>open-voice-note-after-save</h1>
+  <h1>2026-11-08-open-voice-note-after-save</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -459,6 +459,7 @@
 <li class="decision card" id="decision-10" data-note="decision-10" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-08</p>Assumed: the note's page starts from the note as the phone has it when the page opens, and closes at once if the note is already gone, because the words, or the <i>No speech</i> result, can come between the tap and the page.</li>
 <li class="decision card" id="decision-11" data-note="decision-11" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-08</p>Assumed: the spec drops the <i>Deleted on another phone</i> scenario, because a sync never removes the note that is open on its page; that note goes at the first sync after the page closes. A change to that hold is outside this plan.</li>
 <li class="decision card" id="decision-12" data-note="decision-12" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-08</p>Built and saved inside <code>/ship</code>; 482 phone tests pass. The second look found that a page opened over another note gave up that note's sync hold, and that <i>New note</i> inside a note kept a closed note held; both are fixed and tested.</li>
+<li class="decision card" id="decision-13" data-note="decision-13" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-08</p>Archive checkpoint inside <code>/ship</code>. The first save's wait lost its GitHub connection (TLS handshake timeout); <code>gh pr checks 73</code> then showed every check passing, both phone builds included, so task 3.2 is ticked.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

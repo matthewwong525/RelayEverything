@@ -15,4 +15,4 @@
 ## 3. Checks
 
 - [x] 3.1 Run `flutter analyze` and `flutter test` in `mobile/`, `node scripts/product-name.test.mjs` and `node scripts/public-check.mjs`.
-- [ ] 3.2 `/save`, and confirm the phone builds pass.
+- [x] 3.2 `/save`, and confirm the phone builds pass.

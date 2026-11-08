@@ -4,7 +4,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { App } from './apps/relay/App'
 import './index.css'
 
-// The page of a Relay-only install (self-host/SETUP.md): the Relay app in a plain frame, and no WongStack shell.
+// The page of a Relay-only install (app/self-host/SETUP.md): the Relay app in a plain frame, and no WongStack shell.
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <header className="sticky top-0 z-40 flex h-14 items-center border-b bg-background/80 backdrop-blur">

@@ -1,5 +1,5 @@
 // The Relay Everything server: the shared server at app.relayeverything.com, and the Worker a person installs in their
-// own account. Relay Everything's routes, page, sign-in and webhooks, and none of WongStack's. self-host/SETUP.md
+// own account. Relay Everything's routes, page, sign-in and webhooks, and none of WongStack's. app/self-host/SETUP.md
 import { dispatch } from "./api/contract.ts";
 import { getAccessIdentity, type AccessEnv } from "./access.ts";
 import type { AppEnv } from "./apps/index.ts";

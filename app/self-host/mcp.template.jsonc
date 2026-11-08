@@ -1,0 +1,19 @@
+// The AI connector of a Relay-only install: the same Worker as app/wrangler.relay-mcp.jsonc, on the install's
+// database. setup.mjs fills in its own names and IDs and writes app/self-host/wrangler.mcp.jsonc, which git ignores.
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "relay-mcp",
+  "main": "../worker/relay-mcp/index.ts",
+  "compatibility_date": "2026-07-28",
+  "compatibility_flags": ["nodejs_compat", "disallow_importable_env"],
+  "workers_dev": true,
+  "preview_urls": false,
+  // A person signs in on the install's own server, which sends a one-time code back to /callback.
+  "vars": { "RELAY_MCP_ADDRESS": "https://relay-mcp.your-subdomain.workers.dev/mcp", "RELAY_SERVER_URL": "https://relay.your-subdomain.workers.dev" },
+  "d1_databases": [{ "binding": "DB", "database_name": "relay-db", "database_id": "00000000-0000-0000-0000-000000000000" }],
+  "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-spaces" }] },
+  // The install's file store, for read_photo.
+  "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-notes" }],
+  "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-webhooks" }] },
+  "kv_namespaces": [{ "binding": "OAUTH_KV" }]
+}

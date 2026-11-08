@@ -13,18 +13,16 @@ node_modules/
 # Agents' throwaway files.
 .scratch/
 
-# Ring exports: the .scad models in cad/ rebuild every STL.
-*.stl
-__pycache__/
-
 # The Relay website's build output and caches: site/ rebuilds them.
 site/dist/
 site/.astro/
 site/node_modules/
 site/.wrangler/
 
-# A Relay-only install's own settings and Cloudflare key: self-host/setup.mjs writes them, per person.
-self-host/wrangler.jsonc
-self-host/wrangler.mcp.jsonc
-self-host/wrangler.spaces.jsonc
+# A Relay-only install's own settings and Cloudflare key: app/self-host/setup.mjs writes them, per person.
+app/self-host/wrangler.jsonc
+app/self-host/wrangler.mcp.jsonc
+app/self-host/wrangler.spaces.jsonc
+# An install made before the tool moved into app/ keeps them here until its next run of setup.mjs moves them.
+/self-host/
 app/dist-relay/

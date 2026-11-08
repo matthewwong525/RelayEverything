@@ -8,11 +8,12 @@ import 'package:relay_app/data/sender.dart';
 import 'package:relay_app/data/settings.dart';
 import 'package:relay_app/data/store.dart';
 import 'package:relay_app/screens/hold_to_talk.dart';
+import 'package:relay_app/screens/note_editor.dart';
 import 'package:relay_app/sync/background.dart';
 import 'package:relay_app/voice/model.dart';
 
 import 'fakes.dart';
-import 'screens_test.dart' show holdNewNote, newNote, openFolder, openSettings, tallScreen, type;
+import 'screens_test.dart' show holdNewNote, newNote, openFolder, openSettings, quill, tallScreen, type;
 
 /// Pumps, with real time between, until [done]: for file work and the model's checksum, which run outside the test's
 /// fake time.
@@ -145,12 +146,16 @@ void main() {
     await tester.pumpAndSettle();
     expect([for (final request in models.requests) request.url], [modelUrl]);
     expect(models.requests.single.headers.keys.map((key) => key.toLowerCase()), isNot(contains(startsWith('cf-access'))));
-    // Hold, let go, talk, tap the screen: the words are written here, and go nowhere.
+    // Hold, let go, talk, tap the screen: the note's page opens, the words are written there, and go nowhere.
     await holdUntilListening(tester, () => relay.listening != null);
     expect(find.text('Listening'), findsOneWidget);
     clock = clock.add(const Duration(seconds: 10));
     await tester.tapAt(const Offset(200, 150));
     await until(tester, () => relay.entries.any((entry) => entry.voice && !entry.writing));
+    await tester.pumpAndSettle();
+    expect(find.byType(NoteEditor), findsOneWidget);
+    expect(quill(tester).document.toPlainText(), 'Ask the fab if the flex stiffener can be 0.2 mm\n');
+    await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('Ask the fab if the flex stiffener can be 0.2 mm'), findsOneWidget);
     expect(find.text('Voice'), findsOneWidget);
@@ -195,6 +200,9 @@ void main() {
     clock = clock.add(const Duration(seconds: 4));
     await tester.tapAt(const Offset(200, 150));
     await until(tester, () => relay.entries.any((entry) => !entry.writing));
+    await tester.pumpAndSettle();
+    expect(quill(tester).document.toPlainText(), 'Ask the fab if the flex stiffener can be 0.2 mm\n');
+    await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('Ask the fab if the flex stiffener can be 0.2 mm'), findsOneWidget);
     await tester.runAsync(() async {

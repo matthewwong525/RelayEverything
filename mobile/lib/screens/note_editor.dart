@@ -70,7 +70,7 @@ class _NoteEditorState extends State<NoteEditor> {
   late final QuillController _controller;
   late Delta _saved;
   /// The words as last kept: a file added to an unchanged note keeps them as they were.
-  late String _savedText = widget.entry?.text ?? '';
+  late String _savedText = _current?.text ?? '';
   StreamSubscription<DocChange>? _changes;
   final _focus = FocusNode();
   final _scroll = ScrollController();
@@ -82,11 +82,14 @@ class _NoteEditorState extends State<NoteEditor> {
   /// Set by ⋯ → *Delete*: no save runs after it, so leaving keeps nothing.
   bool _deleted = false;
   /// A voice note still writing its words, or one whose words failed: the page shows that until the words come.
-  late bool _waiting = _wordsMissing(widget.entry);
+  late bool _waiting = _wordsMissing(_current);
   bool _formatting = false;
   /// Set with the keyboard, or at once when a button brings it up, so the edit that comes first waits for a pause.
   late bool _typing = widget.entry == null;
   double _keyboard = 300;
+  /// The note held open before this page, such as the note page a voice note from Shortcuts opens over: leaving gives
+  /// the hold back to it, so a pull does not change that note's words under its page.
+  String? _heldBefore;
 
   Relay get relay => widget.relay;
 
@@ -99,22 +102,27 @@ class _NoteEditorState extends State<NoteEditor> {
   }
 
   /// The note as the list has it now, so words still being written fill in here too.
-  Entry? get _current {
+  Entry? get _current => _stored ? _live ?? widget.entry : null;
+
+  /// The note in the list now, or null when the phone no longer has it.
+  Entry? get _live {
     final opened = widget.entry;
-    if (!_stored) return null;
     return relay.entries.where((other) => other.id == _id &&
-      (_id.isNotEmpty || (other.at == opened?.at && other.voice == opened?.voice))).firstOrNull ?? opened;
+      (_id.isNotEmpty || (other.at == opened?.at && other.voice == opened?.voice))).firstOrNull;
   }
 
   @override
   void initState() {
     super.initState();
-    final entry = widget.entry;
+    // The list as it is now: a voice note's words, or its going, can come between the tap that opens it and this.
+    final entry = _current;
     _controller = QuillController(document: _documentOf(entry), selection: const TextSelection.collapsed(offset: 0));
     _listen();
     _focus.addListener(_focusChanged);
     relay.addListener(_relayChanged);
+    _heldBefore = relay.openNote;
     relay.openNote = _id;
+    if (_stored && _live == null) _gone();
   }
 
   static Document _documentOf(Entry? entry) => Document.fromDelta(entry == null
@@ -143,7 +151,7 @@ class _NoteEditorState extends State<NoteEditor> {
   @override
   void dispose() {
     _save(sendNow: true, leaving: true);
-    if (relay.openNote == _id) relay.openNote = null;
+    if (relay.openNote == _id) relay.openNote = _heldBefore;
     relay.removeListener(_relayChanged);
     _changes?.cancel();
     _pause?.cancel();
@@ -162,14 +170,34 @@ class _NoteEditorState extends State<NoteEditor> {
     if (mounted) setState(() {});
   }
 
-  /// Words that came for a voice note fill the page, once.
+  /// Words that came for a voice note fill the page, once. A kept note gone from the list closes the page.
   void _relayChanged() {
+    if (_stored && !_deleted && _live == null) return _gone();
     final note = _current;
     if (!_waiting || note == null || note.writing || note.failed) return;
     _controller.document = _documentOf(note);
     _savedText = note.text;
     _listen();
     setState(() => _waiting = false);
+  }
+
+  /// The note left the phone, such as a voice note with no speech or one deleted on another phone: leaving keeps
+  /// nothing, and the page closes once, after the frame, so the page under it shows. A page opened over it, such as
+  /// the attach sheet, is not the one that goes.
+  void _gone() {
+    _pause?.cancel();
+    _deleted = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final route = ModalRoute.of(context);
+      if (route == null || !route.isActive) return;
+      if (route.isCurrent) {
+        Navigator.of(context).maybePop();
+      } else {
+        Navigator.of(context).removeRoute(route);
+      }
+    });
+    WidgetsBinding.instance.scheduleFrame();
   }
 
   /// Typing saves on a pause. A change with the keyboard down, such as a ticked circle, is kept at once.
@@ -320,9 +348,14 @@ class _NoteEditorState extends State<NoteEditor> {
     Navigator.of(context).maybePop();
   }
 
-  void _compose() => Navigator.of(context).pushReplacement(MaterialPageRoute<void>(
-    builder: (_) => NoteEditor(relay: relay, picker: widget.picker, sharer: widget.sharer, opener: widget.opener,
-      back: widget.back)));
+  /// The new page takes this one's place, so this page gives the hold back first: the new page then gives it, on
+  /// leave, to the note under both, not to this closed one.
+  void _compose() {
+    if (relay.openNote == _id) relay.openNote = _heldBefore;
+    Navigator.of(context).pushReplacement(MaterialPageRoute<void>(
+      builder: (_) => NoteEditor(relay: relay, picker: widget.picker, sharer: widget.sharer, opener: widget.opener,
+        back: widget.back)));
+  }
 
   /// A tap on a link while reading opens it in the browser, and the keyboard stays down. While editing, the tap places
   /// the cursor, as in Apple Notes: it returns false, so the editor handles it.

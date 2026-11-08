@@ -7,7 +7,7 @@ Lets a person write and change a note in place on the phone, with Apple Notes te
 
 ### Requirement: A note edits in place
 
-A tap on a note's words SHALL put the cursor there and bring up the keyboard, on the same page that shows the note. A new note SHALL open on that page with the keyboard up and its first line styled as a title. Each change SHALL be kept on the phone within two seconds of a pause in typing, and when the person leaves the page, with no *Save* button. A note left with no words and no files SHALL be deleted from the phone when the person leaves it, as Apple Notes does, with any upload or change of it still waiting, so it is never sent; a copy already on the server SHALL keep its last words. A voice note left with no words SHALL keep its recording. A voice note's words SHALL be editable, and its recording SHALL stay unchanged.
+A tap on a note's words SHALL put the cursor there and bring up the keyboard, on the same page that shows the note. A new note SHALL open on that page with the keyboard up and its first line styled as a title. Each change SHALL be kept on the phone within two seconds of a pause in typing, and when the person leaves the page, with no *Save* button. A note left with no words and no files SHALL be deleted when the person leaves it, as Apple Notes does, with *Undo*: a note never sent and with no upload waiting SHALL be deleted on the phone only, with any change of it still waiting, so it is never sent; a sent note, or one whose first upload waits or is on its way, SHALL be deleted everywhere, as a delete from the ⋯ menu is. A voice note left with no words SHALL keep its recording. A voice note's words SHALL be editable, and its recording SHALL stay unchanged.
 
 #### Scenario: Fix a word and leave
 - **WHEN** the person opens a note, taps a word, types a fix and taps back
@@ -19,7 +19,7 @@ A tap on a note's words SHALL put the cursor there and bring up the keyboard, on
 
 #### Scenario: An emptied note
 - **WHEN** the person deletes every word of a note that has no files or recording, and leaves
-- **THEN** the note is gone from the list and nothing of it is sent; a copy already sent keeps its last words on the page
+- **THEN** the note is gone from the list with *Undo*, and when the *Undo* time ends a sent copy is deleted from the page and webhooks get `note.deleted`
 
 ### Requirement: Tool bars match Apple Notes
 

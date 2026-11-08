@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { healthSamples, locationPoints, noteCreated, noteFile, noteUpdated, photoCreated, webhookTest, type NoteRow } from "./format.ts";
+import { healthSamples, locationPoints, noteCreated, noteDeleted, noteFile, noteUpdated, photoCreated, webhookTest, type NoteRow } from "./format.ts";
 import { base64, newSecret } from "./sign.ts";
 import { bodyWithFile, post } from "./send.ts";
 
@@ -85,6 +85,19 @@ it("keeps a changed note's latest words and its recording, and lists a file adde
   saved.close();
 });
 
+it("deletes a deleted note and its files, and another note stays", async () => {
+  const at = Date.now();
+  const note = { ...ring, id: "a0000000-0000-4000-8000-000000000011", audio_key: null };
+  const listed = { id: "file-gone-0001", name: "ticket.pdf", content_type: "application/pdf", size: 3 };
+  expect((await send(noteCreated(note, null, at, [listed]))).status).toBe(204);
+  for (let tries = 0; tries < 2; tries++) expect((await send(noteDeleted(note.id, at))).status).toBe(204);
+  const saved = new DatabaseSync(database, { readOnly: true });
+  expect(saved.prepare("SELECT count(*) AS n FROM notes WHERE id = ?").get(note.id)).toEqual({ n: 0 });
+  expect(saved.prepare("SELECT count(*) AS n FROM files WHERE note_id = ?").get(note.id)).toEqual({ n: 0 });
+  expect(saved.prepare("SELECT count(*) AS n FROM notes WHERE id = ?").get(ring.id)).toEqual({ n: 1 });
+  saved.close();
+});
+
 // The phone's own messages, as mobile/test/webhook_test.dart writes them, signed again with this receiver's secret.
 const phone = (type: string) =>
   (JSON.parse(readFileSync(new URL(`../../../../../mobile/test/fixtures/webhook/${type}.json`, import.meta.url), "utf8")) as { body: string }).body;
@@ -105,6 +118,12 @@ it("saves what the phone sends to its own webhook, with each file's bytes beside
     .toEqual({ device_id: note.device.id, taken_at: photo.taken_at, size: photo.size });
   expect(saved.prepare("SELECT count(*) AS n FROM other_messages").get()).toEqual({ n: 0 });
   saved.close();
+  // The phone's note.deleted names the note as its note.created did: the note and its file go.
+  expect((await post(`${address}/`, secret, "phone_note.deleted", phone("note.deleted"))).status).toBe(204);
+  const after = new DatabaseSync(database, { readOnly: true });
+  expect(after.prepare("SELECT (SELECT count(*) FROM notes WHERE id = ?) + (SELECT count(*) FROM files WHERE note_id = ?) AS n")
+    .get(note.id, note.id)).toEqual({ n: 0 });
+  after.close();
 });
 
 it("answers 2xx to a type it does not know yet and keeps it as one raw row, once, however often it comes", async () => {

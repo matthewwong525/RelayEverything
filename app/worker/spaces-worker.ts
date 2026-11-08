@@ -12,6 +12,7 @@ import photos from "../../schema/space-migrations/0008_photos.sql";
 import inbox from "../../schema/space-migrations/0009_inbox.sql";
 import noteEdits from "../../schema/space-migrations/0010_note_edits.sql";
 import noteSync from "../../schema/space-migrations/0011_note_sync.sql";
+import noteDeletes from "../../schema/space-migrations/0012_note_deletes.sql";
 import type { Row, Sql, SqlValue } from "./apps/relay/space.ts";
 import { BEHIND } from "./apps/relay/webhooks/log.ts";
 
@@ -19,7 +20,7 @@ import { BEHIND } from "./apps/relay/webhooks/log.ts";
 export const MIGRATIONS: readonly [string, string][] = [["0001_relay", relay], ["0002_space", space], ["0003_api_devices", apiDevices],
   ["0004_attachments", attachments], ["0005_no_pebble", noPebble], ["0006_phone_data", phoneData],
   ["0007_note_files", noteFiles], ["0008_photos", photos], ["0009_inbox", inbox],
-  ["0010_note_edits", noteEdits], ["0011_note_sync", noteSync]];
+  ["0010_note_edits", noteEdits], ["0011_note_sync", noteSync], ["0012_note_deletes", noteDeletes]];
 /** A staging space ran a migration first under an older name, before another change took its number. */
 const RAN_AS: Readonly<Record<string, string>> = { "0010_note_edits": "0008_note_edits" };
 

@@ -31,7 +31,9 @@ test("a described action shows its fields, errors and example, and a bare handle
   const two = defineAction({
     operationId: "test.two", summary: "Send two", description: "Sends two things.",
     input: z.strictObject({ anything: z.unknown().describe("Any value."), tags: z.array(z.string()).optional().describe("Words.") }),
-    output: z.strictObject({ ok: z.boolean(), z: z.array(z.strictObject({ a: z.string() })).nullable() }), encoding: "json", effect: "external", agentAvailable: false, errors: {}, examples: [],
+    output: z.strictObject({ ok: z.boolean(), z: z.array(z.strictObject({ a: z.string() })).nullable(),
+      u: z.array(z.union([z.strictObject({ b: z.string() }), z.strictObject({ c: z.literal(true) })])) }),
+    encoding: "json", effect: "external", agentAvailable: false, errors: {}, examples: [],
     handler: bare,
   });
   const reference = apiReference(new Map<string, Route>([["GET one", one], ["POST two", two], ["GET raw", bare]]),
@@ -44,6 +46,8 @@ test("a described action shows its fields, errors and example, and a bare handle
   expect(reference).toContain("| `tags` | array of string | no | Words. |");
   expect(reference).toContain("| `ok` | boolean | yes |  |");
   expect(reference).toContain("| `z` | array of object or null | yes |  |\n| `z[].a` | string | yes |  |");
+  // An array of a union gets the rows of its first object.
+  expect(reference).toContain("| `u` | array of object or object | yes |  |\n| `u[].b` | string | yes |  |");
   expect(reference).toContain("- `GET /apps/relay/api/raw`: [Raw bytes](../raw/)");
 });
 

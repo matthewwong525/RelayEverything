@@ -216,6 +216,24 @@ void main() {
       relay.dispose();
     });
 
+    test('a deleted note goes there as note.deleted, by its clientId', () async {
+      final relay = controller();
+      await relay.load();
+      expect(await relay.saveWebhook(hook.address, fixtureSecret), isNull);
+      expect(await relay.startSending(sendEarlier: false, place: SendPlace.webhook), isNull);
+      await relay.addNote('Buy milk', id: 'n1');
+      await relay.settled();
+      await relay.deleteNote('n1');
+      relay.dispose();
+      clock = now.add(const Duration(seconds: 10));
+      final next = controller();
+      await next.load();
+      await next.sync();
+      expect([hookTypes(), next.entries, next.waiting], [['note.created', 'note.deleted'], isEmpty, 0]);
+      expect(jsonDecode(server.requests.last.body)['data'], {'note': {'id': 'n1', 'deleted_at': isA<String>()}});
+      next.dispose();
+    });
+
     test('a phone that lost its webhook reads sending as off, and the key stays for the server', () async {
       await store.set('settings', const Settings(sending: true, place: SendPlace.webhook).encode());
       await KeyVault(storage).save(bearer);
@@ -561,17 +579,38 @@ void main() {
         ['key', 'connections']);
     });
 
-    test('a note emptied before it went leaves the list and the outbox, and is never sent', () async {
+    test('a note emptied while its first upload waits is deleted everywhere, with Undo, as the upload may be on its way',
+        () async {
       final relay = controller();
       await relay.load();
       expect(await relay.connect(pageCode), isNull);
       await relay.startSending(sendEarlier: false);
+      await pumpEventQueue();
       await relay.addNote('# Buy', id: 'n1', sendNow: false);
       expect([relay.entries.length, relay.waiting], [1, 1]);
-      expect(await relay.dropEmptyNote('n1'), isTrue);
+      expect(await relay.dropEmptyNote('n1'), Emptied.deleting);
+      expect(relay.entries, isEmpty);
+      await relay.endUndo('n1');
+      expect([for (final request in server.requests) '${request.method} ${request.url.path.split('/').last}'],
+        ['GET key', 'GET connections', 'DELETE notes']);
+      expect(server.requests.last.url.queryParameters, {'clientId': 'n1'});
       expect([relay.entries, relay.waiting], [isEmpty, 0]);
+      relay.dispose();
+    });
+
+    test('a note emptied with sending off, so with no upload, is dropped at once and never sent', () async {
+      final relay = controller();
+      await relay.load();
+      expect(await relay.connect(pageCode), isNull);
+      await relay.addNote('# Buy', id: 'n1', sendNow: false);
+      expect(relay.waiting, 0);
+      expect(await relay.dropEmptyNote('n1'), Emptied.dropped);
+      expect([relay.entries, await store.outbox()], [isEmpty, isEmpty]);
+      expect(await relay.startSending(sendEarlier: true), isNull);
+      await pumpEventQueue();
       await relay.sync();
-      expect(server.routes, ['key', 'connections']);
+      expect(server.requests.where((request) => request.url.path.endsWith('/notes')), isEmpty);
+      relay.dispose();
     });
 
     test('connects with a key from the Relay Everything page, and sends it as Authorization: Bearer', () async {
@@ -1558,6 +1597,159 @@ void main() {
       await pumpEventQueue();
       expect([for (final note in sentNotes()) note['text']], ['Typed while off', 'Order more TL3312 switches']);
       expect(await relay.earlierNotes(), 0);
+    });
+  });
+
+  group('deleting a note', () {
+    List<http.Request> deletes() => [for (final request in server.requests) if (request.method == 'DELETE') request];
+
+    /// A controller sending to the server, with the note `n1` sent.
+    RelayController sentNote(FakeAsync async) {
+      final relay = controller();
+      relay.load();
+      async.elapse(const Duration(milliseconds: 1));
+      relay.connect(pageCode);
+      async.elapse(const Duration(milliseconds: 1));
+      relay.startSending(sendEarlier: false);
+      async.elapse(const Duration(milliseconds: 1));
+      relay.addNote('# Buy milk', id: 'n1');
+      async.elapse(const Duration(milliseconds: 1));
+      expect([relay.entries.single.sent, sentNotes().length], [true, 1]);
+      return relay;
+    }
+
+    test('leaves the list at once, and when the Undo bar closes with no Undo its delete goes to the server', () {
+      fakeAsync((async) {
+        final relay = sentNote(async);
+        relay.deleteNote('n1');
+        expect(relay.entries, isEmpty);
+        // Past the bar's own five seconds: a bar that slid in late, or waited behind another, still shows Undo.
+        async.elapse(undoTime + const Duration(seconds: 2));
+        expect(deletes(), isEmpty);
+        relay.endUndo('n1');
+        async.elapse(const Duration(milliseconds: 1));
+        expect([for (final request in deletes()) request.url.queryParameters], [{'clientId': 'n1'}]);
+        expect(relay.entries, isEmpty);
+        async.elapse(deleteAfter);
+        expect(deletes().length, 1);
+        relay.dispose();
+      });
+    });
+
+    test('with no bar to close, the delete runs after deleteAfter, longer than the bar shows', () {
+      fakeAsync((async) {
+        final relay = sentNote(async);
+        relay.deleteNote('n1');
+        async.elapse(deleteAfter - const Duration(milliseconds: 100));
+        expect(deletes(), isEmpty);
+        async.elapse(const Duration(milliseconds: 200));
+        expect([for (final request in deletes()) request.url.queryParameters], [{'clientId': 'n1'}]);
+        relay.dispose();
+      });
+    });
+
+    test('a bar that closes while the mark is still written runs the delete once', () {
+      fakeAsync((async) {
+        final relay = sentNote(async);
+        relay.deleteNote('n1');
+        relay.endUndo('n1');
+        async.elapse(const Duration(milliseconds: 1));
+        expect([deletes().length, relay.entries], [1, isEmpty]);
+        async.elapse(deleteAfter);
+        expect([deletes().length, relay.entries], [1, isEmpty]);
+        relay.dispose();
+      });
+    });
+
+    test('Undo in its time brings the note back and sends nothing', () {
+      fakeAsync((async) {
+        final relay = sentNote(async);
+        relay.deleteNote('n1');
+        async.elapse(const Duration(seconds: 2));
+        relay.undoDelete('n1');
+        async.elapse(const Duration(milliseconds: 1));
+        expect(relay.entries.single.id, 'n1');
+        // The bar closes after its Undo, as when the person taps Undo and the bar times out after.
+        relay.endUndo('n1');
+        async.elapse(deleteAfter * 2);
+        expect([deletes(), relay.entries.length], [isEmpty, 1]);
+        relay.dispose();
+      });
+    });
+
+    test('a close in the Undo time deletes the note when the time ends, at the next start', () {
+      fakeAsync((async) {
+        final relay = sentNote(async);
+        relay.deleteNote('n1');
+        async.elapse(const Duration(seconds: 1));
+        relay.dispose();
+        clock = now.add(const Duration(seconds: 2));
+        final next = controller();
+        next.load();
+        async.elapse(const Duration(milliseconds: 1));
+        expect([next.entries, deletes()], [isEmpty, isEmpty]);
+        // Its mark was made at `now`, so with the clock at 2 s its deleteAfter ends 8 s after this start.
+        async.elapse(deleteAfter - const Duration(seconds: 2) - const Duration(milliseconds: 10));
+        expect(deletes(), isEmpty);
+        async.elapse(const Duration(milliseconds: 20));
+        expect([for (final request in deletes()) request.url.queryParameters], [{'clientId': 'n1'}]);
+        next.dispose();
+      });
+    });
+
+    test('with sending off waits on the phone, and goes when sending is on again, before the pull', () async {
+      // The server gives the note to each pull until its delete lands, so a pull before the delete would bring it back.
+      var gone = false;
+      server.answer = (request) {
+        if (request.method == 'DELETE') gone = true;
+        if (request.method != 'GET' || !request.url.path.endsWith('/notes')) return FakeServer.ok(request);
+        return notesPage([
+          if (gone) {'id': 's1', 'clientId': 'n1', 'deleted': true}
+          else pulledNote('s1', clientId: 'n1', mine: true, text: '# Buy milk', recordedAt: now),
+        ], next: gone ? 2 : 1);
+      };
+      final relay = controller();
+      await relay.load();
+      expect(await relay.connect(pageCode), isNull);
+      await relay.startSending(sendEarlier: false);
+      await relay.addNote('# Buy milk', id: 'n1');
+      await pumpEventQueue();
+      await relay.pullNotes();
+      expect(relay.entries.single.id, 'n1');
+      await relay.stopSending();
+      await relay.deleteNote('n1');
+      relay.dispose();
+      clock = now.add(deleteAfter);
+      final next = controller();
+      await next.load();
+      await next.sync();
+      await next.pullNotes();
+      expect([next.entries, deletes(), await store.waiting()], [isEmpty, isEmpty, 1]);
+      server.requests.clear();
+      expect(await next.startSending(sendEarlier: false), isNull);
+      await pumpEventQueue();
+      await next.pullNotes();
+      final calls = [for (final request in server.requests) if (request.method == 'DELETE' || request.url.path.endsWith('/notes'))
+        '${request.method} ${request.url.path.split('/').last}'];
+      expect(calls, ['DELETE notes', 'GET notes']);
+      expect([next.entries, await store.notes(), await store.waiting()], [isEmpty, isEmpty, 0]);
+      next.dispose();
+    });
+
+    test('an emptied note the server has is deleted everywhere, with Undo', () async {
+      final relay = controller();
+      await relay.load();
+      expect(await relay.connect(pageCode), isNull);
+      await relay.startSending(sendEarlier: false);
+      await relay.addNote('# Buy milk', id: 'n1');
+      await pumpEventQueue();
+      await relay.sync();
+      expect(relay.entries.single.sent, isTrue);
+      expect(await relay.dropEmptyNote('n1'), Emptied.deleting);
+      expect(relay.entries, isEmpty);
+      await relay.undoDelete('n1');
+      expect(relay.entries.single.id, 'n1');
+      relay.dispose();
     });
   });
 

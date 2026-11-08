@@ -24,6 +24,7 @@ final note = item(7, 'notes', {'clientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', '
 final update = item(11, noteUpdate, {'clientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'text': '# Receipt\n- [x] Paid',
   'createdAt': Date.recorded, 'editedAt': Date.recorded + 600000,
   'attachments': [{'id': 'f1', 'name': 'receipt.jpg', 'type': 'image/jpeg', 'size': 4}]});
+final deleted = item(15, noteDelete, {'clientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'id': 's1'});
 final file = item(8, 'attachment', {'noteClientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'id': 'f1',
   'path': 'attachments/f1.jpg', 'name': 'receipt.jpg', 'type': 'image/jpeg'});
 final samples = item(9, 'health', {'samples': [{'id': 1, 'type': 'steps', 'start': Date.recorded,
@@ -67,6 +68,9 @@ void main() {
         'recorded_at': '2026-11-04T14:01:00.000Z', 'created_at': '2026-11-04T14:01:00.000Z', 'device': device, 'place': null,
         'attachments': [{'id': 'f1', 'name': 'receipt.jpg', 'content_type': 'image/jpeg', 'size': 4}],
         'edited_at': '2026-11-04T14:11:00.000Z'}}});
+    // A delete names the note by the id the receiver keeps it under: the phone's own.
+    expect(webhook.message(deleted), {'version': 1, 'type': 'note.deleted', 'timestamp': '2026-11-04T14:01:02.000Z', 'data': {
+      'note': {'id': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'deleted_at': '2026-11-04T14:01:02.000Z'}}});
     // A change carries the note's own created_at, though it was queued later, so a receiver keeps one row as it was.
     final later = OutboxItem(12, noteUpdate, update.body, destination: ownWebhook, createdAt: sent);
     expect(webhook.message(later)!['data']['note']['created_at'], webhook.message(note)!['data']['note']['created_at']);
@@ -238,6 +242,7 @@ void main() {
     final webhook = client(server);
     await webhook.send(note);
     await webhook.send(update);
+    await webhook.send(deleted);
     await webhook.sendFile(file, [1, 2, 3, 4]);
     await webhook.send(samples);
     await webhook.send(points);

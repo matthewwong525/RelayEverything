@@ -108,6 +108,9 @@ class Pin {
 /// The route of a sent note's change: `PATCH notes` on the server, `note.updated` to a webhook.
 const noteUpdate = 'note.update';
 
+/// The route of a sent note's delete: `DELETE notes` on the server, `note.deleted` to a webhook.
+const noteDelete = 'note.delete';
+
 /// Where an upload goes: the person's Relay Everything server, or their own webhook. Each waiting upload keeps one.
 const relayServer = 'relay-server', ownWebhook = 'webhook';
 
@@ -179,13 +182,17 @@ const _voiceColumns = "kind TEXT NOT NULL DEFAULT 'typed', audio_path TEXT, dura
 const _syncColumns = 'server_id TEXT, device TEXT, mine INTEGER NOT NULL DEFAULT 1, edit_unsent INTEGER NOT NULL DEFAULT 0';
 const _serverIdIndex = 'CREATE UNIQUE INDEX notes_server_id ON notes (server_id)';
 
+// deleting_at: when the person deleted the note. It is hidden, and still here for *Undo*, until its delete runs.
+const _deletingColumn = 'deleting_at INTEGER';
+
 const _schema = [
   'CREATE TABLE outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, destination TEXT NOT NULL DEFAULT \'$relayServer\', route TEXT NOT NULL, '
     'body TEXT NOT NULL, created_at INTEGER NOT NULL)',
   // queued = 1: the note has its upload. pinning = 1: the note waits for its fix, so no upload can go without its place.
   // words_pending = 1: a voice note still waits for its words, so no upload can go without them.
   'CREATE TABLE notes (client_id TEXT PRIMARY KEY, body TEXT NOT NULL, created_at INTEGER NOT NULL, sent_at INTEGER, '
-    'queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0, $_voiceColumns, edited_at INTEGER, $_syncColumns)',
+    'queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0, $_voiceColumns, edited_at INTEGER, $_syncColumns, '
+    '$_deletingColumn)',
   _serverIdIndex,
   'CREATE TABLE points (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
   'CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
@@ -219,7 +226,7 @@ class Store extends GeneratedDatabase {
   Iterable<TableInfo<Table, dynamic>> get allTables => const [];
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(onCreate: (_) async {
@@ -262,6 +269,11 @@ class Store extends GeneratedDatabase {
         await customStatement('ALTER TABLE notes ADD COLUMN $column');
       }
       await customStatement(_serverIdIndex);
+    }
+    // Version 9 could not delete a note, and its pulls left out deleted notes: the next pull starts again from 0.
+    if (from < 10) {
+      await customStatement('ALTER TABLE notes ADD COLUMN $_deletingColumn');
+      await customStatement("DELETE FROM state WHERE key = '$noteSyncSeq'");
     }
   });
 
@@ -343,7 +355,8 @@ class Store extends GeneratedDatabase {
 
   /// Waiting uploads, and notes that wait for their pin.
   Future<int> waiting() async => (await _rows(
-    'SELECT (SELECT count(*) FROM outbox) + (SELECT count(*) FROM notes WHERE pinning = 1) AS n')).single.read<int>('n');
+    'SELECT (SELECT count(*) FROM outbox) + (SELECT count(*) FROM notes WHERE pinning = 1 AND deleting_at IS NULL) AS n'))
+    .single.read<int>('n');
 
   Future<void> done(int id) => _run('DELETE FROM outbox WHERE id = ?', [id]);
 
@@ -532,23 +545,83 @@ class Store extends GeneratedDatabase {
     await _run('DELETE FROM attachments WHERE note_client_id = ? AND note_client_id NOT IN (SELECT client_id FROM notes)', [clientId]);
   });
 
-  /// Deletes a note the person left with no words, as Apple Notes does, with each upload or change of it still waiting,
-  /// so it never goes. The caller found its words blank. A note with a file or a recording stays, as one still waiting
-  /// for its words does. A copy the server took keeps its last words there. False when the note stays.
+  // A typed note with no file, recording or words to come: blank words leave nothing in it.
+  static const _bare = "kind = 'typed' AND audio_path IS NULL AND words_pending = 0 "
+    'AND NOT EXISTS (SELECT 1 FROM attachments WHERE note_client_id = notes.client_id)';
+
+  /// True when blank words leave nothing in the note: it has no file or recording, and waits for no words.
+  Future<bool> isBare(String clientId) async =>
+    (await _rows('SELECT 1 FROM notes WHERE client_id = ? AND $_bare', [clientId])).isNotEmpty;
+
+  /// Deletes a note the person left with no words, as Apple Notes does, with each change of it still waiting, so it
+  /// never goes. The caller found its words blank. False when the note stays: it is not [isBare], or the server has it or
+  /// may get it, as it went or its upload waits or is on its way, so [deleteNote] deletes it everywhere.
   Future<bool> dropEmptyNote(String clientId) => transaction(() async {
-    final bare = await _rows("SELECT 1 FROM notes WHERE client_id = ? AND kind = 'typed' AND audio_path IS NULL "
-      'AND words_pending = 0 AND NOT EXISTS (SELECT 1 FROM attachments WHERE note_client_id = ?)', [clientId, clientId]);
+    final bare = await _rows('SELECT 1 FROM notes WHERE client_id = ? AND sent_at IS NULL AND server_id IS NULL AND $_bare '
+      "AND NOT EXISTS (SELECT 1 FROM outbox WHERE route = 'notes' AND json_extract(body, '\$.clientId') = notes.client_id)",
+      [clientId]);
     if (bare.isEmpty) return false;
     await _run('DELETE FROM notes WHERE client_id = ?', [clientId]);
     await _run("DELETE FROM outbox WHERE route IN ('notes', '$noteUpdate') AND json_extract(body, '\$.clientId') = ?", [clientId]);
     return true;
   });
 
+  /// Hides a note the person deleted, so *Undo* can bring it back until [deleteNote] runs.
+  Future<void> markDeleted(String clientId, DateTime at) =>
+    _run('UPDATE notes SET deleting_at = ? WHERE client_id = ?', [at.millisecondsSinceEpoch, clientId]);
+
+  /// Brings back a note marked deleted, as it was.
+  Future<void> undoDelete(String clientId) => _run('UPDATE notes SET deleting_at = NULL WHERE client_id = ?', [clientId]);
+
+  /// Each note marked deleted, with when, such as one whose *Undo* time a close cut short.
+  Future<List<(String, DateTime)>> marked() async => [
+    for (final row in await _rows('SELECT client_id, deleting_at FROM notes WHERE deleting_at IS NOT NULL ORDER BY deleting_at'))
+      (row.read<String>('client_id'), DateTime.fromMillisecondsSinceEpoch(row.read<int>('deleting_at'))),
+  ];
+
+  /// Deletes a note on this phone, with its files and each upload of it still waiting. A note the server may have, as
+  /// it went or its upload may be on its way, gets one `note.delete`, also with sending off: the outbox keeps it until
+  /// sending is on, so the note never comes back. A 404 for one that never landed is dropped. True when one was queued.
+  Future<bool> deleteNote(String clientId) async {
+    final files = <String>[];
+    final queued = await transaction(() async {
+      final notes = await _rows('SELECT sent_at, server_id FROM notes WHERE client_id = ?', [clientId]);
+      if (notes.isEmpty) return false;
+      final serverId = notes.single.read<String?>('server_id');
+      final going = await _rows("SELECT 1 FROM outbox WHERE route = 'notes' AND json_extract(body, '\$.clientId') = ?", [clientId]);
+      final sent = serverId != null || notes.single.read<int?>('sent_at') != null || going.isNotEmpty;
+      files.addAll(await _drop(clientId));
+      if (sent) await enqueue(noteDelete, {'clientId': clientId, 'id': ?serverId});
+      return sent;
+    });
+    for (final path in files) {
+      await _delete(path);
+    }
+    return queued;
+  }
+
+  /// Deletes a note's row, its files' rows and its waiting uploads, inside a step; gives its local files, which the
+  /// caller deletes after the step.
+  Future<List<String>> _drop(String clientId) async {
+    final files = [
+      for (final row in await _rows("SELECT path FROM attachments WHERE note_client_id = ? AND path IS NOT NULL AND path != ''",
+          [clientId])) row.read<String>('path'),
+      for (final row in await _rows('SELECT audio_path FROM notes WHERE client_id = ? AND audio_path IS NOT NULL', [clientId]))
+        row.read<String>('audio_path'),
+    ];
+    await _run("DELETE FROM outbox WHERE (route IN ('notes', '$noteUpdate') AND json_extract(body, '\$.clientId') = ?) "
+      "OR (route = 'attachment' AND json_extract(body, '\$.noteClientId') = ?)", [clientId, clientId]);
+    await _run('DELETE FROM attachments WHERE note_client_id = ?', [clientId]);
+    await _run('DELETE FROM notes WHERE client_id = ?', [clientId]);
+    return files;
+  }
+
   /// Voice notes still waiting for their words, oldest first.
   Future<List<LocalNote>> pendingWords() async =>
     [for (final note in (await notes()).reversed) if (note.wordsPending) note];
 
-  static const _earlier = 'FROM notes WHERE sent_at IS NULL AND queued = 0 AND pinning = 0 AND words_pending = 0';
+  static const _earlier = 'FROM notes WHERE sent_at IS NULL AND queued = 0 AND pinning = 0 AND words_pending = 0 '
+    'AND deleting_at IS NULL';
 
   /// How many notes never went to the server and have no upload: the notes the earlier-notes prompt asks about.
   Future<int> earlierCount() async => (await _rows('SELECT count(*) AS n $_earlier')).single.read<int>('n');
@@ -564,18 +637,42 @@ class Store extends GeneratedDatabase {
   Future<void> noteSent(String clientId, DateTime at) =>
     _run('UPDATE notes SET sent_at = ? WHERE client_id = ?', [at.millisecondsSinceEpoch, clientId]);
 
-  /// Keeps the notes a pull read, in change order; gives false when it left out [editing], the note open in the editor.
+  /// Keeps the notes a pull read, in change order; gives false when it left out [editing], the note open in the editor,
+  /// or the delete of a note this phone marked deleted.
   /// A note matches by server id, then by client id against this phone's own notes, whatever the server's `mine` says:
   /// a new key makes a new device on the server, which then calls this phone's older notes not its own. Phone ids are
   /// 32 random hex characters and email ids start `email:`, so no other note matches. One from elsewhere is kept as
-  /// `srv:<id>`.
-  Future<bool> applyPulled(List<Map<String, dynamic>> notes, {String? editing}) => transaction(() async {
-    var all = true;
-    for (final note in notes) {
-      if (!await _applyPulled(note, editing)) all = false;
+  /// `srv:<id>`. A deleted note's `{id, clientId, deleted: true}` deletes it here, with its files, after the step.
+  Future<bool> applyPulled(List<Map<String, dynamic>> notes, {String? editing}) async {
+    final files = <String>[];
+    final all = await transaction(() async {
+      var all = true;
+      for (final note in notes) {
+        final kept = note['deleted'] == true ? await _applyDeleted(note, editing, files) : await _applyPulled(note, editing);
+        if (!kept) all = false;
+      }
+      return all;
+    });
+    for (final path in files) {
+      await _delete(path);
     }
     return all;
-  });
+  }
+
+  /// Deletes a note deleted elsewhere, matched as [_applyPulled] matches, and adds its local files to [files]. The note
+  /// open in the editor stays, as for a change, and so does a note this phone marked deleted: false holds the sync place,
+  /// so the next pull deletes it here too if *Undo* brought it back.
+  Future<bool> _applyDeleted(Map<String, dynamic> note, String? editing, List<String> files) async {
+    final clientId = note['clientId'] as String?;
+    const columns = 'SELECT client_id, deleting_at FROM notes';
+    var rows = await _rows('$columns WHERE server_id = ?', [note['id']]);
+    if (rows.isEmpty && clientId != null) rows = await _rows('$columns WHERE client_id = ? AND mine = 1', [clientId]);
+    if (rows.isEmpty) return true;
+    final id = rows.single.read<String>('client_id');
+    if (id == editing || rows.single.read<int?>('deleting_at') != null) return false;
+    files.addAll(await _drop(id));
+    return true;
+  }
 
   /// Newer wins: this phone's words stay when its waiting change, or its own last edit that never went, is later than
   /// the pulled edit time; else the pulled words are kept and any waiting change of the note is dropped. An edit that
@@ -661,7 +758,7 @@ class Store extends GeneratedDatabase {
     }
   }
 
-  /// Every note made on this phone, newest first, each with its files.
+  /// Every note made on this phone, newest first, each with its files. A note marked deleted is left out.
   Future<List<LocalNote>> notes() async {
     final files = <String, List<Attachment>>{};
     for (final row in await _rows('SELECT note_client_id, id, name, type, size, path, sent_at FROM attachments ORDER BY rowid')) {
@@ -669,7 +766,7 @@ class Store extends GeneratedDatabase {
     }
     return [
       for (final row in await _rows('SELECT client_id, body, sent_at, queued, pinning, kind, audio_path, duration_ms, words_pending, '
-          'edited_at, server_id, device, mine FROM notes ORDER BY created_at DESC, client_id DESC'))
+          'edited_at, server_id, device, mine FROM notes WHERE deleting_at IS NULL ORDER BY created_at DESC, client_id DESC'))
         _noteOf(jsonDecode(row.read<String>('body')) as Map<String, dynamic>, sentAt: row.read<int?>('sent_at'),
           queued: row.read<int>('queued') == 1, pinning: row.read<int>('pinning') == 1,
           kind: NoteKind.values.byName(row.read<String>('kind')), audioPath: row.read<String?>('audio_path'),

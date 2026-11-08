@@ -3,7 +3,7 @@ title: Your own database
 description: Add a webhook, and your Relay Everything server or your phone sends each new note, and the health, calendar, location and photos you pick, to an address you own, in one signed format.
 ---
 
-A webhook copies what your Relay Everything server stores in your space to an address you own, such as a small receiver beside your database. Your server sends each new note there a few seconds after it gets it, then each of its files in a [`note.file`](#notefile) message. When a phone changes a note, the note goes again as [`note.updated`](#noteupdated). Health, calendar, location and photos go only if you tick them.
+A webhook copies what your Relay Everything server stores in your space to an address you own, such as a small receiver beside your database. Your server sends each new note there a few seconds after it gets it, then each of its files in a [`note.file`](#notefile) message. When a phone changes a note, the note goes again as [`note.updated`](#noteupdated), and when a phone deletes it, as [`note.deleted`](#notedeleted). Health, calendar, location and photos go only if you tick them.
 
 Your data lives in your own space: one Durable Object with its own SQLite database, in the spaces Worker (`relay-everything-spaces`, or `<name>-spaces` on [your own server](../../start/run-your-own/)). The server's D1 database holds only the list of accounts: each person, their sign-ins and sessions, and a fingerprint of each key. Each webhook belongs to one person's space, and it sends only that person's data.
 
@@ -64,6 +64,7 @@ Every message is a `POST` with a JSON body in one envelope:
 |---|---|---|
 | `note.created` | A note reaches your server. | `note`, with its words, time, place, device, recording, and the names of its files |
 | `note.updated` | A phone changes a note, from any device or way in. Always after the note's `note.created`. | `note`, with its latest words, without `audio` |
+| `note.deleted` | A phone deletes a note, from any device or way in. Always after the note's `note.created`. | `note`: its `id` and `deleted_at` |
 | `health.samples` | A phone sends health samples. | `samples`: up to 500 |
 | `location.points` | A phone sends location points. | `points`: up to 500 |
 | `calendar.events` | A phone sends new, changed or removed calendar events. | `events`: up to 500, each with its `status` |
@@ -162,6 +163,26 @@ Relay Everything sends `note.updated` when a phone changes a note's words, or ad
 It holds the same `note` as `note.created`, with its latest words and without `audio`. `edited_at` is when the phone changed the note; an older `note.updated` has none. When two phones change a note, the change with the later `edited_at` is the one your server keeps, and only it sends. `attachments` lists all the note's files, as in `note.created`, and only a note with files has it. Update the note's row by its `id`, and keep its stored `audio`. A changed note has the same `id`, `recorded_at` and `created_at`.
 
 The words keep their styles as Markdown marks, such as `#` for a title, `- [ ]` and `- [x]` for a checklist, and `<u>…</u>` for underline. A receiver that ignores `note.updated` keeps working: it keeps the words from `note.created`.
+
+### `note.deleted`
+
+Relay Everything sends `note.deleted` when a phone deletes a note. Any signed-in phone can delete any note in your space, also one from email. Your server deletes the note, its files and its recording, and sends the delete to every active webhook. A phone that sends to your own webhook sends it there itself. It always comes after the note's `note.created`.
+
+```json
+{
+  "version": 1,
+  "type": "note.deleted",
+  "timestamp": "2026-11-04T16:00:00.000Z",
+  "data": {
+    "note": {
+      "id": "a0000000-0000-4000-8000-000000000002",
+      "deleted_at": "2026-11-04T16:00:00.000Z"
+    }
+  }
+}
+```
+
+`id` is the same `id` as in the note's `note.created`. Delete the note's row by it, with its files. `deleted_at` is when the note was deleted. A delete can come again, as any message can, so a delete of a note you do not have is not a fault: answer `2xx`. A receiver that ignores `note.deleted` keeps working: it keeps the note.
 
 ### `health.samples`
 
@@ -375,7 +396,7 @@ CREATE TABLE relay_location_points (
 );
 ```
 
-Save a note with `INSERT ... ON CONFLICT (id) DO UPDATE`, and keep the stored `audio` when a `note.updated` has none. Save each of a note's `attachments` by its `id` too, and a `note.file` in `relay_note_files`. A file listed in `attachments` that has no row in `relay_note_files` did not come, such as one your receiver skipped.
+Save a note with `INSERT ... ON CONFLICT (id) DO UPDATE`, and keep the stored `audio` when a `note.updated` has none. On a `note.deleted`, delete the note's rows in `relay_note_files` and `relay_note_attachments` by `note_id`, then its row in `relay_notes` by `id`. Save each of a note's `attachments` by its `id` too, and a `note.file` in `relay_note_files`. A file listed in `attachments` that has no row in `relay_note_files` did not come, such as one your receiver skipped.
 
 ## An example receiver
 

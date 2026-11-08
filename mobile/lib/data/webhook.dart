@@ -66,6 +66,7 @@ class WebhookClient implements Outbound {
       'notes' => ('note.created', {'note': _note(body)}),
       noteUpdate => ('note.updated', {'note': _note(body)
         ..remove('audio')..['edited_at'] = _iso(body['editedAt'] ?? item.createdAt.millisecondsSinceEpoch)}),
+      noteDelete => ('note.deleted', {'note': {'id': body['clientId'], 'deleted_at': _iso(item.createdAt.millisecondsSinceEpoch)}}),
       'attachment' => ('note.file', {'note_id': body['noteClientId'], 'file': {'id': body['id'], 'name': body['name'],
         'content_type': _type(body['type']), 'size': bytes!.length, 'base64': base64.encode(bytes)}}),
       'health' => ('health.samples', {'samples': [for (final sample in body['samples'] as List) _sample(sample as Map)]}),

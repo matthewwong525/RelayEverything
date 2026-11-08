@@ -372,3 +372,37 @@ it("keeps one change row per note, moved to a higher seq by each insert, change,
   expect(changes()).toEqual(before);
   expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
 });
+
+it("keeps a deleted note's change row at a higher seq, marked deleted, and keeps every change row, log entry and trigger", () => {
+  const space = new DatabaseSync(":memory:");
+  space.exec("PRAGMA foreign_keys = ON");
+  const at = MIGRATIONS.findIndex(([name]) => name === "0012_note_deletes");
+  for (const [, text] of MIGRATIONS.slice(0, at)) inTransaction(space, text);
+  space.exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-phone', 'Phone', 'rek:d-phone', '', 1, 'phone');
+    INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at) VALUES ('n-1', 'd-phone', 'typed', 'c-1', 'One.', 5, 5),
+      ('n-2', 'd-phone', 'typed', 'c-2', 'Two.', 6, 6), ('n-3', 'd-phone', 'typed', 'c-3', 'Three.', 7, 7);
+    UPDATE relay_notes SET text = 'One, fixed.', edited_at = 8 WHERE id = 'n-1';
+    INSERT INTO relay_webhooks (id, name, url, secret, kinds, sent_seq, created_at) VALUES ('w-1', 'DB', 'https://db.example.com', 's', '["notes"]', 2, 1);`);
+  const queries = ["SELECT * FROM relay_outbox ORDER BY seq", "SELECT * FROM relay_webhooks", "SELECT * FROM relay_notes ORDER BY id"];
+  const before = queries.map(query => all(space, query));
+  const changes = () => all(space, "SELECT seq, note_id, deleted FROM relay_note_changes ORDER BY seq");
+  const kept = all(space, "SELECT seq, note_id FROM relay_note_changes ORDER BY seq");
+  expect(kept).toEqual([{ seq: 2, note_id: "n-2" }, { seq: 3, note_id: "n-3" }, { seq: 4, note_id: "n-1" }]);
+  const made = triggers(space).sort();
+  inTransaction(space, MIGRATIONS[at][1]);
+  expect(queries.map(query => all(space, query))).toEqual(before);
+  expect(changes()).toEqual(kept.map(row => ({ ...row, deleted: 0 })));
+  expect(triggers(space).sort()).toEqual([...made, "relay_note_changes_deleted"].sort());
+  // A delete moves the note's row to the next seq, marked deleted; the next note gets a seq above it.
+  space.exec("DELETE FROM relay_notes WHERE id = 'n-2'");
+  expect(changes().at(-1)).toEqual({ seq: 5, note_id: "n-2", deleted: 1 });
+  expect(changes()).toHaveLength(3);
+  expect(all(space, "SELECT note_id, client_id FROM relay_note_changes WHERE client_id IS NOT NULL")).toEqual([{ note_id: "n-2", client_id: "c-2" }]);
+  space.exec(`INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at) VALUES ('n-4', 'd-phone', 'typed', 'c-4', 'Four.', 9, 9);
+    INSERT INTO relay_outbox (kind, ref, at, logged_at) VALUES ('note.deleted', 'n-2', 6, 10);`);
+  expect(changes().at(-1)).toEqual({ seq: 6, note_id: "n-4", deleted: 0 });
+  expect(all(space, "SELECT kind, ref FROM relay_outbox WHERE seq > 3 ORDER BY seq")).toEqual([{ kind: "note.created", ref: "n-4" },
+    { kind: "note.deleted", ref: "n-2" }]);
+  expect(() => space.exec("INSERT INTO relay_outbox (kind, ref, at, logged_at) VALUES ('video', 'v', 1, 1)")).toThrow(/CHECK/);
+  expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
+});

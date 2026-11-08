@@ -13,8 +13,8 @@ export const SESSION_COOKIE = "__Host-relay_session";
 /** A browser keeps a `__Host-` cookie only from https, so a local run on http uses the plain name. */
 export const sessionCookie = (url: URL) => url.protocol === "https:" ? SESSION_COOKIE : "relay_session";
 
-/** A key's reach: POST and `GET key` (its own name); a phone also reads `GET connections` (names), its person's
- *  notes and their files, and changes any note. `GET chats` shares an address with a send, so the method is checked. */
+/** A key's reach: POST and `GET key` (its own name); a phone also reads `GET connections` (names) and its person's
+ *  notes and files, and changes or deletes any note. `GET chats` and a send share an address: the method counts. */
 const REACH: Record<Reach, { routes: RegExp; refusal: string }> = {
   phone: { routes: /^\/apps\/relay\/api\/(?:notes|attachments|health|locations|calendar|photos)$/, refusal: "A device key can only send to Relay Everything." },
   chats: { routes: /^\/apps\/relay\/api\/(?:chats|chat-saves)$/, refusal: "A chat key can only send chats." },
@@ -28,7 +28,7 @@ const PHONE_READS = /^\/apps\/relay\/api\/(?:connections|notes|attachment|audio)
 /** True when a key of this reach may call the method on the address. */
 export function reaches(reach: Reach, method: string, pathname: string): boolean {
   if (method === "GET") return pathname === KEY_CHECK || (reach === "phone" && PHONE_READS.test(pathname));
-  if (method === "PATCH") return reach === "phone" && pathname === NOTES;
+  if (method === "PATCH" || method === "DELETE") return reach === "phone" && pathname === NOTES;
   return method === "POST" && REACH[reach].routes.test(pathname);
 }
 

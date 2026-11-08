@@ -11,7 +11,7 @@ Paste this request into Claude Code or another coding AI:
 
 ```text
 Install Relay Everything from https://github.com/matthewwong525/RelayEverything.
-Read and follow self-host/SETUP.md there.
+Read and follow app/self-host/SETUP.md there.
 ```
 
 The AI follows Relay Everything's setup guide. It asks you to make a Cloudflare key and save it in a file on your computer, never in the chat. Then it makes your server and gives you its address. It takes about 10 minutes.
@@ -43,6 +43,8 @@ Your server shows no contact address until you set one. To give the people on yo
 ## Update it
 
 Ask your AI *update my Relay Everything*. It gets the newest version of Relay Everything, applies its database changes, then puts it live. Your data stays. If a database change fails, your server stays as it was.
+
+If you made your server when the setup guide was in a top-level `self-host/` folder, the update finds your settings and Cloudflare key there and moves them to `app/self-host/`. You do nothing.
 
 If your server is from before spaces, the update also makes your spaces Worker, `<name>-spaces`, and your own account. It doesn't move your old data: the update removes the old shared tables, and the notes in them. The old keys stop too: make a new key for each device on your page with **Add a device**, and connect it again.
 

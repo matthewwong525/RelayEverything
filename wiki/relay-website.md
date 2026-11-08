@@ -19,7 +19,7 @@ Describe Relay Everything as a way to get your own notes, health and location of
 
 A page's folder can't be named `notes/`: [the public check](open-source.md#the-public-check) refuses any `notes/` folder as private notes, so the notes page is `app/your-notes/`.
 
-The ring pictures in `site/src/assets/ring/` are rendered from `cad/`: run `npm run render-ring` in `site/` when a model changes.
+The ring pictures in `site/src/assets/ring/` are finished pictures, not renders: the ring's models left the repository, so a new model brings its own pictures.
 
 ## Legal pages and the contact address
 

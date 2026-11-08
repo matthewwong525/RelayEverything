@@ -8,8 +8,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "test": "astro build && node --test tests/*.test.mjs",
-    "render-ring": "bash scripts/render-ring.sh"
+    "test": "astro build && node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.42.9",

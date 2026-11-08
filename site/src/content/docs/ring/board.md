@@ -3,7 +3,7 @@ title: The board
 description: The flexible board inside the Relay Everything ring, and where each part sits on it.
 ---
 
-The Relay Everything ring has one flexible board: a strip that runs around the inside of the ring. Its KiCad files and plans are [on GitHub](https://github.com/matthewwong525/RelayEverything/tree/main/pcb).
+The Relay Everything ring has one flexible board: a strip that runs around the inside of the ring.
 
 - **Size:** 74.3 × 6.8 mm for US size 10. The ends meet at the palm side.
 - **Layers:** four copper layers, with a thin stiffener behind each switch.

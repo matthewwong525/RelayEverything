@@ -59,7 +59,7 @@ Any verdict but `FAILURE` → report it and merge. `FAILURE` after `/verify`'s o
 
 ## Step 5 — merge and sync
 
-Run `finish` once; allow 12 minutes. It merges the gated commit, promotes deferred [secret edits](../../../wiki/development/secrets.md), and looks at the live app. A skipped sync or a secrets error is one report line, never a failed ship. Not merged → report the error and stop, unless `NEXT:` gives a recovery; then `finish` again only on `SUCCESS` or `NONE`.
+Run `finish` once; allow 12 minutes. It merges the gated commit, promotes deferred [secret edits](../../../wiki/development/secrets.md), closes the plan's Inbox page, and looks at the live app. A skipped sync, a secrets error, or `PLAN_PAGE=skipped` is one report line, never a failed ship. Not merged → report the error and stop, unless `NEXT:` gives a recovery; then `finish` again only on `SUCCESS` or `NONE`.
 
 Merge, not rebase, unless asked. Never check out, switch, stash, reset, or force a branch to make the sync succeed, or delete a local branch.
 
@@ -71,4 +71,4 @@ Merge, not rebase, unless asked. Never check out, switch, stash, reset, or force
 
 Lead with the outcome in plain words: *it is live*, what changed for the person, the live link, then [the plan's link](../explore/references/asking-the-user.md#print-the-plans-link) to the archived `review.html`. Always add **Checks loosened**, each `Check:` bullet in the archived Decision log, and **Choices I made**, each `Assumed` line this ship added and each `MOVED=` plan, one plain line each; omit when none. Only when asked, add `finish`'s and `/save`'s lines, the archive path, the walk's verdict and evidence (a merged-anyway `FAILURE` says the person chose it), and the secret key names.
 
-Then end by [next work](../plan/references/new-workspace.md#next-work). A failed live look, or a `/ship` that `/close` invoked, does not close.
+Then end by [next work](../plan/references/new-workspace.md#next-work). A failed live look, or a `/ship` that `/close` invoked, asks no close question.

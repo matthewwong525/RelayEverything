@@ -1,8 +1,9 @@
 // Sign in with Apple and Google: the code flow with `state` and a nonce, plus PKCE for Google. The ID token is checked
 // against the provider's keys, and only a checked email signs in.
 import { cookie } from "../caller.ts";
+import { claimOnSignIn } from "../inbox/held.ts";
 import { directory, joinPerson, randomToken, type Person } from "../people.ts";
-import type { SignInEnv } from "./index.ts";
+import type { SignInEnv, Wait } from "./index.ts";
 import { appleSecret, challenge, verifyIdToken } from "./jwt.ts";
 import { answer, redirect, secure, startSession } from "./session.ts";
 
@@ -101,7 +102,7 @@ async function personOf(env: SignInEnv, provider: Provider, sub: string, email: 
 }
 
 /** GET google/callback, POST apple/callback: checks the provider's answer, then signs the person in. */
-export const callback = (provider: Provider) => async (request: Request, env: SignInEnv): Promise<Response> => {
+export const callback = (provider: Provider) => async (request: Request, env: SignInEnv, _identity: unknown, wait?: Wait): Promise<Response> => {
   const url = new URL(request.url);
   const clear = oauthCookie(url, "", 0);
   const saved = savedOf(request);
@@ -113,6 +114,7 @@ export const callback = (provider: Provider) => async (request: Request, env: Si
     const claims = token && await verifyIdToken(token, { jwks: PROVIDERS[provider].jwks, issuers: PROVIDERS[provider].issuers,
       audience: PROVIDERS[provider].client(env)!.id, nonce: saved.nonce });
     const person = claims && await personOf(env, provider, claims.sub, claims.email);
+    if (person) await claimOnSignIn(env, wait)(person);
     return person ? redirect(saved.next, [await startSession(env, url, person.id), clear]) : redirect(FAILED, [clear]);
   } catch {
     return redirect(FAILED, [clear]);

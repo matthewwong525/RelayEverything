@@ -2,6 +2,9 @@ import { expect, it } from "vitest";
 import { handleApp } from "../index";
 import { photoById, photoPage } from "./queries";
 import { spaceOf, vouch } from "./space";
+import { email } from "./inbox/email";
+import { addressOf } from "./inbox/links";
+import { fixture, inboxEnv, mailTo } from "../../../tests/relay-inbox";
 import { ANA, BEN, ben, benPhone, bucket, call, env, laptop, matthew, NOW, owner, phone, request, rows, sendPhoto, spaces, type Who } from "../../../tests/relay";
 
 const ANA_RING = "aaaaaaaa-0000-4000-8000-0000000000a1";
@@ -110,4 +113,12 @@ it("never opens Ana's note file for Ben's session, and Ben's key can't add a fil
   const open = (who: Who) => handleApp(request(who, "GET", `https://relay.example.com/apps/relay/api/attachment?id=${file.id}`), env(), null);
   expect((await open(matthew)).status).toBe(200);
   expect((await open(ben)).status).toBe(404);
+});
+
+it("makes mail to Ana's notes address a note in Ana's space only, never Ben's", async () => {
+  const address = (await addressOf(inboxEnv(), ANA))!;
+  await email(mailTo(address, fixture("forwarded-pdf.eml")), inboxEnv());
+  expect(rows("relay_notes").map(row => row.client_id?.toString().slice(0, 6))).toEqual(["email:"]);
+  expect([rows("relay_notes", BEN), rows("relay_attachments", BEN)]).toEqual([[], []]);
+  expect([...bucket.objects.keys()].every(key => key.startsWith(`people/${ANA}/`))).toBe(true);
 });

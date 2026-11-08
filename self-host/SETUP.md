@@ -38,6 +38,14 @@ It costs nothing on Cloudflare's free plan. Tell the person this, and ask before
 6. **Keys:** on the Relay Everything page, the person taps *Add a device* for each phone and each Claude Code computer. The page shows the key once, as a QR code. Never ask for a key in the chat. Then point them to [Connect a phone](https://relayeverything.com/start/connect-a-phone/).
 7. **AI connector:** the person adds the `connector=` address to their AI, as [Connect your AI](https://relayeverything.com/connections/connect-your-ai/) shows. The AI app sends them to their server's own login.
 
+## Email notes
+
+Email is off until the person asks for it. It needs a domain of theirs on Cloudflare, such as a subdomain of their own domain:
+
+1. The person turns on **Email Routing** for that domain in the Cloudflare dashboard, and adds a catch-all rule with the action *Send to a Worker*, to the server's Worker: the `--name` given at install, or `relay`.
+2. From `app/`, set two secrets: `npx wrangler secret put RELAY_INBOX_MAIL_DOMAIN -c ../self-host/wrangler.jsonc` with the domain, and `RELAY_INBOX_HMAC_KEY` the same way, with the output of `openssl rand -base64 32`. Secrets stay through `update`. Never print the key in the chat.
+3. Point the person to [Email notes](https://relayeverything.com/app/email/): the **Email** card shows their address.
+
 ## Update my Relay Everything
 
 When the person asks to update: `git pull`, then `npm ci` in `app/`, then `node self-host/setup.mjs update`. It writes the server's settings again from this repository, applies the new database changes, then puts the new server live. If a database change fails, it stops, and the old server stays live. The data stays.

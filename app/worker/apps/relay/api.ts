@@ -9,6 +9,7 @@ import { calendar } from "./calendar.ts";
 import { chatDelete, chatList, chatRead } from "./chat-read.ts";
 import { chats, chatSaves } from "./chats.ts";
 import { deviceAdd, deviceOff, devices } from "./device.ts";
+import { inbox, inboxAddress, inboxSweep } from "./inbox/routes.ts";
 import { key } from "./key.ts";
 import { notes } from "./notes.ts";
 import { photoAdd, photoCount, photoDelete } from "./photos.ts";
@@ -51,6 +52,9 @@ export const routes = new Map<string, Route>([
   ["GET devices", devices],
   ["POST devices", deviceAdd],
   ["POST devices/off", deviceOff],
+  ["GET inbox", inbox],
+  ["POST inbox/address", inboxAddress],
+  ["POST inbox/sweep", inboxSweep],
   ["GET account", account],
   ["POST account-delete", accountDelete],
 ]);

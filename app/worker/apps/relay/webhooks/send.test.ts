@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi, type Mock } from "vitest";
 import { handleApp } from "../../index";
 import { ANA, ben, BEN, benPhone, call, db, env, jpeg, matthew, NOW, phone, queue, request, rows, sendPhoto, spaces } from "../../../../tests/relay";
 import { spaceOf, vouch, type SqlValue } from "../space.ts";
+import { receive } from "../inbox/receive.ts";
 import { bodyWithFile, consume, DELAYS, post, run } from "./send.ts";
 import { noteFile } from "./format.ts";
 
@@ -70,6 +71,17 @@ it("sends a stored note, signed, and moves the webhook's place only after a 2xx"
   // Caught up, a second message sends nothing.
   await deliver(wakeUp("hook-1"));
   expect(sent).toHaveLength(1);
+});
+
+it("sends an emailed note as note.created from the Email device, with its file listed and then sealed", async () => {
+  hook();
+  const file = { name: "receipt.pdf", type: "application/pdf", bytes: new TextEncoder().encode("%PDF") };
+  await receive(env(), vouch("inbox", ANA), { channel: "email", id: "mail-0001", sentAt: NOW - MINUTE, text: "Receipt", files: [file] });
+  expect(queue.sent).toEqual([wakeUp("hook-1"), wakeUp("hook-1")]);
+  await deliver(wakeUp("hook-1"));
+  expect(bodies()[0]).toMatchObject({ type: "note.created", data: { note: { text: "Receipt", source: "typed", device: { name: "Email" },
+    recorded_at: new Date(NOW - MINUTE).toISOString(), attachments: [{ name: "receipt.pdf", content_type: "application/pdf", size: 4 }] } } });
+  expect(bodies().map(body => body.type)).toEqual(["note.created", "note.file"]);
 });
 
 it("tries a failed group again with the same id and body, and a parallel message waits for that retry", async () => {

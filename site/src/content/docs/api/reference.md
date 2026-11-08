@@ -930,6 +930,60 @@ Send the input as a JSON body.
 |---|---|
 | `not_found` | You have no device with this id. |
 
+## Read your notes addresses
+
+`GET /apps/relay/api/inbox` · `relay.inbox` · reads · called by a signed-in person only, not a device key
+
+Answer your secret notes address, made on first read, and the shared address for your sign-in email.
+
+### Input
+
+It takes no input.
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `email` | object | yes | Email notes: whether this server takes email, and your addresses. |
+| `email.on` | boolean | yes | True when this server takes email: its owner set a mail domain. |
+| `email.address` | string or null | yes | Your secret notes address: any mail to it becomes a note. Null when email is off. |
+| `email.shared` | string or null | yes | The shared address: mail to it from your sign-in email becomes a note. Null when email is off. |
+
+## Make a new notes address
+
+`POST /apps/relay/api/inbox/address` · `relay.inbox-address` · writes · called by a signed-in person only, not a device key
+
+Replace your secret notes address with a new one. Mail to the old address makes no note from now on.
+
+### Input
+
+Send the input as a JSON body.
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `email` | object | yes | Email notes: whether this server takes email, and your addresses. |
+| `email.on` | boolean | yes | True when this server takes email: its owner set a mail domain. |
+| `email.address` | string or null | yes | Your secret notes address: any mail to it becomes a note. Null when email is off. |
+| `email.shared` | string or null | yes | The shared address: mail to it from your sign-in email becomes a note. Null when email is off. |
+
+## Run the kept mail's sweep (previews only)
+
+`POST /apps/relay/api/inbox/sweep` · `relay.inbox-sweep` · writes · called by a signed-in person only, not a device key
+
+Run what the server runs each day: delete mail kept for emails with no account that is older than 30 days.
+
+### Input
+
+Send the input as a JSON body.
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `deleted` | integer | yes | How many kept messages it deleted. |
+
 ## Read the account
 
 `GET /apps/relay/api/account` · `relay.account` · reads · called by a signed-in person only, not a device key

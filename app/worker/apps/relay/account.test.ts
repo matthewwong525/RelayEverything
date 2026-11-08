@@ -64,6 +64,10 @@ it("deletes nothing unless the typed email is the account's own", async () => {
 
 it("deletes Ana's account whole, and leaves Ben's data, key and session as they were", async () => {
   const grants = connector();
+  const link = directoryDb.sql.prepare(`INSERT INTO relay_inbox_links (channel, sender_hmac, person_id, shown, created_at)
+    VALUES ('email', ?, ?, ?, 0)`);
+  link.run("hmac-ana", ANA, "notes-anaaaaaaaa");
+  link.run("hmac-ben", BEN, "notes-benbbbbbbb");
   expect(await call(matthew, "POST", "account-delete", { email: " Ana@Example.com " }, { RELAY_MCP: grants }))
     .toEqual({ status: 200, json: { deleted: true } });
   // Her key, her session and her AI app are refused from now on.
@@ -77,6 +81,7 @@ it("deletes Ana's account whole, and leaves Ben's data, key and session as they 
   expect(counts(ANA)).toEqual([0, 0, 0, 0]);
   expect(directoryDb.sql.prepare("SELECT email FROM relay_people").all()).toEqual([{ email: "ben@example.com" }]);
   expect(directoryDb.sql.prepare("SELECT email FROM relay_sign_in_codes").all()).toEqual([{ email: "ben@example.com" }]);
+  expect(directoryDb.sql.prepare("SELECT person_id FROM relay_inbox_links").all()).toEqual([{ person_id: BEN }]);
   // Ben is untouched.
   expect(counts(BEN)).toEqual([1, 1, 1, 1]);
   expect(rows("relay_notes", BEN)).toEqual([expect.objectContaining({ id: "note-ben" })]);

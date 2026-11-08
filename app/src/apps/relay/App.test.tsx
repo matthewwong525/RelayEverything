@@ -61,6 +61,8 @@ beforeEach(() => {
     if (path === "/apps/relay/api/devices") return Response.json({ devices: [] });
     // The photos card has its own test: Photos.test.tsx.
     if (path === "/apps/relay/api/photos") return Response.json({ count: 0 });
+    // The Email card has its own test: Inbox.test.tsx.
+    if (path === "/apps/relay/api/inbox") return Response.json({ email: { on: false, address: null, shared: null } });
     if (path.startsWith("/apps/relay/api/")) return answer(path.slice("/apps/relay/api/".length), init);
     throw new Error(`Unexpected request: ${path}`);
   });
@@ -105,7 +107,7 @@ it("shows today's summary, every note with its place and recording, and the plac
 
   const { day, offset } = today();
   expect(reads()).toEqual(["/apps/relay/api/account", "/apps/relay/api/chats", "/apps/relay/api/webhooks", "/apps/relay/api/ai-apps",
-    "/apps/relay/api/photos", "/apps/relay/api/devices", `/apps/relay/api/summary?day=${day}&offset=${offset}`, "/apps/relay/api/timeline"]);
+    "/apps/relay/api/photos", "/apps/relay/api/inbox", "/apps/relay/api/devices", `/apps/relay/api/summary?day=${day}&offset=${offset}`, "/apps/relay/api/timeline"]);
   expect(await screen.findByText("No AI app connected yet.")).toBeTruthy();
 });
 

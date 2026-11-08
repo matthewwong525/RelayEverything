@@ -7,7 +7,7 @@ import { migrate, MIGRATIONS } from "../../spaces-worker";
 // D1 keeps only the directory; each person's data lives in their own space. wiki/relay-spaces.md
 const folder = new URL("../../../../schema/migrations/", import.meta.url);
 const DIRECTORY = ["relay_people", "relay_logins", "relay_sessions", "relay_sign_in_codes", "relay_keys", "relay_connect_codes",
-  "relay_phone_codes"];
+  "relay_phone_codes", "relay_inbox_links", "relay_inbox_held"];
 const PERSON = ["relay_devices", "relay_notes", "relay_health", "relay_locations", "relay_chats", "relay_chat_messages",
   "relay_chat_saves", "relay_outbox", "relay_webhooks", "relay_webhook_attempts", "relay_attachments", "relay_calendar_events", "relay_photos"];
 
@@ -40,7 +40,10 @@ it("gives a space made before files the files table, once, and keeps its notes",
   const run = (query: string, params: SQLInputValue[]) => /^\s*SELECT/i.test(query) ? sql.prepare(query).all(...params)
     : params.length ? (sql.prepare(query).run(...params), []) : (sql.exec(query), []);
   const storage = { sql: { exec: (query: string, ...params: SQLInputValue[]) => { const rows = run(query, params); return { toArray: () => rows }; } },
-    transactionSync: <T>(run: () => T) => run() } as unknown as Parameters<typeof migrate>[0];
+    transactionSync: <T>(run: () => T) => {
+      sql.exec("BEGIN");
+      try { const result = run(); sql.exec("COMMIT"); return result; } catch (error) { sql.exec("ROLLBACK"); throw error; }
+    } } as unknown as Parameters<typeof migrate>[0];
   sql.exec("CREATE TABLE space_migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)");
   for (const [name, text] of MIGRATIONS.slice(0, 3)) {
     sql.exec(text);
@@ -271,4 +274,22 @@ it("drops a space's signing secrets and its late-place trigger, keeping its ring
   space.exec("UPDATE relay_notes SET lat = 1, lon = 1, place_from = 'history' WHERE id = 'n-2'");
   expect(all(space, "SELECT kind FROM relay_outbox WHERE ref = 'n-2'")).toEqual([{ kind: "note.created" }]);
   expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
+});
+
+it("lets a new space and a space made before email take the Email device, keeping every row", () => {
+  for (const before of [MIGRATIONS.length, MIGRATIONS.findIndex(([name]) => name === "0009_inbox")]) {
+    const space = new DatabaseSync(":memory:");
+    space.exec("PRAGMA foreign_keys = ON");
+    for (const [, text] of MIGRATIONS.slice(0, before)) inTransaction(space, text);
+    space.exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-phone', 'Phone', 'rek:d-phone', '', 1, 'phone');
+      INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at) VALUES ('n-1', 'd-phone', 'typed', 'c-1', 'Hi.', 5, 5);
+      INSERT INTO relay_attachments (id, note_id, name, content_type, size, created_at) VALUES ('f-1', 'n-1', 'a.pdf', 'application/pdf', 3, 5);`);
+    const queries = ["SELECT * FROM relay_devices", "SELECT * FROM relay_notes", "SELECT * FROM relay_attachments", "SELECT * FROM relay_outbox"];
+    const kept = queries.map(query => all(space, query));
+    for (const [, text] of MIGRATIONS.slice(before)) inTransaction(space, text);
+    expect(queries.map(query => all(space, query))).toEqual(kept);
+    space.exec("INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-mail', 'Email', 'inbox:email', '', 1, 'inbox')");
+    expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
+    expect(tables(space)).toEqual([...PERSON].sort());
+  }
 });

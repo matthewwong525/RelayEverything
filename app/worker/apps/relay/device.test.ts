@@ -124,7 +124,9 @@ it("makes an account from Access's email only for the server's owner, or while s
   expect(await call(visitor("cy@example.com"), "GET", "account")).toEqual({ status: 200, json: { email: "cy@example.com" } });
 });
 
-it("lists a person's devices, newest last, with no key in the list", async () => {
+it("lists a person's devices, newest last, with no key in the list, and not the Email device", async () => {
+  db.sql.prepare(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches)
+    VALUES ('d-mail', 'Email', 'inbox:email', '', 0, 'inbox')`).run();
   const { status, json } = await call(matthew, "GET", "devices");
   expect(status).toBe(200);
   expect(json.devices.map(device => [device.id, device.reaches, device.revokedAt])).toEqual([["d-ipad", "phone", null],

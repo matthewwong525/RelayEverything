@@ -131,7 +131,9 @@ const fileOf = ({ data }: WithFile["message"]) => "file" in data ? data.file
 /** Why a file was skipped, for the card: the address refused it as too large, as the phone's own-webhook mode does. */
 const tooLarge = ({ message }: WithFile) => {
   const file = fileOf(message);
-  return `Too large for this address: ${file.name} (${sizeOf(file.size)}). It stays on your Relay Everything page.`;
+  // The page shows a note's files but only a count of photos.
+  const where = "file" in message.data ? "on your Relay Everything page" : "in your Relay Everything space";
+  return `Too large for this address: ${file.name} (${sizeOf(file.size)}). It stays ${where}.`;
 };
 
 /** After a failed try: the wait before the next, or null once the webhook shows as failing. */

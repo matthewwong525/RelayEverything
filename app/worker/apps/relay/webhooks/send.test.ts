@@ -309,8 +309,8 @@ it("skips a photo the address refuses as too large, names it on the card by its 
   await deliver(wakeUp("photos"));
   expect(types()).toEqual(["photo.created", "photo.created"]);
   const taken = new Date(NOW - MINUTE).toISOString().slice(0, 16).replace("T", " ");
-  const skipped = `Too large for this address: the photo taken ${taken} UTC (${Math.ceil(jpeg(1600, 1200).byteLength / 1000)} KB). It stays on your `
-    + "Relay Everything page.";
+  const skipped = `Too large for this address: the photo taken ${taken} UTC (${Math.ceil(jpeg(1600, 1200).byteLength / 1000)} KB). It stays in your `
+    + "Relay Everything space.";
   expect(rows("relay_webhook_attempts").map(row => [row.type, row.status, row.error])).toEqual([["photo.created", 413, skipped],
     ["photo.created", 204, null]]);
   expect(webhook("photos")).toMatchObject({ sent_seq: 2, tries: 0, failing_since: null, last_status: 204 });

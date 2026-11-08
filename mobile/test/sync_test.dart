@@ -504,8 +504,13 @@ void main() {
       expect([server.requests, await store.waitingPhotos()], [isEmpty, isEmpty]);
       // A receiver that answers 503 keeps the next photo for a later round; a 413 drops it, and the notes still go.
       photos.take('IMG_0002', later(3));
-      hookServer.answer = (_) => http.Response('', 503);
+      await store.addNote(LocalNote(clientId: 'note-0002', text: 'Dinner idea', createdAt: later(4)), send: true);
+      final sentBefore = hookServer.requests.length;
+      hookServer.answer = (request) =>
+        http.Response('', (jsonDecode(request.body) as Map)['type'] == 'photo.created' ? 503 : 204);
       expect(await hookRound(), isFalse);
+      expect([for (final request in hookServer.requests.skip(sentBefore)) (jsonDecode(request.body) as Map)['type']],
+        ['note.created', 'photo.created']);
       expect(queued(await store.waitingPhotos()), ['IMG_0002']);
       hookServer.answer = (_) => http.Response('', 413);
       expect(await hookRound(), isTrue);

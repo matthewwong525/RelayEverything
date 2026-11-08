@@ -9,8 +9,8 @@ Relay Everything can send the photos you take on your phone to your own space, w
 
 ## Turn it on
 
-1. Open **Settings**.
-2. Turn on **Send my notes**, if it is off, and pick **Relay Everything** or **My own webhook**: [Connect a phone](../../start/connect-a-phone/). Photos work only with sending on, and the app reads no photo while it is off.
+1. On Home, open the **Photos** folder, under **On this phone**.
+2. If sending is off, tap **Turn on sending**, and pick **Relay Everything** or **My own webhook**: [Connect a phone](../../start/connect-a-phone/). Photos work only with sending on, and the app reads no photo while it is off.
 3. Turn on **Photos**.
 4. Allow the app to read your photos. On Android, also allow it to read the place in your photos.
 
@@ -33,7 +33,7 @@ On an iPhone with **Limited** photo access, the app sends only the new photos yo
 
 ## Wi-Fi or mobile data
 
-Photos wait for Wi-Fi. To send them on mobile data too, turn on **Send photos on mobile data** in **Settings**. It is off at first, and works only while **Photos** is on.
+Photos wait for Wi-Fi. To send them on mobile data too, turn on **Send photos on mobile data** in the **Photos** folder. It is off at first, and works only while **Photos** is on.
 
 A photo that waits for Wi-Fi does not hold back your notes, health or places: they go as before.
 
@@ -55,7 +55,7 @@ Each copy is at most 3 MB. The original stays on your phone, and the app never d
 
 ## Turn it off
 
-Turn off **Photos** in **Settings**. The phone stops sending, and deletes the copies that did not go yet. Turning off **Send my notes** also stops photos. The photos already sent stay on your server, or in your own database.
+Turn off **Photos** in the **Photos** folder. The phone stops sending, and deletes the copies that did not go yet. Turning off **Send my notes** also stops photos. The photos already sent stay on your server, or in your own database.
 
 ## Delete all photos
 

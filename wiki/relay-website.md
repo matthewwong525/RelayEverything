@@ -41,7 +41,7 @@ The site guard refuses every email address, so the contact address lives on the 
 | To preview a change | `node scripts/publish-relay-site.mjs --ref HEAD --staging`, then open <https://relay-staging.matthewwong525.workers.dev> |
 | To check without a deploy | `node scripts/publish-relay-site.mjs --ref HEAD --dry-run` |
 
-It deploys with `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` from the primary `.env`. To take the site down, run `npx wrangler delete --name relay` (and `relay-staging`) in `site/`.
+It deploys with `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` from the primary `.env`. To take the site down, run `npx wrangler delete --name relay` (and `relay-staging`) in `site/`. A failure another chat hands you can already be fixed on main: run the dry run with `--ref origin/main` before you plan a fix.
 
 ## What the guard refuses
 

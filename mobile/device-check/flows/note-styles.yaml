@@ -1,0 +1,37 @@
+# Text styles: Aa swaps the keyboard for the Format panel, a style tap keeps the panel up, and ✕ brings the keyboard
+# back. The editor once took the keyboard back over the panel, so the panel must still show after each style tap.
+appId: com.matthewwong525.relayApp
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 60000
+- tapOn: 'Notes(.|\n)*'
+- tapOn: "New note"
+- extendedWaitUntil:
+    visible: "Done"
+    timeout: 10000
+- inputText: "Shopping"
+- pressKey: Enter
+- inputText: "Milk"
+# The floating bar's Aa has no words: Maestro finds it by its tooltip, Text styles.
+- tapOn: "Text styles"
+- extendedWaitUntil:
+    visible: "Format"
+    timeout: 10000
+- tapOn: "Heading"
+- assertVisible: "Format"
+- tapOn: "Bold"
+- assertVisible: "Format"
+- takeScreenshot: note-styles
+- tapOn: "Close"
+- extendedWaitUntil:
+    visible: "Text styles"
+    timeout: 10000
+- assertNotVisible: "Format"
+- tapOn: "Done"
+- tapOn: 'Back(.|\n)*'
+- extendedWaitUntil:
+    visible: '(.|\n)*Shopping(.|\n)*'
+    timeout: 10000

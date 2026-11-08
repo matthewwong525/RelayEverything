@@ -37,7 +37,7 @@ abstract class Outbound {
 
 /// Relay's device routes, each call carrying this phone's key: `Authorization: Bearer` for a page-made key, or
 /// Cloudflare Access's two headers for an older one. A device key only adds data: the server refuses it on every
-/// route that reads.
+/// route that reads, but its own key check and the names of what its person connected.
 class RelayApi implements Outbound {
   RelayApi(this.connection, [http.Client? client]) : _client = client ?? http.Client();
 
@@ -48,6 +48,7 @@ class RelayApi implements Outbound {
   /// files' uploads then get 404 and are dropped.
   @override
   Future<void> send(OutboxItem item) async {
+    if (item.route == noteUpdate) return _change(item.body);
     final body = _forServer(item.route, item.body);
     try {
       await post(item.route, body);
@@ -56,6 +57,26 @@ class RelayApi implements Outbound {
       await post(item.route, {...body}..remove('attachments'));
     }
   }
+
+  /// A sent note's newest words, edit time and the file list the store gave it, by its server `id` once a pull saved one,
+  /// else by its `clientId`. A 404 (no such note, or an old server) or a 409 (a newer change is kept) is dropped; the
+  /// pull then takes it. A 400 with files, as when a new key made this phone another device, goes once more without
+  /// them, so the words still land.
+  Future<void> _change(Map<String, dynamic> body) async {
+    try {
+      await _patchNote(body, withFiles: true);
+    } on ApiException catch (error) {
+      if (error.status != 400 || body['attachments'] == null) rethrow;
+      await _patchNote(body, withFiles: false);
+    }
+  }
+
+  Future<void> _patchNote(Map<String, dynamic> body, {required bool withFiles}) => _call(() => _client.patch(_uri('notes'),
+    headers: {..._headers, 'Content-Type': 'application/json'}, body: jsonEncode({
+      if (body['id'] != null) 'id': body['id'] else 'clientId': body['clientId'],
+      'text': body['text'], if (body['editedAt'] != null) 'editedAt': body['editedAt'],
+      if (withFiles && body['attachments'] != null) 'attachments': body['attachments']})),
+    rejected: const {400, 404, 409, 413});
 
   @override
   Future<void> sendFile(OutboxItem item, List<int> bytes) => upload(noteClientId: item.body['noteClientId'] as String,
@@ -113,6 +134,35 @@ class RelayApi implements Outbound {
   Future<String> key() async {
     final json = await _call(() => _client.get(_uri('key'), headers: _headers));
     return json['device'] as String? ?? '';
+  }
+
+  /// The names of the person's AI apps and webhooks: the one read a phone key has, with no data in it.
+  Future<Map<String, dynamic>> connections() => _call(() => _client.get(_uri('connections'), headers: _headers));
+
+  /// One page of the person's notes that changed after change number [since], oldest change first:
+  /// `{notes, next, more}`.
+  Future<Map<String, dynamic>> getNotes(int since, {int limit = 100}) => _call(() => _client.get(
+    _uri('notes').replace(queryParameters: {'since': '$since', 'limit': '$limit'}), headers: _headers));
+
+  /// The bytes of a note's file [id], or with [audio] the recording of the ring note [id]. A file the server does not
+  /// have, such as one still on its way, is [Failure.rejected].
+  Future<List<int>> download(String id, {bool audio = false}) async {
+    final http.Response response;
+    try {
+      response = await _client.get(_uri(audio ? 'audio' : 'attachment').replace(queryParameters: {'id': id}),
+        headers: connection.headers).timeout(_uploadTimeout);
+    } on Exception {
+      throw const ApiException(Failure.offline, null);
+    }
+    final status = response.statusCode;
+    // Cloudflare Access answers a refused key with its sign-in page, never a file.
+    final page = response.headers['content-type']?.startsWith('text/html') ?? false;
+    if (status == 401 || status == 403 || (status >= 300 && status < 400) || (status == 200 && page)) {
+      throw ApiException(Failure.refused, status);
+    }
+    if (status == 404) throw const ApiException(Failure.rejected, 404);
+    if (status != 200) throw ApiException(Failure.offline, status);
+    return response.bodyBytes;
   }
 
   /// Trades the sign-in's one-time code, with the secret only this phone holds, for this phone's own key. The call

@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'data/api.dart';
 import 'data/attachments.dart';
 import 'data/connection.dart';
+import 'data/note_sync.dart';
 import 'data/outbox.dart';
 import 'data/sender.dart';
 import 'data/settings.dart';
@@ -29,6 +30,12 @@ import 'voice/transcriber.dart';
 
 // The first versions kept the server's timeline here. A device key reads nothing now, so load deletes it.
 const _oldTimeline = 'timeline';
+
+/// The `state` keys for the last `GET connections` answer, and for the Home headers the person folded.
+const connectionsKey = 'connections', foldedKey = 'home.folded';
+
+/// After a sync, the names are read again only this long after the last read: they change only on the person's page.
+const _namesEvery = Duration(minutes: 10);
 
 /// What voice notes need: the speech model, the microphone, the words and playback. All of it stays on this phone.
 class VoiceParts {
@@ -120,7 +127,11 @@ class RelayController extends Relay {
   Timer? _drainTimer;
   SendState _healthSent = const SendState(), _pointsSent = const SendState(), _calendarSent = const SendState();
   List<PhoneCalendar> _calendars = const [];
+  Connections? _connections;
+  DateTime? _namesAt;
+  Set<String> _folded = const {};
   Future<void>? _syncing;
+  Future<void>? _pulling;
   bool _again = false;
   DateTime? _listening;
   Future<bool>? _starting;
@@ -144,6 +155,8 @@ class RelayController extends Relay {
   @override String? get webhookAddress => _webhook?.address;
   @override String? get webhookSecret => _webhook?.secret;
   @override WebhookProblem? get webhookProblem => _problem;
+  @override Connections? get connections => _connections;
+  @override Set<String> get folded => _folded;
 
   Outbound? get _api => _sender.api(_settings, connection: _connection, webhook: _webhook, installId: _installId);
 
@@ -166,6 +179,8 @@ class RelayController extends Relay {
     final destination = destinationOf(_settings.place);
     if (await store.destination() != destination) await store.moveOutbox(destination);
     await store.remove(_oldTimeline);
+    _connections = Connections.decode(await store.get(connectionsKey));
+    _folded = {for (final header in jsonDecode(await store.get(foldedKey) ?? '[]') as List) if (header is String) header};
     await _tellNative();
     await _tellShare();
     if (watch && _settings.history) _startHistory();
@@ -214,18 +229,19 @@ class RelayController extends Relay {
   Future<void> resume() async {
     await _drainShare(refresh: false);
     await _refreshLocal();
-    await sync();
+    await pullNotes();
   }
 
-  Entry _entryOfLocal(LocalNote note) => Entry(text: note.text, at: note.createdAt,
+  Entry _entryOfLocal(LocalNote note) => Entry(id: note.clientId, text: note.text, at: note.createdAt,
     // With sending off the phone looks up no place name, so a pin with no name reads as Pinned.
     place: note.pin == null ? null : note.pin!.place ?? 'Pinned',
-    sent: note.sentAt != null, waiting: _settings.sending && note.sentAt == null && (note.queued || note.pinning),
+    sent: note.mine && note.sentAt != null, waiting: _settings.sending && note.sentAt == null && (note.queued || note.pinning),
     voice: note.kind == NoteKind.voice, writing: note.wordsPending && !_wordsFailed.contains(note.clientId),
     failed: note.wordsPending && _wordsFailed.contains(note.clientId), recording: note.audioPath,
     length: note.durationMs == null ? null : Duration(milliseconds: note.durationMs!),
-    files: [for (final file in note.attachments)
-      EntryFile(name: file.name, type: file.type, size: file.size, path: fullPath(file.path))]);
+    files: [for (final file in note.attachments) EntryFile(id: file.id, name: file.name, type: file.type, size: file.size,
+      path: file.path.isEmpty ? '' : fullPath(file.path))],
+    from: note.mine ? null : note.device ?? 'elsewhere');
 
   /// The app's support folder, once [load] has read it.
   String? get filesRoot => _root;
@@ -233,7 +249,7 @@ class RelayController extends Relay {
   /// A path from the support folder, made full.
   String fullPath(String path) => _root == null || path.startsWith('/') ? path : '$_root/$path';
 
-  /// The list shows this phone's own notes, newest first. Ring notes and recordings are on the person's Relay page.
+  /// The list shows this phone's notes and those a pull brought, newest first.
   Future<void> _refreshLocal() async {
     final notes = await store.notes();
     _waiting = await store.waiting();
@@ -302,7 +318,13 @@ class RelayController extends Relay {
     _connection = _connection!.withServer(server);
     await vault.save(_connection!);
     await _tellShare();
-    notifyListeners();
+    // The names and the notes from elsewhere came from the server before, which may be another person's space.
+    _namesAt = null;
+    await _keepConnections(null);
+    // A pull already reading the old server finishes first, so nothing it read lands after the delete.
+    await _pulling;
+    await store.dropSynced();
+    await _refreshLocal();
     return null;
   }
 
@@ -385,17 +407,54 @@ class RelayController extends Relay {
     await stopSending();
     await vault.forget();
     _connection = null;
+    // A pull already reading finishes first, so nothing it read lands after the delete.
+    await _pulling;
+    await store.dropSynced();
     await _tellShare();
-    notifyListeners();
+    await _refreshLocal();
   }
 
   Future<void> _saveSettings(Settings settings) async {
     _settings = settings;
     await store.set(settingsKey, settings.encode());
+    // Off, or sending to the person's own webhook: the phone keeps no names from the server.
+    if (_sender.reader(settings, connection: _connection) == null) {
+      _namesAt = null;
+      if (_connections != null) await _keepConnections(null);
+    }
     await schedule?.call(settings.history || settings.health || settings.calendar || settings.photos);
     await _tellNative();
     await _tellShare();
     notifyListeners();
+  }
+
+  @override
+  Future<void> refreshConnections() async {
+    final reader = _sender.reader(_settings, connection: _connection);
+    if (reader == null) return;
+    _namesAt = _clock();
+    Connections? found;
+    try {
+      found = Connections.fromJson(await reader.connections());
+    } on ApiException catch (error) {
+      // With no signal the last answer stays. A server from before this route refuses it: then no names show.
+      if (error.failure == Failure.offline) return;
+    }
+    // Sending can stop while the answer comes: then the phone keeps nothing.
+    if (_sender.reader(_settings, connection: _connection) != null) await _keepConnections(found);
+  }
+
+  Future<void> _keepConnections(Connections? value) async {
+    _connections = value;
+    value == null ? await store.remove(connectionsKey) : await store.set(connectionsKey, value.encode());
+    notifyListeners();
+  }
+
+  @override
+  Future<void> setFolded(String header, bool folded) async {
+    _folded = folded ? {..._folded, header} : ({..._folded}..remove(header));
+    notifyListeners();
+    await store.set(foldedKey, jsonEncode(_folded.toList()..sort()));
   }
 
   /// Tells the iPhone's share card whether it may send: only while sending to the server is on and a key is kept. While
@@ -585,21 +644,30 @@ class RelayController extends Relay {
   /// Keeps and shows the note at once; Save never waits for a fix. With pins on, the note settles only when the phone
   /// has a fix or gives up (up to 10 s), so a sync meanwhile sends the rest and leaves this note waiting.
   @override
-  Future<String?> addNote(String text, {List<NewFile> files = const []}) async => (await keepNote(text, files: files)).problem;
+  Future<String?> addNote(String text, {List<NewFile> files = const [], String? id, bool sendNow = true}) async =>
+    (await keepNote(text, files: files, clientId: id, sendNow: sendNow)).problem;
 
-  /// Keeps a note with words, files, or both, as the paperclip and Shortcuts make it. Files past the limits are left out
-  /// with a message. A note with nothing in it is kept not at all. A [clientId] this phone already keeps gives back that
-  /// note, so a shortcut that ran twice keeps one. [pin] false keeps no place, for a note made earlier than now.
-  Future<Kept> keepNote(String text, {List<NewFile> files = const [], String? clientId, DateTime? createdAt,
-    bool pin = true}) async {
-    final id = clientId ?? newClientId();
-    if (await store.hasNote(id)) {
-      return Kept((await store.notes()).firstWhere((note) => note.clientId == id), null);
-    }
-    final check = checkFiles(const [], files);
-    final problems = [?check.problem];
+  @override
+  Future<String?> editNote(String id, String text, {List<NewFile> files = const [], bool sendNow = true}) async {
+    final check = checkFiles(const [], files, already: (await store.attachmentsOf(id)).length);
+    final (attachments, problems) = await _keepFiles(check.kept, check.problem);
+    if (await store.editNote(id, text, files: attachments, send: _settings.sending, at: _clock())) await _refreshLocal();
+    if (sendNow) unawaited(sync());
+    return problems.isEmpty ? null : problems.join(' ');
+  }
+
+  @override
+  Future<bool> dropEmptyNote(String id) async {
+    if (!await store.dropEmptyNote(id)) return false;
+    await _refreshLocal();
+    return true;
+  }
+
+  /// Keeps each file's own copy, with [problem] and a line for each file the phone could not read.
+  Future<(List<Attachment>, List<String>)> _keepFiles(Iterable<NewFile> files, String? problem) async {
+    final problems = [?problem];
     final attachments = <Attachment>[];
-    for (final file in check.kept) {
+    for (final file in files) {
       final kept = await _keepFile(file);
       if (kept == null) {
         problems.add('${file.name} could not be read, so it was not added.');
@@ -607,6 +675,20 @@ class RelayController extends Relay {
         attachments.add(kept);
       }
     }
+    return (attachments, problems);
+  }
+
+  /// Keeps a note with words, files, or both, as the paperclip and Shortcuts make it. Files past the limits are left out
+  /// with a message. A note with nothing in it is kept not at all. A [clientId] this phone already keeps gives back that
+  /// note, so a shortcut that ran twice keeps one. [pin] false keeps no place, for a note made earlier than now.
+  Future<Kept> keepNote(String text, {List<NewFile> files = const [], String? clientId, DateTime? createdAt,
+    bool pin = true, bool sendNow = true}) async {
+    final id = clientId ?? newClientId();
+    if (await store.hasNote(id)) {
+      return Kept((await store.notes()).firstWhere((note) => note.clientId == id), null);
+    }
+    final check = checkFiles(const [], files);
+    final (attachments, problems) = await _keepFiles(check.kept, check.problem);
     final words = text.trim();
     if (words.isEmpty && attachments.isEmpty) return Kept(null, [...problems, _nothing].join(' '));
     final note = LocalNote(clientId: id, text: words, createdAt: createdAt ?? _clock(), attachments: attachments);
@@ -617,7 +699,7 @@ class RelayController extends Relay {
       final job = _pinThenSync(id);
       _pinning.add(job);
       job.whenComplete(() => _pinning.remove(job));
-    } else {
+    } else if (sendNow) {
       unawaited(sync());
     }
     return Kept(note, problems.isEmpty ? null : problems.join(' '));
@@ -677,13 +759,41 @@ class RelayController extends Relay {
 
   static const _noFile = 'This file is not on this phone.';
   static const _noApp = 'No app on this phone opens this file.';
+  static const _sendToDownload = 'Turn on Send my notes to Relay Everything to download this file.';
+  static const _notDownloaded = 'The file did not download. Try again.';
 
   @override
   Future<void> openFile(EntryFile file) async {
-    final found = File(file.path);
+    final found = file.onPhone ? File(file.path) : await _download(file);
+    if (found == null) return;
     if (!await found.exists()) return notice(_noFile);
     final open = opener;
     if (open == null || !await open(found, file.type)) notice(_noApp);
+  }
+
+  /// Downloads one file of a note from elsewhere into `attachments/`, or a ring note's recording, and keeps its place.
+  Future<File?> _download(EntryFile file) async {
+    final root = _root, api = _sender.reader(_settings, connection: _connection);
+    if (root == null || api == null) {
+      notice(_sendToDownload);
+      return null;
+    }
+    final audio = file.id.startsWith(recordingPrefix);
+    final path = 'attachments/${file.id.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '-')}${extensionOf(file.name)}';
+    try {
+      final bytes = await api.download(audio ? file.id.substring(recordingPrefix.length) : file.id, audio: audio);
+      final target = File('$root/$path');
+      await target.parent.create(recursive: true);
+      await target.writeAsBytes(bytes);
+      await store.fileKept(file.id, path);
+      await _refreshLocal();
+      return target;
+    } on ApiException {
+      notice(_notDownloaded);
+    } on FileSystemException {
+      notice(_notDownloaded);
+    }
+    return null;
   }
 
   Future<void> _pinThenSync(String clientId) async {
@@ -710,13 +820,32 @@ class RelayController extends Relay {
     return _syncing = _rounds().whenComplete(() => _syncing = null);
   }
 
-  /// Runs rounds until no call asked for another, or a round could not send everything.
+  /// One pull at a time: a second call waits for the one running.
+  @override
+  Future<void> pullNotes() => _pulling ??= _pull().whenComplete(() => _pulling = null);
+
+  Future<void> _pull() async {
+    await sync();
+    // Only after the outbox emptied, so this phone's own changes are on the server before it reads.
+    if (_status != SyncStatus.synced) return;
+    try {
+      await syncNotes(store, _sender, settings: _settings, connection: _connection, editing: openNote, onPage: _refreshLocal);
+    } on ApiException catch (error) {
+      _status = error.failure == Failure.refused ? SyncStatus.refused : SyncStatus.offline;
+      notifyListeners();
+    }
+  }
+
+  /// Runs rounds until no call asked for another, or a round could not send everything. After a full send, the names of
+  /// what the person connected are read again, at most each [_namesEvery].
   Future<void> _rounds() async {
     bool emptied;
     do {
       _again = false;
       emptied = await _sync();
     } while (_again && emptied && _settings.sending);
+    final namesAt = _namesAt;
+    if (emptied && (namesAt == null || _clock().difference(namesAt) >= _namesEvery)) await refreshConnections();
   }
 
   /// One round; true when the outbox emptied.

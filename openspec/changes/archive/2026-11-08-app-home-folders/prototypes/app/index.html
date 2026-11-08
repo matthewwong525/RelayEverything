@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relay Everything app: Home of folders</title>
+<style>
+  * { box-sizing: border-box; }
+  :root { --paper: #F7F8F4; --card: #FFFFFF; --line: #E3E6DF; --ink: #121614; --muted: #5E6660; --accent: #0E7A5A; --on-accent: #FFFFFF;
+    --accent-text: #0E7A5A; --accent-soft: #E1F2EA; --spark: #F5A524; --on-spark: #121614; --danger: #C9302C; --outer: #ECEEE8; }
+  .dark { --paper: #0C110F; --card: #161D1A; --line: #26302B; --ink: #ECF3EE; --muted: #9AA8A0; --accent: #4CC79A; --on-accent: #06281A;
+    --accent-text: #4CC79A; --accent-soft: #133328; --spark: #FFC24D; --on-spark: #121614; --danger: #FF8A80; --outer: #1B2320; }
+  body { margin: 0; font-family: Inter, -apple-system, "Segoe UI", system-ui, sans-serif; background: var(--outer); color: var(--ink); }
+  main { max-width: 760px; margin: 0 auto; padding: 16px 12px 40px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .controls button { font: inherit; font-size: 13px; border: 0; border-radius: 999px; padding: 7px 12px; cursor: pointer; background: var(--card); color: var(--ink); }
+  .controls button.on { background: var(--ink); color: var(--paper); }
+  .hint { font-size: 13px; color: var(--muted); margin: 4px 2px 14px; line-height: 1.45; }
+  .phone { width: 360px; max-width: 100%; height: 760px; margin: 0 auto; position: relative; background: var(--paper); border-radius: 32px;
+    box-shadow: 0 0 0 1px var(--line), 0 20px 40px -20px rgba(0,0,0,.3); overflow: hidden; display: flex; flex-direction: column; }
+  .status { height: 34px; flex: none; }
+  .top { display: flex; align-items: center; gap: 8px; padding: 2px 8px 0 16px; height: 44px; flex: none; }
+  .back { display: inline-flex; align-items: center; gap: 2px; color: var(--accent-text); font-size: 16px; font-weight: 550; margin-left: -6px; cursor: pointer; }
+  .grow { flex: 1; }
+  .icon { width: 36px; height: 36px; display: grid; place-items: center; color: var(--ink); flex: none; border-radius: 50%; background: var(--card); cursor: pointer; }
+  svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .large { padding: 4px 16px 8px; flex: none; }
+  .large h1 { margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -0.02em; }
+  .sub { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .sub b { font-weight: 550; color: var(--ink); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+  .body { flex: 1; overflow-y: auto; padding: 0 16px 110px; display: flex; flex-direction: column; gap: 6px; }
+  .body > * { flex-shrink: 0; }
+  .head { display: flex; align-items: center; font-size: 20px; font-weight: 650; letter-spacing: -0.02em; margin: 14px 2px 4px; cursor: pointer; }
+  .head svg.i { width: 20px; height: 20px; color: var(--accent-text); transition: transform .15s; }
+  .head.shut svg.i { transform: rotate(-90deg); }
+  .group { background: var(--card); border-radius: 16px; overflow: hidden; }
+  .f { display: flex; align-items: center; gap: 14px; padding: 12px 14px 12px 16px; position: relative; cursor: pointer; }
+  .f + .f::before { content: ""; position: absolute; top: 0; left: 54px; right: 0; height: 1px; background: var(--line); }
+  .f .ic { color: var(--accent-text); display: grid; place-items: center; width: 24px; }
+  .f .c { flex: 1; min-width: 0; }
+  .f .t { font-size: 17px; }
+  .f .s { font-size: 13px; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .f .s.ask { color: var(--accent-text); font-weight: 550; }
+  .f .n { font-size: 17px; color: var(--muted); }
+  .f .chev { color: var(--muted); }
+  .f .chev svg.i { width: 18px; height: 18px; }
+  .rowx { display: flex; gap: 12px; padding: 11px 16px; position: relative; }
+  .rowx + .rowx::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 1px; background: var(--line); }
+  .rowx .t { font-size: 16px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rowx .p { font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .rowx .p b { font-weight: 550; color: var(--ink); }
+  .rowx .m { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .rowx .c { flex: 1; min-width: 0; }
+  .gh { font-size: 20px; font-weight: 650; letter-spacing: -0.02em; margin: 12px 2px 4px; }
+  .kind { font-size: 11px; font-weight: 650; color: var(--accent-text); background: var(--accent-soft); padding: 2px 8px; border-radius: 999px; }
+  .kind.voice { color: var(--on-spark); background: var(--spark); }
+  .thumb { width: 48px; height: 48px; border-radius: 10px; background: linear-gradient(135deg, var(--accent-soft), var(--line)); flex: none; align-self: center; }
+  .dock { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 16px 24px; display: flex; gap: 10px; align-items: center;
+    background: linear-gradient(transparent, var(--paper) 20px); }
+  .search { flex: 1; height: 48px; border-radius: 24px; background: var(--card); display: flex; align-items: center; gap: 8px; padding: 0 16px; font-size: 16px;
+    color: var(--muted); box-shadow: 0 2px 10px -6px rgba(0,0,0,.3); }
+  .search.on { color: var(--ink); box-shadow: 0 0 0 2px var(--accent-text); }
+  .search svg.i { width: 18px; height: 18px; color: var(--muted); }
+  .compose { width: 52px; height: 52px; border-radius: 50%; border: 0; display: grid; place-items: center; flex: none; background: var(--accent); color: var(--on-accent);
+    box-shadow: 0 8px 18px -6px var(--accent); }
+  .cancel { font: inherit; font-size: 15px; font-weight: 600; color: var(--accent-text); background: none; border: 0; padding: 0 2px; }
+  .menu { position: absolute; right: 12px; top: 80px; width: 250px; background: var(--card); border-radius: 14px; box-shadow: 0 12px 30px -8px rgba(0,0,0,.35); overflow: hidden; }
+  .menu div { padding: 13px 16px; font-size: 16px; display: flex; align-items: center; gap: 12px; }
+  .menu div + div { box-shadow: inset 0 1px 0 var(--line); }
+  .menu svg.i { width: 20px; height: 20px; color: var(--muted); }
+  .gset { font-size: 13px; font-weight: 650; color: var(--muted); margin: 14px 4px 6px; }
+  .set { background: var(--card); border-radius: 16px; padding: 4px 0; }
+  .item { display: flex; align-items: center; gap: 12px; padding: 11px 16px; }
+  .item .c { flex: 1; min-width: 0; }
+  .item .t { font-size: 16px; }
+  .item .s { font-size: 13px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+  .item .s.danger, .item .t.danger { color: var(--danger); }
+  .sw { width: 46px; height: 28px; border-radius: 14px; background: var(--line); position: relative; flex: none; }
+  .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  .sw.on { background: var(--accent); }
+  .sw.on::after { left: 21px; }
+  .sw.dim { opacity: .4; }
+  .radio { width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--muted); flex: none; }
+  .radio.on { box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 0 6px var(--card); background: var(--accent); }
+  .note { font-size: 13px; color: var(--muted); margin: 6px 4px; line-height: 1.45; }
+  .primary { font: inherit; font-size: 16px; font-weight: 650; border: 0; border-radius: 12px; padding: 12px 16px; background: var(--accent); color: var(--on-accent);
+    box-shadow: 0 8px 18px -6px var(--accent); width: 100%; margin-top: 6px; }
+  .quiet { font: inherit; font-size: 14px; font-weight: 600; border: 0; border-radius: 12px; padding: 7px 12px; background: var(--paper); color: var(--ink); }
+</style>
+</head>
+<body>
+<main>
+  <div class="controls" id="screens"></div>
+  <div class="controls" id="looks"></div>
+  <p class="hint" id="hint"></p>
+  <div class="phone" id="phone"></div>
+</main>
+<script>
+(function () {
+  var ico = {
+    dots: '<svg class="i" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="18" cy="12" r="1.3" fill="currentColor"/></svg>',
+    gear: '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>',
+    sync: '<svg class="i" viewBox="0 0 24 24"><path d="M20 12a8 8 0 0 1-14 5.3M4 12a8 8 0 0 1 14-5.3"/><path d="M18 3v4h-4M6 21v-4h4"/></svg>',
+    open: '<svg class="i" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></svg>',
+    compose: '<svg class="i" viewBox="0 0 24 24"><path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/><path d="M18.4 2.6a2 2 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>',
+    search: '<svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+    back: '<svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+    chev: '<svg class="i" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
+    down: '<svg class="i" viewBox="0 0 24 24"><path d="M5 9l7 7 7-7"/></svg>',
+    notes: '<svg class="i" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
+    mic: '<svg class="i" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
+    clip: '<svg class="i" viewBox="0 0 24 24"><path d="M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.5 3.5 0 0 1 5 5L10 17.5a2 2 0 0 1-3-3L14.5 7"/></svg>',
+    pin: '<svg class="i" viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
+    heart: '<svg class="i" viewBox="0 0 24 24"><path d="M12 20s-8-4.8-8-10.5A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 8 2.5C20 15.2 12 20 12 20z"/></svg>',
+    cal: '<svg class="i" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>',
+    send: '<svg class="i" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2-6z"/></svg>',
+    ai: '<svg class="i" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/></svg>',
+    hook: '<svg class="i" viewBox="0 0 24 24"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/><circle cx="12" cy="6" r="2.5"/><path d="M8.5 18h7M11 8.5 7 15.5M13 8.5l4 7"/></svg>',
+  };
+  var mark = '<svg width="24" height="24" viewBox="0 0 48 48" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M13 42V7M13 7h11a8.5 8.5 0 0 1 0 17H13M22 24l11 17" stroke="var(--accent-text)"/>' +
+    '<path d="M35.1 6.2a14.5 14.5 0 0 1 0 18.6M39.7 2.3a20.5 20.5 0 0 1 0 26.4" stroke="var(--spark)"/></svg>';
+
+  var screens = [
+    ['home', 'Home'], ['first', 'Home, first open'], ['menu', '⋯ menu'], ['search', 'Search on Home'], ['notes', 'Notes'],
+    ['voice', 'Voice notes'], ['location', 'Location'], ['locationOff', 'Location, sending off'], ['calendar', 'Calendar'],
+    ['sending', 'Sending'], ['signin', 'Tap AI apps, signed out'], ['settings', 'Settings'],
+  ];
+  var hints = {
+    home: 'The app opens here. Your notes, then what this phone collects, then what you connected. Tap a header to fold it. Tap a row to open it. Search and New note stay at the bottom.',
+    first: 'A new install: no notes, every data folder Off, and sending Off. AI apps and Webhooks say Sign in to see. Nothing leaves the phone.',
+    menu: 'The ⋯ menu moves from the notes list to Home: Settings, Sync now and Open your Relay Everything page.',
+    search: 'Search on Home finds notes in every folder, on this phone only, with no signal needed.',
+    notes: 'Notes opens the same list as today, grouped by day, with ‹ Home at the top left.',
+    voice: 'Voice notes shows only voice notes. Shares shows notes with a photo, a file or a link. Same list, same rows.',
+    location: 'Each data folder holds its own switch, its status and its choices. Location keeps Save battery or Every 100 m.',
+    locationOff: 'With sending off, the folder says it needs sending, and its one button turns sending on in the same steps as today.',
+    calendar: 'Calendar holds its switch and the list of calendars on the phone.',
+    sending: 'Sending holds what used to be the Sending group in Settings: the switch, where the phone sends, the server and Disconnect.',
+    signin: 'Not signed in, a tap on AI apps opens the sign-in that exists today. Once signed in, Home shows Claude and your webhooks by name.',
+    settings: 'Settings keeps only Notes and Voice notes.',
+  };
+  var state = { screen: 'home', dark: false, shut: {} };
+
+  function el(id) { return document.getElementById(id); }
+  function folder(icon, title, sub, count, go, ask) {
+    return '<div class="f" data-go="' + (go || '') + '"><span class="ic">' + ico[icon] + '</span><div class="c"><div class="t">' + title + '</div>' +
+      (sub ? '<div class="s' + (ask ? ' ask' : '') + '">' + sub + '</div>' : '') + '</div>' +
+      (count !== null && count !== undefined ? '<span class="n">' + count + '</span>' : '') + '<span class="chev">' + ico.chev + '</span></div>';
+  }
+  function head(name) {
+    var shut = state.shut[name];
+    return '<div class="head' + (shut ? ' shut' : '') + '" data-fold="' + name + '"><span class="grow">' + name + '</span>' + ico.down + '</div>';
+  }
+  function section(name, rows) { return head(name) + (state.shut[name] ? '' : '<div class="group">' + rows.join('') + '</div>'); }
+  function top(back) {
+    return '<div class="status"></div><div class="top">' + (back ? '<span class="back" data-go="home">' + ico.back + back + '</span>' : mark) +
+      '<span class="grow"></span>' + (back ? '' : '<span class="icon" data-go="menu">' + ico.dots + '</span>') + '</div>';
+  }
+  function title(text, sub) { return '<div class="large"><h1>' + text + '</h1>' + (sub ? '<div class="sub">' + sub + '</div>' : '') + '</div>'; }
+  function dock(searching, text) {
+    return '<div class="dock"><div class="search' + (searching ? ' on' : '') + '" data-go="search">' + ico.search + (text || 'Search') + '</div>' +
+      (searching ? '<button class="cancel" data-go="home">Cancel</button>' : '<button class="compose" aria-label="New note">' + ico.compose + '</button>') + '</div>';
+  }
+  function sw(on, dim) { return '<span class="sw' + (on ? ' on' : '') + (dim ? ' dim' : '') + '"></span>'; }
+  function item(t, s, right, cls) {
+    return '<div class="item"><div class="c"><div class="t' + (cls ? ' ' + cls : '') + '">' + t + '</div>' + (s ? '<div class="s' + (cls ? ' ' + cls : '') + '">' + s + '</div>' : '') + '</div>' + (right || '') + '</div>';
+  }
+  function row(title, rest, time, kind, extra, thumb) {
+    return '<div class="rowx"><div class="c"><div class="t">' + title + '</div><div class="p"><b>' + time + '</b>  ' + rest + '</div>' +
+      '<div class="m"><span class="kind' + (kind === 'Voice' ? ' voice' : '') + '">' + kind + '</span>' + (extra || '') + '</div></div>' + (thumb ? '<span class="thumb"></span>' : '') + '</div>';
+  }
+
+  function home(first) {
+    var synced = first ? '<b>On this phone</b>' : '<span class="dot"></span><b>Synced</b>';
+    return top() + title('Home', synced) + '<div class="body">' +
+      '<div class="group" style="margin-top:4px">' + [
+        folder('notes', 'Notes', null, first ? 0 : 124, 'notes'),
+        folder('mic', 'Voice notes', null, first ? 0 : 18, 'voice'),
+        folder('clip', 'Shares', null, first ? 0 : 9, 'voice'),
+      ].join('') + '</div>' +
+      section('On this phone', first ? [
+        folder('pin', 'Location', 'Off', null, 'locationOff'),
+        folder('heart', 'Health', 'Off', null, 'locationOff'),
+        folder('cal', 'Calendar', 'Off', null, 'locationOff'),
+      ] : [
+        folder('pin', 'Location', 'Save battery · Sent 14:05', null, 'location'),
+        folder('heart', 'Health', 'Sent 14:02 · 3 waiting', null, 'location'),
+        folder('cal', 'Calendar', '2 calendars · Sent 13:40', null, 'calendar'),
+      ]) +
+      section('Connections', first ? [
+        folder('send', 'Sending', 'Off: nothing leaves this phone', null, 'sending'),
+        folder('ai', 'AI apps', 'Sign in to see', null, 'signin', true),
+        folder('hook', 'Webhooks', 'Sign in to see', null, 'signin', true),
+      ] : [
+        folder('send', 'Sending', 'To Relay Everything · relayeverything.com', null, 'sending'),
+        folder('ai', 'AI apps', 'Claude', 1, 'open'),
+        folder('hook', 'Webhooks', 'Home server, Notion sync', 2, 'open'),
+      ]) + '</div>' + dock(false);
+  }
+
+  function notes(name) {
+    var voice = name === 'Voice notes';
+    var today = voice ? [row('Pick up the dry cleaning', 'and the parcel at the post office', '18:05', 'Voice', '0:12 · Home')]
+      : [row('Paint colours for the hall', 'the warm grey, not the blue', '18:05', 'Typed', 'Home · Sent', true),
+         row('Pick up the dry cleaning', 'and the parcel at the post office', '17:40', 'Voice', '0:12 · Sent')];
+    var before = voice ? [row('Idea for the ring clasp', 'a magnet in the band, not a pin', 'Tue', 'Voice', '0:31 · Sent')]
+      : [row('Dentist on Thursday', '9:30, bring the form', 'Tue', 'Typed', 'Sent'),
+         row('Idea for the ring clasp', 'a magnet in the band, not a pin', 'Tue', 'Voice', '0:31 · Sent')];
+    return top('Home') + title(name, '<span>' + (voice ? 18 : 124) + ' notes ·</span><span class="dot"></span><b>Synced</b>') + '<div class="body">' +
+      '<div class="gh">Today</div><div class="group">' + today.join('') + '</div>' +
+      '<div class="gh">Previous 7 days</div><div class="group">' + before.join('') + '</div></div>' + dock(false);
+  }
+
+  function search() {
+    return top() + title('Home') + '<div class="body">' +
+      '<div class="gh">Notes</div><div class="group">' +
+      row('Dentist on Thursday', '9:30, bring the form', 'Tue', 'Typed', 'Sent') +
+      row('Call the dentist back', 'about the new date', 'Oct 12', 'Voice', '0:08 · Sent') + '</div></div>' + dock(true, 'dentist');
+  }
+
+  function location(off) {
+    var on = !off;
+    return top('Home') + title('Location') + '<div class="body">' +
+      '<div class="set">' + item('Location history', on ? 'Sent 14:05 · none waiting' : 'Where you go, also while the app is closed.', sw(on, off)) + '</div>' +
+      (on ? '<div class="gset">How often</div><div class="set">' +
+        item('Save battery', 'A point at each move of about 500 m, and when you arrive or leave.', '<span class="radio on"></span>') +
+        item('Every 100 m', 'A point each 100 m, or each 5 minutes while you stay. It uses more battery.', '<span class="radio"></span>') + '</div>'
+      : '<p class="note">Location history works with sending on. Nothing leaves this phone until you turn it on.</p>' +
+        '<button class="primary" data-go="signin">Turn on sending</button>') +
+      '</div>';
+  }
+
+  function calendar() {
+    return top('Home') + title('Calendar') + '<div class="body">' +
+      '<div class="set">' + item('Calendar', 'Sent 13:40 · none waiting', sw(true)) + '</div>' +
+      '<div class="gset">Calendars</div><div class="set">' +
+      item('Personal', 'iCloud', sw(true)) + item('Work', 'Google', sw(true)) + item('Birthdays', null, sw(false)) + '</div></div>';
+  }
+
+  function sending() {
+    return top('Home') + title('Sending') + '<div class="body">' +
+      '<div class="set">' + item('Send my notes', 'To Relay Everything: relayeverything.com. Your server can pass notes to your own database and your AI.', sw(true)) +
+      item('Where the phone sends', 'Relay Everything', '<span class="chev">' + ico.chev + '</span>') + '</div>' +
+      '<div class="set" style="margin-top:12px">' + item('Server', 'https://relayeverything.com') +
+      item('Disconnect this phone', 'Removes the key from this phone and turns sending off. Your notes stay here.', '', 'danger') + '</div></div>';
+  }
+
+  function signin() {
+    return top('Home') + title('Where should the phone send?') + '<div class="body">' +
+      '<div class="set">' + item('Relay Everything', 'Your space on relayeverything.com, or your own server.', '<span class="radio on"></span>') +
+      item('My own webhook', 'Your own address. AI apps and webhooks on Relay Everything do not apply.', '<span class="radio"></span>') + '</div>' +
+      '<p class="note">After you sign in, Home shows your AI apps and webhooks by name. The phone reads no notes, health or places from the server.</p>' +
+      '<button class="primary">Sign in to connect</button></div>';
+  }
+
+  function settings() {
+    return top('Home') + title('Settings') + '<div class="body">' +
+      '<div class="gset">Notes</div><div class="set">' + item('Pin notes to where I am', 'Each typed note keeps where you were.', sw(false)) + '</div>' +
+      '<div class="gset">Voice notes</div><div class="set">' + item('Speech model', 'On this phone · 75 MB', '<button class="quiet">Remove</button>') + '</div></div>';
+  }
+
+  function menu() {
+    return home(false) + '<div class="menu"><div data-go="settings">' + ico.gear + 'Settings</div><div>' + ico.sync + 'Sync now</div><div>' + ico.open + 'Open your Relay Everything page</div></div>';
+  }
+
+  function draw() {
+    var s = state.screen;
+    var html = s === 'home' || s === 'open' ? home(false) : s === 'first' ? home(true) : s === 'menu' ? menu() : s === 'search' ? search()
+      : s === 'notes' ? notes('Notes') : s === 'voice' ? notes('Voice notes') : s === 'location' ? location(false) : s === 'locationOff' ? location(true)
+      : s === 'calendar' ? calendar() : s === 'sending' ? sending() : s === 'signin' ? signin() : settings();
+    el('phone').innerHTML = html;
+    el('hint').textContent = s === 'open' ? 'This opens that part of your Relay Everything page in the browser, to change it there.' : hints[s];
+    document.body.className = state.dark ? 'dark' : '';
+    el('screens').innerHTML = screens.map(function (p) { return '<button data-screen="' + p[0] + '" class="' + (p[0] === s ? 'on' : '') + '">' + p[1] + '</button>'; }).join('');
+    el('looks').innerHTML = '<button data-look="light" class="' + (state.dark ? '' : 'on') + '">Light</button><button data-look="dark" class="' + (state.dark ? 'on' : '') + '">Dark</button>';
+  }
+
+  document.addEventListener('click', function (event) {
+    var t = event.target.closest('[data-screen],[data-look],[data-go],[data-fold]');
+    if (!t) return;
+    if (t.dataset.screen) state.screen = t.dataset.screen;
+    else if (t.dataset.look) state.dark = t.dataset.look === 'dark';
+    else if (t.dataset.fold) state.shut[t.dataset.fold] = !state.shut[t.dataset.fold];
+    else if (t.dataset.go) state.screen = t.dataset.go === 'menu' && state.screen === 'menu' ? 'home' : t.dataset.go;
+    draw();
+  });
+  draw();
+})();
+</script>
+</body>
+</html>

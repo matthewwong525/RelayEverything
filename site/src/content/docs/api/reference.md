@@ -41,6 +41,87 @@ Send the input as a JSON body.
 | `id` | string | yes |  |
 | `added` | boolean | yes |  |
 
+## Change a note
+
+`PATCH /apps/relay/api/notes` · `relay.notes-edit` · writes · called by a phone key
+
+Change the words of any note in your space, and list the files added since to a note this phone sent. The newer change wins: a change made before the note's last one gets 409. Webhooks get it as note.updated.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | no | The server's id for the note, as GET notes gives it: any note in your space. |
+| `clientId` | string | no | Or the phone's own id for a note it sent, as POST notes sent it. |
+| `text` | string | yes | What the note says now, in place of its words before. It can be empty only when the note has files. |
+| `attachments` | array of object | no | All of the note's files now, up to 10. A file the server lacks is added: send its bytes after, with POST attachments. |
+| `attachments[].id` | string | yes | The phone's own id for the file: its upload names it. |
+| `attachments[].name` | string | yes | The file's name, such as `warranty.pdf`. |
+| `attachments[].type` | string | yes | The file's content type, such as `application/pdf`; empty when the phone does not know it. |
+| `attachments[].size` | integer | yes | The file's size in bytes, up to 25 MB. |
+| `editedAt` | integer | no | When the phone made the change, in Unix ms; now when left out. A later time is taken as now. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | yes |  |
+| `updated` | boolean | yes | False when the words were the same and no file was new. |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `not_found` | Your space has no note with this id, or this device sent no note with this clientId. |
+| `older` | The note changed after this change was made, so the newer words stay: GET notes gives them. |
+| `not_own` | Add a file only to a note this phone sent. |
+
+## Read the notes changed since the last sync
+
+`GET /apps/relay/api/notes` · `relay.notes-sync` · reads · called by a signed-in person or a phone key
+
+Read each note added or changed after a change number, oldest change first. Ask again with `next` while `more` is true.
+
+### Input
+
+Send the input as query parameters.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `since` | integer | no | The last page's `next`; 0 or left out for every note. |
+| `limit` | integer | no | How many notes, 100 when left out. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `notes` | array of object | yes |  |
+| `notes[].id` | string | yes |  |
+| `notes[].clientId` | string or null | yes | The sending device's own id for the note. |
+| `notes[].mine` | boolean | yes | True when the calling phone sent the note. |
+| `notes[].source` | "ring" or "typed" | yes |  |
+| `notes[].text` | string | yes |  |
+| `notes[].recordedAt` | number | yes |  |
+| `notes[].editedAt` | number or null | yes | When the note last changed, in Unix ms; null when never. |
+| `notes[].device` | string | yes | The name of the device or way in that sent it, such as `Email`. |
+| `notes[].audio` | boolean | yes |  |
+| `notes[].place` | object or null | yes |  |
+| `notes[].place.lat` | number | yes |  |
+| `notes[].place.lon` | number | yes |  |
+| `notes[].place.accuracy` | number or null | yes |  |
+| `notes[].place.name` | string or null | yes |  |
+| `notes[].place.from` | "phone" or "history" | yes |  |
+| `notes[].attachments` | array of object | yes | The note's files, oldest first. |
+| `notes[].attachments[].id` | string | yes |  |
+| `notes[].attachments[].name` | string | yes |  |
+| `notes[].attachments[].type` | string | yes |  |
+| `notes[].attachments[].size` | number | yes |  |
+| `notes[].attachments[].ready` | boolean | yes | True once the phone has sent the file: then GET attachment opens it. |
+| `next` | number | yes | The change number to ask from next time. |
+| `more` | boolean | yes | True when more changes wait after this page. |
+
 ## Store a phone's samples
 
 `POST /apps/relay/api/health` · `relay.samples-add` · writes · called by a phone key
@@ -721,6 +802,25 @@ Send the input as a JSON body.
 |---|---|
 | `unavailable` | The AI connector is not set up here. |
 | `not_found` | You have no connected AI app with this id. |
+
+## List what you connected, by name
+
+`GET /apps/relay/api/connections` · `relay.connections` · reads · called by a signed-in person or a phone key
+
+The names of your connected AI apps and of your webhooks, for the phone's Home. It holds no address, secret or send state. Where the AI connector is not set up, the AI apps list is empty.
+
+### Input
+
+It takes no input.
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `aiApps` | array of object | yes | Each connected AI app. |
+| `aiApps[].name` | string | yes |  |
+| `webhooks` | array of object | yes | Each webhook, paused ones too. |
+| `webhooks[].name` | string | yes |  |
 
 ## Save the AI's summary of a chat
 

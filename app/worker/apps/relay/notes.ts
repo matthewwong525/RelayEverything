@@ -19,23 +19,29 @@ const attachment = z.strictObject({
   size: z.number().int().min(0).max(MAX_FILE_BYTES).describe("The file's size in bytes, up to 25 MB."),
 });
 
+/** A note's files, up to 10, each with its own id. */
+export const noteFiles = z.array(attachment).max(MAX_FILES)
+  .refine(files => new Set(files.map(file => file.id)).size === files.length, "Give each file its own id.");
+export const noteText = z.string().max(20_000).describe("What the note says. It can be empty only when the note has files.");
+export const hasWords = (note: { text: string; attachments?: unknown[] }) => note.text.trim() !== "" || !!note.attachments?.length;
+
+const MIME = /^[\w.+-]+\/[\w.+-]+$/;
+/** A file whose type the phone does not know, or sent in a shape no header holds, is kept as plain bytes. */
+export const typeOf = (type: string) => MIME.test(type.trim()) ? type.trim().toLowerCase() : "application/octet-stream";
+export const withTypes = (files?: z.infer<typeof noteFiles>) => files?.map(file => ({ ...file, type: typeOf(file.type) }));
+
 const noteInput = z.strictObject({
   clientId: z.string().regex(CLIENT_ID).describe("The phone's own id for the note, so a resend is stored once."),
-  text: z.string().max(20_000).describe("What the note says. It can be empty only when the note has files."),
+  text: noteText,
   createdAt: time.describe("When it was written, in Unix milliseconds."),
   lat: latitude.optional().describe("Where it was written: latitude. Send it with lon."),
   lon: longitude.optional().describe("Where it was written: longitude. Send it with lat."),
   accuracy: accuracy.optional().describe("How sure the phone was of the place, in meters."),
   place: placeName.optional().describe("The place's name from the phone's address lookup."),
-  attachments: z.array(attachment).max(MAX_FILES).optional()
+  attachments: noteFiles.optional()
     .describe("The note's files, up to 10: only their names, types and sizes. Send each file's bytes after, with POST attachments."),
 }).refine(note => (note.lat === undefined) === (note.lon === undefined), "Send lat and lon together.")
-  .refine(note => note.text.trim() !== "" || !!note.attachments?.length, "Give the note words or a file.")
-  .refine(note => new Set(note.attachments?.map(file => file.id)).size === (note.attachments?.length ?? 0), "Give each file its own id.");
-
-const MIME = /^[\w.+-]+\/[\w.+-]+$/;
-/** A file whose type the phone does not know, or sent in a shape no header holds, is kept as plain bytes. */
-export const typeOf = (type: string) => MIME.test(type.trim()) ? type.trim().toLowerCase() : "application/octet-stream";
+  .refine(hasWords, "Give the note words or a file.");
 
 export const notes = defineAction({
   operationId: "relay.notes-add", summary: "Store a typed note", description: "Store a note typed on a Relay Everything phone, once per phone and clientId.",
@@ -43,7 +49,6 @@ export const notes = defineAction({
   encoding: "json", effect: "write", agentAvailable: false, requiresIdentity: false, errors: {}, examples: [],
   handler: asDevice<ActionCall>("Only a Relay Everything device key can send notes", async ({ space, device, env, call }) => {
     const note = call.input as z.infer<typeof noteInput>;
-    const attachments = note.attachments?.map(file => ({ ...file, type: typeOf(file.type) }));
-    return Response.json(await addNote(env, space, device.id, { ...note, attachments }));
+    return Response.json(await addNote(env, space, device.id, { ...note, attachments: withTypes(note.attachments) }));
   }),
 });

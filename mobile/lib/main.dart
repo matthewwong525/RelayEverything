@@ -58,9 +58,10 @@ Future<void> main() async {
   runApp(RelayApp(relay: relay, voiceRequests: voiceRequests.stream));
   // While the app runs, Shortcuts' actions use this engine, so the open timeline shows a shortcut's note at once.
   unawaited(listenForShortcuts(ShortcutsBridge(relay, onVoice: () => voiceRequests.add(null))));
-  // Each open, and each return to the app, keeps what the share card left, sends what waits and looks for new photos.
+  // Each open, and each return to the app, keeps what the share card left, sends what waits, looks for new photos and
+  // reads the notes changed elsewhere.
   AppLifecycleListener(onResume: relay.resume);
   // After an update that reads new health types, the phone asks for them once, before the first round reads.
   await relay.askNewHealthTypes();
-  await relay.sync();
+  await relay.pullNotes();
 }

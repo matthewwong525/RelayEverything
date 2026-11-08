@@ -2,7 +2,7 @@
 # The fixed tour: the flows in one Maestro run, one screenshot each, and out/tour.json. It uses no AI.
 set -uo pipefail
 here=$(dirname "$0")
-flows=(timeline new-note settings)
+flows=(timeline new-note note-styles settings)
 mkdir -p "$OUT/tour" "$OUT/maestro"
 # Maestro runs every flow in the order given, also after one fails, and writes one JUnit test case per flow.
 files=()

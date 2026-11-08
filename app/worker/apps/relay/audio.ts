@@ -1,7 +1,7 @@
 // GET audio?id=: a ring note's recording from the caller's own space, opened with its file key, for the site page and
 // the phones to play. It answers one byte range too, as Safari asks for one before it plays anything.
 import type { ActionCall } from "../../api/contract.ts";
-import { asPerson } from "./caller.ts";
+import { asPersonOrPhone } from "./caller.ts";
 import { refused, type Env } from "./store.ts";
 
 const ID = /^[0-9a-f-]{36}$/;
@@ -27,7 +27,7 @@ function bytesOf(wanted: Wanted, size: number): [number, number] | null {
 type Call = Pick<ActionCall, "url" | "identity">;
 
 // A sealed file opens only whole, so a range is cut from the opened bytes: a ring note's recording is small.
-export const audio: (request: Request, env: Env, call: Call) => Promise<Response> = asPerson<Call>(async ({ space, request, call }) => {
+export const audio: (request: Request, env: Env, call: Call) => Promise<Response> = asPersonOrPhone<Call>(async ({ space, request, call }) => {
   const id = call.url.searchParams.get("id") ?? "";
   if (!ID.test(id)) return refused(400, "Give a note's id");
   const note = await space.db.prepare("SELECT audio_key FROM relay_notes WHERE id = ?").bind(id).first<{ audio_key: string | null }>();

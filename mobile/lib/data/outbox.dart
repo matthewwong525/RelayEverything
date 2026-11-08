@@ -62,7 +62,7 @@ Future<FlushResult> flush(Store store, Outbound api, {DateTime Function()? clock
     }
     if (item.route == 'notes') await store.noteSent(item.body['clientId'] as String, now());
     if (item.route == 'attachment') await store.attachmentSent(item.body['id'] as String, now());
-    await store.done(item.id);
+    await store.finish(item);
   }
   return FlushResult(sent: sent, dropped: dropped);
 }

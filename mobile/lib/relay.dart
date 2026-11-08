@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'data/attachments.dart';
 import 'data/settings.dart';
@@ -12,11 +13,14 @@ export 'data/settings.dart' show LocationMode, SendPlace, Settings;
 export 'sync/calendar.dart' show PhoneCalendar;
 export 'voice/model.dart' show ModelState, ModelProblem;
 
-/// One row of the timeline: a note typed or said on this phone.
+/// One row of the timeline: a note typed or said on this phone, or one from elsewhere that a pull brought.
 class Entry {
-  const Entry({required this.text, required this.at, this.place, this.sent = false, this.waiting = false, this.voice = false,
-    this.writing = false, this.failed = false, this.recording, this.length, this.files = const []});
+  const Entry({this.id = '', required this.text, required this.at, this.place, this.sent = false, this.waiting = false, this.voice = false,
+    this.writing = false, this.failed = false, this.recording, this.length, this.files = const [], this.from});
 
+  /// The phone's own id for the note: [Relay.editNote] takes it.
+  final String id;
+  /// The words, with their styles as Markdown marks: `plainText` gives them bare.
   final String text;
   final DateTime at;
   final String? place;
@@ -35,19 +39,26 @@ class Entry {
   final String? recording;
   final Duration? length;
 
-  /// The note's files on this phone, in the order they were added.
+  /// The note's files, in the order they were added.
   final List<EntryFile> files;
+
+  /// Where a note from elsewhere was made, such as `Email` or another phone; null for a note from this phone.
+  final String? from;
 }
 
-/// One file on a note, kept on this phone.
+/// One file on a note: kept on this phone, or, for a note from elsewhere, in the person's space until opened.
 class EntryFile {
-  const EntryFile({required this.name, required this.type, required this.size, required this.path});
+  const EntryFile({this.id = '', required this.name, required this.type, required this.size, required this.path});
 
+  /// The file's id, which a download takes.
+  final String id;
   final String name;
   final String type;
   final int size;
-  /// The app's copy, as a full path.
+  /// The app's copy, as a full path; empty while the file is only in the person's space.
   final String path;
+
+  bool get onPhone => path.isNotEmpty;
 
   /// A picture shows small in the note; any other file shows as a row with its name and size.
   bool get picture => type.startsWith('image/');
@@ -74,6 +85,27 @@ class WebhookProblem {
   final String? file;
 }
 
+/// The names of what the person connected on their Relay Everything page, as the server last answered: the one thing a
+/// phone key reads. No address, secret or send state.
+class Connections {
+  const Connections({this.aiApps = const [], this.webhooks = const []});
+
+  final List<String> aiApps;
+  final List<String> webhooks;
+
+  /// Reads `GET connections`' answer, or its copy kept on this phone. A name that is not text is left out.
+  factory Connections.fromJson(Map<String, dynamic> json) {
+    List<String> names(Object? list) =>
+      [for (final item in list is List ? list : const []) if (item is Map && item['name'] is String) item['name'] as String];
+    return Connections(aiApps: names(json['aiApps']), webhooks: names(json['webhooks']));
+  }
+
+  static Connections? decode(String? saved) => saved == null ? null : Connections.fromJson(jsonDecode(saved) as Map<String, dynamic>);
+
+  String encode() => jsonEncode({'aiApps': [for (final name in aiApps) {'name': name}],
+    'webhooks': [for (final name in webhooks) {'name': name}]});
+}
+
 /// What the screens read and do. The app's controller is one; a test's fake is another.
 abstract class Relay extends ChangeNotifier {
   bool get connected;
@@ -83,15 +115,24 @@ abstract class Relay extends ChangeNotifier {
   int get waiting;
   Settings get settings;
 
-  /// Health readings and location points: when each last went, and how many wait. Settings shows them.
+  /// Health readings and location points: when each last went, and how many wait. Their folders show them.
   SendState get healthSent;
   SendState get pointsSent;
   /// Calendar events and removals: when they last went, and how many wait.
   SendState get calendarSent;
-  /// The phone's calendars, while the calendar is on; each has its own switch in Settings.
+  /// The phone's calendars, while the calendar is on; each has its own switch in the Calendar folder.
   List<PhoneCalendar> get calendars;
   /// True on iPhone, where *Location history* has two ways to keep places.
   bool get locationModes;
+
+  /// The names of the person's AI apps and webhooks, as their Relay Everything server last answered; null before an
+  /// answer, and after sending stops.
+  Connections? get connections;
+  /// Asks the server for [connections], only while sending to a Relay Everything server; else it makes no request.
+  Future<void> refreshConnections();
+  /// The Home headers the person folded, such as *Connections*. The phone keeps them.
+  Set<String> get folded;
+  Future<void> setFolded(String header, bool folded);
 
   /// Each returns null on success, or the words to show when it failed.
   Future<String?> connect(String code);
@@ -134,13 +175,25 @@ abstract class Relay extends ChangeNotifier {
   /// Keeps notes and the key.
   Future<void> stopSending();
 
-  /// Forgets the key and turns sending off.
+  /// Forgets the key, turns sending off, and deletes the notes from elsewhere.
   Future<void> disconnect();
   Future<void> sync();
-  /// Keeps a note with words, files, or both. Returns the words to show for files left out, such as one over 25 MB,
-  /// or for a note with nothing in it; null when all of it was kept.
-  Future<String?> addNote(String text, {List<NewFile> files = const []});
-  /// Opens a note's file in an app on the phone.
+  /// Sends what waits, then reads the notes changed elsewhere: at start, on return to the app, and on pull-down.
+  Future<void> pullNotes();
+  /// The note open in the editor, which a pull leaves as it is.
+  String? openNote;
+  /// Keeps a note with words, files, or both, as [id] when given. Returns the words to show for files left out, such
+  /// as one over 25 MB, or for a note with nothing in it; null when all of it was kept. With [sendNow] false it waits
+  /// for the next sync, as the editor saves while the person types.
+  Future<String?> addNote(String text, {List<NewFile> files = const [], String? id, bool sendNow = true});
+  /// Keeps the person's change to note [id]: its new words and files added. A sent note's change goes at the next sync,
+  /// and with [sendNow] at once. Returns the words to show for files left out; null when all of it was kept.
+  Future<String?> editNote(String id, String text, {List<NewFile> files = const [], bool sendNow = true});
+  /// Deletes note [id] from this phone, as Apple Notes does when you leave a note with no words: the editor calls it once
+  /// the words are blank. Any upload or change of it still waiting goes too, so it is never sent; a copy the server
+  /// took keeps its last words there. A note with a file or a recording stays: false then.
+  Future<bool> dropEmptyNote(String id);
+  /// Opens a note's file in an app on the phone. A file not on the phone downloads first, with sending on.
   Future<void> openFile(EntryFile file);
 
   /// The speech model voice notes need, and its download's progress from 0 to 1.

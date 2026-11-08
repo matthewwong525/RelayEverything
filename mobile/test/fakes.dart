@@ -55,6 +55,7 @@ class FakeServer {
   static http.Response ok(http.Request request) => json(switch (request.url.path) {
     '/apps/relay/sign-in/phone/key' => {'server': request.url.origin, 'key': pageKey},
     final path when path.endsWith('/key') => {'device': 'Android phone'},
+    final path when path.endsWith('/connections') => {'aiApps': [{'name': 'Claude'}], 'webhooks': [{'name': 'Home server'}]},
     _ => {'added': 1},
   });
   static http.Response json(Object body, [int status = 200]) =>
@@ -78,6 +79,19 @@ class FakeServer {
 /// A server for sending off: it answers every call with an error, and the test checks that [FakeServer.requests]
 /// stays empty.
 FakeServer noNetwork() => FakeServer((_) => FakeServer.json({'error': 'no call may reach the network'}, 500));
+
+/// One note as `GET notes` gives it: from elsewhere unless [mine], when this phone sent it as [clientId].
+Map<String, dynamic> pulledNote(String id, {String? clientId, bool mine = false, String text = 'Flight moved to 9:40',
+  DateTime? recordedAt, DateTime? editedAt, String device = 'Email', String source = 'typed', bool audio = false,
+  List<Map<String, dynamic>> files = const []}) => {
+  'id': id, 'clientId': clientId, 'mine': mine, 'source': source, 'text': text,
+  'recordedAt': (recordedAt ?? DateTime(2026, 11, 5, 8, 2)).millisecondsSinceEpoch,
+  'editedAt': editedAt?.millisecondsSinceEpoch, 'device': device, 'audio': audio, 'place': null, 'attachments': files,
+};
+
+/// A page of `GET notes`.
+http.Response notesPage(List<Map<String, dynamic>> notes, {required int next, bool more = false}) =>
+  FakeServer.json({'notes': notes, 'next': next, 'more': more});
 
 class MemoryStorage extends Fake implements FlutterSecureStorage {
   /// The app's own Keychain group, or Android's one home.

@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Failed } from './Failed'
-import { send, useGet, when } from './read'
+import { send, useGet, useOpenedAt, when } from './read'
 import { API_DOCS } from './Setup'
 
 // The AI connector on Relay's page: the address to add to Claude or ChatGPT, and the apps connected to it, each one
@@ -61,9 +61,11 @@ function Connected({ value, changed }: { value: AiApps; changed: () => void }) {
 }
 
 /** The AI apps section, below the notes. */
-export function AiCard() {
+export function AiCard({ ready = true }: { ready?: boolean }) {
   const [state, retry] = useGet<AiApps>('ai-apps')
-  return <section className="grid gap-3" aria-label="AI apps">
+  useOpenedAt('ai-apps', ready)
+  // The phone's *AI apps* row opens the page at #ai-apps.
+  return <section id="ai-apps" className="grid scroll-mt-4 gap-3" aria-label="AI apps">
     <h2>AI apps</h2>
     {state.status === 'loading' && <Loading label="Loading AI apps"><Skeleton className="h-32" /></Loading>}
     {state.status === 'failed' && (state.code === 503 ?

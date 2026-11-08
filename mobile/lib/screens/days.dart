@@ -1,3 +1,4 @@
+import '../editor/markdown.dart' show plainText;
 import '../relay.dart';
 
 const _months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October',
@@ -34,9 +35,28 @@ List<(String, List<Entry>)> groupByDay(List<Entry> entries, DateTime now) {
 bool entryMatches(Entry entry, String query) {
   final words = query.trim().toLowerCase();
   if (words.isEmpty) return true;
-  return [entry.text, entry.place ?? '', for (final file in entry.files) file.name]
+  return [plainText(entry.text), entry.place ?? '', for (final file in entry.files) file.name]
     .any((part) => part.toLowerCase().contains(words));
 }
 
 /// *Sent* or *Waiting to send*, or null while nothing of it goes anywhere.
 String? sendState(Entry entry) => entry.sent ? 'Sent' : entry.waiting ? 'Waiting to send' : null;
+
+/// The notes folders on Home: three views of the same notes, with no new kind of note.
+enum NotesFolder {
+  all('Notes'), voice('Voice notes'), shares('Shares');
+
+  const NotesFolder(this.title);
+
+  final String title;
+}
+
+final _link = RegExp(r'https?://', caseSensitive: false);
+
+/// True when [entry] is in [folder]: every note is in *Notes*, a voice note in *Voice notes*, and a note with a photo,
+/// a file or a link in *Shares*. The phone keeps no mark of which notes came from the share button.
+bool entryIn(NotesFolder folder, Entry entry) => switch (folder) {
+  NotesFolder.all => true,
+  NotesFolder.voice => entry.voice,
+  NotesFolder.shares => entry.files.isNotEmpty || _link.hasMatch(entry.text),
+};

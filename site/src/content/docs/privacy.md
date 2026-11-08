@@ -62,14 +62,14 @@ Click **Delete my account** on your Relay Everything page, and type your email t
 
 | Part | How |
 |---|---|
-| Everything sent | Turn off **Send my notes** in [Settings](../app/settings/). Health, the calendar, location and photos stop, and what of them did not go yet is deleted. |
+| Everything sent | Turn off **Send my notes** on the app's [Sending](../app/settings/#sending) page. Health, the calendar, location and photos stop, and what of them did not go yet is deleted. |
 | Voice notes | Do not tap **Get it**, or tap **Remove** in Settings to delete the speech model. Delete a recording by removing the app. |
 | Pins on typed notes | Turn off **Pin notes to where I am** in Settings. |
-| Location history | Turn off **Location history** in Settings. |
-| Photos | Turn off **Photos** in Settings: the copies that did not go yet are deleted. To delete the photos already sent, click **Delete all photos** on your Relay Everything page: [Photos](../app/photos/#delete-all-photos). |
-| Health | Turn off **Health** in Settings, and take back the permission in Apple Health or Health Connect. To keep one type back, such as cycle, turn off only that type there. |
-| Calendar | Turn off **Calendar** in Settings, or one calendar under it, and take back the permission in the phone's settings. A calendar you turn off is removed from your space at the next send. |
-| One phone | Tap **Disconnect this phone** in Settings, or click **Turn off** beside it on your Relay Everything page: [Keys](../api/keys/#make-list-and-turn-off-keys). |
+| Location history | Turn off **Location history** in the app's **Location** folder. |
+| Photos | Turn off **Photos** in the app's **Photos** folder: the copies that did not go yet are deleted. To delete the photos already sent, click **Delete all photos** on your Relay Everything page: [Photos](../app/photos/#delete-all-photos). |
+| Health | Turn off **Health** in the app's **Health** folder, and take back the permission in Apple Health or Health Connect. To keep one type back, such as cycle, turn off only that type there. |
+| Calendar | Turn off **Calendar** in the app's **Calendar** folder, or one calendar under it, and take back the permission in the phone's settings. A calendar you turn off is removed from your space at the next send. |
+| One phone | Tap **Disconnect this phone** on the app's **Sending** page, or click **Turn off** beside it on your Relay Everything page: [Keys](../api/keys/#make-list-and-turn-off-keys). |
 | Email notes | Don't give out your notes address. If it leaks, click **New address** on the **Email** card: [Email notes](../app/email/#replace-your-address). |
 | A webhook to your database | **Pause** or **Remove** it on the Relay Everything page: [Your own database](../connections/your-database/). |
 

@@ -1,19 +1,28 @@
-# Settings: open it from the ⋯ menu; sending is off, and its groups and switches are there.
+# Settings: open it from the ⋯ menu on Home; it holds only the Notes and Voice notes groups. Sending has its own
+# folder on Home.
 appId: com.matthewwong525.relayApp
 ---
 - launchApp:
     clearState: true
 - extendedWaitUntil:
-    visible: "Notes"
+    visible: "Home"
     timeout: 60000
 # The round ⋯ button has no visible words: Maestro finds it by its tooltip, More.
 - tapOn: "More"
 - tapOn: "Settings"
 - extendedWaitUntil:
-    visible: "Sending"
+    visible: "Voice notes"
     timeout: 10000
-- assertVisible: "Voice notes"
+- assertVisible: "Notes"
 # Flutter joins a row's title and subtitle into one label, so match its start.
-- assertVisible: 'Send my notes(.|\n)*'
 - assertVisible: 'Pin notes to where I am(.|\n)*'
+- assertNotVisible: 'Send my notes(.|\n)*'
 - takeScreenshot: settings
+# Back on Home, Sending opens its own page, with the sending switch off.
+# The back button's label joins its tooltip, Back, and the page it names, Home.
+- tapOn: '(.|\n)*Home(.|\n)*'
+- tapOn: 'Sending(.|\n)*'
+- extendedWaitUntil:
+    visible: 'Send my notes(.|\n)*'
+    timeout: 10000
+- takeScreenshot: sending

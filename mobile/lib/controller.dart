@@ -29,6 +29,12 @@ import 'voice/transcriber.dart';
 // The first versions kept the server's timeline here. A device key reads nothing now, so load deletes it.
 const _oldTimeline = 'timeline';
 
+/// The `state` keys for the last `GET connections` answer, and for the Home headers the person folded.
+const connectionsKey = 'connections', foldedKey = 'home.folded';
+
+/// After a sync, the names are read again only this long after the last read: they change only on the person's page.
+const _namesEvery = Duration(minutes: 10);
+
 /// What voice notes need: the speech model, the microphone, the words and playback. All of it stays on this phone.
 class VoiceParts {
   const VoiceParts({required this.model, required this.recorder, required this.transcriber, required this.player});
@@ -116,6 +122,9 @@ class RelayController extends Relay {
   Timer? _drainTimer;
   SendState _healthSent = const SendState(), _pointsSent = const SendState(), _calendarSent = const SendState();
   List<PhoneCalendar> _calendars = const [];
+  Connections? _connections;
+  DateTime? _namesAt;
+  Set<String> _folded = const {};
   Future<void>? _syncing;
   bool _again = false;
   DateTime? _listening;
@@ -140,6 +149,8 @@ class RelayController extends Relay {
   @override String? get webhookAddress => _webhook?.address;
   @override String? get webhookSecret => _webhook?.secret;
   @override WebhookProblem? get webhookProblem => _problem;
+  @override Connections? get connections => _connections;
+  @override Set<String> get folded => _folded;
 
   Outbound? get _api => _sender.api(_settings, connection: _connection, webhook: _webhook, installId: _installId);
 
@@ -162,6 +173,8 @@ class RelayController extends Relay {
     final destination = destinationOf(_settings.place);
     if (await store.destination() != destination) await store.moveOutbox(destination);
     await store.remove(_oldTimeline);
+    _connections = Connections.decode(await store.get(connectionsKey));
+    _folded = {for (final header in jsonDecode(await store.get(foldedKey) ?? '[]') as List) if (header is String) header};
     await _tellNative();
     await _tellShare();
     if (watch && _settings.history) _startHistory();
@@ -292,7 +305,9 @@ class RelayController extends Relay {
     _connection = _connection!.withServer(server);
     await vault.save(_connection!);
     await _tellShare();
-    notifyListeners();
+    // The names came from the server before, which may be another person's space.
+    _namesAt = null;
+    await _keepConnections(null);
     return null;
   }
 
@@ -380,10 +395,44 @@ class RelayController extends Relay {
   Future<void> _saveSettings(Settings settings) async {
     _settings = settings;
     await store.set(settingsKey, settings.encode());
+    // Off, or sending to the person's own webhook: the phone keeps no names from the server.
+    if (_sender.reader(settings, connection: _connection) == null) {
+      _namesAt = null;
+      if (_connections != null) await _keepConnections(null);
+    }
     await schedule?.call(settings.history || settings.health || settings.calendar);
     await _tellNative();
     await _tellShare();
     notifyListeners();
+  }
+
+  @override
+  Future<void> refreshConnections() async {
+    final reader = _sender.reader(_settings, connection: _connection);
+    if (reader == null) return;
+    _namesAt = _clock();
+    Connections? found;
+    try {
+      found = Connections.fromJson(await reader.connections());
+    } on ApiException catch (error) {
+      // With no signal the last answer stays. A server from before this route refuses it: then no names show.
+      if (error.failure == Failure.offline) return;
+    }
+    // Sending can stop while the answer comes: then the phone keeps nothing.
+    if (_sender.reader(_settings, connection: _connection) != null) await _keepConnections(found);
+  }
+
+  Future<void> _keepConnections(Connections? value) async {
+    _connections = value;
+    value == null ? await store.remove(connectionsKey) : await store.set(connectionsKey, value.encode());
+    notifyListeners();
+  }
+
+  @override
+  Future<void> setFolded(String header, bool folded) async {
+    _folded = folded ? {..._folded, header} : ({..._folded}..remove(header));
+    notifyListeners();
+    await store.set(foldedKey, jsonEncode(_folded.toList()..sort()));
   }
 
   /// Tells the iPhone's share card whether it may send: only while sending to the server is on and a key is kept. While
@@ -629,13 +678,16 @@ class RelayController extends Relay {
     return _syncing = _rounds().whenComplete(() => _syncing = null);
   }
 
-  /// Runs rounds until no call asked for another, or a round could not send everything.
+  /// Runs rounds until no call asked for another, or a round could not send everything. After a full send, the names of
+  /// what the person connected are read again, at most each [_namesEvery].
   Future<void> _rounds() async {
     bool emptied;
     do {
       _again = false;
       emptied = await _sync();
     } while (_again && emptied && _settings.sending);
+    final namesAt = _namesAt;
+    if (emptied && (namesAt == null || _clock().difference(namesAt) >= _namesEvery)) await refreshConnections();
   }
 
   /// One round; true when the outbox emptied.

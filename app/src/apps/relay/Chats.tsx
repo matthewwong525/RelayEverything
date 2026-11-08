@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Loading } from '@/components/Loading'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -48,13 +48,15 @@ function List({ first, query, open }: { first: ChatList; query: string; open: (i
   </Card>
 }
 
-/** The Chats section, below the notes. */
-export function Chats() {
+/** The Chats section, below the notes. `onSettled` runs once the list's first read ends, as the page's scroll waits. */
+export function Chats({ onSettled }: { onSettled: () => void }) {
   const [typed, setTyped] = useState('')
   const [query, setQuery] = useState('')
   const [opened, setOpened] = useState<string | null>(null)
   const [state, retry] = useGet<ChatList>(query ? `chats?${new URLSearchParams({ q: query })}` : 'chats')
   const closed = (changed: boolean) => { setOpened(null); if (changed) retry() }
+  const settled = state.status !== 'loading'
+  useEffect(() => { if (settled) onSettled() }, [settled, onSettled])
   return <section className="grid gap-3" aria-label="Chats">
     <div className="flex flex-wrap items-center gap-2"><h2 className="grow">Chats</h2><ConnectClaude /></div>
     {opened ? <Chat id={opened} close={closed} /> : <>

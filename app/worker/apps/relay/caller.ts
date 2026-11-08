@@ -13,18 +13,20 @@ export const SESSION_COOKIE = "__Host-relay_session";
 /** A browser keeps a `__Host-` cookie only from https, so a local run on http uses the plain name. */
 export const sessionCookie = (url: URL) => url.protocol === "https:" ? SESSION_COOKIE : "relay_session";
 
-/** A key's reach here is POST, plus `GET key`, which answers only its own name; `GET chats` shares an address with a
- *  send, so the method is checked too. An API key reads only on the connector's web API, so here it has `GET key`. */
+/** A key's reach here is POST, plus `GET key`, which answers only its own name, and for a phone `GET connections`, only
+ *  names. `GET chats` shares an address with a send, so the method is checked too. An API key reads only on /v1/. */
 const REACH: Record<Reach, { routes: RegExp; refusal: string }> = {
   phone: { routes: /^\/apps\/relay\/api\/(?:notes|attachments|health|locations|calendar)$/, refusal: "A device key can only send to Relay Everything." },
   chats: { routes: /^\/apps\/relay\/api\/(?:chats|chat-saves)$/, refusal: "A chat key can only send chats." },
   api: { routes: /^$/, refusal: "An API key works only on the web API, at your AI connector's address under /v1/." },
 };
 const KEY_CHECK = "/apps/relay/api/key";
+const CONNECTIONS = "/apps/relay/api/connections";
 
 /** True when a key of this reach may call the method on the address. */
 export function reaches(reach: Reach, method: string, pathname: string): boolean {
-  return method === "GET" ? pathname === KEY_CHECK : method === "POST" && REACH[reach].routes.test(pathname);
+  if (method === "GET") return pathname === KEY_CHECK || (reach === "phone" && pathname === CONNECTIONS);
+  return method === "POST" && REACH[reach].routes.test(pathname);
 }
 
 type KeyRow = { person_id: string; email: string; device_id: string; reaches: Reach; revoked_at: number | null };
@@ -114,16 +116,24 @@ const openSpace = (env: Env, caller: Caller) => env.SPACES ? spaceOf(env as Spac
   : refused(503, "This Relay Everything server has no spaces. Use the shared server.");
 type Context<C> = { space: PersonSpace; caller: Caller; request: Request; env: Env; call: C };
 
-/** A route for a signed-in person: their session, Access email or the checker. A device key reads nothing. */
-export const asPerson = <C extends Call>(run: (context: Context<C>) => Promise<Response>) =>
+type Run<C> = (context: Context<C>) => Promise<Response>;
+
+/** A route for a signed-in person, or with `phone` also for a phone key, in that person's own space. */
+const asSignedIn = <C extends Call>(phone: boolean, run: Run<C>) =>
   async (request: Request, env: Env, call: C): Promise<Response> => {
     const caller = await callerOf(request, env, call.identity);
     if (caller instanceof Response) return caller;
     if (!caller) return refused(401, "Sign in to Relay Everything.");
-    if (caller.device) return refused(403, "A device key can only send to Relay Everything.");
+    if (caller.device && !(phone && caller.device.reaches === "phone")) return refused(403, "A device key can only send to Relay Everything.");
     const space = openSpace(env, caller);
     return space instanceof Response ? space : run({ space, caller, request, env, call });
   };
+
+/** A route for a signed-in person: their session, Access email or the checker. A device key reads nothing. */
+export const asPerson = <C extends Call>(run: Run<C>) => asSignedIn(false, run);
+
+/** A route a phone key reads too, as the gate lets it only for `GET connections`: names, never data. */
+export const asPersonOrPhone = <C extends Call>(run: Run<C>) => asSignedIn(true, run);
 
 /** A route for a device key: it adds data to its own person's space, named by its own device. */
 export const asDevice = <C extends Call>(refusal: string, run: (context: Context<C> & { device: NonNullable<Caller["device"]> }) => Promise<Response>) =>

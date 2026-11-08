@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../brand.dart';
 import '../data/attachments.dart';
 import '../relay.dart';
-import 'back_to_notes.dart';
+import 'back_to.dart';
 
 /// Picks photos ([photos] true) or files from the phone. The app's is `file_picker`; a test passes its own.
 typedef FilesPicker = Future<List<NewFile>> Function({required bool photos});
@@ -45,10 +45,12 @@ class _FirstLineBold extends TextEditingController {
 
 /// A new note, a plain page: the keyboard opens at once, and Save keeps it even with no signal. The paperclip adds photos or files.
 class ComposeScreen extends StatefulWidget {
-  const ComposeScreen({super.key, required this.relay, this.picker});
+  const ComposeScreen({super.key, required this.relay, this.picker, this.back = 'Notes'});
 
   final Relay relay;
   final FilesPicker? picker;
+  /// The page it opened from, *Home* or a folder, which its back button names.
+  final String back;
 
   @override
   State<ComposeScreen> createState() => _ComposeScreenState();
@@ -101,7 +103,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
   Widget build(BuildContext context) {
     final brand = brandOf(context);
     return Scaffold(
-      appBar: AppBar(leading: const BackToNotes(), leadingWidth: backToNotesWidth, actions: [
+      appBar: AppBar(leading: BackTo(widget.back), leadingWidth: BackTo.widthOf(widget.back), actions: [
         ListenableBuilder(
           listenable: _text,
           builder: (context, _) => Padding(

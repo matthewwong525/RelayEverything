@@ -1,11 +1,13 @@
-# A typed note: tap New note, type, Save, and the note is in the list. Then search finds it.
+# A typed note: open Notes from Home, tap New note, type, Save, and the note is in the list. Then search finds it.
 appId: com.matthewwong525.relayApp
 ---
 - launchApp:
     clearState: true
 - extendedWaitUntil:
-    visible: "Notes"
+    visible: "Home"
     timeout: 60000
+# Home lists the folders; a row's label joins its name and its count, so match its start.
+- tapOn: 'Notes(.|\n)*'
 # A short tap on the round New note button opens the New note page. A hold of 0.5 s records.
 - tapOn: "New note"
 - extendedWaitUntil:

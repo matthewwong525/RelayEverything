@@ -239,11 +239,11 @@ void main() {
       }
     });
 
-    test('reads nothing: no code calls the timeline or audio routes, and the one GET is the key check', () {
+    test('reads no data: no code calls the timeline or audio routes, and the GETs are the key check and the names', () {
       final sources = [
         for (final file in Directory('lib').listSync(recursive: true)) if (file is File && file.path.endsWith('.dart')) file.readAsStringSync(),
       ].join('\n');
-      expect([for (final call in RegExp(r"_client\.get\(_uri\('(\w+)'").allMatches(sources)) call[1]], ['key']);
+      expect([for (final call in RegExp(r"_client\.get\(_uri\('(\w+)'").allMatches(sources)) call[1]], ['key', 'connections']);
       expect(sources, isNot(matches(RegExp(r"api/(timeline|audio)|_uri\('(timeline|audio)"))));
     });
 

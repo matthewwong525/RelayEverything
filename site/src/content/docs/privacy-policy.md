@@ -75,7 +75,7 @@ You have these rights wherever you live. Canada's privacy law for companies, the
 - **See your data:** your Relay Everything page shows it, and your webhooks and API keys get a copy of it. You can also ask us for a copy.
 - **Correct it:** ask us to correct your account's data.
 - **Delete it:** [delete your whole account](../privacy/#delete-your-account), or ask us to delete a part of your data.
-- **Take back your consent:** turn off a part in the app's [Settings](../app/settings/), or turn off **Send my notes**. The [Privacy](../privacy/#turn-each-part-off) page shows how.
+- **Take back your consent:** turn off a part in its folder on the app's Home ([Health, Calendar and Location](../app/settings/#health-calendar-and-location)), or turn off **Send my notes**. The [Privacy](../privacy/#turn-each-part-off) page shows how.
 - **Complain:** write to us first. If our answer does not satisfy you, you can complain to the [Office of the Privacy Commissioner of Canada](https://www.priv.gc.ca/en/report-a-concern/), or to the privacy office where you live.
 
 To ask, write to the contact address on the shared server's sign-in screen. We answer within 30 days. We can ask you to show that the account is yours, such as by writing from its email.

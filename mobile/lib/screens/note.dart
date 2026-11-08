@@ -4,17 +4,19 @@ import 'package:flutter/material.dart';
 
 import '../brand.dart';
 import '../relay.dart';
-import 'back_to_notes.dart';
+import 'back_to.dart';
 import 'days.dart';
 import 'hold_to_talk.dart' show clockOf;
 
 /// One note, to read: when and where, all of its words, its pictures and files, *Play* for a recording, and its kind
 /// and send state. It changes nothing, but *Try again* writes the words of a note whose words failed.
 class NoteScreen extends StatelessWidget {
-  const NoteScreen({super.key, required this.entry, required this.relay});
+  const NoteScreen({super.key, required this.entry, required this.relay, this.back = 'Notes'});
 
   final Entry entry;
   final Relay relay;
+  /// The folder it opened from, which its back button names.
+  final String back;
 
   /// The note as the list has it now, so words still being written fill in here too.
   Entry get _current =>
@@ -32,7 +34,7 @@ class NoteScreen extends StatelessWidget {
     final brand = brandOf(context);
     final muted = TextStyle(fontSize: 13, color: brand.muted);
     return Scaffold(
-      appBar: AppBar(leading: const BackToNotes(), leadingWidth: backToNotesWidth),
+      appBar: AppBar(leading: BackTo(back), leadingWidth: BackTo.widthOf(back)),
       body: ListenableBuilder(
         listenable: relay,
         builder: (context, _) {

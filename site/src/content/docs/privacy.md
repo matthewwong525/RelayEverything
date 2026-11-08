@@ -59,13 +59,13 @@ Click **Delete my account** on your Relay Everything page, and type your email t
 
 | Part | How |
 |---|---|
-| Everything sent | Turn off **Send my notes** in [Settings](../app/settings/). Health, the calendar and location stop, and what of them did not go yet is deleted. |
+| Everything sent | Turn off **Send my notes** on the app's [Sending](../app/settings/#sending) page. Health, the calendar and location stop, and what of them did not go yet is deleted. |
 | Voice notes | Do not tap **Get it**, or tap **Remove** in Settings to delete the speech model. Delete a recording by removing the app. |
 | Pins on typed notes | Turn off **Pin notes to where I am** in Settings. |
-| Location history | Turn off **Location history** in Settings. |
-| Health | Turn off **Health** in Settings, and take back the permission in Apple Health or Health Connect. To keep one type back, such as cycle, turn off only that type there. |
-| Calendar | Turn off **Calendar** in Settings, or one calendar under it, and take back the permission in the phone's settings. A calendar you turn off is removed from your space at the next send. |
-| One phone | Tap **Disconnect this phone** in Settings, or click **Turn off** beside it on your Relay Everything page: [Keys](../api/keys/#make-list-and-turn-off-keys). |
+| Location history | Turn off **Location history** in the app's **Location** folder. |
+| Health | Turn off **Health** in the app's **Health** folder, and take back the permission in Apple Health or Health Connect. To keep one type back, such as cycle, turn off only that type there. |
+| Calendar | Turn off **Calendar** in the app's **Calendar** folder, or one calendar under it, and take back the permission in the phone's settings. A calendar you turn off is removed from your space at the next send. |
+| One phone | Tap **Disconnect this phone** on the app's **Sending** page, or click **Turn off** beside it on your Relay Everything page: [Keys](../api/keys/#make-list-and-turn-off-keys). |
 | A webhook to your database | **Pause** or **Remove** it on the Relay Everything page: [Your own database](../connections/your-database/). |
 
 Turning a part off stops new data. Data already in your space stays there until you [delete your account](#delete-your-account), and your notes stay on your phone.

@@ -1,0 +1,321 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../brand.dart';
+import '../relay.dart';
+import 'compose.dart';
+import 'connect.dart' show Scanner;
+import 'days.dart';
+import 'folder.dart';
+import 'hold_to_talk.dart';
+import 'settings.dart';
+import 'timeline.dart';
+
+/// Opens an address in the phone's own browser, and says if it did.
+typedef Opener = Future<bool> Function(Uri address);
+
+Future<bool> _openInBrowser(Uri address) async {
+  try {
+    return await launchUrl(address, mode: LaunchMode.externalApplication);
+  } on Exception {
+    return false;
+  }
+}
+
+/// The first screen, as Apple Notes' *Folders*: the notes folders, *On this phone* and *Connections*, the ⋯ menu, and
+/// at the bottom *Search*, which finds notes in every folder, and *New note*. It also holds what each page needs once:
+/// the notices, the listening card and *Start a voice note* from Shortcuts.
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key, required this.relay, this.scanner, this.opener, this.picker, this.voiceRequests});
+
+  final Relay relay;
+  /// The QR scanner the connect screen uses; a test passes its own.
+  final Scanner? scanner;
+  /// Opens the Relay Everything page; a test passes its own.
+  final Opener? opener;
+  /// The paperclip's picker; a test passes its own.
+  final FilesPicker? picker;
+  /// *Start a voice note* from Shortcuts: each event starts one in the listening card.
+  final Stream<void>? voiceRequests;
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  late final StreamSubscription<String> _notices;
+  StreamSubscription<void>? _voice;
+  OverlayEntry? _listening;
+  bool _recording = false;
+  final _search = TextEditingController();
+  final _searchFocus = FocusNode();
+
+  Relay get relay => widget.relay;
+
+  @override
+  void initState() {
+    super.initState();
+    // Such as *No speech heard*, which comes after the words are written.
+    _notices = relay.notices.listen((message) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    });
+    _voice = widget.voiceRequests?.listen((_) => _record());
+    relay.addListener(_showListening);
+    relay.refreshConnections();
+  }
+
+  /// Starts one voice note, or asks for the model once, however many times the shortcut ran.
+  Future<void> _record() async {
+    if (!mounted || _recording || relay.listening != null) return;
+    _recording = true;
+    try {
+      await recordFromShortcut(context, relay);
+    } finally {
+      _recording = false;
+    }
+  }
+
+  /// The listening card goes in the root overlay, so it covers any page a shortcut finds open.
+  void _showListening() {
+    if (!mounted) return;
+    if (relay.listening != null && _listening == null) {
+      _listening = OverlayEntry(builder: (_) => ListeningOverlay(relay: relay));
+      Overlay.of(context, rootOverlay: true).insert(_listening!);
+    } else if (relay.listening == null && _listening != null) {
+      _listening!.remove();
+      _listening = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    relay.removeListener(_showListening);
+    _listening?.remove();
+    _voice?.cancel();
+    _notices.cancel();
+    _search.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  void _open(Widget page) => openPage(context, page);
+
+  /// Opens [part] of the Relay Everything page, such as `#webhooks`, in the browser.
+  Future<void> _openPage(String server, [String part = '']) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (!await (widget.opener ?? _openInBrowser)(Uri.parse('$server/apps/relay/$part'))) {
+      messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: ListenableBuilder(
+        listenable: Listenable.merge([relay, _search, _searchFocus]),
+        builder: (context, _) => Stack(children: [
+          RefreshIndicator(
+            onRefresh: relay.sync,
+            edgeOffset: 140,
+            child: CustomScrollView(physics: const AlwaysScrollableScrollPhysics(), slivers: [
+              _bar(),
+              if (modelShows(relay)) modelSliver(relay),
+              if (_search.text.trim().isNotEmpty)
+                noteSliver(context, relay, relay.entries, _search.text, back: 'Home')
+              else
+                SliverPadding(padding: const EdgeInsets.symmetric(horizontal: 16), sliver: SliverList.list(children: _folders())),
+              const SliverPadding(padding: EdgeInsets.only(bottom: 110)),
+            ]),
+          ),
+          NotesDock(relay: relay, search: _search, focus: _searchFocus,
+            onWrite: () => _open(ComposeScreen(relay: relay, picker: widget.picker, back: 'Home'))),
+        ]),
+      ),
+    );
+  }
+
+  Widget _bar() {
+    final settings = relay.settings;
+    final server = relay.server;
+    return SliverAppBar.large(
+      leading: const Center(child: RelayMark(size: 24)),
+      title: const Text('Home'),
+      expandedHeight: 140,
+      actions: [
+        _MoreMenu(items: [
+          ('Settings', Icons.settings_outlined, () => _open(SettingsScreen(relay: relay))),
+          if (settings.sending) ('Sync now', Icons.sync, relay.sync),
+          // Ring notes and recordings are on the Relay Everything page; nothing of this phone's goes there while it
+          // sends to the person's own webhook.
+          if (settings.sending && settings.place == SendPlace.server && server != null)
+            ('Open your Relay Everything page', Icons.open_in_new, () => _openPage(server)),
+        ]),
+        const SizedBox(width: 8),
+      ],
+      bottom: PreferredSize(preferredSize: const Size.fromHeight(28), child: SyncLine(relay: relay)),
+    );
+  }
+
+  List<Widget> _folders() {
+    final now = DateTime.now();
+    final scanner = widget.scanner;
+    int count(NotesFolder folder) => relay.entries.where((entry) => entryIn(folder, entry)).length;
+    return [
+      const SizedBox(height: 12),
+      _Card(rows: [
+        for (final (folder, icon) in const [(NotesFolder.all, Icons.notes_outlined), (NotesFolder.voice, Icons.mic_none),
+          (NotesFolder.shares, Icons.attach_file)])
+          _FolderRow(icon: icon, title: folder.title, count: count(folder),
+            onTap: () => _open(TimelineScreen(relay: relay, folder: folder, picker: widget.picker))),
+      ]),
+      ..._section('On this phone', [
+        _FolderRow(icon: Icons.place_outlined, title: 'Location', line: locationLine(relay, now),
+          onTap: () => _open(LocationPage(relay: relay, scanner: scanner))),
+        _FolderRow(icon: Icons.favorite_border, title: 'Health', line: healthLine(relay, now),
+          onTap: () => _open(HealthPage(relay: relay, scanner: scanner))),
+        _FolderRow(icon: Icons.calendar_today_outlined, title: 'Calendar', line: calendarLine(relay, now),
+          onTap: () => _open(CalendarPage(relay: relay, scanner: scanner))),
+      ]),
+      ..._section('Connections', [
+        _FolderRow(icon: Icons.send_outlined, title: 'Sending', line: sendingLine(relay),
+          onTap: () => _open(SendingPage(relay: relay, scanner: scanner))),
+        _connected(Icons.auto_awesome_outlined, 'AI apps', (names) => names.aiApps, '#ai-apps'),
+        _connected(Icons.webhook, 'Webhooks', (names) => names.webhooks, '#webhooks'),
+      ]),
+    ];
+  }
+
+  /// A folding header and, unless the person folded it, its card.
+  List<Widget> _section(String name, List<Widget> rows) {
+    final folded = relay.folded.contains(name);
+    return [
+      _FoldHeader(name: name, folded: folded, onTap: () => relay.setFolded(name, !folded)),
+      if (!folded) _Card(rows: rows),
+    ];
+  }
+
+  /// *AI apps* or *Webhooks*: the names the server last gave and a tap to that [part] of the page, or, until the phone
+  /// sends to a Relay Everything server, *Sign in to see* and a tap to the choice of place.
+  Widget _connected(IconData icon, String title, List<String> Function(Connections names) of, String part) {
+    final settings = relay.settings;
+    final server = relay.server;
+    if (!settings.sending || settings.place != SendPlace.server || !relay.connected || server == null) {
+      return _FolderRow(icon: icon, title: title, line: 'Sign in to see', ask: true,
+        onTap: () => choosePlace(context, relay, widget.scanner));
+    }
+    final names = switch (relay.connections) { final known? => of(known), null => null };
+    return _FolderRow(icon: icon, title: title,
+      line: switch (names) { null => 'See them on your page', [] => 'None yet', final names => names.join(', ') },
+      count: names == null || names.isEmpty ? null : names.length,
+      onTap: () => _openPage(server, part));
+  }
+}
+
+/// A section name with a chevron that turns as it folds, as in Apple Notes.
+class _FoldHeader extends StatelessWidget {
+  const _FoldHeader({required this.name, required this.folded, required this.onTap});
+
+  final String name;
+  final bool folded;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = brandOf(context);
+    return Semantics(
+      button: true,
+      expanded: !folded,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(2, 18, 2, 6),
+          child: Row(children: [
+            Expanded(child: Text(name, style: Theme.of(context).textTheme.titleLarge)),
+            AnimatedRotation(
+              turns: folded ? -0.25 : 0,
+              duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 200),
+              child: Icon(Icons.expand_more, color: brand.accentText),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// One card of folder rows, with a line between rows.
+class _Card extends StatelessWidget {
+  const _Card({required this.rows});
+
+  final List<Widget> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: [
+        for (final (index, row) in rows.indexed) ...[
+          if (index > 0) const Divider(height: 1, thickness: 1, indent: 56),
+          row,
+        ],
+      ]),
+    );
+  }
+}
+
+/// One folder: its icon in accent, its name, its status line, its count, and a chevron. [ask] shows the line in accent
+/// text, as a link.
+class _FolderRow extends StatelessWidget {
+  const _FolderRow({required this.icon, required this.title, required this.onTap, this.line, this.count, this.ask = false});
+
+  final IconData icon;
+  final String title;
+  final String? line;
+  final int? count;
+  final bool ask;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = brandOf(context);
+    return ListTile(
+      leading: Icon(icon, color: brand.accentText),
+      title: Text(title, style: TextStyle(fontSize: 16, color: brand.ink)),
+      subtitle: line == null ? null : Text(line!, maxLines: 1, overflow: TextOverflow.ellipsis,
+        style: TextStyle(fontSize: 13, color: ask ? brand.accentText : brand.muted, fontWeight: ask ? FontWeight.w500 : null)),
+      trailing: Row(mainAxisSize: MainAxisSize.min, spacing: 4, children: [
+        if (count != null) Text('$count', style: TextStyle(fontSize: 16, color: brand.muted)),
+        Icon(Icons.chevron_right, color: brand.muted),
+      ]),
+      onTap: onTap,
+    );
+  }
+}
+
+/// The ⋯ button and its menu: each item a word, an icon and what it does.
+class _MoreMenu extends StatelessWidget {
+  const _MoreMenu({required this.items});
+
+  final List<(String, IconData, VoidCallback)> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = brandOf(context);
+    return MenuAnchor(
+      menuChildren: [
+        for (final (label, icon, act) in items)
+          MenuItemButton(leadingIcon: Icon(icon, size: 20, color: brand.muted), onPressed: act,
+            child: Padding(padding: const EdgeInsets.only(right: 16), child: Text(label, style: const TextStyle(fontSize: 16)))),
+      ],
+      builder: (context, menu, _) => IconButton(
+        tooltip: 'More',
+        style: IconButton.styleFrom(backgroundColor: brand.card, foregroundColor: brand.ink),
+        icon: const Icon(Icons.more_horiz),
+        onPressed: () => menu.isOpen ? menu.close() : menu.open(),
+      ),
+    );
+  }
+}

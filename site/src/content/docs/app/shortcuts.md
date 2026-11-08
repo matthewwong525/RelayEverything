@@ -46,7 +46,7 @@ With no speech model on the phone yet, the app asks to get it first. [Get the sp
 
 ## What is sent
 
-The actions follow your **Send my notes** setting in [Settings](../settings/):
+The actions follow your **Send my notes** setting on the [Sending](../settings/#sending) page:
 
 | Sending | Add a note | Get notes | Start a voice note |
 |---|---|---|---|

@@ -89,3 +89,17 @@ it("shows no app connected yet, a connector not set up, and a failed read with a
   fireEvent.click(screen.getByRole("button", { name: "Try again" }));
   expect(await screen.findByText("Claude")).toBeTruthy();
 });
+
+it("is the part the phone's AI apps row opens, at #ai-apps, and scrolls there", async () => {
+  const scrolled = vi.fn();
+  Element.prototype.scrollIntoView = scrolled;
+  window.location.hash = "#ai-apps";
+  try {
+    await open();
+    expect(document.getElementById("ai-apps")).toBe(screen.getByRole("region", { name: "AI apps" }));
+    expect(scrolled).toHaveBeenCalledOnce();
+  } finally {
+    window.location.hash = "";
+    delete (Element.prototype as Partial<Element>).scrollIntoView;
+  }
+});

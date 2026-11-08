@@ -1,6 +1,6 @@
 # Sign in, sign out and connections move into Settings, under one Account row
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** rethink-connections-settings-ui
 **Open questions:** none
 
@@ -124,3 +124,5 @@ None.
 - **2026-11-08** — Assumed, while building: after *Sign out* or *Stop sending*, the Account page closes back to Settings, which then says *Sign in to Relay Everything*; the *Sign in* screen always opens on *Sign in to connect*, with the webhook one tap away, its address and secret kept.
 - **2026-11-08** — Assumed, while building: the narrow-screen check covers the Account page's *Account*, *AI apps*, *Webhooks* and *Sign out*, not *Open your Relay Everything page*, which wraps at 360 px as it did on the old *Sending* page.
 - **2026-11-08** — Saved for final acceptance: built, and a second review found two gaps, both fixed: the fixed tour's `timeline.yaml` still looked for Home's *AI apps* row, and no controller test proved *Stop sending* keeps the webhook. A test for the checker's empty email closes the last uncovered branch. `flutter analyze` is clean, all 480 phone tests pass, and the app suite passed but for a 5-second timeout in `Welcome.test.tsx`, a file this change does not touch, at a load of about 15; it passes alone. The iPhone device check (4.2) runs on this saved commit.
+- **2026-11-08** — Check: the iPhone device check on 6443018 (run 42526509209) gave *works*: the fixed tour passed all four flows, and Claude saw Home with no *Connections*, Settings opening on *Sign in to Relay Everything*, the *Sign in* screen with its three quiet buttons, Health asking to sign in, and *Delete* still in a note's ⋯ menu. The signed-in Account page and the webhook state were not shown on the iPhone, because the check has no account; widget tests cover them.
+- **2026-11-08** — Archived for the ship. Main moved on with #73 (a voice note opens its page when it saves) and #74 (WongStack 51.4); merged with no conflict, and `flutter analyze` and all 487 phone tests pass on the merge.

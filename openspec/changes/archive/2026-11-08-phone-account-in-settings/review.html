@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · phone-account-in-settings</title>
+<title>Review · 2026-11-08-phone-account-in-settings</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="phone-account-in-settings" data-own-back>
+<body data-change="2026-11-08-phone-account-in-settings" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>phone-account-in-settings</h1>
+  <h1>2026-11-08-phone-account-in-settings</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -487,6 +487,8 @@
 <li class="decision card" id="decision-11" data-note="decision-11" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-08</p>Assumed, while building: after <i>Sign out</i> or <i>Stop sending</i>, the Account page closes back to Settings, which then says <i>Sign in to Relay Everything</i>; the <i>Sign in</i> screen always opens on <i>Sign in to connect</i>, with the webhook one tap away, its address and secret kept.</li>
 <li class="decision card" id="decision-12" data-note="decision-12" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-08</p>Assumed, while building: the narrow-screen check covers the Account page's <i>Account</i>, <i>AI apps</i>, <i>Webhooks</i> and <i>Sign out</i>, not <i>Open your Relay Everything page</i>, which wraps at 360 px as it did on the old <i>Sending</i> page.</li>
 <li class="decision card" id="decision-13" data-note="decision-13" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-08</p>Saved for final acceptance: built, and a second review found two gaps, both fixed: the fixed tour's <code>timeline.yaml</code> still looked for Home's <i>AI apps</i> row, and no controller test proved <i>Stop sending</i> keeps the webhook. A test for the checker's empty email closes the last uncovered branch. <code>flutter analyze</code> is clean, all 480 phone tests pass, and the app suite passed but for a 5-second timeout in <code>Welcome.test.tsx</code>, a file this change does not touch, at a load of about 15; it passes alone. The iPhone device check (4.2) runs on this saved commit.</li>
+<li class="decision card" id="decision-14" data-note="decision-14" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-08</p>Check: the iPhone device check on 6443018 (run 42526509209) gave <i>works</i>: the fixed tour passed all four flows, and Claude saw Home with no <i>Connections</i>, Settings opening on <i>Sign in to Relay Everything</i>, the <i>Sign in</i> screen with its three quiet buttons, Health asking to sign in, and <i>Delete</i> still in a note's ⋯ menu. The signed-in Account page and the webhook state were not shown on the iPhone, because the check has no account; widget tests cover them.</li>
+<li class="decision card" id="decision-15" data-note="decision-15" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-08</p>Archived for the ship. Main moved on with #73 (a voice note opens its page when it saves) and #74 (WongStack 51.4); merged with no conflict, and <code>flutter analyze</code> and all 487 phone tests pass on the merge.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

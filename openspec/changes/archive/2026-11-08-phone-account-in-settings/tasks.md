@@ -24,7 +24,7 @@
 ## 4. Checks
 
 - [x] 4.1 `flutter analyze` and `flutter test` in `mobile/`; `npm test` in `app/`; `node scripts/product-name.test.mjs`; `node scripts/public-check.mjs`.
-- [ ] 4.2 `/save`, then the iPhone device check (`scripts/device-check.mjs run`, with a scenarios file in a temporary folder) on the saved commit: the tour passes, and Claude's steps through `flow.sh` show Home with no *Connections*, Settings' Account row signed out, the *Sign in* screen, and *Delete* still in a note's ⋯ menu.
+- [x] 4.2 `/save`, then the iPhone device check (`scripts/device-check.mjs run`, with a scenarios file in a temporary folder) on the saved commit: the tour passes, and Claude's steps through `flow.sh` show Home with no *Connections*, Settings' Account row signed out, the *Sign in* screen, and *Delete* still in a note's ⋯ menu.
 
 ## 5. Review fixes
 

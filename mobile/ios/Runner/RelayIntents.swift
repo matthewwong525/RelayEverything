@@ -1,3 +1,4 @@
+import AVFoundation
 import AppIntents
 import Flutter
 import Foundation
@@ -257,7 +258,86 @@ struct RelayNoteQuery: EntityQuery {
   }
 }
 
-/// Add a note: words, files, or both. It runs without opening the app, and gives the new note back.
+/// Makes a recording into the WAV the app's speech engine reads: 16 kHz, one channel, 16-bit. Apple's own audio tools
+/// read every format Shortcuts records, such as `.m4a`.
+enum RelayAudio {
+  enum Problem: Error { case noConverter, empty }
+
+  /// Writes [source] as a WAV at [target] and gives its length in milliseconds. It throws when it can not, and then
+  /// leaves no file at [target].
+  static func voiceWav(from source: URL, to target: URL) throws -> Int {
+    do {
+      return try write(from: source, to: target)
+    } catch {
+      try? FileManager.default.removeItem(at: target)
+      throw error
+    }
+  }
+
+  private static func write(from source: URL, to target: URL) throws -> Int {
+    let input = try AVAudioFile(forReading: source)
+    let settings: [String: Any] = [
+      AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: 16000, AVNumberOfChannelsKey: 1,
+      AVLinearPCMBitDepthKey: 16, AVLinearPCMIsFloatKey: false, AVLinearPCMIsBigEndianKey: false,
+    ]
+    guard
+      let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: true),
+      let converter = AVAudioConverter(from: input.processingFormat, to: format),
+      let chunk = AVAudioPCMBuffer(pcmFormat: input.processingFormat, frameCapacity: 8192)
+    else { throw Problem.noConverter }
+    // Two channels become one by their mean, not by the first channel alone.
+    converter.downmix = true
+    try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let output = try AVAudioFile(
+      forWriting: target, settings: settings, commonFormat: .pcmFormatInt16, interleaved: true)
+    var frames: AVAudioFramePosition = 0
+    var readError: Error?
+    var ended = false
+    while true {
+      guard let out = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 8192) else { throw Problem.noConverter }
+      var convertError: NSError?
+      let status = converter.convert(to: out, error: &convertError) { _, inputStatus in
+        if ended || input.framePosition >= input.length {
+          ended = true
+          inputStatus.pointee = .endOfStream
+          return nil
+        }
+        do {
+          try input.read(into: chunk)
+        } catch {
+          readError = error
+          ended = true
+          inputStatus.pointee = .endOfStream
+          return nil
+        }
+        if chunk.frameLength == 0 {
+          ended = true
+          inputStatus.pointee = .endOfStream
+          return nil
+        }
+        inputStatus.pointee = .haveData
+        return chunk
+      }
+      if let readError { throw readError }
+      if status == .error { throw (convertError as Error?) ?? Problem.noConverter }
+      if out.frameLength > 0 {
+        try output.write(from: out)
+        frames += AVAudioFramePosition(out.frameLength)
+      }
+      if status == .endOfStream || (ended && out.frameLength == 0) { break }
+    }
+    if frames == 0 { throw Problem.empty }
+    // As the app's own recordings: phone backups leave voice out.
+    var target = target
+    var values = URLResourceValues()
+    values.isExcludedFromBackup = true
+    try? target.setResourceValues(values)
+    return Int(frames * 1000 / 16000)
+  }
+}
+
+/// Add a note: words, files, or both. It runs without opening the app, and gives the new note back. A recording given
+/// as its only file becomes a voice note: the app writes its words after the typed ones.
 @available(iOS 16, *)
 struct AddNoteIntent: AppIntent {
   static var title: LocalizedStringResource = "Add a note"
@@ -272,9 +352,7 @@ struct AddNoteIntent: AppIntent {
   var files: [IntentFile]?
 
   static var parameterSummary: some ParameterSummary {
-    Summary("Add \(\.$text) to Relay Everything") {
-      \.$files
-    }
+    Summary("Add \(\.$text) with \(\.$files) to Relay Everything")
   }
 
   /// A file name safe in a folder: no slashes, no leading dot.
@@ -295,6 +373,35 @@ struct AddNoteIntent: AppIntent {
     }
   }
 
+  /// True when [file] is a recording, such as Shortcuts' *Recorded Audio*.
+  private static func isAudio(_ file: IntentFile) -> Bool {
+    let type = file.type ?? UTType(filenameExtension: (file.filename as NSString).pathExtension)
+    return type?.conforms(to: .audio) ?? false
+  }
+
+  /// A lone recording within the limit, made into a voice note's WAV at [target]; its length in milliseconds, or nil
+  /// when it is not one or can not be read, so it stays a plain file. The app moves the WAV to `voice/<id>.wav` once it
+  /// keeps the note, so its sweep for stray recordings never takes one that has no note yet.
+  private static func voiceWav(_ given: [IntentFile], to target: URL) async -> Int? {
+    guard given.count == 1, let file = given.first, isAudio(file) else { return nil }
+    let scratch = target.deletingLastPathComponent()
+    if let source = file.fileURL {
+      let scoped = source.startAccessingSecurityScopedResource()
+      defer { if scoped { source.stopAccessingSecurityScopedResource() } }
+      let size = (try? source.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+      if size > maxFileBytes { return nil }
+      return try? await Task.detached { try RelayAudio.voiceWav(from: source, to: target) }.value
+    }
+    // A recording with no URL is in memory: it is read from a file of its own, deleted after.
+    let data = file.data
+    if data.count > maxFileBytes { return nil }
+    let name = (file.filename as NSString).pathExtension
+    let source = scratch.appendingPathComponent("recording.\(name.isEmpty ? "m4a" : name)")
+    defer { try? FileManager.default.removeItem(at: source) }
+    guard (try? data.write(to: source)) != nil else { return nil }
+    return try? await Task.detached { try RelayAudio.voiceWav(from: source, to: target) }.value
+  }
+
   @MainActor
   func perform() async throws -> some IntentResult & ReturnsValue<RelayNoteEntity> & ProvidesDialog {
     let words = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -307,9 +414,10 @@ struct AddNoteIntent: AppIntent {
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     // Shortcuts deletes its own copy of each file once this returns, so the app keeps one first. A file over the limit
     // is never read: the size comes from its URL, and the copy goes by URL too.
+    let durationMs = await Self.voiceWav(given, to: folder.appendingPathComponent("voice.wav"))
     var list: [[String: Any]] = []
     var tooBig: [String] = []
-    for (index, file) in given.enumerated() {
+    for (index, file) in (durationMs == nil ? given : []).enumerated() {
       let stored = safeName(file.filename, index)
       let target = folder.appendingPathComponent(stored)
       if let source = file.fileURL {
@@ -334,9 +442,12 @@ struct AddNoteIntent: AppIntent {
         "type": file.type?.preferredMIMEType ?? "",
       ])
     }
-    let request: [String: Any] = [
+    var request: [String: Any] = [
       "id": id, "text": words, "createdAt": Int(createdAt.timeIntervalSince1970 * 1000), "files": list,
     ]
+    if let durationMs {
+      request["recording"] = ["path": "shortcuts-inbox/\(id)/voice.wav", "durationMs": durationMs] as [String: Any]
+    }
     do {
       let answer = try await ShortcutsEngine.shared.call("add", request)
       guard let note = answer as? [String: Any], let entity = RelayNoteEntity(note) else {
@@ -354,7 +465,7 @@ struct AddNoteIntent: AppIntent {
       let data = try JSONSerialization.data(withJSONObject: request)
       try data.write(to: RelayFolders.inbox.appendingPathComponent("\(id).json"), options: .atomic)
       let entity = RelayNoteEntity(
-        id: id, text: words, createdAt: createdAt, place: nil, kind: "Typed",
+        id: id, text: words, createdAt: createdAt, place: nil, kind: durationMs == nil ? "Typed" : "Voice",
         files: list.compactMap { file in
           (file["path"] as? String).map { IntentFile(fileURL: RelayFolders.url($0), filename: file["name"] as? String) }
         })

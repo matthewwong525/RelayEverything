@@ -317,6 +317,11 @@ class _NoteEditorState extends State<NoteEditor> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(_when(context, note?.at ?? DateTime.now(), note?.place), style: muted, textAlign: TextAlign.center),
         const SizedBox(height: 14),
+        // Words typed with a recording, such as a shortcut's label, show while its own words are written.
+        if (note != null && note.text.isNotEmpty && (note.writing || note.failed)) ...[
+          Text(plainText(note.text), style: const TextStyle(fontFamily: brandFont, fontSize: 17, height: 1.5)),
+          const SizedBox(height: 14),
+        ],
         if (note != null && note.writing) ...[
           Text('Writing the words…', style: TextStyle(color: brand.muted)),
           const SizedBox(height: 8),

@@ -390,14 +390,16 @@ class Store extends GeneratedDatabase {
 
   /// Ends a note's wait for its pin, with the pin when the phone found one. With [send] the note and its upload get the
   /// same body in one step. False when the note is not waiting, such as one settled already.
+  /// A voice note still waiting for its words gets no upload here: [setWords] gives it one.
   Future<bool> settlePin(String clientId, Pin? pin, {required bool send}) => transaction(() async {
-    final notes = await _rows('SELECT body FROM notes WHERE client_id = ? AND pinning = 1', [clientId]);
+    final notes = await _rows('SELECT body, words_pending FROM notes WHERE client_id = ? AND pinning = 1', [clientId]);
     if (notes.isEmpty) return false;
     final note = _noteOf(jsonDecode(notes.single.read<String>('body')) as Map<String, dynamic>);
     final body = LocalNote(clientId: clientId, text: note.text, createdAt: note.createdAt, pin: pin,
       attachments: note.attachments).toJson();
-    await _run('UPDATE notes SET body = ?, pinning = 0, queued = ? WHERE client_id = ?', [jsonEncode(body), send ? 1 : 0, clientId]);
-    if (send) await _queue(body);
+    final queue = send && notes.single.read<int>('words_pending') == 0;
+    await _run('UPDATE notes SET body = ?, pinning = 0, queued = ? WHERE client_id = ?', [jsonEncode(body), queue ? 1 : 0, clientId]);
+    if (queue) await _queue(body);
     return true;
   });
 
@@ -408,24 +410,33 @@ class Store extends GeneratedDatabase {
     }
   }
 
-  /// Keeps a voice note at once, with no words yet and no upload: [setWords] gives it both.
-  Future<void> addVoiceNote(LocalNote note) =>
-    _run('INSERT INTO notes (client_id, body, created_at, kind, audio_path, duration_ms, words_pending) VALUES (?, ?, ?, ?, ?, ?, 1)',
+  /// Keeps a voice note at once, with no written words yet and no upload: [setWords] gives it both. Its text holds the
+  /// words typed with it, such as a shortcut's label. With [waitForPin] it waits for its pin too, as [addNote] does.
+  Future<void> addVoiceNote(LocalNote note, {bool waitForPin = false}) =>
+    _run('INSERT INTO notes (client_id, body, created_at, kind, audio_path, duration_ms, words_pending, pinning) '
+        'VALUES (?, ?, ?, ?, ?, ?, 1, ?)',
       [note.clientId, jsonEncode(note.toJson()), note.createdAt.millisecondsSinceEpoch, NoteKind.voice.name, note.audioPath,
-        note.durationMs]);
+        note.durationMs, waitForPin ? 1 : 0]);
 
-  /// Gives a voice note its words, and with [send] its upload in the same step. False when the note is gone or has
-  /// its words already.
+  /// Gives a voice note its written words, after its typed words on a new line, and with [send] its upload in the same
+  /// step; a note still waiting for its pin gets its upload from [settlePin]. False when the note is gone or has its
+  /// words already.
   Future<bool> setWords(String clientId, String text, {required bool send}) => transaction(() async {
-    final notes = await _rows('SELECT body FROM notes WHERE client_id = ? AND words_pending = 1', [clientId]);
+    final notes = await _rows('SELECT body, pinning FROM notes WHERE client_id = ? AND words_pending = 1', [clientId]);
     if (notes.isEmpty) return false;
     final note = _noteOf(jsonDecode(notes.single.read<String>('body')) as Map<String, dynamic>);
-    final body = LocalNote(clientId: clientId, text: text, createdAt: note.createdAt, pin: note.pin,
+    final words = [note.text.trim(), text.trim()].where((part) => part.isNotEmpty).join('\n');
+    final body = LocalNote(clientId: clientId, text: words, createdAt: note.createdAt, pin: note.pin,
       attachments: note.attachments).toJson();
-    await _run('UPDATE notes SET body = ?, words_pending = 0, queued = ? WHERE client_id = ?', [jsonEncode(body), send ? 1 : 0, clientId]);
-    if (send) await _queue(body);
+    final queue = send && notes.single.read<int>('pinning') == 0;
+    await _run('UPDATE notes SET body = ?, words_pending = 0, queued = ? WHERE client_id = ?', [jsonEncode(body), queue ? 1 : 0, clientId]);
+    if (queue) await _queue(body);
     return true;
   });
+
+  /// True when a note keeps the recording at [audioPath], from the support folder.
+  Future<bool> keepsRecording(String audioPath) async =>
+    (await _rows('SELECT 1 FROM notes WHERE audio_path = ?', [audioPath])).isNotEmpty;
 
   /// Deletes a note that never had words, such as a recording with no speech.
   Future<void> dropNote(String clientId) => transaction(() async {

@@ -36,16 +36,16 @@ class FilesCheck {
   final String? problem;
 }
 
-/// Adds [picked] to [current] up to the limits: a file over 25 MB, or one past the tenth, is left out with a message,
-/// and the rest are kept. The paperclip and Shortcuts both use it, through the controller.
-FilesCheck checkFiles(List<NewFile> current, List<NewFile> picked) {
+/// Adds [picked] to [current] up to the limits: a file over 25 MB, or one past the tenth with the note's [already]
+/// kept files, is left out with a message, and the rest are kept. The paperclip and Shortcuts both use it.
+FilesCheck checkFiles(List<NewFile> current, List<NewFile> picked, {int already = 0}) {
   final kept = [...current];
   final tooBig = <String>[];
   var tooMany = 0;
   for (final file in picked) {
     if (file.size > maxFileBytes) {
       tooBig.add(file.name);
-    } else if (kept.length >= maxFiles) {
+    } else if (already + kept.length >= maxFiles) {
       tooMany++;
     } else {
       kept.add(file);

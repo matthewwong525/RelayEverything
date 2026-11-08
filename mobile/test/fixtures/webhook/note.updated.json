@@ -1,0 +1,9 @@
+{
+  "secret": "whsec_cmVsYXktZXZlcnl0aGluZy13ZWJob29rLWZpeHR1cmU=",
+  "headers": {
+    "webhook-id": "0f5c2a64-1d6e-4b7a-9c3e-2a8d5b7f6e10:11",
+    "webhook-timestamp": "1793801100",
+    "webhook-signature": "v1,CO1BnltWEhYt+l0Lut98x6JanFTAZJoFILM1xk8bG4I="
+  },
+  "body": "{\"version\":1,\"type\":\"note.updated\",\"timestamp\":\"2026-11-04T14:01:02.000Z\",\"data\":{\"note\":{\"id\":\"3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7\",\"source\":\"typed\",\"text\":\"# Receipt\\n- [x] Paid\",\"recorded_at\":\"2026-11-04T14:01:00.000Z\",\"created_at\":\"2026-11-04T14:01:00.000Z\",\"device\":{\"id\":\"0f5c2a64-1d6e-4b7a-9c3e-2a8d5b7f6e10\",\"name\":\"Android phone\"},\"place\":null,\"attachments\":[{\"id\":\"f1\",\"name\":\"receipt.jpg\",\"content_type\":\"image/jpeg\",\"size\":4}],\"edited_at\":\"2026-11-04T14:11:00.000Z\"}}}"
+}

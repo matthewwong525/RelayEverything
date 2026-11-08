@@ -329,6 +329,47 @@
                       "type": "null"
                     }
                   ]
+                },
+                "edited_at": {
+                  "description": "When the phone that sent the note changed it.",
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                },
+                "attachments": {
+                  "description": "The note's files: each one's name, type and size, never its bytes; each file's bytes follow in its own note.file. Only a note with files has this list.",
+                  "minItems": 1,
+                  "maxItems": 10,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "description": "The file's id, from the phone that sent it."
+                      },
+                      "name": {
+                        "type": "string",
+                        "description": "The file's name, such as warranty.pdf."
+                      },
+                      "content_type": {
+                        "type": "string",
+                        "description": "Such as application/pdf."
+                      },
+                      "size": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991,
+                        "description": "In bytes."
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "content_type",
+                      "size"
+                    ]
+                  }
                 }
               },
               "required": [
@@ -353,7 +394,7 @@
         "timestamp",
         "data"
       ],
-      "description": "No longer sent: the server gives no note a place later. It once said a ring note got its place from a later location batch. It has no audio."
+      "description": "The phone that sent a note changed its words: the note with its latest words, after its note.created. Update the note's row by its id. It has no audio."
     },
     {
       "type": "object",

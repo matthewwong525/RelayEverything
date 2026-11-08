@@ -1,14 +1,15 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import '../brand.dart';
+import '../editor/markdown.dart' show plainText;
 import '../relay.dart';
 import 'back_to.dart';
-import 'compose.dart';
 import 'days.dart';
 import 'hold_to_talk.dart';
-import 'note.dart';
+import 'note_editor.dart';
 
 const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -24,12 +25,14 @@ String rowTime(BuildContext context, DateTime at, DateTime now) {
 /// One notes folder's notes, newest first and grouped by day, as Apple Notes lists them: *‹ Home*, a large title with the
 /// count and the sync state, and at the bottom *Search*, which finds notes in this folder only, and *New note*.
 class TimelineScreen extends StatefulWidget {
-  const TimelineScreen({super.key, required this.relay, this.folder = NotesFolder.all, this.picker});
+  const TimelineScreen({super.key, required this.relay, this.folder = NotesFolder.all, this.picker, this.sharer});
 
   final Relay relay;
   final NotesFolder folder;
   /// The paperclip's picker; a test passes its own.
   final FilesPicker? picker;
+  /// A note's *Share*; a test passes its own.
+  final Sharer? sharer;
 
   @override
   State<TimelineScreen> createState() => _TimelineScreenState();
@@ -72,12 +75,12 @@ class _TimelineScreenState extends State<TimelineScreen> {
                 if (notes.isEmpty)
                   SliverFillRemaining(hasScrollBody: false, child: _Empty(folder: widget.folder, sending: relay.settings.sending))
                 else
-                  noteSliver(context, relay, notes, _search.text, back: _title),
+                  noteSliver(context, relay, notes, _search.text, back: _title, picker: widget.picker, sharer: widget.sharer),
                 const SliverPadding(padding: EdgeInsets.only(bottom: 110)),
               ]),
             ),
             NotesDock(relay: relay, search: _search, focus: _searchFocus,
-              onWrite: () => openPage(context, ComposeScreen(relay: relay, picker: widget.picker, back: _title))),
+              onWrite: () => openPage(context, NoteEditor(relay: relay, picker: widget.picker, sharer: widget.sharer, back: _title))),
           ]);
         },
       ),
@@ -99,7 +102,8 @@ Widget modelSliver(Relay relay) =>
 
 /// [notes] that hold [query], grouped by day, or a line that says none does. A tap opens a note, whose back button
 /// says [back].
-Widget noteSliver(BuildContext context, Relay relay, List<Entry> notes, String query, {required String back}) {
+Widget noteSliver(BuildContext context, Relay relay, List<Entry> notes, String query,
+  {required String back, FilesPicker? picker, Sharer? sharer}) {
   final shown = [for (final entry in notes) if (entryMatches(entry, query)) entry];
   if (shown.isEmpty) {
     return SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(32), child: Text('No notes with "${query.trim()}"',
@@ -111,7 +115,8 @@ Widget noteSliver(BuildContext context, Relay relay, List<Entry> notes, String q
       for (final (name, group) in groupByDay(shown, DateTime.now()))
         _DayGroup(name: name, children: [
           for (final entry in group)
-            _NoteRow(entry: entry, relay: relay, onTap: () => openPage(context, NoteScreen(entry: entry, relay: relay, back: back))),
+            _NoteRow(entry: entry, relay: relay, onTap: () => openPage(context,
+              NoteEditor(entry: entry, relay: relay, picker: picker, sharer: sharer, back: back))),
         ]),
     ]),
   );
@@ -274,7 +279,7 @@ class _DayGroup extends StatelessWidget {
 
 /// A note's first line: its words' first line, or what stands for it while it has no words.
 String noteTitle(Entry entry) {
-  final first = entry.text.trim().split('\n').first.trim();
+  final first = plainText(entry.text).trim().split('\n').first.trim();
   if (first.isNotEmpty) return first;
   if (entry.writing) return 'Writing the words…';
   if (entry.failed) return 'The words did not come';
@@ -284,7 +289,7 @@ String noteTitle(Entry entry) {
 
 /// What follows the time on a row: the rest of the words, or else the file names the title does not show.
 String _preview(Entry entry) {
-  final rest = entry.text.trim().split('\n').skip(1).map((line) => line.trim()).where((line) => line.isNotEmpty).join(' ');
+  final rest = plainText(entry.text).trim().split('\n').skip(1).map((line) => line.trim()).where((line) => line.isNotEmpty).join(' ');
   if (rest.isNotEmpty || entry.text.trim().isNotEmpty) return rest;
   return entry.files.skip(1).map((file) => file.name).join(', ');
 }
@@ -347,7 +352,7 @@ class _Thumbnail extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         child: Image.file(File(file.path), width: 48, height: 48, fit: BoxFit.cover, cacheWidth: 144,
           errorBuilder: (context, _, _) => Container(width: 48, height: 48, color: brand.accentSoft,
-            child: Icon(Icons.image_outlined, color: brand.muted))),
+            child: Icon(CupertinoIcons.photo, color: brand.muted))),
       ),
     );
   }
@@ -416,9 +421,9 @@ class _SearchField extends StatelessWidget {
           filled: true,
           fillColor: brand.card,
           contentPadding: EdgeInsets.zero,
-          prefixIcon: Icon(Icons.search, size: 20, color: brand.muted),
+          prefixIcon: Icon(CupertinoIcons.search, size: 20, color: brand.muted),
           suffixIcon: controller.text.isEmpty ? null : IconButton(tooltip: 'Clear', onPressed: controller.clear,
-            icon: Icon(Icons.cancel, size: 18, color: brand.muted)),
+            icon: Icon(CupertinoIcons.xmark_circle_fill, size: 18, color: brand.muted)),
           enabledBorder: border(),
           focusedBorder: border(BorderSide(color: brand.accentText, width: 2)),
         ),

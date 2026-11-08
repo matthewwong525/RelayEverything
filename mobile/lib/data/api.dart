@@ -48,6 +48,7 @@ class RelayApi implements Outbound {
   /// files' uploads then get 404 and are dropped.
   @override
   Future<void> send(OutboxItem item) async {
+    if (item.route == noteUpdate) return _change(item.body);
     final body = _forServer(item.route, item.body);
     try {
       await post(item.route, body);
@@ -56,6 +57,13 @@ class RelayApi implements Outbound {
       await post(item.route, {...body}..remove('attachments'));
     }
   }
+
+  /// A sent note's latest words and its whole file list. The server answers 404 for a note it does not have, such as
+  /// one it turned down, or when it is older than changes: the change can never land, so it is dropped.
+  Future<void> _change(Map<String, dynamic> body) => _call(() => _client.patch(_uri('notes'),
+    headers: {..._headers, 'Content-Type': 'application/json'}, body: jsonEncode({'clientId': body['clientId'],
+      'text': body['text'], if (body['attachments'] != null) 'attachments': body['attachments']})),
+    rejected: const {400, 404, 413});
 
   @override
   Future<void> sendFile(OutboxItem item, List<int> bytes) => upload(noteClientId: item.body['noteClientId'] as String,

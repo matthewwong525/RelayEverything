@@ -230,7 +230,7 @@ class RelayController extends Relay {
     await sync();
   }
 
-  Entry _entryOfLocal(LocalNote note) => Entry(text: note.text, at: note.createdAt,
+  Entry _entryOfLocal(LocalNote note) => Entry(id: note.clientId, text: note.text, at: note.createdAt,
     // With sending off the phone looks up no place name, so a pin with no name reads as Pinned.
     place: note.pin == null ? null : note.pin!.place ?? 'Pinned',
     sent: note.sentAt != null, waiting: _settings.sending && note.sentAt == null && (note.queued || note.pinning),
@@ -634,21 +634,30 @@ class RelayController extends Relay {
   /// Keeps and shows the note at once; Save never waits for a fix. With pins on, the note settles only when the phone
   /// has a fix or gives up (up to 10 s), so a sync meanwhile sends the rest and leaves this note waiting.
   @override
-  Future<String?> addNote(String text, {List<NewFile> files = const []}) async => (await keepNote(text, files: files)).problem;
+  Future<String?> addNote(String text, {List<NewFile> files = const [], String? id, bool sendNow = true}) async =>
+    (await keepNote(text, files: files, clientId: id, sendNow: sendNow)).problem;
 
-  /// Keeps a note with words, files, or both, as the paperclip and Shortcuts make it. Files past the limits are left out
-  /// with a message. A note with nothing in it is kept not at all. A [clientId] this phone already keeps gives back that
-  /// note, so a shortcut that ran twice keeps one. [pin] false keeps no place, for a note made earlier than now.
-  Future<Kept> keepNote(String text, {List<NewFile> files = const [], String? clientId, DateTime? createdAt,
-    bool pin = true}) async {
-    final id = clientId ?? newClientId();
-    if (await store.hasNote(id)) {
-      return Kept((await store.notes()).firstWhere((note) => note.clientId == id), null);
-    }
-    final check = checkFiles(const [], files);
-    final problems = [?check.problem];
+  @override
+  Future<String?> editNote(String id, String text, {List<NewFile> files = const [], bool sendNow = true}) async {
+    final check = checkFiles(const [], files, already: (await store.attachmentsOf(id)).length);
+    final (attachments, problems) = await _keepFiles(check.kept, check.problem);
+    if (await store.editNote(id, text, files: attachments, send: _settings.sending, at: _clock())) await _refreshLocal();
+    if (sendNow) unawaited(sync());
+    return problems.isEmpty ? null : problems.join(' ');
+  }
+
+  @override
+  Future<bool> dropEmptyNote(String id) async {
+    if (!await store.dropEmptyNote(id)) return false;
+    await _refreshLocal();
+    return true;
+  }
+
+  /// Keeps each file's own copy, with [problem] and a line for each file the phone could not read.
+  Future<(List<Attachment>, List<String>)> _keepFiles(Iterable<NewFile> files, String? problem) async {
+    final problems = [?problem];
     final attachments = <Attachment>[];
-    for (final file in check.kept) {
+    for (final file in files) {
       final kept = await _keepFile(file);
       if (kept == null) {
         problems.add('${file.name} could not be read, so it was not added.');
@@ -656,6 +665,20 @@ class RelayController extends Relay {
         attachments.add(kept);
       }
     }
+    return (attachments, problems);
+  }
+
+  /// Keeps a note with words, files, or both, as the paperclip and Shortcuts make it. Files past the limits are left out
+  /// with a message. A note with nothing in it is kept not at all. A [clientId] this phone already keeps gives back that
+  /// note, so a shortcut that ran twice keeps one. [pin] false keeps no place, for a note made earlier than now.
+  Future<Kept> keepNote(String text, {List<NewFile> files = const [], String? clientId, DateTime? createdAt,
+    bool pin = true, bool sendNow = true}) async {
+    final id = clientId ?? newClientId();
+    if (await store.hasNote(id)) {
+      return Kept((await store.notes()).firstWhere((note) => note.clientId == id), null);
+    }
+    final check = checkFiles(const [], files);
+    final (attachments, problems) = await _keepFiles(check.kept, check.problem);
     final words = text.trim();
     if (words.isEmpty && attachments.isEmpty) return Kept(null, [...problems, _nothing].join(' '));
     final note = LocalNote(clientId: id, text: words, createdAt: createdAt ?? _clock(), attachments: attachments);
@@ -666,7 +689,7 @@ class RelayController extends Relay {
       final job = _pinThenSync(id);
       _pinning.add(job);
       job.whenComplete(() => _pinning.remove(job));
-    } else {
+    } else if (sendNow) {
       unawaited(sync());
     }
     return Kept(note, problems.isEmpty ? null : problems.join(' '));

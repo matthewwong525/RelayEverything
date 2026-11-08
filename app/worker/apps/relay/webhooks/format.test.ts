@@ -63,11 +63,12 @@ it("keeps base64 whole for a recording larger than one piece", () => {
 it("publishes the schema the format makes", () => {
   if (process.env.RELAY_API_DOC_WRITE) writeFileSync(schemaFile, jsonSchema());
   expect(readFileSync(schemaFile, "utf8"), "The format changed: run `npm run relay:api-doc` in app/").toBe(jsonSchema());
-  // note.updated stays in version 1, marked as no longer sent, so a receiver built for it keeps working.
+  // note.updated is sent again, for a note changed on its phone, and says so.
   const schema = JSON.parse(jsonSchema()) as { oneOf?: { description?: string; properties: { type: { const: string } } }[];
     anyOf?: { description?: string; properties: { type: { const: string } } }[] };
   const updated = (schema.oneOf ?? schema.anyOf)!.find(item => item.properties.type.const === "note.updated");
-  expect(updated?.description).toMatch(/^No longer sent/);
+  expect(updated?.description).toMatch(/^The phone that sent a note changed/);
+  expect(jsonSchema().toLowerCase()).not.toContain("no longer sent");
   expect(jsonSchema().toLowerCase()).not.toContain("pebble");
 });
 
@@ -121,6 +122,18 @@ it("lists a note's files by name, type and size, never their bytes, and leaves t
   expect(() => message.parse({ ...built, data: { note: { ...note, attachments: [{ ...pdf, base64: "AAAA" }] } } })).toThrow();
 });
 
+it("sends a changed note with its latest words, the time of the change and its files, each only when it has them", () => {
+  const pdf = { id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 245_760 };
+  const edited = noteUpdated({ ...typed, text: "# Desk lamp\n- [x] Receipt", edited_at: AT + 60_000 }, AT + 60_000, [pdf]);
+  expect(message.parse(edited)).toEqual(edited);
+  expect(edited.data).toMatchObject({ note: { text: "# Desk lamp\n- [x] Receipt", edited_at: "2026-11-04T14:02:02.000Z", attachments: [pdf] } });
+  const plain = noteUpdated({ ...typed, edited_at: null }, AT);
+  expect(message.parse(plain)).toEqual(plain);
+  expect(plain.data).not.toHaveProperty("note.edited_at");
+  expect(plain.data).not.toHaveProperty("note.attachments");
+  expect(plain.data).not.toHaveProperty("note.audio");
+});
+
 it("takes a note's file with its bytes, which the server and the phone both send", () => {
   const file = { version: 1, type: "note.file", timestamp: "2026-11-04T14:01:02.000Z", data: { note_id: typed.id,
     file: { id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 4, base64: "AAAAGA==" } } };
@@ -136,7 +149,7 @@ const fixtures = new URL("../../../../../mobile/test/fixtures/webhook/", import.
 it("takes each message the phone builds, and its signature passes the server's own signing", async () => {
   const names = readdirSync(fixtures).filter(name => name.endsWith(".json")).sort();
   expect(names).toEqual(["calendar.events.json", "health.samples.json", "location.points.json", "note.created.json", "note.file.json",
-    "photo.created.json", "webhook.test.json"]);
+    "note.updated.json", "photo.created.json", "webhook.test.json"]);
   for (const name of names) {
     const { secret, headers, body } = JSON.parse(readFileSync(new URL(name, fixtures), "utf8")) as
       { secret: string; headers: Record<string, string>; body: string };

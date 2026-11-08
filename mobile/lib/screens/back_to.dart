@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 /// *‹ Home* or *‹ Voice notes* at the top left of a page, as Apple Notes has it: it names the page it goes back to. Its
@@ -18,7 +19,7 @@ class BackTo extends StatelessWidget {
       message: 'Back',
       child: TextButton.icon(
         onPressed: () => Navigator.of(context).maybePop(),
-        icon: const Icon(Icons.chevron_left, size: 28),
+        icon: const Icon(CupertinoIcons.chevron_back, size: 24),
         label: Text(label, maxLines: 1, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
         style: TextButton.styleFrom(padding: const EdgeInsets.only(left: 4, right: 8)),
       ),

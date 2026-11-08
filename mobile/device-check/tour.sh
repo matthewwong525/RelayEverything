@@ -4,7 +4,7 @@ set -uo pipefail
 here=$(dirname "$0")
 mkdir -p "$OUT/tour" "$OUT/maestro"
 results='[]'
-for flow in timeline new-note settings; do
+for flow in timeline new-note note-styles settings; do
   shot="$OUT/tour/$flow.png"
   if maestro test --test-output-dir "$OUT/maestro/$flow" "$here/flows/$flow.yaml" > "$OUT/maestro/$flow.log" 2>&1; then
     passed=true

@@ -48,7 +48,7 @@ Anyone can run Relay Everything in their own Cloudflare account: [`app/self-host
 - **An install made before the tool moved into `app/` keeps its files in a top-level `self-host/`.** `setup.mjs` moves each one `app/self-host/` lacks on its next run and removes the old folder once empty; a file already in `app/self-host/` wins.
 - **A Relay Everything migration reads only `relay_` tables.** An install applies every migration, so WongStack's tables are there but empty.
 - **Relay Everything has no end-to-end encryption.** Data lives on a Relay Everything server or only on the phone. A person who wants more control runs their own server.
-- **A device key only adds data.** It reads nothing on any server, so a person's data stays theirs: [Keys](https://relayeverything.com/api/keys/).
+- **A device key only adds data**, and a phone's key changes only the notes that phone sent. It reads nothing on any server, so a person's data stays theirs: [Keys](https://relayeverything.com/api/keys/).
 
 ## Pull requests from outside
 

@@ -1,3 +1,4 @@
+import '../editor/markdown.dart' show plainText;
 import '../relay.dart';
 
 const _months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October',
@@ -34,7 +35,7 @@ List<(String, List<Entry>)> groupByDay(List<Entry> entries, DateTime now) {
 bool entryMatches(Entry entry, String query) {
   final words = query.trim().toLowerCase();
   if (words.isEmpty) return true;
-  return [entry.text, entry.place ?? '', for (final file in entry.files) file.name]
+  return [plainText(entry.text), entry.place ?? '', for (final file in entry.files) file.name]
     .any((part) => part.toLowerCase().contains(words));
 }
 

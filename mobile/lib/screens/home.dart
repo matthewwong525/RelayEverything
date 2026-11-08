@@ -1,14 +1,15 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import '../brand.dart';
 import '../relay.dart';
-import 'compose.dart';
 import 'connect.dart' show Scanner;
 import 'days.dart';
 import 'folder.dart';
 import 'hold_to_talk.dart';
+import 'note_editor.dart';
 import 'settings.dart';
 import 'timeline.dart';
 
@@ -18,7 +19,8 @@ export 'folder.dart' show Opener;
 /// at the bottom *Search*, which finds notes in every folder, and *New note*. It also holds what each page needs once:
 /// the notices, the listening card and *Start a voice note* from Shortcuts.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.relay, this.scanner, this.opener, this.picker, this.voiceRequests});
+  const HomeScreen({super.key, required this.relay, this.scanner, this.opener, this.picker, this.sharer,
+    this.voiceRequests});
 
   final Relay relay;
   /// The QR scanner the connect screen uses; a test passes its own.
@@ -27,6 +29,8 @@ class HomeScreen extends StatefulWidget {
   final Opener? opener;
   /// The paperclip's picker; a test passes its own.
   final FilesPicker? picker;
+  /// A note's *Share*; a test passes its own.
+  final Sharer? sharer;
   /// *Start a voice note* from Shortcuts: each event starts one in the listening card.
   final Stream<void>? voiceRequests;
 
@@ -113,14 +117,14 @@ class _HomeScreenState extends State<HomeScreen> {
               _bar(),
               if (modelShows(relay)) modelSliver(relay),
               if (_search.text.trim().isNotEmpty)
-                noteSliver(context, relay, relay.entries, _search.text, back: 'Home')
+                noteSliver(context, relay, relay.entries, _search.text, back: 'Home', picker: widget.picker, sharer: widget.sharer)
               else
                 SliverPadding(padding: const EdgeInsets.symmetric(horizontal: 16), sliver: SliverList.list(children: _folders())),
               const SliverPadding(padding: EdgeInsets.only(bottom: 110)),
             ]),
           ),
           NotesDock(relay: relay, search: _search, focus: _searchFocus,
-            onWrite: () => _open(ComposeScreen(relay: relay, picker: widget.picker, back: 'Home'))),
+            onWrite: () => _open(NoteEditor(relay: relay, picker: widget.picker, sharer: widget.sharer, back: 'Home'))),
         ]),
       ),
     );
@@ -135,12 +139,12 @@ class _HomeScreenState extends State<HomeScreen> {
       expandedHeight: 140,
       actions: [
         _MoreMenu(items: [
-          ('Settings', Icons.settings_outlined, () => _open(SettingsScreen(relay: relay))),
-          if (settings.sending) ('Sync now', Icons.sync, relay.sync),
+          ('Settings', CupertinoIcons.gear, () => _open(SettingsScreen(relay: relay))),
+          if (settings.sending) ('Sync now', CupertinoIcons.arrow_2_circlepath, relay.sync),
           // Ring notes and recordings are on the Relay Everything page; nothing of this phone's goes there while it
           // sends to the person's own webhook.
           if (settings.sending && settings.place == SendPlace.server && server != null)
-            ('Open your Relay Everything page', Icons.open_in_new, () => _openPage(server)),
+            ('Open your Relay Everything page', CupertinoIcons.arrow_up_right_square, () => _openPage(server)),
         ]),
         const SizedBox(width: 8),
       ],
@@ -155,26 +159,26 @@ class _HomeScreenState extends State<HomeScreen> {
     return [
       const SizedBox(height: 12),
       _Card(rows: [
-        for (final (folder, icon) in const [(NotesFolder.all, Icons.notes_outlined), (NotesFolder.voice, Icons.mic_none),
-          (NotesFolder.shares, Icons.attach_file)])
+        for (final (folder, icon) in const [(NotesFolder.all, CupertinoIcons.doc_text), (NotesFolder.voice, CupertinoIcons.mic),
+          (NotesFolder.shares, CupertinoIcons.paperclip)])
           _FolderRow(icon: icon, title: folder.title, count: count(folder),
-            onTap: () => _open(TimelineScreen(relay: relay, folder: folder, picker: widget.picker))),
+            onTap: () => _open(TimelineScreen(relay: relay, folder: folder, picker: widget.picker, sharer: widget.sharer))),
       ]),
       ..._section('On this phone', [
-        _FolderRow(icon: Icons.place_outlined, title: 'Location', line: locationLine(relay, now),
+        _FolderRow(icon: CupertinoIcons.location, title: 'Location', line: locationLine(relay, now),
           onTap: () => _open(LocationPage(relay: relay, scanner: scanner))),
-        _FolderRow(icon: Icons.favorite_border, title: 'Health', line: healthLine(relay, now),
+        _FolderRow(icon: CupertinoIcons.heart, title: 'Health', line: healthLine(relay, now),
           onTap: () => _open(HealthPage(relay: relay, scanner: scanner))),
-        _FolderRow(icon: Icons.calendar_today_outlined, title: 'Calendar', line: calendarLine(relay, now),
+        _FolderRow(icon: CupertinoIcons.calendar, title: 'Calendar', line: calendarLine(relay, now),
           onTap: () => _open(CalendarPage(relay: relay, scanner: scanner))),
-        _FolderRow(icon: Icons.photo_outlined, title: 'Photos', line: photosLine(relay),
+        _FolderRow(icon: CupertinoIcons.photo, title: 'Photos', line: photosLine(relay),
           onTap: () => _open(PhotosPage(relay: relay, scanner: scanner, opener: widget.opener))),
       ]),
       ..._section('Connections', [
-        _FolderRow(icon: Icons.send_outlined, title: 'Sending', line: sendingLine(relay),
+        _FolderRow(icon: CupertinoIcons.paperplane, title: 'Sending', line: sendingLine(relay),
           onTap: () => _open(SendingPage(relay: relay, scanner: scanner))),
-        _connected(Icons.auto_awesome_outlined, 'AI apps', (names) => names.aiApps, '#ai-apps'),
-        _connected(Icons.webhook, 'Webhooks', (names) => names.webhooks, '#webhooks'),
+        _connected(CupertinoIcons.sparkles, 'AI apps', (names) => names.aiApps, '#ai-apps'),
+        _connected(CupertinoIcons.link, 'Webhooks', (names) => names.webhooks, '#webhooks'),
       ]),
     ];
   }
@@ -229,7 +233,7 @@ class _FoldHeader extends StatelessWidget {
             AnimatedRotation(
               turns: folded ? -0.25 : 0,
               duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 200),
-              child: Icon(Icons.expand_more, color: brand.accentText),
+              child: Icon(CupertinoIcons.chevron_down, color: brand.accentText),
             ),
           ]),
         ),
@@ -280,7 +284,7 @@ class _FolderRow extends StatelessWidget {
         style: TextStyle(fontSize: 13, color: ask ? brand.accentText : brand.muted, fontWeight: ask ? FontWeight.w500 : null)),
       trailing: Row(mainAxisSize: MainAxisSize.min, spacing: 4, children: [
         if (count != null) Text('$count', style: TextStyle(fontSize: 16, color: brand.muted)),
-        Icon(Icons.chevron_right, color: brand.muted),
+        Icon(CupertinoIcons.chevron_forward, color: brand.muted),
       ]),
       onTap: onTap,
     );
@@ -305,7 +309,7 @@ class _MoreMenu extends StatelessWidget {
       builder: (context, menu, _) => IconButton(
         tooltip: 'More',
         style: IconButton.styleFrom(backgroundColor: brand.card, foregroundColor: brand.ink),
-        icon: const Icon(Icons.more_horiz),
+        icon: const Icon(CupertinoIcons.ellipsis),
         onPressed: () => menu.isOpen ? menu.close() : menu.open(),
       ),
     );

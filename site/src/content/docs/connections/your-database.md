@@ -3,7 +3,7 @@ title: Your own database
 description: Add a webhook, and your Relay Everything server or your phone sends each new note, and the health, calendar, location and photos you pick, to an address you own, in one signed format.
 ---
 
-A webhook copies what your Relay Everything server stores in your space to an address you own, such as a small receiver beside your database. Your server sends each new note there a few seconds after it gets it, then each of its files in a [`note.file`](#notefile) message. When the phone changes a note, the note goes again as [`note.updated`](#noteupdated). Health, calendar, location and photos go only if you tick them.
+A webhook copies what your Relay Everything server stores in your space to an address you own, such as a small receiver beside your database. Your server sends each new note there a few seconds after it gets it, then each of its files in a [`note.file`](#notefile) message. When a phone changes a note, the note goes again as [`note.updated`](#noteupdated). Health, calendar, location and photos go only if you tick them.
 
 Your data lives in your own space: one Durable Object with its own SQLite database, in the spaces Worker (`relay-everything-spaces`, or `<name>-spaces` on [your own server](../../start/run-your-own/)). The server's D1 database holds only the list of accounts: each person, their sign-ins and sessions, and a fingerprint of each key. Each webhook belongs to one person's space, and it sends only that person's data.
 
@@ -63,7 +63,7 @@ Every message is a `POST` with a JSON body in one envelope:
 | `type` | When | `data` holds |
 |---|---|---|
 | `note.created` | A note reaches your server. | `note`, with its words, time, place, device, recording, and the names of its files |
-| `note.updated` | The phone that sent a note changes it. Always after the note's `note.created`. | `note`, with its latest words, without `audio` |
+| `note.updated` | A phone changes a note, from any device or way in. Always after the note's `note.created`. | `note`, with its latest words, without `audio` |
 | `health.samples` | A phone sends health samples. | `samples`: up to 500 |
 | `location.points` | A phone sends location points. | `points`: up to 500 |
 | `calendar.events` | A phone sends new, changed or removed calendar events. | `events`: up to 500, each with its `status` |
@@ -137,7 +137,7 @@ Files that your server stored before it sent `note.file` go once to each webhook
 
 ### `note.updated`
 
-Relay Everything sends `note.updated` when the phone that sent a note changes the note's words or adds a file to it. Your server sends it to every active webhook, and the phone sends it to your own webhook. It always comes after the note's `note.created`. Each new file then comes in its own [`note.file`](#notefile).
+Relay Everything sends `note.updated` when a phone changes a note's words, or adds a file to a note it sent. With [your notes on every phone](../../app/your-notes/#your-notes-on-every-phone), any signed-in phone can change any note, also one from email, and your server sends each change, from any phone, to every active webhook. A phone that sends to your own webhook sends it there itself. It always comes after the note's `note.created`. Each new file then comes in its own [`note.file`](#notefile).
 
 ```json
 {
@@ -159,7 +159,7 @@ Relay Everything sends `note.updated` when the phone that sent a note changes th
 }
 ```
 
-It holds the same `note` as `note.created`, with its latest words and without `audio`. `edited_at` is when the phone changed the note; an older `note.updated` has none. `attachments` lists all the note's files, as in `note.created`, and only a note with files has it. Update the note's row by its `id`, and keep its stored `audio`. A changed note has the same `id`, `recorded_at` and `created_at`.
+It holds the same `note` as `note.created`, with its latest words and without `audio`. `edited_at` is when the phone changed the note; an older `note.updated` has none. When two phones change a note, the change with the later `edited_at` is the one your server keeps, and only it sends. `attachments` lists all the note's files, as in `note.created`, and only a note with files has it. Update the note's row by its `id`, and keep its stored `audio`. A changed note has the same `id`, `recorded_at` and `created_at`.
 
 The words keep their styles as Markdown marks, such as `#` for a title, `- [ ]` and `- [x]` for a checklist, and `<u>…</u>` for underline. A receiver that ignores `note.updated` keeps working: it keeps the words from `note.created`.
 

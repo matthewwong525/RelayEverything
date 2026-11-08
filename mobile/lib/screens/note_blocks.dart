@@ -35,7 +35,8 @@ class NotePicture extends StatelessWidget {
   }
 }
 
-/// Any other file: its name and size in a card row; a tap opens it.
+/// Any other file, or one not on the phone yet: its name and size in a card row; a tap downloads it if needed, then
+/// opens it.
 class NoteFileRow extends StatelessWidget {
   const NoteFileRow({super.key, required this.file, required this.relay});
 
@@ -53,9 +54,10 @@ class NoteFileRow extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(spacing: 10, children: [
-            Icon(CupertinoIcons.doc, size: 20, color: brand.muted),
+            Icon(file.onPhone ? CupertinoIcons.doc : CupertinoIcons.cloud_download, size: 20, color: brand.muted),
             Expanded(child: Text(file.name, overflow: TextOverflow.ellipsis)),
-            Text(sizeLabel(file.size), style: TextStyle(fontSize: 13, color: brand.muted)),
+            Text([if (file.size > 0) sizeLabel(file.size), if (!file.onPhone) 'Download'].join(' · '),
+              style: TextStyle(fontSize: 13, color: brand.muted)),
           ]),
         ),
       ),

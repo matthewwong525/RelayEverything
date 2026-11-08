@@ -97,7 +97,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void _open(Widget page) => openPage(context, page);
 
   /// What pulling Home down does, and *Sync now* too.
-  Future<void> _refresh() => relay.sync();
+  /// Pull to refresh and *Sync now* do the same: send what waits and take notes from the person's other devices.
+  Future<void> _refresh() => relay.pullNotes();
 
   /// Opens [part] of the Relay Everything page, such as `#webhooks`, in the browser.
   Future<void> _openPage(String server, [String part = '']) async {
@@ -213,7 +214,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-/// A section name with a chevron that turns as it folds, as in Apple Notes.
+/// A section name with a chevron that turns as it folds, as in Apple Notes: a tap shows no highlight.
 class _FoldHeader extends StatelessWidget {
   const _FoldHeader({required this.name, required this.folded, required this.onTap});
 
@@ -227,9 +228,9 @@ class _FoldHeader extends StatelessWidget {
     return Semantics(
       button: true,
       expanded: !folded,
-      child: InkWell(
+      child: GestureDetector(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
+        behavior: HitTestBehavior.opaque,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(2, 18, 2, 6),
           child: Row(children: [

@@ -13,10 +13,10 @@ export 'data/settings.dart' show Appearance, LocationMode, SendPlace, Settings;
 export 'sync/calendar.dart' show PhoneCalendar;
 export 'voice/model.dart' show ModelState, ModelProblem;
 
-/// One row of the timeline: a note typed or said on this phone.
+/// One row of the timeline: a note typed or said on this phone, or one from elsewhere that a pull brought.
 class Entry {
   const Entry({this.id = '', required this.text, required this.at, this.place, this.sent = false, this.waiting = false, this.voice = false,
-    this.writing = false, this.failed = false, this.recording, this.length, this.files = const []});
+    this.writing = false, this.failed = false, this.recording, this.length, this.files = const [], this.from});
 
   /// The phone's own id for the note: [Relay.editNote] takes it.
   final String id;
@@ -39,19 +39,26 @@ class Entry {
   final String? recording;
   final Duration? length;
 
-  /// The note's files on this phone, in the order they were added.
+  /// The note's files, in the order they were added.
   final List<EntryFile> files;
+
+  /// Where a note from elsewhere was made, such as `Email` or another phone; null for a note from this phone.
+  final String? from;
 }
 
-/// One file on a note, kept on this phone.
+/// One file on a note: kept on this phone, or, for a note from elsewhere, in the person's space until opened.
 class EntryFile {
-  const EntryFile({required this.name, required this.type, required this.size, required this.path});
+  const EntryFile({this.id = '', required this.name, required this.type, required this.size, required this.path});
 
+  /// The file's id, which a download takes.
+  final String id;
   final String name;
   final String type;
   final int size;
-  /// The app's copy, as a full path.
+  /// The app's copy, as a full path; empty while the file is only in the person's space.
   final String path;
+
+  bool get onPhone => path.isNotEmpty;
 
   /// A picture shows small in the note; any other file shows as a row with its name and size.
   bool get picture => type.startsWith('image/');
@@ -170,9 +177,13 @@ abstract class Relay extends ChangeNotifier {
   /// Keeps notes and the key.
   Future<void> stopSending();
 
-  /// Forgets the key and turns sending off.
+  /// Forgets the key, turns sending off, and deletes the notes from elsewhere.
   Future<void> disconnect();
   Future<void> sync();
+  /// Sends what waits, then reads the notes changed elsewhere: at start, on return to the app, and on pull-down.
+  Future<void> pullNotes();
+  /// The note open in the editor, which a pull leaves as it is.
+  String? openNote;
   /// Keeps a note with words, files, or both, as [id] when given. Returns the words to show for files left out, such
   /// as one over 25 MB, or for a note with nothing in it; null when all of it was kept. With [sendNow] false it waits
   /// for the next sync, as the editor saves while the person types.
@@ -184,7 +195,7 @@ abstract class Relay extends ChangeNotifier {
   /// the words are blank. Any upload or change of it still waiting goes too, so it is never sent; a copy the server
   /// took keeps its last words there. A note with a file or a recording stays: false then.
   Future<bool> dropEmptyNote(String id);
-  /// Opens a note's file in an app on the phone.
+  /// Opens a note's file in an app on the phone. A file not on the phone downloads first, with sending on.
   Future<void> openFile(EntryFile file);
 
   /// The speech model voice notes need, and its download's progress from 0 to 1.

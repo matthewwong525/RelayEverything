@@ -22,6 +22,7 @@ Relay Everything keeps your notes on your phone. When you turn on sending, it ke
 | Photos: a small copy, with when and where you took it | Your Relay Everything server: the time and place in your space, the copy sealed in your folder of its file store | With sending and **Photos** on, only the photos you take after you turn it on: [Photos](../app/photos/) |
 | Email notes: mail to your notes address, or to `notes@` from your sign-in email, with its files | Your space on your Relay Everything server, the files sealed. The server's list finds you by a fingerprint (an HMAC) of your address, and keeps the address itself to show it on your card. If your address leaks, [replace it](../app/email/#replace-your-address). | When the mail comes. On the way, the sender's mail service and Cloudflare can read it: [Email notes](../app/email/#what-is-sent). |
 | Mail to `notes@` from an email with no account yet | The server, sealed with a key made from that email, which the server does not keep. It finds the mail by a fingerprint of the email. | Kept 30 days, then deleted. If that email signs up first, the mail becomes notes in its space. |
+| Notes from your other phones, email, Claude Code and your AI apps, with each file's name and size | The phone's own storage, after a sync. A file comes to the phone only when you open it. | With sending on and Relay Everything picked: on open, on pull-down and every hour. Signing out deletes them from the phone: [Notes on every phone](../app/your-notes/#your-notes-on-every-phone). |
 | The phone's key | The iPhone Keychain or the Android Keystore; the server keeps only its fingerprint | Never sent, except as the key's header |
 | Your email | The server's list of accounts, to sign you in | When you sign up |
 | Your sign-in | A cookie in your browser, for 30 days | With each visit to your Relay Everything page |
@@ -36,13 +37,14 @@ With sending off, the app makes no network call, reads no health data, no calend
 Each person's data is in their own space: a separate store that holds only that person's notes, health, calendar events, places, photos, chats, devices and webhooks. One shared list holds only who has an account, how they sign in, and a fingerprint of each key.
 
 - **You** see your own space on your Relay Everything page, after you sign in.
-- **Your devices** only add data to your space, and a phone changes only the notes it sent. A phone's key or a chat key can't read your notes, health, calendar, places or photos back, and a phone's key can only add photos, not count or delete them: [Keys](../api/keys/).
+- **Your devices** add data to your space. A phone's key also reads your notes and their files, and changes any note, so each signed-in phone shows all your notes. It can't read your health, calendar, places or photos, and can only add photos, not count or delete them. A chat key reads nothing. If you lose a phone, turn off its key on your Relay Everything page at once: [Keys](../api/keys/#make-list-and-turn-off-keys).
+- **Your other phones** get your notes only while they are signed in with sending on and Relay Everything picked. A phone that sends to your own webhook gets none.
 - **Your AI apps** read only your space, and add notes to it, only after you connect them: [Connect your AI](../connections/connect-your-ai/). Only your page and your AI apps can open a photo.
 - **Your own scripts and services** read your space and add notes through the web API, only with an API key you made or after you connect them: [Connect a service](../api/connect-a-service/).
 - **Your webhooks** send only your data, to the addresses you add. They send photos from the **Photos** switch only to a webhook you tick **Photos** for.
 - **No one else.** The server opens a space only for the person who signed in, or for that person's own key or AI app. There is no screen, route or tool for the server's owner to open another person's space. [The code is public](https://github.com/matthewwong525/RelayEverything), and a test fails if such a way in is added.
 
-Each recording, each file on a note and each photo is in your own folder of the server's file store, sealed with a key that is kept in your space. The file store alone, as in the Cloudflare dashboard, shows only sealed bytes. Only your own sign-in opens a file on your Relay Everything page.
+Each recording, each file on a note and each photo is in your own folder of the server's file store, sealed with a key that is kept in your space. The file store alone, as in the Cloudflare dashboard, shows only sealed bytes. Only your own sign-in opens a file on your Relay Everything page, and only your own phones' keys open one in the app.
 
 **The limit:** the owner of the Cloudflare account that runs a server could change its code to read a space. Only encryption on the phone stops that, and Relay Everything does not have it yet. On [your own server](../start/run-your-own/), that owner is you.
 

@@ -13,21 +13,22 @@ export const SESSION_COOKIE = "__Host-relay_session";
 /** A browser keeps a `__Host-` cookie only from https, so a local run on http uses the plain name. */
 export const sessionCookie = (url: URL) => url.protocol === "https:" ? SESSION_COOKIE : "relay_session";
 
-/** A key's reach: POST, `GET key` (its own name), and for a phone `GET connections` (names) and `PATCH notes` (its own
- *  notes). `GET chats` shares an address with a send, so the method is checked too. An API key reads only on /v1/. */
+/** A key's reach: POST and `GET key` (its own name); a phone also reads `GET connections` (names), its person's
+ *  notes and their files, and changes any note. `GET chats` shares an address with a send, so the method is checked. */
 const REACH: Record<Reach, { routes: RegExp; refusal: string }> = {
   phone: { routes: /^\/apps\/relay\/api\/(?:notes|attachments|health|locations|calendar|photos)$/, refusal: "A device key can only send to Relay Everything." },
   chats: { routes: /^\/apps\/relay\/api\/(?:chats|chat-saves)$/, refusal: "A chat key can only send chats." },
   api: { routes: /^$/, refusal: "An API key works only on the web API, at your AI connector's address under /v1/." },
 };
 const KEY_CHECK = "/apps/relay/api/key";
-const CONNECTIONS = "/apps/relay/api/connections";
-const NOTE_EDIT = "/apps/relay/api/notes";
+const NOTES = "/apps/relay/api/notes";
+/** A phone's reads: its person's AI app and webhook names, and notes, their files and old ring recordings to sync. */
+const PHONE_READS = /^\/apps\/relay\/api\/(?:connections|notes|attachment|audio)$/;
 
 /** True when a key of this reach may call the method on the address. */
 export function reaches(reach: Reach, method: string, pathname: string): boolean {
-  if (method === "GET") return pathname === KEY_CHECK || (reach === "phone" && pathname === CONNECTIONS);
-  if (method === "PATCH") return reach === "phone" && pathname === NOTE_EDIT;
+  if (method === "GET") return pathname === KEY_CHECK || (reach === "phone" && PHONE_READS.test(pathname));
+  if (method === "PATCH") return reach === "phone" && pathname === NOTES;
   return method === "POST" && REACH[reach].routes.test(pathname);
 }
 
@@ -134,7 +135,7 @@ const asSignedIn = <C extends Call>(phone: boolean, run: Run<C>) =>
 /** A route for a signed-in person: their session, Access email or the checker. A device key reads nothing. */
 export const asPerson = <C extends Call>(run: Run<C>) => asSignedIn(false, run);
 
-/** A route a phone key reads too, as the gate lets it only for `GET connections`: names, never data. */
+/** A route a phone key reads too, as the gate lets it only for names and notes: never health, places or photos. */
 export const asPersonOrPhone = <C extends Call>(run: Run<C>) => asSignedIn(true, run);
 
 /** A route for a device key: it adds data to its own person's space, named by its own device. */

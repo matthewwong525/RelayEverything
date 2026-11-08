@@ -7,7 +7,7 @@ The phone app opens on Home: the notes folders, a folder for each kind of phone 
 
 ### Requirement: The app opens on Home
 
-The phone app SHALL open on a *Home* screen with three groups of folders: the notes folders *Notes*, *Voice notes* and *Shares*; *On this phone*, with *Location*, *Health* and *Calendar*; and *Connections*, with *Sending*, *AI apps* and *Webhooks*. Each notes folder SHALL show how many notes it holds. *Notes* SHALL hold every note, *Voice notes* only voice notes, and *Shares* only notes with a photo, a file or a link. Home SHALL show no folder for a feature that does not work yet. A person SHALL be able to fold *On this phone* and *Connections*, and the phone SHALL remember it.
+The phone app SHALL open on a *Home* screen with three groups of folders: the notes folders *Notes*, *Voice notes* and *Shares*; *On this phone*, with *Location*, *Health* and *Calendar*; and *Connections*, with *Sending*, *AI apps* and *Webhooks*. Each notes folder SHALL show how many notes it holds. *Notes* SHALL hold every note, *Voice notes* only voice notes, and *Shares* only notes with a photo, a file or a link. Home SHALL show no folder for a feature that does not work yet. A person SHALL be able to fold *On this phone* and *Connections*, and the phone SHALL remember it. A tap on a section name SHALL fold or open it with no highlight behind the name, as in Apple Notes.
 
 #### Scenario: Opening the app
 
@@ -18,6 +18,11 @@ The phone app SHALL open on a *Home* screen with three groups of folders: the no
 
 - **WHEN** a new install opens with sending off
 - **THEN** Home shows every notes folder at 0, *Location*, *Health*, *Calendar* and *Sending* as *Off*, and no request leaves the phone
+
+#### Scenario: Folding a section with no highlight
+
+- **WHEN** the person taps *Connections* on Home
+- **THEN** the section folds, its chevron turns, and no grey box shows behind the name
 
 ### Requirement: Each kind of phone data has its own folder
 

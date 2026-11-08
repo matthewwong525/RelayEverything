@@ -28,7 +28,7 @@ The server seals the file with your space's own key and keeps it in your own fol
 
 ## Open a file
 
-`GET /apps/relay/api/attachment?id=<file id>` sends a file back, with its own `Content-Type`. Only a signed-in person can call it, on the Relay Everything page: a device key only adds data. A picture opens in the page; any other file downloads with its own name.
+`GET /apps/relay/api/attachment?id=<file id>` sends a file back, with its own `Content-Type`. A signed-in person calls it on the Relay Everything page, and a phone's [device key](../keys/) calls it when you tap a synced note's file in the app. A chat key or an API key can't. A picture opens in the page; any other file downloads with its own name.
 
 Take the file's id from [`GET timeline`](../reference/#read-the-notes): each note lists its `attachments`, and a file with `"ready": true` has arrived.
 

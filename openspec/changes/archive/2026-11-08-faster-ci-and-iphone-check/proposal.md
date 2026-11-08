@@ -1,6 +1,6 @@
 # Proposal: Faster checks for each save, and an iPhone check that always gives an answer
 
-**Status:** building
+**Status:** ready-to-ship
 **Branch:** speed-up-ci-claude-check
 **Open questions:** none
 
@@ -67,6 +67,7 @@ Non-goals: building the apps less often; an Android device check; changing which
 - **2026-11-08** — Built inside /ship; the second look found 7 problems (a cut-off `flow.sh` retry, an empty step log after a time-out, unfinished Swift tests counted as failed, and four smaller ones), all fixed; saved for the live checks (tasks 5.2 and 5.3).
 - **2026-11-08** — Live checks on the saved branch (PR #68): Mobile CI took 7 min (was about 10): tests 1.5 min, both builds started with them; the Android build took 4 min 52 s with no cache and 3 min 6 s with it (was 6 min 35 s), and the iPhone build with its signed archive about 6 min 50 s (was about 8.5 min), now the slowest part. Two iPhone checks in a row: the first was cancelled, both jobs; the second said *works* in 25.7 min (was 30 to 40), with `claude/steps.md`, the Swift tests on the second Mac, and `flow.sh`'s retry getting past a stuck app launch.
 - **2026-11-08** — Assumed after that check: the iPhone starts after the 2 GB Flutter download, not before it, because the two at once took the download from under 1 min to 4 min 9 s and the build from 3-4 min to 7 min; `flow.sh` waits 120 s, not 90 s, because a finished 10-step flow ran past 90 s; Claude may run `mkdir -p` anywhere and `out/claude/flows/` is made for it, because `mkdir -p out/claude/flows` was refused by the narrower rule.
+- **2026-11-08** — Archived inside /ship and saved for the gate; the specs for app builds and the device check now hold this change.
 
 ## Capabilities
 

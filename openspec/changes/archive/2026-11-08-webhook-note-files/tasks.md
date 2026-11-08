@@ -24,4 +24,4 @@
 ## 4. Checks
 
 - [x] 4.1 Run `npm test` in `app/` and `node scripts/public-check.mjs`
-- [ ] 4.2 `/save`, then on staging: a note with a 25 MB file and a small photo reaches the example receiver behind a tunnel with both files' bytes; a receiver that answers 413 to files gets the next note, and the card names the skipped file
+- [x] 4.2 `/save`, then on staging: a note with a 25 MB file and a small photo reaches the example receiver behind a tunnel with both files' bytes; a receiver that answers 413 to files gets the next note, and the card names the skipped file

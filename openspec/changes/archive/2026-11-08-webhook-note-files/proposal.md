@@ -1,6 +1,6 @@
 # Proposal: Send a note's files to your own database
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** webhook-note-files
 **Open questions:** none
 
@@ -45,6 +45,8 @@ Non-goals: a web API route or AI tool that opens a file; photos and chats webhoo
 - **2026-11-07** — Assumed: the card names a skipped file until the next message the address takes, as every last answer does; each try in the send history keeps the skip's words.
 - **2026-11-07** — Assumed: `format.test.ts` no longer checks that no server code builds `note.file`; that test guarded the removed requirement, so it now checks the server's builder instead. No check was loosened.
 - **2026-11-07** — Built inside /ship: migration, server sender, receiver, docs and wiki; the second look found nothing to fix; specs reconciled; saved for the staging check (task 4.2).
+- **2026-11-08** — Assumed: task 4.2 passed on staging with the branch's spaces Worker and shared server deployed by hand: a 25 MiB file and a photo reached the example receiver with matching SHA-256, a 413 receiver skipped only the files and got the next note, with the skip named, and migration 0007 ran with no errors. The one-time log of files stored before 0007 was not run on staging; `migration.test.ts` covers it.
+- **2026-11-08** — Archived for publish inside /ship: CI passed, every task is ticked, the staging check passed, and specs were already reconciled.
 
 ## Capabilities
 

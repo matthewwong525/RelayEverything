@@ -502,6 +502,9 @@ class RelayController extends Relay {
   }
 
   @override
+  Future<void> setAppearance(Appearance appearance) => _saveSettings(_settings.copyWith(appearance: appearance));
+
+  @override
   Future<String?> setHistory(bool on) async {
     if (on && !_settings.sending) return _sendFirst;
     if (on && !await places.allow(always: true)) return 'Relay Everything may not read your location all the time. Allow it in the phone\'s settings.';

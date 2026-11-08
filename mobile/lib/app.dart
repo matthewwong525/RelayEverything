@@ -6,7 +6,11 @@ import 'screens/connect.dart' show Scanner;
 import 'screens/home.dart';
 import 'screens/note_editor.dart' show FilesPicker, Sharer;
 
-/// Home, with or without a key: notes stay on this phone until the person turns sending on.
+final _light = brandTheme(Brightness.light);
+final _dark = brandTheme(Brightness.dark);
+
+/// Home, with or without a key: notes stay on this phone until the person turns sending on. The look follows the
+/// person's *Appearance* pick, and the phone's own setting while it is *System*.
 class RelayApp extends StatelessWidget {
   const RelayApp({super.key, required this.relay, this.scanner, this.opener, this.picker, this.sharer,
     this.voiceRequests});
@@ -23,11 +27,20 @@ class RelayApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Relay Everything',
-      theme: brandTheme(Brightness.light),
-      darkTheme: brandTheme(Brightness.dark),
-      home: HomeScreen(relay: relay, scanner: scanner, opener: opener, picker: picker, sharer: sharer,
+    return ListenableBuilder(
+      listenable: relay,
+      builder: (context, home) => MaterialApp(
+        title: 'Relay Everything',
+        theme: _light,
+        darkTheme: _dark,
+        themeMode: switch (relay.settings.appearance) {
+          Appearance.light => ThemeMode.light,
+          Appearance.dark => ThemeMode.dark,
+          Appearance.system => ThemeMode.system,
+        },
+        home: home,
+      ),
+      child: HomeScreen(relay: relay, scanner: scanner, opener: opener, picker: picker, sharer: sharer,
         voiceRequests: voiceRequests),
     );
   }

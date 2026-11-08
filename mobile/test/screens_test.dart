@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart' show CustomSemanticsAction, RenderParagraph, SemanticsAction;
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:relay_app/app.dart';
 import 'package:relay_app/brand.dart';
 import 'package:relay_app/editor/markdown.dart';
@@ -15,6 +16,7 @@ import 'package:relay_app/screens/hold_to_talk.dart';
 import 'package:relay_app/screens/folder.dart';
 import 'package:relay_app/screens/note_bars.dart';
 import 'package:relay_app/screens/note_editor.dart';
+import 'package:relay_app/screens/round_button.dart' show ButtonPill;
 import 'package:relay_app/screens/settings.dart' show SettingsScreen;
 import 'package:relay_app/screens/timeline.dart' show TimelineScreen;
 
@@ -86,6 +88,13 @@ class FakeRelay extends Relay {
 
   @override Future<String?> setServer(String server) async { calls.add('server $server'); return problem; }
   @override Future<String?> setPinNotes(bool on) async { calls.add('pin $on'); return problem; }
+
+  @override
+  Future<void> setAppearance(Appearance appearance) async {
+    calls.add('appearance ${appearance.name}');
+    settings = settings.copyWith(appearance: appearance);
+    notifyListeners();
+  }
   @override Future<String?> setHistory(bool on) async { calls.add('history $on'); return problem; }
   @override Future<String?> setHealth(bool on) async { calls.add('health $on'); return problem; }
   @override Future<String?> setPhotos(bool on) async { calls.add('photos $on'); return problem; }
@@ -289,11 +298,9 @@ final now = DateTime.now();
 /// The round *New note* button: a tap writes, a hold talks.
 final newNote = find.byType(NewNoteButton);
 
-/// Opens the ⋯ menu, and Settings from it.
+/// Opens Settings with Home's gear.
 Future<void> openSettings(WidgetTester tester) async {
-  await tester.tap(find.byTooltip('More'));
-  await tester.pumpAndSettle();
-  await tester.tap(find.text('Settings'));
+  await tester.tap(find.byTooltip('Settings'));
   await tester.pumpAndSettle();
 }
 
@@ -342,6 +349,10 @@ Future<void> tapAnywhere(WidgetTester tester) async {
   return ((box.decoration as ShapeDecoration).color, ink);
 }
 
+/// How far *Sync now*'s arrows have turned, from 0 to 1.
+double arrowsTurn() => find.ancestor(of: find.byIcon(CupertinoIcons.arrow_2_circlepath), matching: find.byType(RotationTransition))
+  .evaluate().map((element) => (element.widget as RotationTransition).turns.value).first;
+
 /// The note page's editor.
 QuillController quill(WidgetTester tester) => tester.widget<QuillEditor>(find.byType(QuillEditor)).controller;
 
@@ -359,9 +370,21 @@ Future<void> type(WidgetTester tester, String words) async {
   await tester.pump();
 }
 
+/// The screen point [part] of the way across the note page's letter at [letter]: 0.8 is its right half.
+Offset onLetter(WidgetTester tester, int letter, double part) {
+  final editor = tester.allRenderObjects.whereType<RenderEditor>().first;
+  final left = editor.getLocalRectForCaret(TextPosition(offset: letter));
+  final right = editor.getLocalRectForCaret(TextPosition(offset: letter + 1));
+  return editor.localToGlobal(Offset(left.left + (right.left - left.left) * part, left.center.dy));
+}
+
 void main() {
   late FakeRelay relay;
-  setUp(() => relay = FakeRelay());
+  setUp(() {
+    relay = FakeRelay();
+    PackageInfo.setMockInitialValues(appName: 'Relay Everything', packageName: 'com.relayeverything.app', version: '1.4.0',
+      buildNumber: '91', buildSignature: '');
+  });
 
   /// Scrolls the connect screen's own list until [finder] shows.
   Future<void> scrollConnect(WidgetTester tester, Finder finder, [double delta = 100]) => tester.scrollUntilVisible(finder, delta,
@@ -567,60 +590,108 @@ void main() {
     expect(find.text('2 notes ·'), findsOneWidget);
     expect(find.text('1 waiting'), findsOneWidget);
     await tester.tap(find.text('1 waiting'));
-    expect(relay.calls, ['sync']);
+    expect(relay.calls, ['pull']);
   });
 
-  testWidgets('the ⋯ menu holds Settings, and while sending Sync now, and the page only when sending to a server',
+  testWidgets('the gear opens Settings in one tap, and Home has no ⋯ menu', (tester) async {
+    await tester.pumpWidget(RelayApp(relay: relay));
+    expect(find.byTooltip('More'), findsNothing);
+    expect(find.byIcon(CupertinoIcons.gear), findsOneWidget);
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsScreen), findsOneWidget);
+    expect(find.byType(MenuItemButton), findsNothing);
+    expect(relay.calls, isEmpty);
+  });
+
+  testWidgets('Sync now follows the sync state while sending, and does what a pull down does', (tester) async {
+    relay.entries = [Entry(text: 'Lunch idea', at: now)];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    expect(find.text('On this phone'), findsWidgets);
+    expect(find.byTooltip('Sync now'), findsNothing);
+    relay
+      ..connected = true
+      ..settings = const Settings(sending: true)
+      ..waiting = 1
+      ..changed();
+    await tester.pump();
+    final state = tester.getRect(find.text('1 waiting'));
+    final button = tester.getRect(find.byTooltip('Sync now'));
+    expect(button.left, greaterThan(state.right));
+    expect((button.center.dy - state.center.dy).abs(), lessThan(2));
+    expect([button.width, button.height], [32, 32]);
+    // Muted, not the accent.
+    expect(tester.widget<Icon>(find.byIcon(CupertinoIcons.arrow_2_circlepath)).color, BrandColors.light.muted);
+    await tester.tap(find.byTooltip('Sync now'));
+    await tester.pump();
+    await tester.drag(find.text('Voice notes'), const Offset(0, 300));
+    await tester.pumpAndSettle();
+    expect(relay.calls, ['pull', 'pull']);
+    // A notes folder has its own, under its title.
+    await openFolder(tester, 'Notes');
+    await tester.tap(find.byTooltip('Sync now'));
+    await tester.pump();
+    expect(relay.calls, ['pull', 'pull', 'pull']);
+  });
+
+  testWidgets('Sending shows Open your Relay Everything page only while sending to a server, and it opens the page',
       (tester) async {
+    tallScreen(tester);
     final opened = <Uri>[];
     var opens = true;
-    relay.entries = [Entry(text: 'Lunch idea', at: now)];
+    relay
+      ..connected = true
+      ..server = 'https://relay.example.com';
     await tester.pumpWidget(RelayApp(relay: relay, opener: (address) async {
       opened.add(address);
       return opens;
     }));
-    Future<List<String>> items() async {
-      await tester.tap(find.byTooltip('More'));
-      await tester.pumpAndSettle();
-      final shown = [for (final label in ['Settings', 'Sync now', 'Open your Relay Everything page'])
-        if (find.widgetWithText(MenuItemButton, label).evaluate().isNotEmpty) label];
-      return shown;
-    }
-    Future<void> close() async {
-      await tester.tapAt(const Offset(300, 110));
-      await tester.pumpAndSettle();
-    }
-
-    expect(await items(), ['Settings']);
-    await close();
+    await openFolder(tester, 'Sending');
+    const row = 'Open your Relay Everything page';
+    expect(find.text(row), findsNothing);
     relay
       ..settings = const Settings(sending: true, place: SendPlace.webhook)
       ..changed();
     await tester.pump();
-    expect(await items(), ['Settings', 'Sync now']);
-    await tester.tap(find.text('Sync now'));
-    await tester.pumpAndSettle();
-    expect(relay.calls, ['sync']);
+    expect(find.text(row), findsNothing);
     relay
-      ..connected = true
-      ..server = 'https://relay.example.com'
       ..settings = const Settings(sending: true)
       ..changed();
     await tester.pump();
-    expect(await items(), ['Settings', 'Sync now', 'Open your Relay Everything page']);
-    await tester.tap(find.text('Open your Relay Everything page'));
+    await tester.tap(find.text(row));
     await tester.pumpAndSettle();
     expect(opened, [Uri.parse('https://relay.example.com/apps/relay/')]);
     opens = false;
-    await items();
-    await tester.tap(find.text('Open your Relay Everything page'));
+    await tester.tap(find.text(row));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('The browser did not open. Try again.'), findsOneWidget);
-    expect([opened, relay.calls], [hasLength(2), ['sync']]);
-    // The menu lives on Home only.
-    await openFolder(tester, 'Notes');
-    expect(find.byTooltip('More'), findsNothing);
+    expect([opened, relay.calls], [hasLength(2), isEmpty]);
+  });
+
+  testWidgets('Light picked on a dark phone shows the light colors, and again after a new start', (tester) async {
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    await tester.pumpWidget(RelayApp(relay: relay));
+    Color paper() => Theme.of(tester.element(find.byType(Scaffold).last)).scaffoldBackgroundColor;
+    expect(paper(), BrandColors.dark.paper);
+    await openSettings(tester);
+    final segments = tester.widget<SegmentedButton<Appearance>>(find.byType(SegmentedButton<Appearance>));
+    expect(segments.selected, {Appearance.system});
+    await tester.tap(find.text('Light'));
+    await tester.pumpAndSettle();
+    expect([relay.calls, paper()], [['appearance light'], BrandColors.light.paper]);
+    // A new start reads the pick the phone kept.
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await tester.pumpAndSettle();
+    expect(paper(), BrandColors.light.paper);
+    relay
+      ..settings = relay.settings.copyWith(appearance: Appearance.dark)
+      ..changed();
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    await tester.pumpAndSettle();
+    expect(paper(), BrandColors.dark.paper);
   });
 
   testWidgets('a swipe to the left deletes a note at once, and Undo in the bar brings it back', (tester) async {
@@ -808,6 +879,26 @@ void main() {
       ..changed();
     await tester.pumpAndSettle();
     expect([find.text('Syncing').evaluate().length, tester.hasRunningAnimations], [1, false]);
+    expect(arrowsTurn(), 0);
+  });
+
+  testWidgets('the Sync now arrows turn only while syncing', (tester) async {
+    relay
+      ..connected = true
+      ..settings = const Settings(sending: true);
+    await tester.pumpWidget(RelayApp(relay: relay));
+    expect([tester.hasRunningAnimations, arrowsTurn()], [false, 0]);
+    relay
+      ..status = SyncStatus.syncing
+      ..changed();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(arrowsTurn(), greaterThan(0));
+    relay
+      ..status = SyncStatus.synced
+      ..changed();
+    await tester.pumpAndSettle();
+    expect(arrowsTurn(), 0);
   });
 
   group('the note page', () {
@@ -1187,6 +1278,259 @@ void main() {
       await tester.pumpAndSettle();
       expect([relay.calls, find.byType(NoteEditor).evaluate(), find.text('Note deleted').evaluate()], [isEmpty, isEmpty, isEmpty]);
     });
+
+    testWidgets('on a 375-point phone the ⋯ menu lies on the screen, its right edge in line with the button', (tester) async {
+      tester.view
+        ..physicalSize = const Size(375, 812)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      relay.entries = [Entry(id: 'n1', text: 'Onfido Verification', at: now, voice: true, recording: 'voice/a.wav')];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Onfido Verification'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      // The pill's card shape is the button the person sees.
+      final button = tester.getRect(find.ancestor(of: find.byTooltip('More'), matching: find.byType(ButtonPill)));
+      for (final item in ['Copy', 'Play']) {
+        final row = tester.getRect(find.widgetWithText(MenuItemButton, item));
+        expect(row.left, greaterThanOrEqualTo(12), reason: item);
+        expect(row.right, lessThanOrEqualTo(375 - 12), reason: item);
+        expect((row.right - button.right).abs(), lessThanOrEqualTo(1), reason: item);
+        expect(row.top, greaterThan(button.bottom), reason: item);
+      }
+      // Round corners on the card color.
+      final panel = tester.widgetList<Material>(find.ancestor(of: find.widgetWithText(MenuItemButton, 'Copy'), matching: find.byType(Material)))
+        .firstWhere((material) => material.shape is RoundedRectangleBorder &&
+          (material.shape! as RoundedRectangleBorder).borderRadius == const BorderRadius.all(Radius.circular(14)));
+      expect(panel.color, BrandColors.light.card);
+    });
+
+    testWidgets('a web address shows as a link; a tap while reading opens it, and the note stays as it was', (tester) async {
+      final opened = <Uri>[];
+      const text = 'Onfido Verification\nhttps://id.onfido.com/XX6L46TU\nOr www.example.com.\nHello friend';
+      relay.entries = [Entry(id: 'n1', text: text, at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay, opener: (address) async {
+        opened.add(address);
+        return true;
+      }));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Onfido Verification'));
+      await tester.pumpAndSettle();
+      final document = quill(tester).document;
+      final words = document.toPlainText();
+      String? linkOn(String part) => linkAt(document, words.indexOf(part) + 2);
+      expect([linkOn('id.onfido'), linkOn('example'), linkOn('Hello'), linkOn('Or ')],
+        ['https://id.onfido.com/XX6L46TU', 'www.example.com', null, null]);
+      // The stop after an address is not part of the link.
+      expect(linkAt(document, words.indexOf('.com.') + 4), isNull);
+      // The link draws in the accent text color, underlined.
+      final link = noteStyles(tester.element(find.byType(QuillEditor))).link!;
+      expect([link.color, link.decoration], [BrandColors.light.accentText, TextDecoration.underline]);
+      // A tap on the link while reading opens it, and the keyboard stays down.
+      final line = find.text('https://id.onfido.com/XX6L46TU', findRichText: true);
+      final at = tester.getTopLeft(line) + Offset(30, tester.getSize(line).height / 2);
+      await tester.tapAt(at);
+      await tester.pumpAndSettle();
+      expect(opened, [Uri.parse('https://id.onfido.com/XX6L46TU')]);
+      expect(editorFocused(tester), isFalse);
+      // While editing, the same tap places the cursor and opens nothing.
+      await tester.pump(const Duration(seconds: 1));
+      await tester.tapAt(tester.getTopLeft(find.text('Hello friend', findRichText: true)) + const Offset(10, 8));
+      await tester.pump();
+      expect(editorFocused(tester), isTrue);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.tapAt(at);
+      await tester.pumpAndSettle();
+      expect(opened, hasLength(1));
+      expect(editorFocused(tester), isTrue);
+      final address = words.indexOf('https://id.onfido');
+      expect(quill(tester).selection.baseOffset, inInclusiveRange(address, address + 'https://id.onfido.com/XX6L46TU'.length));
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, isEmpty, reason: 'an untouched note is never written back');
+    });
+
+    testWidgets('a link mark never reaches the words: a changed note keeps the plain address', (tester) async {
+      const text = 'Links\nSee https://example.com/a_b';
+      final marked = withLinks(markdownToDelta(text, title: true));
+      expect(marked.toList().where((op) => op.attributes?['link'] != null).map((op) => op.data), ['https://example.com/a_b']);
+      expect(deltaToMarkdown(marked), '# Links\nSee https://example.com/a_b');
+      relay.entries = [Entry(id: 'n1', text: text, at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Links'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Checklist'));
+      await tester.pumpAndSettle();
+      await type(tester, 'Eggs');
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['edit # Links\nSee https://example.com/a_b\n- [ ] Eggs']);
+    });
+
+    testWidgets('an address typed in this visit becomes a link once editing ends, and the words stay plain', (tester) async {
+      final opened = <Uri>[];
+      relay.entries = [Entry(id: 'n1', text: 'Trip\nTickets', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay, opener: (address) async {
+        opened.add(address);
+        return true;
+      }));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Trip'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Tickets', findRichText: true));
+      await tester.pump();
+      final end = quill(tester).document.length - 1;
+      quill(tester).updateSelection(TextSelection.collapsed(offset: end), ChangeSource.local);
+      // One letter at a time, as the keyboard types. The editor links an `https://` address as it is typed, but not
+      // a `www.` one.
+      const typed = ' https://example.com and www.example.com.';
+      for (final letter in typed.split('')) {
+        await type(tester, letter);
+      }
+      final www = end + typed.indexOf('www.');
+      expect(linkAt(quill(tester).document, www + 5), isNull, reason: 'no www link while typing');
+      await tester.tap(find.byTooltip('Done'));
+      await tester.pumpAndSettle();
+      expect(editorFocused(tester), isFalse);
+      expect(linkAt(quill(tester).document, www + 15), isNull, reason: 'the stop is not part of the link');
+      await tester.pump(const Duration(seconds: 1));
+      await tester.tapAt(onLetter(tester, www + 5, 0.5));
+      await tester.pumpAndSettle();
+      expect(opened, [Uri.parse('https://www.example.com')]);
+      expect(editorFocused(tester), isFalse);
+      await tester.tapAt(onLetter(tester, end + 10, 0.5));
+      await tester.pumpAndSettle();
+      expect(opened, [Uri.parse('https://www.example.com'), Uri.parse('https://example.com')]);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['edit # Trip\nTickets https://example.com and www.example.com.'], reason: 'the stored words keep no link mark');
+    });
+
+    testWidgets('a stop typed after an address is not part of its link, and the tap opens the address', (tester) async {
+      final opened = <Uri>[];
+      relay.entries = [Entry(id: 'n1', text: 'Trip\nTickets', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay, opener: (address) async {
+        opened.add(address);
+        return true;
+      }));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Trip'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Tickets', findRichText: true));
+      await tester.pump();
+      final end = quill(tester).document.length - 1;
+      quill(tester).updateSelection(TextSelection.collapsed(offset: end), ChangeSource.local);
+      const typed = ' See https://a.com. Then';
+      for (final letter in typed.split('')) {
+        await type(tester, letter);
+      }
+      // The mark the editor's own space rule leaves when it takes the stop into the link.
+      final stop = end + typed.indexOf('. Then');
+      final start = end + typed.indexOf('https://');
+      quill(tester).formatText(start, stop + 1 - start, const LinkAttribute('https://a.com.'));
+      await tester.pump();
+      expect(linkAt(quill(tester).document, stop), 'https://a.com.');
+      await tester.tap(find.byTooltip('Done'));
+      await tester.pumpAndSettle();
+      expect([linkAt(quill(tester).document, stop - 1), linkAt(quill(tester).document, stop)], ['https://a.com', null]);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.tapAt(onLetter(tester, stop - 2, 0.5));
+      await tester.pumpAndSettle();
+      expect(opened, [Uri.parse('https://a.com')]);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['edit # Trip\nTickets See https://a.com. Then']);
+    });
+
+    testWidgets('an edited link keeps no old mark: a removed https:// or a space typed inside', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Links\nGo https://example.com now\nSee https://example.com/path', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay, opener: (_) async => true));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Links'));
+      await tester.pumpAndSettle();
+      await tester.tapAt(tester.getTopLeft(find.text('Links', findRichText: true)) + const Offset(10, 8));
+      await tester.pump();
+      expect(editorFocused(tester), isTrue);
+      final controller = quill(tester);
+      final first = controller.document.toPlainText().indexOf('https://');
+      controller.replaceText(first, 'https://'.length, '', TextSelection.collapsed(offset: first));
+      await tester.pump();
+      final path = controller.document.toPlainText().indexOf('/path');
+      controller.replaceText(path, 0, ' ', TextSelection.collapsed(offset: path + 1));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Done'));
+      await tester.pumpAndSettle();
+      final document = quill(tester).document;
+      final words = document.toPlainText();
+      expect(words, 'Links\nGo example.com now\nSee https://example.com /path\n');
+      String? linkOn(String part) => linkAt(document, words.indexOf(part) + 1);
+      expect([linkOn('example.com now'), linkOn('https://example.com /'), linkOn('/path')], [null, 'https://example.com', null]);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['edit # Links\nGo example.com now\nSee https://example.com /path']);
+    });
+
+    testWidgets('a tap on the right half of a link\'s last letter opens it; one on the space before it does not', (tester) async {
+      final opened = <Uri>[];
+      relay.entries = [Entry(id: 'n1', text: 'Links\nGo https://example.com now', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay, opener: (address) async {
+        opened.add(address);
+        return true;
+      }));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Links'));
+      await tester.pumpAndSettle();
+      final words = quill(tester).document.toPlainText();
+      final start = words.indexOf('https://');
+      final last = start + 'https://example.com'.length - 1;
+      expect(linkAtPosition(quill(tester).document, TextPosition(offset: last + 1, affinity: TextAffinity.upstream)),
+        'https://example.com');
+      expect(linkAtPosition(quill(tester).document, TextPosition(offset: start, affinity: TextAffinity.upstream)), isNull);
+      await tester.tapAt(onLetter(tester, last, 0.8));
+      await tester.pumpAndSettle();
+      expect(opened, [Uri.parse('https://example.com')]);
+      expect(editorFocused(tester), isFalse);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.tapAt(onLetter(tester, start - 1, 0.8));
+      await tester.pumpAndSettle();
+      expect(opened, hasLength(1), reason: 'the space before a link places the cursor');
+      expect(editorFocused(tester), isTrue);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, isEmpty);
+    });
+
+    testWidgets('Waiting to send is a button that sends now, and says Sending… while it goes', (tester) async {
+      relay
+        ..connected = true
+        ..settings = const Settings(sending: true)
+        ..entries = [Entry(id: 'n1', text: 'Shop', at: now, waiting: true), Entry(id: 'n2', text: 'Gone', at: now, sent: true)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Shop'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, 'Waiting to send · Send now'));
+      await tester.pump();
+      expect(relay.calls, ['sync']);
+      relay
+        ..status = SyncStatus.syncing
+        ..changed();
+      await tester.pump();
+      expect(tester.widget<TextButton>(find.widgetWithText(TextButton, 'Sending…')).onPressed, isNull);
+      relay
+        ..status = SyncStatus.synced
+        ..changed();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Gone'));
+      await tester.pumpAndSettle();
+      expect([find.text('Sent'), find.byType(TextButton).evaluate().where((element) =>
+        (element.widget as TextButton).child is Text && ((element.widget as TextButton).child! as Text).data!.contains('Send now'))],
+        [findsOneWidget, isEmpty]);
+    });
   });
 
   testWidgets('turns settings on and says why one could not be', (tester) async {
@@ -1547,14 +1891,20 @@ void main() {
       'scan.pdf was too large for your receiver (14:05), so it was not sent.');
   });
 
-  testWidgets('Settings shows only the Notes and Voice notes groups, with no lines', (tester) async {
+  testWidgets('Settings shows only the Appearance, Notes and Voice notes groups, with no lines, and the version', (tester) async {
     tallScreen(tester);
     await tester.pumpWidget(RelayApp(relay: relay));
     await openSettings(tester);
     final groups = find.descendant(of: find.byType(SettingsScreen), matching: find.byType(SliverList));
-    for (final heading in ['Notes', 'Voice notes']) {
+    for (final heading in ['Appearance', 'Notes', 'Voice notes']) {
       expect(find.descendant(of: groups, matching: find.text(heading)), findsOneWidget, reason: heading);
     }
+    expect(tester.getTopLeft(find.text('Appearance')).dy, lessThan(tester.getTopLeft(find.text('Notes').last).dy));
+    for (final segment in ['System', 'Light', 'Dark']) {
+      expect(find.text(segment), findsOneWidget, reason: segment);
+    }
+    expect(find.text('Relay Everything 1.4.0 (91)'), findsOneWidget);
+    expect(tester.getTopLeft(find.text('Relay Everything 1.4.0 (91)')).dy, greaterThan(tester.getTopLeft(find.text('Speech model')).dy));
     for (final gone in ['Sending', 'Send my notes', 'Health', 'Calendar', 'Location history', 'Send photos on mobile data']) {
       expect(find.text(gone), findsNothing, reason: gone);
     }

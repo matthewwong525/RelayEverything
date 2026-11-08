@@ -187,7 +187,7 @@ To keep a web page, a photo or a file from another app, use its share button: [S
 
 ## Talk a note
 
-Hold **New note** for half a second. The phone buzzes, and the button turns into an amber mic. Let go, and talk: the phone keeps listening. Tap anywhere on the screen to save. The phone writes the words itself. [Voice notes](../voice-notes/)
+Hold **New note**: an amber ring fills round it in half a second, and the phone buzzes. Until your first voice note, a tip above the button says **Hold to talk**. Let go, and talk: the phone keeps listening on its own full screen, with bars that move with your voice. Tap anywhere on the screen to save, or tap the **X** at the top right to keep nothing. The phone writes the words itself. [Voice notes](../voice-notes/)
 
 ## Where a ring note's place comes from
 

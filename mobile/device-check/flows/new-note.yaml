@@ -1,4 +1,4 @@
-# A typed note: open Notes from Home, tap New note, type, Done, Back, and the note is in the list. Then search finds it.
+# The Hold to talk tip on a fresh install, then a typed note: open Notes from Home, tap New note, type, Done, Back, and the note is in the list. Then search finds it.
 appId: com.matthewwong525.relayApp
 ---
 - launchApp:
@@ -6,6 +6,8 @@ appId: com.matthewwong525.relayApp
 - extendedWaitUntil:
     visible: "Home"
     timeout: 60000
+# A fresh install has made no voice note yet, so a tip above New note says a hold talks.
+- assertVisible: "Hold to talk"
 # Home lists the folders; a row's label joins its name and its count, so match its start.
 - tapOn: 'Notes(.|\n)*'
 # A short tap on the round New note button opens a new note with the keyboard up. A hold of 0.5 s records.

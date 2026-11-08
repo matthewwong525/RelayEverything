@@ -1,0 +1,47 @@
+# A voice note from a hold on New note: the recording fills the screen, a tap in the middle saves, and the X at the top
+# right keeps nothing. Not in the fixed tour: it needs the speech model and a microphone, so run it by name.
+appId: com.matthewwong525.relayApp
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 60000
+- longPressOn: "New note"
+# With no speech model yet, the hold asks to get it first; then hold again.
+- runFlow:
+    when:
+      visible: "Get the speech model?"
+    commands:
+      - tapOn: "Get it"
+      - extendedWaitUntil:
+          notVisible: "Getting the speech model.*"
+          timeout: 100000
+      - longPressOn: "New note"
+# iOS asks for the microphone the first time.
+- tapOn:
+    text: "Allow|OK"
+    optional: true
+- extendedWaitUntil:
+    visible: "Tap anywhere to save"
+    timeout: 10000
+- assertVisible: "Saves by itself at 5:00"
+- assertVisible: "Cancel"
+- takeScreenshot: voice-recording
+- tapOn:
+    point: "50%,50%"
+- extendedWaitUntil:
+    notVisible: "Tap anywhere to save"
+    timeout: 10000
+- assertNotVisible: "Hold to talk"
+- takeScreenshot: voice-saved
+- longPressOn: "New note"
+- extendedWaitUntil:
+    visible: "Tap anywhere to save"
+    timeout: 10000
+# The X's label is Cancel.
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    notVisible: "Tap anywhere to save"
+    timeout: 10000
+- assertVisible: "Home"
+- takeScreenshot: voice-cancelled

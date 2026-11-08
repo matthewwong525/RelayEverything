@@ -187,7 +187,7 @@ class AccentGlow extends StatelessWidget {
 }
 
 /// A small pill with a word: *Voice* and *Listening* in the spark color, a small live moment; *Typed* in accent text on
-/// accent soft. [large] is the size on a note's page and the listening card.
+/// accent soft. [large] is the size on a note's page.
 class BrandTag extends StatelessWidget {
   const BrandTag(this.label, {super.key, this.spark = false, this.large = false});
 

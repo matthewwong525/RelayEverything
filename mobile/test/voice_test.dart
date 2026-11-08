@@ -165,6 +165,18 @@ void main() {
 
     File fileOf(String clientId) => File('${folder.path}/voice/$clientId.wav');
 
+    test('the sound level goes from 0 at −60 dBFS or less to 1 at 0 dBFS, and only while it records', () async {
+      expect([levelOf(-120), levelOf(-60), levelOf(-30), levelOf(0), levelOf(6), levelOf(double.nan),
+        levelOf(double.negativeInfinity)], [0, 0, 0.5, 1, 1, 0, 0]);
+      expect(recorder.levels, isNull);
+      microphone.heard = [0.2, 0.9];
+      await recorder.start('abc');
+      expect(await recorder.levels!.take(2).toList(), [0.2, 0.9]);
+      final ended = recorder.levels!.toList();
+      await recorder.cancel();
+      expect([await ended, recorder.levels], [isEmpty, isNull]);
+    });
+
     test('records to <support>/voice/<clientId>.wav and keeps a hold of 0.5 s or more', () async {
       expect(await recorder.start('abc'), isTrue);
       expect(recorder.recording, isTrue);

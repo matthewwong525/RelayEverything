@@ -232,6 +232,10 @@ class FakeRelay extends Relay {
   @override ModelProblem? modelProblem;
   @override int modelBytes = 59721011;
   @override DateTime? listening;
+  /// What the recording screen's bars draw while listening: a test adds levels to it.
+  final levels = StreamController<double>.broadcast();
+  @override Stream<double>? get level => listening == null ? null : levels.stream;
+  @override bool holdTipSeen = false;
   /// What [startVoiceNote] and [endVoiceNote] return.
   String? startProblem;
   String? endProblem;
@@ -268,6 +272,7 @@ class FakeRelay extends Relay {
   Future<String?> startVoiceNote() async {
     calls.add('voice start');
     if (startProblem == null) {
+      holdTipSeen = true;
       listening = DateTime.now();
       notifyListeners();
     }
@@ -334,12 +339,21 @@ Future<void> holdNewNote(WidgetTester tester) async {
   await tester.pump();
 }
 
-/// A tap on the screen away from the card, which saves the voice note.
+/// A tap in the middle of the recording screen, which saves the voice note.
 Future<void> tapAnywhere(WidgetTester tester) async {
-  await tester.tapAt(const Offset(200, 150));
+  await tester.tapAt(tester.getCenter(find.byType(RecordingScreen)));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 100));
 }
+
+/// The X at the top right of the recording screen, which keeps nothing.
+final cancelX = find.byTooltip('Cancel');
+
+/// The heights of the recording screen's sound bars, left to right.
+List<double> barHeights(WidgetTester tester) => [
+  for (final bar in find.descendant(of: find.byType(LevelBars), matching: find.byType(AnimatedContainer)).evaluate())
+    tester.getSize(find.byWidget(bar.widget)).height,
+];
 
 /// The fill and the word color of a [BrandTag].
 (Color?, Color?) tagColors(WidgetTester tester, String label) {
@@ -2097,8 +2111,8 @@ void main() {
       await tester.pump();
       expect(relay.calls, ['voice start']);
       expect(find.descendant(of: newNote, matching: find.byIcon(CupertinoIcons.mic_fill)), findsOneWidget);
-      expect(find.text('Listening'), findsOneWidget);
-      expect(find.text('Tap anywhere to save.'), findsOneWidget);
+      expect([find.text('Listening'), find.text('Tap anywhere to save'), find.text('Saves by itself at 5:00'), cancelX],
+        everyElement(findsOneWidget));
       await gesture.up();
       await tester.pump(const Duration(seconds: 2));
       expect(relay.calls, ['voice start']);
@@ -2108,14 +2122,16 @@ void main() {
       expect([find.text('Listening'), find.byType(NoteEditor)], [findsNothing, findsNothing]);
     });
 
-    testWidgets('a voice note and Listening wear the spark color; a typed note wears accent soft', (tester) async {
+    testWidgets('a voice note and the sound bars wear the spark color; a typed note wears accent soft', (tester) async {
       relay.entries = [Entry(text: 'Spoken', at: now, voice: true), Entry(text: 'Written', at: now)];
       await tester.pumpWidget(RelayApp(relay: relay));
       await openFolder(tester, 'Notes');
       expect(tagColors(tester, 'Voice'), (BrandColors.light.spark, BrandColors.light.onSpark));
       expect(tagColors(tester, 'Typed'), (BrandColors.light.accentSoft, BrandColors.light.accentText));
       await holdNewNote(tester);
-      expect(tagColors(tester, 'Listening'), (BrandColors.light.spark, BrandColors.light.onSpark));
+      final bar = tester.widget<AnimatedContainer>(find.descendant(of: find.byType(LevelBars),
+        matching: find.byType(AnimatedContainer)).first);
+      expect((bar.decoration! as ShapeDecoration).color, BrandColors.light.spark);
       await tapAnywhere(tester);
     });
 
@@ -2129,13 +2145,141 @@ void main() {
       expect(relay.calls, isEmpty);
     });
 
-    testWidgets('Cancel keeps nothing', (tester) async {
+    testWidgets('the X keeps nothing and does not also save', (tester) async {
       await tester.pumpWidget(RelayApp(relay: relay));
       await holdNewNote(tester);
-      await tester.tap(find.text('Cancel'));
+      await tester.tap(cancelX);
       await tester.pump();
       expect(relay.calls, ['voice start', 'voice cancel']);
-      expect(find.text('Listening'), findsNothing);
+      expect(find.byType(RecordingScreen), findsNothing);
+    });
+
+    testWidgets('the recording covers the whole app; a tap in its middle saves', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await holdNewNote(tester);
+      expect(tester.getSize(find.byType(RecordingScreen)), tester.view.physicalSize / tester.view.devicePixelRatio);
+      expect(find.text('Home').hitTestable(), findsNothing);
+      await tapAnywhere(tester);
+      expect(relay.calls, ['voice start', 'voice end']);
+      expect(find.byType(RecordingScreen), findsNothing);
+    });
+
+    testWidgets('the back gesture saves, on Home and on a page over it, and leaves the page open', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await holdNewNote(tester);
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      expect(relay.calls, ['voice start', 'voice end']);
+      expect(find.byType(RecordingScreen), findsNothing);
+      await openFolder(tester, 'Notes');
+      await holdNewNote(tester);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['voice start', 'voice end', 'voice start', 'voice end']);
+      expect(find.byType(TimelineScreen), findsOneWidget);
+      // With the recording closed, back leaves the page again.
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(TimelineScreen), findsNothing);
+    });
+
+    testWidgets('the sound bars follow the level, and a silent microphone keeps them at their floor', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await holdNewNote(tester);
+      await tester.pump(const Duration(seconds: 1));
+      expect(barHeights(tester), List.filled(levelBars, LevelBars.floor));
+      relay.levels.add(1);
+      // The bars ease from the frame after the level comes.
+      for (var frame = 0; frame < 3; frame++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      // All bars follow the current level at once, tallest in the middle.
+      final heights = barHeights(tester);
+      expect(heights, everyElement(greaterThan(LevelBars.floor)));
+      expect(heights[levelBars ~/ 2], greaterThan(heights.first * 3));
+      expect(heights[levelBars ~/ 2], greaterThan(heights.last * 3));
+      relay.levels.add(0);
+      for (var frame = 0; frame < 3; frame++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(barHeights(tester), List.filled(levelBars, LevelBars.floor));
+      await tapAnywhere(tester);
+    });
+
+    test('each bar follows the current level, tallest in the middle, the same for the same step', () {
+      const middle = levelBars ~/ 2;
+      for (final step in [0, 1, 7]) {
+        final heights = [for (var index = 0; index < levelBars; index++) LevelBars.heightOf(index, 1, step)];
+        expect(heights, everyElement(inInclusiveRange(LevelBars.floor, LevelBars.top)));
+        expect(heights[middle], greaterThan(LevelBars.top * 0.7));
+        expect([heights.first, heights.last], everyElement(lessThan(LevelBars.top * 0.25)));
+        expect(LevelBars.heightOf(middle, 1, step), heights[middle]);
+        expect(LevelBars.heightOf(middle, 0.5, step), closeTo(heights[middle] / 2, 0.001));
+        expect(LevelBars.heightOf(middle, 0, step), LevelBars.floor);
+      }
+      expect(LevelBars.heightOf(3, 1, 0), isNot(LevelBars.heightOf(3, 1, 1)));
+    });
+
+    testWidgets('a side swipe on the recording screen saves', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await holdNewNote(tester);
+      await tester.drag(find.byType(RecordingScreen), const Offset(300, 0));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(relay.calls, ['voice start', 'voice end']);
+      expect(find.byType(RecordingScreen), findsNothing);
+    });
+
+    testWidgets('Hold to talk shows until the first voice note, and not after', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      expect(find.text('Hold to talk'), findsOneWidget);
+      await holdNewNote(tester);
+      await tapAnywhere(tester);
+      expect(find.text('Hold to talk'), findsNothing);
+      await tester.pumpWidget(RelayApp(relay: relay, key: UniqueKey()));
+      expect(find.text('Hold to talk'), findsNothing);
+    });
+
+    testWidgets('a voice note seen before shows no tip; search hides New note and its tip', (tester) async {
+      relay.holdTipSeen = true;
+      await tester.pumpWidget(RelayApp(relay: relay));
+      expect(find.text('Hold to talk'), findsNothing);
+      relay.holdTipSeen = false;
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      expect([newNote, find.text('Hold to talk')], [findsNothing, findsNothing]);
+    });
+
+    testWidgets('the ring fills while New note is held and empties on an early lift', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      double ring() => (tester.widget<CustomPaint>(find.descendant(of: newNote, matching: find.byWidgetPredicate(
+        (widget) => widget is CustomPaint && widget.painter is HoldRingPainter))).painter! as HoldRingPainter).progress.value;
+      expect(ring(), 0);
+      final gesture = await tester.startGesture(tester.getCenter(newNote));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(ring(), closeTo(0.5, 0.1));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(find.byType(NoteEditor), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect([ring(), relay.calls], [0, isEmpty]);
+    });
+
+    testWidgets('with Reduce motion on, the ring still takes the whole hold to fill', (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+      await tester.pumpWidget(RelayApp(relay: relay));
+      double ring() => (tester.widget<CustomPaint>(find.descendant(of: newNote, matching: find.byWidgetPredicate(
+        (widget) => widget is CustomPaint && widget.painter is HoldRingPainter))).painter! as HoldRingPainter).progress.value;
+      final gesture = await tester.startGesture(tester.getCenter(newNote));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(ring(), closeTo(0.5, 0.1));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(relay.calls, isEmpty);
     });
 
     testWidgets('a voice note the phone could not keep says so, and the card closes', (tester) async {
@@ -2248,6 +2392,7 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect([relay.calls, find.text('Listening').evaluate().length], [['voice start'], 1]);
+      expect(find.semantics.byPredicate((node) => node.tooltip == 'Cancel' && node.getSemanticsData().hasAction(SemanticsAction.tap)), findsOne);
       tester.semantics.tap(find.semantics.byLabel('Save the voice note'));
       await tester.pump();
       expect(relay.calls, ['voice start', 'voice end']);
@@ -2397,19 +2542,19 @@ void main() {
       return requests;
     }
 
-    testWidgets('records at once in the same listening card; a tap anywhere saves', (tester) async {
+    testWidgets('records at once on the same recording screen; a tap anywhere saves', (tester) async {
       await openWithRequest(tester);
-      expect(find.text('Listening'), findsOneWidget);
-      expect(find.text('Tap anywhere to save.'), findsOneWidget);
+      expect([find.byType(RecordingScreen), find.text('Tap anywhere to save')], everyElement(findsOneWidget));
+      expect(relay.holdTipSeen, isTrue);
       expect(relay.calls, ['voice start']);
       await tapAnywhere(tester);
       expect(find.text('Listening'), findsNothing);
       expect(relay.calls, ['voice start', 'voice end']);
     });
 
-    testWidgets('Cancel keeps nothing', (tester) async {
+    testWidgets('the X keeps nothing', (tester) async {
       await openWithRequest(tester);
-      await tester.tap(find.text('Cancel'));
+      await tester.tap(cancelX);
       await tester.pump();
       expect(find.text('Listening'), findsNothing);
       expect(relay.calls, ['voice start', 'voice cancel']);

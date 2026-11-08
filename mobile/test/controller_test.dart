@@ -1273,6 +1273,44 @@ void main() {
       expect([reopened.entries, await store.notes()], [isEmpty, isEmpty]);
     });
 
+    test('Hold to talk: the tip shows until a first voice note starts, also after a restart; a failed start keeps it', () async {
+      final relay = voiceController();
+      await relay.load();
+      expect(relay.holdTipSeen, isFalse);
+      microphone.allowed = false;
+      expect(await relay.startVoiceNote(), contains('microphone'));
+      microphone.allowed = true;
+      microphone.startError = Exception('busy');
+      expect(await relay.startVoiceNote(), 'The microphone did not start. Try again.');
+      expect([relay.holdTipSeen, await store.get(holdTipKey)], [false, null]);
+      expect(await relay.startVoiceNote(), isNull);
+      expect(relay.holdTipSeen, isTrue);
+      await relay.cancelVoiceNote();
+      relay.dispose();
+      final reopened = voiceController();
+      await reopened.load();
+      expect(reopened.holdTipSeen, isTrue);
+    });
+
+    test('the sound level shows only while it listens, and ends when the note is saved or cancelled', () async {
+      final relay = voiceController();
+      await relay.load();
+      expect(relay.level, isNull);
+      microphone.heard = [0.4, 0.7];
+      await relay.startVoiceNote();
+      expect(await relay.level!.take(2).toList(), [0.4, 0.7]);
+      var ended = relay.level!.toList();
+      clock = clock.add(const Duration(seconds: 2));
+      expect(await relay.endVoiceNote(), isNull);
+      expect([await ended, relay.level], [isEmpty, isNull]);
+      microphone.heard = const [];
+      await relay.startVoiceNote();
+      ended = relay.level!.toList();
+      await relay.cancelVoiceNote();
+      expect([await ended, relay.level], [isEmpty, isNull]);
+      await relay.wordsWritten();
+    });
+
     test('a bump in a pocket: a 0.3 s press saves nothing and the timeline does not change', () async {
       final relay = voiceController();
       await relay.load();

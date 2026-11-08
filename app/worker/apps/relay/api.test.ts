@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { handleApp } from "../index";
 import { hashToken } from "./people";
 import { spaceOf, vouch } from "./space";
-import { ANA, call, checker, db, directoryDb, env, laptop, lost, makeKey, matthew, NOW, ipad, phone, queue, request, rows,
+import { ANA, benPhone, call, checker, db, directoryDb, env, laptop, lost, makeKey, matthew, NOW, ipad, phone, queue, request, rows,
   type Who } from "../../../tests/relay";
 
 const MINUTE = 60_000;
@@ -160,8 +160,10 @@ it("streams a ring note's recording, and answers not found for a note without on
     expect((await call(matthew, "GET", "audio", { id })).status, String(id)).toBe(status);
   }
   expect((await call(matthew, "GET", "audio")).status).toBe(400);
-  // A device key only sends: it plays no recording.
-  for (const [who, status] of [[phone, 403], [ipad, 403], [null, 401]] as const) expect((await play(who, RING)).status).toBe(status);
+  // The person's phones play it too, to sync; a chat key can't, and another person's phone finds nothing.
+  for (const [who, status] of [[phone, 200], [ipad, 200], [laptop, 403], [benPhone, 404], [null, 401]] as const) {
+    expect((await play(who, RING)).status, JSON.stringify(who)).toBe(status);
+  }
 });
 
 it("answers one byte range of a recording, as Safari asks before it plays", async () => {

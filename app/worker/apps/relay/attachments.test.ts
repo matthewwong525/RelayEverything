@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { handleApp } from "../index";
-import { ANA, bucket, call, env, matthew, NOW, phone, ipad, request, rows, type Who } from "../../../tests/relay";
+import { ANA, benPhone, bucket, call, env, laptop, matthew, NOW, phone, ipad, request, rows, type Who } from "../../../tests/relay";
 
 const PDF = new TextEncoder().encode("%PDF-1.7 warranty");
 const PNG = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -61,8 +61,10 @@ it("seals each listed file once, shows it as waiting until it comes, and opens i
   // A waiting file, an unknown one or a bad id opens nothing.
   expect((await open(matthew, "file-none-0001")).status).toBe(404);
   expect((await open(matthew, "../x")).status).toBe(400);
-  // A device key only adds: it can't read a file back.
-  expect((await open(phone, "file-pdf-0001")).status).toBe(403);
+  // The person's phones open it too, to sync; a chat key can't, and another person's phone finds nothing.
+  for (const who of [phone, ipad]) expect(new Uint8Array(await (await open(who, "file-pdf-0001")).arrayBuffer())).toEqual(PDF);
+  expect((await open(laptop, "file-pdf-0001")).status).toBe(403);
+  expect((await open(benPhone, "file-pdf-0001")).status).toBe(404);
 });
 
 it("refuses a file its note does not list, one on another device's note, and one over 25 MB", async () => {

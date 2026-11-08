@@ -37,7 +37,7 @@ The key starts with `rek_`. It adds data only to your own space. [Keys](../../ap
    Or tap **Or paste the key**, paste it, and tap **Connect**.
 4. If you wrote notes before, the app asks **Send your earlier notes too?** Tap **Send them** to send them, or **Only new notes** to keep them only on the phone. The app asks again each time you turn sending on.
 
-To connect, the phone checks its key with the server, and reads no data. Once connected, it reads only the names of your AI apps and webhooks, for **Connections** on Home: [Connections on Home](../../app/your-notes/#connections-on-home). Then your notes go to your space. The key only adds data, so the phone shows only its own notes: ring notes and recordings are on your Relay Everything page, and **Open your Relay Everything page** opens it. Close the page with the QR code when the phone is connected: the key does not show again.
+To connect, the phone checks its key with the server, and reads no data. Once connected, it reads the names of your AI apps and webhooks, for **Connections** on Home: [Connections on Home](../../app/your-notes/#connections-on-home). Then your notes go to your space, and the phone gets your notes from your other phones, email and AI apps: [Your notes on every phone](../../app/your-notes/#your-notes-on-every-phone). The key reads no health, calendar, places or photos. Close the page with the QR code when the phone is connected: the key does not show again.
 
 ## Stop sending
 

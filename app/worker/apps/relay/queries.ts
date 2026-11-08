@@ -27,8 +27,9 @@ export type Note = ReturnType<typeof shaped>;
 
 const FILES = `(SELECT json_group_array(json_object('id', a.id, 'name', a.name, 'type', a.content_type, 'size', a.size,
   'ready', a.file_key IS NOT NULL)) FROM (SELECT * FROM relay_attachments WHERE note_id = n.id ORDER BY rowid) a) AS files`;
-const NOTE = `SELECT n.id, n.source, n.text, n.recorded_at, d.name AS device, n.audio_key IS NOT NULL AS audio, n.lat, n.lon,
-  n.accuracy, n.place, n.place_from, ${FILES} FROM relay_notes n JOIN relay_devices d ON d.id = n.device_id`;
+const COLUMNS = `n.id, n.source, n.text, n.recorded_at, d.name AS device, n.audio_key IS NOT NULL AS audio, n.lat, n.lon,
+  n.accuracy, n.place, n.place_from, ${FILES}`;
+const NOTE = `SELECT ${COLUMNS} FROM relay_notes n JOIN relay_devices d ON d.id = n.device_id`;
 
 export type NoteFilter = { before?: number; beforeId?: string; after?: number; source?: "ring" | "typed"; words?: string[]; limit: number };
 
@@ -51,6 +52,21 @@ export async function notePage(db: Db, filter: NoteFilter) {
 export async function noteById(db: Db, id: string): Promise<Note | null> {
   const row = await db.prepare(`${NOTE} WHERE n.id = ?`).bind(id).first<Row>();
   return row && shaped(row);
+}
+
+type SyncRow = Row & { seq: number; client_id: string | null; edited_at: number | null; device_id: string };
+const SYNCED = `SELECT c.seq, n.client_id, n.edited_at, n.device_id, ${COLUMNS} FROM relay_note_changes c
+  JOIN relay_notes n ON n.id = c.note_id JOIN relay_devices d ON d.id = n.device_id`;
+
+/** The timeline's note, and what a phone needs to sync it: its own id, whether it sent it, and the last change. */
+const synced = (row: SyncRow, deviceId: string | null) =>
+  ({ ...shaped(row), clientId: row.client_id, mine: row.device_id === deviceId, editedAt: row.edited_at });
+
+/** The notes changed after change number `since`, oldest change first; `next` is the page's last number. */
+export async function noteChanges(db: Db, since: number, limit: number, deviceId: string | null) {
+  const { results } = await db.prepare(`${SYNCED} WHERE c.seq > ? ORDER BY c.seq LIMIT ?`).bind(since, limit + 1).all<SyncRow>();
+  const page = results.slice(0, limit);
+  return { notes: page.map(row => synced(row, deviceId)), next: page.at(-1)?.seq ?? since, more: results.length > limit };
 }
 
 // Spans arrive as one bound JSON array, numbered from 0 by json_each's key.

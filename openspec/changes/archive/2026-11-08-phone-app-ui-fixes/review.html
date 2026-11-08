@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · phone-app-ui-fixes</title>
+<title>Review · 2026-11-08-phone-app-ui-fixes</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="phone-app-ui-fixes" data-own-back>
+<body data-change="2026-11-08-phone-app-ui-fixes" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>phone-app-ui-fixes</h1>
+  <h1>2026-11-08-phone-app-ui-fixes</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -483,6 +483,7 @@
 <li class="decision card" id="decision-14" data-note="decision-14" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-08</p>Assumed: an address typed in this visit becomes a link once editing ends (✓ or the keyboard goes down), because the spec promises typed addresses work.</li>
 <li class="decision card" id="decision-15" data-note="decision-15" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-08</p>Assumed: the iPhone tour's Settings flow taps the gear and waits for <i>Appearance</i>, because the change removes Home's ⋯ that the flow tapped. Correction to the entry on prototype pictures: this computer has Flutter (<code>/opt/flutter</code>), and the build ran <code>flutter analyze</code> and 413 tests on it. Saved for final acceptance: built and reviewed in two rounds; the iPhone device check (6.2) runs on the saved commit.</li>
 <li class="decision card" id="decision-16" data-note="decision-16" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-08</p>Assumed: after #64 (note sync) merged, <code>_refresh</code> in <code>home.dart</code> and <code>timeline.dart</code> calls <code>relay.pullNotes</code>, so <i>Sync now</i>, a tap on the sync state, and pull to refresh all send what waits and then take notes from the person's other devices. <i>Open your Relay Everything page</i> sits on <i>Sending</i> in the server group, beside #64's rows; #65's plain-tap headers are kept.</li>
+<li class="decision card" id="decision-17" data-note="decision-17" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-08</p>Check: the iPhone device check on 4e5d776 (run 42499289534) gave <i>works</i>: the fixed tour passed all four steps, and each scenario showed its THEN: the ⋯ menu under its button inside the screen, the gear opening Settings, <i>Appearance</i> with Dark and Light applied at once, the version line, <i>On this phone</i> with no ↻ while sending is off, and a typed address shown as a link without the word after it.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

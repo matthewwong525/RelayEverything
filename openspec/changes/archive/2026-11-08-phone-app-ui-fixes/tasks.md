@@ -31,7 +31,7 @@
 ## 6. Checks
 
 - [x] 6.1 `flutter analyze` and `flutter test` in `mobile/`; `node scripts/product-name.test.mjs`; `node scripts/public-check.mjs`.
-- [ ] 6.2 The iPhone device check shows the note's ⋯ menu inside the screen, Settings with *Appearance* in dark and light, and the ↻ beside the sync state.
+- [x] 6.2 The iPhone device check shows the note's ⋯ menu inside the screen, Settings with *Appearance* in dark and light, and the ↻ beside the sync state.
 
 ## 7. Review fixes
 

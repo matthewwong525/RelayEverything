@@ -1,6 +1,6 @@
 # Phone app fixes: a menu that fits, light or dark, a Settings gear and Sync now in view
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** ui-fixes-settings-theme-toggle
 **Open questions:** none
 
@@ -104,3 +104,4 @@ None.
 - **2026-11-08** — Assumed: an address typed in this visit becomes a link once editing ends (✓ or the keyboard goes down), because the spec promises typed addresses work.
 - **2026-11-08** — Assumed: the iPhone tour's Settings flow taps the gear and waits for *Appearance*, because the change removes Home's ⋯ that the flow tapped. Correction to the entry on prototype pictures: this computer has Flutter (`/opt/flutter`), and the build ran `flutter analyze` and 413 tests on it. Saved for final acceptance: built and reviewed in two rounds; the iPhone device check (6.2) runs on the saved commit.
 - **2026-11-08** — Assumed: after #64 (note sync) merged, `_refresh` in `home.dart` and `timeline.dart` calls `relay.pullNotes`, so *Sync now*, a tap on the sync state, and pull to refresh all send what waits and then take notes from the person's other devices. *Open your Relay Everything page* sits on *Sending* in the server group, beside #64's rows; #65's plain-tap headers are kept.
+- **2026-11-08** — Check: the iPhone device check on 4e5d776 (run 42499289534) gave *works*: the fixed tour passed all four steps, and each scenario showed its THEN: the ⋯ menu under its button inside the screen, the gear opening Settings, *Appearance* with Dark and Light applied at once, the version line, *On this phone* with no ↻ while sending is off, and a typed address shown as a link without the word after it.

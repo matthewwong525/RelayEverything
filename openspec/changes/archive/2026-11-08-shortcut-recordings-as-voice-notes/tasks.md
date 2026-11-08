@@ -23,4 +23,4 @@
 ## 4. Checks
 
 - [x] 4.1 Run `flutter analyze` and `flutter test` in `mobile/`, `node scripts/public-check.mjs`, and `node scripts/product-name.test.mjs`.
-- [ ] 4.2 `/save`, and confirm the iOS CI build compiles the Swift change.
+- [x] 4.2 `/save`, and confirm the iOS CI build compiles the Swift change.

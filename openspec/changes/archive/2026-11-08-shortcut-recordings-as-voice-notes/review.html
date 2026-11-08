@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · shortcut-recordings-as-voice-notes</title>
+<title>Review · 2026-11-08-shortcut-recordings-as-voice-notes</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="shortcut-recordings-as-voice-notes" data-own-back>
+<body data-change="2026-11-08-shortcut-recordings-as-voice-notes" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>shortcut-recordings-as-voice-notes</h1>
+  <h1>2026-11-08-shortcut-recordings-as-voice-notes</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -469,6 +469,7 @@
 <li class="decision card" id="decision-7" data-note="decision-7" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-08</p>Assumed (build): Swift writes the WAV into the note's inbox folder, <code>shortcuts-inbox/&lt;id&gt;/voice.wav</code>, and the app moves it to <code>voice/&lt;id&gt;.wav</code> only after it keeps the note, because the app's sweep for stray recordings, which runs as it opens, deleted a WAV written to <code>voice/</code> before its note was kept.</li>
 <li class="decision card" id="decision-8" data-note="decision-8" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-08</p>Assumed (build): the note page shows a voice note's typed words above <i>Writing the words…</i> or <i>Try again</i>, because a shortcut's label is the only words the note has until its own words are written, and a page with no words looks empty.</li>
 <li class="decision card" id="decision-9" data-note="decision-9" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-08</p>Built and reviewed; local checks pass (287 phone tests). The second look found a Swift compile error and a weak sweep test, both fixed, then nothing. Left: the iPhone CI build compiles the Swift change, then Matthew runs his <i>Record audio</i> shortcut on the TestFlight build.</li>
+<li class="decision card" id="decision-10" data-note="decision-10" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-08</p>Archive checkpoint: all checks passed on PR #55, including the iPhone TestFlight build, so the Swift change compiles. Left after publish: Matthew runs his <i>Record audio</i> shortcut on the new TestFlight build.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

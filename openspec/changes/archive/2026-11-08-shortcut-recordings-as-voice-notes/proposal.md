@@ -1,6 +1,6 @@
 # Proposal: A recording from Shortcuts becomes a voice note
 
-**Status:** ready-to-ship
+**Status:** shipped
 **Branch:** add-audio-recording-to-note
 **Open questions:** none
 
@@ -68,6 +68,8 @@ Matthew has a shortcut that records audio and sends it by email with a note. He 
 - **2026-11-08** — Assumed (build): the note page shows a voice note's typed words above *Writing the words…* or *Try again*, because a shortcut's label is the only words the note has until its own words are written, and a page with no words looks empty.
 
 - **2026-11-08** — Built and reviewed; local checks pass (287 phone tests). The second look found a Swift compile error and a weak sweep test, both fixed, then nothing. Left: the iPhone CI build compiles the Swift change, then Matthew runs his *Record audio* shortcut on the TestFlight build.
+
+- **2026-11-08** — Archive checkpoint: all checks passed on PR #55, including the iPhone TestFlight build, so the Swift change compiles. Left after publish: Matthew runs his *Record audio* shortcut on the new TestFlight build.
 
 ## Capabilities
 

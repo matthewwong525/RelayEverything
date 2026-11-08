@@ -1,5 +1,5 @@
-# Settings: open it from the gear on Home; it holds the Appearance, Notes and Voice notes groups. Sending has its own
-# folder on Home.
+# Settings: open it from the gear on Home. Signed out, its first row is the Account row, Sign in to Relay Everything,
+# then the Appearance, Notes and Voice notes groups. A tap on the Account row opens the Sign in screen.
 appId: com.matthewwong525.relayApp
 ---
 - launchApp:
@@ -18,18 +18,15 @@ appId: com.matthewwong525.relayApp
 - assertVisible: "Voice notes"
 # Flutter joins a row's title and subtitle into one label, so match its start.
 - assertVisible: 'Pin notes to where I am(.|\n)*'
+# The Account row joins its title and its line, Your notes stay on this phone until you sign in.
+- assertVisible: 'Sign in to Relay Everything(.|\n)*'
 - assertNotVisible: 'Send my notes(.|\n)*'
 - takeScreenshot: settings
-# Back on Home, Sending opens its own page, with the sending switch off.
-# The back button's label joins its tooltip, Back, and the page it names, Home.
-- tapOn: '(.|\n)*Home(.|\n)*'
-# Sending sits low on Home, under Search and New note on a small screen: scroll it to the middle first.
-- scrollUntilVisible:
-    element: 'Sending(.|\n)*'
-    direction: DOWN
-    centerElement: true
-- tapOn: 'Sending(.|\n)*'
+# The Account row opens the Sign in screen, with Sign in to connect first and the quiet ways below it.
+- tapOn: 'Sign in to Relay Everything(.|\n)*'
 - extendedWaitUntil:
-    visible: 'Send my notes(.|\n)*'
+    visible: "Sign in to connect"
     timeout: 10000
-- takeScreenshot: sending
+- assertVisible: "Scan a key"
+- assertVisible: "Send to my own webhook instead"
+- takeScreenshot: sign-in

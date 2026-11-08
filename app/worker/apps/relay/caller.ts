@@ -13,8 +13,8 @@ export const SESSION_COOKIE = "__Host-relay_session";
 /** A browser keeps a `__Host-` cookie only from https, so a local run on http uses the plain name. */
 export const sessionCookie = (url: URL) => url.protocol === "https:" ? SESSION_COOKIE : "relay_session";
 
-/** A key's reach: POST and `GET key` (its own name); a phone also reads `GET connections` (names) and its person's
- *  notes and files, and changes or deletes any note. `GET chats` and a send share an address: the method counts. */
+/** A key's reach: POST and `GET key` (its own name); a phone also reads `GET connections` (email and names) and its
+ *  person's notes and files, and changes or deletes any note. `GET chats` and a send share an address. */
 const REACH: Record<Reach, { routes: RegExp; refusal: string }> = {
   phone: { routes: /^\/apps\/relay\/api\/(?:notes|attachments|health|locations|calendar|photos)$/, refusal: "A device key can only send to Relay Everything." },
   chats: { routes: /^\/apps\/relay\/api\/(?:chats|chat-saves)$/, refusal: "A chat key can only send chats." },
@@ -22,7 +22,7 @@ const REACH: Record<Reach, { routes: RegExp; refusal: string }> = {
 };
 const KEY_CHECK = "/apps/relay/api/key";
 const NOTES = "/apps/relay/api/notes";
-/** A phone's reads: its person's AI app and webhook names, and notes, their files and old ring recordings to sync. */
+/** A phone's reads: its account's email, AI app and webhook names, notes, files and old ring recordings. */
 const PHONE_READS = /^\/apps\/relay\/api\/(?:connections|notes|attachment|audio)$/;
 
 /** True when a key of this reach may call the method on the address. */

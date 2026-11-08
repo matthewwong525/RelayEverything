@@ -96,11 +96,14 @@ class WebhookProblem {
   final String? file;
 }
 
-/// The names of what the person connected on their Relay Everything page, as the server last answered: the one thing a
-/// phone key reads. No address, secret or send state.
+/// The account's email and the names of what the person connected on their Relay Everything page, as the server last
+/// answered. No address, secret or send state.
 class Connections {
-  const Connections({this.aiApps = const [], this.webhooks = const []});
+  const Connections({this.email, this.aiApps = const [], this.webhooks = const []});
 
+  /// The email of the account this phone's key belongs to; null from a server older than this field, and in a copy
+  /// kept before it.
+  final String? email;
   final List<String> aiApps;
   final List<String> webhooks;
 
@@ -108,12 +111,14 @@ class Connections {
   factory Connections.fromJson(Map<String, dynamic> json) {
     List<String> names(Object? list) =>
       [for (final item in list is List ? list : const []) if (item is Map && item['name'] is String) item['name'] as String];
-    return Connections(aiApps: names(json['aiApps']), webhooks: names(json['webhooks']));
+    final email = json['email'];
+    return Connections(email: email is String && email.isNotEmpty ? email : null, aiApps: names(json['aiApps']),
+      webhooks: names(json['webhooks']));
   }
 
   static Connections? decode(String? saved) => saved == null ? null : Connections.fromJson(jsonDecode(saved) as Map<String, dynamic>);
 
-  String encode() => jsonEncode({'aiApps': [for (final name in aiApps) {'name': name}],
+  String encode() => jsonEncode({if (email != null) 'email': email, 'aiApps': [for (final name in aiApps) {'name': name}],
     'webhooks': [for (final name in webhooks) {'name': name}]});
 }
 
@@ -136,12 +141,12 @@ abstract class Relay extends ChangeNotifier {
   /// True on iPhone, where *Location history* has two ways to keep places.
   bool get locationModes;
 
-  /// The names of the person's AI apps and webhooks, as their Relay Everything server last answered; null before an
-  /// answer, and after sending stops.
+  /// The account's email and the names of the person's AI apps and webhooks, as their Relay Everything server last
+  /// answered; null before an answer, and after sending stops.
   Connections? get connections;
   /// Asks the server for [connections], only while sending to a Relay Everything server; else it makes no request.
   Future<void> refreshConnections();
-  /// The Home headers the person folded, such as *Connections*. The phone keeps them.
+  /// The Home headers the person folded, such as *On this phone*. The phone keeps them.
   Set<String> get folded;
   Future<void> setFolded(String header, bool folded);
 
@@ -188,7 +193,7 @@ abstract class Relay extends ChangeNotifier {
   /// Keeps notes and the key.
   Future<void> stopSending();
 
-  /// Forgets the key, turns sending off, and deletes the notes from elsewhere.
+  /// *Sign out*: forgets the key, turns sending off, and deletes the notes from elsewhere.
   Future<void> disconnect();
   Future<void> sync();
   /// Sends what waits, then reads the notes changed elsewhere: at start, on return to the app, and on pull-down.

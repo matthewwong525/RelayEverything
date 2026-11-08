@@ -46,14 +46,22 @@ void main() {
     await back();
     await openSettings(tester);
     expect(materialIcons(), findsNothing, reason: 'Settings');
+    await tester.tap(find.byKey(const ValueKey('account')));
+    await tester.pumpAndSettle();
+    expect(materialIcons(), findsNothing, reason: 'the Sign in page');
+    await tester.tap(find.text('Send to my own webhook instead'));
+    await tester.pumpAndSettle();
+    expect(materialIcons(), findsNothing, reason: 'the Sign in page, My own webhook picked');
     await back();
-    await openFolder(tester, 'Sending');
-    expect(materialIcons(), findsNothing, reason: 'Sending');
-    await tester.tap(find.text('Send my notes'));
+    // The Account page, signed in.
+    relay
+      ..connected = true
+      ..server = 'https://relay.example.com'
+      ..settings = const Settings(sending: true)
+      ..changed();
     await tester.pumpAndSettle();
-    expect(materialIcons(), findsNothing, reason: 'the connect page, Relay Everything picked');
-    await tester.tap(find.text('My own webhook'));
+    await tester.tap(find.byKey(const ValueKey('account')));
     await tester.pumpAndSettle();
-    expect(materialIcons(), findsNothing, reason: 'the connect page, My own webhook picked');
+    expect(materialIcons(), findsNothing, reason: 'the Account page');
   }, variant: const TargetPlatformVariant({TargetPlatform.android, TargetPlatform.iOS}));
 }

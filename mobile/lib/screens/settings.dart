@@ -1,18 +1,27 @@
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../brand.dart';
 import '../relay.dart';
 import '../voice/model.dart' show megabytes;
+import 'account.dart';
 import 'back_to.dart';
-import 'folder.dart' show Group, apply;
+import 'connect.dart' show Scanner;
+import 'folder.dart' show Group, Opener, apply, choosePlace, hostOf;
+import 'timeline.dart' show openPage;
 
-/// What is about this phone alone: *Appearance*, *Pin notes to where I am*, the speech model, and at the bottom the
-/// app's version and build. Sending and each kind of phone data have their own folder on Home.
+/// The Account row first, as the Apple Account row in iPhone Settings, then what is about this phone alone:
+/// *Appearance*, *Pin notes to where I am*, the speech model, and at the bottom the app's version and build. Each kind
+/// of phone data has its own folder on Home.
 class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key, required this.relay});
+  const SettingsScreen({super.key, required this.relay, this.scanner, this.opener});
 
   final Relay relay;
+  /// The QR scanner the sign-in uses; a test passes its own.
+  final Scanner? scanner;
+  /// Opens the Relay Everything page; a test passes its own.
+  final Opener? opener;
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +31,7 @@ class SettingsScreen extends StatelessWidget {
         builder: (context, _) => CustomScrollView(slivers: [
           SliverAppBar.large(leading: const BackTo('Home'), leadingWidth: BackTo.widthOf('Home'), title: const Text('Settings')),
           SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 32), sliver: SliverList.list(children: [
+            _AccountRow(relay: relay, scanner: scanner, opener: opener),
             Group(title: 'Appearance', children: [_AppearanceRow(relay: relay)]),
             Group(title: 'Notes', children: [
               SwitchListTile(
@@ -35,6 +45,48 @@ class SettingsScreen extends StatelessWidget {
             const _Version(),
           ])),
         ]),
+      ),
+    );
+  }
+}
+
+/// The account, in its own card: signed in, the Relay Everything mark, the email and the server; with the person's
+/// own webhook, *My own webhook* and its address; else *Sign in to Relay Everything*. Signed out, a tap opens the
+/// sign-in; else it opens the Account page.
+class _AccountRow extends StatelessWidget {
+  const _AccountRow({required this.relay, this.scanner, this.opener});
+
+  final Relay relay;
+  final Scanner? scanner;
+  final Opener? opener;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = brandOf(context);
+    final state = accountOf(relay);
+    final email = relay.connections?.email;
+    final (String title, String? line) = switch (state) {
+      AccountState.signedIn => (email ?? hostOf(relay.server), email == null ? null : hostOf(relay.server)),
+      AccountState.webhook => ('My own webhook', hostOf(relay.webhookAddress)),
+      AccountState.signedOut => ('Sign in to Relay Everything', 'Your notes stay on this phone until you sign in.'),
+    };
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          key: const ValueKey('account'),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          leading: state == AccountState.webhook
+            ? Icon(CupertinoIcons.link, size: 32, color: brand.accentText)
+            : const RelayMark(size: 40),
+          title: Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: brand.ink)),
+          subtitle: line == null ? null : Text(line, style: TextStyle(fontSize: 13, color: brand.muted)),
+          trailing: Icon(CupertinoIcons.chevron_forward, color: brand.muted),
+          onTap: () => state == AccountState.signedOut
+            ? choosePlace(context, relay, scanner)
+            : openPage(context, AccountPage(relay: relay, opener: opener)),
+        ),
       ),
     );
   }

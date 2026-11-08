@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show ValueKey;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -49,10 +50,14 @@ void main() {
     expectOneLine(tester, 'No notes ·');
     await tester.pageBack();
     await tester.pumpAndSettle();
-    await openFolder(tester, 'Sending');
-    for (final title in ['Sending', 'Send my notes', 'Where the phone sends']) {
+    await openSettings(tester);
+    await tester.tap(find.byKey(const ValueKey('account')));
+    await tester.pumpAndSettle();
+    for (final title in ['Account', 'AI apps', 'Webhooks', 'Sign out']) {
       expectOneLine(tester, title);
     }
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await tester.pageBack();
     await tester.pumpAndSettle();
     await openFolder(tester, 'Location');

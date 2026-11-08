@@ -9,7 +9,8 @@ appId: com.matthewwong525.relayApp
 # A row's label joins its name, its status and its count, so match inside it.
 - assertVisible: 'Voice notes(.|\n)*'
 - assertVisible: 'Location(.|\n)*Off(.|\n)*'
-- assertVisible: 'AI apps(.|\n)*Sign in to see(.|\n)*'
+# Sign-in and connections live in Settings now, not on Home.
+- assertNotVisible: 'Connections(.|\n)*'
 # New note is a round button with no visible words: Maestro finds it by its accessibility label.
 - assertVisible: "New note"
 - assertVisible: "Search"

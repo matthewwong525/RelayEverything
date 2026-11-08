@@ -37,7 +37,7 @@ With sending off, the app makes no network call, reads no health data, no calend
 Each person's data is in their own space: a separate store that holds only that person's notes, health, calendar events, places, photos, chats, devices and webhooks. One shared list holds only who has an account, how they sign in, and a fingerprint of each key.
 
 - **You** see your own space on your Relay Everything page, after you sign in.
-- **Your devices** add data to your space. A phone's key also reads your notes and their files, and changes any note, so each signed-in phone shows all your notes. It can't read your health, calendar, places or photos, and can only add photos, not count or delete them. A chat key reads nothing. If you lose a phone, turn off its key on your Relay Everything page at once: [Keys](../api/keys/#make-list-and-turn-off-keys).
+- **Your devices** add data to your space. A phone's key also reads your notes and their files, and changes or deletes any note, so each signed-in phone shows all your notes. It can't read your health, calendar, places or photos, and can only add photos, not count or delete them. A chat key reads nothing. If you lose a phone, turn off its key on your Relay Everything page at once: [Keys](../api/keys/#make-list-and-turn-off-keys).
 - **Your other phones** get your notes only while they are signed in with sending on and Relay Everything picked. A phone that sends to your own webhook gets none.
 - **Your AI apps** read only your space, and add notes to it, only after you connect them: [Connect your AI](../connections/connect-your-ai/). Only your page and your AI apps can open a photo.
 - **Your own scripts and services** read your space and add notes through the web API, only with an API key you made or after you connect them: [Connect a service](../api/connect-a-service/).
@@ -65,7 +65,8 @@ Click **Delete my account** on your Relay Everything page, and type your email t
 | Part | How |
 |---|---|
 | Everything sent | Turn off **Send my notes** on the app's [Sending](../app/settings/#sending) page. Health, the calendar, location and photos stop, and what of them did not go yet is deleted. |
-| Voice notes | Do not tap **Get it**, or tap **Remove** in Settings to delete the speech model. Delete a recording by removing the app. |
+| A note | [Delete it](../app/your-notes/#delete-a-note) with a swipe or **⋯** → **Delete**. With sending on, your server deletes the note, its files and its recording too, and each webhook gets `note.deleted`. A copy your webhook already saved stays in your own database until your receiver deletes it. |
+| Voice notes | Do not tap **Get it**, or tap **Remove** in Settings to delete the speech model. Delete a recording by deleting its note, or by removing the app. |
 | Pins on typed notes | Turn off **Pin notes to where I am** in Settings. |
 | Location history | Turn off **Location history** in the app's **Location** folder. |
 | Photos | Turn off **Photos** in the app's **Photos** folder: the copies that did not go yet are deleted. To delete the photos already sent, click **Delete all photos** on your Relay Everything page: [Photos](../app/photos/#delete-all-photos). |

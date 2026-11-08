@@ -11,9 +11,11 @@ typedef MoreItem = (String label, IconData icon, VoidCallback onPressed);
 /// side of the screen, with round corners on the card color. A bare `MenuAnchor` opens from the button's left edge, so
 /// near the right edge of the screen it runs off and Flutter pushes it flush against the edge.
 class MoreMenu extends StatefulWidget {
-  const MoreMenu({super.key, required this.items, required this.builder});
+  const MoreMenu({super.key, required this.items, this.destructive, required this.builder});
 
   final List<MoreItem> items;
+  /// An item that deletes, such as *Delete*: last, in the danger color, as Apple draws it.
+  final MoreItem? destructive;
   /// The button: a tap on it calls `toggle`, which opens the menu, or closes it when it is open.
   final Widget Function(BuildContext context, VoidCallback toggle) builder;
 
@@ -59,15 +61,17 @@ class _MoreMenuState extends State<MoreMenu> {
         maximumSize: const WidgetStatePropertyAll(Size(MoreMenu.width, double.infinity)),
       ),
       menuChildren: [
-        for (final (label, icon, onPressed) in widget.items)
-          // A menu's items keep their own width; each fills the menu, so its press fills the row.
-          SizedBox(width: MoreMenu.width, child: MenuItemButton(
-            leadingIcon: Icon(icon, size: 20, color: brand.muted),
-            onPressed: onPressed,
-            child: Text(label, style: TextStyle(fontSize: 16, color: brand.ink)),
-          )),
+        for (final item in widget.items) _item(item, brand.muted, brand.ink),
+        if (widget.destructive case final item?) _item(item, brand.danger, brand.danger),
       ],
       builder: (anchor, _, _) => widget.builder(anchor, () => _toggle(anchor)),
     );
   }
+
+  // A menu's items keep their own width; each fills the menu, so its press fills the row.
+  Widget _item(MoreItem item, Color icon, Color ink) => SizedBox(width: MoreMenu.width, child: MenuItemButton(
+    leadingIcon: Icon(item.$2, size: 20, color: icon),
+    onPressed: item.$3,
+    child: Text(item.$1, style: TextStyle(fontSize: 16, color: ink)),
+  ));
 }

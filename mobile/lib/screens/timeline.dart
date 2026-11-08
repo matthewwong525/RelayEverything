@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 
 import '../brand.dart';
 import '../editor/markdown.dart' show plainText;
@@ -365,8 +367,22 @@ String _preview(Entry entry) {
   return entry.files.skip(1).map((file) => file.name).join(', ');
 }
 
+/// *Note deleted* with *Undo* for [undoTime], after a swipe or ⋯ → *Delete*. It takes the messenger, as the note page
+/// that deletes may be gone when it shows. The delete runs when the bar closes with no *Undo*, never while it shows:
+/// the bar's own time starts only once it is in.
+void showDeleted(ScaffoldMessengerState? messenger, Relay relay, String id) {
+  if (messenger == null) return;
+  messenger.hideCurrentSnackBar();
+  final bar = messenger.showSnackBar(SnackBar(content: const Text('Note deleted'), duration: undoTime, persist: false,
+    action: SnackBarAction(label: 'Undo', onPressed: () => unawaited(relay.undoDelete(id)))));
+  unawaited(bar.closed.then((reason) {
+    if (reason != SnackBarClosedReason.action) unawaited(relay.endUndo(id));
+  }));
+}
+
 /// One note in its day's card: the first line in bold; the time, where a note from elsewhere came from, and the rest of
-/// the words; then its kind, length, place and send state. A first picture shows small at the right. A tap opens it.
+/// the words; then its kind, length, place and send state. A first picture shows small at the right. A tap opens it;
+/// a swipe to the left, or a screen reader's *Delete*, deletes it with *Undo*.
 class _NoteRow extends StatelessWidget {
   const _NoteRow({required this.entry, required this.relay, required this.onTap});
 
@@ -380,7 +396,7 @@ class _NoteRow extends StatelessWidget {
     final muted = TextStyle(fontSize: 13, color: brand.muted);
     final meta = [if (entry.length != null) clockOf(entry.length!), entry.place, sendState(entry)].whereType<String>();
     final picture = entry.files.where((file) => file.picture && file.onPhone).firstOrNull;
-    return InkWell(
+    final row = InkWell(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
@@ -406,6 +422,26 @@ class _NoteRow extends StatelessWidget {
         ]),
       ),
     );
+    if (entry.id.isEmpty) return row;
+    // A node of its own, so a screen reader's *Delete* is on this row, not on the whole card.
+    return Semantics(
+      container: true,
+      customSemanticsActions: {const CustomSemanticsAction(label: 'Delete'): () => _delete(context)},
+      child: Dismissible(
+        key: ValueKey('note:${entry.id}'),
+        direction: DismissDirection.endToStart,
+        background: ColoredBox(color: brand.danger, child: Align(alignment: Alignment.centerRight,
+          child: Padding(padding: const EdgeInsets.only(right: 24), child: Icon(CupertinoIcons.trash, color: brand.onDanger)))),
+        onDismissed: (_) => _delete(context),
+        child: row,
+      ),
+    );
+  }
+
+  void _delete(BuildContext context) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    unawaited(relay.deleteNote(entry.id));
+    showDeleted(messenger, relay, entry.id);
   }
 }
 

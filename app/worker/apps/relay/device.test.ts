@@ -26,10 +26,11 @@ async function gate(who: Who, method: string, path: string, { bindings = {}, hea
   return response && [response.status, (await body(response)).error.message];
 }
 
-it("lets a phone key send, check itself and sync its notes, and nothing else", async () => {
+it("lets a phone key send, check itself, sync, change and delete its notes, and nothing else", async () => {
   for (const path of ROUTES) expect(await gate(phone, "POST", path), path).toBeNull();
   expect(await gate(phone, "GET", KEY)).toBeNull();
   expect(await gate(phone, "PATCH", NOTES)).toBeNull();
+  expect(await gate(phone, "DELETE", NOTES)).toBeNull();
   // Its reads: the names of its person's AI apps and webhooks, and notes, their files and recordings, by GET only.
   for (const path of [CONNECTIONS, NOTES, "/apps/relay/api/attachment", "/apps/relay/api/audio"]) expect(await gate(phone, "GET", path), path).toBeNull();
   expect(await gate(phone, "POST", CONNECTIONS)).toEqual([403, SEND_ONLY]);
@@ -37,8 +38,8 @@ it("lets a phone key send, check itself and sync its notes, and nothing else", a
   for (const [method, path] of [...ROUTES.filter(route => route !== NOTES).map(route => ["GET", route]), ["POST", KEY],
     ["GET", "/apps/relay/api/timeline"], ["GET", "/apps/relay/api/summary"], ["POST", "/apps/relay/api/attachment"], ["POST", "/apps/relay/api/audio"], ["GET", "/apps/relay/api/devices"], ["POST", "/apps/relay/api/devices"],
     ["POST", "/apps/relay/api/account-delete"], ["POST", "/apps/relay/api/photos/delete"], ["GET", "/apps/relay/"], ["GET", "/apps/hello/api/greeting"], ["GET", "/api/health"], ["GET", "/"],
-    ["POST", "/apps/relay/api/notes/x"], ["POST", "/apps/relay/api/pebble"], ["POST", CHATS], ["POST", SAVES], ["GET", CHATS], ["DELETE", ROUTES[1]], ["HEAD", KEY],
-    ["PATCH", "/apps/relay/api/health"], ["PATCH", "/apps/relay/api/notes/x"]]) {
+    ["POST", "/apps/relay/api/notes/x"], ["POST", "/apps/relay/api/pebble"], ["POST", CHATS], ["POST", SAVES], ["GET", CHATS], ["DELETE", ROUTES[2]], ["HEAD", KEY],
+    ["PATCH", "/apps/relay/api/health"], ["PATCH", "/apps/relay/api/notes/x"], ["DELETE", "/apps/relay/api/chat"], ["DELETE", "/apps/relay/api/notes/x"]]) {
     expect(await gate(phone, method, path), `${method} ${path}`).toEqual([403, SEND_ONLY]);
   }
 });
@@ -47,7 +48,7 @@ it("lets a chats key only send chats and saves, and check itself, and nothing el
   for (const path of [CHATS, SAVES]) expect(await gate(laptop, "POST", path), path).toBeNull();
   expect(await gate(laptop, "GET", KEY)).toBeNull();
   for (const [method, path] of [["GET", CHATS], ["GET", "/apps/relay/api/chat"], ["DELETE", "/apps/relay/api/chat"], ["GET", SAVES], ["GET", CONNECTIONS],
-    ...ROUTES.map(route => ["POST", route]), ["PATCH", NOTES], ["GET", NOTES], ["GET", "/apps/relay/api/attachment"], ["GET", "/apps/relay/api/devices"],
+    ...ROUTES.map(route => ["POST", route]), ["PATCH", NOTES], ["DELETE", NOTES], ["GET", NOTES], ["GET", "/apps/relay/api/attachment"], ["GET", "/apps/relay/api/devices"],
     ["GET", "/api/health"]]) {
     expect(await gate(laptop, method, path), `${method} ${path}`).toEqual([403, "A chat key can only send chats."]);
   }

@@ -13,6 +13,17 @@ export 'data/settings.dart' show Appearance, LocationMode, SendPlace, Settings;
 export 'sync/calendar.dart' show PhoneCalendar;
 export 'voice/model.dart' show ModelState, ModelProblem;
 
+/// How long *Undo* shows after a note is deleted. The delete runs when its bar closes.
+const undoTime = Duration(seconds: 5);
+
+/// The longest a delete waits with no *Undo* bar to close it, as after a close: longer than [undoTime] with the bar's
+/// own show and hide, and its wait behind a bar that closes, so a delete never runs while *Undo* still shows.
+const deleteAfter = Duration(seconds: 10);
+
+/// What [Relay.dropEmptyNote] did: a file or recording [kept] the note, a note never sent or queued was [dropped] at
+/// once, or a note the server has or may get is [deleting], with *Undo*.
+enum Emptied { kept, dropped, deleting }
+
 /// One row of the timeline: a note typed or said on this phone, or one from elsewhere that a pull brought.
 class Entry {
   const Entry({this.id = '', required this.text, required this.at, this.place, this.sent = false, this.waiting = false, this.voice = false,
@@ -191,10 +202,18 @@ abstract class Relay extends ChangeNotifier {
   /// Keeps the person's change to note [id]: its new words and files added. A sent note's change goes at the next sync,
   /// and with [sendNow] at once. Returns the words to show for files left out; null when all of it was kept.
   Future<String?> editNote(String id, String text, {List<NewFile> files = const [], bool sendNow = true});
-  /// Deletes note [id] from this phone, as Apple Notes does when you leave a note with no words: the editor calls it once
-  /// the words are blank. Any upload or change of it still waiting goes too, so it is never sent; a copy the server
-  /// took keeps its last words there. A note with a file or a recording stays: false then.
-  Future<bool> dropEmptyNote(String id);
+  /// Deletes note [id], as Apple Notes does when you leave a note with no words: the editor calls it once the words are
+  /// blank. A note never sent, with no upload, goes from this phone at once; a sent note, or one whose upload waits or
+  /// is on its way, is deleted everywhere, as [deleteNote] does, with *Undo*. A note with a file or a recording stays.
+  Future<Emptied> dropEmptyNote(String id);
+  /// Deletes note [id]: it leaves the list at once, and [undoDelete] brings it back until [endUndo], or [deleteAfter] with
+  /// no bar. Then it goes from this phone, and a sent note also from the person's space, their other phones and
+  /// webhooks, at the next send.
+  Future<void> deleteNote(String id);
+  /// Brings back note [id], deleted and not yet gone, as it was. Nothing of the delete left the phone.
+  Future<void> undoDelete(String id);
+  /// The *Undo* bar of note [id] closed with no *Undo*: the delete runs now. A note brought back or gone stays as it is.
+  Future<void> endUndo(String id);
   /// Opens a note's file in an app on the phone. A file not on the phone downloads first, with sending on.
   Future<void> openFile(EntryFile file);
 

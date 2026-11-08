@@ -69,7 +69,7 @@ At the top of the page:
 
 While you type, a round bar floats above the keyboard: **Aa** for [text styles](#text-styles-and-checklists), the checklist button, and the paperclip to [add photos and files](#add-photos-and-files). With the keyboard closed, a bar at the bottom holds the checklist button, the paperclip, and the round compose button, which starts a new note.
 
-If you leave a note with no words and no files, the app deletes it from the phone, as Apple Notes does. A note already sent stays on your page with its last words. A voice note keeps its recording.
+If you leave a note with no words and no files, the app deletes it, as Apple Notes does. A note that your server has, or that is on its way to it, is deleted everywhere, with **Undo**, as when you [delete a note](#delete-a-note). A voice note keeps its recording.
 
 ## Text styles and checklists
 
@@ -101,6 +101,19 @@ The page shows each style as it looks. Inside, the note keeps its styles as plai
 
 Your notes list shows the first line and the start of the rest without these marks. A note that you wrote before styles came opens with the same words, and its first line shows as a title. It does not change until you change it.
 
+## Delete a note
+
+Delete a note in one of two ways:
+
+- In a folder's list, swipe the note's row to the left.
+- On the note's page, tap **⋯**, then **Delete**, the last item, in red. The page closes.
+
+The note leaves the list at once, and the bar at the bottom says **Note deleted**, with **Undo**. Tap **Undo** in the next 5 seconds to get the note back as it was. After that, the phone deletes the note, its files and its recording. With a screen reader, each note's row has a **Delete** action.
+
+With sending on, the delete then goes everywhere: your server deletes the note, its files and its recording, and your page, your AI and your other phones no longer show it. Each of your webhooks gets one [`note.deleted`](../../connections/your-database/#notedeleted) message. You can delete any note, also one from email or another phone. After the 5 seconds you can't undo it.
+
+A delete made with no signal goes on the next sync. With sending off, a note that your server has keeps its delete on the phone, and the delete goes when you turn sending on again, so the note does not come back. A note that never went is deleted from the phone only.
+
 ## Change a sent note
 
 With sending on, a change to a note that your server already has goes to your server when you stop typing. Your Relay Everything page and your AI then read the new words in place of the old ones, and each of your webhooks gets one [`note.updated`](../../connections/your-database/#noteupdated) message. With your own webhook picked on the **Sending** page, the phone sends `note.updated` there itself.
@@ -116,6 +129,7 @@ With sending on and **Relay Everything** picked on the **Sending** page, each ph
 New notes and changes come in when you open the app, when you come back to it, when you pull down the list, and every hour in the background. A note from somewhere else shows where it came from, under its title in the list and at the top of the note.
 
 - **Edit anywhere.** Change a note on one phone, and your other phones, your page and your AI get the new words at their next sync. Each of your webhooks gets one [`note.updated`](../../connections/your-database/#noteupdated) message.
+- **Delete anywhere.** Delete a note on one phone, and it goes from your other phones at their next sync, and from your page and your AI: [Delete a note](#delete-a-note). A note open on another phone stays until you leave it, then goes.
 - **The newer change wins.** If two phones change the same note before they sync, the change made later stays on every phone and on your page, even when the older change arrives last.
 - **Files on tap.** A note from somewhere else lists its files by name and size. Tap one to download it and open it. Only that file downloads, so the phone uses no space or data for files you never open. You add files only to the notes you wrote on this phone.
 - **Voice recordings stay on their phone.** A voice note from another phone shows its words with no recording. A ring note's recording downloads and opens on tap, as a file does.

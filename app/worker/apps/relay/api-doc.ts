@@ -30,11 +30,13 @@ const typeOf = (schema: Schema): string =>
       : schema.type === "array" ? `array of ${typeOf(schema.items!)}`
         : schema.type ?? "any";
 
-/** The object inside a field, whose fields get rows too: the field itself, an array's item, or a nullable's. */
-const inner = (schema: Schema): { object: Schema; list: boolean } | undefined =>
-  schema.properties ? { object: schema, list: false }
-    : schema.items?.properties ? { object: schema.items, list: true }
-      : schema.anyOf?.map(inner).find(Boolean);
+/** The object inside a field, whose fields get rows too: the field itself, an array's item, or a nullable's or union's
+ * first object. */
+function inner(schema: Schema): { object: Schema; list: boolean } | undefined {
+  if (schema.properties) return { object: schema, list: false };
+  const item = schema.items && inner(schema.items);
+  return item ? { object: item.object, list: true } : schema.anyOf?.map(inner).find(Boolean);
+}
 
 function rows(schema: Schema, prefix = ""): string[] {
   const required = new Set(schema.required);

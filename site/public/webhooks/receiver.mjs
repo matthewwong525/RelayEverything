@@ -45,6 +45,8 @@ const file = db.prepare(`INSERT INTO files VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT
   name = excluded.name, content_type = excluded.content_type, size = excluded.size, bytes = excluded.bytes`);
 const event = db.prepare('INSERT OR REPLACE INTO calendar_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
 const photo = db.prepare('INSERT OR REPLACE INTO photos VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+const dropFiles = db.prepare('DELETE FROM files WHERE note_id = ?');
+const dropNote = db.prepare('DELETE FROM notes WHERE id = ?');
 // The same webhook-id again is a retry: it keeps the first row.
 const other = db.prepare('INSERT OR IGNORE INTO other_messages VALUES (?, ?, ?, ?)');
 
@@ -54,10 +56,12 @@ function saveNote({ note: { id, source, text, recorded_at, created_at, device, p
   attachments.forEach(f => listed.run(f.id, id, f.name, f.content_type, f.size));
 }
 
-// One way to save each type this receiver knows. A note.updated holds a changed note's latest words.
+// One way to save each type this receiver knows. A note.updated holds a changed note's latest words; a note.deleted
+// deletes the note and its files.
 const handlers = {
   'note.created': saveNote,
   'note.updated': saveNote,
+  'note.deleted': ({ note: { id } }) => { dropFiles.run(id); dropNote.run(id); },
   'note.file': ({ note_id, file: f }) => file.run(f.id, note_id, f.name, f.content_type, f.size, Buffer.from(f.base64, 'base64')),
   'health.samples': ({ samples }) => samples.forEach(s => sample.run(s.id, s.device.id, s.type, s.start, s.end, s.value, s.unit, s.source)),
   'location.points': ({ points }) => points.forEach(p => point.run(p.id, p.device.id, p.at, p.lat, p.lon, p.accuracy, p.place)),

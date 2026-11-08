@@ -1,7 +1,19 @@
 # The iPhone device check: build the phone app for the simulator, open it on an iPhone, run the fixed tour, then let
 # Claude try the change. It starts only by hand or by the "check on iPhone" label: wiki/development/device-check.md.
+# A release in mobile-ci.yml calls it with tour_only: the fixed tour alone, as a gate, with no Claude.
 name: Mobile device check
 on:
+  workflow_call:
+    inputs:
+      sha:
+        description: The commit to check.
+        required: true
+        type: string
+      tour_only:
+        description: Run the fixed tour with no Claude, and fail unless every step of it passes.
+        required: false
+        type: boolean
+        default: false
   # GitHub starts this by hand only once the file is on the default branch; before that, the label is the only start.
   workflow_dispatch:
     inputs:
@@ -32,7 +44,7 @@ jobs:
   iphone:
     # The label start runs only for a branch in this repository, so a fork's code never gets the key.
     if: >-
-      ${{ github.event_name == 'workflow_dispatch' || (github.event.label.name == 'check on iPhone'
+      ${{ inputs.tour_only || github.event_name == 'workflow_dispatch' || (github.event.label.name == 'check on iPhone'
       && github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: macos-latest
     timeout-minutes: 45
@@ -102,9 +114,14 @@ jobs:
         if: steps.open.outputs.ok == 'true'
         run: bash mobile/device-check/tour.sh
 
+      - name: Tour only
+        if: inputs.tour_only
+        run: |
+          echo "Claude skipped: a release runs the fixed tour only" > "$OUT/claude-skipped.txt"
+
       - name: Claude's key
         id: key
-        if: steps.tour.outputs.ok == 'true'
+        if: steps.tour.outputs.ok == 'true' && !inputs.tour_only
         env:
           HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' || secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
         run: |
@@ -170,6 +187,26 @@ jobs:
           path: out/
           if-no-files-found: error
           retention-days: 14
+
+      # The release gate: it reads each step of tour.json and the verdict, so a release never goes on past a failed or
+      # missing step, or a failed build or Swift test.
+      - name: Every tour step passed
+        if: always() && inputs.tour_only
+        run: |
+          if [ "$(cat "$OUT/verdict.txt" 2>/dev/null)" = broken ]; then
+            echo "::error::$(cat "$OUT/reason.txt" 2>/dev/null || echo 'The check is broken.') The release stops. The file device-check-iphone shows why."
+            exit 1
+          fi
+          if [ ! -s "$OUT/tour.json" ] || [ "$(jq length "$OUT/tour.json")" -eq 0 ]; then
+            echo "::error::The fixed tour did not run, so the release stops. The file device-check-iphone shows why."
+            exit 1
+          fi
+          failed=$(jq -r '[.[] | select(.passed != true) | .flow] | join(", ")' "$OUT/tour.json")
+          if [ -n "$failed" ]; then
+            echo "::error::A step of the fixed tour failed: $failed. The release stops. The file device-check-iphone has the pictures."
+            exit 1
+          fi
+          echo "Every step of the fixed tour passed."
 
   # Posts the report on the pull request. It checks out no branch code, so the write token never shares a machine
   # with it: the same split as deploy.yml.

@@ -14,7 +14,7 @@ if [ -z "$verdict" ]; then
   case "$verdict" in
     works | broken | could-not-check) ;;
     *) verdict=could-not-check
-       if [ -f claude-skipped.txt ]; then reason="Claude skipped: no key. The fixed tour passed."
+       if [ -f claude-skipped.txt ]; then reason="$(cat claude-skipped.txt). The fixed tour passed."
        else reason="Claude gave no verdict. The fixed tour passed."; fi ;;
   esac
 fi

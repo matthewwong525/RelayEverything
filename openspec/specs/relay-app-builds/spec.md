@@ -7,19 +7,23 @@ Turn each version of `mobile/` in RelayEverything into a checked Android app fil
 
 ### Requirement: Each pushed version is checked and built
 
-A pull request or push to RelayEverything that changes `mobile/` SHALL run the Flutter analyzer and tests, then build the Android app file and, when the App Store Connect keys are set, upload an iPhone build to TestFlight; only `main` SHALL publish the Android file as a public release of RelayEverything.
+A pull request or push to RelayEverything that changes `mobile/` SHALL run the Flutter analyzer and tests, then build the Android app file and, when the App Store Connect keys are set, the signed iPhone app. Only a push to `main` SHALL upload an iPhone build to TestFlight or publish the Android file as a RelayEverything pre-release; a branch, pull request or fork SHALL upload and publish nothing. A `main` build SHALL upload and publish only when no newer commit on `main` changes `mobile/`, so TestFlight and the pre-releases never receive an older build after a newer one. Every build SHALL get a build number higher than every build before it, on any branch or tag.
 
 #### Scenario: A published change
-- **WHEN** a change to `mobile/` is published to `main`
-- **THEN** a new RelayEverything release holds the Android app file, and TestFlight receives a build when the Apple keys are set
+- **WHEN** a change to `mobile/` is published to `main` and is the newest change to `mobile/` there
+- **THEN** a new RelayEverything pre-release, not marked latest, holds the Android app file, and TestFlight receives a build when the Apple keys are set
 
 #### Scenario: A pre-publish branch
-- **WHEN** a change's pull request changes `mobile/`
-- **THEN** the Android app file is kept with the run, and no public release is made
+- **WHEN** a change's branch or pull request changes `mobile/`
+- **THEN** the Android app file is kept with the run, the iPhone app builds where the keys allow, and nothing goes to TestFlight or to a release
 
 #### Scenario: A failing test
 - **WHEN** a Flutter test fails
 - **THEN** no release or TestFlight build is made from that commit
+
+#### Scenario: A newer change lands first
+- **WHEN** a `main` build finishes after a newer commit that changes `mobile/` is already on `main`
+- **THEN** it uploads nothing and publishes nothing, and says that a newer build follows
 
 ### Requirement: iPhone builds sign with one saved certificate
 

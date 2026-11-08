@@ -1,5 +1,5 @@
-# Signs the iPhone build with the one saved certificate (scripts/ios-signing-cert.mjs) and sends it to TestFlight.
-# mobile-ios.yml gives it the secrets; it never makes a certificate, as Apple's account holds only a few.
+# Signs the iPhone build with the one saved certificate (scripts/ios-signing-cert.mjs), and never makes one, as Apple's
+# account holds only a few. Main's builds go to TestFlight, and a release to App Store review.
 require "base64"
 require "shellwords"
 require "tmpdir"
@@ -36,17 +36,31 @@ SIGNED_TARGETS = {
   "ShareExtension" => "com.matthewwong525.relayApp.share"
 }.freeze
 
+# App Store states in which a version is already sent: a rerun of the release job sends it no second time.
+SENT_STATES = %w[
+  WAITING_FOR_REVIEW IN_REVIEW ACCEPTED PENDING_DEVELOPER_RELEASE PENDING_APPLE_RELEASE PROCESSING_FOR_APP_STORE
+  READY_FOR_SALE
+].freeze
+
+# The build's processing at Apple can take over 30 minutes; mobile-ci.yml gives the release job 90.
+PROCESSING_WAIT = 75 * 60
+
 platform :ios do
-  desc "Build, sign and upload to TestFlight"
-  lane :beta do
-    setup_ci
-    api_key = app_store_connect_api_key(
+  # The App Store Connect key from the secrets; it also signs Spaceship's own calls.
+  private_lane :connect_key do
+    app_store_connect_api_key(
       key_id: ENV.fetch("ASC_KEY_ID"),
       issuer_id: ENV.fetch("ASC_ISSUER_ID"),
       key_content: ENV.fetch("ASC_KEY_P8"),
       is_key_content_base64: true,
       in_house: false
     )
+  end
+
+  # Signs, archives and exports the .ipa, then checks its speech parts. Returns the App Store Connect key.
+  private_lane :build_signed do
+    setup_ci
+    api_key = connect_key
     team_id = ENV.fetch("APPLE_TEAM_ID")
 
     # The .p12 lives only for this run, in setup_ci's own keychain.
@@ -89,6 +103,97 @@ platform :ios do
     )
     # The .ipa exported from the archive is the file TestFlight gets, so the check reads it, not an earlier build.
     check_speech_parts(lane_context[SharedValues::IPA_OUTPUT_PATH])
+    api_key
+  end
+
+  desc "Build, sign and check, and send nothing: a branch's build"
+  lane :build do
+    build_signed
+  end
+
+  desc "Build, sign and upload to TestFlight: main and a release"
+  lane :beta do
+    api_key = build_signed
     upload_to_testflight(api_key: api_key, skip_waiting_for_build_processing: true)
+  end
+
+  # fastlane submit version:1.1.0 build:120 notes:whats-new.txt [check:true]
+  desc "Send an uploaded build to App Store review with only its What's New text; check:true stops before it sends"
+  lane :submit do |options|
+    version = options.fetch(:version).to_s
+    build = options.fetch(:build).to_s
+    notes = File.read(options.fetch(:notes)).strip
+    check = options[:check].to_s == "true"
+    api_key = connect_key
+
+    app_identifier = CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier)
+    app = Spaceship::ConnectAPI::App.find(app_identifier)
+    UI.user_error!("App Store Connect has no app #{app_identifier}.") if app.nil?
+
+    versions = app.get_app_store_versions(filter: { platform: "IOS" })
+    same = versions.find { |found| found.version_string == version }
+    if same && SENT_STATES.include?(same.app_store_state)
+      UI.important("Version #{version} is already #{same.app_store_state}, so it is not sent again.")
+      next
+    end
+    # Apple takes one version in review at a time.
+    busy = versions.find do |found|
+      found.version_string != version && %w[WAITING_FOR_REVIEW IN_REVIEW].include?(found.app_store_state)
+    end
+    if busy
+      UI.user_error!("Version #{busy.version_string} is still #{busy.app_store_state}. " \
+                     "Run the release job again when its review ends.")
+    end
+    live = versions.find { |found| found.app_store_state == "READY_FOR_SALE" }
+    if live && Gem::Version.new(version) <= Gem::Version.new(live.version_string)
+      UI.user_error!("Version #{version} is not higher than #{live.version_string}, the version in the App Store.")
+    end
+
+    wait_for_processing(app, version, build)
+    if check
+      UI.success("Ready: build #{build} of #{version} is processed, and App Store review can take it. Nothing was sent.")
+      next
+    end
+
+    # An empty metadata folder and only the release notes, so the listing's description, pictures and answers stay.
+    # Apple refuses What's New on an app's first version, so it goes only when a version is already live.
+    release_notes = live ? { release_notes: { "default" => notes } } : {}
+    UI.message("The first version in the App Store: Apple takes no What's New, so none is sent.") unless live
+    Dir.mktmpdir("metadata") do |metadata|
+      deliver(
+        api_key: api_key,
+        app_identifier: app_identifier,
+        platform: "ios",
+        app_version: version,
+        build_number: build,
+        metadata_path: metadata,
+        **release_notes,
+        skip_binary_upload: true,
+        skip_screenshots: true,
+        submit_for_review: true,
+        automatic_release: true,
+        run_precheck_before_submit: false,
+        submission_information: { add_id_info_uses_idfa: false },
+        force: true
+      )
+    end
+  end
+end
+
+# Waits until Apple has processed the build, as App Store review takes only a processed build.
+def wait_for_processing(app, version, build)
+  deadline = Time.now + PROCESSING_WAIT
+  loop do
+    found = Spaceship::ConnectAPI::Build.all(app_id: app.id, version: version, build_number: build).first
+    state = found&.processing_state
+    return found if state == Spaceship::ConnectAPI::Build::ProcessingState::VALID
+    if %w[INVALID FAILED].include?(state)
+      UI.user_error!("Build #{build} of #{version} is #{state} in App Store Connect.")
+    end
+    if Time.now > deadline
+      UI.user_error!("Build #{build} of #{version} was not processed in time. Run the release job again.")
+    end
+    UI.message("Build #{build} of #{version} is #{state || 'not in App Store Connect yet'}; checking again in a minute.")
+    sleep(60)
   end
 end

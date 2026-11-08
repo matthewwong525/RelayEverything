@@ -1,9 +1,21 @@
-# The Android app: a release of this repository on main, tagged mobile-v<version>+<build>, and a file to try on any other
-# branch.
+# The Android app, by mobile-ci.yml's mode: a file to try on a branch; on main, a pre-release tagged
+# mobile-v<version>+<build>; for a release, the signed file that mobile-ci.yml's release job publishes.
 name: Mobile Android
 on:
   workflow_call:
-  workflow_dispatch:
+    inputs:
+      mode:
+        description: branch, beta, release or release-check, from scripts/app-release.mjs version.
+        required: true
+        type: string
+      version:
+        description: The version name, such as 1.1.0.
+        required: true
+        type: string
+      build:
+        description: The build number, the same for every app of one run.
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -31,36 +43,83 @@ jobs:
           cache: true
       - name: Upload key
         env:
+          MODE: ${{ inputs.mode }}
           KEYSTORE: ${{ secrets.RELAY_ANDROID_KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.RELAY_ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.RELAY_ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.RELAY_ANDROID_KEY_PASSWORD }}
         run: |
-          if [ -z "$KEYSTORE" ]; then
-            echo "::warning::No upload key in this repository's secrets, so this file is signed with a debug key and will not install over a release."
+          missing=""
+          [ -n "$KEYSTORE" ] || missing="$missing RELAY_ANDROID_KEYSTORE_BASE64"
+          [ -n "$STORE_PASSWORD" ] || missing="$missing RELAY_ANDROID_KEYSTORE_PASSWORD"
+          [ -n "$KEY_ALIAS" ] || missing="$missing RELAY_ANDROID_KEY_ALIAS"
+          [ -n "$KEY_PASSWORD" ] || missing="$missing RELAY_ANDROID_KEY_PASSWORD"
+          if [ -n "$missing" ]; then
+            # A file signed with a debug key can never update to a signed one, so a release refuses it.
+            if [ "$MODE" = release ] || [ "$MODE" = release-check ]; then
+              echo "::error::A release needs the upload key: add$missing to this repository's secrets. See mobile/README.md."
+              exit 1
+            fi
+            echo "::warning::No upload key in this repository's secrets (missing$missing), so this file is signed with a debug key and will not install over a release."
             exit 0
           fi
           echo "$KEYSTORE" | base64 -d > android/app/upload.jks
           printf 'storeFile=upload.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > android/key.properties
       - run: flutter pub get
-      - run: flutter build apk --release --build-number=${{ github.run_number }}
-      - run: mv build/app/outputs/flutter-apk/app-release.apk relay-${{ github.run_number }}.apk
+      - name: Build
+        id: apk
+        env:
+          MODE: ${{ inputs.mode }}
+          VERSION: ${{ inputs.version }}
+          BUILD: ${{ inputs.build }}
+        run: |
+          flutter build apk --release --build-name="$VERSION" --build-number="$BUILD"
+          case "$MODE" in
+            release | release-check) file="relay-everything-${VERSION}.apk" ;;
+            *) file="relay-everything-${VERSION}-${BUILD}.apk" ;;
+          esac
+          mv build/app/outputs/flutter-apk/app-release.apk "$file"
+          echo "file=$file" >> "$GITHUB_OUTPUT"
       - name: File to try
-        if: github.ref != 'refs/heads/main'
+        if: inputs.mode == 'branch'
         uses: actions/upload-artifact@v4
         with:
-          name: relay-android-${{ github.run_number }}
-          path: mobile/relay-${{ github.run_number }}.apk
-      # The version is pubspec.yaml's, with this run's build number, so each release has a tag of its own.
-      - name: Release
-        if: github.ref == 'refs/heads/main'
+          name: relay-everything-android-${{ inputs.build }}
+          path: mobile/${{ steps.apk.outputs.file }}
+      # mobile-ci.yml's release job publishes this file only after the full test passes.
+      - name: File for the release
+        if: inputs.mode == 'release' || inputs.mode == 'release-check'
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-everything-android-release
+          path: mobile/${{ steps.apk.outputs.file }}
+          if-no-files-found: error
+      # A newer commit on main that changes the app has its own run, which publishes: the pre-releases never get an
+      # older build after a newer one. A newer change outside mobile/ does not count.
+      - name: Newest on main
+        id: newest
+        if: inputs.mode == 'beta'
+        working-directory: .
+        run: |
+          git fetch --quiet --depth=1 origin main
+          if git diff --quiet "$GITHUB_SHA" FETCH_HEAD -- mobile/; then
+            echo "send=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::A newer commit on main changes mobile/, and its own run publishes the newer file. This file goes nowhere."
+            echo "send=false" >> "$GITHUB_OUTPUT"
+          fi
+      # A pre-release, never the latest release: the website's Android link opens the newest tagged release.
+      - name: Pre-release
+        if: inputs.mode == 'beta' && steps.newest.outputs.send == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          BUILD: ${{ github.run_number }}
+          VERSION: ${{ inputs.version }}
+          BUILD: ${{ inputs.build }}
+          FILE: ${{ steps.apk.outputs.file }}
           SHA: ${{ github.sha }}
           REPO: ${{ github.repository }}
         run: |
-          name="$(sed -n 's/^version: *\([^+ ]*\).*/\1/p' pubspec.yaml)"
-          gh release create "mobile-v${name}+${BUILD}" "relay-${BUILD}.apk" --repo "$REPO" --target "$SHA" \
-            --title "Relay for Android ${name}, build ${BUILD}" \
-            --notes "Install this file on your Android phone. Built from ${SHA}." --latest
+          gh release create "mobile-v${VERSION}+${BUILD}" "$FILE" --repo "$REPO" --target "$SHA" \
+            --title "Relay Everything for Android ${VERSION}, build ${BUILD}" \
+            --notes "A test build from main. Install this file on your Android phone. Built from ${SHA}." \
+            --prerelease --latest=false

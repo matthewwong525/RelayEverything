@@ -16,6 +16,8 @@ A tap shorter than half a second opens the **New note** page to type, and record
 
 The note shows **Voice** and **Writing the words…**, then its words. A note ends by itself after 5 minutes.
 
+A recording you give to **Add a note** in Apple Shortcuts becomes a voice note too, with your typed words first. [A voice note from Record audio](../shortcuts/#a-voice-note-from-record-audio)
+
 The first time you hold **New note**, the phone asks for the microphone. If you said no, allow the microphone for Relay Everything in the phone's settings.
 
 ## When the words do not come

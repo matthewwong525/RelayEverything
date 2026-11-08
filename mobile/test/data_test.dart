@@ -475,6 +475,26 @@ void main() {
       expect(await store.pendingWords(), isEmpty);
     });
 
+    test('a voice note with typed words puts them first, and goes only when it has both its pin and its words', () async {
+      await store.addVoiceNote(LocalNote(clientId: 'v', text: 'Note @ 7:07 PM', createdAt: at, kind: NoteKind.voice,
+        audioPath: 'voice/v.wav'), waitForPin: true);
+      expect((await store.notes()).single.pinning, isTrue);
+      // The pin comes first: no upload yet, as the words are still to come.
+      expect(await store.settlePin('v', Pin(at: at, lat: 1, lon: 2, accuracy: 3), send: true), isTrue);
+      expect(await store.outbox(), isEmpty);
+      expect(await store.setWords('v', 'Call the plumber', send: true), isTrue);
+      expect((await store.outbox()).single.body,
+        {'clientId': 'v', 'text': 'Note @ 7:07 PM\nCall the plumber', 'createdAt': at.millisecondsSinceEpoch, 'lat': 1.0,
+          'lon': 2.0, 'accuracy': 3.0});
+      // Words first, then the pin: the pin gives the upload.
+      await store.addVoiceNote(LocalNote(clientId: 'w', text: 'Label', createdAt: at, kind: NoteKind.voice,
+        audioPath: 'voice/w.wav'), waitForPin: true);
+      expect(await store.setWords('w', '', send: true), isTrue);
+      expect((await store.outbox()).length, 1);
+      expect(await store.settlePin('w', null, send: true), isTrue);
+      expect((await store.outbox()).last.body, {'clientId': 'w', 'text': 'Label', 'createdAt': at.millisecondsSinceEpoch});
+    });
+
     test('a voice note given words with sending off stays only here, and counts as earlier', () async {
       await store.addVoiceNote(LocalNote(clientId: 'v', text: '', createdAt: at, kind: NoteKind.voice, audioPath: 'voice/v.wav'));
       expect(await store.setWords('v', 'Words', send: false), isTrue);

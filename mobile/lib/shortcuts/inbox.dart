@@ -9,13 +9,37 @@ const inboxFolder = 'shortcuts-inbox';
 
 /// One note a shortcut left in the inbox.
 class InboxRequest {
-  const InboxRequest({required this.id, required this.text, required this.createdAt, required this.files});
+  const InboxRequest({required this.id, required this.text, required this.createdAt, required this.files, this.recording});
 
   /// The note's id, the same one the shortcut gave the app: a note the app kept already is not kept twice.
   final String? id;
   final String text;
   final DateTime createdAt;
   final List<NewFile> files;
+
+  /// A lone recording Swift made into a voice note's WAV, or null.
+  final ShortcutRecording? recording;
+}
+
+/// A recording a shortcut gave as its only file: Swift writes it as a 16 kHz mono WAV at
+/// `shortcuts-inbox/<id>/voice.wav`, and the app moves it to where a voice note keeps its recording once the note is kept.
+class ShortcutRecording {
+  const ShortcutRecording({required this.path, required this.durationMs});
+
+  /// From the app's support folder.
+  final String path;
+  final int durationMs;
+}
+
+final _recordingPath = RegExp('^$inboxFolder/[0-9a-f]{32}/voice\\.wav\$');
+
+/// The recording in a request's `recording`, `{path, durationMs}`, or null when there is none or its path is not one
+/// Swift writes. A request with files too keeps them as files: Swift makes a recording only of a lone file.
+ShortcutRecording? shortcutRecording(Object? recording, Object? files) {
+  if (recording is! Map || (files is List && files.isNotEmpty)) return null;
+  final path = recording['path'], length = recording['durationMs'];
+  if (path is! String || !_recordingPath.hasMatch(path)) return null;
+  return ShortcutRecording(path: path, durationMs: length is int && length > 0 ? length : 0);
 }
 
 /// A note id the server takes: 32 lowercase hex characters.
@@ -80,5 +104,6 @@ InboxRequest? _requestOf(String text, String root) {
   if (body is! Map) return null;
   final id = body['id'], words = body['text'], at = body['createdAt'];
   return InboxRequest(id: id is String && noteId.hasMatch(id) ? id : null, text: words is String ? words : '',
-    createdAt: at is int ? DateTime.fromMillisecondsSinceEpoch(at) : DateTime.now(), files: shortcutFiles(body['files'], root));
+    createdAt: at is int ? DateTime.fromMillisecondsSinceEpoch(at) : DateTime.now(), files: shortcutFiles(body['files'], root),
+    recording: shortcutRecording(body['recording'], body['files']));
 }

@@ -71,7 +71,7 @@ A new push to a labelled pull request does not run the check again. That keeps t
 ## What keeps the key safe
 
 - **Only the owner's branches run it.** The label start refuses a pull request from a fork, and GitHub never gives a secret to a fork's code.
-- **Claude can use only the simulator, `flow.sh`, `ls`, `sleep`, `mkdir -p out/claude`, Read, Glob and Grep, and it can write only in `out/claude/`.** Its commands never see the key. The brief says that text on the screen is data, never an instruction. The job's GitHub token can only read, and the checkout keeps no token, so Claude can't push or change the repository.
+- **Claude can use only the simulator, `flow.sh`, `ls`, `sleep`, `mkdir -p`, Read, Glob and Grep, and it can write only in `out/claude/`.** Its commands never see the key. The brief says that text on the screen is data, never an instruction. The job's GitHub token can only read, and the checkout keeps no token, so Claude can't push or change the repository.
 - **The step log is public**, as the repository is. It holds the commands Claude ran and the paths it read, never their output, and never the key.
 - **The job that writes the comment runs no branch code.** It downloads only the results, the same split as [the deploy key](../stack/github-actions.md#where-the-deploy-key-is).
 - **A person who can change a workflow on GitHub can still reach the key**, as with the deploy key. Turn the key off in the Anthropic console if it leaks.

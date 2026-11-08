@@ -16,7 +16,7 @@
 
 ## 3. Device check: Claude
 
-- [x] 3.1 Add `mobile/device-check/flow.sh` (90 s limit, kill and one retry, `result=` line).
+- [x] 3.1 Add `mobile/device-check/flow.sh` (120 s limit, kill and one retry, `result=` line).
 - [x] 3.2 Set `--max-turns 80` and the new `allowedTools` in the Claude step, by design.md.
 - [x] 3.3 Update `mobile/device-check/brief.md` (write the report first, update after each scenario, 60 tool calls) and `iphone.md` (use `flow.sh`).
 - [x] 3.4 Add the step-log step: `out/claude/steps.md` and `out/claude/end.txt` from the action's `execution_file`, in a small node script `mobile/device-check/steps.mjs` with a test beside it on a saved sample.
@@ -31,5 +31,5 @@
 ## 5. Checks
 
 - [x] 5.1 Run `node --test scripts/*.test.mjs`, the device-check script tests, `actionlint` if present, and `node scripts/public-check.mjs`; fix what fails.
-- [ ] 5.2 `/save`, then confirm on GitHub: Mobile CI on the branch starts both builds with the tests and ends in about 6 minutes or less; the Android file and the iPhone archive still build.
-- [ ] 5.3 Start the device check on the saved commit twice in a row: the first is cancelled, the second gives a verdict (any of works, broken, could-not-check) in about 20 minutes, `claude/steps.md` is in the run's files, and the Swift tests ran on the second Mac. Record the times in the Decision log.
+- [x] 5.2 `/save`, then confirm on GitHub: Mobile CI on the branch starts both builds with the tests and ends in about 6 minutes or less; the Android file and the iPhone archive still build.
+- [x] 5.3 Start the device check on the saved commit twice in a row: the first is cancelled, the second gives a verdict (any of works, broken, could-not-check) in about 20 minutes, `claude/steps.md` is in the run's files, and the Swift tests ran on the second Mac. Record the times in the Decision log.

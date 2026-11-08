@@ -27,7 +27,7 @@ A save that changes the phone app waits about 10 minutes for its checks, and the
   build+start|tour|Claude
   code tests (second Mac)
   ```
-- **Claude has the room to finish, and writes as it goes.** Claude gets more turns and a few safe everyday commands, such as making a folder and listing files. It writes its report after each scenario, so a stop keeps what it found. A tap step that hangs stops after 90 seconds and tries once more, so one stuck tap does not end the whole check.
+- **Claude has the room to finish, and writes as it goes.** Claude gets more turns and a few safe everyday commands, such as making a folder and listing files. It writes its report after each scenario, so a stop keeps what it found. A tap step that hangs stops after 2 minutes and tries once more, so one stuck tap does not end the whole check.
 - **No verdict shows red, with the reason.** When Claude stops with no verdict, the check fails and says why: out of time, out of turns, or commands refused. A verdict of *could not check* that Claude gives on purpose, with its reason, stays green.
   ```text
   iPhone check: no verdict          [red]
@@ -65,6 +65,8 @@ Non-goals: building the apps less often; an Android device check; changing which
 - **2026-11-08** — Check: `.github/workflows/mobile-ios.yml` the separate full `flutter build ios` before the archive becomes `--config-only`, because fastlane's archive compiles the same app again and the speech-parts check still reads the exported `.ipa`.
 - **2026-11-08** — Check: `.github/workflows/mobile-device-check.yml` Claude gets 80 turns and `ls`, `sleep`, `mkdir -p out/claude`, Glob, Grep and `flow.sh` in place of `maestro`, and a newer check of a branch cancels the older one, because Claude ran out of turns and was refused harmless commands, and only the newest commit matters; no command reads a secret, a release's tour is never cancelled, and the Swift tests still gate a release from their own job.
 - **2026-11-08** — Built inside /ship; the second look found 7 problems (a cut-off `flow.sh` retry, an empty step log after a time-out, unfinished Swift tests counted as failed, and four smaller ones), all fixed; saved for the live checks (tasks 5.2 and 5.3).
+- **2026-11-08** — Live checks on the saved branch (PR #68): Mobile CI took 7 min (was about 10): tests 1.5 min, both builds started with them; the Android build took 4 min 52 s with no cache and 3 min 6 s with it (was 6 min 35 s), and the iPhone build with its signed archive about 6 min 50 s (was about 8.5 min), now the slowest part. Two iPhone checks in a row: the first was cancelled, both jobs; the second said *works* in 25.7 min (was 30 to 40), with `claude/steps.md`, the Swift tests on the second Mac, and `flow.sh`'s retry getting past a stuck app launch.
+- **2026-11-08** — Assumed after that check: the iPhone starts after the 2 GB Flutter download, not before it, because the two at once took the download from under 1 min to 4 min 9 s and the build from 3-4 min to 7 min; `flow.sh` waits 120 s, not 90 s, because a finished 10-step flow ran past 90 s; Claude may run `mkdir -p` anywhere and `out/claude/flows/` is made for it, because `mkdir -p out/claude/flows` was refused by the narrower rule.
 
 ## Capabilities
 
@@ -80,5 +82,5 @@ Non-goals: building the apps less often; an Android device check; changing which
 - `.github/workflows/mobile-android.yml`: `--target-platform android-arm64` for `mode == branch`; cache the speech package's CMake output (`.cxx`) and Gradle build cache.
 - `.github/workflows/mobile-ios.yml` and `mobile/ios/fastlane/Fastfile`: `flutter build ios --config-only` before the fastlane archive, in place of a full `flutter build ios`.
 - `.github/workflows/mobile-device-check.yml`: job concurrency, early simulator boot, a parallel `swift-tests` job, `--max-turns 80`, wider `allowedTools`, the Claude execution file into `out/claude/steps.md`.
-- `mobile/device-check/`: `iphone-open.sh` split into boot and install, `tour.sh` one Maestro run, new `flow.sh` (90 s limit, one retry), `finish.sh` no-verdict reason and exit, `brief.md` and `iphone.md` write-as-you-go.
+- `mobile/device-check/`: `iphone-open.sh` split into boot and install, `tour.sh` one Maestro run, new `flow.sh` (120 s limit, one retry), `finish.sh` no-verdict reason and exit, `brief.md` and `iphone.md` write-as-you-go.
 - `wiki/development/device-check.md`, `mobile/README.md#builds-on-github`, `.agents/rules/mobile.md` if it names the old steps.

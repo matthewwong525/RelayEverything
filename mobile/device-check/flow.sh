@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Runs one Maestro flow for Claude. A run past 90 s is stopped with its driver and tried once more, so one stuck tap
+# Runs one Maestro flow for Claude. A run past 120 s is stopped with its driver and tried once more, so one stuck tap
 # does not end the check. The last line is result=passed|failed|hung.
 set -uo pipefail
 flow=${1:?usage: bash mobile/device-check/flow.sh <flow.yaml>}
-limit=${FLOW_LIMIT:-90}
+limit=${FLOW_LIMIT:-120}
 log="${flow%.yaml}.log"
 
 stop_tree() {

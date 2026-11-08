@@ -77,11 +77,6 @@ jobs:
             exit 1
           fi
 
-      # The iPhone boots while the app builds.
-      - name: Start an iPhone
-        id: boot
-        run: bash mobile/device-check/iphone-boot.sh
-
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
@@ -102,6 +97,11 @@ jobs:
           echo "$MAESTRO_SHA256  $zip" | shasum -a 256 -c -
           unzip -q "$zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
+
+      # The iPhone boots while the app builds, after the Flutter download: both at once slow each other.
+      - name: Start an iPhone
+        id: boot
+        run: bash mobile/device-check/iphone-boot.sh
 
       - name: Build for the simulator
         id: build
@@ -156,8 +156,8 @@ jobs:
         env:
           # Keeps the key out of every command Claude runs, so screen text can't send it anywhere.
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
-          # 4 minutes per command, so flow.sh's hung run (90 s) and its retry finish before the Bash tool stops it.
-          BASH_DEFAULT_TIMEOUT_MS: "240000"
+          # 5 minutes per command, so flow.sh's hung run (120 s) and its retry finish before the Bash tool stops it.
+          BASH_DEFAULT_TIMEOUT_MS: "300000"
         with:
           prompt: ${{ steps.brief.outputs.text }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -167,7 +167,7 @@ jobs:
           claude_args: >-
             --model ${{ steps.brief.outputs.model }}
             --max-turns ${{ env.CLAUDE_MAX_TURNS }}
-            --allowedTools "Bash(xcrun simctl:*),Bash(bash mobile/device-check/flow.sh:*),Bash(mkdir -p out/claude:*),Bash(ls:*),Bash(sleep:*),Read,Glob,Grep,Edit(./out/claude/**),Write(./out/claude/**)"
+            --allowedTools "Bash(xcrun simctl:*),Bash(bash mobile/device-check/flow.sh:*),Bash(mkdir -p:*),Bash(ls:*),Bash(sleep:*),Read,Glob,Grep,Edit(./out/claude/**),Write(./out/claude/**)"
             --disallowedTools "Bash(xcrun simctl spawn:*)"
 
       # The action keeps its log only in the runner's temp folder, and only when Claude ends on its own; without it,
@@ -248,16 +248,16 @@ jobs:
             exit 1
           fi
 
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version-file: mobile/pubspec.yaml
+          cache: true
+
       - name: Start an iPhone
         id: boot
         run: |
           bash mobile/device-check/iphone-boot.sh
           if [ -f "$OUT/reason.txt" ]; then echo "::error::$(cat "$OUT/reason.txt")"; exit 1; fi
-
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          flutter-version-file: mobile/pubspec.yaml
-          cache: true
 
       # `failed` is written only when xcodebuild ends with a failure, so tests that never finished are no failure.
       - name: Swift tests

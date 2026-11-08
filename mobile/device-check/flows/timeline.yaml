@@ -1,12 +1,15 @@
-# The timeline on a fresh install: the app opens with sending off and no notes.
+# The notes list on a fresh install: the app opens with sending off and no notes.
 appId: com.matthewwong525.relayApp
 ---
 - launchApp:
     clearState: true
 - extendedWaitUntil:
-    visible: "Relay Everything"
+    visible: "Notes"
     timeout: 60000
-- assertVisible: "On this phone"
-- assertVisible: "No notes yet.*"
+# The count line joins the count and the state, such as "0 notes · On this phone", so match the state inside it.
+- assertVisible: '(.|\n)*On this phone(.|\n)*'
+- assertVisible: 'No notes yet(.|\n)*'
+# New note is a round button with no visible words: Maestro finds it by its accessibility label.
 - assertVisible: "New note"
+- assertVisible: "Search"
 - takeScreenshot: timeline

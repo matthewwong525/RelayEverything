@@ -4,9 +4,11 @@ import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { post, postTo, SIGN_IN } from './read'
+import { post, postTo, SIGN_IN, useMethods } from './read'
+import { Contact } from './SignIn'
 
-// The person's account: who is signed in, *Sign out*, and *Delete my account*, which needs the email typed again.
+// The person's account: who is signed in, *Sign out*, *Delete my account*, which needs the email typed again, and the
+// server's contact address when it has one.
 const same = (one: string, other: string) => one.trim().toLowerCase() === other.trim().toLowerCase()
 
 function DeleteAccount({ email, onDeleted }: { email: string; onDeleted: () => void }) {
@@ -41,6 +43,7 @@ function DeleteAccount({ email, onDeleted }: { email: string; onDeleted: () => v
 /** The bottom of the page: the account, sign-out, then deletion. `onSignedOut` shows the sign-in again. */
 export function Account({ email, onSignedOut }: { email: string; onSignedOut: () => void }) {
   const [error, setError] = useState('')
+  const methods = useMethods()
   const signOut = () => postTo(`${SIGN_IN}out`).then(onSignedOut, (caught: Error) => setError(caught.message))
   return <section className="grid gap-3" aria-label="Your account">
     <h2>Your account</h2>
@@ -51,6 +54,7 @@ export function Account({ email, onSignedOut }: { email: string; onSignedOut: ()
       </div>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <div><DeleteAccount email={email} onDeleted={onSignedOut} /></div>
+      <Contact methods={methods} />
     </Card>
   </section>
 }

@@ -24,6 +24,19 @@ You can also say *Add a note to Relay Everything* to Siri.
 - With no words and no files, the action stops with a message and keeps nothing.
 - The action gives the new note back, so the next step can use it.
 
+The action's line reads *Add Words with Files to Relay Everything*. Tap **Files** to give it a file from a step before.
+
+### A recording becomes a voice note
+
+Give **Add a note** one recording, such as the **Recorded Audio** from **Record audio**, and the note is a voice note. It shows **Voice** and **Play**, and the phone writes its words itself, as for a voice note you hold **New note** for. [Voice notes](../voice-notes/)
+
+- **Your words go first.** Give words with the recording, such as *Note @ 7:07 PM*, and the note starts with them. The written words of the recording follow on the next line.
+- **The words are written in the open app.** When the app is closed, the voice note waits on the phone, and the phone writes its words the next time you open Relay Everything.
+- **No speech, no new words.** A recording with no speech keeps your words and the recording. With no words of yours either, the note is not kept, and the app says **No speech heard**.
+- **Other files stay files.** A recording given with other files, or a recording the phone can not read, is kept as a plain file.
+
+With sending on, the voice note goes to your space once its words are written. The recording stays on the phone.
+
 If the app takes more than 20 seconds to answer, the action says *Saved. It shows when you open Relay Everything.* The note is safe. It shows in your notes, and goes on to your server, the next time you open the app.
 
 ## Get notes
@@ -40,7 +53,7 @@ Each note gives its words, time, place, files, and whether it is a voice note. *
 
 ## Start a voice note
 
-**Start a voice note** opens the app and starts to record at once. Talk, then tap **Stop** to save the note, or **Cancel** to keep nothing. The phone writes the words itself, as with **Hold to talk**. [Voice notes](../voice-notes/)
+**Start a voice note** opens the app and starts to record at once. It shows the same **Listening** card as a hold on **New note**. Talk, then tap anywhere on the screen to save the note, or tap **Cancel** to keep nothing. The phone writes the words itself. [Voice notes](../voice-notes/)
 
 With no speech model on the phone yet, the app asks to get it first. [Get the speech model](../voice-notes/#get-the-speech-model)
 
@@ -51,7 +64,7 @@ The actions follow your **Send my notes** setting in [Settings](../settings/):
 | Sending | Add a note | Get notes | Start a voice note |
 |---|---|---|---|
 | Off | Kept on the phone. The app makes no network call. | Reads the phone. Sends nothing. | Kept on the phone. |
-| On | Kept on the phone, and sent to your space at once, with its files. | Reads the phone. Sends nothing. | Kept on the phone; its words go to your space. |
+| On | Kept on the phone, and sent to your space at once, with its files. A recording's note goes once its words are written; the recording stays on the phone. | Reads the phone. Sends nothing. | Kept on the phone; its words go to your space. |
 
 Your server sends a note on to your webhooks with each file's name, type and size, not the file. When the phone sends to [your own webhook](../../connections/your-database/#send-from-the-phone), the note and its files go there, not to your space. [Privacy](../../privacy/)
 
@@ -95,6 +108,16 @@ The email holds each note from today. No server is asked: the notes come from th
 4. Tap **New Blank Automation**, and add **Add a note**.
 5. Type *Fed the cat* in its words.
 
+### A voice note from Record audio
+
+1. Make a new shortcut, and name it *Voice note to Relay Everything*.
+2. Add **Record audio**. Set **Start Recording** to **Immediately** if you like.
+3. Add **Add a note** from Relay Everything.
+4. Tap **Files**, and pick the **Recorded Audio** from the step before.
+5. Tap **Words**, and type a label, such as *Note @*, then add the **Current Date**. Leave **Words** empty if you want only the written words.
+
+Run the shortcut, talk, and tap **Done**. The note shows as a voice note that starts with your label, and its words follow when the app is open.
+
 ### A voice note from the Action button
 
 On an iPhone with an Action button:
@@ -103,4 +126,4 @@ On an iPhone with an Action button:
 2. Swipe to **Shortcut**, and tap **Choose a Shortcut**.
 3. Pick **Relay Everything**, then **Start a voice note**.
 
-Press the Action button, talk, and tap **Stop**.
+Press the Action button, talk, and tap anywhere on the screen to save.

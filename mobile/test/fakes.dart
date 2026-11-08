@@ -332,26 +332,46 @@ class FakeMicrophone implements Microphone {
     await File(path).writeAsBytes([82, 73, 70, 70]);
   }
 
+  /// Thrown by the next [stop], as by a microphone that fails to end its file; it is cleared then.
+  Exception? stopError;
+
   @override
-  Future<void> stop() async => calls.add('stop');
+  Future<void> stop() async {
+    calls.add('stop');
+    final error = stopError;
+    if (error != null) {
+      stopError = null;
+      throw error;
+    }
+  }
 
   @override
   Future<void> cancel() async => calls.add('cancel');
 }
 
-/// Writes [answer] as every recording's words, or waits for [hold] when set.
+/// Writes [answer] as every recording's words, or waits for [hold] when set, or throws [error], an Exception or an
+/// Error. It runs one recording at a time, as the app's does; a time limit counts [cancelled] and fails the held words,
+/// unless [cancelStops] is false, as with a stuck engine.
 class FakeTranscriber extends Transcriber {
   String answer = 'Ask the fab if the flex stiffener can be 0.2 mm';
   Completer<String>? hold;
-  Exception? error;
+  bool cancelStops = true;
+  Object? error;
   final heard = <String>[];
   int closed = 0;
+  int cancelled = 0;
 
   @override
-  Future<String> words(File wav) async {
+  Future<String> write(File wav, WordsJob job) async {
     heard.add(wav.uri.pathSegments.last);
     if (error != null) throw error!;
-    return hold == null ? answer : hold!.future;
+    final held = hold;
+    if (held == null) return answer;
+    job.onCancel(() {
+      cancelled++;
+      if (cancelStops && !held.isCompleted) held.completeError(StateError('Cancelled at the time limit'));
+    });
+    return held.future;
   }
 
   @override

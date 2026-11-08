@@ -38,6 +38,8 @@ Sign in on your Relay Everything page with your server's own login, then click *
 
 Your server keeps Cloudflare Access, the login it was made with: `RELAY_SIGN_IN` is `access`. Only your email gets an account, and your data goes in your own space. To let other people sign up, set `RELAY_SIGN_UP` to `open` in your server's settings, and let their emails through your Cloudflare Access login. Each new person then gets their own space, and you can't open it: [Privacy](../../privacy/).
 
+Your server shows no contact address until you set one. To give the people on your server an address for questions and privacy requests, set `RELAY_CONTACT_EMAIL` to it in your server's settings. Each person's account card then shows it. Your Cloudflare Access login comes before the page, so the sign-in screen does not. Relay Everything's own terms and policies cover only the shared server: on your server, you answer those requests.
+
 ## Take email
 
 Your server can make [email notes](../../app/email/) too. It is off until you set it up, and it needs a domain on Cloudflare. Ask your AI *turn on email notes for my Relay Everything server*, or do these steps:

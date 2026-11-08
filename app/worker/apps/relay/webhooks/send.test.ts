@@ -1,9 +1,11 @@
 import { Webhook } from "standardwebhooks";
 import { afterEach, beforeEach, expect, it, vi, type Mock } from "vitest";
-import { ANA, ben, BEN, benPhone, call, db, env, matthew, NOW, phone, queue, rows, spaces } from "../../../../tests/relay";
+import { handleApp } from "../../index";
+import { ANA, ben, BEN, benPhone, call, db, env, matthew, NOW, phone, queue, request, rows, spaces } from "../../../../tests/relay";
 import { spaceOf, vouch, type SqlValue } from "../space.ts";
 import { receive } from "../inbox/receive.ts";
-import { consume, DELAYS, post, run } from "./send.ts";
+import { bodyWithFile, consume, DELAYS, post, run } from "./send.ts";
+import { noteFile } from "./format.ts";
 
 const MINUTE = 60_000;
 const SECRET = "whsec_dGVzdC1vbmx5LXNlY3JldC1mb3ItdGhlLXNlbmRlcg==";
@@ -15,7 +17,8 @@ beforeEach(() => {
   sent.length = 0;
   answer = () => new Response(null, { status: 204 });
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
-    sent.push({ url, headers: init.headers as Record<string, string>, body: String(init.body), redirect: String(init.redirect) });
+    const body = init.body instanceof Uint8Array ? new TextDecoder().decode(init.body) : String(init.body);
+    sent.push({ url, headers: init.headers as Record<string, string>, body, redirect: String(init.redirect) });
     return answer(sent.length - 1);
   }));
 });
@@ -70,14 +73,15 @@ it("sends a stored note, signed, and moves the webhook's place only after a 2xx"
   expect(sent).toHaveLength(1);
 });
 
-it("sends an emailed note as note.created from the Email device, with its file listed", async () => {
+it("sends an emailed note as note.created from the Email device, with its file listed and then sealed", async () => {
   hook();
   const file = { name: "receipt.pdf", type: "application/pdf", bytes: new TextEncoder().encode("%PDF") };
   await receive(env(), vouch("inbox", ANA), { channel: "email", id: "mail-0001", sentAt: NOW - MINUTE, text: "Receipt", files: [file] });
-  expect(queue.sent).toEqual([wakeUp("hook-1")]);
+  expect(queue.sent).toEqual([wakeUp("hook-1"), wakeUp("hook-1")]);
   await deliver(wakeUp("hook-1"));
   expect(bodies()[0]).toMatchObject({ type: "note.created", data: { note: { text: "Receipt", source: "typed", device: { name: "Email" },
     recorded_at: new Date(NOW - MINUTE).toISOString(), attachments: [{ name: "receipt.pdf", content_type: "application/pdf", size: 4 }] } } });
+  expect(bodies().map(body => body.type)).toEqual(["note.created", "note.file"]);
 });
 
 it("tries a failed group again with the same id and body, and a parallel message waits for that retry", async () => {
@@ -350,4 +354,77 @@ it("names a note's files in its message at once, without waiting for their bytes
     attachments: [{ id: "file-pdf-0001", name: "warranty.pdf", type: "application/pdf", size: 245_760 }] });
   await deliver(wakeUp("hook-1"));
   expect(bodies()[0].data.note.attachments).toEqual([{ id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 245_760 }]);
+});
+
+const PDF = new TextEncoder().encode("%PDF-1.7 warranty");
+const PNG = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+const noteWithFiles = (clientId = "note-files-01") => call(phone, "POST", "notes", { clientId, text: "Receipt", createdAt: NOW - MINUTE,
+  attachments: [{ id: `${clientId}-pdf`, name: "warranty.pdf", type: "application/pdf", size: PDF.byteLength },
+    { id: `${clientId}-png`, name: "receipt.png", type: "image/png", size: PNG.byteLength }] });
+const upload = (clientId: string, id: string, bytes: Uint8Array) => handleApp(request(phone, "POST", "https://relay.example.com/apps/relay/api/attachments",
+  { body: bytes, headers: { "X-Note-Client-Id": clientId, "X-Attachment-Id": id } }), env(), null);
+
+it("sends each stored file after its note, signed, with its bytes, and the same message on a retry", async () => {
+  hook();
+  await noteWithFiles();
+  await upload("note-files-01", "note-files-01-png", PNG);
+  await upload("note-files-01", "note-files-01-pdf", PDF);
+  answer = index => new Response(null, { status: index === 1 ? 503 : 204 });
+  await deliver(wakeUp("hook-1"));
+  at(NOW + 30_000);
+  await deliver(wakeUp("hook-1"));
+  expect(types()).toEqual(["note.created", "note.file", "note.file", "note.file"]);
+  expect(sent[2].headers["webhook-id"]).toBe(sent[1].headers["webhook-id"]);
+  expect(sent[2].body).toBe(sent[1].body);
+  const [png, , pdf] = sent.slice(1).map(item => new Webhook(SECRET).verify(item.body, item.headers) as { data: { note_id: string;
+    file: { id: string; base64: string } } });
+  const note = rows("relay_notes")[0].id;
+  expect(png.data).toEqual({ note_id: note, file: { id: "note-files-01-png", name: "receipt.png", content_type: "image/png", size: PNG.byteLength,
+    base64: Buffer.from(PNG).toString("base64") } });
+  expect([pdf.data.file.id, Buffer.from(pdf.data.file.base64, "base64")]).toEqual(["note-files-01-pdf", Buffer.from(PDF)]);
+  expect(webhook()).toMatchObject({ sent_seq: 3, last_status: 204, last_error: null });
+});
+
+it("skips only a file the address refuses as too large, names it on the card, and retries any other refusal", async () => {
+  hook();
+  await noteWithFiles();
+  await upload("note-files-01", "note-files-01-pdf", PDF);
+  await noteWithFiles("note-files-02");
+  answer = () => new Response(null, { status: 413 });
+  const [first] = await deliver(wakeUp("hook-1"));
+  // The note itself is retried: only a file is skipped.
+  expect(first.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+  at(NOW + 30_000);
+  answer = index => new Response(null, { status: index === 2 ? 413 : 204 });
+  await deliver(wakeUp("hook-1"));
+  expect(types()).toEqual(["note.created", "note.created", "note.file", "note.created"]);
+  const skipped = "Too large for this address: warranty.pdf (1 KB). It stays on your Relay Everything page.";
+  expect(rows("relay_webhook_attempts").map(row => [row.type, row.status, row.error])).toEqual([["note.created", 413, null],
+    ["note.created", 204, null], ["note.file", 413, skipped], ["note.created", 204, null]]);
+  expect(webhook()).toMatchObject({ sent_seq: 3, tries: 0, failing_since: null });
+  answer = () => new Response(null, { status: 413 });
+  await upload("note-files-02", "note-files-02-png", new Uint8Array(1_500_000));
+  await deliver(wakeUp("hook-1"));
+  const big = "Too large for this address: receipt.png (1.5 MB). It stays on your Relay Everything page.";
+  expect(webhook()).toMatchObject({ sent_seq: 4, last_status: 413, last_error: big });
+  expect((await call(matthew, "GET", "webhooks")).json.webhooks[0]).toMatchObject({ lastError: big });
+});
+
+it("skips the file of a note deleted since", async () => {
+  hook();
+  await noteWithFiles();
+  await upload("note-files-01", "note-files-01-pdf", PDF);
+  db.sql.prepare("DELETE FROM relay_notes").run();
+  await deliver(wakeUp("hook-1"));
+  expect(sent).toEqual([]);
+  expect(webhook()).toMatchObject({ sent_seq: 2 });
+});
+
+it("builds a 25 MB file's body as valid JSON, with its whole base64", () => {
+  const bytes = new Uint8Array(25 * 1024 * 1024 + 1).map((_, index) => index % 251);
+  const row = { id: "file-big-0001", name: "Ünïcode video.mp4", content_type: "video/mp4", size: bytes.length };
+  const body = bodyWithFile({ message: noteFile(row, "note-big", NOW), bytes });
+  const parsed = JSON.parse(new TextDecoder().decode(body));
+  expect(parsed.data.file.name).toBe("Ünïcode video.mp4");
+  expect(parsed.data.file.base64 === Buffer.from(bytes).toString("base64")).toBe(true);
 });

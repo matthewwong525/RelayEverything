@@ -17,7 +17,7 @@ Each kind of data in a person's space, such as notes, health or the calendar, ha
 - A message type or a send log kind has no owner, or two. Only `webhook.test` is shared.
 - The `relay_outbox` CHECK list in the newest space migration is not the same as the kinds' `log` lists.
 
-So add the entry first, and let the check list what the kind still needs. Files, photos and Claude Code chats list their webhook part as missing until a plan adds it.
+So add the entry first, and let the check list what the kind still needs. Photos and Claude Code chats list their webhook part as missing until a plan adds it. Files list it as missing too, because a file goes with its note as `note.file`, under Notes.
 
 ## Rules for a new message
 

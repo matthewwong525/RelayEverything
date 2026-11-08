@@ -4,7 +4,7 @@ import { addNote } from "../add-note.ts";
 import { storeFile } from "../attachments.ts";
 import { MAX_FILE_BYTES, MAX_FILES, typeOf } from "../notes.ts";
 import { spaceOf, type Caller, type PersonSpace, type SpaceEnv } from "../space.ts";
-import type { wake } from "../webhooks/send.ts";
+import { wake } from "../webhooks/send.ts";
 
 export type InboxFile = { name: string; type: string; bytes: Uint8Array };
 /** One message: `id` is unique for the message, so a repeat stores once; `left` names files already left out. */
@@ -58,5 +58,7 @@ export async function receive(env: ReceiveEnv, caller: Caller, item: InboxItem) 
   const { results } = await space.db.prepare("SELECT id FROM relay_attachments WHERE note_id = ? AND file_key IS NULL").bind(note.id).all<{ id: string }>();
   const waiting = new Set(results.map(row => row.id));
   for (const file of files) if (waiting.has(file.id)) await storeFile(space, file.id, file.bytes.slice().buffer);
+  // Each seal logs a note.file, which goes to every webhook with the note.
+  if (waiting.size) await wake(env, space, ["notes"]);
   return note;
 }

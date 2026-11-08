@@ -10,11 +10,13 @@
   "preview_urls": false,
   "assets": { "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": true },
   // The sign-in's public IDs; its keys are secrets: app/.dev.vars.example. WONG_OWNER_EMAIL may always sign up.
+  // RELAY_CONTACT_EMAIL is the address the sign-in screen and the account card show for questions and privacy requests.
   "vars": {
     "WONG_ENVIRONMENT": "production",
     "WONG_OWNER_EMAIL": "matthewwong525@gmail.com",
     "RELAY_SIGN_UP": "open",
     "RELAY_SIGN_IN_FROM": "sign-in@relayeverything.com",
+    "RELAY_CONTACT_EMAIL": "privacy@relayeverything.com",
     "RELAY_APPLE_SERVICES_ID": "com.matthewwong525.relayeverything.signin",
     "RELAY_GOOGLE_CLIENT_ID": "20665982462-kf2e6v2vd3jofia52g0d9p5vn1gt4hfu.apps.googleusercontent.com",
     "RELAY_MCP_CALLBACK": "https://relay-everything-mcp.matthewwong525.workers.dev/callback",
@@ -40,6 +42,7 @@
         "WONG_OWNER_EMAIL": "matthewwong525@gmail.com",
         "RELAY_SIGN_UP": "open",
         "RELAY_SIGN_IN_FROM": "sign-in@relayeverything.com",
+    "RELAY_CONTACT_EMAIL": "privacy@relayeverything.com",
         "RELAY_APPLE_SERVICES_ID": "com.matthewwong525.relayeverything.signin",
         "RELAY_GOOGLE_CLIENT_ID": "20665982462-kf2e6v2vd3jofia52g0d9p5vn1gt4hfu.apps.googleusercontent.com",
         "RELAY_MCP_CALLBACK": "https://relay-everything-mcp-staging.matthewwong525.workers.dev/callback",

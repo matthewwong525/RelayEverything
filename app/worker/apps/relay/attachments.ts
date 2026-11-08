@@ -6,6 +6,7 @@ import { asDevice, asPerson } from "./caller.ts";
 import { CLIENT_ID, MAX_FILE_BYTES } from "./notes.ts";
 import type { PersonSpace } from "./space.ts";
 import { refused, type Env } from "./store.ts";
+import { wake } from "./webhooks/send.ts";
 
 type Call = Pick<ActionCall, "url" | "identity">;
 type Listed = { id: string; file_key: string | null };
@@ -13,7 +14,7 @@ type Listed = { id: string; file_key: string | null };
 const notFound = () => Response.json({ error: "Not found" }, { status: 404 });
 
 export const attachmentAdd: (request: Request, env: Env, call: Call) => Promise<Response> =
-  asDevice<Call>("Only a Relay Everything device key can send files", async ({ space, device, request }) => {
+  asDevice<Call>("Only a Relay Everything device key can send files", async ({ space, device, request, env }) => {
     const noteClientId = request.headers.get("X-Note-Client-Id") ?? "";
     const id = request.headers.get("X-Attachment-Id") ?? "";
     if (!CLIENT_ID.test(noteClientId) || !CLIENT_ID.test(id)) return refused(400, "Name the file and its note: X-Note-Client-Id and X-Attachment-Id.");
@@ -30,6 +31,8 @@ export const attachmentAdd: (request: Request, env: Env, call: Call) => Promise<
     }
     // boundedBytes gives a new array of exactly the file's size, so its buffer is the file.
     await storeFile(space, id, bytes.buffer as ArrayBuffer);
+    // The seal logs a note.file, which goes to every webhook with the note.
+    await wake(env, space, ["notes"]);
     return Response.json({ ok: true, added: true });
   });
 

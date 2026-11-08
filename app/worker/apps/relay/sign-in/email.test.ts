@@ -58,6 +58,13 @@ describe("the sign-in's addresses", () => {
     expect(await methods({ RELAY_APPLE_TEAM_ID: "T", RELAY_APPLE_SERVICES_ID: "S", RELAY_APPLE_SIGN_IN_KEY: "K", RELAY_APPLE_SIGN_IN_KEY_ID: "I",
       RELAY_GOOGLE_CLIENT_ID: "g", RELAY_GOOGLE_SIGN_IN_SECRET: "s" })).toEqual({ email: true, apple: true, google: true, signUp: true });
   });
+
+  it("gives the contact address only when the server has one set", async () => {
+    const methods = async (more: object) => (await send(new Request(`${ORIGIN}/apps/relay/sign-in/methods`), more)).json();
+    expect(await methods({ RELAY_CONTACT_EMAIL: "privacy@relayeverything.com" }))
+      .toEqual({ email: true, apple: false, google: false, signUp: true, contact: "privacy@relayeverything.com" });
+    for (const unset of [undefined, "", " "]) expect(await methods({ RELAY_CONTACT_EMAIL: unset })).not.toHaveProperty("contact");
+  });
 });
 
 describe("POST email", () => {

@@ -19,7 +19,7 @@ flowchart LR
 1. **Checks the commit.** A run started by hand stops if the branch is not at the saved commit, so a later push is never checked in its place.
 2. **Builds the app for the simulator.** The build needs no signing key. A failed build ends the run as *broken*, with the end of the build log.
 3. **Opens the app on an iPhone.** It boots an iPhone on the newest iOS the Mac has, installs the app, starts a video and opens the app.
-4. **Runs the fixed tour.** [Maestro](https://maestro.mobile.dev) flows in [`mobile/device-check/flows/`](../../mobile/device-check/flows/) open the timeline, write and save a note, and open Settings, with a screenshot of each. The tour uses no AI, so it costs nothing and gives the same pictures each run. If the timeline does not open, the run ends as *broken* and Claude does not start.
+4. **Runs the fixed tour.** [Maestro](https://maestro.mobile.dev) flows in [`mobile/device-check/flows/`](../../mobile/device-check/flows/) open the notes list, write, save and search a note, and open Settings, with a screenshot of each. The tour uses no AI, so it costs nothing and gives the same pictures each run. If the timeline does not open, the run ends as *broken* and Claude does not start.
 5. **Claude tries the change.** Claude runs on the same Mac, with [the brief](../../mobile/device-check/brief.md) and the scenarios to check. It taps through the app, looks at each screen and writes a report.
 6. **Keeps the results** as the run's file `device-check-iphone`: `report.md`, `verdict.txt`, `tour/`, `claude/`, `run.mp4` and the logs. `phone.log` holds the iPhone's system log for the app, Shortcuts and App Intents, and `crashes/` the app's crash reports: read them when a step fails with no words on the screen. Job `report` puts `report.md` on the pull request.
 
@@ -32,6 +32,8 @@ Each run ends with one verdict:
 | `could-not-check` | No scenario could be checked, Claude had no key, or the branch was not at the saved commit. The report says why. When the job runs out of time, the run on GitHub shows *cancelled* and the report says *Claude gave no report*: the pictures in `claude/` still show what it reached, so grade them. |
 
 A *works* is evidence, not a gate. The pictures and the video are always there to look at.
+
+A release uses the fixed tour alone as a gate: [`mobile-ci.yml`](../../.github/workflows/mobile-ci.yml) calls the check with `tour_only`, Claude does not start, and the run fails unless each step of `tour.json` passed. [Builds on GitHub](../../mobile/README.md#builds-on-github) says how a release runs.
 
 - **To see the launch screen, read the first seconds of `run.mp4`**: the video starts before the app opens, and no picture shows it. Take frames with `ffmpeg -i run.mp4 -t 12 -vf fps=4 f%03d.png`.
 - **The home-screen icon is never shown**: the tour and Claude stay inside the app. Check a new icon on a real phone after the next TestFlight build.
@@ -83,3 +85,5 @@ Relay Everything has no Windows app yet. When it has one, add a job `windows` be
 Run `node --test scripts/device-check.test.mjs`: CI does not run it. Check the workflow with `npx --yes @action-validator/cli .github/workflows/mobile-device-check.yml` before you save it.
 
 **Match a Flutter row by the start of its text.** Flutter joins a card's lines, or a row's title and its small text, into one label, such as `Send my notes\nOff: nothing leaves…`. Maestro matches the whole label, so `assertVisible: "Send my notes"` fails. Write `assertVisible: 'Send my notes(.|\n)*'`, in single quotes. A failed flow keeps its screen's labels in `maestro/<flow>/…/screen-hierarchy/`, in the run's results.
+
+**Tap an icon button by its label.** A button with no words on the screen, such as the round *New note* or the ⋯ button, has an accessibility label or a tooltip. Maestro matches it as it matches text: `tapOn: "New note"`, `tapOn: "More"`. A Maestro tap is short, so `tapOn: "New note"` opens the *New note* page and never records.

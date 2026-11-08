@@ -113,6 +113,29 @@ it("hides Apple, Google and sign-up when the server has them off, and shows the 
   expect(screen.queryByLabelText("Code")).toBeNull();
 });
 
+it("shows the server's contact address on the sign-in and the account card only when it has one", async () => {
+  const line = () => screen.queryByText(/Questions or privacy requests:/);
+  await open();
+  await screen.findByText("Sign in or make an account");
+  expect(line()).toBeNull();
+  expect(screen.queryByRole("link", { name: /@/ })).toBeNull();
+  cleanup();
+  methods = () => Response.json({ email: true, apple: true, google: true, signUp: true, contact: "privacy@relayeverything.com" });
+  await open();
+  await screen.findByText("Sign in or make an account");
+  expect(screen.getByRole("link", { name: "privacy@relayeverything.com" }).getAttribute("href")).toBe("mailto:privacy@relayeverything.com");
+  await signInWithCode();
+  const card = await screen.findByRole("region", { name: "Your account" });
+  expect(within(card).getByText(/Questions or privacy requests:/)).toBeTruthy();
+  expect(within(card).getByRole("link", { name: "privacy@relayeverything.com" }).getAttribute("href")).toBe("mailto:privacy@relayeverything.com");
+  cleanup();
+  methods = () => Response.json({ email: true, apple: true, google: true, signUp: true });
+  await open();
+  const plain = await screen.findByRole("region", { name: "Your account" });
+  await act(async () => {});
+  expect(within(plain).queryByText(/Questions or privacy requests:/)).toBeNull();
+});
+
 it("goes back to the AI connector's own page after signing in, and never to another site", async () => {
   const next = "/apps/relay/sign-in/connect?state=s1";
   await open(`/apps/relay/?next=${encodeURIComponent(next)}`);

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../brand.dart';
 import '../relay.dart';
 import '../voice/model.dart' show megabytes;
+import 'back_to_notes.dart';
 import 'connect.dart';
 
 String _two(int value) => value.toString().padLeft(2, '0');
@@ -57,98 +59,106 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
       body: ListenableBuilder(
         listenable: relay,
         builder: (context, _) {
           final settings = relay.settings;
           final sending = settings.sending;
-          return ListView(children: [
-            SwitchListTile(
-              title: const Text('Pin notes to where I am'),
-              subtitle: const Text('Each typed note keeps where you were. It works with no signal.'),
-              value: settings.pinNotes,
-              onChanged: (on) => _apply(context, relay.setPinNotes(on)),
-            ),
-            const Divider(),
-            _VoiceSection(relay: relay),
-            const Divider(),
-            SwitchListTile(
-              title: const Text('Send my notes'),
-              subtitle: Text(_placeLine(relay)),
-              value: sending,
-              onChanged: (on) => on ? _choosePlace(context) : _stopSending(context),
-            ),
-            SwitchListTile(
-              title: const Text('Health: steps, heart rate, sleep and more'),
-              subtitle: Text(settings.health ? sentLine(relay.healthSent, 'reading', DateTime.now())
-                : 'Sends the last 90 days, then new readings about each hour, also while the app is closed. You choose each '
-                  'type in the phone\'s health permission.'),
-              value: settings.health,
-              onChanged: sending ? (on) => _apply(context, relay.setHealth(on)) : null,
-            ),
-            SwitchListTile(
-              title: const Text('Calendar'),
-              subtitle: Text(settings.calendar ? sentLine(relay.calendarSent, 'event', DateTime.now())
-                : 'Sends your events from the phone\'s calendars, 90 days back and ahead. It never changes an event.'),
-              value: settings.calendar,
-              onChanged: sending ? (on) => _apply(context, relay.setCalendar(on)) : null,
-            ),
-            if (settings.calendar)
-              for (final calendar in relay.calendars) SwitchListTile(
-                contentPadding: const EdgeInsets.only(left: 32, right: 16),
-                title: Text(calendar.name),
-                subtitle: calendar.account == null || calendar.account!.isEmpty ? null : Text(calendar.account!),
-                value: !settings.calendarsOff.contains(calendar.id),
-                onChanged: (on) => relay.setCalendarShown(calendar.id, on),
-              ),
-            SwitchListTile(
-              title: const Text('Location history'),
-              subtitle: Text(settings.history ? sentLine(relay.pointsSent, 'point', DateTime.now())
-                : 'Keeps where you go, also while the app is closed, so ring notes get a place too.'),
-              value: settings.history,
-              onChanged: sending ? (on) => _apply(context, relay.setHistory(on)) : null,
-            ),
-            if (settings.history && relay.locationModes) RadioGroup<LocationMode>(
-              groupValue: settings.mode,
-              onChanged: (mode) { if (mode != null) _apply(context, relay.setLocationMode(mode)); },
-              child: const Column(children: [
-                RadioListTile(value: LocationMode.battery, title: Text('Save battery'),
-                  subtitle: Text('A point at each move of about 500 m, and when you arrive or leave.')),
-                RadioListTile(value: LocationMode.move, title: Text('Every 100 m'),
-                  subtitle: Text('A point each 100 m, or each 5 minutes while you stay. It uses more battery.')),
+          final danger = Theme.of(context).colorScheme.error;
+          return CustomScrollView(slivers: [
+            const SliverAppBar.large(leading: BackToNotes(), leadingWidth: backToNotesWidth, title: Text('Settings')),
+            SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 32), sliver: SliverList.list(children: [
+              _Group(title: 'Notes', children: [
+                SwitchListTile(
+                  title: const Text('Pin notes to where I am'),
+                  subtitle: const Text('Each typed note keeps where you were.'),
+                  value: settings.pinNotes,
+                  onChanged: (on) => _apply(context, relay.setPinNotes(on)),
+                ),
               ]),
-            ),
-            if (sending) ListTile(
-              title: const Text('Where the phone sends'),
-              subtitle: Text(settings.place == SendPlace.webhook ? 'My own webhook' : 'Relay Everything'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _choosePlace(context),
-            ),
-            if (sending && settings.place == SendPlace.webhook) ...[
-              ListTile(
-                title: const Text('Webhook'),
-                subtitle: Text(relay.webhookAddress ?? ''),
-                trailing: OutlinedButton(onPressed: () => _test(context), child: const Text('Send a test')),
-              ),
-              if (relay.webhookProblem case final problem?) ListTile(
-                subtitle: Text(problemLine(problem, DateTime.now()),
-                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
-              ),
-            ],
-            if (relay.connected && settings.place == SendPlace.server) ...[
-              ListTile(
-                title: const Text('Server'),
-                subtitle: Text(relay.server ?? ''),
-                trailing: const Icon(Icons.edit_outlined),
-                onTap: () => _editServer(context),
-              ),
-              ListTile(
-                title: const Text('Disconnect this phone'),
-                subtitle: const Text('Removes the key from this phone and turns sending off. Your notes stay here.'),
-                onTap: () => _disconnect(context),
-              ),
-            ],
+              _Group(title: 'Voice notes', children: [_VoiceRow(relay: relay)]),
+              _Group(title: 'Sending', children: [
+                SwitchListTile(
+                  title: const Text('Send my notes'),
+                  subtitle: Text(_placeLine(relay)),
+                  value: sending,
+                  onChanged: (on) => on ? _choosePlace(context) : _stopSending(context),
+                ),
+                SwitchListTile(
+                  title: const Text('Health'),
+                  subtitle: Text(settings.health ? sentLine(relay.healthSent, 'reading', DateTime.now())
+                    : 'Steps, heart rate, sleep and more.'),
+                  value: settings.health,
+                  onChanged: sending ? (on) => _apply(context, relay.setHealth(on)) : null,
+                ),
+                SwitchListTile(
+                  title: const Text('Calendar'),
+                  subtitle: Text(settings.calendar ? sentLine(relay.calendarSent, 'event', DateTime.now())
+                    : 'Your phone\'s calendars.'),
+                  value: settings.calendar,
+                  onChanged: sending ? (on) => _apply(context, relay.setCalendar(on)) : null,
+                ),
+                if (settings.calendar)
+                  for (final calendar in relay.calendars) SwitchListTile(
+                    contentPadding: const EdgeInsets.only(left: 32, right: 16),
+                    title: Text(calendar.name),
+                    subtitle: calendar.account == null || calendar.account!.isEmpty ? null : Text(calendar.account!),
+                    value: !settings.calendarsOff.contains(calendar.id),
+                    onChanged: (on) => relay.setCalendarShown(calendar.id, on),
+                  ),
+                SwitchListTile(
+                  title: const Text('Location history'),
+                  subtitle: Text(settings.history ? sentLine(relay.pointsSent, 'point', DateTime.now())
+                    : 'Where you go, also while the app is closed.'),
+                  value: settings.history,
+                  onChanged: sending ? (on) => _apply(context, relay.setHistory(on)) : null,
+                ),
+                if (settings.history && relay.locationModes) RadioGroup<LocationMode>(
+                  groupValue: settings.mode,
+                  onChanged: (mode) { if (mode != null) _apply(context, relay.setLocationMode(mode)); },
+                  child: const Column(children: [
+                    RadioListTile(value: LocationMode.battery, title: Text('Save battery'),
+                      subtitle: Text('A point at each move of about 500 m, and when you arrive or leave.')),
+                    RadioListTile(value: LocationMode.move, title: Text('Every 100 m'),
+                      subtitle: Text('A point each 100 m, or each 5 minutes while you stay. It uses more battery.')),
+                  ]),
+                ),
+                if (!sending) Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: Text('Health, Calendar and Location history work with Send my notes on.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                ),
+                if (sending) ListTile(
+                  title: const Text('Where the phone sends'),
+                  subtitle: Text(settings.place == SendPlace.webhook ? 'My own webhook' : 'Relay Everything'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _choosePlace(context),
+                ),
+                if (sending && settings.place == SendPlace.webhook) ...[
+                  ListTile(
+                    title: const Text('Webhook'),
+                    subtitle: Text(relay.webhookAddress ?? ''),
+                    trailing: TextButton(onPressed: () => _test(context), style: quietButton(context), child: const Text('Send a test')),
+                  ),
+                  if (relay.webhookProblem case final problem?) ListTile(
+                    subtitle: Text(problemLine(problem, DateTime.now()), style: TextStyle(color: danger)),
+                  ),
+                ],
+                if (relay.connected && settings.place == SendPlace.server) ...[
+                  ListTile(
+                    title: const Text('Server'),
+                    subtitle: Text(relay.server ?? ''),
+                    trailing: const Icon(Icons.edit_outlined),
+                    onTap: () => _editServer(context),
+                  ),
+                  ListTile(
+                    title: Text('Disconnect this phone', style: TextStyle(color: danger)),
+                    subtitle: const Text('Removes the key from this phone and turns sending off. Your notes stay here.'),
+                    onTap: () => _disconnect(context),
+                  ),
+                ],
+              ]),
+            ])),
           ]);
         },
       ),
@@ -208,34 +218,48 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
-/// The speech model voice notes use: where it is, its size, and *Remove* to free the space.
-class _VoiceSection extends StatelessWidget {
-  const _VoiceSection({required this.relay});
+/// One Settings group: a small muted heading, and one card with its rows and no lines between them.
+class _Group extends StatelessWidget {
+  const _Group({required this.title, required this.children});
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Padding(padding: const EdgeInsets.fromLTRB(4, 14, 4, 6), child: Text(title,
+        style: theme.textTheme.bodySmall?.copyWith(fontWeight: const FontWeight(650), color: theme.colorScheme.onSurfaceVariant))),
+      Card(clipBehavior: Clip.antiAlias, child: Padding(padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Column(children: children))),
+    ]);
+  }
+}
+
+/// The speech model voice notes use: where it is, its size, and *Remove* to free the space. The voice never leaves
+/// the phone.
+class _VoiceRow extends StatelessWidget {
+  const _VoiceRow({required this.relay});
 
   final Relay relay;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final size = megabytes(relay.modelBytes);
     final state = switch (relay.speechModel) {
-      ModelState.ready => 'Speech model: on this phone, $size',
-      ModelState.downloading => 'Speech model: getting it… ${(relay.modelProgress * 100).floor()}%',
-      ModelState.failed => 'Speech model: did not download. Hold to talk on the timeline to try again.',
-      _ => 'Speech model: not on this phone. Your first voice note asks to get it, $size.',
+      ModelState.ready => 'On this phone, $size. Your voice never leaves it.',
+      ModelState.downloading => 'Getting it… ${(relay.modelProgress * 100).floor()}%',
+      ModelState.failed => 'It did not download. Hold New note to try again.',
+      _ => 'Not on this phone. Your first voice note asks to get it, $size.',
     };
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      ListTile(
-        title: const Text('Voice notes'),
-        subtitle: const Text('Your voice is written into words on this phone. Recordings never leave it.'),
-      ),
-      ListTile(
-        title: Text(state, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        trailing: relay.speechModel == ModelState.ready
-          ? OutlinedButton(onPressed: relay.removeSpeechModel, child: const Text('Remove'))
-          : null,
-      ),
-    ]);
+    return ListTile(
+      title: const Text('Speech model'),
+      subtitle: Text(state),
+      trailing: relay.speechModel == ModelState.ready
+        ? TextButton(onPressed: relay.removeSpeechModel, style: quietButton(context), child: const Text('Remove'))
+        : null,
+    );
   }
 }
 

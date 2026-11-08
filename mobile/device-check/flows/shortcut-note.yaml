@@ -1,12 +1,12 @@
 # Add a note from Apple Shortcuts: the app's own tile in the Shortcuts app asks for words, and the note is in the
-# timeline. Not in the fixed tour: the Shortcuts app's screens change with each iOS, so run it by name.
+# notes list. Not in the fixed tour: the Shortcuts app's screens change with each iOS, so run it by name.
 appId: com.matthewwong525.relayApp
 ---
 # The first open puts the app's actions in Shortcuts.
 - launchApp:
     clearState: true
 - extendedWaitUntil:
-    visible: "New note"
+    visible: "Notes"
     timeout: 60000
 - launchApp:
     appId: com.apple.shortcuts
@@ -25,9 +25,9 @@ appId: com.matthewwong525.relayApp
     timeout: 30000
 - launchApp:
     stopApp: false
+# Flutter joins a row's lines into one label, so match a word inside it, or its start.
 - extendedWaitUntil:
-    visible: "Typed"
+    visible: '(.|\n)*Typed(.|\n)*'
     timeout: 10000
-# Flutter joins a card's lines into one label, so match its start.
 - assertVisible: 'Shortcut check note(.|\n)*'
 - takeScreenshot: shortcut-note

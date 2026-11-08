@@ -41,14 +41,20 @@ class ShortcutsBridge {
     }
   }
 
-  /// `{id, text, createdAt, files: [{path, name, type}]}` → the kept note, with `message` when a file was left out.
-  /// Nothing to keep fails with the words to show.
+  /// `{id, text, createdAt, files: [{path, name, type}], recording: {path, durationMs}}` → the kept note, with `message`
+  /// when a file was left out. A `recording` makes a voice note, its words written after the typed ones. Nothing to keep
+  /// fails with the words to show.
   Future<Map<String, Object?>> add(Map<String, dynamic> arguments) async {
     final id = arguments['id'], text = arguments['text'], at = arguments['createdAt'];
-    final kept = await relay.keepNote(text is String ? text : '',
-      files: shortcutFiles(arguments['files'], relay.filesRoot ?? ''),
-      clientId: id is String && noteId.hasMatch(id) ? id : null,
-      createdAt: at is int ? DateTime.fromMillisecondsSinceEpoch(at) : null);
+    final words = text is String ? text : '';
+    final clientId = id is String && noteId.hasMatch(id) ? id : null;
+    final createdAt = at is int ? DateTime.fromMillisecondsSinceEpoch(at) : null;
+    final recording = shortcutRecording(arguments['recording'], arguments['files']);
+    final kept = recording == null
+      ? await relay.keepNote(words, files: shortcutFiles(arguments['files'], relay.filesRoot ?? ''), clientId: clientId,
+          createdAt: createdAt)
+      : await relay.keepRecording(words, recording: recording.path, durationMs: recording.durationMs, clientId: clientId,
+          createdAt: createdAt);
     final note = kept.note;
     if (note == null) throw PlatformException(code: 'empty', message: kept.problem);
     // The note goes now while sending is on, before iOS puts the app away; it stays waiting if that takes longer.

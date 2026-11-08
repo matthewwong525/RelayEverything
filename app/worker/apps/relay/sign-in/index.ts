@@ -14,6 +14,9 @@ export type SignInEnv = DirectoryEnv & {
   RELAY_APPLE_TEAM_ID?: string; RELAY_APPLE_SERVICES_ID?: string; RELAY_APPLE_SIGN_IN_KEY?: string; RELAY_APPLE_SIGN_IN_KEY_ID?: string;
   RELAY_GOOGLE_CLIENT_ID?: string; RELAY_GOOGLE_SIGN_IN_SECRET?: string;
   RELAY_MCP_CALLBACK?: string;
+  // The address for questions and privacy requests, shown on the sign-in screen and the account card. Unset on a
+  // server a person runs themselves until its owner sets it, so their people never write to the shared server's.
+  RELAY_CONTACT_EMAIL?: string;
 };
 
 /** The Worker's `waitUntil`: work that goes on after the answer. */

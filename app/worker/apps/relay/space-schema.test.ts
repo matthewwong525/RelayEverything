@@ -127,6 +127,47 @@ it("frees health types and adds the calendar, keeping every health row, log entr
     .toThrow(/FOREIGN KEY/);
 });
 
+it("logs a note's files when their bytes are sealed, keeping every log entry and webhook place, and logs stored files once", () => {
+  const space = new DatabaseSync(":memory:");
+  space.exec("PRAGMA foreign_keys = ON");
+  const at = MIGRATIONS.findIndex(([name]) => name === "0007_note_files");
+  for (const [, text] of MIGRATIONS.slice(0, at)) inTransaction(space, text);
+  space.exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-phone', 'Phone', 'rek:d-phone', '', 1, 'phone');
+    INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at) VALUES ('n-late', 'd-phone', 'typed', 'c-1', 'Late.', 50, 50),
+      ('n-early', 'd-phone', 'typed', 'c-2', 'Early.', 10, 51);
+    INSERT INTO relay_attachments (id, note_id, name, content_type, size, file_key, created_at) VALUES
+      ('f-late', 'n-late', 'late.pdf', 'application/pdf', 3, 'key-late', 50), ('f-early', 'n-early', 'early.jpg', 'image/jpeg', 3, 'key-early', 51),
+      ('f-listed', 'n-early', 'never.pdf', 'application/pdf', 3, NULL, 51);
+    INSERT INTO relay_webhooks (id, name, url, secret, kinds, sent_seq, created_at) VALUES ('w-1', 'DB', 'https://db.example.com', 's', '["notes"]', 1, 1);`);
+  const queries = ["SELECT * FROM relay_outbox ORDER BY seq", "SELECT * FROM relay_webhooks", "SELECT * FROM relay_attachments ORDER BY id"];
+  const before = queries.map(query => all(space, query));
+  expect(() => space.exec("INSERT INTO relay_outbox (kind, ref, at, logged_at) VALUES ('note.file', 'f-late', 50, 52)")).toThrow(/CHECK/);
+  inTransaction(space, MIGRATIONS[at][1]);
+  expect(all(space, "SELECT * FROM relay_outbox WHERE seq <= 2 ORDER BY seq")).toEqual(before[0]);
+  expect(queries.slice(1).map(query => all(space, query))).toEqual(before.slice(1));
+  expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
+  expect(tables(space)).toEqual([...PERSON].sort());
+  // Each stored file once, in its note's order; a file only listed waits for its bytes.
+  expect(all(space, "SELECT seq, kind, ref, at FROM relay_outbox WHERE seq > 2 ORDER BY seq")).toEqual([
+    { seq: 3, kind: "note.file", ref: "f-early", at: 10 }, { seq: 4, kind: "note.file", ref: "f-late", at: 50 }]);
+  // A new note's file logs one row after its note when sealed, and none while it is only listed or sealed again.
+  space.exec(`INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at) VALUES ('n-new', 'd-phone', 'typed', 'c-3', 'New.', 60, 60);
+    INSERT INTO relay_attachments (id, note_id, name, content_type, size, created_at) VALUES ('f-new', 'n-new', 'new.png', 'image/png', 3, 60);
+    UPDATE relay_attachments SET size = 4 WHERE id = 'f-new';
+    UPDATE relay_attachments SET file_key = 'key-new' WHERE id = 'f-new';
+    UPDATE relay_attachments SET file_key = 'key-new' WHERE id = 'f-new';`);
+  expect(all(space, "SELECT seq, kind, ref, at FROM relay_outbox WHERE seq > 4 ORDER BY seq")).toEqual([
+    { seq: 5, kind: "note.created", ref: "n-new", at: 60 }, { seq: 6, kind: "note.file", ref: "f-new", at: 60 }]);
+  const [{ logged_at: logged }] = all(space, "SELECT logged_at FROM relay_outbox WHERE seq = 6") as { logged_at: number }[];
+  expect(Math.abs(logged - Date.now())).toBeLessThan(60_000);
+  // Every other log trigger is back.
+  space.exec(`INSERT INTO relay_health (device_id, type, start_at, end_at, value, unit, source, created_at) VALUES ('d-phone', 'steps', 6, 6, 1, 'count', 'fit', 6);
+    INSERT INTO relay_locations (device_id, at, lat, lon, accuracy, created_at) VALUES ('d-phone', 8, 43, -79, 5, 8);
+    INSERT INTO relay_calendar_events (device_id, event_key, title, start_at, end_at, updated_at, created_at) VALUES ('d-phone', 'k', 'Lunch', 9, 10, 9, 9);
+    UPDATE relay_calendar_events SET removed_at = 11, updated_at = 11;`);
+  expect(all(space, "SELECT kind FROM relay_outbox WHERE seq > 6 ORDER BY seq").map(row => row.kind)).toEqual(["health", "location", "calendar", "calendar"]);
+});
+
 it("widens the directory's keys to API keys, keeping every key", () => {
   const d1 = new DatabaseSync(":memory:");
   d1.exec("PRAGMA foreign_keys = ON");
@@ -170,7 +211,7 @@ it("drops a space's signing secrets and its late-place trigger, keeping its ring
 });
 
 it("lets a new space and a space made before email take the Email device, keeping every row", () => {
-  for (const before of [MIGRATIONS.length, MIGRATIONS.findIndex(([name]) => name === "0007_inbox")]) {
+  for (const before of [MIGRATIONS.length, MIGRATIONS.findIndex(([name]) => name === "0008_inbox")]) {
     const space = new DatabaseSync(":memory:");
     space.exec("PRAGMA foreign_keys = ON");
     for (const [, text] of MIGRATIONS.slice(0, before)) inTransaction(space, text);

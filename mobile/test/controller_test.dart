@@ -1431,5 +1431,5 @@ class _FullStore extends Store {
   _FullStore() : super(NativeDatabase.memory());
 
   @override
-  Future<void> addVoiceNote(LocalNote note) => throw Exception('disk full');
+  Future<void> addVoiceNote(LocalNote note, {bool waitForPin = false}) => throw Exception('disk full');
 }

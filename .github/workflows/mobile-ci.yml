@@ -1,25 +1,63 @@
-# The phone app in mobile/: analyze and test on each change to it, then the Android file on every branch and the
-# iPhone build where the keys allow. A pull request from a fork runs the tests only, with no secret.
+# The phone app in mobile/: test, then build both apps. A branch sends nothing, main sends its newest build as a beta,
+# and a v<x.y.z> tag on main releases the app (mobile/README.md). A pull request from a fork runs the tests only.
 name: Mobile CI
 on:
   push:
     branches: ['**']
+    # GitHub reads no paths filter for a tag, so every release tag runs.
+    tags: ['v*']
     paths: ['mobile/**', '.github/workflows/mobile-*.yml']
   pull_request:
     paths: ['mobile/**', '.github/workflows/mobile-*.yml']
   workflow_dispatch:
+    inputs:
+      release_check:
+        description: Run a release's every step, with a draft GitHub release that is deleted and no App Store review.
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
-# A same-repo pull request is already covered by its own push, as in test.yml.
+# A same-repo pull request is already covered by its own push, as in test.yml. Main's runs go in order and keep only
+# the newest waiting run; a tag has its own group, never cancelled.
 concurrency:
-  group: mobile-ci-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: ${{ github.ref_name != github.event.repository.default_branch }}
+  group: >-
+    ${{ github.ref_type == 'tag' && format('mobile-release-{0}', github.ref_name)
+    || format('mobile-ci-{0}-{1}', github.event_name, github.head_ref || github.ref_name) }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' && github.ref_name != github.event.repository.default_branch }}
 
 jobs:
-  flutter:
+  # One build number for every run (github.run_number), and the version: the tag's for a release, else the next beta.
+  # A bad tag, a tag off main, or a version not above the last release stops here, before any build.
+  plan:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository }}
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+      version: ${{ steps.plan.outputs.version }}
+      build: ${{ steps.plan.outputs.build }}
+      tag: ${{ steps.plan.outputs.tag }}
+      previous_tag: ${{ steps.plan.outputs.previous_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Version
+        id: plan
+        env:
+          RELEASE_CHECK: ${{ inputs.release_check }}
+        run: |
+          if ! out=$(node scripts/app-release.mjs version 2> "$RUNNER_TEMP/plan.err"); then
+            echo "::error::$(cat "$RUNNER_TEMP/plan.err")"
+            exit 1
+          fi
+          echo "$out"
+          echo "$out" >> "$GITHUB_OUTPUT"
+
+  flutter:
+    needs: plan
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -35,15 +73,119 @@ jobs:
       - run: flutter test
 
   android:
-    needs: flutter
+    needs: [plan, flutter]
     if: ${{ github.event_name != 'pull_request' }}
     permissions:
       contents: write
     uses: ./.github/workflows/mobile-android.yml
+    with:
+      mode: ${{ needs.plan.outputs.mode }}
+      version: ${{ needs.plan.outputs.version }}
+      build: ${{ needs.plan.outputs.build }}
     secrets: inherit
 
   ios:
-    needs: flutter
+    needs: [plan, flutter]
     if: ${{ github.event_name != 'pull_request' }}
     uses: ./.github/workflows/mobile-ios.yml
+    with:
+      mode: ${{ needs.plan.outputs.mode }}
+      upload: ${{ needs.plan.outputs.mode != 'branch' }}
+      version: ${{ needs.plan.outputs.version }}
+      build: ${{ needs.plan.outputs.build }}
     secrets: inherit
+
+  # The fixed iPhone tour on a simulator, each step required, with no Claude.
+  tour:
+    needs: plan
+    if: ${{ needs.plan.outputs.mode == 'release' || needs.plan.outputs.mode == 'release-check' }}
+    # The device check's report job asks for pull-requests: write, and GitHub checks it even though a release skips it.
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/mobile-device-check.yml
+    with:
+      sha: ${{ github.sha }}
+      tour_only: true
+
+  # Runs only when every check above passed. Each step can run again for the same tag: the App Store review is not sent
+  # twice, the GitHub release is edited, and each pull request gets one comment.
+  release:
+    needs: [plan, android, ios, tour]
+    if: ${{ needs.plan.outputs.mode == 'release' || needs.plan.outputs.mode == 'release-check' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    env:
+      MODE: ${{ needs.plan.outputs.mode }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      BUILD: ${{ needs.plan.outputs.build }}
+      TAG: ${{ needs.plan.outputs.tag }}
+      PREVIOUS_TAG: ${{ needs.plan.outputs.previous_tag }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Release notes
+        run: |
+          node scripts/app-release.mjs notes --version "$VERSION" --previous-tag="$PREVIOUS_TAG" --out "$RUNNER_TEMP"
+          if [ -z "$PREVIOUS_TAG" ]; then
+            # The first release is the first file signed with the upload key: an earlier file can not update to it.
+            printf '\n%s\n' "**Android:** if your phone has the app from an earlier file, send your notes first, then remove the app once and install this file. Notes that are only on the phone go with the app." >> "$RUNNER_TEMP/notes.md"
+          fi
+          cat "$RUNNER_TEMP/notes.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+          working-directory: mobile/ios
+      - name: App Store review
+        working-directory: mobile/ios
+        env:
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          missing=""
+          for name in ASC_ISSUER_ID ASC_KEY_ID ASC_KEY_P8; do [ -n "${!name}" ] || missing="$missing $name"; done
+          if [ -n "$missing" ]; then
+            echo "::error::A release needs the App Store Connect key: add$missing to this repository's secrets. See mobile/README.md."
+            exit 1
+          fi
+          check=false
+          if [ "$MODE" = release-check ]; then check=true; fi
+          bundle exec fastlane submit version:"$VERSION" build:"$BUILD" notes:"$RUNNER_TEMP/whats-new.txt" check:"$check"
+      - uses: actions/download-artifact@v4
+        with:
+          name: relay-everything-android-release
+          path: ${{ runner.temp }}/apk
+      - name: GitHub release
+        run: |
+          apk="$RUNNER_TEMP/apk/relay-everything-${VERSION}.apk"
+          title="Relay Everything ${VERSION}"
+          notes="$RUNNER_TEMP/notes.md"
+          if [ "$MODE" = release-check ]; then
+            # A draft makes no tag. The last step deletes it.
+            gh release create "$TAG" "$apk" --draft --target "$GITHUB_SHA" --title "$title" --notes-file "$notes"
+            gh release view "$TAG" --json name,body,assets --jq '"\(.name): \([.assets[].name] | join(", "))\n\n\(.body)"'
+          elif gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "$apk" --clobber
+            gh release edit "$TAG" --title "$title" --notes-file "$notes" --latest
+          else
+            gh release create "$TAG" "$apk" --verify-tag --latest --title "$title" --notes-file "$notes"
+          fi
+      - name: Mark the pull requests
+        if: ${{ env.MODE == 'release' }}
+        run: node scripts/app-release.mjs mark --version "$VERSION" --previous-tag="$PREVIOUS_TAG"
+      - name: Delete the check's draft
+        if: ${{ always() && env.MODE == 'release-check' }}
+        run: |
+          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null)" = true ]; then
+            gh release delete "$TAG" --yes
+            echo "The check's draft release $TAG is deleted."
+          fi

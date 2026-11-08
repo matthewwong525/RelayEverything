@@ -185,7 +185,13 @@ class RelayController extends Relay {
     final root = _root;
     if (root != null) {
       await drainInbox(Directory(root), (request) async {
-        await keepNote(request.text, files: request.files, clientId: request.id, createdAt: request.createdAt, pin: false);
+        final recording = request.recording;
+        if (recording == null) {
+          await keepNote(request.text, files: request.files, clientId: request.id, createdAt: request.createdAt, pin: false);
+        } else {
+          await keepRecording(request.text, recording: recording.path, durationMs: recording.durationMs, clientId: request.id,
+            createdAt: request.createdAt, pin: false);
+        }
       });
     }
     await _drainShare(refresh: false);
@@ -627,6 +633,42 @@ class RelayController extends Relay {
     return Kept(note, problems.isEmpty ? null : problems.join(' '));
   }
 
+  /// Keeps a shortcut's recording, a WAV Swift left at [recording] from the support folder, as a voice note that waits
+  /// for its words, with [text], the words typed with it, first. The note is kept before its recording moves to
+  /// `voice/<id>.wav`, so the sweep for stray recordings never takes it. It pins as [keepNote] does, and a [clientId]
+  /// already kept gives back that note. The words are written now when this engine has the voice parts, else at the
+  /// app's next open. A recording that is not there keeps the typed words alone, or nothing.
+  Future<Kept> keepRecording(String text, {required String recording, required int durationMs, String? clientId,
+    DateTime? createdAt, bool pin = true}) async {
+    final id = clientId ?? newClientId();
+    if (await store.hasNote(id)) {
+      return Kept((await store.notes()).firstWhere((note) => note.clientId == id), null);
+    }
+    final root = _root ?? (await folder?.call())?.path;
+    final source = File('$root/$recording');
+    if (root == null || !await source.exists()) return keepNote(text, clientId: id, createdAt: createdAt, pin: pin);
+    final note = LocalNote(clientId: id, text: text.trim(), createdAt: createdAt ?? _clock(), kind: NoteKind.voice,
+      audioPath: VoiceRecorder.pathOf(id), durationMs: durationMs, wordsPending: true);
+    final pinned = pin && _settings.pinNotes;
+    await store.addVoiceNote(note, waitForPin: pinned);
+    try {
+      final target = File('$root/${note.audioPath}');
+      await target.parent.create(recursive: true);
+      await source.rename(target.path);
+    } on FileSystemException {
+      await store.dropNote(id);
+      rethrow;
+    }
+    await _refreshLocal();
+    if (pinned) {
+      final job = _pinThenSync(id);
+      _pinning.add(job);
+      job.whenComplete(() => _pinning.remove(job));
+    }
+    if (voice != null) _track(_write(note));
+    return Kept(note, null);
+  }
+
   /// Copies a file into `attachments/<id><.ext>`, or moves the app's own copy there. Null when it could not.
   Future<Attachment?> _keepFile(NewFile file) async {
     final root = _root ?? (await folder?.call())?.path;
@@ -894,7 +936,11 @@ class RelayController extends Relay {
       final folder = (await parts.recorder.fileOf(VoiceRecorder.pathOf('x'))).parent;
       if (await folder.exists()) {
         await for (final file in folder.list()) {
-          if (file is File && !kept.contains('voice/${file.uri.pathSegments.last}')) await file.delete();
+          final path = 'voice/${file.uri.pathSegments.last}';
+          if (file is! File || kept.contains(path)) continue;
+          // A shortcut's recording can land meanwhile: its note is kept before the recording moves here.
+          if (await store.keepsRecording(path)) continue;
+          await _deleteRecording(file);
         }
       }
     }
@@ -903,13 +949,16 @@ class RelayController extends Relay {
     }
   }
 
-  /// Writes one voice note's words. No words: the note and its recording go, and the app says it heard no speech.
-  /// It waits while the model is away; failed words, or words past the time limit, show *Try again* on the note.
+  /// Writes one voice note's words, after the words typed with it. No words: a note with typed words keeps them and its
+  /// recording; one without goes with its recording, and the app says it heard no speech. It waits while the model is
+  /// away; failed words, or words past the time limit, show *Try again* on the note.
   Future<void> _write(LocalNote note) async {
     final parts = voice;
     if (parts == null) return;
     final file = await parts.recorder.fileOf(note.audioPath ?? VoiceRecorder.pathOf(note.clientId));
     if (!await file.exists()) {
+      // Typed words stay, with no recording to write.
+      if (note.text.trim().isNotEmpty) return _keepTyped(note);
       await store.dropNote(note.clientId);
       await _refreshLocal();
       return;
@@ -929,13 +978,31 @@ class RelayController extends Relay {
       return;
     }
     if (words.isEmpty) {
+      if (note.text.trim().isNotEmpty) return _keepTyped(note);
       await store.dropNote(note.clientId);
-      await file.delete();
+      await _deleteRecording(file);
       await _refreshLocal();
       notice(_noSpeech);
       return;
     }
     if (await store.setWords(note.clientId, words, send: _settings.sending)) {
+      await _refreshLocal();
+      await sync();
+    }
+  }
+
+  /// Deletes a recording, or does nothing when the sweep for stray recordings deleted it first.
+  Future<void> _deleteRecording(File file) async {
+    try {
+      await file.delete();
+    } on PathNotFoundException {
+      // Gone already.
+    }
+  }
+
+  /// Ends a voice note's wait with only the words typed with it, such as a shortcut's label over a silent recording.
+  Future<void> _keepTyped(LocalNote note) async {
+    if (await store.setWords(note.clientId, '', send: _settings.sending)) {
       await _refreshLocal();
       await sync();
     }

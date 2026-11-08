@@ -1,9 +1,28 @@
-# The iPhone app: built on a Mac and sent to TestFlight. It waits, with a notice, until the App Store Connect key
-# is in this repository's secrets.
+# The iPhone app: built on a Mac and signed with the saved certificate on every run; with upload, sent to TestFlight.
+# mobile-ci.yml sets upload for main and a release only. Until the App Store Connect key and the certificate are in
+# this repository's secrets, it ends with a notice, but a release or a release check fails.
 name: Mobile iOS
 on:
   workflow_call:
-  workflow_dispatch:
+    inputs:
+      mode:
+        description: The run's mode from scripts/app-release.mjs version. A release fails on a missing secret.
+        required: false
+        type: string
+        default: ""
+      upload:
+        description: Send the build to TestFlight. A push to main sends only when it is main's newest change to mobile/.
+        required: false
+        type: boolean
+        default: false
+      version:
+        description: The version name, such as 1.1.0, from scripts/app-release.mjs version.
+        required: true
+        type: string
+      build:
+        description: The build number, the same for every app of one run.
+        required: true
+        type: string
 
 jobs:
   testflight:
@@ -16,17 +35,29 @@ jobs:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      BUILD_NUMBER: ${{ github.run_number }}
+      IOS_DIST_CERT_P12: ${{ secrets.IOS_DIST_CERT_P12 }}
+      IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+      MODE: ${{ inputs.mode }}
+      VERSION: ${{ inputs.version }}
+      BUILD_NUMBER: ${{ inputs.build }}
     steps:
-      - name: App Store Connect key
+      # A release or a release check stops with the missing names, so the Android file never goes out alone.
+      - name: App Store Connect key and certificate
         id: key
         working-directory: .
         run: |
-          if [ -z "$ASC_KEY_ID" ] || [ -z "$ASC_ISSUER_ID" ] || [ -z "$ASC_KEY_P8" ] || [ -z "$APPLE_TEAM_ID" ]; then
-            echo "::notice::No App Store Connect key in this repository's secrets yet, so no iPhone build. See mobile/README.md."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
+          missing=""
+          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 APPLE_TEAM_ID IOS_DIST_CERT_P12 IOS_DIST_CERT_PASSWORD; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -z "$missing" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
+          elif [ "$MODE" = release ] || [ "$MODE" = release-check ]; then
+            echo "::error::A release needs the iPhone signing secrets: add${missing} to this repository's secrets. See mobile/README.md."
+            exit 1
+          else
+            echo "::notice::No iPhone build: add${missing} to this repository's secrets (the certificate with node scripts/ios-signing-cert.mjs). See mobile/README.md."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/checkout@v4
         if: steps.key.outputs.ready == 'true'
@@ -45,8 +76,26 @@ jobs:
         if: steps.key.outputs.ready == 'true'
         run: |
           flutter pub get
-          flutter build ios --release --no-codesign --build-number="$BUILD_NUMBER"
+          flutter build ios --release --no-codesign --build-name="$VERSION" --build-number="$BUILD_NUMBER"
+      # A newer commit on main that changes the app has its own run, which sends: TestFlight never gets an older build
+      # after a newer one. A newer change outside mobile/ does not count.
+      - name: Newest on main
+        id: newest
+        if: steps.key.outputs.ready == 'true' && inputs.upload && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: .
+        run: |
+          git fetch --quiet --depth=1 origin main
+          if git diff --quiet "$GITHUB_SHA" FETCH_HEAD -- mobile/; then
+            echo "send=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::A newer commit on main changes mobile/, and its own run sends the newer build. This build goes nowhere."
+            echo "send=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Sign and check
+        if: steps.key.outputs.ready == 'true' && (!inputs.upload || steps.newest.outputs.send == 'false')
+        working-directory: mobile/ios
+        run: bundle exec fastlane build
       - name: TestFlight
-        if: steps.key.outputs.ready == 'true'
+        if: steps.key.outputs.ready == 'true' && inputs.upload && steps.newest.outputs.send != 'false'
         working-directory: mobile/ios
         run: bundle exec fastlane beta

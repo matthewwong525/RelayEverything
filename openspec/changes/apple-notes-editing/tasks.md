@@ -2,7 +2,7 @@
 
 ## 1. The editor and its Markdown codec (phone)
 
-- [ ] 1.1 Add `flutter_quill`, `markdown` and `share_plus` to `mobile/pubspec.yaml`; confirm `flutter build apk --debug` and `flutter build ios --no-codesign` pass on Flutter 3.47.9. If `flutter_quill` fails, switch to `appflowy_editor` and note it in design.md.
+- [x] 1.1 Add `flutter_quill`, `markdown` and `share_plus` to `mobile/pubspec.yaml`; confirm `flutter build apk --debug` and `flutter build ios --no-codesign` pass on Flutter 3.47.9. If `flutter_quill` fails, switch to `appflowy_editor` and note it in design.md.
 - [x] 1.2 Write `mobile/lib/editor/markdown.dart`: Markdown ↔ Delta for every style in design.md (Title/Heading/Subheading, Mono fence, bulleted `*`, dashed `-`, numbered, checklist `- [ ]`/`- [x]`, quote, indent, `**`, `_`, `~~`, `<u>`), plus `plainPreview()` for the list. Test in `mobile/test/markdown_test.dart`: each style round-trips byte for byte, and a corpus of plain old notes with stray `*`, `#` and `-` comes back unchanged.
 - [x] 1.3 Use `plainPreview()` for the list's first line, rest and search in `timeline.dart`; test that a note starting `# Shop` and `- [ ] Eggs` lists as *Shop* and *Eggs*.
 
@@ -22,7 +22,7 @@
 
 ## 4. The server
 
-- [x] 4.1 `schema/space-migrations/0008_note_edits.sql`: add `relay_notes.edited_at`. Test in `space-schema.test.ts`.
+- [x] 4.1 `schema/space-migrations/0010_note_edits.sql`: add `relay_notes.edited_at`. Test in `space-schema.test.ts`.
 - [x] 4.2 `app/worker/apps/relay/edit-note.ts`: `PATCH notes` with `clientId` in the body, for device keys; finds the note by device and client id (another device's → 404); updates text and `edited_at`; adds new files; logs one `note.updated` unless the words are unchanged. Register it in `api.ts`. Tests: change, same words logs nothing, another device refused, phone-only key reach.
 - [x] 4.3 `webhooks/format.ts`: `note.updated` carries optional `edited_at` and `attachments`; update `site/public/webhooks/v1.schema.json` and `receiver.mjs` to drop *no longer sent*; update `relay-webhooks` tests that expect no `note.updated`. Run `npm run relay:api-doc` in `app/`.
 
@@ -32,12 +32,12 @@
 
 ## 6. Docs
 
-- [x] 6.1 Update `site/src/content/docs/app/your-notes.md` (editing, styles, checklists, a change to a sent note is sent) and the webhooks page (`note.updated` is sent again). Update `wiki/relay-spaces.md` for `0008`.
+- [x] 6.1 Update `site/src/content/docs/app/your-notes.md` (editing, styles, checklists, a change to a sent note is sent) and the webhooks page (`note.updated` is sent again). Update `wiki/relay-spaces.md` for `0010`.
 
 ## 7. Checks
 
 - [x] 7.1 `flutter analyze` and `flutter test` in `mobile/`; `npm test` in `app/`; `node scripts/product-name.test.mjs`; `node scripts/public-check.mjs`.
-- [ ] 7.2 `/save`, then on staging: edit a sent note from a phone build and confirm the page shows the new words and a test webhook gets one `note.updated`.
+- [x] 7.2 `/save`, then on staging: edit a sent note from a phone build and confirm the page shows the new words and a test webhook gets one `note.updated`.
 - [ ] 7.3 The iPhone device check shows the editing, Aa and reading states; compare them to Apple Notes and fix gaps before publishing.
 
 ## 8. Review fixes
@@ -52,3 +52,5 @@
 - [x] 8.8 The webhooks page says a phone note's `created_at` equals its `recorded_at`, matching what the phone sends.
 - [x] 8.9 The note's Title, Heading, Subheading and Body styles name the brand font, so they draw in Inter, not the system font.
 - [x] 8.10 A note left with no words and no files is deleted from the phone, as Apple Notes does: a new note that was added then emptied, and an old note emptied. Any waiting upload or change of it leaves the outbox; a note already on the server keeps its last words there. Widget and store tests.
+- [x] 8.11 *Aa* lets go of the cursor the normal way, and each style tap tells the editor not to ask for the keyboard, so the panel stays in the keyboard's place on an iPhone; ✕ brings the cursor and keyboard back, and ✓ on the panel closes it and sends. Widget tests.
+- [x] 8.12 The Home and folders redesign, email notes and photos came in from main: Home and each folder open the editor, with the back button naming the page it goes back to; every new icon is a `CupertinoIcons` one; the space step is now `0010_note_edits`, and a staging space that ran it as `0008_note_edits` skips it. Phone, server and schema tests.

@@ -5,7 +5,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../data/connection.dart' show defaultServer;
 import '../relay.dart';
-import 'back_to_notes.dart';
+import 'back_to.dart';
 
 /// Opens the camera and returns the code it read.
 typedef Scanner = Future<String?> Function(BuildContext context);
@@ -96,7 +96,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
   Widget build(BuildContext context) {
     final error = TextStyle(color: Theme.of(context).colorScheme.error);
     return Scaffold(
-      appBar: AppBar(leading: const BackToNotes(), leadingWidth: backToNotesWidth,
+      appBar: AppBar(leading: const BackTo('Back'), leadingWidth: BackTo.widthOf('Back'),
         title: const Text('Where should the phone send?')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         SegmentedButton<SendPlace>(
@@ -184,7 +184,7 @@ class _ScanPageState extends State<_ScanPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(leading: const BackToNotes(), leadingWidth: backToNotesWidth, title: const Text('Scan the QR code')),
+      appBar: AppBar(leading: const BackTo('Back'), leadingWidth: BackTo.widthOf('Back'), title: const Text('Scan the QR code')),
       body: MobileScanner(onDetect: (capture) {
         final code = capture.barcodes.map((barcode) => barcode.rawValue).whereType<String>().firstOrNull;
         if (code == null || _done) return;

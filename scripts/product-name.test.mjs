@@ -41,7 +41,7 @@ const PLACES = [
   'plugin/lib/state.mjs',
   'plugin/skills',
   'scripts/relay-mcp-trial.mjs',
-  'self-host/SETUP.md',
+  'app/self-host/SETUP.md',
   'wiki',
 ];
 const SKIP_DIRS = new Set(['node_modules', '.git', 'vendor', 'dist', 'build', '.dart_tool', '.astro', '.wrangler']);

@@ -1,8 +1,8 @@
 // The web API's OpenAPI 3.1 document, made from the tools' inputs, the routes and the answers here, so it can't go
 // stale. /v1/openapi.json serves it; `npm run relay:api-doc` writes the website's copy and reference page.
 import { z } from "zod";
-import { ROUTES, type V1Route } from "./api.ts";
-import { TOOLS, type ToolName } from "./inputs.ts";
+import { ROUTES, type V1Route, type WebTool } from "./api.ts";
+import { TOOLS } from "./inputs.ts";
 
 const at = z.string().describe("A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00.");
 const nextCursor = z.string().nullable().describe("Send it as `cursor` to read the next page; null on the last one.");
@@ -32,6 +32,7 @@ const event = z.strictObject({ id: z.string(), title: z.string(), calendar: z.st
 const chat = { id: z.string(), title: z.string(), project: z.string().describe("The project's folder name."), app: z.literal("claude-code"),
   startedAt: at, lastAt: at, messages: z.number(), savedByAi: z.boolean() };
 const role = z.enum(["you", "ai", "step"]);
+const photo = z.strictObject({ id: z.string(), takenAt: at, lat: z.number().nullable(), lon: z.number().nullable(), width: z.number(), height: z.number() });
 
 /** What each tool answers, and `me`: api.test.ts checks every answer against these. */
 export const ANSWERS = {
@@ -50,9 +51,10 @@ export const ANSWERS = {
   search_chats: z.strictObject({ chats: z.array(z.strictObject({ ...chat, lines: z.array(z.strictObject({ role, text: z.string() })) })), nextCursor }),
   read_chat: z.strictObject({ ...chat, saves: z.array(z.strictObject({ id: z.string(), title: z.string(), text: z.string(), createdAt: at })),
     messages: z.array(z.strictObject({ seq: z.number(), role, text: z.string(), at })), nextCursor }),
+  photos: z.strictObject({ photos: z.array(photo), nextCursor }),
   add_note: z.strictObject({ id: z.string().describe("The note's id."), added: z.boolean().describe("False when this clientId was added before.") }),
   me: z.strictObject({ device: z.string().describe("The key's device name, or the app's name."), adds: z.boolean().describe("Whether it may add notes.") }),
-} satisfies Record<ToolName | "me", z.ZodType>;
+} satisfies Record<WebTool | "me", z.ZodType>;
 
 type Json = Record<string, unknown>;
 const json = (schema: z.ZodType, io: "input" | "output" = "output") => {

@@ -38,7 +38,7 @@ No one else gets it, unless a court order or the law makes us give it.
 
 You agree in two steps, and you can take back each one at any time:
 
-1. In the app's [Settings](../app/settings/), you turn on **Send my notes**, then **Health** or **Location history**.
+1. In the app, you turn on **Send my notes** on the [Sending](../app/settings/#sending) page, then **Health** or **Location history** in its folder on Home.
 2. Your phone asks you to allow it: Apple Health or Health Connect for each health type, and the phone's location permission for location history.
 
 With either step off, the app reads none of that data and keeps none of it.
@@ -46,7 +46,7 @@ With either step off, the app reads none of that data and keeps none of it.
 ## See or delete it
 
 - **See it** on your Relay Everything page, or through your webhooks and API keys.
-- **Stop it:** turn off **Health** or **Location history** in Settings, and take back the permission in the phone's settings. New data stops, and what is in your space stays until you delete it. The [Privacy](../privacy/#turn-each-part-off) page shows each step.
+- **Stop it:** turn off **Health** or **Location history** in its folder on Home, and take back the permission in the phone's settings. New data stops, and what is in your space stays until you delete it. The [Privacy](../privacy/#turn-each-part-off) page shows each step.
 - **Delete it:** [delete your account](../privacy/#delete-your-account), and all your health and location data goes with it. The [Privacy policy](../privacy-policy/#how-long-we-keep-it) says how long Cloudflare's recovery copies keep it after that.
 - **Ask us** to confirm what we keep, give you a copy, or delete it: write to the contact address on the shared server's sign-in screen. We answer within 45 days, and do not charge you.
 

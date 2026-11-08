@@ -20,11 +20,12 @@ A call with a wrong key, or a key that is off, answers `403`.
 
 A device key only adds data, and only to the space of the person who made it. It reaches only these routes:
 
-- `POST notes`, `POST attachments`, `POST health`, `POST locations`
+- `POST notes`, `POST attachments`, `POST health`, `POST locations`, `POST calendar`, `POST photos`
 - `PATCH notes`, which changes the words of a note that the same phone key sent, and adds its new files. A phone key can not change another device's note: the server answers `404`.
 - `GET key`, which answers the key's own device name and no data, so a device can check its key
+- `GET connections`, for a phone's key only, which answers the names of your AI apps and webhooks and no address, secret or data, for **Connections** on the app's Home
 
-Any other address or method answers `403` to a device key. To read, a person signs in on the Relay Everything page: `GET timeline`, `GET audio`, `GET attachment` and `GET summary` need a signed-in person, and each answers only from that person's own space. [Routes](../reference/) shows who can call each route.
+Any other address or method answers `403` to a device key. To read, a person signs in on the Relay Everything page: `GET timeline`, `GET audio`, `GET attachment`, `GET summary`, `GET photos` and `POST photos/delete` need a signed-in person, and each answers only from that person's own space. [Routes](../reference/) shows who can call each route.
 
 ## A chat key
 

@@ -1,4 +1,4 @@
-// Format v1 of what a webhook receives: one envelope, seven types; mobile/lib/data/webhook.dart builds it too. The
+// Format v1 of what a webhook receives: one envelope, eight types; mobile/lib/data/webhook.dart builds it too. The
 // source of the public site/public/webhooks/v1.schema.json, which takes fields and values it does not list.
 import { z } from "zod";
 import { HEALTH_TYPES, type HealthType } from "../queries.ts";
@@ -46,6 +46,15 @@ const event = z.strictObject({
   people: z.array(z.strictObject({ name: z.string().optional(), email: z.string().optional(), organizer: z.boolean().optional() })),
 });
 
+const photo = z.strictObject({
+  id: z.string().describe("The photo's id: a UUID, or the phone's own photo id when the phone sends to its own webhook."),
+  device, taken_at: iso.describe("When the photo was taken, by the phone's photo library."),
+  place: z.strictObject({ lat: z.number(), lon: z.number() }).nullable().describe("Where the photo was taken, or null for a photo with no place."),
+  width: z.number().int().min(1).describe("In pixels: at most 1,600 on the long side."), height: z.number().int().min(1).describe("In pixels."),
+  content_type: z.literal("image/jpeg"), size: z.number().int().min(0).describe("The JPEG's size in bytes, up to 3 MB."),
+  base64: z.string().describe("The JPEG's bytes in base64."),
+});
+
 const BATCH = 500;
 const stored = iso.describe("When Relay Everything, or the phone that sends to its own webhook, stored what this message holds.");
 const envelope = <Type extends string, Data extends z.ZodType>(type: Type, data: Data, description: string) =>
@@ -62,6 +71,8 @@ export const message = z.discriminatedUnion("type", [
     "One file of a note, with its bytes, after the note's note.created. Relay Everything sends it once it stores the file, and a phone that sends to its own webhook sends it too. A file can be 25 MB, about 33 MB as base64: answer 413 to skip a file too large for you."),
   envelope("calendar.events", z.strictObject({ events: z.array(event).min(1).max(BATCH) }),
     "Calendar events that are new, changed or removed, in the order Relay Everything stored them. A removed event from a phone that sends to its own webhook has only its key, id and start."),
+  envelope("photo.created", z.strictObject({ photo }),
+    "A new photo from the Photos switch, with its bytes. A photo shared into a note goes as one of the note's files instead."),
   envelope("webhook.test", z.strictObject({ webhook: z.strictObject({ id: z.string(), name: z.string() }) }), "Send a test, from the Relay Everything page or the phone."),
 ]).meta({ title: "Relay Everything webhook message, version 1", description: "The JSON body of each message a Relay Everything webhook sends." });
 
@@ -79,6 +90,9 @@ export type LocationRow = { id: number; device_id: string; device_name: string; 
 export type EventRow = { id: number; device_id: string; device_name: string; event_key: string; calendar: string | null;
   title: string | null; start_at: number; end_at: number; all_day: number; location: string | null; notes: string | null; url: string | null;
   people: string; removed_at: number | null };
+
+export type PhotoRow = { id: string; device_id: string; device_name: string; taken_at: number; lat: number | null; lon: number | null;
+  width: number; height: number; bytes: number };
 
 const isoOf = (ms: number) => new Date(ms).toISOString();
 const deviceOf = (row: { device_id: string; device_name: string }) => ({ id: row.device_id, name: row.device_name });
@@ -118,6 +132,11 @@ export const calendarEvents = (rows: EventRow[], at: number) => wrap("calendar.e
   id: row.id, status: row.removed_at === null ? "changed" as const : "removed" as const, device: deviceOf(row), key: row.event_key,
   calendar: row.calendar, title: row.title, start: isoOf(row.start_at), end: isoOf(row.end_at), all_day: row.all_day === 1,
   location: row.location, notes: row.notes, url: row.url, people: JSON.parse(row.people) })) }, at);
+
+/** A new photo, with `base64` empty as in noteFile. lat and lon are stored together: POST photos checks it. */
+export const photoCreated = (row: PhotoRow, at: number) => wrap<Extract<Message, { type: "photo.created" }>>("photo.created", {
+  photo: { id: row.id, device: deviceOf(row), taken_at: isoOf(row.taken_at), place: row.lat === null ? null : { lat: row.lat, lon: row.lon! },
+    width: row.width, height: row.height, content_type: "image/jpeg", size: row.bytes, base64: "" } }, at);
 
 export const webhookTest = (webhook: { id: string; name: string }, at: number) => wrap("webhook.test", { webhook }, at);
 

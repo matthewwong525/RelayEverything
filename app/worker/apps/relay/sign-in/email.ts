@@ -2,7 +2,8 @@
 // answer is the same for a new and a known address, so the form tells no one who has an account.
 import { z } from "zod";
 import { directory, hashToken, joinPerson, mayJoin, normalEmail, personByEmail } from "../people.ts";
-import type { SignInEnv } from "./index.ts";
+import { claimOnSignIn } from "../inbox/held.ts";
+import type { SignInEnv, Wait } from "./index.ts";
 import { ready } from "./oidc.ts";
 import { answer, NO_STORE, startSession } from "./session.ts";
 
@@ -66,7 +67,7 @@ export async function email(request: Request, env: SignInEnv): Promise<Response>
 type CodeRow = { code_sha256: string; tries: number };
 
 /** POST code: signs in with the emailed code. A code works once; the fifth wrong try ends it. */
-export async function code(request: Request, env: SignInEnv): Promise<Response> {
+export async function code(request: Request, env: SignInEnv, _identity: unknown, wait?: Wait): Promise<Response> {
   const body = await input(request, z.strictObject({ email: address, code: z.string().regex(/^\d{6}$/) }));
   if (!body) return answer(400, "invalid_input", "Give the email address and its 6-digit code.");
   if (await limited(env, [ipOf(request)])) return tooMany();
@@ -87,5 +88,6 @@ export async function code(request: Request, env: SignInEnv): Promise<Response> 
   if (!results.length) return answer(400, "invalid_input", WRONG);
   const person = await joinPerson(env, to);
   if (!person) return answer(403, "forbidden", "This Relay Everything server does not take new accounts.");
+  await claimOnSignIn(env, wait)(person);
   return Response.json({ ok: true }, { headers: { ...NO_STORE, "Set-Cookie": await startSession(env, new URL(request.url), person.id) } });
 }

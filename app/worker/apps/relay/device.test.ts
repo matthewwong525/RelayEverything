@@ -9,10 +9,11 @@ import { hashToken } from "./people";
 // The fingerprint of checker.id, "checker.access".
 const CHECKER_SHA256 = "6a6814c5281a7635cb9d9f881d7feae9b0d6159c868666fad3ffa0a164f4d999";
 const ORIGIN = "https://relay.example.com";
-const ROUTES = ["attachments", "notes", "health", "locations", "calendar"].map(route => `/apps/relay/api/${route}`);
+const ROUTES = ["attachments", "notes", "health", "locations", "calendar", "photos"].map(route => `/apps/relay/api/${route}`);
 const KEY = "/apps/relay/api/key";
 const CHATS = "/apps/relay/api/chats";
 const SAVES = "/apps/relay/api/chat-saves";
+const CONNECTIONS = "/apps/relay/api/connections";
 const SEND_ONLY = "A device key can only send to Relay Everything.";
 const NO_LIST = "This key is on no list of devices.";
 const identityOf = (who: Who) => who && "kind" in who ? who : null;
@@ -24,14 +25,17 @@ async function gate(who: Who, method: string, path: string, { bindings = {}, hea
   return response && [response.status, (await body(response)).error.message];
 }
 
-it("lets a phone key only send notes, health and places, and check itself, and nothing else", async () => {
+it("lets a phone key only send notes, health, places and photos, and check itself, and nothing else", async () => {
   for (const path of ROUTES) expect(await gate(phone, "POST", path), path).toBeNull();
   expect(await gate(phone, "GET", KEY)).toBeNull();
   expect(await gate(phone, "PATCH", "/apps/relay/api/notes")).toBeNull();
+  // Its one read: the names of its person's AI apps and webhooks, by GET only.
+  expect(await gate(phone, "GET", CONNECTIONS)).toBeNull();
+  expect(await gate(phone, "POST", CONNECTIONS)).toEqual([403, SEND_ONLY]);
   // A phone can't read notes, recordings, health or chats, even on an address it sends to.
   for (const [method, path] of [...ROUTES.map(route => ["GET", route]), ["POST", KEY], ["GET", "/apps/relay/api/timeline"],
     ["GET", "/apps/relay/api/audio"], ["GET", "/apps/relay/api/summary"], ["GET", "/apps/relay/api/devices"], ["POST", "/apps/relay/api/devices"],
-    ["POST", "/apps/relay/api/account-delete"], ["GET", "/apps/relay/"], ["GET", "/apps/hello/api/greeting"], ["GET", "/api/health"], ["GET", "/"],
+    ["POST", "/apps/relay/api/account-delete"], ["POST", "/apps/relay/api/photos/delete"], ["GET", "/apps/relay/"], ["GET", "/apps/hello/api/greeting"], ["GET", "/api/health"], ["GET", "/"],
     ["POST", "/apps/relay/api/notes/x"], ["POST", "/apps/relay/api/pebble"], ["POST", CHATS], ["POST", SAVES], ["GET", CHATS], ["DELETE", ROUTES[1]], ["HEAD", KEY],
     ["PATCH", "/apps/relay/api/health"], ["PATCH", "/apps/relay/api/notes/x"]]) {
     expect(await gate(phone, method, path), `${method} ${path}`).toEqual([403, SEND_ONLY]);
@@ -41,7 +45,7 @@ it("lets a phone key only send notes, health and places, and check itself, and n
 it("lets a chats key only send chats and saves, and check itself, and nothing else", async () => {
   for (const path of [CHATS, SAVES]) expect(await gate(laptop, "POST", path), path).toBeNull();
   expect(await gate(laptop, "GET", KEY)).toBeNull();
-  for (const [method, path] of [["GET", CHATS], ["GET", "/apps/relay/api/chat"], ["DELETE", "/apps/relay/api/chat"], ["GET", SAVES],
+  for (const [method, path] of [["GET", CHATS], ["GET", "/apps/relay/api/chat"], ["DELETE", "/apps/relay/api/chat"], ["GET", SAVES], ["GET", CONNECTIONS],
     ...ROUTES.map(route => ["POST", route]), ["PATCH", "/apps/relay/api/notes"], ["GET", "/apps/relay/api/devices"], ["GET", "/api/health"]]) {
     expect(await gate(laptop, method, path), `${method} ${path}`).toEqual([403, "A chat key can only send chats."]);
   }
@@ -126,7 +130,9 @@ it("makes an account from Access's email only for the server's owner, or while s
   expect(await call(visitor("cy@example.com"), "GET", "account")).toEqual({ status: 200, json: { email: "cy@example.com" } });
 });
 
-it("lists a person's devices, newest last, with no key in the list", async () => {
+it("lists a person's devices, newest last, with no key in the list, and not the Email device", async () => {
+  db.sql.prepare(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches)
+    VALUES ('d-mail', 'Email', 'inbox:email', '', 0, 'inbox')`).run();
   const { status, json } = await call(matthew, "GET", "devices");
   expect(status).toBe(200);
   expect(json.devices.map(device => [device.id, device.reaches, device.revokedAt])).toEqual([["d-ipad", "phone", null],
@@ -168,7 +174,7 @@ it("gives an API key the web API's address, and lets it reach only that and its 
   const key = String(json.key);
   const API_ONLY = [403, "An API key works only on the web API, at your AI connector's address under /v1/."];
   for (const path of [ROUTES[1], CHATS, SAVES]) expect(await gate({ bearer: key }, "POST", path), path).toEqual(API_ONLY);
-  expect(await gate({ bearer: key }, "GET", "/apps/relay/api/timeline")).toEqual(API_ONLY);
+  for (const path of ["/apps/relay/api/timeline", CONNECTIONS]) expect(await gate({ bearer: key }, "GET", path), path).toEqual(API_ONLY);
   expect(await call({ bearer: key }, "GET", "key")).toEqual({ status: 200, json: { device: "Backup script" } });
   expect(await apiKeyCaller({ DB: db.DB }, key)).toMatchObject({ kind: "key", personId: ANA, device: { id: json.id, reaches: "api" } });
   // A phone or chat key is refused by the web API's door, and a turned-off API key too.

@@ -19,7 +19,7 @@ Turning off a device's key SHALL stop that device at its next request and leave 
 
 ### Requirement: A device key adds only to its own person's space
 
-A person SHALL make each device's key on their Relay Everything page, which SHALL show it once, or, for a phone, by signing in from the Relay Everything app and confirming that phone on the page. A key made from the app SHALL go to that phone only, through a code that works once and only for a few minutes, and SHALL never show. A phone key or a chat key SHALL reach only the routes that add data, and a key check that answers only that key's own device name. It SHALL add data only to the space of the person who made it, and SHALL NOT list, read or delete any note, recording, sample, point or chat. This SHALL hold on every Relay Everything server.
+A person SHALL make each device's key on their Relay Everything page, which SHALL show it once, or, for a phone, by signing in from the Relay Everything app and confirming that phone on the page. A key made from the app SHALL go to that phone only, through a code that works once and only for a few minutes, and SHALL never show. A phone key or a chat key SHALL reach only the routes that add data, and a key check that answers only that key's own device name. A phone key SHALL also read the names of its person's connected AI apps and webhooks, and nothing else about them: no webhook address, secret or send state. It SHALL add data only to the space of the person who made it, and SHALL NOT list, read or delete any note, recording, sample, point, chat or photo. This SHALL hold on every Relay Everything server.
 
 #### Scenario: A phone key tries to read notes
 - **WHEN** a request with a phone's key asks for the timeline or a recording
@@ -40,6 +40,15 @@ A person SHALL make each device's key on their Relay Everything page, which SHAL
 #### Scenario: A connect code used twice or by another app
 - **WHEN** a connect code is traded for a key a second time, after a few minutes, or without the secret the phone made when it started
 - **THEN** the server refuses it and makes no key
+
+#### Scenario: A phone key tries to delete photos
+- **WHEN** a request with a phone's key asks to count or delete photos
+- **THEN** it is refused, and the photos stay
+
+#### Scenario: A phone reads its person's connections
+
+- **WHEN** a phone's key asks for its person's connections
+- **THEN** the server answers with the AI apps' and webhooks' names only, from that person's space, and a chat key or an API key asking the same is refused
 
 ### Requirement: Only live device keys and the checker pass as machines
 

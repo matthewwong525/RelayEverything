@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'brand.dart';
 import 'relay.dart';
 import 'screens/connect.dart' show Scanner;
+import 'screens/home.dart';
 import 'screens/note_editor.dart' show FilesPicker, Sharer;
-import 'screens/timeline.dart';
 
-/// The timeline, with or without a key: notes stay on this phone until the person turns sending on.
+/// Home, with or without a key: notes stay on this phone until the person turns sending on.
 class RelayApp extends StatelessWidget {
   const RelayApp({super.key, required this.relay, this.scanner, this.opener, this.picker, this.sharer,
     this.voiceRequests});
@@ -27,7 +27,7 @@ class RelayApp extends StatelessWidget {
       title: 'Relay Everything',
       theme: brandTheme(Brightness.light),
       darkTheme: brandTheme(Brightness.dark),
-      home: TimelineScreen(relay: relay, scanner: scanner, opener: opener, picker: picker, sharer: sharer,
+      home: HomeScreen(relay: relay, scanner: scanner, opener: opener, picker: picker, sharer: sharer,
         voiceRequests: voiceRequests),
     );
   }

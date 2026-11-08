@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { ANA, BEN, ben, benPhone, bucket, call, checker, directoryDb, env, matthew, NOW, owner, phone, request, rows, spaces } from "../../../tests/relay";
+import { ANA, BEN, ben, benPhone, bucket, call, checker, directoryDb, env, matthew, NOW, owner, phone, request, rows, sendPhoto, spaces } from "../../../tests/relay";
 import { handleApp } from "../index";
 import { hashToken } from "./people";
 
@@ -64,6 +64,10 @@ it("deletes nothing unless the typed email is the account's own", async () => {
 
 it("deletes Ana's account whole, and leaves Ben's data, key and session as they were", async () => {
   const grants = connector();
+  const link = directoryDb.sql.prepare(`INSERT INTO relay_inbox_links (channel, sender_hmac, person_id, shown, created_at)
+    VALUES ('email', ?, ?, ?, 0)`);
+  link.run("hmac-ana", ANA, "notes-anaaaaaaaa");
+  link.run("hmac-ben", BEN, "notes-benbbbbbbb");
   expect(await call(matthew, "POST", "account-delete", { email: " Ana@Example.com " }, { RELAY_MCP: grants }))
     .toEqual({ status: 200, json: { deleted: true } });
   // Her key, her session and her AI app are refused from now on.
@@ -77,6 +81,7 @@ it("deletes Ana's account whole, and leaves Ben's data, key and session as they 
   expect(counts(ANA)).toEqual([0, 0, 0, 0]);
   expect(directoryDb.sql.prepare("SELECT email FROM relay_people").all()).toEqual([{ email: "ben@example.com" }]);
   expect(directoryDb.sql.prepare("SELECT email FROM relay_sign_in_codes").all()).toEqual([{ email: "ben@example.com" }]);
+  expect(directoryDb.sql.prepare("SELECT person_id FROM relay_inbox_links").all()).toEqual([{ person_id: BEN }]);
   // Ben is untouched.
   expect(counts(BEN)).toEqual([1, 1, 1, 1]);
   expect(rows("relay_notes", BEN)).toEqual([expect.objectContaining({ id: "note-ben" })]);
@@ -110,6 +115,16 @@ it("leaves no way in when a step fails partway, and a second try finishes the de
   expect([...bucket.objects.keys()]).toEqual([`people/${BEN}/d`]);
   expect(spaces.objects.has(ANA)).toBe(false);
   expect(directoryDb.sql.prepare("SELECT email FROM relay_people").all()).toEqual([{ email: "ben@example.com" }]);
+});
+
+it("deletes Ana's photos with her account, and leaves Ben's", async () => {
+  await sendPhoto(phone);
+  await sendPhoto(benPhone);
+  expect([...bucket.objects.keys()].filter(key => key.includes("/photos/"))).toHaveLength(2);
+  expect((await call(matthew, "POST", "account-delete", { email: "ana@example.com" })).status).toBe(200);
+  expect([...bucket.objects.keys()].filter(key => key.startsWith(`people/${ANA}/`))).toEqual([]);
+  expect([...bucket.objects.keys()].filter(key => key.startsWith(`people/${BEN}/photos/`))).toHaveLength(1);
+  expect(rows("relay_photos", BEN)).toHaveLength(1);
 });
 
 it("deletes a note's files with the account", async () => {

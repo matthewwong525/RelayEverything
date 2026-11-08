@@ -32,6 +32,8 @@ Open the app once after you install it or update it, before the first share.
 | Photos or a video | Your words, and the photos or video as files |
 | A PDF or another file | Your words, and the file |
 
+A photo you share becomes a file on its note, and goes where your notes go. To send each new photo you take, with no note, so your AI can see it, turn on **Photos** instead: [Photos](../photos/).
+
 A shared note has no place, even with **Pin notes to where I am** on: you shared it, you did not make it there. It shows **Typed** in your notes.
 
 ## The limits
@@ -43,7 +45,7 @@ A note holds up to 10 files, each up to 25 MB, the same as a note you write: [Ad
 
 ## What is sent
 
-The card follows your **Send my notes** setting in [Settings](../settings/). The last line of the card tells you which:
+The card follows your **Send my notes** setting on the [Sending](../settings/#sending) page. The last line of the card tells you which:
 
 | Sending | The card says | What happens |
 |---|---|---|

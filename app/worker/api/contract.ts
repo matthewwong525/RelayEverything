@@ -217,10 +217,10 @@ async function inputFor(action: Action, request: Request, url: URL, max: number)
   return input;
 }
 
-// Settings setup commits in wrangler.jsonc. Anyone with the code can read them, and an honest answer
-// may name them: an account is often named for its owner's email. Every other text binding is a secret.
+// Settings committed in wrangler.jsonc, which an honest answer may name: an account is often named for its owner's
+// email, and a Relay Everything notes address ends with its mail domain. Every other text binding is a secret.
 const COMMITTED = new Set(["WONG_ENVIRONMENT", "WONG_OWNER_EMAIL", "WONG_CODE_REPOSITORY", "WONG_KNOWLEDGE_REPOSITORY", "WORKSPACE_LOGIN",
-  "CF_ACCESS_TEAM_DOMAIN", "CF_ACCESS_AUD", "CF_ACCESS_APP_ID", "CF_ACCESS_WORKER_ID"]);
+  "CF_ACCESS_TEAM_DOMAIN", "CF_ACCESS_AUD", "CF_ACCESS_APP_ID", "CF_ACCESS_WORKER_ID", "RELAY_INBOX_MAIL_DOMAIN"]);
 
 export function containsCredential(output: unknown, env: AppEnv): boolean {
   const serialized = JSON.stringify(output);

@@ -11,7 +11,7 @@ Paste this request into Claude Code or another coding AI:
 
 ```text
 Install Relay Everything from https://github.com/matthewwong525/RelayEverything.
-Read and follow self-host/SETUP.md there.
+Read and follow app/self-host/SETUP.md there.
 ```
 
 The AI follows Relay Everything's setup guide. It asks you to make a Cloudflare key and save it in a file on your computer, never in the chat. Then it makes your server and gives you its address. It takes about 10 minutes.
@@ -40,9 +40,21 @@ Your server keeps Cloudflare Access, the login it was made with: `RELAY_SIGN_IN`
 
 Your server shows no contact address until you set one. To give the people on your server an address for questions and privacy requests, set `RELAY_CONTACT_EMAIL` to it in your server's settings. Each person's account card then shows it. Your Cloudflare Access login comes before the page, so the sign-in screen does not. Relay Everything's own terms and policies cover only the shared server: on your server, you answer those requests.
 
+## Take email
+
+Your server can make [email notes](../../app/email/) too. It is off until you set it up, and it needs a domain on Cloudflare. Ask your AI *turn on email notes for my Relay Everything server*, or do these steps:
+
+1. Pick a mail domain on Cloudflare for your server, such as a subdomain of your own domain.
+2. In the Cloudflare dashboard, turn on **Email Routing** for that domain, and add a catch-all rule that sends each mail to your server's Worker.
+3. Set two secrets on your server's Worker: `RELAY_INBOX_MAIL_DOMAIN`, the mail domain, and `RELAY_INBOX_HMAC_KEY`, a key made with `openssl rand -base64 32`. Keep a copy of the key: a new key stops every notes address. An update keeps both.
+
+Old kept mail is deleted when new mail comes, because your server has no daily job.
+
 ## Update it
 
 Ask your AI *update my Relay Everything*. It gets the newest version of Relay Everything, applies its database changes, then puts it live. Your data stays. If a database change fails, your server stays as it was.
+
+If you made your server when the setup guide was in a top-level `self-host/` folder, the update finds your settings and Cloudflare key there and moves them to `app/self-host/`. You do nothing.
 
 If your server is from before spaces, the update also makes your spaces Worker, `<name>-spaces`, and your own account. It doesn't move your old data: the update removes the old shared tables, and the notes in them. The old keys stop too: make a new key for each device on your page with **Add a device**, and connect it again.
 

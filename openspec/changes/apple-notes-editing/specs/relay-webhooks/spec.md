@@ -2,7 +2,7 @@
 
 ### Requirement: Stored data goes to each active webhook
 
-After Relay Everything's server stores a note, a health batch, a location batch or calendar events, it SHALL send one message for it to each active webhook that takes that kind of data. Notes SHALL go to every active webhook. Health, location and calendar SHALL go only to webhooks the owner ticked for them. A changed or removed calendar event SHALL be sent again, marked as changed or removed. Only data that reached the server SHALL be sent: a note kept offline on a phone never goes out. A note changed on the phone that sent it SHALL be sent again as one `note.updated` message, with its latest words, to every active webhook; a receiver that ignores `note.updated` keeps working.
+After Relay Everything's server stores a note, a health batch, a location batch, calendar events or a photo, it SHALL send one message for it to each active webhook that takes that kind of data. Notes SHALL go to every active webhook. Health, location, calendar and photos SHALL go only to webhooks the owner ticked for them. Each photo SHALL go alone, in one message with its bytes. A changed or removed calendar event SHALL be sent again, marked as changed or removed. Only data that reached the server SHALL be sent: a note kept offline on a phone never goes out. A note changed on the phone that sent it SHALL be sent again as one `note.updated` message, with its latest words, to every active webhook; a receiver that ignores `note.updated` keeps working.
 
 #### Scenario: A note with one webhook
 - **WHEN** a phone's note is stored and one active webhook exists

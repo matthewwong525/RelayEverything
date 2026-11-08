@@ -1,15 +1,44 @@
 ---
 title: Notes
-description: Read, search and change the notes you write on your phone, as in Apple Notes, with text styles, checklists, photos and files, and open your Relay Everything page for ring notes.
+description: Home and its folders, read, search and change the notes you write on your phone, as in Apple Notes, with text styles, checklists, photos and files, and open your Relay Everything page for ring notes.
 ---
 
-The Relay Everything app opens on your notes, newest first, under a large **Notes** title. It shows the notes that you type or say into this phone. It keeps them on the phone.
+The Relay Everything app opens on **Home**, a screen of folders. Your notes are the first folders. The app shows the notes that you type or say into this phone, and keeps them on the phone.
 
 Ring notes and recordings are on your Relay Everything page, not in the app. Your phone's key can only send to your Relay Everything server. It can not read your notes from the server.
 
+## Home
+
+Home has a large **Home** title, the [sync state](#the-sync-state) under it, and the [⋯ menu](#the--menu) at the top right. Then three cards of folders. Each row shows a name, its status or its count, and a chevron. Tap a row to open it.
+
+| Card | Folder | What it holds |
+|---|---|---|
+| Your notes | **Notes** | Every note on this phone. |
+| | **Voice notes** | Only the notes you said. [Voice notes](../voice-notes/) |
+| | **Shares** | The notes with a photo, a file or a link. |
+| **On this phone** | **Location** | Location history: *Off*, or its mode and when the points last went, such as *Save battery · Sent 14:05*. [Location](../location/) |
+| | **Health** | *Off*, or when the readings last went and how many wait. [Health](../health/) |
+| | **Calendar** | *Off*, or how many calendars and when the events last went. [Calendar](../calendar/) |
+| | **Photos** | *Off*, or *On* and if photos also go on mobile data. [Photos](../photos/) |
+| **Connections** | **Sending** | Where the phone sends: *Off*, your Relay Everything server, or your own webhook. [Sending](../settings/#sending) |
+| | **AI apps** | The AI apps you connected on your Relay Everything page, such as *Claude*. [Connections on Home](#connections-on-home) |
+| | **Webhooks** | The webhooks you added on your Relay Everything page. [Connections on Home](#connections-on-home) |
+
+Tap **On this phone** or **Connections** to fold that card away. Tap it again to open it. The phone remembers which cards you folded.
+
+**Search** and **New note** stay at the bottom of Home, so you still write or talk with one tap.
+
+## Connections on Home
+
+While the phone sends to your Relay Everything server, **AI apps** and **Webhooks** show the names of what you connected on your Relay Everything page, as the server last told the phone, and how many. Tap one to open that part of your Relay Everything page in the phone's browser. You change them there, not in the app. With no signal, the rows show the last names the phone got.
+
+With sending off, or while the phone sends to your own webhook, each row says *Sign in to see*. Tap it to choose where the phone sends: [Connect a phone](../../start/connect-a-phone/).
+
+To show these names, the phone's key reads only the names of your AI apps and webhooks. It reads no address, secret, note, health data, place or chat. The phone asks for the names only while it sends to your Relay Everything server.
+
 ## Read your notes
 
-The notes are in groups by day: **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then one group for each month. Each group is one card, with one row for each note:
+Tap **Notes**, **Voice notes** or **Shares** on Home. The folder shows its notes, newest first, under its name. Tap **Home** at the top left to go back. The notes are in groups by day: **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then one group for each month. Each group is one card, with one row for each note:
 
 - The note's first line, in bold, without its style marks. A voice note shows **Writing the words…** until the phone writes them. [Voice notes](../voice-notes/)
 - The time, then the rest of the words. Today and yesterday show the time, this week the day, and older notes the date.
@@ -17,7 +46,7 @@ The notes are in groups by day: **Today**, **Yesterday**, **Previous 7 days**, *
 - With sending on, **Sent** or **Waiting to send**. **Sent** means your server has the note. **Waiting to send** means the note goes on the next sync.
 - The first picture, small, at the right. [Add photos and files](#add-photos-and-files)
 
-Before your first note, the list says **No notes yet**: *Tap New note to write one, or hold it to talk.* With sending off, it also says *Notes stay on this phone until you turn on sending in Settings.*
+Before your first note, **Notes** says **No notes yet**: *Tap New note to write one, or hold it to talk.* An empty **Voice notes** says *Hold New note to talk.*, and an empty **Shares** says *A note with a photo, a file or a link shows here.* With sending off, each also says *Notes stay on this phone until you turn on Sending on Home.*
 
 ## Open and change a note
 
@@ -34,7 +63,7 @@ The page works as in Apple Notes: you change the note in place. Tap the words wh
 
 At the top of the page:
 
-- **‹**, at the left, goes back to your notes.
+- **‹** and the folder's name, such as **Voice notes**, at the left, go back to the folder.
 - **Share** and **⋯**, in a round button at the right.
 - **✓**, while you type, closes the keyboard. The change stays.
 
@@ -74,7 +103,7 @@ Your notes list shows the first line and the start of the rest without these mar
 
 ## Change a sent note
 
-With sending on, a change to a note that your server already has goes to your server when you stop typing. Your Relay Everything page and your AI then read the new words in place of the old ones, and each of your webhooks gets one [`note.updated`](../../connections/your-database/#noteupdated) message. With your own webhook picked in Settings, the phone sends `note.updated` there itself.
+With sending on, a change to a note that your server already has goes to your server when you stop typing. Your Relay Everything page and your AI then read the new words in place of the old ones, and each of your webhooks gets one [`note.updated`](../../connections/your-database/#noteupdated) message. With your own webhook picked on the **Sending** page, the phone sends `note.updated` there itself.
 
 A change made with no signal, or while the note waits to send, goes on the next sync. Only the latest words go. Only the phone that sent a note can change it on your server.
 
@@ -82,15 +111,15 @@ With sending off, a change stays on this phone, as every note does.
 
 ## Search your notes
 
-1. Tap **Search**, at the bottom of your notes.
-2. Type a word. The list shows only the notes with that word in their words, their place or their file names. Upper and lower case are the same.
-3. Tap **Cancel** to see all your notes again.
+1. Tap **Search**, at the bottom of Home or of a folder.
+2. Type a word. The list shows only the notes with that word in their words, their place or their file names. Upper and lower case are the same. On Home, search finds notes in every folder. In a folder, it finds only that folder's notes.
+3. Tap **Cancel** to see Home or all the folder's notes again.
 
 Search reads only the notes on this phone, so it works with no signal and sends nothing. With no match, the list says *No notes with "<your words>"*.
 
 ## The ⋯ menu
 
-The round **⋯** button at the top right of your notes holds:
+The round **⋯** button at the top right of Home holds:
 
 | Item | Shows | What it does |
 |---|---|---|
@@ -102,7 +131,7 @@ The round **⋯** button at the top right of your notes holds:
 
 1. Tap **New note**, the round green button at the bottom right. A short tap opens a new note. A hold records a voice note: [Talk a note](#talk-a-note).
 2. Type the note. The keyboard opens at once. The first line is the note's title.
-3. Tap **‹** to go back to your notes. The phone keeps the note as you type, so you do not save it.
+3. Tap **‹** to go back. The phone keeps the note as you type, so you do not save it.
 
 The note shows at once, with or without a signal. With **Pin notes to where I am** on, it keeps where you are; the pin follows when the phone has a fix. With sending on, the note also goes to your server. If the phone sends a note two times, for example after it lost the server's answer, your server keeps it one time.
 
@@ -113,7 +142,7 @@ A note can hold photos, screenshots, PDFs and other files of any kind.
 1. Tap **New note**.
 2. Type the note, or leave it empty: a note can be only files.
 3. Tap **Add photo or file**, the paperclip, and pick photos or files from the phone. Each one shows under the words, with its name and size.
-4. Tap **‹** to go back to your notes.
+4. Tap **‹** to go back.
 
 You can add a file to a note later too: open the note and tap the paperclip. With sending on, a file that you add to a sent note goes to your server after the change.
 
@@ -142,7 +171,7 @@ A ring note keeps the place it already has, which you see on your Relay Everythi
 
 ## The sync state
 
-The line under the **Notes** title gives how many notes are on this phone, and where they are, such as *5 notes · Synced*. With sending on, a small dot is beside the state, and you can tap the state to sync now. You can also pull the list down, or tap **Sync now** in the ⋯ menu.
+The line under the **Home** title gives the sync state, such as *Synced*. Under a folder's name, it also gives how many notes the folder holds, such as *5 notes · Synced*. With sending on, a small dot is beside the state, and you can tap the state to sync now. You can also pull Home or a folder down, or tap **Sync now** in the ⋯ menu.
 
 | State | Dot | What it means |
 |---|---|---|

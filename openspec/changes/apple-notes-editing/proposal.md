@@ -77,7 +77,7 @@ Non-goals: tables, drawing on a note, Apple Intelligence tools, pinning, folders
 - `mobile/lib/screens/note.dart` and `compose.dart` merge into one editor page; new editor and tool bar widgets; `timeline.dart`, `settings.dart`, `connect.dart`, `hold_to_talk.dart`, `back_to_notes.dart` swap Material icons for `CupertinoIcons`.
 - `mobile/lib/data/store.dart`, `outbox.dart`, `sender.dart`, `webhook.dart`: an edited note marks itself to send again, as an update.
 - New dependencies: `flutter_quill` (the editor) and `share_plus`, both open licenses.
-- Space migration `0008_note_edits.sql` adds `relay_notes.edited_at`.
+- Space migration `0010_note_edits.sql` adds `relay_notes.edited_at`.
 - Server: a new `PATCH notes` route for phone keys, with the note's client id in the body, in `app/worker/apps/relay/`, logging `note.updated` to the outbox; `npm run relay:api-doc`.
 - Website: `site/src/content/docs/app/your-notes.md` and the webhooks page say notes can change and `note.updated` is sent; `site/public/webhooks/v1.schema.json` drops *no longer sent*.
 
@@ -106,3 +106,5 @@ Non-goals: tables, drawing on a note, Apple Intelligence tools, pinning, folders
 - **2026-11-08** — Assumed: a `*` between letters in an old note, such as `2*3*4`, reads as italic, because Markdown reads it the same way and the stored words don't change unless the person edits the note.
 - **2026-11-08** — Assumed: an empty note is deleted when you leave its page, not on ✓, as Apple Notes does, because deleting on ✓ and typing again would send a sent note's new words under an id the server already has.
 - **2026-11-08** — Saved for final acceptance: built and reviewed in two rounds, local checks pass; the staging check (7.2) and the iPhone device check (7.3) run on the saved commit.
+- **2026-11-08** — Assumed: *Aa* takes the cursor away while its panel is open, not keeps it with the keyboard hidden, because on the iPhone check the editor brought the keyboard back each time it was hidden and the tap hung.
+- **2026-11-08** — Assumed: renumbered to 0010 because email notes and photos took 0008 and 0009 first; a staging space that ran it as `0008_note_edits` skips it by that name.

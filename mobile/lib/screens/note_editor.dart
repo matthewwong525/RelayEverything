@@ -12,7 +12,7 @@ import '../brand.dart';
 import '../controller.dart' show newClientId;
 import '../editor/markdown.dart';
 import '../relay.dart';
-import 'back_to_notes.dart';
+import 'back_to.dart';
 import 'days.dart';
 import 'note_bars.dart';
 import 'note_blocks.dart';
@@ -41,13 +41,15 @@ const savePause = Duration(milliseconds: 1500);
 /// One note's page, as Apple Notes has it: the note to read, and a tap in its words edits it in place. A new note
 /// opens with the keyboard up and a Title first line. Each change is kept on a pause and on leave, with no *Save*.
 class NoteEditor extends StatefulWidget {
-  const NoteEditor({super.key, required this.relay, this.entry, this.picker, this.sharer});
+  const NoteEditor({super.key, required this.relay, this.entry, this.picker, this.sharer, this.back = 'Notes'});
 
   final Relay relay;
   /// The note to open, or null for a new one.
   final Entry? entry;
   final FilesPicker? picker;
   final Sharer? sharer;
+  /// The page it opened from, *Home* or a folder, which its back button names.
+  final String back;
 
   @override
   State<NoteEditor> createState() => _NoteEditorState();
@@ -137,9 +139,10 @@ class _NoteEditorState extends State<NoteEditor> {
     super.dispose();
   }
 
+  /// The format panel lets go of the cursor, but the person is still editing; the cursor coming back closes it.
   void _focusChanged() {
-    _typing = _focus.hasFocus;
-    if (!_typing) _formatting = false;
+    if (_focus.hasFocus) _formatting = false;
+    _typing = _focus.hasFocus || _formatting;
     if (mounted) setState(() {});
   }
 
@@ -209,19 +212,22 @@ class _NoteEditorState extends State<NoteEditor> {
   void _say(String message) => _messenger?.showSnackBar(SnackBar(content: Text(message)));
 
   void _done() {
+    setState(() => _formatting = _typing = false);
     _focus.unfocus();
     _save(sendNow: true);
   }
 
+  /// *Aa*: the keyboard goes down the normal way and the panel takes its place. Hiding the keyboard while the editor
+  /// keeps the cursor makes the editor bring it back at once, so the two fight. The editor also asks for the keyboard
+  /// when it loses the cursor while waiting to redraw, so that one request is skipped.
   void _styles() {
-    unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.hide'));
     setState(() => _formatting = true);
+    _controller.skipRequestKeyboard = true;
+    _focus.unfocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _controller.skipRequestKeyboard = false);
   }
 
-  void _closeStyles() {
-    setState(() => _formatting = false);
-    unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.show'));
-  }
+  void _closeStyles() => _focus.requestFocus();
 
   /// *Checklist*: the cursor's line becomes a checklist item, or stops being one. With the keyboard down it adds an
   /// item at the end and brings the keyboard up.
@@ -265,7 +271,7 @@ class _NoteEditorState extends State<NoteEditor> {
   }
 
   void _compose() => Navigator.of(context).pushReplacement(MaterialPageRoute<void>(
-    builder: (_) => NoteEditor(relay: relay, picker: widget.picker, sharer: widget.sharer)));
+    builder: (_) => NoteEditor(relay: relay, picker: widget.picker, sharer: widget.sharer, back: widget.back)));
 
   /// *Yesterday at 18:05 · Home*.
   String _when(BuildContext context, DateTime at, String? place) {
@@ -277,11 +283,11 @@ class _NoteEditorState extends State<NoteEditor> {
   @override
   Widget build(BuildContext context) {
     final brand = brandOf(context);
-    final editing = _focus.hasFocus;
+    final editing = _focus.hasFocus || _formatting;
     final inset = MediaQuery.viewInsetsOf(context).bottom;
     if (inset > 100) _keyboard = inset;
     return Scaffold(
-      appBar: AppBar(leading: const BackToNotes(), leadingWidth: backToNotesWidth, actions: [
+      appBar: AppBar(leading: BackTo(widget.back), leadingWidth: BackTo.widthOf(widget.back), actions: [
         ButtonPill(children: [
           PillIconButton(icon: CupertinoIcons.square_arrow_up, tooltip: 'Share', onPressed: _share),
           _MoreMenu(copy: _copy, play: _current?.recording == null ? null : () => relay.play(_current!.recording!)),
@@ -301,7 +307,7 @@ class _NoteEditorState extends State<NoteEditor> {
               : ReadingBar(onChecklist: _checklist, onAttach: _attach, onCompose: _compose),
           )),
         ])),
-        if (_formatting && editing) FormatSheet(controller: _controller, height: _keyboard, onClose: _closeStyles),
+        if (_formatting) FormatSheet(controller: _controller, height: _keyboard, onClose: _closeStyles),
       ]),
     );
   }

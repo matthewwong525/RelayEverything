@@ -1,5 +1,5 @@
 name: relay_app
-description: "Relay Everything: notes kept on your phone, and sent with your health and places to your own server when you turn sending on."
+description: "Relay Everything: notes kept on your phone, and sent with your health, places and photos to your own server when you turn sending on."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -56,6 +56,11 @@ dependencies:
   # Files on a note: the paperclip picks photos and files, and a tap opens one in an app on the phone.
   file_picker: ^13.3.2
   open_filex: ^5.0.0
+  # Photos: photo_manager reads new photos from the phone's library, connectivity_plus tells Wi-Fi from mobile data,
+  # and http_parser names the photo's content type in its upload.
+  photo_manager: ^3.12.0
+  connectivity_plus: ^7.3.1
+  http_parser: ^4.1.2
   # Sign in to connect: your Relay Everything sign-in inside the app, and back with a one-time code.
   flutter_web_auth_2: ^5.1.0
   # Your calendar: reads the phone's calendars and their events (EventKit, CalendarContract). It never writes.

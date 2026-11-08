@@ -70,9 +70,10 @@ final _lineStyles = <(String, Attribute?)>[
 ];
 
 /// Shows a list kind on [controller]'s lines: a second tap on the same kind takes it off.
-void toggleList(QuillController controller, String kind) {
+/// The list style that turns [kind] on for the cursor's lines, or off when they have it.
+Attribute listToggle(QuillController controller, String kind) {
   final now = controller.getSelectionStyle().attributes[Attribute.list.key]?.value;
-  controller.formatSelection(kind == now ? Attribute.clone(Attribute.list, null) : ListAttribute(kind));
+  return kind == now ? Attribute.clone(Attribute.list, null) : ListAttribute(kind);
 }
 
 /// *Text styles*, in the keyboard's place: a line's style, bold, italic, underline and strikethrough for the words
@@ -86,13 +87,23 @@ class FormatSheet extends StatelessWidget {
 
   bool _has(Attribute attribute) => controller.getSelectionStyle().attributes[attribute.key]?.value == attribute.value;
 
-  void _toggle(Attribute attribute) =>
-    controller.formatSelection(_has(attribute) ? Attribute.clone(attribute, null) : attribute);
+  /// Styles one change without the editor bringing the keyboard back over the panel.
+  void _format(Attribute attribute) => controller
+    ..skipRequestKeyboard = true
+    ..formatSelection(attribute)
+    ..skipRequestKeyboard = false;
+
+  void _indent(bool more) => controller
+    ..skipRequestKeyboard = true
+    ..indentSelection(more)
+    ..skipRequestKeyboard = false;
+
+  void _toggle(Attribute attribute) => _format(_has(attribute) ? Attribute.clone(attribute, null) : attribute);
 
   /// A line's style: one header level, Monostyled, or Body, which takes both off.
   void _line(Attribute? header) {
-    controller.formatSelection(Attribute.clone(Attribute.codeBlock, null));
-    controller.formatSelection(header ?? Attribute.clone(Attribute.header, null));
+    _format(Attribute.clone(Attribute.codeBlock, null));
+    _format(header ?? Attribute.clone(Attribute.header, null));
   }
 
   @override
@@ -109,7 +120,7 @@ class FormatSheet extends StatelessWidget {
       isSelected: _has(attribute), onPressed: () => _toggle(attribute));
     Widget list(IconData icon, String tooltip, String kind) => IconButton(tooltip: tooltip, icon: Icon(icon),
       isSelected: controller.getSelectionStyle().attributes[Attribute.list.key]?.value == kind,
-      onPressed: () => toggleList(controller, kind));
+      onPressed: () => _format(listToggle(controller, kind)));
     return Material(
       color: brand.card,
       child: SafeArea(
@@ -143,9 +154,9 @@ class FormatSheet extends StatelessWidget {
                 list(CupertinoIcons.list_number, 'Numbered list', 'ordered'),
                 toggle(CupertinoIcons.text_quote, 'Block quote', Attribute.blockQuote),
                 IconButton(tooltip: 'Indent less', icon: const Icon(CupertinoIcons.decrease_indent),
-                  onPressed: () => controller.indentSelection(false)),
+                  onPressed: () => _indent(false)),
                 IconButton(tooltip: 'Indent more', icon: const Icon(CupertinoIcons.increase_indent),
-                  onPressed: () => controller.indentSelection(true)),
+                  onPressed: () => _indent(true)),
               ]),
             ]),
           ),

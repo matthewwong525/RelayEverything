@@ -1,0 +1,34 @@
+// A Relay-only install in a person's own Cloudflare account: the same Relay files as app/, through its own entry.
+// setup.mjs fills in its own names and IDs and writes app/self-host/wrangler.jsonc, which git ignores. SETUP.md
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "relay",
+  "main": "../worker/relay-only.ts",
+  "compatibility_date": "2026-07-28",
+  "compatibility_flags": ["nodejs_compat", "disallow_importable_env"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": { "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": true },
+  "vars": {
+    "WONG_ENVIRONMENT": "production",
+    "WONG_OWNER_EMAIL": "owner@example.com",
+    "CF_ACCESS_TEAM_DOMAIN": "your-team.cloudflareaccess.com",
+    "CF_ACCESS_AUD": "",
+    "CF_ACCESS_APP_ID": "",
+    "CF_ACCESS_WORKER_ID": "",
+    "RELAY_CHECKER_SHA256": "",
+    // Access signs the owner in; no one else gets an account until the owner sets RELAY_SIGN_UP to "open". The owner
+    // may set RELAY_CONTACT_EMAIL, the address the page shows for questions and privacy requests. update keeps both.
+    "RELAY_SIGN_IN": "access",
+    "RELAY_MCP_CALLBACK": "https://relay-mcp.your-subdomain.workers.dev/callback"
+  },
+  "d1_databases": [{ "binding": "DB", "database_name": "relay-db", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "../../schema/migrations" }],
+  "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-notes" }],
+  "queues": {
+    "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-webhooks" }],
+    "consumers": [{ "queue": "relay-webhooks", "max_batch_size": 10, "max_retries": 10 }]
+  },
+  // Each person's space, in the install's own spaces Worker: spaces.template.jsonc. Its alarm wakes late webhooks.
+  "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-spaces" }] },
+  "services": [{ "binding": "RELAY_MCP", "service": "relay-mcp", "entrypoint": "Grants" }]
+}

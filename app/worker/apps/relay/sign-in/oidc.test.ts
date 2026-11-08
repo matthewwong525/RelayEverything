@@ -12,6 +12,9 @@ const encoder = new TextEncoder();
 const b64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 const part = (value: unknown) => b64(encoder.encode(JSON.stringify(value)));
 
+const claimed = vi.hoisted(() => vi.fn(async (_person: { email: string }) => {}));
+vi.mock("../inbox/held", () => ({ claimOnSignIn: () => claimed }));
+
 const RSA = { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" };
 let good: CryptoKeyPair, forged: CryptoKeyPair, apple: CryptoKeyPair, pem: string, jwk: JsonWebKey & { kid: string };
 beforeAll(async () => {
@@ -100,6 +103,13 @@ describe("Sign in with Google", () => {
       redirect_uri: `${ORIGIN}/apps/relay/sign-in/google/callback`, client_id: GOOGLE, client_secret: "google-secret", code_verifier: saved.verifier });
     expect(db.sql.prepare("SELECT provider, subject FROM relay_logins").all()).toEqual([{ provider: "google", subject: "google-sub-ana" }]);
     expect(count("relay_sessions")).toBe(1);
+  });
+
+  it("claims kept mail for the signed-in email", async () => {
+    const { cookie, saved } = await begin("google");
+    token = () => idToken(claimsFor(GOOGLE, saved.nonce));
+    await googleBack(saved.state, cookie);
+    expect(claimed).toHaveBeenLastCalledWith(expect.objectContaining({ email: "ana@example.com" }));
   });
 
   it("keeps a linked login's person when the email changes, and sends an unsafe next to the page", async () => {

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'data/attachments.dart';
 import 'data/settings.dart';
@@ -77,6 +78,27 @@ class WebhookProblem {
   final String? file;
 }
 
+/// The names of what the person connected on their Relay Everything page, as the server last answered: the one thing a
+/// phone key reads. No address, secret or send state.
+class Connections {
+  const Connections({this.aiApps = const [], this.webhooks = const []});
+
+  final List<String> aiApps;
+  final List<String> webhooks;
+
+  /// Reads `GET connections`' answer, or its copy kept on this phone. A name that is not text is left out.
+  factory Connections.fromJson(Map<String, dynamic> json) {
+    List<String> names(Object? list) =>
+      [for (final item in list is List ? list : const []) if (item is Map && item['name'] is String) item['name'] as String];
+    return Connections(aiApps: names(json['aiApps']), webhooks: names(json['webhooks']));
+  }
+
+  static Connections? decode(String? saved) => saved == null ? null : Connections.fromJson(jsonDecode(saved) as Map<String, dynamic>);
+
+  String encode() => jsonEncode({'aiApps': [for (final name in aiApps) {'name': name}],
+    'webhooks': [for (final name in webhooks) {'name': name}]});
+}
+
 /// What the screens read and do. The app's controller is one; a test's fake is another.
 abstract class Relay extends ChangeNotifier {
   bool get connected;
@@ -86,15 +108,24 @@ abstract class Relay extends ChangeNotifier {
   int get waiting;
   Settings get settings;
 
-  /// Health readings and location points: when each last went, and how many wait. Settings shows them.
+  /// Health readings and location points: when each last went, and how many wait. Their folders show them.
   SendState get healthSent;
   SendState get pointsSent;
   /// Calendar events and removals: when they last went, and how many wait.
   SendState get calendarSent;
-  /// The phone's calendars, while the calendar is on; each has its own switch in Settings.
+  /// The phone's calendars, while the calendar is on; each has its own switch in the Calendar folder.
   List<PhoneCalendar> get calendars;
   /// True on iPhone, where *Location history* has two ways to keep places.
   bool get locationModes;
+
+  /// The names of the person's AI apps and webhooks, as their Relay Everything server last answered; null before an
+  /// answer, and after sending stops.
+  Connections? get connections;
+  /// Asks the server for [connections], only while sending to a Relay Everything server; else it makes no request.
+  Future<void> refreshConnections();
+  /// The Home headers the person folded, such as *Connections*. The phone keeps them.
+  Set<String> get folded;
+  Future<void> setFolded(String header, bool folded);
 
   /// Each returns null on success, or the words to show when it failed.
   Future<String?> connect(String code);
@@ -110,6 +141,11 @@ abstract class Relay extends ChangeNotifier {
   Future<String?> setCalendar(bool on);
   /// Turns one of the phone's calendars on or off. Its events leave the space at the next send.
   Future<void> setCalendarShown(String id, bool on);
+  /// Turning on asks for photo access; only photos taken from then on go, to the server or the webhook, as the rest.
+  /// Turning off drops the photos still waiting on this phone; the ones sent stay where they went.
+  Future<String?> setPhotos(bool on);
+  /// Off: photos wait for Wi-Fi.
+  Future<String?> setPhotosOnMobileData(bool on);
 
   /// How many notes never went to the server: the earlier-notes prompt asks about them when sending turns on.
   Future<int> earlierNotes();
@@ -128,8 +164,8 @@ abstract class Relay extends ChangeNotifier {
   Future<String?> saveWebhook(String address, String secret);
   /// *Send a test*: a signed test message to [address]. Returns the words to show: the receiver's answer, or why not.
   Future<String> testWebhook(String address, String secret);
-  /// Turns sending off: stops health, the calendar and location history and drops what of them did not go. Keeps notes
-  /// and the key.
+  /// Turns sending off: stops health, the calendar, location history and photos, and drops what of them did not go.
+  /// Keeps notes and the key.
   Future<void> stopSending();
 
   /// Forgets the key and turns sending off.

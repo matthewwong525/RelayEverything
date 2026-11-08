@@ -7,11 +7,11 @@ import { cloudflare } from "@cloudflare/vite-plugin";
 
 const bootstrap = fileURLToPath(new URL('../scripts/employee-bootstrap.mjs', import.meta.url))
 
-// A Relay-only install (self-host/SETUP.md) builds the same index.html around src/relay-only.tsx, with the install's
-// own config; RELAY_CONFIG is the filled copy setup.mjs writes, and the template stands in for a check's build.
+// A Relay-only install (app/self-host/SETUP.md) builds the same index.html around src/relay-only.tsx, with the
+// install's own config: RELAY_CONFIG, the filled copy setup.mjs writes; a check's build uses the template.
 const relayOnly: Plugin = { name: 'relay-only', transformIndexHtml: { order: 'pre',
   handler: html => html.replace('/src/main.tsx', '/src/relay-only.tsx').replace('<title>Your apps</title>', '<title>Relay Everything</title>') } }
-const relayConfig = process.env.RELAY_CONFIG ?? '../self-host/wrangler.template.jsonc'
+const relayConfig = process.env.RELAY_CONFIG ?? './self-host/wrangler.template.jsonc'
 // The spaces Worker bundles its migrations as text, as Wrangler's Text rule does on a deploy.
 const sqlText: Plugin = { name: 'sql-text', transform: (code, id) => id.endsWith('.sql') ? `export default ${JSON.stringify(code)};` : undefined }
 

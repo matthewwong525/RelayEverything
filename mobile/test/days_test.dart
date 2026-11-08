@@ -41,4 +41,20 @@ void main() {
     expect([sendState(Entry(text: '', at: now, sent: true)), sendState(Entry(text: '', at: now, waiting: true)),
       sendState(Entry(text: '', at: now))], ['Sent', 'Waiting to send', null]);
   });
+
+  test('a share is a note with a photo, a file or a link; a voice note is only in Voice notes and Notes', () {
+    const photo = EntryFile(name: 'receipt.jpg', type: 'image/jpeg', size: 1, path: '/nowhere/receipt.jpg');
+    final notes = {
+      'typed': Entry(text: 'Buy milk', at: now),
+      'voice': Entry(text: 'Call the fab', at: now, voice: true),
+      'photo': Entry(text: '', at: now, files: const [photo]),
+      'link': Entry(text: 'Read HTTPS://example.com/post later', at: now),
+      'no link': Entry(text: 'The http header is long', at: now),
+    };
+    List<String> inFolder(NotesFolder folder) => [for (final MapEntry(:key, :value) in notes.entries) if (entryIn(folder, value)) key];
+    expect(inFolder(NotesFolder.all), notes.keys);
+    expect(inFolder(NotesFolder.voice), ['voice']);
+    expect(inFolder(NotesFolder.shares), ['photo', 'link']);
+    expect([for (final folder in NotesFolder.values) folder.title], ['Notes', 'Voice notes', 'Shares']);
+  });
 }

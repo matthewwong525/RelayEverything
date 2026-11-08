@@ -37,7 +37,7 @@ String _type(Object? type) => type is String && type.isNotEmpty ? type : 'applic
 /// receiver built for the server's webhooks takes it unchanged. It builds each message from the waiting upload's body
 /// when it sends, so a move between places needs no rewrite.
 ///
-/// Only a 2xx answer counts as sent. A 413 on a file drops that file; every other answer, or none, keeps the upload
+/// Only a 2xx answer counts as sent. A 413 on a file or a photo drops it; every other answer, or none, keeps the upload
 /// and stops the round: a receiver's 400 is most often its own bug, and dropping would lose data.
 class WebhookClient implements Outbound {
   WebhookClient(this.webhook, {required this.installId, String? deviceName, http.Client? client, DateTime Function()? clock})
@@ -133,6 +133,21 @@ class WebhookClient implements Outbound {
   @override
   Future<void> sendFile(OutboxItem item, List<int> bytes) async {
     await _post(_id(item), message(item, bytes)!, file: true);
+  }
+
+  /// The `photo.created` message for one photo from *Photos*, in the server's shape: the photo's id is the phone's own
+  /// client id, and `timestamp` is when the phone queued it.
+  Map<String, dynamic> photoMessage(QueuedPhoto photo, List<int> bytes) => {'version': 1, 'type': 'photo.created',
+    'timestamp': _iso((photo.queuedAt ?? photo.takenAt).millisecondsSinceEpoch), 'data': {'photo': {
+      'id': photo.clientId, 'device': _device, 'taken_at': _iso(photo.takenAt.millisecondsSinceEpoch),
+      'place': photo.lat == null || photo.lon == null ? null : {'lat': photo.lat, 'lon': photo.lon},
+      'width': photo.width, 'height': photo.height, 'content_type': 'image/jpeg', 'size': bytes.length,
+      'base64': base64.encode(bytes)}}};
+
+  /// A photo goes as a file does: a 413 drops it, and any other failure keeps it for a later round.
+  @override
+  Future<void> sendPhoto(QueuedPhoto photo, List<int> bytes) async {
+    await _post('$installId:photo-${photo.clientId}', photoMessage(photo, bytes), file: true);
   }
 
   /// *Send a test*: a signed `webhook.test` message. Returns the receiver's status, or null when it did not answer.

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Loading } from '@/components/Loading'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -7,13 +7,15 @@ import { AiCard } from './AiCard'
 import { Chats } from './Chats'
 import { Devices } from './Devices'
 import { Failed } from './Failed'
+import { Inbox } from './Inbox'
 import { Notes } from './Notes'
+import { Photos } from './Photos'
 import { SIGNED_OUT, today, useGet, when, type Summary, type Timeline } from './read'
 import { SignIn } from './SignIn'
 import { Webhooks } from './Webhooks'
 
-// Relay Everything's page: the sign-in, then today's summary, notes, chats, webhooks, devices and the account. Devices
-// send to app/worker/apps/relay/; this page reads the signed-in person's own space.
+// Relay Everything's page: the sign-in, then today's summary, notes, chats, webhooks, AI apps, email, devices and the
+// account. Devices send to app/worker/apps/relay/; this page reads the signed-in person's own space.
 const number = new Intl.NumberFormat()
 
 function Tile({ label, value }: { label: string; value: string }) {
@@ -76,6 +78,10 @@ function Home({ email, onSignedOut }: { email: string; onSignedOut: () => void }
   const { day, offset } = today()
   const [summary, retrySummary] = useGet<Summary>(`summary?day=${day}&offset=${offset}`)
   const [timeline, retryTimeline] = useGet<Timeline>('timeline')
+  const [chats, setChats] = useState(false)
+  const chatsSettled = useCallback(() => setChats(true), [])
+  // The #webhooks and #ai-apps scrolls wait for the day, notes and chats, which push those parts down as they load.
+  const above = summary.status !== 'loading' && timeline.status !== 'loading' && chats
   return <div className="grid gap-6">
     <h1>Relay Everything</h1>
     {summary.status === 'loading' && <Loading label="Loading today" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -88,9 +94,11 @@ function Home({ email, onSignedOut }: { email: string; onSignedOut: () => void }
     </Loading>}
     {timeline.status === 'failed' && <Failed what="Notes" retry={retryTimeline} />}
     {timeline.status === 'ready' && <Notes first={timeline.value} />}
-    <Chats />
-    <Webhooks />
-    <AiCard />
+    <Chats onSettled={chatsSettled} />
+    <Webhooks ready={above} />
+    <AiCard ready={above} />
+    <Photos />
+    <Inbox />
     <Devices />
     <Account email={email} onSignedOut={onSignedOut} />
   </div>

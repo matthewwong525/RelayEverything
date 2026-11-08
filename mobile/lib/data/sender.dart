@@ -27,7 +27,12 @@ class Sender {
     };
   }
 
-  /// Tries a key the person scanned or pasted. Only the connect screen calls it, and only the sending switch opens
+  /// The server's client for the one read a phone key has, the names of its person's AI apps and webhooks: only while
+  /// sending to the Relay Everything server with its key, else null.
+  RelayApi? reader(Settings settings, {Connection? connection}) =>
+    settings.sending && settings.place == SendPlace.server && connection != null ? _apiFor(connection) : null;
+
+  /// Tries a key the person scanned or pasted. Only the connect screen calls it, and only the choice of place opens
   /// that screen.
   RelayApi check(Connection connection) => _apiFor(connection);
 

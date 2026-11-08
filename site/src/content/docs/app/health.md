@@ -26,8 +26,8 @@ Mindful minutes come from an iPhone only: Health Connect does not give them to t
 
 ## Turn it on
 
-1. Open **Settings**.
-2. Turn on **Send my notes**, if it is off: [Connect a phone](../../start/connect-a-phone/). Health works only with sending on, and the app reads no health data while it is off.
+1. Open **Health**, under **On this phone** on Home.
+2. If sending is off, tap **Turn on sending**: [Connect a phone](../../start/connect-a-phone/). Health works only with sending on, and the app reads no health data while it is off.
 3. Turn on **Health**.
 4. Allow the phone to read the types you want. The phone shows a switch for each type, so you can leave any type off, such as cycle. The app skips a type you leave off, with no error. On Android, also allow Health Connect to read in the background and to read past data.
 
@@ -46,7 +46,7 @@ The app sends new health data each time you open it. While it is closed, it send
 - **On an iPhone**, Apple Health wakes the app when it has new readings, about once an hour. A locked iPhone keeps Health closed, so the readings go after you next unlock it.
 - **On Android**, the app sends every hour while the phone lets it run.
 
-Under **Health**, **Settings** shows when the data last went, and how many readings wait, such as *Sent 14:05 · 3 readings waiting*. Open the app to send at once.
+The **Health** folder, and its row on Home, show when the data last went, and how many readings wait, such as *Sent 14:05 · 3 readings waiting*. Open the app to send at once.
 
 Each sample is kept once for its type, time and source, however often the phone sends it.
 
@@ -56,4 +56,4 @@ The server counts each day's totals, as the table in [What it reads](#what-it-re
 
 ## Turn it off
 
-Turn off **Health** in **Settings**. The phone stops sending. Turning off **Send my notes** also stops health, and deletes the health data that did not go yet. To take back the phone's permission, use Apple Health or Health Connect. [Privacy](../../privacy/) says what the server keeps.
+Turn off **Health** in the **Health** folder. The phone stops sending. Turning off **Send my notes** also stops health, and deletes the health data that did not go yet. To take back the phone's permission, use Apple Health or Health Connect. [Privacy](../../privacy/) says what the server keeps.

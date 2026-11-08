@@ -59,6 +59,10 @@ beforeEach(() => {
     // The sign-in, devices and account have their own test: SignIn.test.tsx.
     if (path === "/apps/relay/api/account") return Response.json({ email: "ana@example.com" });
     if (path === "/apps/relay/api/devices") return Response.json({ devices: [] });
+    // The photos card has its own test: Photos.test.tsx.
+    if (path === "/apps/relay/api/photos") return Response.json({ count: 0 });
+    // The Email card has its own test: Inbox.test.tsx.
+    if (path === "/apps/relay/api/inbox") return Response.json({ email: { on: false, address: null, shared: null } });
     if (path.startsWith("/apps/relay/api/")) return answer(path.slice("/apps/relay/api/".length), init);
     throw new Error(`Unexpected request: ${path}`);
   });
@@ -103,7 +107,7 @@ it("shows today's summary, every note with its place and recording, and the plac
 
   const { day, offset } = today();
   expect(reads()).toEqual(["/apps/relay/api/account", "/apps/relay/api/chats", "/apps/relay/api/webhooks", "/apps/relay/api/ai-apps",
-    "/apps/relay/api/devices", `/apps/relay/api/summary?day=${day}&offset=${offset}`, "/apps/relay/api/timeline"]);
+    "/apps/relay/api/photos", "/apps/relay/api/inbox", "/apps/relay/api/devices", `/apps/relay/api/summary?day=${day}&offset=${offset}`, "/apps/relay/api/timeline"]);
   expect(await screen.findByText("No AI app connected yet.")).toBeTruthy();
 });
 
@@ -260,6 +264,37 @@ it("tells how to connect Claude Code, that its key only adds chats, and that you
   expect(within(dialog).getByText("/plugin marketplace add matthewwong525/RelayEverything")).toBeTruthy();
   expect(within(dialog).getByText("/plugin install relay@relay")).toBeTruthy();
   expect(within(dialog).getByText(/run your own Relay Everything server/)).toBeTruthy();
+});
+
+it("scrolls to #webhooks or #ai-apps only once the notes and chats above have replaced their placeholders", async () => {
+  const scrolled = vi.fn();
+  Element.prototype.scrollIntoView = scrolled;
+  try {
+    for (const id of ["webhooks", "ai-apps"]) {
+      cleanup();
+      scrolled.mockClear();
+      window.location.hash = `#${id}`;
+      let notesLoaded!: () => void, chatsLoaded!: () => void;
+      const timeline = new Promise<Response>((resolve) => { notesLoaded = () => resolve(Response.json(FIRST)); });
+      const chats = new Promise<Response>((resolve) => { chatsLoaded = () => resolve(Response.json(CHATS)); });
+      answer = (route, init) => route === "timeline" ? timeline : route === "chats" ? chats : ordinary(route, init);
+      await open();
+      expect(await screen.findByText("Loading notes")).toBeTruthy();
+      expect(document.getElementById(id)).toBeTruthy();
+      expect(scrolled).not.toHaveBeenCalled();
+      await act(async () => { notesLoaded(); });
+      expect(await screen.findByText("Note 00000000-0000-4000-8000-000000000002")).toBeTruthy();
+      expect(screen.getByText("Loading chats")).toBeTruthy();
+      expect(scrolled).not.toHaveBeenCalled();
+      await act(async () => { chatsLoaded(); });
+      expect(await screen.findByRole("button", { name: "Stiffener plan" })).toBeTruthy();
+      expect(scrolled).toHaveBeenCalledOnce();
+      expect(scrolled.mock.contexts[0]).toBe(document.getElementById(id));
+    }
+  } finally {
+    window.location.hash = "";
+    delete (Element.prototype as Partial<Element>).scrollIntoView;
+  }
 });
 
 it("writes times, places and the day as the page shows them", () => {

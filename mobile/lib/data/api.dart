@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart' show MediaType;
 
 import 'connection.dart';
 import 'store.dart';
@@ -18,8 +19,8 @@ class ApiException implements Exception {
   String toString() => 'ApiException($failure, $status)';
 }
 
-/// Where the outbox sends: the Relay Everything server, or the person's own webhook. Each call throws [ApiException]:
-/// [Failure.rejected] drops the upload, and any other failure stops the round with it kept.
+/// Where the outbox and the photos send: the Relay Everything server, or the person's own webhook. Each call throws
+/// [ApiException]: [Failure.rejected] drops the upload, and any other failure stops the round with it kept.
 abstract class Outbound {
   /// The outbox destination this client sends to.
   String get destination;
@@ -29,11 +30,14 @@ abstract class Outbound {
 
   /// Sends one file of a note: [item] is its `attachment` upload.
   Future<void> sendFile(OutboxItem item, List<int> bytes);
+
+  /// Sends one photo from *Photos*: its JPEG copy's [bytes], with its time and place.
+  Future<void> sendPhoto(QueuedPhoto photo, List<int> bytes);
 }
 
 /// Relay's device routes, each call carrying this phone's key: `Authorization: Bearer` for a page-made key, or
 /// Cloudflare Access's two headers for an older one. A device key only adds data: the server refuses it on every
-/// route that reads.
+/// route that reads, but its own key check and the names of what its person connected.
 class RelayApi implements Outbound {
   RelayApi(this.connection, [http.Client? client]) : _client = client ?? http.Client();
 
@@ -65,6 +69,11 @@ class RelayApi implements Outbound {
   Future<void> sendFile(OutboxItem item, List<int> bytes) => upload(noteClientId: item.body['noteClientId'] as String,
     id: item.body['id'] as String, type: item.body['type'] as String? ?? '', bytes: bytes);
 
+  /// To `POST photos`, once per photo however often it goes: the server keeps a photo by its client id.
+  @override
+  Future<void> sendPhoto(QueuedPhoto photo, List<int> bytes) => multipart('photos', photo.fields, file: 'photo', bytes: bytes,
+    filename: '${photo.clientId}.jpg', contentType: 'image/jpeg');
+
   /// The server numbers its own rows, and its routes take no `id` on a reading or point: the ids are for webhooks.
   static Map<String, dynamic> _forServer(String route, Map<String, dynamic> body) {
     final list = switch (route) { 'health' => 'samples', 'locations' => 'points', _ => null };
@@ -77,6 +86,8 @@ class RelayApi implements Outbound {
   static const _timeout = Duration(seconds: 30);
   /// A file can be 25 MB, so its upload may take longer on a slow signal.
   static const _uploadTimeout = Duration(minutes: 5);
+  // A photo is a few hundred kilobytes, which can take longer than a JSON body on a slow network.
+  static const _photoTimeout = Duration(seconds: 120);
 
   Uri _uri(String route) => Uri.parse('${connection.server}/apps/relay/api/$route');
 
@@ -94,11 +105,26 @@ class RelayApi implements Outbound {
       'X-Note-Client-Id': noteClientId, 'X-Attachment-Id': id}, body: bytes), rejected: const {400, 404, 413},
       timeout: _uploadTimeout);
 
+  /// Sends one multipart body to a POST route: the text [fields], and one file part named [file], with its [bytes],
+  /// [filename] and [contentType]. A refusal is named the same way as for [post].
+  Future<Map<String, dynamic>> multipart(String route, Map<String, String> fields,
+    {required String file, required List<int> bytes, required String filename, required String contentType}) =>
+    _call(() async {
+      final request = http.MultipartRequest('POST', _uri(route))
+        ..headers.addAll(_headers)
+        ..fields.addAll(fields)
+        ..files.add(http.MultipartFile.fromBytes(file, bytes, filename: filename, contentType: MediaType.parse(contentType)));
+      return http.Response.fromStream(await _client.send(request));
+    }, timeout: _photoTimeout);
+
   /// Checks this phone's key and returns the device name it was made for. It reads no data.
   Future<String> key() async {
     final json = await _call(() => _client.get(_uri('key'), headers: _headers));
     return json['device'] as String? ?? '';
   }
+
+  /// The names of the person's AI apps and webhooks: the one read a phone key has, with no data in it.
+  Future<Map<String, dynamic>> connections() => _call(() => _client.get(_uri('connections'), headers: _headers));
 
   /// Trades the sign-in's one-time code, with the secret only this phone holds, for this phone's own key. The call
   /// carries no key: the code and the secret are its proof.

@@ -4,6 +4,7 @@ import { boundedBytes } from "../../api/body.ts";
 import type { ActionCall } from "../../api/contract.ts";
 import { asDevice, asPerson } from "./caller.ts";
 import { CLIENT_ID, MAX_FILE_BYTES } from "./notes.ts";
+import type { PersonSpace } from "./space.ts";
 import { refused, type Env } from "./store.ts";
 import { wake } from "./webhooks/send.ts";
 
@@ -29,13 +30,18 @@ export const attachmentAdd: (request: Request, env: Env, call: Call) => Promise<
       return refused(413, "The file is larger than 25 MB");
     }
     // boundedBytes gives a new array of exactly the file's size, so its buffer is the file.
-    const key = await space.files.put(`attachments/${id}`, bytes.buffer as ArrayBuffer);
-    // Two uploads of one file at once seal the same bytes under the same name, so the second changes nothing.
-    await space.db.prepare("UPDATE relay_attachments SET file_key = ?, size = ? WHERE id = ? AND file_key IS NULL").bind(key, bytes.byteLength, id).run();
+    await storeFile(space, id, bytes.buffer as ArrayBuffer);
     // The seal logs a note.file, which goes to every webhook with the note.
     await wake(env, space, ["notes"]);
     return Response.json({ ok: true, added: true });
   });
+
+/** Seals a listed file into the person's folder and marks it ready: the phone's upload and the inbox share it. */
+export async function storeFile(space: PersonSpace, id: string, bytes: ArrayBuffer) {
+  const key = await space.files.put(`attachments/${id}`, bytes);
+  // Two uploads of one file at once seal the same bytes under the same name, so the second changes nothing.
+  await space.db.prepare("UPDATE relay_attachments SET file_key = ?, size = ? WHERE id = ? AND file_key IS NULL").bind(key, bytes.byteLength, id).run();
+}
 
 type Stored = { name: string; content_type: string; file_key: string | null };
 

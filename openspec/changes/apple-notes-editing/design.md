@@ -33,14 +33,14 @@ Alternatives: `appflowy_editor` has a Markdown codec built in, but its mobile to
 ### The tool bars
 
 - **Editing:** a pill floating 8 px above the keyboard (`MediaQuery.viewInsets`), with `BackdropFilter` blur over `brand.card` at 80 %: *Aa*, checklist, paperclip. The top bar: back circle, a pill with share and ⋯, and a round ✓ filled with the accent.
-- **Aa** swaps the keyboard for a format sheet the keyboard's height (focus stays, `TextInput` hidden by `readOnly` toggling), with the style row, B/I/U/S, Mono, the three list kinds, quote and indent; ✕ brings the keyboard back.
+- **Aa** swaps the keyboard for a format sheet the keyboard's height (the editor lets go of focus, and each style sets `skipRequestKeyboard` so the editor doesn't take it back; the note stays in editing mode while the sheet is open), with the style row, B/I/U/S, Mono, the three list kinds, quote and indent; ✕ brings the keyboard back.
 - **Reading:** a bottom pill with checklist and paperclip and a round compose button; compose opens a new `NoteEditor`.
 - Share uses the phone's share sheet with the note's plain words (`share_plus`, BSD). ⋯ holds *Copy* and, when the note has a recording, *Play*.
 
 ### Sending a change
 
 - **Phone store:** `LocalNote` gains `editedAt`. `editNote` on a sent note sets `editedAt` and puts one `note.update` item in the outbox, replacing any waiting update for that note, so only the latest words go. A note not yet sent just changes its waiting `notes` item. A `notes` item whose body changed while it was on its way becomes a `note.update` item, as the server has the old words.
-- **Relay Everything mode:** a new route `PATCH notes` (phone keys only; the router matches exact paths, so the body names the note: `edit-note.ts`, kept apart from `notes.ts`, which the email-notes work also changes) takes `{ clientId, text, attachments? }`, `attachments` being the whole list. It finds the note by `(device_id, client_id)`, so another device's note is a 404. It updates `text`, sets a new `edited_at` column, adds new files as `POST notes` does, and logs `note.updated` in the outbox. New space migration `0008_note_edits.sql` adds `relay_notes.edited_at`; `relay_outbox` already allows `note.updated` (`0007`). A resend of the same words changes nothing and logs nothing.
+- **Relay Everything mode:** a new route `PATCH notes` (phone keys only; the router matches exact paths, so the body names the note: `edit-note.ts`, kept apart from `notes.ts`, which the email-notes work also changes) takes `{ clientId, text, attachments? }`, `attachments` being the whole list. It finds the note by `(device_id, client_id)`, so another device's note is a 404. It updates `text`, sets a new `edited_at` column, adds new files as `POST notes` does, and logs `note.updated` in the outbox. New space migration `0010_note_edits.sql` adds `relay_notes.edited_at`; `relay_outbox` already allows `note.updated` (`0007`, kept by `0008_photos`); a staging space that ran it first as `0008_note_edits` skips it. A resend of the same words changes nothing and logs nothing.
 - **Webhook format:** `note.updated` gains `edited_at` and the note's `attachments`, both optional, so v1 stays compatible; `v1.schema.json` and the example receiver drop *no longer sent*.
 - **Own-webhook mode:** `webhook.dart` signs and sends `note.updated` from the phone, with new files as `note.file` after it.
 
@@ -79,4 +79,4 @@ Reuses `BrandColors`, `BackToNotes` (restyled as a round back button), `_Picture
 
 ## Migration Plan
 
-Space migration `0008` runs on each space's next start; old rows get `edited_at` null. Rollback: the phone build that edits needs the route; an older server answers 404, and the phone drops the update, as a waiting item would hold back every upload behind it.
+Space migration `0010` runs on each space's next start; old rows get `edited_at` null. Rollback: the phone build that edits needs the route; an older server answers 404, and the phone drops the update, as a waiting item would hold back every upload behind it.

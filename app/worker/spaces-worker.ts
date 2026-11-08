@@ -8,14 +8,19 @@ import attachments from "../../schema/space-migrations/0004_attachments.sql";
 import noPebble from "../../schema/space-migrations/0005_no_pebble.sql";
 import phoneData from "../../schema/space-migrations/0006_phone_data.sql";
 import noteFiles from "../../schema/space-migrations/0007_note_files.sql";
-import noteEdits from "../../schema/space-migrations/0008_note_edits.sql";
+import photos from "../../schema/space-migrations/0008_photos.sql";
+import inbox from "../../schema/space-migrations/0009_inbox.sql";
+import noteEdits from "../../schema/space-migrations/0010_note_edits.sql";
 import type { Row, Sql, SqlValue } from "./apps/relay/space.ts";
 import { BEHIND } from "./apps/relay/webhooks/log.ts";
 
 /** The space's migrations, in order. A space runs each once, and keeps the name of each in `space_migrations`. */
 export const MIGRATIONS: readonly [string, string][] = [["0001_relay", relay], ["0002_space", space], ["0003_api_devices", apiDevices],
   ["0004_attachments", attachments], ["0005_no_pebble", noPebble], ["0006_phone_data", phoneData],
-  ["0007_note_files", noteFiles], ["0008_note_edits", noteEdits]];
+  ["0007_note_files", noteFiles], ["0008_photos", photos], ["0009_inbox", inbox],
+  ["0010_note_edits", noteEdits]];
+/** A staging space ran a migration first under an older name, before another change took its number. */
+const RAN_AS: Readonly<Record<string, string>> = { "0010_note_edits": "0008_note_edits" };
 
 const SWEEP = 15 * 60_000;
 const KEEP = 30 * 24 * 60 * 60_000;
@@ -28,7 +33,7 @@ export function migrate(storage: Pick<DurableObjectStorage, "sql" | "transaction
   storage.sql.exec("CREATE TABLE IF NOT EXISTS space_migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)");
   const done = new Set(storage.sql.exec<{ name: string }>("SELECT name FROM space_migrations").toArray().map(row => row.name));
   for (const [name, text] of MIGRATIONS) {
-    if (done.has(name)) continue;
+    if (done.has(name) || done.has(RAN_AS[name])) continue;
     storage.transactionSync(() => {
       storage.sql.exec(text);
       storage.sql.exec("INSERT INTO space_migrations (name, applied_at) VALUES (?, ?)", name, Date.now());
@@ -57,7 +62,7 @@ export class Space extends DurableObject<SpacesEnv> {
     return this.ctx.storage.transactionSync(() => statements.map(statement => this.rows(statement)));
   }
 
-  /** The key that seals this person's recordings, made on first use. It never leaves the space but to space.ts. */
+  /** The key that seals this person's recordings and photos, made on first use. Only space.ts gets it. */
   fileKey(): ArrayBuffer {
     const [found] = this.query("SELECT key FROM space_keys WHERE name = ?", [FILE_KEY]);
     if (found) return found.key as ArrayBuffer;

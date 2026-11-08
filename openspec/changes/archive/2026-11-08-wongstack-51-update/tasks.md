@@ -17,7 +17,7 @@
 - [x] 3.1 Run `node /root/.cache/wong-stack/WongStack/.claude/skills/wong-sync/scripts/merge-check.mjs --target . --source /root/.cache/wong-stack/WongStack --from 2acdf24b018a3596186316cc29a91ccfb40384b7`; take every missing hunk until none remain.
 - [x] 3.2 Run `npm test` in `app/`, `node --test .claude/skills/daily/scripts/*.test.mjs` if any exist, and `node scripts/public-check.mjs --tree`; verify all pass with no check loosened.
 - [x] 3.3 Rerun the preflight; verify every unit is `latest-equivalent` or `locally-adapted` with no missing hunk.
-- [ ] 3.4 Run `/save`; verify the pull request's checks pass and the staging Inbox opens on the chat list.
+- [x] 3.4 Run `/save`; verify the pull request's checks pass and the staging Inbox opens on the chat list.
 
 ## 4. Before it goes live
 

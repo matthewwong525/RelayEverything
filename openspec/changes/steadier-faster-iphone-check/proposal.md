@@ -74,6 +74,7 @@ Non-goals: an Android device check; a check that starts on each save; a change t
 - **2026-11-09** — Check: `.github/workflows/mobile-device-check.yml` a failed save of the build cache does not fail the job (`continue-on-error`), and a failed tour step runs once more before it counts, because the cache only saves time and a slow Mac or a missed tap should not fail a working app.
 - **2026-11-09** — Assumed: a re-check carries forward the scenarios an earlier re-check skipped as passed, and reads the newest check that reached Claude, because a re-check's own report holds only what it tried, and the plan's goal is less Claude time for each re-check.
 - **2026-11-09** — Built inside /ship; the second look found 2 problems (a step's first-try picture lost when its second try left none, and a re-check that sent earlier passes again from the second re-check on), both fixed. Saved for the live checks (tasks 7.2 and 7.3).
+- **2026-11-09** — iPhone check 1 on d8d59e8 (run 42571939953) with `--flows voice-note`: the early result worked (`tour=broken` at about 15 min, before the end), the build cache saved, the 4 fixed steps passed first try, and Claude did not start. `voice-note` failed both tries while its pictures show *Tap anywhere to save*: Flutter joins the recording screen into one label (`Listening\n0:34\nTap anywhere to save\n…`), so #75's flow, never passed before, now matches inside the label and starts again from Home before the cancel.
 
 ## Capabilities
 

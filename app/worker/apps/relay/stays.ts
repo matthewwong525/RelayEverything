@@ -3,11 +3,8 @@
 import { z } from "zod";
 import { defineAction, type ActionCall } from "../../api/contract.ts";
 import { asDevice } from "./caller.ts";
-import { BATCH, latitude, longitude, placeName, time, type Db } from "./store.ts";
+import { BATCH, latitude, longitude, placeName, STAY_SOURCES, time, TRIP_MODES, type Db } from "./store.ts";
 import { wake } from "./webhooks/send.ts";
-
-export const STAY_SOURCES = ["calendar", "map", "street", "point"] as const;
-export const TRIP_MODES = ["walking", "running", "cycling", "driving", "flying", "unknown"] as const;
 
 const span = { start: time, end: time, ongoing: z.boolean().optional().describe("True while the person is still there.") };
 const stay = z.strictObject({

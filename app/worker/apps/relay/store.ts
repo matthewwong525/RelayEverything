@@ -17,6 +17,9 @@ export const longitude = z.number().min(-180).max(180);
 export const accuracy = z.number().min(0).max(100_000);
 /** A place's name from the phone's own address lookup, such as a street. */
 export const placeName = z.string().min(1).max(200);
+/** Where a stay's name came from, and how a trip went. Here, not in the stays route, so webhooks load no route code. */
+export const STAY_SOURCES = ["calendar", "map", "street", "point"] as const;
+export const TRIP_MODES = ["walking", "running", "cycling", "driving", "flying", "unknown"] as const;
 
 const CODES: Record<number, string> = { 400: "invalid_input", 401: "authentication_required", 403: "forbidden", 413: "invalid_input", 503: "unavailable" };
 

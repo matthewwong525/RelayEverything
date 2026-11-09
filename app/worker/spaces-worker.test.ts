@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 import { ANA, BEN, NOW, queue, spaces } from "../tests/relay";
 import spacesWorker, { migrate, MIGRATIONS } from "./spaces-worker.ts";
@@ -88,4 +91,25 @@ it("deletes every row, the file key and the alarm", async () => {
 it("answers no address", async () => {
   const response = await spacesWorker.fetch();
   expect([response.status, await response.text()]).toEqual([404, "Not found"]);
+});
+
+/** Each file `entry` loads at run time through relative imports, mapped to its loader. `import type` leaves no code. */
+function loads(entry: string, from: string | null = null, found = new Map<string, string | null>()) {
+  if (found.has(entry)) return found;
+  found.set(entry, from);
+  if (!entry.endsWith(".ts")) return found;
+  for (const [, path] of readFileSync(entry, "utf8").matchAll(/^(?:import|export)(?!\s+type\b)\b[^;]*?from\s+"(\.[^"]+)"/gms)) {
+    const file = resolve(dirname(entry), path);
+    loads(existsSync(file) ? file : `${file}.ts`, entry, found);
+  }
+  return found;
+}
+
+it("loads no route code and no Vite-only import.meta.glob, since wrangler bundles the spaces Worker alone", () => {
+  const worker = fileURLToPath(new URL("./", import.meta.url));
+  const found = loads(fileURLToPath(new URL("./spaces-worker.ts", import.meta.url)));
+  const chain = (file: string): string[] => [...(found.get(file) ? chain(found.get(file)!) : []), relative(worker, file)];
+  expect([...found.keys()].some(file => file.endsWith("apps/relay/webhooks/format.ts"))).toBe(true);
+  const bad = [...found.keys()].filter(file => file.endsWith("api/contract.ts") || (file.endsWith(".ts") && readFileSync(file, "utf8").includes("import.meta.glob")));
+  expect(bad.map(file => chain(file).join("\n → ")), "the spaces Worker reaches no route code").toEqual([]);
 });

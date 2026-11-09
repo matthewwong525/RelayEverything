@@ -504,13 +504,13 @@ class Store extends GeneratedDatabase {
     });
 
   /// Queues a note's upload, then one upload for each of its files not sent yet, so a file never reaches the server
-  /// before its note.
-  Future<void> _queue(Map<String, dynamic> body) async {
+  /// before its note. With [allFiles], one for each file on this phone, sent or not.
+  Future<void> _queue(Map<String, dynamic> body, {bool allFiles = false}) async {
     final clientId = body['clientId'] as String;
     await enqueue('notes', body);
     await _run('UPDATE notes SET edit_unsent = 0 WHERE client_id = ?', [clientId]);
     for (final file in await attachmentsOf(clientId)) {
-      if (file.sentAt == null) await enqueue('attachment', file.upload(clientId));
+      if (file.sentAt == null || (allFiles && file.path.isNotEmpty)) await enqueue('attachment', file.upload(clientId));
     }
   }
 
@@ -670,14 +670,31 @@ class Store extends GeneratedDatabase {
   static const _earlier = 'FROM notes WHERE sent_at IS NULL AND queued = 0 AND pinning = 0 AND words_pending = 0 '
     'AND deleting_at IS NULL';
 
-  /// How many notes never went to the server and have no upload: the notes the earlier-notes prompt asks about.
-  Future<int> earlierCount() async => (await _rows('SELECT count(*) AS n $_earlier')).single.read<int>('n');
+  /// With the notes that went only to the person's own webhook: this phone's own, sent, with no server id and no upload
+  /// waiting. A note on the person's Relay Everything space has a server id once a pull saw it, so it never counts again.
+  static const _earlierOrWebhook = 'FROM notes WHERE pinning = 0 AND words_pending = 0 AND deleting_at IS NULL AND '
+    '((sent_at IS NULL AND queued = 0) OR (mine = 1 AND server_id IS NULL AND sent_at IS NOT NULL AND NOT EXISTS '
+    "(SELECT 1 FROM outbox WHERE route = 'notes' AND json_extract(outbox.body, '\$.clientId') = notes.client_id)))";
 
-  /// Queues every earlier note, oldest first, each with its files.
-  Future<void> queueEarlier() => transaction(() async {
-    for (final row in await _rows('SELECT client_id, body $_earlier ORDER BY created_at, client_id')) {
-      await _queue(jsonDecode(row.read<String>('body')) as Map<String, dynamic>);
-      await _run('UPDATE notes SET queued = 1 WHERE client_id = ?', [row.read<String>('client_id')]);
+  /// How many notes never went to the server and have no upload: the notes the earlier-notes prompt asks about. With
+  /// [fromWebhook], as when a phone that sent to the person's own webhook signs in, the notes that went only there too.
+  Future<int> earlierCount({bool fromWebhook = false}) async =>
+    (await _rows('SELECT count(*) AS n ${fromWebhook ? _earlierOrWebhook : _earlier}')).single.read<int>('n');
+
+  /// Queues every earlier note, oldest first, each with its files. With [fromWebhook], the notes that went only to the
+  /// person's own webhook too, with all their files: the webhook took the files, the server never did. A change still
+  /// waiting for such a note goes: the new upload carries its newest words.
+  Future<void> queueEarlier({bool fromWebhook = false}) => transaction(() async {
+    final rows = await _rows('SELECT client_id, body, sent_at ${fromWebhook ? _earlierOrWebhook : _earlier} '
+      'ORDER BY created_at, client_id');
+    for (final row in rows) {
+      final clientId = row.read<String>('client_id');
+      final went = row.read<int?>('sent_at') != null;
+      if (went) {
+        await _run("DELETE FROM outbox WHERE route = '$noteUpdate' AND json_extract(body, '\$.clientId') = ?", [clientId]);
+      }
+      await _queue(jsonDecode(row.read<String>('body')) as Map<String, dynamic>, allFiles: went);
+      await _run('UPDATE notes SET queued = 1 WHERE client_id = ?', [clientId]);
     }
   });
 

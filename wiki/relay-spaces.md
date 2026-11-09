@@ -54,7 +54,7 @@ The phone can also send format v1 itself, straight to one webhook, with no space
 
 Three Workers serve Relay Everything, and each deploy goes in this order, because Cloudflare refuses a binding to a Worker that does not exist:
 
-1. The spaces Worker, [`app/wrangler.spaces.jsonc`](../app/wrangler.spaces.jsonc): the `Space` class, with no web address.
+1. The spaces Worker, [`app/wrangler.spaces.jsonc`](../app/wrangler.spaces.jsonc): the `Space` class, with no web address. Wrangler bundles it alone, with no Vite, so it loads no route code (`api/contract.ts`) and no `import.meta.glob`: Cloudflare refuses a Worker that fails at its start. Put a list that a route and a webhook both need in `apps/relay/store.ts`, not in the route. [`spaces-worker.test.ts`](../app/worker/spaces-worker.test.ts) fails, and names the chain of files, when the spaces Worker loads such code.
 2. The AI connector, [`app/wrangler.relay-mcp.jsonc`](../app/wrangler.relay-mcp.jsonc), which binds `SPACES`.
 3. The shared server, [`app/wrangler.relay.jsonc`](../app/wrangler.relay.jsonc), and the company app, [`app/wrangler.jsonc`](../app/wrangler.jsonc), which both bind `SPACES` and the connector.
 

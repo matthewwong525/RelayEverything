@@ -6,10 +6,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/voice/model.dart';
 import 'package:relay_app/voice/recorder.dart';
 import 'package:relay_app/voice/transcriber.dart';
+import 'package:whisper_cpp_flutter_plus/whisper_cpp_flutter_plus.dart' show WhisperBackend, WhisperConfig;
 
 import 'fakes.dart';
 
 void main() {
+  test('the iPhone simulator loads whisper.cpp on the CPU; a phone keeps the default', () {
+    const simulator = '/Users/me/Library/Developer/CoreSimulator/Devices/23C8/data/Containers/Bundle/Application/0A8D/'
+      'Runner.app/Runner';
+    expect(whisperConfig(executable: simulator).backend, WhisperBackend.cpu);
+    expect(whisperConfig(executable: '/private/var/containers/Bundle/Application/0A8D/Runner.app/Runner').backend,
+      const WhisperConfig().backend);
+  });
+
   group('the words', () {
     test('drop whisper.cpp\'s marks for sounds with no speech', () {
       expect(cleanWords([' [BLANK_AUDIO]']), '');
@@ -164,6 +173,18 @@ void main() {
     tearDown(() async => recorder.cancel());
 
     File fileOf(String clientId) => File('${folder.path}/voice/$clientId.wav');
+
+    test('the sound level goes from 0 at −60 dBFS or less to 1 at 0 dBFS, and only while it records', () async {
+      expect([levelOf(-120), levelOf(-60), levelOf(-30), levelOf(0), levelOf(6), levelOf(double.nan),
+        levelOf(double.negativeInfinity)], [0, 0, 0.5, 1, 1, 0, 0]);
+      expect(recorder.levels, isNull);
+      microphone.heard = [0.2, 0.9];
+      await recorder.start('abc');
+      expect(await recorder.levels!.take(2).toList(), [0.2, 0.9]);
+      final ended = recorder.levels!.toList();
+      await recorder.cancel();
+      expect([await ended, recorder.levels], [isEmpty, isNull]);
+    });
 
     test('records to <support>/voice/<clientId>.wav and keeps a hold of 0.5 s or more', () async {
       expect(await recorder.start('abc'), isTrue);

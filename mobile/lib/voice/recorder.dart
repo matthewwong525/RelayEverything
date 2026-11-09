@@ -17,7 +17,13 @@ abstract class Microphone {
 
   /// Ends and deletes the file.
   Future<void> cancel();
+
+  /// The sound level while it records, from 0 for silence to 1 for loud, about ten times a second.
+  Stream<double> levels();
 }
+
+/// A level from 0 to 1 for [dbfs], the loudness from −60, near silence, to 0, the loudest.
+double levelOf(double dbfs) => dbfs.isNaN ? 0 : ((dbfs + 60) / 60).clamp(0.0, 1.0);
 
 class PhoneMicrophone implements Microphone {
   final _recorder = AudioRecorder();
@@ -34,6 +40,10 @@ class PhoneMicrophone implements Microphone {
 
   @override
   Future<void> cancel() => _recorder.cancel();
+
+  @override
+  Stream<double> levels() =>
+    _recorder.onAmplitudeChanged(const Duration(milliseconds: 100)).map((amplitude) => levelOf(amplitude.current));
 }
 
 /// One finished recording: where it is, from the support folder, and how long.
@@ -72,12 +82,16 @@ class VoiceRecorder {
   String? _clientId;
   DateTime? _startedAt;
   Timer? _cap;
+  StreamController<double>? _levels;
+  StreamSubscription<double>? _heard;
   /// Called with the recording when it reaches [longest], as if the person let go; with null when the microphone did not
   /// stop, and nothing is kept.
   void Function(Recording? recording)? onLongest;
 
   bool get recording => _clientId != null;
   DateTime? get startedAt => _startedAt;
+  /// The sound level while it records, only to draw; it ends when the recording does, and nothing keeps it.
+  Stream<double>? get levels => _levels?.stream;
 
   /// The recording's file, from its [audioPath].
   Future<File> fileOf(String audioPath) async => File('${(await folder()).path}/$audioPath');
@@ -100,6 +114,9 @@ class VoiceRecorder {
     }
     _clientId = clientId;
     _startedAt = startedAt;
+    final levels = _levels = StreamController<double>.broadcast();
+    // With no level from the microphone, the bars stay low and the recording goes on.
+    _heard = microphone.levels().listen(levels.add, onError: (_) {});
     _cap = _timer(longest, () async {
       final Recording? done;
       try {
@@ -156,6 +173,10 @@ class VoiceRecorder {
   void _end() {
     _cap?.cancel();
     _cap = null;
+    unawaited(_heard?.cancel());
+    unawaited(_levels?.close());
+    _heard = null;
+    _levels = null;
     _clientId = null;
     _startedAt = null;
   }

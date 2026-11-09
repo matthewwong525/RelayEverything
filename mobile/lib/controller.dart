@@ -39,6 +39,9 @@ const connectionsKey = 'connections', foldedKey = 'home.folded';
 /// Set once the app asked for motion: a no is final until the person changes it in the phone's settings.
 const motionAskedKey = 'motion.asked';
 
+/// The `state` key set once a first voice note starts, so *New note* stops showing *Hold to talk*.
+const holdTipKey = 'holdTipSeen';
+
 /// After a sync, the names are read again only this long after the last read: they change only on the person's page.
 const _namesEvery = Duration(minutes: 10);
 
@@ -141,6 +144,7 @@ class RelayController extends Relay {
   Connections? _connections;
   DateTime? _namesAt;
   Set<String> _folded = const {};
+  bool _holdTipSeen = false;
   Future<void>? _syncing;
   Future<void>? _pulling;
   bool _again = false;
@@ -168,6 +172,7 @@ class RelayController extends Relay {
   @override WebhookProblem? get webhookProblem => _problem;
   @override Connections? get connections => _connections;
   @override Set<String> get folded => _folded;
+  @override bool get holdTipSeen => _holdTipSeen;
   @override bool get privateWebhookMissing => _settings.sending && _settings.place == SendPlace.server &&
     _settings.privateTo == SendPlace.webhook && _webhook == null;
 
@@ -206,6 +211,7 @@ class RelayController extends Relay {
     await store.remove(_oldTimeline);
     _connections = Connections.decode(await store.get(connectionsKey));
     _folded = {for (final header in jsonDecode(await store.get(foldedKey) ?? '[]') as List) if (header is String) header};
+    _holdTipSeen = await store.get(holdTipKey) != null;
     await _tellNative();
     await _tellShare();
     if (watch && _settings.history) _startHistory();
@@ -1081,6 +1087,7 @@ class RelayController extends Relay {
   @override ModelProblem? get modelProblem => voice?.model.problem;
   @override int get modelBytes => voice?.model.bytes ?? modelSize;
   @override DateTime? get listening => _listening;
+  @override Stream<double>? get level => _listening == null ? null : voice?.recorder.levels;
 
   @override
   void askSpeechModel() => voice?.model.ask();
@@ -1118,6 +1125,14 @@ class RelayController extends Relay {
       _starting = null;
     }
     if (!allowed) return _noMicrophone;
+    if (!_holdTipSeen) {
+      _holdTipSeen = true;
+      try {
+        await store.set(holdTipKey, 'true');
+      } catch (_) {
+        // The voice note records all the same; the tip then shows again at the next open.
+      }
+    }
     // A quick release can end it before this line.
     if (parts.recorder.recording) {
       _listening = parts.recorder.startedAt;

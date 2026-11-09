@@ -12,7 +12,7 @@ appId: com.matthewwong525.relayApp
 # Home has a Voice notes folder too, so wait for a word only Settings shows.
 - extendedWaitUntil:
     visible: "Appearance"
-    timeout: 10000
+    timeout: 30000
 - assertVisible: "System"
 - assertVisible: "Dark"
 - assertVisible: "Voice notes"
@@ -26,7 +26,7 @@ appId: com.matthewwong525.relayApp
 - tapOn: 'Sign in to Relay Everything(.|\n)*'
 - extendedWaitUntil:
     visible: "Sign in to connect"
-    timeout: 10000
+    timeout: 30000
 - assertVisible: "Scan a key"
 - assertVisible: "Send to my own webhook instead"
 - takeScreenshot: sign-in

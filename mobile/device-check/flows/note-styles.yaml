@@ -11,7 +11,7 @@ appId: com.matthewwong525.relayApp
 - tapOn: "New note"
 - extendedWaitUntil:
     visible: "Done"
-    timeout: 10000
+    timeout: 30000
 - inputText: "Shopping"
 - pressKey: Enter
 - inputText: "Milk"
@@ -19,7 +19,7 @@ appId: com.matthewwong525.relayApp
 - tapOn: "Text styles"
 - extendedWaitUntil:
     visible: "Format"
-    timeout: 10000
+    timeout: 30000
 - tapOn: "Heading"
 - assertVisible: "Format"
 - tapOn: "Bold"
@@ -28,10 +28,10 @@ appId: com.matthewwong525.relayApp
 - tapOn: "Close"
 - extendedWaitUntil:
     visible: "Text styles"
-    timeout: 10000
+    timeout: 30000
 - assertNotVisible: "Format"
 - tapOn: "Done"
 - tapOn: 'Back(.|\n)*'
 - extendedWaitUntil:
     visible: '(.|\n)*Shopping(.|\n)*'
-    timeout: 10000
+    timeout: 30000

@@ -14,7 +14,7 @@ appId: com.matthewwong525.relayApp
 - tapOn: "New note"
 - extendedWaitUntil:
     visible: "Done"
-    timeout: 10000
+    timeout: 30000
 - inputText: "Device check note"
 - tapOn: "Done"
 - takeScreenshot: note-reading
@@ -23,7 +23,7 @@ appId: com.matthewwong525.relayApp
 # Flutter joins a row's lines into one label, so match a word inside it, or its start.
 - extendedWaitUntil:
     visible: '(.|\n)*Typed(.|\n)*'
-    timeout: 10000
+    timeout: 30000
 - assertVisible: 'Device check note(.|\n)*'
 - takeScreenshot: new-note
 # Search the phone's notes: a match stays, no match says so, and Cancel brings back New note.

@@ -62,6 +62,7 @@ Non-goals: a separate mic button; a pause button; a waveform kept with the note;
 - **2026-11-09** — Assumed: the simulator is found by the app's own path, which holds `/CoreSimulator/`, not by the `SIMULATOR_DEVICE_NAME` flag, because the second iPhone check crashed in the same Metal load: the flag did not reach the app. One more fix round, then one more iPhone check, because the crash is in the speech model's start, not in the new screen.
 - **2026-11-09** — Assumed: task 4.2 is done on the iPhone check of 3737a3e (`result=works`): the tip, the full screen, a tap that saves and opens the note, and an X that keeps nothing all passed in light mode. The half-second ring was too fast for a picture, and dark mode was not run; the phone tests cover both, so they do not hold the publish.
 - **2026-11-09** — Assumed: took main after #76 (private data only to your own webhook) at the archive step, because it changes `controller.dart` and the phone tests; all 520 phone tests pass, and the iPhone check runs again on the merged commit before the merge.
+- **2026-11-09** — Assumed: the iPhone check of the merged commit b34311f said `broken`, but the app was right: each word the tour waited for was on screen, after its 10-second wait ended, on a simulator about twice as slow as the run before. The tour's short waits go up to 30 seconds, which costs nothing on a fast run because a wait ends when the words show; then the check runs once more.
 
 ## Capabilities
 

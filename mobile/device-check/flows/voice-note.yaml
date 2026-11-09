@@ -23,7 +23,7 @@ appId: com.matthewwong525.relayApp
     optional: true
 - extendedWaitUntil:
     visible: "Tap anywhere to save"
-    timeout: 10000
+    timeout: 30000
 - assertVisible: "Saves by itself at 5:00"
 - assertVisible: "Cancel"
 - takeScreenshot: voice-recording
@@ -31,17 +31,17 @@ appId: com.matthewwong525.relayApp
     point: "50%,50%"
 - extendedWaitUntil:
     notVisible: "Tap anywhere to save"
-    timeout: 10000
+    timeout: 30000
 - assertNotVisible: "Hold to talk"
 - takeScreenshot: voice-saved
 - longPressOn: "New note"
 - extendedWaitUntil:
     visible: "Tap anywhere to save"
-    timeout: 10000
+    timeout: 30000
 # The X's label is Cancel.
 - tapOn: "Cancel"
 - extendedWaitUntil:
     notVisible: "Tap anywhere to save"
-    timeout: 10000
+    timeout: 30000
 - assertVisible: "Home"
 - takeScreenshot: voice-cancelled

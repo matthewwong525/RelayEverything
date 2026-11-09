@@ -179,3 +179,4 @@ None.
 - Check: task 7.2's staging check ran on this computer, not on staging: the made-up day (3 stays, 2 trips) was saved, a resend changed nothing, a changed end changed one row, a bad row got 400, the day summary gave the stays and trips, and only the webhook ticked for Location tried `location.stays`. The AI connector's *places* and *day_summary* were checked by `tools.test.ts` and `api.test.ts` only, not live.
 - **2026-11-09** — Assumed: after main gained private-data-to-own-webhook, the `stays` route joined `privateRoutes`, so stays and trips go where health and points go, the person's own webhook when they pick it; two of its tests now expect `location.stays` there too.
 - **2026-11-09** — Archive checkpoint: archived for publishing, with main merged in.
+- **2026-11-09** — Archive checkpoint: main merged in again (voice note screen, device check page); the iPhone device check of *What to send* passed on `f3e66ef`.

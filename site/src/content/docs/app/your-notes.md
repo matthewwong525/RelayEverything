@@ -118,6 +118,8 @@ Each phone that you sign in on shows all your notes, as in Apple Notes. It gets 
 
 New notes and changes come in when you open the app, when you come back to it, when you pull down the list, and every hour in the background. A note from somewhere else shows where it came from, under its title in the list and at the top of the note.
 
+Notes go first. Each time, the phone sends your notes, then gets the new notes. Only then does it send [health](../health/), [places](../location/), the [calendar](../calendar/) and [photos](../photos/). A note that you write while they send goes before the rest. If a health, place, calendar or photo upload fails, your notes still go and come in. That data waits on the phone and goes on a later sync.
+
 - **Edit anywhere.** Change a note on one phone, and your other phones, your page and your AI get the new words at their next sync. Each of your webhooks gets one [`note.updated`](../../connections/your-database/#noteupdated) message.
 - **Delete anywhere.** Delete a note on one phone, and it goes from your other phones at their next sync, and from your page and your AI: [Delete a note](#delete-a-note). A note open on another phone stays until you leave it, then goes.
 - **The newer change wins.** If two phones change the same note before they sync, the change made later stays on every phone and on your page, even when the older change arrives last.
@@ -187,7 +189,7 @@ The line under the **Home** title gives the sync state, such as *Synced*. Under 
 |---|---|---|
 | **On this phone** | No dot | You are signed out. Your notes stay on this phone, and the app sends nothing. [Connect a phone](../../start/connect-a-phone/) to sign in. |
 | **Synced** | Green, still | Your server has all the notes from this phone. |
-| **Syncing** | Amber, pulses | The phone sends notes now. If the phone is set to reduce motion, the dot stays still. |
+| **Syncing** | Amber, pulses | The phone sends and gets notes now. It shows only for notes: health, places, the calendar and photos can still send after it ends. If the phone is set to reduce motion, the dot stays still. |
 | **2 waiting** | Hollow | Notes made with no signal. They show **Waiting to send** and go on the next sync. |
 | **Offline** | Hollow | The phone can not reach your server. You lose nothing. |
 | **Key refused** | Red | The server refused this phone's key. [Connect the phone](../../start/connect-a-phone/) with a new key. |

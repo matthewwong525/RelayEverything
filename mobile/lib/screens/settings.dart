@@ -85,7 +85,7 @@ class _AccountRow extends StatelessWidget {
           trailing: Icon(CupertinoIcons.chevron_forward, color: brand.muted),
           onTap: () => state == AccountState.signedOut
             ? choosePlace(context, relay, scanner)
-            : openPage(context, AccountPage(relay: relay, opener: opener)),
+            : openPage(context, AccountPage(relay: relay, opener: opener, scanner: scanner)),
         ),
       ),
     );

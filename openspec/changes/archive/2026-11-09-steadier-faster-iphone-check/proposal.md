@@ -1,6 +1,6 @@
 # Proposal: A steadier, faster iPhone check
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** fix-iphone-check
 **Open questions:** none
 
@@ -10,7 +10,7 @@ The iPhone check often fails when the app is fine, and a real problem takes abou
 
 ## What Changes
 
-- **A failed tour step runs once more before it counts.** The tour runs as now. Each step that failed then runs again, alone, after the iPhone's tap driver restarts. A step that passes the second time counts as passed, and the report marks it *passed on the second try*, so a step that does this often gets noticed. A step that fails twice is broken: the check ends there, and Claude does not start, so a sure failure takes about 15 minutes, not 30. Each step's picture shows the screen where that step stopped, not the last screen of the run.
+- **A failed tour step runs once more before it counts.** The tour runs as now. Each step that failed then runs again, alone, after the iPhone's tap driver restarts. A step that passes the second time counts as passed, and the report marks it *passed on the second try*, so a step that does this often gets noticed. A step that fails twice is broken: the check ends there, and Claude does not start, so a sure failure shows at about 25 minutes, with no wait for Claude. Each step's picture shows the screen where that step stopped, not the last screen of the run.
   ```text
   Before                          After
   tour: timeline  failed          tour: timeline  failed
@@ -25,19 +25,19 @@ The iPhone check often fails when the app is fine, and a real problem takes abou
     0 Flutter  ... MTLDevice newLibrary
     1 sherpa   ... loadModel
   ```
-- **The tour's result comes back first.** As soon as the tour ends, at about 15 minutes, the pull request gets a short note and `/verify` tells you: the tour passed and Claude is checking now, or the tour is broken and why. The full report follows as today.
+- **The tour's result comes back first.** As soon as the tour ends, at about 25 minutes, the pull request gets a short note and `/verify` tells you: the tour passed and Claude is checking now, or the tour is broken and why. The full report follows as today.
   ```mermaid
   sequenceDiagram
     participant V as "/verify"
     participant M as Mac on GitHub
     participant P as Pull request
     V->>M: start the check
-    M-->>P: tour: passed (~15 min)
+    M-->>P: tour: passed (~25 min)
     M-->>V: tour: passed
-    M-->>P: full report (~25-30 min)
+    M-->>P: full report (~30-45 min)
     M-->>V: full report
   ```
-- **A change's main path runs in the tour, with no AI.** A check can name extra tour steps from `mobile/device-check/flows/`, such as the voice note's hold, tap to save and cancel. They run with the fixed tour, the same way each time, with a retry too. A change to the phone app writes such a step for its main path when the simulator can show it. Claude then only looks at what a fixed step can't. The PR #75 crash would have shown at about 15 minutes, with no AI.
+- **A change's main path runs in the tour, with no AI.** A check can name extra tour steps from `mobile/device-check/flows/`, such as the voice note's hold, tap to save and cancel. They run with the fixed tour, the same way each time, with a retry too. A change to the phone app writes such a step for its main path when the simulator can show it. Claude then only looks at what a fixed step can't. The PR #75 crash would have shown at about 25 minutes, with no AI.
   ```text
   every check and release:
     timeline  new-note  note-styles  settings
@@ -45,7 +45,7 @@ The iPhone check often fails when the app is fine, and a real problem takes abou
     + voice-note
   ```
 - **A re-check tries only what did not work.** After a fix, `/verify` gives Claude only the scenarios that were broken or not checked in the last check of the same branch. Each one that passed is listed as *passed in the last check*, with that check's link. The tour still runs in full. This saves about 5 to 10 minutes for each re-check.
-- **The app builds faster.** The check keeps the iPhone build's slow parts between runs, so a build does not start from nothing. This stays only if three runs show it saves at least 2 minutes. Else it is taken out again.
+- **No build cache.** A cache of the iPhone build's slow parts was tried on three checks. It saved about 1 minute, less than the 2 minutes it had to save, so it was taken out again.
 
 Non-goals: an Android device check; a check that starts on each save; a change to the release gate's steps (it gets the retry, and a step that fails twice still stops a release).
 
@@ -75,6 +75,8 @@ Non-goals: an Android device check; a check that starts on each save; a change t
 - **2026-11-09** — Assumed: a re-check carries forward the scenarios an earlier re-check skipped as passed, and reads the newest check that reached Claude, because a re-check's own report holds only what it tried, and the plan's goal is less Claude time for each re-check.
 - **2026-11-09** — Built inside /ship; the second look found 2 problems (a step's first-try picture lost when its second try left none, and a re-check that sent earlier passes again from the second re-check on), both fixed. Saved for the live checks (tasks 7.2 and 7.3).
 - **2026-11-09** — iPhone check 1 on d8d59e8 (run 42571939953) with `--flows voice-note`: the early result worked (`tour=broken` at about 15 min, before the end), the build cache saved, the 4 fixed steps passed first try, and Claude did not start. `voice-note` failed both tries while its pictures show *Tap anywhere to save*: Flutter joins the recording screen into one label (`Listening\n0:34\nTap anywhere to save\n…`), so #75's flow, never passed before, now matches inside the label and starts again from Home before the cancel.
+- **2026-11-09** — iPhone checks 2 and 3 on 8d7b96a (runs 42575227411 and 42578725875), both `--flows voice-note --recheck`: each gave *works*, with all 5 tour steps passed on the first try, and the tour note on the pull request about 30 s after the tour ended. Check 2 had no earlier report (`recheck=none`); check 3 skipped *Settings shows Appearance* and listed it under *Passed in the last check*. Build times: check 1 had no cache, 687 s build and 23 s save; check 2, 147 s restore and 526 s build; check 3, 194 s restore and 371 s build. That saves about 70 s on average, under 2 minutes, so the cache is out, with its clean rebuild and the `continue-on-error` on its save. The tour note comes at about 25 to 29 minutes, not 15: each Maestro step takes 1 to 4 minutes on GitHub's Mac, so the 5-step tour takes about 12 minutes.
+- **2026-11-09** — Archive checkpoint inside /ship: tasks 7.2 and 7.3 passed on live checks 2 and 3; the build cache is out; the wiki's tour page adds the rule for a line in the middle of a Flutter label.
 
 ## Capabilities
 
@@ -87,6 +89,6 @@ Non-goals: an Android device check; a check that starts on each save; a change t
 
 - `mobile/device-check/tour.sh`, `tour-json.mjs` (+ test): retry failed flows one by one after a driver restart, `tries` in `tour.json`, extra flows, each flow's own failure picture.
 - New `mobile/device-check/crash.mjs` (+ test): summary from `.ips` crash reports; a watcher in `iphone-open.sh` that copies new reports to `out/crashes/` as they appear; `finish.sh` and `brief.md` use them.
-- `.github/workflows/mobile-device-check.yml`: `flows` input, a tour-only artifact `device-check-tour`, a new `tour-report` job, end before Claude on a failed step, `MAESTRO_DRIVER_STARTUP_TIMEOUT`, cache of Pods and the build folder.
+- `.github/workflows/mobile-device-check.yml`: `flows` input, a tour-only artifact `device-check-tour`, a new `tour-report` job, end before Claude on a failed step, `MAESTRO_DRIVER_STARTUP_TIMEOUT`.
 - `scripts/device-check.mjs` (+ test): `--flows`, `--recheck`, print `tour=` early.
 - `.agents/rules/mobile.md`, `wiki/development/device-check.md`, and the `/apply` rule for a change's tour step.

@@ -37,5 +37,5 @@
 ## 7. Checks
 
 - [x] 7.1 Run `node --test scripts/device-check.test.mjs mobile/device-check/*.test.mjs`, the workflow validator and `node scripts/public-check.mjs`; fix what fails.
-- [ ] 7.2 `/save`, then start a check on the saved commit with `--flows voice-note`: the pull request gets the tour note at about 15 min, the voice-note step runs in the tour, and the full report follows. Log the times and the build time.
-- [ ] 7.3 Start 2 more checks, the second with `--recheck`: compare the 3 build times (keep the cache only at 2 min saved or more), and confirm the re-check sends only what was not *works*. Log the results in the Decision log.
+- [x] 7.2 `/save`, then start a check on the saved commit with `--flows voice-note`: the pull request gets the tour note at about 15 min, the voice-note step runs in the tour, and the full report follows. Log the times and the build time.
+- [x] 7.3 Start 2 more checks, the second with `--recheck`: compare the 3 build times (keep the cache only at 2 min saved or more), and confirm the re-check sends only what was not *works*. Log the results in the Decision log.

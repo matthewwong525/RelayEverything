@@ -59,7 +59,7 @@ The rule in `.agents/rules/mobile.md` says: a phone change writes a flow for its
 
 With no earlier check, or a report it can't read, every scenario goes, and the script prints `recheck=none` with the reason. The scenarios file format is already `Scenario: <name>` blocks with WHEN and THEN (the rule writes it); the rule says so.
 
-### Build cache, kept only if it pays
+### Build cache, kept only if it pays (taken out: it saved about 1 minute)
 
 `actions/cache` for `mobile/ios/Pods`, `~/Library/Caches/CocoaPods` and `mobile/build/ios`, keyed by the runner image version, the Flutter version, `pubspec.lock` and `Podfile.lock`, with a restore key that drops the lock files. If the build fails with a restored cache, delete `mobile/build/ios` and build once more, so a bad cache never fails a check. Measure the *Build for the simulator* time on 3 runs against today's 7.5 to 9.5 min; keep the cache only if it saves at least 2 min, else take it out in the same change and log the times.
 

@@ -104,7 +104,6 @@ jobs:
           java-version: "17"
 
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        id: flutter
         with:
           flutter-version-file: mobile/pubspec.yaml
           cache: true
@@ -125,47 +124,16 @@ jobs:
         id: boot
         run: bash mobile/device-check/iphone-boot.sh
 
-      # The app uses Swift packages, not CocoaPods: Xcode keeps them and its module caches in DerivedData. Kept only
-      # while it saves 2 minutes a build: wiki/development/device-check.md.
-      - name: Build cache key
-        id: cache-key
-        run: echo "key=ios-build-$ImageOS-$ImageVersion-flutter-${{ steps.flutter.outputs.VERSION }}" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        id: cache
-        with:
-          path: |
-            mobile/build/ios
-            ~/Library/Developer/Xcode/DerivedData
-          key: ${{ steps.cache-key.outputs.key }}-${{ hashFiles('mobile/pubspec.lock') }}
-          restore-keys: ${{ steps.cache-key.outputs.key }}-
-
-      # A build that fails on a restored cache builds once more from nothing, so a bad cache never fails a check.
       - name: Build for the simulator
         id: build
         working-directory: mobile
-        env:
-          CACHED: ${{ steps.cache.outputs.cache-matched-key != '' }}
         run: |
           set -o pipefail
-          build() { flutter pub get 2>&1 | tee -a "$OUT/build.log" && flutter build ios --simulator --debug 2>&1 | tee -a "$OUT/build.log"; }
-          start=$(date +%s)
-          if build || { [ "$CACHED" = true ] && echo "The build failed on the cache: building from nothing." | tee -a "$OUT/build.log" \
-            && rm -rf build/ios ~/Library/Developer/Xcode/DerivedData && build; }; then
+          if flutter pub get 2>&1 | tee "$OUT/build.log" && flutter build ios --simulator --debug 2>&1 | tee -a "$OUT/build.log"; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
           else
             bash device-check/broken.sh "The app does not build for the simulator." "$OUT/build.log"
           fi
-          echo "Build time: $(( $(date +%s) - start )) s, cache: $CACHED." | tee -a "$OUT/build.log" >> "$GITHUB_STEP_SUMMARY"
-
-      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        if: steps.build.outputs.ok == 'true' && steps.cache.outputs.cache-hit != 'true'
-        continue-on-error: true
-        with:
-          path: |
-            mobile/build/ios
-            ~/Library/Developer/Xcode/DerivedData
-          key: ${{ steps.cache-key.outputs.key }}-${{ hashFiles('mobile/pubspec.lock') }}
 
       - name: Open the app on an iPhone
         id: open

@@ -30,8 +30,8 @@ function DeleteAll({ onDeleted }: { onDeleted: (error: string) => void }) {
     <AlertDialogContent>
       <AlertDialogHeader>
         <AlertDialogTitle>Delete all photos?</AlertDialogTitle>
-        <AlertDialogDescription>This deletes every photo your phones sent, and your AI can't see them any more. Ring recordings, notes,
-          health and places stay. You can't undo it.</AlertDialogDescription>
+        <AlertDialogDescription>This deletes every photo your phones sent, and your AI can't see them any more. Recordings, notes, health
+          and places stay. You can't undo it.</AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
         <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>

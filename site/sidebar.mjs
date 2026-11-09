@@ -18,6 +18,5 @@ export const sidebar = [
   ] },
   { label: 'Server API', items: ['api/keys', 'api/reference', 'api/recordings', 'api/files'] },
   { label: 'Web API', items: ['api/connect-a-service', 'api/v1-reference'] },
-  { label: 'The ring', items: ['ring/how-it-works', 'ring/parts-and-battery', 'ring/board', 'ring/models'] },
   { label: 'About', items: ['privacy'] },
 ];

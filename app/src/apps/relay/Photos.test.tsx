@@ -69,7 +69,7 @@ it("deletes all photos after a confirm that says it can't be undone, and keeps t
   await open();
   await press("Delete all photos", card());
   const confirm = within(screen.getByRole("alertdialog", { name: "Delete all photos?" }));
-  expect(confirm.getByText(/Ring recordings, notes, health and places stay\. You can't undo it\./)).toBeTruthy();
+  expect(confirm.getByText(/Recordings, notes, health and places stay\. You can't undo it\./)).toBeTruthy();
   await press("Cancel", confirm);
   expect(calls.filter(call => call.input)).toEqual([]);
 

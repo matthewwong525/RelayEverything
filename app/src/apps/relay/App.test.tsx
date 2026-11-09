@@ -103,11 +103,12 @@ it("shows today's summary, every note with its place and recording, and the plac
   expect(within(places).queryByText(/walking|1\.4 km/i)).toBeNull();
 
   const notes = await screen.findByRole("region", { name: "Notes" });
-  const ring = within(notes).getByLabelText("Ring note");
-  expect(within(ring).getByText("No words, only the recording.")).toBeTruthy();
-  expect(within(ring).getByText(/43\.6532, -79\.3832 · iPad/)).toBeTruthy();
-  expect(within(ring).getByLabelText("The recording").getAttribute("src")).toBe("/apps/relay/api/audio?id=00000000-0000-4000-8000-000000000001");
-  const typed = within(notes).getByLabelText("Typed note");
+  // An older recorded note shows as a plain note, with no label for where it came from.
+  const [recorded, typed] = within(notes).getAllByLabelText("Note");
+  expect(within(recorded).getByText("No words, only the recording.")).toBeTruthy();
+  expect(within(recorded).getByText(/43\.6532, -79\.3832 · iPad/)).toBeTruthy();
+  expect(within(recorded).getByLabelText("The recording").getAttribute("src")).toBe("/apps/relay/api/audio?id=00000000-0000-4000-8000-000000000001");
+  expect(within(notes).queryByText(/^(Ring|Typed)$/)).toBeNull();
   expect(within(typed).getByText("Note 00000000-0000-4000-8000-000000000002")).toBeTruthy();
   expect(within(typed).getByText(/Queen St W · Android phone/)).toBeTruthy();
   expect(within(typed).queryByLabelText("The recording")).toBeNull();
@@ -161,7 +162,7 @@ it("says when the summary or the notes fail, and tries each again", async () => 
     .toBeTruthy();
   expect(screen.getByText("No title")).toBeTruthy();
   fireEvent.click(notes);
-  expect(await screen.findByLabelText("Ring note")).toBeTruthy();
+  expect(await screen.findAllByLabelText("Note")).toHaveLength(2);
 });
 
 it("drops an answer that comes after the page closed", async () => {

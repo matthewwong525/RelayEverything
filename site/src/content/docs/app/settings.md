@@ -27,7 +27,7 @@ Signed in, tap the row to open the **Account** page:
 | **AI apps** | The names of the AI apps you connected, such as *Claude*. Tap it to add or remove one on your Relay Everything page. [Connect your AI](../../connections/connect-your-ai/) |
 | **Webhooks** | The names of the webhooks you added, such as *My database*. Tap it to add or remove one on your Relay Everything page. [Your own database](../../connections/your-database/) |
 | **Health, places, calendar and photos** | Where they go: **Relay Everything** (the default), or **Only my own webhook**. [Below](#health-places-calendar-and-photos-only-to-your-webhook) |
-| **Open your Relay Everything page** | Opens `<your-relay-server>/apps/relay/` in the phone's browser, with your ring notes, their recordings, and the notes from all your devices. [Notes](../your-notes/#the-gear-and-your-relay-everything-page) |
+| **Open your Relay Everything page** | Opens `<your-relay-server>/apps/relay/` in the phone's browser, with the notes from all your devices, and their recordings. [Notes](../your-notes/#the-gear-and-your-relay-everything-page) |
 | **Server** | The server this phone sends to. Change it to try a preview. [Connect a phone](../../start/connect-a-phone/#try-a-preview) |
 | **Sign out** | In red. Asks first, then removes this phone's key and stops sending. Your notes from this phone stay here. Notes from your other devices leave this phone. You sign in again to send again. [Connect a phone](../../start/connect-a-phone/#sign-out) |
 

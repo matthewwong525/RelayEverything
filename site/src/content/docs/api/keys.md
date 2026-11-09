@@ -25,7 +25,7 @@ A device key reaches only the space of the person who made it. It adds data ther
 - `GET key`, which answers the key's own device name and no data, so a device can check its key
 - For a phone's key only:
   - `GET notes`, which answers the notes added or changed since the phone's last sync, from every device and way in, so each signed-in phone shows all your notes
-  - `GET attachment` and `GET audio`, which open a note's file and a ring note's recording, when you tap one in the app
+  - `GET attachment` and `GET audio`, which open a note's file and an older recorded note's recording, when you tap one in the app
   - `PATCH notes`, which changes the words of any note in your space, by its `id`, or of the phone's own note, by its `clientId`. It adds new files only to a note the same phone sent. When the note changed later on another phone, the server keeps the newer words and answers `409`.
   - `GET connections`, which answers your account's email and the names of your AI apps and webhooks, and no address, secret or data, for the Account row and the **Account** page in the app's Settings
 

@@ -19,4 +19,4 @@
 ## 4. Checks
 
 - [x] 4.1 Run `flutter analyze` and `flutter test` in `mobile/`, and confirm both are clean.
-- [ ] 4.2 Run `/save`, and confirm CI's phone checks pass and the iPhone device check shows the webhook Account page with *Sign in to Relay Everything*.
+- [x] 4.2 Run `/save`, and confirm CI's phone checks pass and the iPhone device check shows the webhook Account page with *Sign in to Relay Everything*.

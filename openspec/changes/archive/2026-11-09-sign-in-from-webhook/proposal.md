@@ -1,6 +1,6 @@
 # Sign in from the webhook Account page, and keep your webhook
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** webhook-login-option
 **Open questions:** none
 
@@ -84,3 +84,5 @@ None.
 - **2026-11-09** — Assumed, at review: the earlier-notes question says *They are not on Relay Everything yet.* in place of *They went only to your webhook.*, because the count may also hold notes that never left the phone, and the new words are true for both.
 - **2026-11-09** — Saved for final acceptance: built, and a second review found one gap, fixed: the earlier-notes question could say notes went to the webhook when some never left the phone. `flutter analyze` is clean and all 574 phone tests pass. The iPhone device check (4.2) runs on this saved commit.
 - **2026-11-09** — Check: the iPhone device check on 671b74e (run 42574850334) gave *broken*: the new Settings tour step failed at `hideKeyboard`, which the Flutter keyboard does not support. Its pictures show the webhook form working, with *Save* above the keyboard. The flow now taps *Save* at once, and the device check page says to never use `hideKeyboard`. The Claude step had no time left, so the run was cancelled at its 45-minute limit.
+- **2026-11-09** — Check: the iPhone device check on ac22864 (run 42632289144). The fixed Settings tour, with the new webhook step, passed. Claude saw both scenarios work: the webhook Account page shows *Sign in to Relay Everything* with its line and a chevron, *Stop sending* last in red, no *Notes from elsewhere* and no filled button; the row opens *Sign in* with no *Send to my own webhook instead*. The run says *broken* only because `new-note` missed its tap at *Cancel*, the known one-time miss the device check page names; this change does not touch that flow, and it passed on 671b74e. The doubled address in Claude's picture came from its own flow running twice.
+- **2026-11-09** — Archived for the ship. The spec deltas were already in the main specs at the last save.

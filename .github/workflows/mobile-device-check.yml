@@ -1,4 +1,5 @@
 # The iPhone device check: build, open, the fixed tour, then Claude tries the change; a second Mac runs the Swift tests.
+# Job tour-report posts the tour's result on the pull request as soon as it is known.
 # Starts only by hand or by the "check on iPhone" label: wiki/development/device-check.md. A release calls it with
 # tour_only: the tour and the Swift tests alone, as a gate, with no Claude.
 name: Mobile device check
@@ -34,6 +35,14 @@ on:
         required: false
         type: string
         default: claude-sonnet-5-5
+      flows:
+        description: Extra tour steps from mobile/device-check/flows/, by name, split by spaces, such as voice-note.
+        required: false
+        type: string
+      passed_before:
+        description: The last check's link, then one scenario name per line that passed there and is not tried again.
+        required: false
+        type: string
   pull_request:
     types: [labeled]
 
@@ -59,6 +68,8 @@ jobs:
       OUT: ${{ github.workspace }}/out
       EXPECTED_SHA: ${{ inputs.sha || github.event.pull_request.head.sha }}
       CLAUDE_MAX_TURNS: 80
+      # Maestro's iPhone driver once took longer than its 120 s default to start (run 42494210887).
+      MAESTRO_DRIVER_STARTUP_TIMEOUT: "180000"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -66,16 +77,26 @@ jobs:
           persist-credentials: false
 
       - name: Check the commit
+        env:
+          FLOWS: ${{ inputs.flows }}
         run: |
           mkdir -p "$OUT"
           head=$(git rev-parse HEAD)
           echo "$head" > "$OUT/commit.txt"
-          if [ "$head" != "$EXPECTED_SHA" ]; then
+          stop() {
             echo could-not-check > "$OUT/verdict.txt"
-            echo "The branch is at $head, not at the saved commit $EXPECTED_SHA. Save again, then start the check." > "$OUT/reason.txt"
-            echo "::error::$(cat "$OUT/reason.txt")"
+            echo "$1" > "$OUT/reason.txt"
+            echo "::error::$1"
             exit 1
+          }
+          if [ "$head" != "$EXPECTED_SHA" ]; then
+            stop "The branch is at $head, not at the saved commit $EXPECTED_SHA. Save again, then start the check."
           fi
+          for flow in $FLOWS; do
+            if ! [[ "$flow" =~ ^[a-z0-9-]+$ ]] || [ ! -f "mobile/device-check/flows/$flow.yaml" ]; then
+              stop "The tour step \"$flow\" is not in mobile/device-check/flows/ at this commit."
+            fi
+          done
 
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
@@ -83,6 +104,7 @@ jobs:
           java-version: "17"
 
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        id: flutter
         with:
           flutter-version-file: mobile/pubspec.yaml
           cache: true
@@ -103,16 +125,47 @@ jobs:
         id: boot
         run: bash mobile/device-check/iphone-boot.sh
 
+      # The app uses Swift packages, not CocoaPods: Xcode keeps them and its module caches in DerivedData. Kept only
+      # while it saves 2 minutes a build: wiki/development/device-check.md.
+      - name: Build cache key
+        id: cache-key
+        run: echo "key=ios-build-$ImageOS-$ImageVersion-flutter-${{ steps.flutter.outputs.VERSION }}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        id: cache
+        with:
+          path: |
+            mobile/build/ios
+            ~/Library/Developer/Xcode/DerivedData
+          key: ${{ steps.cache-key.outputs.key }}-${{ hashFiles('mobile/pubspec.lock') }}
+          restore-keys: ${{ steps.cache-key.outputs.key }}-
+
+      # A build that fails on a restored cache builds once more from nothing, so a bad cache never fails a check.
       - name: Build for the simulator
         id: build
         working-directory: mobile
+        env:
+          CACHED: ${{ steps.cache.outputs.cache-matched-key != '' }}
         run: |
           set -o pipefail
-          if flutter pub get 2>&1 | tee "$OUT/build.log" && flutter build ios --simulator --debug 2>&1 | tee -a "$OUT/build.log"; then
+          build() { flutter pub get 2>&1 | tee -a "$OUT/build.log" && flutter build ios --simulator --debug 2>&1 | tee -a "$OUT/build.log"; }
+          start=$(date +%s)
+          if build || { [ "$CACHED" = true ] && echo "The build failed on the cache: building from nothing." | tee -a "$OUT/build.log" \
+            && rm -rf build/ios ~/Library/Developer/Xcode/DerivedData && build; }; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
           else
             bash device-check/broken.sh "The app does not build for the simulator." "$OUT/build.log"
           fi
+          echo "Build time: $(( $(date +%s) - start )) s, cache: $CACHED." | tee -a "$OUT/build.log" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        if: steps.build.outputs.ok == 'true' && steps.cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        with:
+          path: |
+            mobile/build/ios
+            ~/Library/Developer/Xcode/DerivedData
+          key: ${{ steps.cache-key.outputs.key }}-${{ hashFiles('mobile/pubspec.lock') }}
 
       - name: Open the app on an iPhone
         id: open
@@ -122,7 +175,23 @@ jobs:
       - name: Fixed tour
         id: tour
         if: steps.open.outputs.ok == 'true'
+        env:
+          # A release's tour runs the fixed steps alone.
+          EXTRA_FLOWS: ${{ !inputs.tour_only && inputs.flows || '' }}
         run: bash mobile/device-check/tour.sh
+
+      # Job tour-report reads this while the run goes on, so the pull request learns the tour's result early.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always() && steps.tour.outcome != 'skipped'
+        with:
+          name: device-check-tour
+          path: |
+            out/tour.json
+            out/tour/
+            out/reason.txt
+            out/crash.txt
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Tour only
         if: inputs.tour_only
@@ -181,6 +250,7 @@ jobs:
       - name: Stop the video
         if: always()
         run: |
+          [ -f "$RUNNER_TEMP/crashes.pid" ] && { kill "$(cat "$RUNNER_TEMP/crashes.pid")" 2>/dev/null || true; }
           [ -f "$RUNNER_TEMP/video.pid" ] || exit 0
           pid=$(cat "$RUNNER_TEMP/video.pid")
           kill -INT "$pid" 2>/dev/null || true
@@ -188,6 +258,8 @@ jobs:
 
       - name: Report
         if: always()
+        env:
+          PASSED_BEFORE: ${{ inputs.passed_before }}
         run: bash mobile/device-check/finish.sh
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -281,6 +353,70 @@ jobs:
           path: out/
           if-no-files-found: warn
           retention-days: 14
+
+  # Posts the tour's result on the pull request as soon as job iphone uploads device-check-tour, about 15 minutes in,
+  # while Claude still works. It checks out no code and stops with no note when job iphone ends with no tour.
+  tour-report:
+    if: >-
+      ${{ !inputs.tour_only && (inputs.pr || github.event.pull_request.number) && (github.event_name == 'workflow_dispatch'
+      || (github.event.label.name == 'check on iPhone' && github.event.pull_request.head.repo.full_name == github.repository)) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      pull-requests: write
+    concurrency:
+      group: device-check-tour-${{ github.head_ref || github.ref_name }}
+      cancel-in-progress: true
+    steps:
+      - name: Wait for the tour
+        id: wait
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: repos/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          for _ in $(seq 80); do
+            id=$(gh api "$RUN/artifacts" --jq '.artifacts[] | select(.name == "device-check-tour") | .id' 2>/dev/null | head -n 1 || true)
+            if [ -n "$id" ]; then
+              gh api "repos/${{ github.repository }}/actions/artifacts/$id/zip" > tour.zip && unzip -q -o tour.zip -d tour
+              echo "found=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            state=$(gh api "$RUN/jobs" --jq '.jobs[] | select(.name == "iphone") | .status' 2>/dev/null || true)
+            # One more look after the Mac ends: its upload and its end can land in the same 30 s.
+            if [ "$state" = completed ]; then
+              if [ -n "${last:-}" ]; then echo "Job iphone ended with no tour."; exit 0; fi
+              last=true
+            fi
+            sleep 30
+          done
+          echo "No tour after 40 minutes."
+
+      - name: Post the tour's result
+        if: steps.wait.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ inputs.pr || github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if ! [[ "$PR" =~ ^[0-9]+$ ]]; then echo "::error::pr must be a pull request number."; exit 1; fi
+          cd tour
+          failed=$(jq -r '[.[] | select(.passed | not) | .flow] | join(", ")' tour.json 2>/dev/null)
+          second=$(jq -r '[.[] | select(.passed and .tries == 2) | .flow] | join(", ")' tour.json 2>/dev/null)
+          {
+            if [ -s tour.json ] && [ -z "$failed" ] && [ ! -s crash.txt ]; then
+              echo "**iPhone check: the tour passed** ($(jq length tour.json) steps). Claude is checking the change now."
+              if [ -n "$second" ]; then echo; echo "Passed on the second try: $second."; fi
+            else
+              echo "**iPhone check: broken** at the tour. Claude does not start."
+              echo; head -c 2000 reason.txt 2>/dev/null || echo "The tour did not finish."
+              if [ -s crash.txt ]; then echo; echo '```text'; head -c 4000 crash.txt; echo '```'; fi
+            fi
+            echo
+            echo "The full report follows. Pictures: [the run]($RUN_URL), file \`device-check-tour\`."
+          } > comment.md
+          gh pr comment "$PR" --body-file comment.md
 
   # Posts the report on the pull request, except for a check a newer one stopped. It checks out no branch code, so the
   # write token never shares a machine with it: the same split as deploy.yml.

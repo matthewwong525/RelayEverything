@@ -1,0 +1,135 @@
+{"app_name": "Runner", "timestamp": "2026-11-09 00:22:31.00 +0000", "app_version": "1.0.0", "build_version": "1", "bundleID": "com.matthewwong525.relayApp", "bug_type": "309", "os_version": "macOS 26.7.2 (25G332)", "name": "Runner"}
+{
+  "procName": "Runner",
+  "cpuType": "ARM-64",
+  "osVersion": {
+    "train": "macOS 26.7.2",
+    "build": "25G332",
+    "releaseType": "User"
+  },
+  "exception": {
+    "codes": "0x0000000000000001, 0x00000001800f69ac",
+    "rawCodes": [
+      1,
+      6443461036
+    ],
+    "type": "EXC_BREAKPOINT",
+    "signal": "SIGTRAP"
+  },
+  "termination": {
+    "flags": 0,
+    "code": 5,
+    "namespace": "SIGNAL",
+    "indicator": "Trace/BPT trap: 5",
+    "byProc": "exc handler",
+    "byPid": 70360
+  },
+  "faultingThread": 1,
+  "threads": [
+    {
+      "id": 1,
+      "frames": [
+        {
+          "imageOffset": 1000,
+          "symbol": "mach_msg2_trap",
+          "imageIndex": 3
+        }
+      ]
+    },
+    {
+      "triggered": true,
+      "id": 2,
+      "name": "DartWorker",
+      "frames": [
+        {
+          "imageOffset": 223660,
+          "symbol": "_xpc_api_misuse",
+          "symbolLocation": 80,
+          "imageIndex": 3
+        },
+        {
+          "imageOffset": 219524,
+          "symbol": "_xpc_shmem_create_with_prot.cold.1",
+          "symbolLocation": 24,
+          "imageIndex": 3
+        },
+        {
+          "imageOffset": 113088,
+          "symbol": "_xpc_shmem_create_with_prot",
+          "symbolLocation": 280,
+          "imageIndex": 3
+        },
+        {
+          "imageOffset": 15792,
+          "symbol": "-[MTLSimDevice newBufferWithLength:options:pointer:copyBytes:deallocator:]",
+          "symbolLocation": 260,
+          "imageIndex": 1
+        },
+        {
+          "imageOffset": 3983576,
+          "symbol": "ggml_metal_buffer_set_tensor",
+          "symbolLocation": 148,
+          "imageIndex": 0
+        },
+        {
+          "imageOffset": 2725348,
+          "symbol": "whisper_init_with_params_no_state",
+          "symbolLocation": 7768,
+          "imageIndex": 0
+        },
+        {
+          "imageOffset": 2717336,
+          "symbol": "whisper_init_from_file_with_params_no_state",
+          "symbolLocation": 380,
+          "imageIndex": 0
+        },
+        {
+          "imageOffset": 2726868,
+          "symbol": "whisper_init_from_file_with_params",
+          "symbolLocation": 44,
+          "imageIndex": 0
+        },
+        {
+          "imageOffset": 2311352,
+          "sourceLine": 69,
+          "sourceFile": "whisper_flutter.cpp",
+          "symbol": "wf_context_create",
+          "imageIndex": 0,
+          "symbolLocation": 312
+        },
+        {
+          "imageOffset": 4654661736,
+          "imageIndex": 2
+        },
+        {
+          "imageOffset": 5089227124,
+          "imageIndex": 2
+        },
+        {
+          "imageOffset": 5089205456,
+          "imageIndex": 2
+        }
+      ]
+    }
+  ],
+  "usedImages": [
+    {
+      "source": "P",
+      "arch": "arm64",
+      "name": "Runner.debug.dylib"
+    },
+    {
+      "source": "P",
+      "arch": "arm64",
+      "name": "MTLSimDriver"
+    },
+    {
+      "source": "A"
+    },
+    {
+      "source": "P",
+      "arch": "arm64",
+      "name": "libxpc.dylib"
+    }
+  ]
+}

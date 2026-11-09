@@ -37,4 +37,4 @@
 ## 7. Checks
 
 - [x] 7.1 Run the app tests, `flutter test` and `flutter analyze` in `mobile/`, `node scripts/product-name.test.mjs` and `node scripts/public-check.mjs`
-- [ ] 7.2 `/save`, then on staging: send a made-up day of stays and trips with a phone key, and see the page's *Places today* list show the stays, the AI's *places* and *day_summary* give the stays and trips, and a webhook ticked for Location get `location.stays`; turn the key off
+- [x] 7.2 `/save`, then on staging: send a made-up day of stays and trips with a phone key, and see the page's *Places today* list show the stays, the AI's *places* and *day_summary* give the stays and trips, and a webhook ticked for Location get `location.stays`; turn the key off

@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · places-timeline</title>
+<title>Review · 2026-11-09-places-timeline</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="places-timeline" data-own-back>
+<body data-change="2026-11-09-places-timeline" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>places-timeline</h1>
+  <h1>2026-11-09-places-timeline</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -509,6 +509,10 @@
 <li class="decision card" id="decision-38" data-note="decision-38" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-09</p>Assumed: with sending on, <i>Location history</i> off or <i>Only points</i> picked queues the open stay closed, its end the later of its last point and the end already sent, before the phone drops it; and the server reads a stay as ongoing only while its <code>end_at</code> or <code>updated_at</code> is within 6 hours, else as ended at <code>end_at</code>, because otherwise a stay stays ongoing forever when the phone stops sending it.</li>
 <li class="decision card" id="decision-39" data-note="decision-39" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-09</p>Assumed: each round, the phone sends the open stay again when its end moved on (its newest point, or the round's time for a still stay with no new point and no sure move), and not when nothing moved, because an ongoing stay showed its 5-minute end as its real end; a ticked webhook gets each change once.</li>
 <li class="decision card" id="decision-40" data-note="decision-40" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-09</p>Checkpoint: built and reviewed twice (nine findings fixed); the local checks pass. Left: the iPhone and Android builds in CI, and the staging check (7.2).</li>
+<li class="decision card" id="decision-41" data-note="decision-41" tabindex="0"><p class="meta"><span class="tag asked">asked</span>2026-11-09</p>Asked whether to publish when the staging check could not run (staging sign-in needs Matthew's emailed code) → chose to publish on the same check run on this computer, against the branch's own server and spaces Worker.</li>
+<li class="decision card" id="decision-42" data-note="decision-42" tabindex="0"><p class="meta"><span class="tag check">check</span></p>Check: task 7.2's staging check ran on this computer, not on staging: the made-up day (3 stays, 2 trips) was saved, a resend changed nothing, a changed end changed one row, a bad row got 400, the day summary gave the stays and trips, and only the webhook ticked for Location tried <code>location.stays</code>. The AI connector's <i>places</i> and <i>day_summary</i> were checked by <code>tools.test.ts</code> and <code>api.test.ts</code> only, not live.</li>
+<li class="decision card" id="decision-43" data-note="decision-43" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-09</p>Assumed: after main gained private-data-to-own-webhook, the <code>stays</code> route joined <code>privateRoutes</code>, so stays and trips go where health and points go, the person's own webhook when they pick it; two of its tests now expect <code>location.stays</code> there too.</li>
+<li class="decision card" id="decision-44" data-note="decision-44" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-09</p>Archive checkpoint: archived for publishing, with main merged in.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

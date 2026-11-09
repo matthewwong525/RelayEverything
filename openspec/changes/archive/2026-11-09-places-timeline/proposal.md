@@ -1,6 +1,6 @@
 # Your places as stays and trips, like Google Maps Timeline
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** naughty-spider
 **Open questions:** none
 
@@ -175,3 +175,7 @@ None.
 - **2026-11-09** — Assumed: with sending on, *Location history* off or *Only points* picked queues the open stay closed, its end the later of its last point and the end already sent, before the phone drops it; and the server reads a stay as ongoing only while its `end_at` or `updated_at` is within 6 hours, else as ended at `end_at`, because otherwise a stay stays ongoing forever when the phone stops sending it.
 - **2026-11-09** — Assumed: each round, the phone sends the open stay again when its end moved on (its newest point, or the round's time for a still stay with no new point and no sure move), and not when nothing moved, because an ongoing stay showed its 5-minute end as its real end; a ticked webhook gets each change once.
 - **2026-11-09** — Checkpoint: built and reviewed twice (nine findings fixed); the local checks pass. Left: the iPhone and Android builds in CI, and the staging check (7.2).
+- **2026-11-09** — Asked whether to publish when the staging check could not run (staging sign-in needs Matthew's emailed code) → chose to publish on the same check run on this computer, against the branch's own server and spaces Worker.
+- Check: task 7.2's staging check ran on this computer, not on staging: the made-up day (3 stays, 2 trips) was saved, a resend changed nothing, a changed end changed one row, a bad row got 400, the day summary gave the stays and trips, and only the webhook ticked for Location tried `location.stays`. The AI connector's *places* and *day_summary* were checked by `tools.test.ts` and `api.test.ts` only, not live.
+- **2026-11-09** — Assumed: after main gained private-data-to-own-webhook, the `stays` route joined `privateRoutes`, so stays and trips go where health and points go, the person's own webhook when they pick it; two of its tests now expect `location.stays` there too.
+- **2026-11-09** — Archive checkpoint: archived for publishing, with main merged in.

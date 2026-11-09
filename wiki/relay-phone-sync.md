@@ -6,6 +6,15 @@ The Relay Everything phone app reads health, places and calendar events only whi
 
 `backgroundRound` in [`background.dart`](../mobile/lib/sync/background.dart) runs for Android's hourly task, for each iPhone wake, and at app open. It drains the iPhone's places, reads health, reads the calendar, steps the [stays and trips](#places-stays-and-trips), queues the uploads and flushes them. An iPhone wake has about 25 seconds, so a round must never read all of a long history at once. There is no calendar wake: the calendar goes with the wakes for health and places.
 
+## Two places: notes and private data
+
+A signed-in person can send health, location points, stays and trips, calendar events and photos only to their own webhook, while notes still go to Relay Everything (`Settings.privateTo`). The round then has two clients, from `Sender.api` and `Sender.privateApi` in [`sender.dart`](../mobile/lib/data/sender.dart):
+
+1. **Routed at enqueue.** The store keeps two destinations: `outbox.destination` for notes and their files, and `outbox.private` for the `health`, `locations` and `calendar` routes. `Store.enqueue` reads the one for its route in the same statement, so an upload never takes a place the person just left. A store with no `outbox.private` reads `outbox.destination`.
+2. **Two flushes.** Each `flush` in [`outbox.dart`](../mobile/lib/data/outbox.dart) sends only its client's destination, oldest first. The notes go first, then the private data, then photos through the private client. A receiver that is down holds back no note, and the other way round. One flush with two clients is wrong: one failing place would stop the other.
+3. **Never a fallback.** `privateApi` never gives the server's client while private data goes to the webhook. With no webhook, such as after a restore, it gives none: private data waits on the phone, and the Account page shows *Set your webhook again*. A silent fallback breaks the person's choice.
+4. **A change of place.** `moveOutbox(notes, private:)` moves each group's rows in one transaction. A change of the private place empties `calendar_sent`, so the new place gets the whole window.
+
 ## Health: new readings first, then 90 days back
 
 1. **New readings.** The round reads from the state key `health.since`, with a 2-hour overlap, so a late reading is not lost. This read always runs first, so new readings never wait behind history.

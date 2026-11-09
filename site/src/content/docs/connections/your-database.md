@@ -26,7 +26,7 @@ Each card shows the webhook's state: **Working**, **Paused**, **Failing** or **S
 
 ## Send from the phone
 
-The phone app can send to your own webhook itself, with no Relay Everything account, sign-in or key. Your receiver gets the same messages, signed the same way, so one receiver works for both. The phone sends to your server or to your webhook, never both.
+The phone app can send to your own webhook itself, with no Relay Everything account, sign-in or key. Your receiver gets the same messages, signed the same way, so one receiver works for both. The phone sends everything to your server or everything to your webhook. Or, signed in, it sends your notes to your server and your health, places, calendar and photos only to your webhook: [Settings](../../app/settings/#health-places-calendar-and-photos-only-to-your-webhook).
 
 1. Start your receiver at an `https://` address. A home address, such as your own computer on your Wi-Fi, is allowed. The phone does not take a self-made certificate.
 2. In the app, open Settings and tap **Sign in to Relay Everything**, the first row.

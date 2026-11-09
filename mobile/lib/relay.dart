@@ -192,6 +192,13 @@ abstract class Relay extends ChangeNotifier {
   Future<String?> saveWebhook(String address, String secret);
   /// *Send a test*: a signed test message to [address]. Returns the words to show: the receiver's answer, or why not.
   Future<String> testWebhook(String address, String secret);
+  /// *Health, places, calendar and photos* on the Account page: [SendPlace.server] sends them to Relay Everything with
+  /// the notes; [SendPlace.webhook] sends them only to the person's own webhook, kept first with [saveWebhook], while
+  /// notes still sync. What of them waits moves too. [Settings.privateTo] keeps the choice.
+  Future<String?> setPrivatePlace(SendPlace place);
+  /// True while health, places, the calendar and photos should go only to the webhook, but the phone lost it, such as in
+  /// a restore: they wait on the phone until the person sets it again.
+  bool get privateWebhookMissing;
   /// Turns sending off: stops health, the calendar, location history and photos, and drops what of them did not go.
   /// Keeps notes and the key.
   Future<void> stopSending();

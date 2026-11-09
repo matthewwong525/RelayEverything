@@ -54,6 +54,10 @@ Each sample is kept once for its type, time and source, however often the phone 
 
 The server counts each day's totals, as the table in [What it reads](#what-it-reads) shows. When two devices count the same steps, sleep, mindful minutes or water, such as a phone and its watch, the day takes the larger count, not the sum. A day leaves out a type that has no readings that day.
 
+## Only to your own webhook
+
+Signed in to Relay Everything, you can send your health data only to your own webhook and still sync your notes. On the Account page, under **Health, places, calendar and photos**, pick **Only my own webhook**. The phone then sends each reading straight to your receiver as `health.samples`, and Relay Everything gets none. The **Health** folder then says *Sent to your webhook* and the time. Your AI and your Relay Everything page show no new readings, and the readings already sent stay on your page. [Settings](../settings/#health-places-calendar-and-photos-only-to-your-webhook)
+
 ## Turn it off
 
 Turn off **Health** in the **Health** folder. The phone stops sending. Signing out also stops health, and deletes the health data that did not go yet. To take back the phone's permission, use Apple Health or Health Connect. [Privacy](../../privacy/) says what the server keeps.

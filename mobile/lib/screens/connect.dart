@@ -13,12 +13,16 @@ typedef Scanner = Future<String?> Function(BuildContext context);
 /// *Sign in*: *Sign in to connect* to the person's Relay Everything server, and below it the quiet other ways: *Scan a
 /// key* from *Add a device*, *Use another server*, and *Send to my own webhook instead*, which opens the webhook's
 /// address and a secret to copy, with *Send a test*. A phone that keeps a key offers it in one tap. The Account row in
-/// Settings and a folder's *Sign in* open it, and it closes with the place once that place is set up.
+/// Settings and a folder's *Sign in* open it, and it closes with the place once that place is set up. With
+/// [privateOnly], the Account page's *Only my own webhook* opens the webhook's form alone: its *Save* keeps the webhook
+/// and closes with [SendPlace.webhook], and the Account page sends private data there; notes stay where they go.
 class ConnectScreen extends StatefulWidget {
-  const ConnectScreen({super.key, required this.relay, Scanner? scanner, Future<void> Function(String text)? copy})
-    : scanner = scanner ?? _scan, copy = copy ?? _copy;
+  const ConnectScreen({super.key, required this.relay, Scanner? scanner, Future<void> Function(String text)? copy,
+    this.privateOnly = false}) : scanner = scanner ?? _scan, copy = copy ?? _copy;
 
   final Relay relay;
+  /// The webhook's form for health, places, the calendar and photos only, with no way to sign in.
+  final bool privateOnly;
   /// Opens the camera and returns the code it read; a test passes its own.
   final Scanner scanner;
   /// Puts the secret on the clipboard; a test passes its own.
@@ -35,7 +39,7 @@ Future<String?> _scan(BuildContext context) => Navigator.of(context).push(Materi
 class _ConnectScreenState extends State<ConnectScreen> {
   final _code = TextEditingController();
   /// True once the person picked *Send to my own webhook instead*.
-  bool _webhookOpen = false;
+  late bool _webhookOpen = widget.privateOnly;
   late final _address = TextEditingController(text: widget.relay.webhookAddress ?? 'https://');
   late final _secret = TextEditingController(text: widget.relay.webhookSecret ?? widget.relay.newWebhookSecret());
   String? _problem;
@@ -131,8 +135,11 @@ class _ConnectScreenState extends State<ConnectScreen> {
   ];
 
   List<Widget> _webhook() => [
-    const Text('The phone sends your notes, their files, and health and places if you turn them on, straight to your '
-      'receiver. Nothing goes to Relay Everything, and you need no account.'),
+    Text(widget.privateOnly
+      ? 'The phone sends your health, places, calendar and photos straight to your receiver. Relay Everything never gets '
+        'them. Your notes still sync through Relay Everything.'
+      : 'The phone sends your notes, their files, and health and places if you turn them on, straight to your '
+        'receiver. Nothing goes to Relay Everything, and you need no account.'),
     const SizedBox(height: 16),
     TextField(controller: _address, keyboardType: TextInputType.url, autocorrect: false,
       decoration: const InputDecoration(labelText: 'Address', helperText: 'It must start with https://.',
@@ -152,8 +159,10 @@ class _ConnectScreenState extends State<ConnectScreen> {
     const SizedBox(height: 16),
     Text('The phone sends only while it is on and has signal, so your data comes in groups. Your Relay Everything page '
       'and your AI can not read it.', style: Theme.of(context).textTheme.bodySmall),
-    const SizedBox(height: 16),
-    _quiet('Sign in to Relay Everything instead', () => _pick(false)),
+    if (!widget.privateOnly) ...[
+      const SizedBox(height: 16),
+      _quiet('Sign in to Relay Everything instead', () => _pick(false)),
+    ],
   ];
 
   List<Widget> _server() => [

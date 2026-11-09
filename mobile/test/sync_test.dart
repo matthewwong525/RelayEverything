@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:health/health.dart';
 import 'package:http/http.dart' as http;
 import 'package:relay_app/data/connection.dart';
+import 'package:relay_app/data/outbox.dart';
 import 'package:relay_app/data/sender.dart';
 import 'package:relay_app/data/settings.dart';
 import 'package:relay_app/data/store.dart';
@@ -731,6 +732,100 @@ void main() {
       expect(id, matches(RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')));
       expect(id, matches(RegExp(r'^[A-Za-z0-9-]{8,64}$')));
       expect(newPhotoId(), isNot(newPhotoId()));
+    });
+  });
+
+  group('notes and private data in two places', () {
+    bool toHook(http.Request request) => request.url.toString() == hook.address;
+    List<String> hookTypes(FakeServer server) =>
+      [for (final request in server.requests) if (toHook(request)) jsonDecode(request.body)['type'] as String];
+    List<String> serverRoutes(FakeServer server) =>
+      [for (final request in server.requests) if (!toHook(request)) request.url.path.split('/').last];
+
+    test('the private client is never the server\'s while private data goes to the webhook', () {
+      final server = FakeServer();
+      final sender = Sender(server.api, null, server.webhook);
+      for (final sending in [false, true]) {
+        for (final place in SendPlace.values) {
+          for (final privateTo in SendPlace.values) {
+            for (final key in <Connection?>[null, connection]) {
+              for (final webhook in <Webhook?>[null, hook]) {
+                final settings = Settings(sending: sending, place: place, privateTo: privateTo);
+                final client = sender.privateApi(settings, connection: key, webhook: webhook, installId: installId);
+                final want = !sending ? null
+                  : settings.privatePlace == SendPlace.webhook ? (webhook == null ? null : ownWebhook)
+                  : (key == null ? null : relayServer);
+                expect(client?.destination, want, reason: '$sending $place $privateTo ${key != null} ${webhook != null}');
+              }
+            }
+          }
+        }
+      }
+      // With no install id there is no webhook message, so no client either.
+      expect(sender.privateApi(const Settings(sending: true, privateTo: SendPlace.webhook), connection: connection,
+        webhook: hook), isNull);
+      expect(server.requests, isEmpty);
+    });
+
+    test('a flush sends only its own place\'s uploads, so a webhook that fails holds back no note', () async {
+      final store = memoryStore();
+      addTearDown(store.close);
+      final server = FakeServer((request) => toHook(request) ? http.Response('', 503) : FakeServer.ok(request));
+      await store.moveOutbox(relayServer, private: ownWebhook);
+      await store.queueSamples([{'type': 'steps', 'start': 1, 'end': 2, 'value': 10, 'unit': 'count', 'source': 'Health'}]);
+      await store.addNote(LocalNote(clientId: 'note-0001', text: 'Lunch idea', createdAt: start), send: true);
+      final hookClient = server.webhook(hook, installId);
+      final failed = await flush(store, hookClient);
+      expect([failed.failure, failed.sent, hookTypes(server)], [isNotNull, 0, ['health.samples']]);
+      final notes = await flush(store, server.api(connection));
+      expect([notes.failure, notes.sent, serverRoutes(server)], [isNull, 1, ['notes']]);
+      expect([for (final item in await store.outbox()) item.route], ['health']);
+      server.answer = (request) => http.Response('', 204);
+      final private = await flush(store, hookClient);
+      expect([private.failure, private.sent, await store.outbox()], [isNull, 1, isEmpty]);
+      expect(serverRoutes(server), ['notes']);
+    });
+
+    test('a background round sends notes to the server and private data only to the webhook, each apart', () async {
+      final store = memoryStore();
+      addTearDown(store.close);
+      final server = FakeServer((request) => toHook(request) ? http.Response('', 204) : FakeServer.ok(request));
+      final source = FakeHealth()..readings = [reading(HealthDataType.STEPS, start, later(5), value: 10)];
+      final photos = FakePhotos();
+      final network = FakeNetwork();
+      await store.set(settingsKey,
+        const Settings(sending: true, health: true, history: true, photos: true, privateTo: SendPlace.webhook).encode());
+      await store.set(healthTypes, askedTypes);
+      await store.set(photosSince, '${start.millisecondsSinceEpoch}');
+      await store.moveOutbox(relayServer, private: ownWebhook);
+      await store.addPoint(Pin(at: start, lat: 1, lon: 1, accuracy: 1));
+      await store.addNote(LocalNote(clientId: 'note-0001', text: 'Lunch idea', createdAt: later(2)), send: true);
+      photos.take('IMG_0001', later(1));
+      Future<bool> round(Webhook? webhook, int minutes) => backgroundRound(store, connection: connection, webhook: webhook,
+        health: source, sender: Sender(server.api, null, server.webhook), photos: photos, network: network,
+        now: later(minutes));
+      expect(await round(hook, 60), isTrue);
+      expect(serverRoutes(server), ['notes']);
+      expect(hookTypes(server), ['health.samples', 'location.stays', 'location.points', 'photo.created']);
+      expect([await store.outbox(), await store.waitingPhotos()], [isEmpty, isEmpty]);
+
+      // A webhook the phone lost: the note still goes, and private data waits on the phone, never at the server.
+      server.requests.clear();
+      source.readings = [reading(HealthDataType.STEPS, later(70), later(75), value: 20)];
+      await store.addNote(LocalNote(clientId: 'note-0002', text: 'Dinner idea', createdAt: later(80)), send: true);
+      photos.take('IMG_0002', later(81));
+      expect(await round(null, 120), isTrue);
+      expect([serverRoutes(server), hookTypes(server)], [['notes'], isEmpty]);
+      expect({for (final item in await store.outbox()) (item.route, item.destination)}, {('health', ownWebhook), ('stays', ownWebhook)});
+      expect((await store.waitingPhotos()).length, 1);
+
+      // A receiver that answers 503: notes still go, the round is not done, and nothing private goes to the server.
+      server.requests.clear();
+      server.answer = (request) => toHook(request) ? http.Response('', 503) : FakeServer.ok(request);
+      await store.addNote(LocalNote(clientId: 'note-0003', text: 'Breakfast idea', createdAt: later(130)), send: true);
+      expect(await round(hook, 180), isFalse);
+      expect([serverRoutes(server), hookTypes(server).first], [['notes'], 'health.samples']);
+      expect((await store.waitingPhotos()).length, 1);
     });
   });
 

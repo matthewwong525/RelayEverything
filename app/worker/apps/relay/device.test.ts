@@ -9,7 +9,7 @@ import { hashToken } from "./people";
 // The fingerprint of checker.id, "checker.access".
 const CHECKER_SHA256 = "6a6814c5281a7635cb9d9f881d7feae9b0d6159c868666fad3ffa0a164f4d999";
 const ORIGIN = "https://relay.example.com";
-const ROUTES = ["attachments", "notes", "health", "locations", "calendar", "photos"].map(route => `/apps/relay/api/${route}`);
+const ROUTES = ["attachments", "notes", "health", "locations", "stays", "calendar", "photos"].map(route => `/apps/relay/api/${route}`);
 const KEY = "/apps/relay/api/key";
 const CHATS = "/apps/relay/api/chats";
 const SAVES = "/apps/relay/api/chat-saves";

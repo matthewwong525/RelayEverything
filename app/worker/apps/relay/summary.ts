@@ -1,4 +1,4 @@
-// GET summary: one day on the site page: notes, health totals, places visited and calendar events. When two phones,
+// GET summary: one day on the site page: notes, health totals, places, trips and calendar events. When two phones,
 // or a phone and its watch, count the same steps or sleep, the larger count is the day's.
 import { z } from "zod";
 import { defineAction, type ActionCall } from "../../api/contract.ts";
@@ -18,7 +18,11 @@ const output = z.strictObject({
   bloodPressure: z.array(z.strictObject({ at: z.number(), upper: z.number(), lower: z.number() })).optional(),
   cycleFlow: z.number().optional(), mindfulMinutes: z.number().optional(), waterMl: z.number().optional(),
   events: z.array(z.strictObject({ title: z.string(), start: z.number(), end: z.number(), allDay: z.boolean(), people: z.array(z.string()) })),
-  places: z.array(z.strictObject({ name: z.string(), lat: z.number(), lon: z.number(), from: z.number(), to: z.number() })),
+  // One row per stay, or each place once on a day before the phone made stays.
+  places: z.array(z.strictObject({ name: z.string(), lat: z.number(), lon: z.number(), from: z.number(), to: z.number(),
+    address: z.string().optional(), event: z.string().optional(), ongoing: z.literal(true).optional() })),
+  trips: z.array(z.strictObject({ left: z.number(), arrived: z.number(), mode: z.string(), km: z.number(), minutes: z.number(),
+    from: z.string().nullable(), to: z.string().nullable() })),
 });
 
 export const summary = defineAction({

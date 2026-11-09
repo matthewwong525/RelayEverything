@@ -1,0 +1,9 @@
+{
+  "secret": "whsec_cmVsYXktZXZlcnl0aGluZy13ZWJob29rLWZpeHR1cmU=",
+  "headers": {
+    "webhook-id": "0f5c2a64-1d6e-4b7a-9c3e-2a8d5b7f6e10:16",
+    "webhook-timestamp": "1793801100",
+    "webhook-signature": "v1,A6sXfGopEJAQquAPnFWIjAjxxYPEomD+caJqL01Isgc="
+  },
+  "body": "{\"version\":1,\"type\":\"location.stays\",\"timestamp\":\"2026-11-04T14:01:02.000Z\",\"data\":{\"stays\":[{\"id\":259317429566811,\"device\":{\"id\":\"0f5c2a64-1d6e-4b7a-9c3e-2a8d5b7f6e10\",\"name\":\"Android phone\"},\"kind\":\"stay\",\"start\":\"2026-11-04T13:01:00.000Z\",\"end\":\"2026-11-04T14:01:00.000Z\",\"ongoing\":false,\"lat\":43.65,\"lon\":-79.38,\"name\":\"Cafe Nero\",\"address\":\"King St W\",\"event\":\"Coffee with Sam\",\"source\":\"calendar\",\"mode\":null,\"km\":null},{\"id\":233100257586226,\"device\":{\"id\":\"0f5c2a64-1d6e-4b7a-9c3e-2a8d5b7f6e10\",\"name\":\"Android phone\"},\"kind\":\"trip\",\"start\":\"2026-11-04T14:01:00.000Z\",\"end\":\"2026-11-04T14:21:00.000Z\",\"ongoing\":false,\"lat\":null,\"lon\":null,\"name\":null,\"address\":null,\"event\":null,\"source\":null,\"mode\":\"cycling\",\"km\":4.2},{\"id\":176404327028198,\"device\":{\"id\":\"0f5c2a64-1d6e-4b7a-9c3e-2a8d5b7f6e10\",\"name\":\"Android phone\"},\"kind\":\"stay\",\"start\":\"2026-11-04T14:21:00.000Z\",\"end\":\"2026-11-04T14:26:00.000Z\",\"ongoing\":true,\"lat\":43.66,\"lon\":-79.39,\"name\":\"43.660, -79.390\",\"address\":null,\"event\":null,\"source\":\"point\",\"mode\":null,\"km\":null}]}}"
+}

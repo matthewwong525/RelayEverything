@@ -49,7 +49,7 @@ Future<void> main() async {
   final relay = RelayController(store: openStore(), vault: KeyVault(), places: PhonePlaces(), health: PhoneHealth(), schedule: scheduleSync,
     voice: voice, native: Platform.isIOS ? PhoneBackground() : null, folder: getApplicationSupportDirectory, opener: openWithPhone,
     share: Platform.isIOS ? PhoneShareGroup() : null, calendar: PhoneCalendarSource(), photos: PhonePhotos(),
-    network: PhoneNetwork());
+    network: PhoneNetwork(), motion: phoneMotion());
   // A Health or place wake while the app runs syncs here, in place of a second engine.
   if (Platform.isIOS) PhoneBackground.onWake(relay.sync);
   await relay.load();

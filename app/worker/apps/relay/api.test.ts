@@ -129,11 +129,25 @@ it("sums a day for the site page: notes, the larger phone's steps and sleep, hea
   expect(json).toEqual({ day: "2026-11-05", notes: 1, steps: 8214, sleepMinutes: 450, heartRate: { min: 61, max: 90, average: 76 },
     workouts: { count: 1, minutes: 45 }, places: [
       { name: "Queen St W", lat: 43.6487, lon: -79.3962, from: start + 60 * MINUTE, to: start + 90 * MINUTE },
-      { name: "43.663, -79.396", lat: 43.6629, lon: -79.3957, from: start + 3 * 60 * MINUTE, to: start + 3 * 60 * MINUTE }], events: [] });
+      { name: "43.663, -79.396", lat: 43.6629, lon: -79.3957, from: start + 3 * 60 * MINUTE, to: start + 3 * 60 * MINUTE }], trips: [], events: [] });
   expect((await call(matthew, "GET", "summary", { day: "2026-11-04" })).json).toEqual({ day: "2026-11-04", notes: 1, steps: 0, sleepMinutes: 0,
-    heartRate: null, workouts: { count: 0, minutes: 0 }, places: [], events: [] });
+    heartRate: null, workouts: { count: 0, minutes: 0 }, places: [], trips: [], events: [] });
   for (const day of ["yesterday", "2026-13-45"]) expect((await call(matthew, "GET", "summary", { day })).status).toBe(400);
   for (const [who, status] of [[phone, 403], [null, 401]] as const) expect((await call(who, "GET", "summary", { day: "2026-11-05" })).status).toBe(status);
+});
+
+it("lists a day's stays for the site page, one row per stay, with its trips, once the phone sends stays", async () => {
+  const start = Date.UTC(2026, 10, 5, 13);
+  await call(phone, "POST", "stays", { stays: [
+    { kind: "stay", start: start - 2 * 60 * MINUTE, end: start, lat: 43.65, lon: -79.38, name: "12 Maple Street", source: "street" },
+    { kind: "trip", start, end: start + 15 * MINUTE, mode: "driving", km: 6.2 },
+    { kind: "stay", start: start + 15 * MINUTE, end: start + 80 * MINUTE, lat: 43.66, lon: -79.39, name: "Corner Café", address: "Lake Drive",
+      source: "map" }] });
+  const { json } = await call(matthew, "GET", "summary", { day: "2026-11-05" });
+  expect(json.places).toEqual([{ name: "12 Maple Street", lat: 43.65, lon: -79.38, from: start - 2 * 60 * MINUTE, to: start },
+    { name: "Corner Café", lat: 43.66, lon: -79.39, from: start + 15 * MINUTE, to: start + 80 * MINUTE, address: "Lake Drive" }]);
+  expect(json.trips).toEqual([{ left: start, arrived: start + 15 * MINUTE, mode: "driving", km: 6.2, minutes: 15, from: "12 Maple Street",
+    to: "Corner Café" }]);
 });
 
 it("takes the larger source's steps and sleep when a phone and its watch both count them", async () => {

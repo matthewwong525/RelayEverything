@@ -18,6 +18,7 @@ import { notes } from "./notes.ts";
 import { noteSync } from "./note-sync.ts";
 import { photoAdd, photoCount, photoDelete } from "./photos.ts";
 import { health, locations } from "./samples.ts";
+import { stays } from "./stays.ts";
 import { summary } from "./summary.ts";
 import { timeline } from "./timeline.ts";
 import { add, list, remove, resend, retry, secret, sweepNow, test, update } from "./webhooks/routes.ts";
@@ -31,6 +32,7 @@ export const routes = new Map<string, Route>([
   ["POST attachments", attachmentAdd],
   ["POST health", health],
   ["POST locations", locations],
+  ["POST stays", stays],
   ["POST calendar", calendar],
   ["POST photos", photoAdd],
   ["GET photos", photoCount],

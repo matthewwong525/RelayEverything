@@ -19,8 +19,10 @@ import 'package:relay_app/data/webhook.dart';
 import 'package:relay_app/sync/calendar.dart';
 import 'package:relay_app/sync/health.dart';
 import 'package:relay_app/sync/location.dart';
+import 'package:relay_app/sync/motion.dart';
 import 'package:relay_app/sync/native.dart';
 import 'package:relay_app/sync/photos.dart';
+import 'package:relay_app/sync/stays.dart';
 import 'package:relay_app/voice/model.dart';
 import 'package:relay_app/voice/recorder.dart';
 import 'package:relay_app/voice/transcriber.dart';
@@ -175,7 +177,45 @@ class FakePlaces implements Places {
   @override
   Future<String?> nameOf(double lat, double lon) async {
     lookups.add((lat, lon));
+    if (streetFails) throw Exception('no network');
     return 'Place ${lookups.length}';
+  }
+
+  /// When true, a street lookup fails, as with no network.
+  bool streetFails = false;
+  /// Where each event place is, by its words; a place not here is not found.
+  final places = <String, ({double lat, double lon})>{};
+  /// Each event place looked up.
+  final placeLookups = <String>[];
+
+  @override
+  Future<({double lat, double lon})?> locate(String address) async {
+    placeLookups.add(address);
+    return places[address];
+  }
+}
+
+/// The motion sensors: [changes] is what a read gives, between its times.
+class FakeMotion implements Motion {
+  bool allowed = true;
+  int asked = 0;
+  final watching = <bool>[];
+  List<MotionChange> changes = [];
+  final reads = <(DateTime, DateTime)>[];
+
+  @override
+  Future<bool> allow() async {
+    asked++;
+    return allowed;
+  }
+
+  @override
+  Future<void> watch(bool on) async => watching.add(on);
+
+  @override
+  Future<List<MotionChange>> read(DateTime from, DateTime to) async {
+    reads.add((from, to));
+    return [for (final change in changes) if (!change.at.isBefore(from) && !change.at.isAfter(to)) change];
   }
 }
 
@@ -195,6 +235,16 @@ class FakeBackground implements NativeBackground {
     final kept = lines;
     lines = [];
     return kept;
+  }
+
+  /// Apple Maps' answer for a stay's place; null for none.
+  String? venueName;
+  final venues = <(double, double)>[];
+
+  @override
+  Future<String?> venue(double lat, double lon) async {
+    venues.add((lat, lon));
+    return venueName;
   }
 }
 

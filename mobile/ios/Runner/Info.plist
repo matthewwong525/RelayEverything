@@ -57,6 +57,8 @@
 	<string>With location history on, Relay Everything keeps where you go, also while the app is closed, so ring notes get a place. Turn it off in Relay Everything settings.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Relay Everything adds where you are to each note you type.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>With location history on, Relay Everything reads only what kind of moving you did, such as walking or driving, to tell a walk from a drive. It reads no steps, and the motion stays on the phone.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Relay Everything adds the photos you pick to a note. With Photos on, it also sends the new photos you take, with when and where you took them, to your own Relay Everything server. It reads no photos while Photos is off.</string>
 	<key>UIBackgroundModes</key>

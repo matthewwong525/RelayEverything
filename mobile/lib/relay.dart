@@ -9,7 +9,7 @@ import 'sync/calendar.dart';
 import 'voice/model.dart';
 
 export 'data/attachments.dart' show NewFile, sizeLabel;
-export 'data/settings.dart' show Appearance, LocationMode, SendPlace, Settings;
+export 'data/settings.dart' show Appearance, LocationMode, LocationSend, SendPlace, Settings;
 export 'sync/calendar.dart' show PhoneCalendar;
 export 'voice/model.dart' show ModelState, ModelProblem;
 
@@ -156,6 +156,9 @@ abstract class Relay extends ChangeNotifier {
   /// key. Null also when the person closed the sign-in: then [connected] stays false.
   Future<String?> signIn(String server);
   Future<String?> setLocationMode(LocationMode mode);
+  /// *What to send*: stays, trips and points, only stays and trips, or only points. *Only stays and trips* drops the points
+  /// still waiting on this phone, and says so; *Only points* makes no stay or trip and asks for no motion.
+  Future<String?> setLocationSend(LocationSend send);
   Future<String?> setServer(String server);
   Future<String?> setPinNotes(bool on);
   /// *System*, *Light* or *Dark*: the app's look, which the phone keeps.

@@ -29,7 +29,7 @@ export const TOOLS = {
   },
   fetch: {
     title: "Read one note",
-    description: "Read one note by its id, with the places visited within 30 minutes of it and the health totals of its day.",
+    description: "Read one note by its id, with the places you stayed within 30 minutes of it and the health totals of its day.",
     input: { id: z.string().max(64).describe("The note's id, from search or timeline."), timezone: zone },
   },
   timeline: {
@@ -40,8 +40,8 @@ export const TOOLS = {
   },
   day_summary: {
     title: "Sum up a day",
-    description: "One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, each place " +
-      "visited, and the calendar's events with the people in each.",
+    description: "One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, each stay " +
+      "with its name and times, each trip with its mode, km and minutes, and the calendar's events with the people in each.",
     input: { day, timezone: zone },
   },
   health: {
@@ -56,9 +56,10 @@ export const TOOLS = {
   },
   places: {
     title: "Read places visited",
-    description: "The places visited from one time to another, oldest first: each place's name, where it is, and when you arrived and left.",
+    description: "The stays and trips from one time to another, oldest first: each stay's name, street, where it is, and when you " +
+      "arrived and left; each trip's mode (walking, running, cycling, driving, flying or unknown), km, minutes, and the stays it went between.",
     input: { from: when("The first time"), to: when("The time to stop before"),
-      limit: z.number().int().min(1).max(200).default(100).describe("How many visits, at most 200. Read on from `next`."), timezone: zone },
+      limit: z.number().int().min(1).max(200).default(100).describe("How many stays, at most 200. Read on from `next`."), timezone: zone },
   },
   calendar: {
     title: "Read calendar events",

@@ -3,7 +3,7 @@ import { Webhook } from "standardwebhooks";
 import { afterEach, expect, it, vi } from "vitest";
 import { z } from "zod";
 import * as format from "./format.ts";
-import { calendarEvents, healthSamples, jsonSchema, locationPoints, message, noteCreated, noteDeleted, noteFile, noteUpdated, photoCreated,
+import { calendarEvents, healthSamples, jsonSchema, locationPoints, locationStays, message, noteCreated, noteDeleted, noteFile, noteUpdated, photoCreated,
   webhookTest, type NoteRow } from "./format.ts";
 import { base64, newSecret, signedHeaders } from "./sign.ts";
 
@@ -24,6 +24,10 @@ it("builds each type in the published format, with times in ISO 8601 and a recor
     webhookTest({ id: "e0000000-0000-4000-8000-000000000001", name: "Example database" }, AT),
     noteFile({ id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 245_760 }, typed.id, AT),
     noteDeleted(typed.id, AT),
+    locationStays([{ id: 3, ...device, kind: "stay", start_at: AT, end_at: AT + 600_000, ongoing: 1, lat: 43.6629, lon: -79.3957,
+      name: "Corner Café", address: "Harbord St", event: null, source: "map", mode: null, km: null },
+    { id: 4, ...device, kind: "trip", start_at: AT - 900_000, end_at: AT, ongoing: 0, lat: null, lon: null, name: null, address: null,
+      event: null, source: null, mode: "driving", km: 6.2 }], AT),
   ];
   for (const item of built) expect(message.parse(item), item.type).toEqual(item);
   expect(built[0]).toEqual({ version: 1, type: "note.created", timestamp: "2026-11-04T14:01:02.000Z", data: { note: {
@@ -40,6 +44,9 @@ it("builds each type in the published format, with times in ISO 8601 and a recor
     size: 245_760, base64: "" } });
   // A deleted note's row is gone: the message names it by its id alone.
   expect(built[7].data).toEqual({ note: { id: typed.id, deleted_at: "2026-11-04T14:01:02.000Z" } });
+  expect(built[8].data).toMatchObject({ stays: [
+    { kind: "stay", ongoing: true, start: "2026-11-04T14:01:02.000Z", name: "Corner Café", mode: null, km: null },
+    { kind: "trip", ongoing: false, start: "2026-11-04T13:46:02.000Z", name: null, mode: "driving", km: 6.2 }] });
 });
 
 afterEach(() => vi.useRealTimers());
@@ -142,7 +149,7 @@ it("takes a note's file with its bytes, which the server and the phone both send
     file: { id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 4, base64: "AAAAGA==" } } };
   expect(message.parse(file)).toEqual(file);
   expect(() => message.parse({ ...file, data: { ...file.data, file: { ...file.data.file, base64: undefined } } })).toThrow();
-  expect(Object.keys(format).sort()).toEqual(["calendarEvents", "healthSamples", "jsonSchema", "locationPoints", "message", "noteCreated",
+  expect(Object.keys(format).sort()).toEqual(["calendarEvents", "healthSamples", "jsonSchema", "locationPoints", "locationStays", "message", "noteCreated",
     "noteDeleted", "noteFile", "noteUpdated", "photoCreated", "webhookTest"]);
 });
 
@@ -151,7 +158,7 @@ const fixtures = new URL("../../../../../mobile/test/fixtures/webhook/", import.
 
 it("takes each message the phone builds, and its signature passes the server's own signing", async () => {
   const names = readdirSync(fixtures).filter(name => name.endsWith(".json")).sort();
-  expect(names).toEqual(["calendar.events.json", "health.samples.json", "location.points.json", "note.created.json", "note.deleted.json",
+  expect(names).toEqual(["calendar.events.json", "health.samples.json", "location.points.json", "location.stays.json", "note.created.json", "note.deleted.json",
     "note.file.json", "note.updated.json", "photo.created.json", "webhook.test.json"]);
   for (const name of names) {
     const { secret, headers, body } = JSON.parse(readFileSync(new URL(name, fixtures), "utf8")) as

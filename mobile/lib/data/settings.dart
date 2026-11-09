@@ -10,6 +10,10 @@ enum LocationMode { battery, move }
 /// Where sending goes: the person's Relay Everything [server], or their own [webhook]. Never both.
 enum SendPlace { server, webhook }
 
+/// What location history sends: [all] stays, trips and points; [stays] only stays and trips, with no point leaving the
+/// phone; [points] only points, as before stays and trips, with no motion asked for.
+enum LocationSend { all, stays, points }
+
 /// Light or dark: [system] follows the phone's own setting; [light] and [dark] keep that look whatever the phone says.
 enum Appearance { system, light, dark }
 
@@ -22,7 +26,7 @@ class Settings {
   const Settings({this.sending = false, this.pinNotes = false, bool history = false, bool health = false,
     bool calendar = false, this.calendarsOff = const {}, this.mode = LocationMode.battery, this.place = SendPlace.server,
     this.privateTo = SendPlace.server, bool photos = false, bool photosOnMobileData = false,
-    this.appearance = Appearance.system})
+    this.appearance = Appearance.system, this.locationSend = LocationSend.all})
     : history = sending && history, health = sending && health, calendar = sending && calendar,
       photos = sending && photos, photosOnMobileData = sending && photos && photosOnMobileData;
 
@@ -45,6 +49,11 @@ class Settings {
   final bool photosOnMobileData;
   /// Light or dark. Settings from before there was a choice read as [Appearance.system].
   final Appearance appearance;
+  /// What location history sends. Settings from before there was a choice read as [LocationSend.all].
+  final LocationSend locationSend;
+
+  /// Location history makes stays and trips.
+  bool get stays => history && locationSend != LocationSend.points;
 
   /// Where health, location points, calendar events and photos go now: the webhook while [place] is the webhook, else
   /// [privateTo]. Only this is read to route them, so whole-webhook sending needs no case of its own.
@@ -52,17 +61,18 @@ class Settings {
 
   Settings copyWith({bool? sending, bool? pinNotes, bool? history, bool? health, bool? calendar, Set<String>? calendarsOff,
     LocationMode? mode, SendPlace? place, SendPlace? privateTo, bool? photos, bool? photosOnMobileData,
-    Appearance? appearance}) => Settings(
+    Appearance? appearance, LocationSend? locationSend}) => Settings(
     sending: sending ?? this.sending, pinNotes: pinNotes ?? this.pinNotes,
     history: history ?? this.history, health: health ?? this.health, calendar: calendar ?? this.calendar,
     calendarsOff: calendarsOff ?? this.calendarsOff, mode: mode ?? this.mode, place: place ?? this.place,
     privateTo: privateTo ?? this.privateTo, photos: photos ?? this.photos,
     photosOnMobileData: photosOnMobileData ?? this.photosOnMobileData,
-    appearance: appearance ?? this.appearance);
+    appearance: appearance ?? this.appearance, locationSend: locationSend ?? this.locationSend);
 
   String encode() => jsonEncode({'sending': sending, 'pinNotes': pinNotes, 'history': history, 'health': health,
     'calendar': calendar, 'calendarsOff': (calendarsOff.toList()..sort()), 'mode': mode.name, 'place': place.name,
-    'privateTo': privateTo.name, 'photos': photos, 'photosOnMobileData': photosOnMobileData, 'appearance': appearance.name});
+    'privateTo': privateTo.name, 'photos': photos, 'photosOnMobileData': photosOnMobileData, 'appearance': appearance.name,
+    'locationSend': locationSend.name});
 
   /// Reads saved settings. Settings from before sending was a switch, or none on a phone with a key, come from the
   /// first version, which sent everything: that install keeps sending on, so nothing it set up stops. Settings from
@@ -84,6 +94,7 @@ class Settings {
       photos: json['photos'] as bool? ?? false,
       photosOnMobileData: json['photosOnMobileData'] as bool? ?? false,
       appearance: Appearance.values.asNameMap()[json['appearance']] ?? Appearance.system,
+      locationSend: LocationSend.values.asNameMap()[json['locationSend']] ?? LocationSend.all,
     );
   }
 }

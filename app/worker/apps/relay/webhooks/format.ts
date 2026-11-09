@@ -1,7 +1,8 @@
-// Format v1 of what a webhook receives: one envelope, nine types; mobile/lib/data/webhook.dart builds it too. The
+// Format v1 of what a webhook receives: one envelope, ten types; mobile/lib/data/webhook.dart builds it too. The
 // source of the public site/public/webhooks/v1.schema.json, which takes fields and values it does not list.
 import { z } from "zod";
 import { HEALTH_TYPES, type HealthType } from "../queries.ts";
+import { STAY_SOURCES, TRIP_MODES } from "../stays.ts";
 
 /** A list of values that can get a new one: the schema publishes it as text, with the values known today. */
 const GROWS = { grows: true };
@@ -37,6 +38,18 @@ const point = z.strictObject({
   id: z.number().int().describe(ownId), device, at: iso, lat: z.number(), lon: z.number(),
   accuracy: z.number().describe("In meters."), place: z.string().nullable(),
 });
+const stay = z.strictObject({
+  id: z.number().int().describe("Unique in this Relay Everything server, or made from the phone's install id, the kind and the start when the phone sends to its own webhook: upsert by it."),
+  device, kind: z.enum(["stay", "trip"]).describe("stay: a time in one place. trip: the time between two stays."),
+  start: iso, end: iso, ongoing: z.boolean().describe("True while the person is still there: a later message gives its end."),
+  lat: z.number().nullable().describe("A stay's center; null for a trip."), lon: z.number().nullable(),
+  name: z.string().nullable().describe("A stay's name: a calendar event's place, a place on the map, the street, or the coordinates."),
+  address: z.string().nullable().describe("The street, when the name came from the calendar or the map."),
+  event: z.string().nullable().describe("The calendar event that named the stay."),
+  source: z.enum(STAY_SOURCES).meta(GROWS).nullable().describe("Where a stay's name came from."),
+  mode: z.enum(TRIP_MODES).meta(GROWS).nullable().describe("How a trip went; null for a stay."),
+  km: z.number().nullable().describe("A trip's distance in km; null for a stay."),
+});
 const event = z.strictObject({
   id: z.number().int().describe("Unique in this Relay Everything server, or made from the phone's install id and the key when the phone sends to its own webhook: upsert by it."),
   status: z.enum(["changed", "removed"]).meta(GROWS).describe("changed: new or changed. removed: deleted on the phone, or its calendar turned off."),
@@ -69,6 +82,8 @@ export const message = z.discriminatedUnion("type", [
     "A note was deleted on a phone, with its files and recording: delete the note's row and its files by its id. It can't be undone."),
   envelope("health.samples", z.strictObject({ samples: z.array(sample).min(1).max(BATCH) }), "Health samples, in the order Relay Everything stored them."),
   envelope("location.points", z.strictObject({ points: z.array(point).min(1).max(BATCH) }), "Location points, in the order Relay Everything stored them."),
+  envelope("location.stays", z.strictObject({ stays: z.array(stay).min(1).max(BATCH) }),
+    "Stays and trips the phone worked out from its points, new or changed, in the order Relay Everything stored them. A stay comes when it is 5 minutes long, with ongoing true, again as its end moves on, and again when it ends: upsert by its id."),
   envelope("note.file", z.strictObject({ note_id: z.string().describe("The id of the note this file is on."),
     file: attachment.extend({ base64: z.string().describe("The file's bytes in base64.") }) }),
     "One file of a note, with its bytes, after the note's note.created. Relay Everything sends it once it stores the file, and a phone that sends to its own webhook sends it too. A file can be 25 MB, about 33 MB as base64: answer 413 to skip a file too large for you."),
@@ -90,6 +105,9 @@ export type HealthRow = { id: number; device_id: string; device_name: string; ty
   start_at: number; end_at: number; value: number; unit: string; source: string };
 export type LocationRow = { id: number; device_id: string; device_name: string; at: number; lat: number; lon: number; accuracy: number;
   place: string | null };
+export type StayRow = { id: number; device_id: string; device_name: string; kind: "stay" | "trip"; start_at: number; end_at: number;
+  ongoing: number; lat: number | null; lon: number | null; name: string | null; address: string | null; event: string | null;
+  source: (typeof STAY_SOURCES)[number] | null; mode: (typeof TRIP_MODES)[number] | null; km: number | null };
 export type EventRow = { id: number; device_id: string; device_name: string; event_key: string; calendar: string | null;
   title: string | null; start_at: number; end_at: number; all_day: number; location: string | null; notes: string | null; url: string | null;
   people: string; removed_at: number | null };
@@ -133,6 +151,10 @@ export const healthSamples = (rows: HealthRow[], at: number) => wrap("health.sam
 
 export const locationPoints = (rows: LocationRow[], at: number) => wrap("location.points", { points: rows.map(row => ({
   id: row.id, device: deviceOf(row), at: isoOf(row.at), lat: row.lat, lon: row.lon, accuracy: row.accuracy, place: row.place })) }, at);
+
+export const locationStays = (rows: StayRow[], at: number) => wrap("location.stays", { stays: rows.map(row => ({
+  id: row.id, device: deviceOf(row), kind: row.kind, start: isoOf(row.start_at), end: isoOf(row.end_at), ongoing: row.ongoing === 1,
+  lat: row.lat, lon: row.lon, name: row.name, address: row.address, event: row.event, source: row.source, mode: row.mode, km: row.km })) }, at);
 
 export const calendarEvents = (rows: EventRow[], at: number) => wrap("calendar.events", { events: rows.map(row => ({
   id: row.id, status: row.removed_at === null ? "changed" as const : "removed" as const, device: deviceOf(row), key: row.event_key,

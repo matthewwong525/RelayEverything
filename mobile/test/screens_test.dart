@@ -86,6 +86,14 @@ class FakeRelay extends Relay {
     return problem;
   }
 
+  @override
+  Future<String?> setLocationSend(LocationSend send) async {
+    calls.add('send ${send.name}');
+    settings = settings.copyWith(locationSend: send);
+    notifyListeners();
+    return problem;
+  }
+
   @override Future<String?> setServer(String server) async { calls.add('server $server'); return problem; }
   @override Future<String?> setPinNotes(bool on) async { calls.add('pin $on'); return problem; }
 
@@ -1950,6 +1958,27 @@ void main() {
     relay.changed();
     await tester.pumpAndSettle();
     expect(find.text('Every 100 m'), findsNothing);
+  });
+
+  testWidgets('with location history on, both phones offer What to send, and a pick says what it dropped', (tester) async {
+    relay
+      ..connected = true
+      ..settings = const Settings(sending: true);
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Location');
+    expect(find.text('What to send'), findsNothing);
+    relay.settings = const Settings(sending: true, history: true);
+    relay.changed();
+    await tester.pumpAndSettle();
+    RadioGroup<LocationSend> group() => tester.widget(find.byType(RadioGroup<LocationSend>));
+    expect([find.text('What to send'), find.text('Stays, trips and points'), find.text('Only points')], everyElement(findsOneWidget));
+    expect(group().groupValue, LocationSend.all);
+    relay.problem = 'The points still waiting on this phone were dropped.';
+    await tester.scrollUntilVisible(find.text('Only stays and trips'), 100, scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.text('Only stays and trips'));
+    await tester.pumpAndSettle();
+    expect([relay.calls, group().groupValue], [['send stays'], LocationSend.stays]);
+    expect(find.text('The points still waiting on this phone were dropped.'), findsOneWidget);
   });
 
   testWidgets('says when health and places last went, and how many wait', (tester) async {

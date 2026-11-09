@@ -22,8 +22,10 @@ import 'shortcuts/inbox.dart';
 import 'sync/calendar.dart';
 import 'sync/health.dart';
 import 'sync/location.dart';
+import 'sync/motion.dart';
 import 'sync/native.dart';
 import 'sync/photos.dart';
+import 'sync/stay_round.dart';
 import 'voice/model.dart';
 import 'voice/recorder.dart';
 import 'voice/transcriber.dart';
@@ -33,6 +35,9 @@ const _oldTimeline = 'timeline';
 
 /// The `state` keys for the last `GET connections` answer, and for the Home headers the person folded.
 const connectionsKey = 'connections', foldedKey = 'home.folded';
+
+/// Set once the app asked for motion: a no is final until the person changes it in the phone's settings.
+const motionAskedKey = 'motion.asked';
 
 /// The `state` key set once a first voice note starts, so *New note* stops showing *Hold to talk*.
 const holdTipKey = 'holdTipSeen';
@@ -78,7 +83,7 @@ class RelayController extends Relay {
   RelayController({required this.store, required this.vault, required this.places, required this.health,
     RelayApi Function(Connection)? apiFor, http.Client Function()? signInClient, WebAuth? webAuth, DateTime Function()? clock,
     WebhookClient Function(Webhook webhook, String installId)? webhookFor, this.schedule, this.voice, this.native, this.folder,
-    this.opener, this.share, this.calendar, this.photos, this.network, Duration Function(Duration length)? wordsLimit})
+    this.opener, this.share, this.calendar, this.photos, this.network, this.motion, Duration Function(Duration length)? wordsLimit})
     : _sender = Sender(apiFor, signInClient, webhookFor), _webAuth = webAuth ?? phoneWebAuth, _clock = clock ?? DateTime.now,
       _wordsLimit = wordsLimit ?? wordsLimitOf {
     voice?.model.addListener(notifyListeners);
@@ -112,6 +117,8 @@ class RelayController extends Relay {
   /// The photo library and the network kind; with either missing, *Photos* can not turn on.
   final PhotoSource? photos;
   final Network? network;
+  /// The motion sensors, for a trip's mode; with none, the mode comes from speed.
+  final Motion? motion;
   final Sender _sender;
   final WebAuth _webAuth;
   final DateTime Function() _clock;
@@ -208,6 +215,7 @@ class RelayController extends Relay {
     await _tellNative();
     await _tellShare();
     if (watch && _settings.history) _startHistory();
+    if (watch) await _watchMotion();
     // Nothing waits for a fix yet at start, so a note still waiting lost its wait when the app closed.
     await store.settleWaiting(send: _settings.sending);
     // A close during a delete's Undo time left its mark: the delete runs when that time ends, and goes at the next send.
@@ -448,6 +456,7 @@ class RelayController extends Relay {
     await _saveSettings(_settings.copyWith(sending: false));
     _calendars = const [];
     await _stopHistory();
+    await _watchMotion();
     // A round already sending finishes first, so nothing it read lands after the drop.
     await _syncing;
     await store.dropReadings();
@@ -548,13 +557,60 @@ class RelayController extends Relay {
   Future<String?> setHistory(bool on) async {
     if (on && !_settings.sending) return _sendFirst;
     if (on && !await places.allow(always: true)) return 'Relay Everything may not read your location all the time. Allow it in the phone\'s settings.';
+    if (on && _settings.locationSend != LocationSend.points) await _askMotion();
     await _saveSettings(_settings.copyWith(history: on));
     if (on) {
       _startHistory();
     } else {
       await _stopHistory();
+      // A round already stepping finishes first, so nothing it read lands after the drop.
+      await _syncing;
+      await _endTimeline();
     }
+    await _watchMotion();
     return null;
+  }
+
+  @override
+  Future<String?> setLocationSend(LocationSend send) async {
+    final before = _settings.locationSend;
+    if (send == before) return null;
+    if (_settings.history && before == LocationSend.points) await _askMotion();
+    await _saveSettings(_settings.copyWith(locationSend: send));
+    await _syncing;
+    String? said;
+    if (send == LocationSend.stays) {
+      if (await store.dropPoints() > 0) said = 'The points still waiting on this phone were dropped.';
+    }
+    if (send == LocationSend.points) await _endTimeline();
+    await _watchMotion();
+    await _refreshLocal();
+    return said;
+  }
+
+  /// Stops making stays: with sending on, the open stay goes as ended first, so the server does not keep it ongoing.
+  Future<void> _endTimeline() => _settings.sending ? store.closeTimeline() : store.dropTimeline();
+
+  /// Asks for motion once, when location history starts to make stays and trips. A no leaves the mode to speed.
+  Future<void> _askMotion() async {
+    final sensors = motion;
+    if (sensors == null || await store.get(motionAskedKey) != null) return;
+    try {
+      await sensors.allow();
+    } on Exception {
+      // No motion sensors: the mode comes from speed.
+    } finally {
+      await store.set(motionAskedKey, '1');
+    }
+  }
+
+  /// Tells Android to keep motion changes only while location history makes stays and trips.
+  Future<void> _watchMotion() async {
+    try {
+      await motion?.watch(_settings.stays);
+    } on Exception {
+      // No Google Play services, or a test's engine: the mode comes from speed.
+    }
   }
 
   @override
@@ -567,7 +623,7 @@ class RelayController extends Relay {
   /// the timeline's pins do not wait for the next round.
   void _startHistory() {
     if (native == null) {
-      _history ??= places.history().listen((point) => store.addPoint(point), onError: (_) {});
+      _history ??= places.history().listen((point) => store.addPoint(point, send: _settings.locationSend), onError: (_) {});
       return;
     }
     _drainTimer ??= Timer.periodic(const Duration(minutes: 1), (_) => unawaited(_drain()));
@@ -585,7 +641,8 @@ class RelayController extends Relay {
     final swift = native;
     if (swift == null || !_settings.history) return;
     try {
-      if (await drainPoints(store, swift, name: _settings.sending ? places.nameOf : null) > 0) await _refreshLocal();
+      final moved = await drainPoints(store, swift, name: _settings.sending ? places.nameOf : null, send: _settings.locationSend);
+      if (moved > 0) await _refreshLocal();
     } on Exception {
       // Swift empties its file as it answers, but the points are in the store before any name lookup, so a failure
       // here costs at most a name.
@@ -977,7 +1034,15 @@ class RelayController extends Relay {
       }
     }
     if (_settings.history) await _drain();
-    if (_settings.sending) await store.queuePoints();
+    if (_settings.stays) {
+      try {
+        await syncStays(store, _settings, motion: motion, now: _clock(),
+          namer: stayNamer(_settings, places: places, native: native, calendar: calendar));
+      } on Exception {
+        // The points stay in the store, and the next round steps them again.
+      }
+    }
+    if (_settings.sending && _settings.locationSend != LocationSend.stays) await store.queuePoints();
     final place = _settings.place, privatePlace = _settings.privatePlace;
     // A switch of either place while the round runs stops it at its next upload; a new round follows.
     bool still() => _settings.sending && _settings.place == place && _settings.privatePlace == privatePlace;

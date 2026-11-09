@@ -63,10 +63,11 @@ function buckets(from: number, to: number, size: "hour" | "day", timezone: strin
 }
 
 async function summary(db: Db, date: string, timezone: string) {
-  const { places, events, bloodPressure, ...totals } = await daySummary(db, startOfDay(date, timezone), startOfDay(nextDay(date), timezone));
+  const { places, trips, events, bloodPressure, ...totals } = await daySummary(db, startOfDay(date, timezone), startOfDay(nextDay(date), timezone));
   return { day: date, timezone, ...totals,
     ...bloodPressure && { bloodPressure: bloodPressure.map(reading => ({ ...reading, at: local(reading.at, timezone) })) },
     places: places.map(place => ({ ...place, from: local(place.from, timezone), to: local(place.to, timezone) })),
+    trips: trips.map(trip => spanShown(trip, timezone)),
     events: events.map(event => ({ ...event, start: local(event.start, timezone), end: local(event.end, timezone) })) };
 }
 
@@ -80,9 +81,12 @@ function eventAfter(text: string | undefined): { at: number; id: number } | unde
 
 const eventShown = (event: CalendarEvent, timezone: string) => ({ ...event, start: local(event.start, timezone), end: local(event.end, timezone) });
 
+const spanShown = <Span extends { left: number; arrived: number }>(trip: Span, timezone: string) =>
+  ({ ...trip, left: local(trip.left, timezone), arrived: local(trip.arrived, timezone) });
+
 async function visits(db: Db, from: number, to: number, limit: number, timezone: string) {
   const found = await placeVisits(db, from, to, limit);
-  return { visits: found.visits.map(visit => ({ ...visit, arrived: local(visit.arrived, timezone), left: local(visit.left, timezone) })),
+  return { visits: found.visits.map(visit => spanShown(visit, timezone)), trips: found.trips.map(trip => spanShown(trip, timezone)),
     next: found.next === null ? null : local(found.next, timezone) };
 }
 

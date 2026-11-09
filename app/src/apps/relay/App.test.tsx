@@ -20,10 +20,13 @@ const OLDER = { notes: [note("00000000-0000-4000-8000-000000000003", { recordedA
 const SUMMARY = { day: "2026-11-05", notes: 2, steps: 8432, sleepMinutes: 455,
   heartRate: { min: 52, max: 131, average: 74 }, workouts: { count: 1, minutes: 40 },
   weightKg: 71.2, hrvSdnn: 48, bloodPressure: [{ at: NOW, upper: 118, lower: 76 }], waterMl: 1500,
-  places: [{ name: "Queen St W", lat: 43.65, lon: -79.38, from: NOW - 3_600_000, to: NOW }, { name: "Home", lat: 43.66, lon: -79.4, from: NOW, to: NOW }],
+  places: [{ name: "Queen St W", lat: 43.65, lon: -79.38, from: NOW - 3_600_000, to: NOW }, { name: "Home", lat: 43.66, lon: -79.4, from: NOW, to: NOW },
+    { name: "Corner Café", lat: 43.65, lon: -79.39, from: NOW + 900_000, to: NOW + 4_800_000, address: "Lake Drive", ongoing: true }],
+  trips: [{ left: NOW, arrived: NOW + 900_000, mode: "walking", km: 1.4, minutes: 15, from: "Home", to: "Corner Café" }],
   events: [{ title: "Board meeting", start: NOW, end: NOW + 3_600_000, allDay: false, people: ["Sam Lee", "Ana"] },
     { title: "US Holiday", start: NOW, end: NOW + DAY, allDay: true, people: [] }] };
-const EMPTY = { day: "2026-11-05", notes: 0, steps: 0, sleepMinutes: 0, heartRate: null, workouts: { count: 0, minutes: 0 }, places: [], events: [] };
+const EMPTY = { day: "2026-11-05", notes: 0, steps: 0, sleepMinutes: 0, heartRate: null, workouts: { count: 0, minutes: 0 }, places: [], trips: [],
+  events: [] };
 
 const CHAT_1 = "c0000000-0000-4000-8000-000000000001";
 const CHAT_2 = "c0000000-0000-4000-8000-000000000002";
@@ -93,7 +96,11 @@ it("shows today's summary, every note with its place and recording, and the plac
   expect(within(calendar).getByText("All day")).toBeTruthy();
   const places = screen.getByRole("region", { name: "Places" });
   expect(within(places).getByText("Home")).toBeTruthy();
-  expect(within(places).getByText(/ to /)).toBeTruthy();
+  // A stay shows by its name and its times; a trip gets no row.
+  const cafe = within(places).getByText("Corner Café").parentElement!;
+  expect(within(cafe).getByText(/ to /)).toBeTruthy();
+  expect(within(places).getAllByText(/ to /)).toHaveLength(2);
+  expect(within(places).queryByText(/walking|1\.4 km/i)).toBeNull();
 
   const notes = await screen.findByRole("region", { name: "Notes" });
   const ring = within(notes).getByLabelText("Ring note");

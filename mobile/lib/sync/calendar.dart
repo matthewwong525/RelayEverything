@@ -209,3 +209,13 @@ List<Map<String, dynamic>> _uploads(List<Map<String, dynamic>> events, List<Stri
   close();
   return uploads;
 }
+
+/// The events of the calendars not turned off that overlap `[from, to)`, to name a stay; null while the calendar is off,
+/// so a stay never reads it then.
+Future<List<PhoneEvent>> Function(DateTime from, DateTime to)? eventsAt(CalendarSource? source, Settings settings) {
+  if (source == null || !settings.calendar) return null;
+  return (from, to) async {
+    final ids = {for (final calendar in await source.calendars()) if (!settings.calendarsOff.contains(calendar.id)) calendar.id};
+    return ids.isEmpty ? const [] : source.events(from, to, ids);
+  };
+}

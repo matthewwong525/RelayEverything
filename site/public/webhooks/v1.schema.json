@@ -678,6 +678,214 @@
         },
         "type": {
           "type": "string",
+          "const": "location.stays"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+          "description": "When Relay Everything, or the phone that sends to its own webhook, stored what this message holds."
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "stays": {
+              "minItems": 1,
+              "maxItems": 500,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "Unique in this Relay Everything server, or made from the phone's install id, the kind and the start when the phone sends to its own webhook: upsert by it."
+                  },
+                  "device": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "description": "The device key's id in Relay Everything, or the phone's own install id when the phone sends to its own webhook."
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name"
+                    ],
+                    "description": "The phone or other device that sent the item."
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "stay",
+                      "trip"
+                    ],
+                    "description": "stay: a time in one place. trip: the time between two stays."
+                  },
+                  "start": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                    "description": "A time in ISO 8601, UTC."
+                  },
+                  "end": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                    "description": "A time in ISO 8601, UTC."
+                  },
+                  "ongoing": {
+                    "type": "boolean",
+                    "description": "True while the person is still there: a later message gives its end."
+                  },
+                  "lat": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "A stay's center; null for a trip."
+                  },
+                  "lon": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "name": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "A stay's name: a calendar event's place, a place on the map, the street, or the coordinates."
+                  },
+                  "address": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The street, when the name came from the calendar or the map."
+                  },
+                  "event": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The calendar event that named the stay."
+                  },
+                  "source": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "examples": [
+                          "calendar",
+                          "map",
+                          "street",
+                          "point"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Where a stay's name came from."
+                  },
+                  "mode": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "examples": [
+                          "walking",
+                          "running",
+                          "cycling",
+                          "driving",
+                          "flying",
+                          "unknown"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "How a trip went; null for a stay."
+                  },
+                  "km": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "A trip's distance in km; null for a stay."
+                  }
+                },
+                "required": [
+                  "id",
+                  "device",
+                  "kind",
+                  "start",
+                  "end",
+                  "ongoing",
+                  "lat",
+                  "lon",
+                  "name",
+                  "address",
+                  "event",
+                  "source",
+                  "mode",
+                  "km"
+                ]
+              }
+            }
+          },
+          "required": [
+            "stays"
+          ]
+        }
+      },
+      "required": [
+        "version",
+        "type",
+        "timestamp",
+        "data"
+      ],
+      "description": "Stays and trips the phone worked out from its points, new or changed, in the order Relay Everything stored them. A stay comes when it is 5 minutes long, with ongoing true, again as its end moves on, and again when it ends: upsert by its id."
+    },
+    {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "type": {
+          "type": "string",
           "const": "note.file"
         },
         "timestamp": {

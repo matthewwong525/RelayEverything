@@ -30,6 +30,8 @@ abstract class Places {
   Stream<Pin> history();
   /// The place's name, through the phone's lookup: a network call, made only while sending is on. Null when none.
   Future<String?> nameOf(double lat, double lon);
+  /// Where an address is, such as a calendar event's place, through the same lookup and only while sending is on.
+  Future<({double lat, double lon})?> locate(String address);
 }
 
 class PhonePlaces implements Places {
@@ -53,6 +55,16 @@ class PhonePlaces implements Places {
     try {
       final marks = await _geocoding.placemarkFromCoordinates(lat, lon);
       return marks.isEmpty ? null : placeOf(marks.first);
+    } on Exception {
+      return null;
+    }
+  }
+
+  @override
+  Future<({double lat, double lon})?> locate(String address) async {
+    try {
+      final found = await _geocoding.locationFromAddress(address);
+      return found.isEmpty ? null : (lat: found.first.latitude, lon: found.first.longitude);
     } on Exception {
       return null;
     }

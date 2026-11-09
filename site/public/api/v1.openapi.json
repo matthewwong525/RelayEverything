@@ -471,7 +471,7 @@
       "get": {
         "operationId": "getNote",
         "summary": "Read one note",
-        "description": "Read one note by its id, with the places visited within 30 minutes of it and the health totals of its day.",
+        "description": "Read one note by its id, with the places you stayed within 30 minutes of it and the health totals of its day.",
         "parameters": [
           {
             "name": "id",
@@ -624,7 +624,8 @@
                         "type": "object",
                         "properties": {
                           "name": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "The best name the phone found: a calendar event's place, a place on the map, the street, or the coordinates."
                           },
                           "lat": {
                             "type": "number"
@@ -639,6 +640,22 @@
                           "left": {
                             "type": "string",
                             "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "minutes": {
+                            "type": "number"
+                          },
+                          "address": {
+                            "description": "The street, when the name came from the calendar or the map.",
+                            "type": "string"
+                          },
+                          "event": {
+                            "description": "The calendar event that named the stay.",
+                            "type": "string"
+                          },
+                          "ongoing": {
+                            "description": "You are still there.",
+                            "type": "boolean",
+                            "const": true
                           }
                         },
                         "required": [
@@ -646,9 +663,11 @@
                           "lat",
                           "lon",
                           "arrived",
-                          "left"
+                          "left",
+                          "minutes"
                         ],
-                        "additionalProperties": false
+                        "additionalProperties": false,
+                        "description": "A stay: a time in one place."
                       }
                     },
                     "day": {
@@ -782,7 +801,7 @@
       "get": {
         "operationId": "getDay",
         "summary": "Sum up a day",
-        "description": "One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, each place visited, and the calendar's events with the people in each.",
+        "description": "One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, each stay with its name and times, each trip with its mode, km and minutes, and the calendar's events with the people in each.",
         "parameters": [
           {
             "name": "day",
@@ -958,6 +977,16 @@
                           "to": {
                             "type": "string",
                             "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "address": {
+                            "type": "string"
+                          },
+                          "event": {
+                            "type": "string"
+                          },
+                          "ongoing": {
+                            "type": "boolean",
+                            "const": true
                           }
                         },
                         "required": [
@@ -968,7 +997,68 @@
                           "to"
                         ],
                         "additionalProperties": false
-                      }
+                      },
+                      "description": "One row per stay, in order. Points with no stay, as on a day before the phone made stays, give each place once."
+                    },
+                    "trips": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "left": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "arrived": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "mode": {
+                            "type": "string",
+                            "description": "walking, running, cycling, driving, flying or unknown."
+                          },
+                          "km": {
+                            "type": "number"
+                          },
+                          "minutes": {
+                            "type": "number"
+                          },
+                          "from": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "The name of the stay it left."
+                          },
+                          "to": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "The name of the stay it reached."
+                          }
+                        },
+                        "required": [
+                          "left",
+                          "arrived",
+                          "mode",
+                          "km",
+                          "minutes",
+                          "from",
+                          "to"
+                        ],
+                        "additionalProperties": false,
+                        "description": "A trip between two stays."
+                      },
+                      "description": "The trips between the day's stays, in order."
                     },
                     "events": {
                       "type": "array",
@@ -1018,6 +1108,7 @@
                     "heartRate",
                     "workouts",
                     "places",
+                    "trips",
                     "events"
                   ],
                   "additionalProperties": false
@@ -1254,7 +1345,7 @@
       "get": {
         "operationId": "listPlaces",
         "summary": "Read places visited",
-        "description": "The places visited from one time to another, oldest first: each place's name, where it is, and when you arrived and left.",
+        "description": "The stays and trips from one time to another, oldest first: each stay's name, street, where it is, and when you arrived and left; each trip's mode (walking, running, cycling, driving, flying or unknown), km, minutes, and the stays it went between.",
         "parameters": [
           {
             "name": "from",
@@ -1280,7 +1371,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "How many visits, at most 200. Read on from `next`.",
+            "description": "How many stays, at most 200. Read on from `next`.",
             "schema": {
               "default": 100,
               "type": "integer",
@@ -1312,7 +1403,8 @@
                         "type": "object",
                         "properties": {
                           "name": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "The best name the phone found: a calendar event's place, a place on the map, the street, or the coordinates."
                           },
                           "lat": {
                             "type": "number"
@@ -1327,6 +1419,22 @@
                           "left": {
                             "type": "string",
                             "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "minutes": {
+                            "type": "number"
+                          },
+                          "address": {
+                            "description": "The street, when the name came from the calendar or the map.",
+                            "type": "string"
+                          },
+                          "event": {
+                            "description": "The calendar event that named the stay.",
+                            "type": "string"
+                          },
+                          "ongoing": {
+                            "description": "You are still there.",
+                            "type": "boolean",
+                            "const": true
                           }
                         },
                         "required": [
@@ -1334,10 +1442,73 @@
                           "lat",
                           "lon",
                           "arrived",
-                          "left"
+                          "left",
+                          "minutes"
                         ],
-                        "additionalProperties": false
-                      }
+                        "additionalProperties": false,
+                        "description": "A stay: a time in one place."
+                      },
+                      "description": "The stays, oldest first. Points with no stay or trip, as before the phone made stays, give each run of points at one place."
+                    },
+                    "trips": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "left": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "arrived": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "mode": {
+                            "type": "string",
+                            "description": "walking, running, cycling, driving, flying or unknown."
+                          },
+                          "km": {
+                            "type": "number"
+                          },
+                          "minutes": {
+                            "type": "number"
+                          },
+                          "from": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "The name of the stay it left."
+                          },
+                          "to": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "The name of the stay it reached."
+                          }
+                        },
+                        "required": [
+                          "left",
+                          "arrived",
+                          "mode",
+                          "km",
+                          "minutes",
+                          "from",
+                          "to"
+                        ],
+                        "additionalProperties": false,
+                        "description": "A trip between two stays."
+                      },
+                      "description": "The trips between the stays, before `next`."
                     },
                     "next": {
                       "anyOf": [
@@ -1354,6 +1525,7 @@
                   },
                   "required": [
                     "visits",
+                    "trips",
                     "next"
                   ],
                   "additionalProperties": false

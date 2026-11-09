@@ -91,3 +91,10 @@ INSERT INTO relay_photos (id, device_id, client_id, taken_at, lat, lon, width, h
    1200, 1600, 31, 'people/aaaaaaaa-0000-4000-8000-00000000000a/photos/f0000000-0000-4000-8000-000000000002', 1793820100000),
   ('f0000000-0000-4000-8000-000000000003', 'd0000000-0000-4000-8000-000000000001', 'seed-photo-0003', 1793830000000, 43.6544, -79.4006,
    1600, 900, 31, 'people/aaaaaaaa-0000-4000-8000-00000000000a/photos/f0000000-0000-4000-8000-000000000003', 1793830100000);
+-- A made-up Saturday from the update on, 7 November in Toronto: home, a drive, a café, a walk, the dentist, still there.
+INSERT INTO relay_stays (device_id, kind, start_at, end_at, ongoing, lat, lon, name, address, event, source, mode, km, updated_at, created_at) VALUES
+  ('d0000000-0000-4000-8000-000000000001', 'stay', 1794052800000, 1794060000000, 0, 43.65, -79.38, '12 Maple Street', NULL, NULL, 'street', NULL, NULL, 1794060000000, 1794060000000),
+  ('d0000000-0000-4000-8000-000000000001', 'trip', 1794060000000, 1794060900000, 0, NULL, NULL, NULL, NULL, NULL, NULL, 'driving', 6.2, 1794060900000, 1794060900000),
+  ('d0000000-0000-4000-8000-000000000001', 'stay', 1794060900000, 1794064800000, 0, 43.66, -79.39, 'Corner Café', 'Lake Drive', NULL, 'map', NULL, NULL, 1794064800000, 1794064800000),
+  ('d0000000-0000-4000-8000-000000000001', 'trip', 1794064800000, 1794066000000, 0, NULL, NULL, NULL, NULL, NULL, NULL, 'walking', 1.4, 1794066000000, 1794066000000),
+  ('d0000000-0000-4000-8000-000000000001', 'stay', 1794066000000, 1794069000000, 1, 43.67, -79.4, 'Smile Dental', 'Park Lane', 'Dentist', 'calendar', NULL, NULL, 1794069000000, 1794069000000);

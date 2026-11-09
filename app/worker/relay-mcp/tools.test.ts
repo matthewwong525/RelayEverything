@@ -47,7 +47,7 @@ async function ask(name: string, args: Record<string, unknown>) {
 
 const ID = (n: number) => `a0000000-0000-4000-8000-00000000000${n}`;
 const ids = (answer: { notes: { id: string }[] }) => answer.notes.map(note => note.id);
-const harbord = { name: "Harbord St", lat: 43.6629, lon: -79.3957, arrived: "2026-11-04T08:00:00-05:00", left: "2026-11-04T08:00:00-05:00" };
+const harbord = { name: "Harbord St", lat: 43.6629, lon: -79.3957, arrived: "2026-11-04T08:00:00-05:00", left: "2026-11-04T08:00:00-05:00", minutes: 0 };
 const day = { steps: 8690, sleepMinutes: 450, heartRate: { min: 68, max: 121, average: 95 }, workouts: { count: 1, minutes: 40 } };
 
 it("names itself Relay Everything to the AI app", () => {
@@ -111,9 +111,10 @@ it("sums up a day, and an empty one", async () => {
     { name: "Kensington Ave", lat: 43.6544, lon: -79.4006, from: "2026-11-04T17:00:00-05:00", to: "2026-11-04T17:30:00-05:00" }],
     weightKg: 71.4, bloodPressure: [{ at: "2026-11-04T08:30:00-05:00", upper: 118, lower: 76 }], events: [
       { title: "Board meeting", start: "2026-11-04T10:00:00-05:00", end: "2026-11-04T11:00:00-05:00", allDay: false, people: ["Sam Lee", "Ana"] },
-      { title: "Lunch with Sam", start: "2026-11-04T12:00:00-05:00", end: "2026-11-04T13:00:00-05:00", allDay: false, people: ["Sam Lee"] }] });
+      { title: "Lunch with Sam", start: "2026-11-04T12:00:00-05:00", end: "2026-11-04T13:00:00-05:00", allDay: false, people: ["Sam Lee"] }],
+    trips: [] });
   expect(await ask("day_summary", { day: "2026-11-05" })).toMatchObject({ notes: 0, steps: 0, sleepMinutes: 0, heartRate: null,
-    workouts: { count: 0, minutes: 0 }, places: [] });
+    workouts: { count: 0, minutes: 0 }, places: [], trips: [] });
   expect((await ask("day_summary", { day: "2026-13-45" })).refused).toContain("Not a day.");
 });
 
@@ -162,10 +163,26 @@ it("reads calendar events by time or words, never a removed one, a page at a tim
 
 it("lists visits in order, one per stay at a place, and says where to read on", async () => {
   const all = await ask("places", { from: "2026-11-04", to: "2026-11-05" });
-  expect(all).toEqual({ next: null, visits: [harbord,
-    { name: "King St W", lat: 43.6487, lon: -79.3817, arrived: "2026-11-04T12:00:00-05:00", left: "2026-11-04T12:00:00-05:00" },
-    { name: "Kensington Ave", lat: 43.6544, lon: -79.4006, arrived: "2026-11-04T17:00:00-05:00", left: "2026-11-04T17:30:00-05:00" }] });
+  expect(all).toEqual({ next: null, trips: [], visits: [harbord,
+    { name: "King St W", lat: 43.6487, lon: -79.3817, arrived: "2026-11-04T12:00:00-05:00", left: "2026-11-04T12:00:00-05:00", minutes: 0 },
+    { name: "Kensington Ave", lat: 43.6544, lon: -79.4006, arrived: "2026-11-04T17:00:00-05:00", left: "2026-11-04T17:30:00-05:00", minutes: 30 }] });
   expect(await ask("places", { from: "2026-11-04", to: "2026-11-05", limit: 2 })).toMatchObject({ next: "2026-11-04T17:00:00-05:00" });
+});
+
+it("answers where you went on a Saturday with its stays, by name, and the trips between them", async () => {
+  const places = await ask("places", { from: "2026-11-07", to: "2026-11-08" });
+  expect(places.visits.map((visit: { name: string; arrived: string }) => [visit.name, visit.arrived])).toEqual([
+    ["12 Maple Street", "2026-11-07T07:00:00-05:00"], ["Corner Café", "2026-11-07T09:15:00-05:00"], ["Smile Dental", "2026-11-07T10:40:00-05:00"]]);
+  expect(places.visits[2]).toEqual({ name: "Smile Dental", lat: 43.67, lon: -79.4, arrived: "2026-11-07T10:40:00-05:00",
+    left: "2026-11-07T11:30:00-05:00", minutes: 50, address: "Park Lane", event: "Dentist", ongoing: true });
+  expect(places.trips).toEqual([
+    { left: "2026-11-07T09:00:00-05:00", arrived: "2026-11-07T09:15:00-05:00", mode: "driving", km: 6.2, minutes: 15, from: "12 Maple Street", to: "Corner Café" },
+    { left: "2026-11-07T10:20:00-05:00", arrived: "2026-11-07T10:40:00-05:00", mode: "walking", km: 1.4, minutes: 20, from: "Corner Café", to: "Smile Dental" }]);
+  const day = await ask("day_summary", { day: "2026-11-07" });
+  expect(day.places.map((place: { name: string; from: string; to: string }) => [place.name, place.from, place.to])).toEqual([
+    ["12 Maple Street", "2026-11-07T07:00:00-05:00", "2026-11-07T09:00:00-05:00"], ["Corner Café", "2026-11-07T09:15:00-05:00", "2026-11-07T10:20:00-05:00"],
+    ["Smile Dental", "2026-11-07T10:40:00-05:00", "2026-11-07T11:30:00-05:00"]]);
+  expect(day.trips.map((trip: { mode: string }) => trip.mode)).toEqual(["driving", "walking"]);
 });
 
 const CHAT = (n: number) => `c0000000-0000-4000-8000-00000000000${n}`;

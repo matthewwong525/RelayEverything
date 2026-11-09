@@ -43,7 +43,7 @@ What you give up:
 - **Your Relay Everything page and your AI can not read it**, because none of it is on the server.
 - **A failing receiver holds back the rest.** The phone sends in order, so it keeps each item, and all after it, until your receiver answers `2xx`. The **Account** page in Settings shows the last answer. It never drops an item for a `400`. Only a file your receiver refuses with `413` is dropped, and the **Account** page names it. A photo your receiver refuses with `413` is dropped too. A photo that waits does not hold back your notes.
 
-From the phone, `device.id` is the phone's own id, a UUID the app makes once. A note's `created_at` is the same as its `recorded_at`: the note's own time, which for a voice note is when it was recorded. Its `note.updated` has the same one. The message's `timestamp` is when the phone queued the message. Health samples and points are numbered on the phone, so save them by `device.id` and `id` together. A calendar event's `id` is made from the phone's id and the event's `key`, so each change of one event has the same `id`. A removed event from the phone has only its `key`, `id` and `start`. A photo's `id` is the phone's own id for it, a UUID.
+From the phone, `device.id` is the phone's own id, a UUID the app makes once. A note's `created_at` is the same as its `recorded_at`: the note's own time, which for a voice note is when it was recorded. Its `note.updated` has the same one. The message's `timestamp` is when the phone queued the message. Health samples and points are numbered on the phone, so save them by `device.id` and `id` together. A calendar event's `id` is made from the phone's id and the event's `key`, so each change of one event has the same `id`. A stay's or a trip's `id` is made from the phone's id, its `kind` and its `start` in the same way. A removed event from the phone has only its `key`, `id` and `start`. A photo's `id` is the phone's own id for it, a UUID.
 
 ## The message
 
@@ -67,6 +67,7 @@ Every message is a `POST` with a JSON body in one envelope:
 | `note.deleted` | A phone deletes a note, from any device or way in. Always after the note's `note.created`. | `note`: its `id` and `deleted_at` |
 | `health.samples` | A phone sends health samples. | `samples`: up to 500 |
 | `location.points` | A phone sends location points. | `points`: up to 500 |
+| `location.stays` | A phone sends new or changed stays and trips. | `stays`: up to 500, each a `stay` or a `trip` |
 | `calendar.events` | A phone sends new, changed or removed calendar events. | `events`: up to 500, each with its `status` |
 | `note.file` | A file of a note reaches your server, or the phone sends it: one message for each file, after the note. | `note_id`, and `file` with its bytes |
 | `photo.created` | A new photo from the **Photos** switch reaches your server, or the phone sends it. | `photo`, with its bytes, time and place |
@@ -233,6 +234,31 @@ A blood pressure reading is two samples with the same `start`: the upper and the
 }
 ```
 
+### `location.stays`
+
+```json
+{
+  "version": 1,
+  "type": "location.stays",
+  "timestamp": "2026-11-04T19:00:00.000Z",
+  "data": {
+    "stays": [
+      { "id": 4, "device": { "id": "d0000000-0000-4000-8000-000000000001", "name": "iPhone" }, "kind": "trip",
+        "start": "2026-11-04T14:00:00.000Z", "end": "2026-11-04T14:15:00.000Z", "ongoing": false,
+        "lat": null, "lon": null, "name": null, "address": null, "event": null, "source": null, "mode": "driving", "km": 6.2 },
+      { "id": 5, "device": { "id": "d0000000-0000-4000-8000-000000000001", "name": "iPhone" }, "kind": "stay",
+        "start": "2026-11-04T14:15:00.000Z", "end": "2026-11-04T14:25:00.000Z", "ongoing": true,
+        "lat": 43.6629, "lon": -79.3957, "name": "Corner Café", "address": "Lake Drive", "event": null, "source": "map",
+        "mode": null, "km": null }
+    ]
+  }
+}
+```
+
+The phone works out stays and trips from its points, from the update that adds them on: older days have only points. A `stay` is a time in one place, with its `lat`, `lon` and `name`. A `trip` is the time between two stays, with its `mode` and its `km`. `source` tells where a stay's name came from: `calendar` (an event at that time and place, in `event`), `map` (a place on Apple Maps), `street`, or `point` (the coordinates). `mode` is `walking`, `running`, `cycling`, `driving`, `flying` or `unknown`. A later version can add a value to either list.
+
+A stay comes once it is 5 minutes long, with `ongoing` `true`, again each time its `end` moves on while you stay, and again when it ends or gets a better name. Each change of one stay has the same `id`: save it as an upsert by `device.id` and `id`. Location history's tick takes both points and stays. With **Only stays and trips** on the phone, you get no `location.points`.
+
 ### `calendar.events`
 
 ```json
@@ -384,6 +410,23 @@ CREATE TABLE relay_photos (
   size bigint NOT NULL,
   bytes bytea NOT NULL
 );
+CREATE TABLE relay_location_stays (
+  id bigint NOT NULL,
+  device_id text NOT NULL,
+  kind text NOT NULL,
+  start_at timestamptz NOT NULL,
+  end_at timestamptz NOT NULL,
+  ongoing boolean NOT NULL,
+  lat double precision,
+  lon double precision,
+  name text,
+  address text,
+  event text,
+  source text,
+  mode text,
+  km double precision,
+  PRIMARY KEY (device_id, id)
+);
 CREATE TABLE relay_location_points (
   id bigint NOT NULL,
   device_id text NOT NULL,
@@ -400,7 +443,7 @@ Save a note with `INSERT ... ON CONFLICT (id) DO UPDATE`, and keep the stored `a
 
 ## An example receiver
 
-[`receiver.mjs`](../../webhooks/receiver.mjs) is about 80 lines of Node with no packages. It checks each signature and saves notes, their files, samples, points, calendar events and photos in a SQLite file, so it needs no database server. It keeps a message of a type it does not know in its `other_messages` table, by its `webhook-id`, and answers `204`. It needs Node 22.13 or later.
+[`receiver.mjs`](../../webhooks/receiver.mjs) is about 80 lines of Node with no packages. It checks each signature and saves notes, their files, samples, points, stays and trips, calendar events and photos in a SQLite file, so it needs no database server. It keeps a message of a type it does not know in its `other_messages` table, by its `webhook-id`, and answers `204`. It needs Node 22.13 or later.
 
 ```bash
 curl -O https://relayeverything.com/webhooks/receiver.mjs

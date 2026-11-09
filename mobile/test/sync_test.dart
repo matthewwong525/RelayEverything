@@ -310,7 +310,7 @@ void main() {
         places: FakePlaces(), now: later(60)), isTrue);
       expect([swift.drains, source.reads.length], [1, 1]);
       expect([for (final request in server.requests) (request.url.toString(), jsonDecode(request.body)['type'])],
-        [(hook.address, 'health.samples'), (hook.address, 'location.points')]);
+        [(hook.address, 'health.samples'), (hook.address, 'location.stays'), (hook.address, 'location.points')]);
       expect(await store.waiting(), 0);
     });
 
@@ -374,7 +374,8 @@ void main() {
       await store.set(settingsKey, const Settings(sending: true, history: true).encode());
       expect(await backgroundRound(store, connection: connection, health: FakeHealth(), sender: Sender(server.api), native: swift,
         places: places), isTrue);
-      final sent = [for (final point in jsonDecode(server.requests.single.body)['points'] as List) point as Map];
+      final locations = server.requests.singleWhere((request) => request.url.path.endsWith('/locations'));
+      final sent = [for (final point in jsonDecode(locations.body)['points'] as List) point as Map];
       expect([sent.length, sent.first['at'], sent.where((point) => point.containsKey('place')).length], [12, start.millisecondsSinceEpoch, 10]);
       // The two oldest go with no name.
       expect([sent[0]['place'], sent[1]['place'], sent[2]['place']], [null, null, 'Place 10']);
@@ -394,7 +395,7 @@ void main() {
       await store.set(healthSince, '${start.millisecondsSinceEpoch}');
       await store.addPoint(Pin(at: start, lat: 1, lon: 1, accuracy: 1));
       expect(await backgroundRound(store, connection: connection, health: source, sender: Sender(server.api), now: later(60)), isFalse);
-      expect([server.routes, await store.get(healthSince)], [['locations'], '${start.millisecondsSinceEpoch}']);
+      expect([server.routes, await store.get(healthSince)], [['stays', 'locations'], '${start.millisecondsSinceEpoch}']);
       source.error = null;
       expect(await backgroundRound(store, connection: connection, health: source, sender: Sender(server.api), now: later(120)), isTrue);
       expect(source.reads.last.$1.isBefore(start), isTrue);
@@ -527,7 +528,7 @@ void main() {
       // Health is read again next time, so the round is not done; the points and the photo still go.
       expect(await backgroundRound(store, connection: connection, health: health, sender: Sender(server.api), native: swift,
         places: FakePlaces(), photos: photos, network: network, now: later(600)), isFalse);
-      expect([server.routes, await store.waitingPhotos()], [['locations', 'photos'], isEmpty]);
+      expect([server.routes, await store.waitingPhotos()], [['stays', 'locations', 'photos'], isEmpty]);
     });
 
     test('with mobile data allowed, photos go on mobile data, and never with no network', () async {
@@ -805,7 +806,7 @@ void main() {
         now: later(minutes));
       expect(await round(hook, 60), isTrue);
       expect(serverRoutes(server), ['notes']);
-      expect(hookTypes(server), ['health.samples', 'location.points', 'photo.created']);
+      expect(hookTypes(server), ['health.samples', 'location.stays', 'location.points', 'photo.created']);
       expect([await store.outbox(), await store.waitingPhotos()], [isEmpty, isEmpty]);
 
       // A webhook the phone lost: the note still goes, and private data waits on the phone, never at the server.
@@ -815,7 +816,7 @@ void main() {
       photos.take('IMG_0002', later(81));
       expect(await round(null, 120), isTrue);
       expect([serverRoutes(server), hookTypes(server)], [['notes'], isEmpty]);
-      expect({for (final item in await store.outbox()) (item.route, item.destination)}, {('health', ownWebhook)});
+      expect({for (final item in await store.outbox()) (item.route, item.destination)}, {('health', ownWebhook), ('stays', ownWebhook)});
       expect((await store.waitingPhotos()).length, 1);
 
       // A receiver that answers 503: notes still go, the round is not done, and nothing private goes to the server.

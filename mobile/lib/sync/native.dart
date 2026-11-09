@@ -13,6 +13,10 @@ abstract class NativeBackground {
 
   /// The points Swift kept since the last drain, one JSON object each, and empties its file.
   Future<List<String>> drain();
+
+  /// The nearest place of interest within 50 m, such as a café, from Apple Maps; null when there is none. A network
+  /// call, made once per stay and only while sending is on.
+  Future<String?> venue(double lat, double lon);
 }
 
 class PhoneBackground implements NativeBackground {
@@ -24,6 +28,9 @@ class PhoneBackground implements NativeBackground {
 
   @override
   Future<List<String>> drain() async => await _channel.invokeListMethod<String>('drain') ?? const [];
+
+  @override
+  Future<String?> venue(double lat, double lon) => _channel.invokeMethod<String>('venue', {'lat': lat, 'lon': lon});
 
   /// With the app open, a wake runs [round] here, in place of a second engine.
   static void onWake(Future<void> Function() round) => _channel.setMethodCallHandler((call) async {
@@ -49,17 +56,19 @@ Pin? pointOf(String line) {
 const _namedPerRound = 10;
 
 /// Moves the points Swift kept into the store. Swift empties its file as it answers, so every point is stored before
-/// any name lookup: a wake that iOS cuts short loses at most names, never points. Then, with [name], set only while
-/// sending is on, the newest 10 get a place name; the rest, and any whose lookup fails, stay unnamed. Returns how many
-/// it moved.
-Future<int> drainPoints(Store store, NativeBackground native, {Future<String?> Function(double lat, double lon)? name}) async {
+/// any name lookup: a wake that iOS cuts short loses at most names, never points. Each goes where [send] says: waiting
+/// to go as a point, into the open stay or trip, or both. Then, with [name], set only while sending is on, the newest
+/// 10 points that go get a place name; the rest, and any whose lookup fails, stay unnamed. Returns how many it moved.
+Future<int> drainPoints(Store store, NativeBackground native, {Future<String?> Function(double lat, double lon)? name,
+  LocationSend send = LocationSend.all}) async {
   final points = [for (final line in await native.drain()) ?pointOf(line)]..sort((a, b) => b.at.compareTo(a.at));
   await store.transaction(() async {
     for (final point in points) {
-      await store.addPoint(point);
+      await store.addPoint(point, send: send);
     }
   });
-  if (name != null) {
+  // With *Only stays and trips* no point goes, so none needs a name: the stay gets its own.
+  if (name != null && send != LocationSend.stays) {
     for (final point in points.take(_namedPerRound)) {
       try {
         final place = await name(point.lat, point.lon);

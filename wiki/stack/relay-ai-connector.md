@@ -26,12 +26,12 @@ Then ask, for example: *What did I note on 4 November?*, *How many steps did I w
 The connector has twelve tools: eleven read, and `add_note` adds. Each answer has a limit, so one question can't copy all of Relay Everything.
 
 - **search**: notes that hold every word you give, newest first.
-- **fetch**: one note, the places near it in time, and its day's health totals.
+- **fetch**: one note, the places you stayed near it in time, and its day's health totals.
 - **timeline**: every note from one time to another, a page at a time.
-- **day_summary**: one day's notes count, health totals, places and events (title, start, end and people's names). A health type with no readings that day is left out.
+- **day_summary**: one day's notes count, health totals, places, trips and events (title, start, end and people's names). `places` has one row per stay (`name`, `lat`, `lon`, `from`, `to`, and `address`, `event` and `ongoing` when it has them); `trips` has each trip's `mode`, `km`, `minutes`, and the names of the stays it went `from` and `to`. A health type with no readings that day is left out.
 - **health**: one type from `HEALTH_TYPES` in `queries.ts`, one value per hour or per day.
 - **calendar**: events from `relay_calendar_events` between two times, by start, or newest first with `q`; removed events are skipped. `GET /v1/calendar` is the same read. `fetch` stays notes and chats.
-- **places**: each stay at a place, with when you arrived and left.
+- **places**: `visits`, the stays from one time to another (name, street as `address`, the calendar `event` that named it, `lat`, `lon`, `arrived`, `left`, `minutes`, and `ongoing` while you are still there), and `trips` between them (`mode`, `km`, `minutes`, `from` and `to`), with `next` to read on. The phone works out stays and trips ([phone sync](../relay-phone-sync.md)), and the server keeps them in `relay_stays`. For points that no stay or trip covers, `placeVisits` in [`queries.ts`](../../app/worker/apps/relay/queries.ts) gives the old runs of points at one street, so old days and a phone on *Only points* answer as before; where two phones' stays overlap, it keeps the longer one, and it reads on until the page is full. A stay not sent for 6 hours reads as ended, not `ongoing`.
 - **search_chats**: saved Claude Code chats that hold every word you give, with the lines that match ([Relay Everything's Claude Code chats](relay-chats.md)).
 - **read_chat**: one saved chat, a part at a time, with the AI's saved summaries.
 - **photos**: photos the phones sent, from one time to another, newest first: each one's id, time taken, place (`lat`, `lon`), width and height, with `nextCursor` for the next page. `near` (`lat`, `lon`, `km` up to 500) keeps only photos near a point; `limit` is at most 50.

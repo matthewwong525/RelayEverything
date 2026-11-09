@@ -151,7 +151,7 @@ class _NeedsSending extends StatelessWidget {
   }
 }
 
-/// *Location*: the location history switch, its send state, and on iPhone how often it keeps a point.
+/// *Location*: the location history switch, its send state, on iPhone how often it keeps a point, and what it sends.
 class LocationPage extends StatelessWidget {
   const LocationPage({super.key, required this.relay, this.scanner});
 
@@ -178,6 +178,18 @@ class LocationPage extends StatelessWidget {
               subtitle: Text('A point at each move of about 500 m, and when you arrive or leave.')),
             RadioListTile(value: LocationMode.move, title: Text('Every 100 m'),
               subtitle: Text('A point each 100 m, or each 5 minutes while you stay. It uses more battery.')),
+          ]),
+        )]),
+        if (settings.history) Group(title: 'What to send', children: [RadioGroup<LocationSend>(
+          groupValue: settings.locationSend,
+          onChanged: (send) { if (send != null) apply(context, relay.setLocationSend(send)); },
+          child: const Column(children: [
+            RadioListTile(value: LocationSend.all, title: Text('Stays, trips and points'),
+              subtitle: Text('Where you stayed, how you moved, and each point on the way.')),
+            RadioListTile(value: LocationSend.stays, title: Text('Only stays and trips'),
+              subtitle: Text('Where you stayed and how you moved. No point on the way leaves the phone.')),
+            RadioListTile(value: LocationSend.points, title: Text('Only points'),
+              subtitle: Text('Each point, with its street, as before.')),
           ]),
         )]),
         if (!settings.sending) _NeedsSending(relay: relay, what: 'Location history', scanner: scanner),

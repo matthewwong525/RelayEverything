@@ -2,8 +2,8 @@
 // not in `missing`. How to add a kind: wiki/relay-webhook-changes.md.
 import type { Files } from "./space.ts";
 import { MINUTE, type Db } from "./store.ts";
-import { calendarEvents, healthSamples, locationPoints, noteCreated, noteDeleted, noteFile, noteUpdated, photoCreated, type AttachmentRow, type EventRow,
-  type HealthRow, type LocationRow, type NoteRow, type PhotoRow } from "./webhooks/format.ts";
+import { calendarEvents, healthSamples, locationPoints, locationStays, noteCreated, noteDeleted, noteFile, noteUpdated, photoCreated, type AttachmentRow, type EventRow,
+  type HealthRow, type LocationRow, type NoteRow, type PhotoRow, type StayRow } from "./webhooks/format.ts";
 import { base64 } from "./webhooks/sign.ts";
 
 type Part = "webhook" | "api" | "tool" | "docs";
@@ -107,8 +107,11 @@ export const KINDS: DataKind[] = [
     build: async (_files, db, group) => healthSamples(await rowsOf<HealthRow>(db, "relay_health", group), loggedAt(group)),
     api: ["/v1/health"], tools: ["health"], docs: "app/health" },
   { id: "locations", label: "Location history", detail: "", sensitive: true,
-    log: ["location"], messages: ["location.points"],
-    build: async (_files, db, group) => locationPoints(await rowsOf<LocationRow>(db, "relay_locations", group), loggedAt(group)),
+    log: ["location", "stay"], messages: ["location.points", "location.stays"],
+    // A stay changed twice in one group goes once, as it is now.
+    build: async (_files, db, group) => group[0].kind === "stay"
+      ? locationStays(await rowsOf<StayRow>(db, "relay_stays", group), loggedAt(group))
+      : locationPoints(await rowsOf<LocationRow>(db, "relay_locations", group), loggedAt(group)),
     api: ["/v1/places"], tools: ["places"], docs: "app/location" },
   { id: "calendar", label: "Calendar", detail: "new, changed and removed events", sensitive: true,
     log: ["calendar"], messages: ["calendar.events"],

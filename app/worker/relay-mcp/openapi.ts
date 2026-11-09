@@ -14,7 +14,14 @@ const note = z.strictObject({
   attachments: z.array(z.strictObject({ id: z.string(), name: z.string(), type: z.string(), size: z.number().describe("In bytes."),
     ready: z.boolean().describe("Whether the file's bytes have arrived.") })).describe("The note's files: names, types and sizes, never the bytes."),
 });
-const visit = z.strictObject({ name: z.string(), lat: z.number(), lon: z.number(), arrived: at, left: at });
+const visit = z.strictObject({ name: z.string().describe("The best name the phone found: a calendar event's place, a place on the map, the street, or the coordinates."),
+  lat: z.number(), lon: z.number(), arrived: at, left: at, minutes: z.number(),
+  address: z.string().optional().describe("The street, when the name came from the calendar or the map."),
+  event: z.string().optional().describe("The calendar event that named the stay."),
+  ongoing: z.literal(true).optional().describe("You are still there.") }).describe("A stay: a time in one place.");
+const trip = z.strictObject({ left: at, arrived: at, mode: z.string().describe("walking, running, cycling, driving, flying or unknown."),
+  km: z.number(), minutes: z.number(), from: z.string().nullable().describe("The name of the stay it left."),
+  to: z.string().nullable().describe("The name of the stay it reached.") }).describe("A trip between two stays.");
 const totals = { steps: z.number(), sleepMinutes: z.number(), heartRate: z.strictObject({ min: z.number(), max: z.number(), average: z.number() }).nullable(),
   workouts: z.strictObject({ count: z.number(), minutes: z.number() }) };
 /** The day's other health values: each is there only when the day has some. */
@@ -40,13 +47,18 @@ export const ANSWERS = {
   timeline: z.strictObject({ notes: z.array(note), nextCursor }),
   fetch: note.extend({ placesNearby: z.array(visit), day: z.strictObject({ day: z.string(), ...totals }) }),
   day_summary: z.strictObject({ day: z.string(), timezone: z.string(), notes: z.number(), ...totals, ...more,
-    places: z.array(z.strictObject({ name: z.string(), lat: z.number(), lon: z.number(), from: at, to: at })),
+    places: z.array(z.strictObject({ name: z.string(), lat: z.number(), lon: z.number(), from: at, to: at, address: z.string().optional(),
+      event: z.string().optional(), ongoing: z.literal(true).optional() }))
+      .describe("One row per stay, in order. Points with no stay, as on a day before the phone made stays, give each place once."),
+    trips: z.array(trip).describe("The trips between the day's stays, in order."),
     events: z.array(z.strictObject({ title: z.string(), start: at, end: at, allDay: z.boolean(), people: z.array(z.string()).describe("Their names.") }))
       .describe("The day's calendar events, in start order, up to 50.") }),
   health: z.strictObject({ type: z.string(), bucket: z.enum(["hour", "day"]), timezone: z.string(),
     values: z.array(z.object({ from: at, to: at }).catchall(z.number().nullable())
       .describe("Each type's own values, as the health tool says: such as `total` for steps, `min`, `max` and `average` for heart rate.")) }),
-  places: z.strictObject({ visits: z.array(visit), next: at.nullable().describe("The first visit left out: read on from it.") }),
+  places: z.strictObject({ visits: z.array(visit).describe("The stays, oldest first. Points with no stay or trip, as before the phone made stays, give each run of points at one place."),
+    trips: z.array(trip).describe("The trips between the stays, before `next`."),
+    next: at.nullable().describe("The first visit left out: read on from it.") }),
   calendar: z.strictObject({ events: z.array(event), nextCursor }),
   search_chats: z.strictObject({ chats: z.array(z.strictObject({ ...chat, lines: z.array(z.strictObject({ role, text: z.string() })) })), nextCursor }),
   read_chat: z.strictObject({ ...chat, saves: z.array(z.strictObject({ id: z.string(), title: z.string(), text: z.string(), createdAt: at })),

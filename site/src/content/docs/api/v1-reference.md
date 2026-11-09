@@ -46,7 +46,7 @@ Add a typed note, with this key's or app's name as its device, and send it on to
 
 `GET /v1/notes/{id}` · `getNote`
 
-Read one note by its id, with the places visited within 30 minutes of it and the health totals of its day.
+Read one note by its id, with the places you stayed within 30 minutes of it and the health totals of its day.
 
 | Field | In | Type | Required | What it holds |
 |---|---|---|---|---|
@@ -57,7 +57,7 @@ Read one note by its id, with the places visited within 30 minutes of it and the
 
 `GET /v1/days/{day}` · `getDay`
 
-One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, each place visited, and the calendar's events with the people in each.
+One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, each stay with its name and times, each trip with its mode, km and minutes, and the calendar's events with the people in each.
 
 | Field | In | Type | Required | What it holds |
 |---|---|---|---|---|
@@ -82,13 +82,13 @@ One value per hour or day for one kind of health data: steps, sleep, mindful min
 
 `GET /v1/places` · `listPlaces`
 
-The places visited from one time to another, oldest first: each place's name, where it is, and when you arrived and left.
+The stays and trips from one time to another, oldest first: each stay's name, street, where it is, and when you arrived and left; each trip's mode (walking, running, cycling, driving, flying or unknown), km, minutes, and the stays it went between.
 
 | Field | In | Type | Required | What it holds |
 |---|---|---|---|---|
 | `from` | query | string | yes | The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
 | `to` | query | string | yes | The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
-| `limit` | query | integer | no | How many visits, at most 200. Read on from `next`. |
+| `limit` | query | integer | no | How many stays, at most 200. Read on from `next`. |
 | `timezone` | query | string | no | An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out. |
 
 ## Read calendar events

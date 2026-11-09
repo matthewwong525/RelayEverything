@@ -74,7 +74,7 @@ it("gives each message type and each send log kind exactly one owner", () => {
   expect(KINDS.flatMap(kind => kind.messages).filter(type => !TYPES.includes(type))).toEqual([]);
   const latest = readdirSync(new URL("schema/space-migrations/", root)).sort().reverse()
     .map(name => read(`schema/space-migrations/${name}`)).find(sql => sql.includes("CREATE TABLE relay_outbox"))!;
-  const logged = /kind TEXT NOT NULL CHECK \(kind IN \(([^)]*)\)\)/.exec(latest)![1].split(",").map(item => item.trim().replaceAll("'", ""));
+  const logged = /CREATE TABLE relay_outbox \([^;]*?kind TEXT NOT NULL CHECK \(kind IN \(([^)]*)\)\)/.exec(latest)![1].split(",").map(item => item.trim().replaceAll("'", ""));
   expect(owners(logged, kind => kind.log)).toEqual([]);
   expect(KINDS.flatMap(kind => kind.log).sort()).toEqual(logged.sort());
 });

@@ -105,9 +105,9 @@ String cleanWords(Iterable<String> segments) {
 }
 
 /// The iPhone simulator's Metal driver traps when whisper.cpp loads its model there, so the simulator runs it on the
-/// CPU; a real phone keeps the GPU.
-WhisperConfig whisperConfig({Map<String, String>? environment}) =>
-  (environment ?? Platform.environment).containsKey('SIMULATOR_DEVICE_NAME')
+/// CPU; a real phone keeps the GPU. Only a simulator app runs from a CoreSimulator folder: no flag reaches every launch.
+WhisperConfig whisperConfig({String? executable}) =>
+  (executable ?? Platform.resolvedExecutable).contains('/CoreSimulator/')
     ? const WhisperConfig(backend: WhisperBackend.cpu) : const WhisperConfig();
 
 /// whisper.cpp through `whisper_cpp_flutter_plus`. The model loads at the first recording and stays loaded. The

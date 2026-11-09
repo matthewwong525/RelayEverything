@@ -12,8 +12,11 @@ import 'fakes.dart';
 
 void main() {
   test('the iPhone simulator loads whisper.cpp on the CPU; a phone keeps the default', () {
-    expect(whisperConfig(environment: {'SIMULATOR_DEVICE_NAME': 'iPhone 17'}).backend, WhisperBackend.cpu);
-    expect(whisperConfig(environment: {}).backend, const WhisperConfig().backend);
+    const simulator = '/Users/me/Library/Developer/CoreSimulator/Devices/23C8/data/Containers/Bundle/Application/0A8D/'
+      'Runner.app/Runner';
+    expect(whisperConfig(executable: simulator).backend, WhisperBackend.cpu);
+    expect(whisperConfig(executable: '/private/var/containers/Bundle/Application/0A8D/Runner.app/Runner').backend,
+      const WhisperConfig().backend);
   });
 
   group('the words', () {

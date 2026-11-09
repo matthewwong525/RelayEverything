@@ -59,6 +59,7 @@ Non-goals: a separate mic button; a pause button; a waveform kept with the note;
 - **2026-11-08** — Assumed: built and merged with main after #73, all 495 phone tests pass locally; saved for the online checks, with the iPhone check (task 4.2) next.
 - **2026-11-08** — Assumed: after #72 merged, took main into this change before the iPhone check, and stopped the check already running on the older commit, because a pass on the older code would not prove the merged one.
 - **2026-11-08** — Assumed: the iPhone check's crash on save (whisper.cpp's Metal model load on the simulator) is fixed here by running the model on the CPU on the simulator only, because it blocks the check of this change's save and cancel, and a real phone is unchanged.
+- **2026-11-09** — Assumed: the simulator is found by the app's own path, which holds `/CoreSimulator/`, not by the `SIMULATOR_DEVICE_NAME` flag, because the second iPhone check crashed in the same Metal load: the flag did not reach the app. One more fix round, then one more iPhone check, because the crash is in the speech model's start, not in the new screen.
 
 ## Capabilities
 

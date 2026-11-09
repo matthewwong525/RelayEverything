@@ -22,7 +22,7 @@
 ## 4. Checks
 
 - [x] 4.1 Run `flutter analyze` and `flutter test` in `mobile/`, `node scripts/public-check.mjs`, and the wiki link check; verify all pass.
-- [ ] 4.2 `/save`, then run the iPhone device check with a hold on *New note*, a save by tap, and a cancel by X, in light and dark; show its pictures beside the prototype on the preview page.
+- [x] 4.2 `/save`, then run the iPhone device check with a hold on *New note*, a save by tap, and a cancel by X, in light and dark; show its pictures beside the prototype on the preview page.
 
 ## 5. Review fixes
 

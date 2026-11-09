@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · full-screen-voice-recording</title>
+<title>Review · 2026-11-09-full-screen-voice-recording</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="full-screen-voice-recording" data-own-back>
+<body data-change="2026-11-09-full-screen-voice-recording" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>full-screen-voice-recording</h1>
+  <h1>2026-11-09-full-screen-voice-recording</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -601,6 +601,8 @@
 <li class="decision card" id="decision-19" data-note="decision-19" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-08</p>Assumed: after #72 merged, took main into this change before the iPhone check, and stopped the check already running on the older commit, because a pass on the older code would not prove the merged one.</li>
 <li class="decision card" id="decision-20" data-note="decision-20" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-08</p>Assumed: the iPhone check's crash on save (whisper.cpp's Metal model load on the simulator) is fixed here by running the model on the CPU on the simulator only, because it blocks the check of this change's save and cancel, and a real phone is unchanged.</li>
 <li class="decision card" id="decision-21" data-note="decision-21" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-09</p>Assumed: the simulator is found by the app's own path, which holds <code>/CoreSimulator/</code>, not by the <code>SIMULATOR_DEVICE_NAME</code> flag, because the second iPhone check crashed in the same Metal load: the flag did not reach the app. One more fix round, then one more iPhone check, because the crash is in the speech model's start, not in the new screen.</li>
+<li class="decision card" id="decision-22" data-note="decision-22" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-09</p>Assumed: task 4.2 is done on the iPhone check of 3737a3e (<code>result=works</code>): the tip, the full screen, a tap that saves and opens the note, and an X that keeps nothing all passed in light mode. The half-second ring was too fast for a picture, and dark mode was not run; the phone tests cover both, so they do not hold the publish.</li>
+<li class="decision card" id="decision-23" data-note="decision-23" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-09</p>Assumed: took main after #76 (private data only to your own webhook) at the archive step, because it changes <code>controller.dart</code> and the phone tests; all 520 phone tests pass, and the iPhone check runs again on the merged commit before the merge.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

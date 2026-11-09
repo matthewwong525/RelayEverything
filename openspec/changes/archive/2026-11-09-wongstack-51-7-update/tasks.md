@@ -15,7 +15,7 @@
 - [x] 3.1 Run `node /root/WongStack/.claude/skills/wong-sync/scripts/merge-check.mjs --target /root/.paseo/worktrees/11511sre/famous-goose --source /root/WongStack --from 3ee8c0f97091af2831f42120d889babfd9a62759`; take every missing hunk, or name each one dropped on purpose (the old local close wording), until no other remains.
 - [x] 3.2 Rebuild this change's page with the new builder (`build-review.mjs openspec/changes/wongstack-51-7-update --require-current`); verify it builds with no error.
 - [x] 3.3 Run `npm test` in `app/` and `node scripts/public-check.mjs --tree`; verify all pass, `tidy.test.mjs` included, with no check loosened.
-- [ ] 3.4 Run `/save`; verify the pull request's checks pass.
+- [x] 3.4 Run `/save`; verify the pull request's checks pass.
 
 ## 4. Install record
 

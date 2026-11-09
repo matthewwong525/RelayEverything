@@ -100,3 +100,5 @@ None: this update changes WongStack's shared tools, not a Relay Everything behav
 - **2026-11-09** — Assumed: show WongStack's own sample pictures of the new review card, because they are the closest real result and this repo's plan pages use the same kit.
 - **2026-11-09** — Assumed: move the *open it in a browser before you build the page* tip from `wiki/review-pages.md` to the `live` fence line of the plan's drawing guide (`.claude/skills/plan/references/drawings.md`), because upstream's page is already 2,995 words and the tip takes it past the wiki's 3,000-word cap; the drawing guide is where a plan writes a live card, and `wiki/review-pages.md` becomes a plain copy again.
 - **2026-11-09** — Built inside `/ship`: 51.7.0 copied and merged, install record at 51.7.0. Merge check clean, preflight `current`, local checks pass (one unrelated app test timed out once, then passed). Second look found no failures; saving for task 3.4.
+- **2026-11-09** — Task 3.4 passed: PR #82 checks SUCCESS at dd696ea.
+- **2026-11-09** — Archived for publish: task 3.4 passed (PR #82 checks SUCCESS at dd696ea).

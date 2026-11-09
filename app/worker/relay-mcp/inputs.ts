@@ -24,7 +24,7 @@ export const TOOLS = {
     title: "Search notes",
     description: "Find notes whose text holds every word of the query, in any case, newest first, with each note's time and place.",
     input: { query, from: when("Only notes from this time").optional(), to: when("Only notes before this time").optional(),
-      source: z.enum(["ring", "typed"]).optional().describe("Only ring notes, or only typed ones."),
+      source: z.enum(["ring", "typed"]).optional().describe("Only older recorded notes, or only typed ones."),
       limit: z.number().int().min(1).max(50).default(20).describe("How many notes, at most 50."), cursor, timezone: zone },
   },
   fetch: {

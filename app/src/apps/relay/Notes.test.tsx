@@ -14,7 +14,7 @@ const note: Note = { id: "00000000-0000-4000-8000-000000000001", source: "typed"
 
 it("shows a note's picture, a download link for another file, and a file still on its way as waiting", () => {
   render(<Notes first={{ notes: [note], next: null, nextId: null }} />);
-  const files = within(screen.getByLabelText("Typed note")).getByRole("list", { name: "Files" });
+  const files = within(screen.getByLabelText("Note")).getByRole("list", { name: "Files" });
   expect(within(files).getByRole("img", { name: "receipt.png" }).getAttribute("src")).toBe("/apps/relay/api/attachment?id=file-png-0001");
   const pdf = within(files).getByRole("link", { name: "warranty.pdf · 240 KB · Download" });
   expect(pdf.getAttribute("href")).toBe("/apps/relay/api/attachment?id=file-pdf-0001");

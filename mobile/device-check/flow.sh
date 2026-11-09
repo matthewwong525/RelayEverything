@@ -6,33 +6,13 @@ flow=${1:?usage: bash mobile/device-check/flow.sh <flow.yaml>}
 limit=${FLOW_LIMIT:-120}
 log="${flow%.yaml}.log"
 
-stop_tree() {
-  local child
-  for child in $(pgrep -P "$1"); do stop_tree "$child"; done
-  kill -TERM "$1" 2>/dev/null
-}
-
-# Prints the run's exit status, or `hung`. macOS has no `timeout`, so the loop counts the seconds.
-run_once() {
-  maestro test "$flow" >> "$log" 2>&1 &
-  local pid=$! second
-  for ((second = 0; second < limit; second++)); do
-    kill -0 "$pid" 2>/dev/null || { wait "$pid"; echo $?; return; }
-    sleep 1
-  done
-  stop_tree "$pid"
-  pkill -TERM -f 'maestro-driver' 2>/dev/null
-  sleep 3
-  kill -KILL "$pid" 2>/dev/null
-  wait "$pid" 2>/dev/null
-  echo hung
-}
+source "$(dirname "$0")/limit.sh"
 
 : > "$log"
-end=$(run_once)
+end=$(run_limited "$limit" "$log" maestro test "$flow")
 if [ "$end" = hung ]; then
   echo "The flow ran over $limit s and was stopped. Trying once more." | tee -a "$log"
-  end=$(run_once)
+  end=$(run_limited "$limit" "$log" maestro test "$flow")
 fi
 tail -n 30 "$log"
 case "$end" in

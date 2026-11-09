@@ -11,3 +11,5 @@
 - Examples of flows: `mobile/device-check/flows/`.
 - Set where the iPhone is: `xcrun simctl location booted set <latitude>,<longitude>`.
 - Open a link in the iPhone: `xcrun simctl openurl booted <url>`.
+- A crash report: `out/crashes/Runner-<time>.ips`, a JSON line, then the report as JSON. Its `exception` gives the
+  crash's type, and the thread with `"triggered": true` gives its frames.

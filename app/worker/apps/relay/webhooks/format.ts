@@ -2,7 +2,7 @@
 // source of the public site/public/webhooks/v1.schema.json, which takes fields and values it does not list.
 import { z } from "zod";
 import { HEALTH_TYPES, type HealthType } from "../queries.ts";
-import { STAY_SOURCES, TRIP_MODES } from "../stays.ts";
+import { STAY_SOURCES, TRIP_MODES } from "../store.ts";
 
 /** A list of values that can get a new one: the schema publishes it as text, with the values known today. */
 const GROWS = { grows: true };

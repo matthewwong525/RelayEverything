@@ -146,7 +146,8 @@ class RelayController extends Relay {
   Set<String> _folded = const {};
   bool _holdTipSeen = false;
   Future<void>? _syncing;
-  Future<void>? _pulling;
+  /// A pull of notes asked for and not yet read, and the one reading now; [pullNotes] ends with them.
+  Completer<void>? _pull, _reading;
   bool _again = false;
   DateTime? _listening;
   Future<bool>? _starting;
@@ -364,7 +365,7 @@ class RelayController extends Relay {
     _namesAt = null;
     await _keepConnections(null);
     // A pull already reading the old server finishes first, so nothing it read lands after the delete.
-    await _pulling;
+    await _reading?.future;
     await store.dropSynced();
     await _refreshLocal();
     return null;
@@ -478,7 +479,7 @@ class RelayController extends Relay {
     await vault.forget();
     _connection = null;
     // A pull already reading finishes first, so nothing it read lands after the delete.
-    await _pulling;
+    await _reading?.future;
     await store.dropSynced();
     await _tellShare();
     await _refreshLocal();
@@ -979,7 +980,9 @@ class RelayController extends Relay {
   }
 
   /// One sync at a time; a second call waits for the one running. With sending off it does nothing. A call while a round
-  /// runs asks for one more round after it, because that round read the outbox before the call's note was queued.
+  /// runs asks for one more round after it, because that round read the outbox before the call's note was queued; it
+  /// also stops the health, places, calendar and photos of the round running at their next upload, so the note goes
+  /// first.
   @override
   Future<void> sync() {
     final running = _syncing;
@@ -990,42 +993,94 @@ class RelayController extends Relay {
     return _syncing = _rounds().whenComplete(() => _syncing = null);
   }
 
-  /// One pull at a time: a second call waits for the one running.
+  /// Sends this phone's notes, then reads the notes changed elsewhere, and ends there: the round goes on with health,
+  /// places, the calendar and photos after it. Calls before the read starts share it.
   @override
-  Future<void> pullNotes() => _pulling ??= _pull().whenComplete(() => _pulling = null);
+  Future<void> pullNotes() {
+    final pull = _pull ??= Completer<void>();
+    unawaited(sync());
+    return pull.future;
+  }
 
-  Future<void> _pull() async {
-    await sync();
-    // Only after the outbox emptied, so this phone's own changes are on the server before it reads.
-    if (_status != SyncStatus.synced) return;
+  /// Ends the pull asked for, read or not.
+  void _endPull(Completer<void>? pull) {
+    if (pull != null && !pull.isCompleted) pull.complete();
+  }
+
+  /// Runs rounds until no call asked for another, or a round could not send the notes. Each round sends the notes and
+  /// pulls first, then health, places, the calendar and photos; a call or a pull that comes in the second part stops it,
+  /// and the next round starts with the notes again. After a full send, the names of what the person connected are read
+  /// again, at most each [_namesEvery].
+  Future<void> _rounds() async {
     try {
-      await syncNotes(store, _sender, settings: _settings, connection: _connection, editing: openNote, onPage: _refreshLocal);
-    } on ApiException catch (error) {
-      _status = error.failure == Failure.refused ? SyncStatus.refused : SyncStatus.offline;
-      notifyListeners();
+      while (true) {
+        _again = false;
+        final emptied = await _notesPart();
+        // Also when the notes could not go: private data may go to another place, the person's own webhook. Then no
+        // round follows, so a call that came does not stop it.
+        await _privatePart(yieldToNotes: emptied);
+        if (!emptied || !_settings.sending) break;
+        if (_again || _pull != null) continue;
+        final namesAt = _namesAt;
+        if (namesAt == null || _clock().difference(namesAt) >= _namesEvery) await refreshConnections();
+        // A call while the names were read gets its round.
+        if (!_again && _pull == null) break;
+      }
+    } finally {
+      // A pull this round could not read, such as with no signal: it ends with the round, so no wait is left open.
+      final pull = _pull;
+      _pull = null;
+      _endPull(pull);
     }
   }
 
-  /// Runs rounds until no call asked for another, or a round could not send everything. After a full send, the names of
-  /// what the person connected are read again, at most each [_namesEvery].
-  Future<void> _rounds() async {
-    bool emptied;
-    do {
-      _again = false;
-      emptied = await _sync();
-    } while (_again && emptied && _settings.sending);
-    final namesAt = _namesAt;
-    if (emptied && (namesAt == null || _clock().difference(namesAt) >= _namesEvery)) await refreshConnections();
-  }
-
-  /// One round; true when the outbox emptied.
-  Future<bool> _sync() async {
+  /// The notes part of a round: sends this phone's notes, their changes, deletes and files, then reads the notes changed
+  /// elsewhere when a pull waits. The line on Home comes from this part alone. True when the notes' uploads emptied.
+  Future<bool> _notesPart() async {
     final api = _api;
     if (api == null) return false;
     _status = SyncStatus.syncing;
     notifyListeners();
-    // Sending can turn off while a round runs: from then on it reads, queues and sends nothing more.
-    if (_settings.health) {
+    final place = _settings.place;
+    // A switch of place while the round runs stops it at its next upload; a new round follows.
+    final result = await flush(store, api, clock: _clock, private: false, folder: folder,
+      keepGoing: () => _settings.sending && _settings.place == place);
+    _status = switch (result.failure) { Failure.refused => SyncStatus.refused, null => SyncStatus.synced, _ => SyncStatus.offline };
+    // The stop's own state wins.
+    if (!_settings.sending) _status = SyncStatus.idle;
+    await _refreshLocal();
+    // The pull waiting from here; one asked for while it reads waits for the next round.
+    final pull = _reading = _pull;
+    _pull = null;
+    try {
+      // Only after the notes' uploads emptied, so this phone's own changes are on the server before it reads.
+      if (pull != null && _status == SyncStatus.synced) {
+        try {
+          await syncNotes(store, _sender, settings: _settings, connection: _connection, editing: openNote, onPage: _refreshLocal);
+        } on ApiException catch (error) {
+          _status = error.failure == Failure.refused ? SyncStatus.refused : SyncStatus.offline;
+          notifyListeners();
+        }
+      }
+    } finally {
+      _reading = null;
+      _endPull(pull);
+    }
+    return result.failure == null;
+  }
+
+  /// The second part of a round: health, the calendar, the points, stays and trips, their uploads, and photos. It never
+  /// changes the line on Home, which is about notes; a failure here waits for a later round. With [yieldToNotes], it
+  /// stops at its next read or upload while a note or a pull waits, so they go first in the next round.
+  Future<void> _privatePart({required bool yieldToNotes}) async {
+    final api = _api;
+    if (api == null) return;
+    final place = _settings.place, privatePlace = _settings.privatePlace;
+    // Sending can turn off, either place can change, and a note or a pull can come while it runs: from then on it reads,
+    // queues and sends nothing more.
+    bool still() => _settings.sending && _settings.place == place && _settings.privatePlace == privatePlace &&
+      !(yieldToNotes && (_again || _pull != null));
+    if (still() && _settings.health) {
       try {
         await syncHealth(store, health, now: _clock());
       } on Exception {
@@ -1033,15 +1088,15 @@ class RelayController extends Relay {
       }
     }
     final source = calendar;
-    if (_settings.calendar && source != null) {
+    if (still() && _settings.calendar && source != null) {
       try {
         await syncCalendar(store, source, _settings, now: _clock());
       } on Exception {
         // A refused calendar removes nothing; the next round reads again.
       }
     }
-    if (_settings.history) await _drain();
-    if (_settings.stays) {
+    if (still() && _settings.history) await _drain();
+    if (still() && _settings.stays) {
       try {
         await syncStays(store, _settings, motion: motion, now: _clock(),
           namer: stayNamer(_settings, places: places, native: native, calendar: calendar));
@@ -1049,33 +1104,26 @@ class RelayController extends Relay {
         // The points stay in the store, and the next round steps them again.
       }
     }
-    if (_settings.sending && _settings.locationSend != LocationSend.stays) await store.queuePoints();
-    final place = _settings.place, privatePlace = _settings.privatePlace;
-    // A switch of either place while the round runs stops it at its next upload; a new round follows.
-    bool still() => _settings.sending && _settings.place == place && _settings.privatePlace == privatePlace;
-    final result = await flush(store, api, clock: _clock, keepGoing: still, folder: folder);
-    // Private data to its own place, the person's webhook, flushed apart, so a receiver that is down holds back no note,
-    // and the other way round. With no webhook kept it waits on the phone, and never goes to the server.
+    if (still() && _settings.locationSend != LocationSend.stays) await store.queuePoints();
+    // Private data to where the person picked: the same server as the notes, or their own webhook, flushed apart so a
+    // receiver that is down holds back no note. With no webhook kept it waits on the phone, and never goes to the server.
     final privateApi = _privateApi;
     final apart = privateApi != null && privateApi.destination != api.destination;
-    final private = apart ? await flush(store, privateApi, clock: _clock, keepGoing: still, folder: folder) : result;
-    // New photos, as in the background round: after the outbox, so a photo waiting for Wi-Fi holds back no note. They go
-    // where private data goes, the server or the webhook. A refused photo with a key that still answers, such as on an
-    // older server with no photos, comes back as null.
+    final private = privateApi == null || !still() ? const FlushResult()
+      : await flush(store, privateApi, clock: _clock, keepGoing: still, folder: folder, private: apart ? null : true);
+    // New photos, as in the background round: after the outbox, so a photo waiting for Wi-Fi holds back nothing else.
+    // A refused photo with a key that still answers, such as on an older server with no photos, comes back as null.
     Failure? photoFailure;
     final library = photos;
     final kind = network;
-    if (_settings.photos && library != null && kind != null) {
+    if (still() && _settings.photos && library != null && kind != null) {
       photoFailure = await syncPhotos(store, privateApi, library, kind, settings: _settings, send: private.failure == null,
         now: _clock(), keepGoing: () async => _settings.photos && still());
     }
-    // The line on Home is about notes: a failure on the webhook's side shows on the Account page instead.
-    _status = switch (result.failure ?? (apart ? null : photoFailure)) {
-      Failure.refused => SyncStatus.refused, null => SyncStatus.synced, _ => SyncStatus.offline };
-    // The stop's own state wins.
+    // A turned-off key refuses the notes too, so Home says so, though no note waited; any other failure here waits.
+    if (!apart && (private.failure ?? photoFailure) == Failure.refused) _status = SyncStatus.refused;
     if (!_settings.sending) _status = SyncStatus.idle;
     await _refreshLocal();
-    return result.failure == null;
   }
 
   // Voice notes.

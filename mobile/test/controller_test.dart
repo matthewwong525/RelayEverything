@@ -325,9 +325,9 @@ void main() {
       await relay.addNote('First');
       await relay.addNote('Second');
       await pumpEventQueue();
-      // The round has read health, queued the location point, and holds open its first upload.
+      // The round holds open its first note upload, before it reads health or queues the location point.
       expect(server.routes, ['notes']);
-      expect([for (final item in await store.outbox()) item.route], containsAll(['notes', 'health', 'locations']));
+      expect([for (final item in await store.outbox()) item.route], ['notes', 'notes']);
       final reads = health.reads.length;
       final stopped = relay.stopSending();
       await pumpEventQueue();
@@ -656,7 +656,8 @@ void main() {
       await relay.addNote('From a page key');
       await pumpEventQueue();
       await relay.sync();
-      expect(server.routes, ['key', 'connections', 'notes']);
+      // The note comes while the first round runs, so it goes in a round of its own before the names are read.
+      expect(server.routes, ['key', 'notes', 'connections']);
       expect([for (final request in server.requests) request.headers['Authorization']], List.filled(3, 'Bearer $pageKey'));
       expect([for (final request in server.requests) request.headers['CF-Access-Client-Id']], [null, null, null]);
     });
@@ -1912,6 +1913,7 @@ void main() {
       await relay.addNote('# Buy milk', id: 'n1');
       await pumpEventQueue();
       await relay.pullNotes();
+      await relay.settled();
       expect(relay.entries.single.id, 'n1');
       await relay.stopSending();
       await relay.deleteNote('n1');
@@ -1921,11 +1923,13 @@ void main() {
       await next.load();
       await next.sync();
       await next.pullNotes();
+      await next.settled();
       expect([next.entries, deletes(), await store.waiting()], [isEmpty, isEmpty, 1]);
       server.requests.clear();
       expect(await next.startSending(sendEarlier: false), isNull);
       await pumpEventQueue();
       await next.pullNotes();
+      await next.settled();
       final calls = [for (final request in server.requests) if (request.method == 'DELETE' || request.url.path.endsWith('/notes'))
         '${request.method} ${request.url.path.split('/').last}'];
       expect(calls, ['DELETE notes', 'GET notes']);
@@ -2225,6 +2229,161 @@ void main() {
     });
   });
 
+  group('notes first', () {
+    bool isPull(http.Request request) => request.method == 'GET' && request.url.path.endsWith('/notes');
+    /// The note and health calls, in order, as `POST notes`, `GET notes`, `POST health`.
+    List<String> calls() => [for (final request in server.requests)
+      if (const {'notes', 'health'}.contains(request.url.path.split('/').last)) '${request.method} ${request.url.path.split('/').last}'];
+    Future<void> queueHealth(int value) => store.queueSamples([
+      {'type': 'steps', 'start': 1, 'end': 2, 'value': value, 'unit': 'count', 'source': 'Health'}]);
+
+    /// Signed in to Relay Everything, with pins off, and the server giving one note from elsewhere to each pull.
+    Future<RelayController> signedIn() async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', const Settings(sending: true).encode());
+      server.answer = (request) => isPull(request) ? notesPage([pulledNote('s1')], next: 1) : FakeServer.ok(request);
+      final relay = controller();
+      await relay.load();
+      await relay.setPinNotes(false);
+      await relay.settled();
+      server.requests.clear();
+      return relay;
+    }
+
+    test('a pull sends the note, then shows the note from elsewhere, before the health readings send', () async {
+      final relay = await signedIn();
+      await queueHealth(10);
+      await relay.addNote('Lunch idea', sendNow: false);
+      List<String?>? shownAtHealth;
+      server.answer = (request) {
+        if (request.url.path.endsWith('/health')) shownAtHealth ??= [for (final entry in relay.entries) entry.from];
+        return isPull(request) ? notesPage([pulledNote('s1')], next: 1) : FakeServer.ok(request);
+      };
+      await relay.pullNotes();
+      await relay.settled();
+      expect(calls(), ['POST notes', 'GET notes', 'POST health']);
+      expect(shownAtHealth, containsAll([null, 'Email']));
+      expect(await store.outbox(), isEmpty);
+    });
+
+    test('a failed health upload still pulls, keeps the health on the phone, and Home shows Synced', () async {
+      final relay = await signedIn();
+      await queueHealth(10);
+      server.answer = (request) => request.url.path.endsWith('/health') ? FakeServer.json({}, 503)
+        : isPull(request) ? notesPage([pulledNote('s1')], next: 1) : FakeServer.ok(request);
+      await relay.sync();
+      expect([relay.status, [for (final item in await store.outbox()) item.route]], [SyncStatus.synced, ['health']]);
+      await relay.pullNotes();
+      await relay.settled();
+      expect(calls(), ['POST health', 'GET notes', 'POST health']);
+      expect([relay.status, relay.entries.single.from, [for (final item in await store.outbox()) item.route]],
+        [SyncStatus.synced, 'Email', ['health']]);
+    });
+
+    test('a pull ends, and Home shows Synced, while the health readings still send', () async {
+      final relay = await signedIn();
+      await queueHealth(10);
+      // The pull's answer holds open each call after it, so the health upload is still on its way.
+      server.answer = (request) {
+        if (!isPull(request)) return FakeServer.ok(request);
+        server.hold = Completer();
+        return notesPage([pulledNote('s1')], next: 1);
+      };
+      final statuses = <SyncStatus>[];
+      relay.addListener(() => statuses.add(relay.status));
+      await relay.pullNotes();
+      await pumpEventQueue();
+      expect([calls(), relay.status, relay.entries.single.from], [['GET notes', 'POST health'], SyncStatus.synced, 'Email']);
+      expect([for (final item in await store.outbox()) item.route], ['health']);
+      server.hold!.complete();
+      await relay.settled();
+      expect([await store.outbox(), relay.status], [isEmpty, SyncStatus.synced]);
+      // Syncing showed once, for the notes alone.
+      expect(statuses.where((status) => status == SyncStatus.syncing).length, 1);
+    });
+
+    test('a note kept while health readings send goes before the readings still waiting', () async {
+      final relay = await signedIn();
+      await queueHealth(10);
+      await queueHealth(20);
+      server.hold = Completer();
+      final round = relay.sync();
+      await pumpEventQueue();
+      expect(calls(), ['POST health']);
+      await relay.keepNote('Lunch idea');
+      server.hold!.complete();
+      await round;
+      await relay.settled();
+      expect(calls(), ['POST health', 'POST notes', 'POST health']);
+      expect([for (final request in server.requests) if (request.url.path.endsWith('/health'))
+        ((jsonDecode(request.body) as Map)['samples'] as List).single['value']], [10, 20]);
+      expect([await store.outbox(), relay.status], [isEmpty, SyncStatus.synced]);
+    });
+
+    test('a pull asked for while health readings send stops them, and reads the notes before the rest', () async {
+      final relay = await signedIn();
+      await queueHealth(10);
+      await queueHealth(20);
+      server.hold = Completer();
+      final round = relay.sync();
+      await pumpEventQueue();
+      final pulled = relay.pullNotes();
+      server.hold!.complete();
+      await pulled;
+      expect(calls().take(2), ['POST health', 'GET notes']);
+      await round;
+      await relay.settled();
+      expect(calls(), ['POST health', 'GET notes', 'POST health']);
+    });
+
+    test('a failed photo upload does not stop notes: the pull reads, and the photo waits for a later round', () async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', const Settings(sending: true, photos: true).encode());
+      await store.set(photosSince, '${now.millisecondsSinceEpoch}');
+      final photos = FakePhotos();
+      final relay = controller(photos: photos, network: FakeNetwork());
+      await relay.load();
+      await relay.setPinNotes(false);
+      await relay.settled();
+      server.requests.clear();
+      clock = now.add(const Duration(minutes: 5));
+      photos.take('IMG_0001', now.add(const Duration(minutes: 1)));
+      server.answer = (request) => request.url.path.endsWith('/photos') ? FakeServer.json({}, 503)
+        : isPull(request) ? notesPage([pulledNote('s1')], next: 1) : FakeServer.ok(request);
+      await relay.pullNotes();
+      await relay.settled();
+      expect([for (final request in server.requests) if (isPull(request) || request.url.path.endsWith('/photos'))
+        '${request.method} ${request.url.path.split('/').last}'], ['GET notes', 'POST photos']);
+      expect([relay.status, relay.entries.single.from, (await store.waitingPhotos()).length], [SyncStatus.synced, 'Email', 1]);
+    });
+
+    test('a pull ends when the round fails before it reads, so no wait is left open', () async {
+      await store.close();
+      store = _BrokenOutboxStore();
+      final relay = await signedIn();
+      (store as _BrokenOutboxStore).broken = true;
+      final errors = <Object>[];
+      await runZonedGuarded(() async {
+        await relay.pullNotes();
+        await pumpEventQueue();
+      }, (error, _) => errors.add(error));
+      expect([calls(), errors], [isEmpty, [isA<StateError>()]]);
+    });
+
+    test('a pull with sending off, or with no signal, ends at once and reads nothing', () async {
+      final relay = await signedIn();
+      await relay.addNote('Waits', sendNow: false);
+      server.answer = (_) => FakeServer.json({}, 502);
+      await relay.pullNotes();
+      expect([calls(), relay.status], [['POST notes'], SyncStatus.offline]);
+      await relay.stopSending();
+      server.requests.clear();
+      await relay.pullNotes();
+      await relay.settled();
+      expect([server.requests, relay.status], [isEmpty, SyncStatus.idle]);
+    });
+  });
+
   test('makes a note id the server takes', () {
     expect(newClientId(Random(1)), matches(RegExp(r'^[0-9a-f]{32}$')));
     expect(newClientId(), isNot(newClientId()));
@@ -2250,6 +2409,17 @@ class _HeldHealth extends FakeHealth {
 
   @override
   Future<bool> allow() => answer.future;
+}
+
+/// A store whose outbox can not be read once [broken], such as a database that failed: a round stops with an error.
+class _BrokenOutboxStore extends Store {
+  _BrokenOutboxStore() : super(NativeDatabase.memory(), folder: () async => tempFolder());
+
+  bool broken = false;
+
+  @override
+  Future<List<OutboxItem>> outbox({String? destination, bool? private}) =>
+    broken ? throw StateError('database closed') : super.outbox(destination: destination, private: private);
 }
 
 /// A store whose disk is full: it can not keep a voice note.

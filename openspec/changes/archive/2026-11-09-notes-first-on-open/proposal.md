@@ -1,6 +1,6 @@
 # Notes first when the app opens
 
-**Status:** building
+**Status:** ready-to-ship
 **Branch:** speed-up-phone-sync
 **Open questions:** none
 
@@ -51,6 +51,8 @@ When you open the Relay Everything app, or come back to it, new notes from your 
 **2026-11-09** — Assumed (build): `pullNotes` starts the round and does not pass on an error the round throws, as every other `unawaited(sync())` caller in the app already does, because the pull's caller (pull to refresh, Sync now) only needs to know the notes part ended.
 
 **2026-11-09** — Checkpoint: built and reviewed (review 0 after three test fixes); saved for CI's Flutter tests and both phone builds before the ship.
+
+**2026-11-09** — Archive checkpoint: archived as `openspec/changes/archive/2026-11-09-notes-first-on-open`, saved on branch `speed-up-phone-sync` for the ship.
 
 ## Capabilities
 

@@ -22,4 +22,4 @@
 ## 5. Checks
 
 - [x] 5.1 Run `flutter analyze` and `flutter test` in `mobile/` and verify both pass
-- [ ] 5.2 `/save` the change, and verify CI's Flutter tests and both phone builds pass
+- [x] 5.2 `/save` the change, and verify CI's Flutter tests and both phone builds pass

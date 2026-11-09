@@ -5,7 +5,7 @@ import '../brand.dart';
 import '../data/connection.dart' show defaultServer;
 import '../relay.dart';
 import 'back_to.dart';
-import 'connect.dart' show ServerDialog;
+import 'connect.dart' show ConnectScreen, ServerDialog;
 import 'folder.dart';
 
 /// Where this phone's account stands: signed in to a Relay Everything server, sending to the person's own webhook, or
@@ -20,7 +20,8 @@ AccountState accountOf(Relay relay) {
 }
 
 /// *Account*, opened from the Account row in Settings. Signed in: the email and server, *AI apps* and *Webhooks* by
-/// name, *Open your Relay Everything page*, the server to change, and *Sign out*. With the person's own webhook: its
+/// name, where health, places, the calendar and photos go, *Open your Relay Everything page*, the server to change,
+/// and *Sign out*. With the person's own webhook: its
 /// address, *Send a test*, *Notes from elsewhere* and *Stop sending*. Adding or removing an AI app or a webhook is on
 /// the web page.
 class AccountPage extends StatefulWidget {
@@ -77,6 +78,7 @@ class _AccountPageState extends State<AccountPage> {
         _connected(CupertinoIcons.sparkles, 'AI apps', names?.aiApps, '#ai-apps'),
         _connected(CupertinoIcons.link, 'Webhooks', names?.webhooks, '#webhooks'),
       ]),
+      ..._private(context),
       Group(children: [
         ListTile(
           title: const Text('Open your Relay Everything page'),
@@ -107,6 +109,65 @@ class _AccountPageState extends State<AccountPage> {
     count: names == null || names.isEmpty ? null : names.length,
     trailing: CupertinoIcons.arrow_up_right_square,
     onTap: () => _open(part));
+
+  /// *Health, places, calendar and photos*: to Relay Everything with the notes, or only to the person's own webhook. With
+  /// the webhook picked: its host, *Send a test* and its last failure, or *Set your webhook again* when the phone lost
+  /// it. The picked row's check is its only mark: no filled button.
+  List<Widget> _private(BuildContext context) {
+    final theme = Theme.of(context);
+    final danger = theme.colorScheme.error;
+    final webhook = relay.settings.privateTo == SendPlace.webhook;
+    return [
+      Group(title: 'Health, places, calendar and photos', children: [
+        RadioGroup<SendPlace>(
+          groupValue: relay.settings.privateTo,
+          onChanged: (place) { if (place != null) _pickPrivate(context, place); },
+          child: const Column(children: [
+            RadioListTile(value: SendPlace.server, title: Text('Relay Everything'),
+              subtitle: Text('Your AI and your page can see them.')),
+            RadioListTile(value: SendPlace.webhook, title: Text('Only my own webhook'),
+              subtitle: Text('Straight from this phone. Relay Everything never gets them.')),
+          ]),
+        ),
+        if (webhook && relay.privateWebhookMissing) ListTile(
+          title: Text('Set your webhook again', style: TextStyle(color: danger)),
+          subtitle: const Text('This phone lost its address and secret. Your health, places, calendar and photos wait '
+            'here until you do.'),
+          trailing: const Icon(CupertinoIcons.chevron_forward),
+          onTap: () => _setPrivateWebhook(context),
+        ) else if (webhook) ...[
+          ListTile(
+            title: const Text('Webhook'),
+            subtitle: Text(hostOf(relay.webhookAddress)),
+            trailing: TextButton(onPressed: () => _test(context), style: quietButton(context), child: const Text('Send a test')),
+          ),
+          if (relay.webhookProblem case final problem?) ListTile(
+            subtitle: Text(problemLine(problem, DateTime.now(), what: 'Health, places, calendar and photos'),
+              style: TextStyle(color: danger)),
+          ),
+        ],
+      ]),
+      if (webhook) Padding(
+        padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+        child: Text('What already went to Relay Everything stays on your page. Your AI apps and your page show none of '
+          'this from now on.', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+      ),
+    ];
+  }
+
+  /// *Relay Everything* moves at once, with no question: it sends nothing new outside the person's server. *Only my own
+  /// webhook* with no webhook kept first opens its setup; leaving it changes nothing.
+  Future<void> _pickPrivate(BuildContext context, SendPlace place) async {
+    if (place == SendPlace.webhook && relay.webhookAddress == null) return _setPrivateWebhook(context);
+    await apply(context, relay.setPrivatePlace(place));
+  }
+
+  /// The webhook's setup, for private data only: its *Save* keeps the webhook, then private data goes there.
+  Future<void> _setPrivateWebhook(BuildContext context) async {
+    final saved = await Navigator.of(context).push(MaterialPageRoute<SendPlace>(
+      builder: (_) => ConnectScreen(relay: relay, privateOnly: true)));
+    if (saved == SendPlace.webhook && context.mounted) await apply(context, relay.setPrivatePlace(SendPlace.webhook));
+  }
 
   List<Widget> _webhook(BuildContext context) {
     final danger = Theme.of(context).colorScheme.error;

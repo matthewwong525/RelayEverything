@@ -465,10 +465,23 @@ void main() {
       const on = Settings(sending: true, history: true, health: true);
       expect([on.copyWith(sending: false).history, on.copyWith(sending: false).health], [false, false]);
       expect(jsonDecode(on.encode()), {'sending': true, 'pinNotes': false, 'history': true, 'health': true, 'calendar': false,
-        'calendarsOff': [], 'mode': 'battery', 'place': 'server',
+        'calendarsOff': [], 'mode': 'battery', 'place': 'server', 'privateTo': 'server',
         'photos': false, 'photosOnMobileData': false, 'appearance': 'system'});
       final back = Settings.decode(on.encode(), hasKey: false);
       expect([back.sending, back.health], [true, true]);
+    });
+
+    test('keep where private data goes: Relay Everything by default and in settings from before the choice', () {
+      expect(const Settings().privateTo, SendPlace.server);
+      expect(Settings.decode(jsonEncode({'sending': true, 'place': 'server'}), hasKey: true).privateTo, SendPlace.server);
+      const chosen = Settings(sending: true, privateTo: SendPlace.webhook);
+      expect(Settings.decode(chosen.encode(), hasKey: true).privateTo, SendPlace.webhook);
+      // Off keeps the choice, so a sign-in again keeps it.
+      expect(chosen.copyWith(sending: false).privateTo, SendPlace.webhook);
+      expect([
+        for (final place in SendPlace.values)
+          for (final privateTo in SendPlace.values) Settings(place: place, privateTo: privateTo).privatePlace,
+      ], [SendPlace.server, SendPlace.webhook, SendPlace.webhook, SendPlace.webhook]);
     });
 
     test('photos are off unless sending is on, and mobile data is off unless photos is on', () {
@@ -540,7 +553,7 @@ void main() {
       await relay.load();
       expect([relay.settings.sending, relay.settings.pinNotes], [false, true]);
       expect(jsonDecode((await store.get('settings'))!), {'sending': false, 'pinNotes': true, 'history': false, 'health': false,
-        'calendar': false, 'calendarsOff': [], 'mode': 'battery', 'place': 'server',
+        'calendar': false, 'calendarsOff': [], 'mode': 'battery', 'place': 'server', 'privateTo': 'server',
         'photos': false, 'photosOnMobileData': false, 'appearance': 'system'});
     });
 
@@ -564,7 +577,7 @@ void main() {
       expect(await relay.setPinNotes(true), isNull);
       expect(scheduled, [false, true, true, true, true]);
       expect(jsonDecode((await store.get('settings'))!), {'sending': true, 'pinNotes': true, 'history': false, 'health': true,
-        'calendar': false, 'calendarsOff': [], 'mode': 'battery', 'place': 'server',
+        'calendar': false, 'calendarsOff': [], 'mode': 'battery', 'place': 'server', 'privateTo': 'server',
         'photos': false, 'photosOnMobileData': false, 'appearance': 'system'});
       expect(places.asked, [false, true, true, false]);
       // Each change started a sync; the last round ends before the store closes.
@@ -1922,6 +1935,124 @@ void main() {
       await pumpEventQueue();
       expect(notices, ['No app on this phone opens this file.', 'This file is not on this phone.']);
       expect(opened, hasLength(2));
+    });
+  });
+
+  group('private data only to your own webhook', () {
+    late FakePhotos photos;
+    late FakeNetwork network;
+    setUp(() {
+      photos = FakePhotos();
+      network = FakeNetwork();
+    });
+
+    bool toHook(http.Request request) => request.url.toString() == hook.address;
+    List<String> hookTypes() => [for (final request in server.requests) if (toHook(request)) jsonDecode(request.body)['type'] as String];
+    List<String> serverRoutes() => [for (final request in server.requests) if (!toHook(request)) request.url.path.split('/').last];
+    const private = {'health', 'locations', 'calendar', 'photos'};
+
+    /// Signed in to Relay Everything with health and the calendar on, and a reading and an event to send.
+    Future<RelayController> signedIn({Settings settings = const Settings(sending: true, health: true, calendar: true)}) async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', settings.encode());
+      await store.set(healthTypes, askedTypes);
+      health.readings = [reading(HealthDataType.STEPS, now.subtract(const Duration(minutes: 30)), now, value: 10)];
+      calendar.items = [meeting('a', now.add(const Duration(hours: 1)))];
+      final relay = controller(photos: photos, network: network);
+      await relay.load();
+      return relay;
+    }
+
+    test('notes go to Relay Everything, and health, points, the calendar and a photo only to the webhook', () async {
+      final relay = await signedIn();
+      expect(await relay.setPrivatePlace(SendPlace.webhook), 'Set your webhook first.');
+      expect(relay.settings.privateTo, SendPlace.server);
+      expect(await relay.saveWebhook(hook.address, fixtureSecret), isNull);
+      expect(await relay.setPrivatePlace(SendPlace.webhook), isNull);
+      await relay.settled();
+      expect(await relay.setPhotos(true), isNull);
+      await relay.settled();
+      clock = now.add(const Duration(minutes: 5));
+      photos.take('IMG_0001', clock);
+      await store.addPoint(Pin(at: clock, lat: 43.6, lon: -79.3, accuracy: 5));
+      await relay.addNote('Lunch idea');
+      await relay.settled();
+      expect([for (final note in sentNotes()) note['text']], ['Lunch idea']);
+      expect(serverRoutes().where(private.contains), isEmpty);
+      expect(hookTypes().toSet(), {'health.samples', 'calendar.events', 'location.points', 'photo.created'});
+      expect([relay.settings.place, relay.settings.privatePlace, relay.status, relay.privateWebhookMissing],
+        [SendPlace.server, SendPlace.webhook, SyncStatus.synced, false]);
+      expect([await store.outbox(), await store.waitingPhotos()], [isEmpty, isEmpty]);
+      relay.dispose();
+    });
+
+    test('a receiver that answers 503 holds back no note, and a switch back sends what waits to Relay Everything', () async {
+      final relay = await signedIn();
+      server.answer = (request) => toHook(request) ? http.Response('', 503) : FakeServer.ok(request);
+      expect(await relay.saveWebhook(hook.address, fixtureSecret), isNull);
+      expect(await relay.setPrivatePlace(SendPlace.webhook), isNull);
+      await relay.settled();
+      clock = now.add(const Duration(minutes: 5));
+      await relay.addNote('Still syncs');
+      await relay.settled();
+      expect([for (final note in sentNotes()) note['text']], ['Still syncs']);
+      expect([relay.status, relay.webhookProblem?.status], [SyncStatus.synced, 503]);
+      expect([relay.healthSent.waiting, relay.calendarSent.waiting], [greaterThan(0), 1]);
+      expect({for (final item in await store.outbox()) (item.route, item.destination)},
+        {('health', ownWebhook), ('calendar', ownWebhook)});
+      expect(serverRoutes().where(private.contains), isEmpty);
+      final asked = hookTypes().length;
+      expect(await relay.setPrivatePlace(SendPlace.server), isNull);
+      await relay.settled();
+      expect([relay.settings.privateTo, await store.outbox()], [SendPlace.server, isEmpty]);
+      expect(serverRoutes(), containsAll(['health', 'calendar']));
+      expect(hookTypes().length, asked);
+      relay.dispose();
+    });
+
+    test('a new private place says not sent yet until it takes data, never the time of the old place', () async {
+      final relay = await signedIn();
+      await relay.sync();
+      await relay.settled();
+      expect([relay.healthSent.at, relay.calendarSent.at], [isNotNull, isNotNull]);
+      server.answer = (request) => toHook(request) ? http.Response('', 503) : FakeServer.ok(request);
+      expect(await relay.saveWebhook(hook.address, fixtureSecret), isNull);
+      expect(await relay.setPrivatePlace(SendPlace.webhook), isNull);
+      await relay.settled();
+      expect([relay.healthSent.at, relay.pointsSent.at, relay.calendarSent.at], [null, null, null]);
+      relay.dispose();
+    });
+
+    test('Sign out keeps the choice and the webhook, so a sign-in again sends private data there', () async {
+      final relay = await signedIn();
+      await relay.saveWebhook(hook.address, fixtureSecret);
+      await relay.setPrivatePlace(SendPlace.webhook);
+      await relay.settled();
+      await relay.disconnect();
+      expect([relay.settings.sending, relay.settings.privateTo, relay.webhookAddress], [false, SendPlace.webhook, hook.address]);
+      relay.dispose();
+      final next = controller();
+      await next.load();
+      expect([next.settings.privateTo, next.webhookAddress, next.connected], [SendPlace.webhook, hook.address, false]);
+      next.dispose();
+    });
+
+    test('a webhook lost in a restore keeps sending on: notes go, private data waits and never goes to the server', () async {
+      final relay = await signedIn(settings: const Settings(sending: true, health: true, privateTo: SendPlace.webhook));
+      expect([relay.settings.sending, relay.privateWebhookMissing, relay.webhookAddress], [true, true, isNull]);
+      await relay.addNote('Goes');
+      await relay.settled();
+      expect([for (final note in sentNotes()) note['text']], ['Goes']);
+      expect(serverRoutes().where(private.contains), isEmpty);
+      expect(relay.healthSent.waiting, greaterThan(0));
+      expect({for (final item in await store.outbox()) item.destination}, {ownWebhook});
+      // Set again: what waited goes there.
+      expect(await relay.saveWebhook(hook.address, fixtureSecret), isNull);
+      expect(await relay.setPrivatePlace(SendPlace.webhook), isNull);
+      await relay.settled();
+      expect([relay.privateWebhookMissing, relay.healthSent.waiting, hookTypes().toSet()], [false, 0, {'health.samples'}]);
+      expect(serverRoutes().where(private.contains), isEmpty);
+      relay.dispose();
     });
   });
 

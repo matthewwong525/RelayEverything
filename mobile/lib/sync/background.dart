@@ -59,16 +59,20 @@ Future<bool> savedRound(Store store, KeyVault vault, {required HealthSource heal
 /// wake share it. With [share], it first keeps the notes the iPhone's share card left. With [native], it moves the
 /// points Swift kept. True when it is done; a calendar that could not be read, such as where the iPhone's background
 /// engine has no calendar, does not hold the round back.
-/// It sends to the place the settings name: the server with [connection], or the person's own [webhook], which needs no
-/// key. The photo step runs after the outbox, so a photo waiting for Wi-Fi holds back no note; it runs only with
-/// [photos] and [network] given, and sends to the same place. With [pull], it ends by reading notes changed elsewhere.
+/// It sends notes to the place the settings name: the server with [connection], or the person's own [webhook], which
+/// needs no key. Health, points, the calendar and photos go to [Settings.privatePlace]: the same place, or only the
+/// webhook, flushed apart after the notes, so one place that fails holds back nothing for the other. With no webhook
+/// for them, they wait on the phone and never go to the server. The photo step runs after the outbox, so a photo
+/// waiting for Wi-Fi holds back no note; it runs only with [photos] and [network] given. With [pull], it ends by
+/// reading notes changed elsewhere, after the notes' flush emptied.
 Future<bool> backgroundRound(Store store, {required Connection? connection, Webhook? webhook, required HealthSource health,
   required Sender sender, NativeBackground? native, Places? places, DateTime? now, Future<Directory> Function()? folder,
   ShareGroup? share, CalendarSource? calendar, PhotoSource? photos, Network? network, bool pull = false}) async {
   final settings = Settings.decode(await store.get(settingsKey), hasKey: connection != null);
-  final api = sender.api(settings, connection: connection, webhook: webhook,
-    installId: settings.place == SendPlace.webhook ? await store.installId() : null);
+  final installId = settings.privatePlace == SendPlace.webhook ? await store.installId() : null;
+  final api = sender.api(settings, connection: connection, webhook: webhook, installId: installId);
   if (api == null) return true;
+  final privateApi = sender.privateApi(settings, connection: connection, webhook: webhook, installId: installId);
   if (share != null && folder != null) {
     try {
       final group = await share.folder();
@@ -96,13 +100,17 @@ Future<bool> backgroundRound(Store store, {required Connection? connection, Webh
   }
   await store.queuePoints();
   final notes = await flush(store, api, folder: folder);
+  // Private data to its own place: flushed apart, so it waits behind no note. With no client for it, such as a webhook
+  // lost in a restore, it waits; that is no failure of the round, as no retry can send it before the person sets it.
+  final apart = privateApi != null && privateApi.destination != api.destination;
+  final private = apart ? await flush(store, privateApi, folder: folder) : notes;
   Failure? failure;
   if (photos != null && network != null && settings.photos) {
     // The app can turn photos off while this round runs: it reads the switch again before each photo.
-    failure = await syncPhotos(store, api, photos, network, settings: settings, send: notes.failure == null, now: now,
-      keepGoing: () async {
+    failure = await syncPhotos(store, privateApi, photos, network, settings: settings, send: private.failure == null,
+      now: now, keepGoing: () async {
         final now = Settings.decode(await store.get(settingsKey), hasKey: true);
-        return now.photos && now.place == settings.place;
+        return now.photos && now.place == settings.place && now.privatePlace == settings.privatePlace;
       });
   }
   // Only after the outbox emptied, so this phone's own changes are on the server before it reads.
@@ -115,7 +123,7 @@ Future<bool> backgroundRound(Store store, {required Connection? connection, Webh
   }
   // A refused photo from a key that still answers, such as on an older server with no photos, comes back as null; a
   // turned-off key fails the round, as for the notes.
-  return notes.failure == null && read && failure == null;
+  return notes.failure == null && private.failure == null && read && failure == null;
 }
 
 /// Turns the hourly round on while sending and history, health, the calendar or photos are on, and off otherwise.

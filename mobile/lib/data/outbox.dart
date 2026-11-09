@@ -24,7 +24,8 @@ const webhookProblemKey = 'webhook.problem';
 /// An upload [api] turns down ([Failure.rejected]) is dropped: it would never land, and would hold back the rest.
 /// An `attachment` upload sends a note's file from [folder], the app's support folder, after its note. A file turned
 /// down, or one no longer on the phone, is dropped, and its note stays sent.
-/// An upload for another destination stops the round: only its own place's client sends it. Each upload is read again
+/// It sends only the uploads for [api]'s own destination, so notes and private data, which may go to two places, each
+/// flush apart, in their own order: one place that fails holds back nothing for the other. Each upload is read again
 /// just before it goes, so a switch of place in the middle of a round stops it there; so does an upload already gone.
 /// [keepGoing] is asked before each upload; when it says no, such as after *Stop sending*, the round stops there.
 Future<FlushResult> flush(Store store, Outbound api, {DateTime Function()? clock, bool Function()? keepGoing,
@@ -32,7 +33,7 @@ Future<FlushResult> flush(Store store, Outbound api, {DateTime Function()? clock
   var sent = 0, dropped = 0;
   final now = clock ?? DateTime.now;
   final webhook = api.destination == ownWebhook;
-  for (final listed in await store.outbox()) {
+  for (final listed in await store.outbox(destination: api.destination)) {
     if (keepGoing != null && !keepGoing()) break;
     // A switch of place can move the outbox while this round runs, and no background round has [keepGoing]: read each
     // upload again, so one moved since the list never goes to the place left.

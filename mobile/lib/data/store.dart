@@ -117,8 +117,14 @@ const relayServer = 'relay-server', ownWebhook = 'webhook';
 /// The outbox destination for [place].
 String destinationOf(SendPlace place) => place == SendPlace.webhook ? ownWebhook : relayServer;
 
-/// The `state` keys: the destination new uploads take, this install's own id, and the next health or point id.
-const _destination = 'outbox.destination', _installId = 'install.id', _nextId = 'ids.next';
+/// The `state` keys: the destination new uploads take, the destination new [privateRoutes] uploads take, this install's
+/// own id, and the next health or point id.
+const _destination = 'outbox.destination', _private = 'outbox.private', _installId = 'install.id', _nextId = 'ids.next';
+
+/// The routes of the person's private data: health, location points and calendar events. They may go to another place
+/// than notes, the person's own webhook.
+const privateRoutes = {'health', 'locations', 'calendar'};
+final _privateList = privateRoutes.map((route) => "'$route'").join(', ');
 
 /// The last change number a pull of notes read, in the store's `state`: the next pull asks for the changes after it.
 const noteSyncSeq = 'note_sync_seq';
@@ -282,11 +288,14 @@ class Store extends GeneratedDatabase {
 
   Future<void> _run(String sql, [List<Object?> values = const []]) => customStatement(sql, values);
 
-  /// Queues one upload. With no [destination] it takes the current one, read in the same statement, so an upload never
-  /// lands on the place the person just left.
+  /// Queues one upload. With no [destination] it takes the current one for its route, read in the same statement, so an
+  /// upload never lands on the place the person just left: the private destination for [privateRoutes], else the notes
+  /// destination. A store from before the private destination has none, so its private uploads take the notes one.
   Future<void> enqueue(String route, Map<String, dynamic> body, {String? destination}) =>
-    _run("INSERT INTO outbox (destination, route, body, created_at) VALUES (coalesce(?, (SELECT value FROM state WHERE key = "
-      "'$_destination'), '$relayServer'), ?, ?, ?)", [destination, route, jsonEncode(body), DateTime.now().millisecondsSinceEpoch]);
+    _run("INSERT INTO outbox (destination, route, body, created_at) VALUES (coalesce(?, "
+      "(SELECT value FROM state WHERE key = CASE WHEN ? IN ($_privateList) THEN '$_private' END), "
+      "(SELECT value FROM state WHERE key = '$_destination'), '$relayServer'), ?, ?, ?)",
+      [destination, route, route, jsonEncode(body), DateTime.now().millisecondsSinceEpoch]);
 
   /// Every waiting upload, or those for [destination], oldest first.
   Future<List<OutboxItem>> outbox({String? destination}) async => [
@@ -307,12 +316,24 @@ class Store extends GeneratedDatabase {
   /// The destination new uploads take.
   Future<String> destination() async => await get(_destination) ?? relayServer;
 
-  /// Sends every waiting upload, and each new one, to [destination], in one step. Health and points queued before they
-  /// had ids get them here, as a webhook message needs them. A new place has none of the calendar, so the phone forgets
-  /// what went and the next read sends the whole window there.
-  Future<void> moveOutbox(String destination) => transaction(() async {
-    if (await this.destination() != destination) await _dropCalendar();
+  /// The destination new [privateRoutes] uploads take; with none kept, as in a store from before it, the notes one.
+  Future<String> privateDestination() async => await get(_private) ?? await destination();
+
+  /// Sends every waiting upload, and each new one, to [destination], and the [privateRoutes] ones to [private], or to
+  /// [destination] with none given, in one step. Health and points queued before they had ids get them here, as a
+  /// webhook message needs them. A new private place has none of the calendar, so the phone forgets what went and the
+  /// next read sends the whole window there. It also forgets when health, points and the calendar last sent, so a
+  /// folder never says *Sent to your webhook* for a send that went to the server.
+  Future<void> moveOutbox(String destination, {String? private}) => transaction(() async {
+    final privateTo = private ?? destination;
+    if (await privateDestination() != privateTo) {
+      await _dropCalendar();
+      for (final key in [sentHealth, sentPoints, sentCalendar]) {
+        await remove(key);
+      }
+    }
     await set(_destination, destination);
+    await set(_private, privateTo);
     for (final row in await _rows("SELECT id, body FROM outbox WHERE route IN ('health', 'locations')")) {
       final body = jsonDecode(row.read<String>('body')) as Map<String, dynamic>;
       final items = [for (final item in (body['samples'] ?? body['points']) as List) item as Map<String, dynamic>];
@@ -324,7 +345,8 @@ class Store extends GeneratedDatabase {
       }
       await _run('UPDATE outbox SET body = ? WHERE id = ?', [jsonEncode(body), row.read<int>('id')]);
     }
-    await _run('UPDATE outbox SET destination = ?', [destination]);
+    await _run('UPDATE outbox SET destination = ? WHERE route NOT IN ($_privateList)', [destination]);
+    await _run('UPDATE outbox SET destination = ? WHERE route IN ($_privateList)', [privateTo]);
   });
 
   /// This install's own id, a UUID made once: a webhook message names the phone by it.

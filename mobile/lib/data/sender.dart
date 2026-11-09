@@ -5,8 +5,9 @@ import 'connection.dart';
 import 'settings.dart';
 import 'webhook.dart';
 
-/// The one way out of the phone: to the Relay Everything server, or to the person's own webhook. It gives no client
-/// while sending is off, so no screen or job can call the network on its own.
+/// The one way out of the phone: to the Relay Everything server, or to the person's own webhook, and for private data
+/// maybe the webhook while notes go to the server. It gives no client while sending is off, so no screen or job can
+/// call the network on its own.
 class Sender {
   Sender([RelayApi Function(Connection)? apiFor, http.Client Function()? clientFor,
     WebhookClient Function(Webhook webhook, String installId)? webhookFor])
@@ -25,6 +26,19 @@ class Sender {
       SendPlace.server => connection == null ? null : _apiFor(connection),
       SendPlace.webhook => webhook == null || installId == null ? null : _webhookFor(webhook, installId),
     };
+  }
+
+  /// The client for health, location points, calendar events and photos: the same as [api] while they go where notes
+  /// go; the person's own webhook while [Settings.privateTo] says so; else null, and they wait on the phone. It never
+  /// gives the server's client while [Settings.privatePlace] is the webhook: a missing webhook is no reason to send
+  /// them to the server.
+  Outbound? privateApi(Settings settings, {Connection? connection, Webhook? webhook, String? installId}) {
+    if (!settings.sending) return null;
+    if (settings.privatePlace == settings.place) {
+      return api(settings, connection: connection, webhook: webhook, installId: installId);
+    }
+    // Notes go to the server and private data to the webhook: the one other case.
+    return webhook == null || installId == null ? null : _webhookFor(webhook, installId);
   }
 
   /// The server's client for the one read a phone key has, the names of its person's AI apps and webhooks: only while

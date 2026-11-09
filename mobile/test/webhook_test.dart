@@ -185,13 +185,13 @@ void main() {
     expect(await store.waiting(), 0);
   });
 
-  test('flush stops at an upload for another place, and sends it once it is moved', () async {
+  test('flush leaves an upload for another place where it is, and sends it once it is moved', () async {
     final store = memoryStore();
     addTearDown(store.close);
     await store.addNote(LocalNote(clientId: 'n1', text: 'Queued for the server', createdAt: queued), send: true);
     final server = FakeServer();
-    expect((await flush(store, client(server))).failure, Failure.offline);
-    expect(server.requests, isEmpty);
+    final skipped = await flush(store, client(server));
+    expect([skipped.failure, skipped.sent, server.requests, (await store.outbox()).length], [isNull, 0, isEmpty, 1]);
     await store.moveOutbox(ownWebhook);
     expect((await flush(store, client(server))).sent, 1);
   });

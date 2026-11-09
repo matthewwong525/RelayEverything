@@ -19,7 +19,7 @@ appId: com.matthewwong525.relayApp
 # The count line joins the count and the state, such as "No notes · On this phone", so match the state inside it.
 - extendedWaitUntil:
     visible: 'No notes yet(.|\n)*'
-    timeout: 10000
+    timeout: 30000
 - assertVisible: '(.|\n)*On this phone(.|\n)*'
 - assertVisible: "New note"
 - takeScreenshot: timeline

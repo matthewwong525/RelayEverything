@@ -17,7 +17,7 @@ export 'folder.dart' show Opener;
 
 /// The first screen, as Apple Notes' *Folders*: the notes folders, *On this phone*, the Settings gear, and at the bottom
 /// *Search*, which finds notes in every folder, and *New note*. It also holds what each page needs once:
-/// the notices, the listening card and *Start a voice note* from Shortcuts.
+/// the notices, the recording screen and *Start a voice note* from Shortcuts.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.relay, this.scanner, this.opener, this.picker, this.sharer,
     this.voiceRequests});
@@ -31,7 +31,7 @@ class HomeScreen extends StatefulWidget {
   final FilesPicker? picker;
   /// A note's *Share*; a test passes its own.
   final Sharer? sharer;
-  /// *Start a voice note* from Shortcuts: each event starts one in the listening card.
+  /// *Start a voice note* from Shortcuts: each event starts one on the recording screen.
   final Stream<void>? voiceRequests;
 
   @override
@@ -72,11 +72,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  /// The listening card goes in the root overlay, so it covers any page a shortcut finds open.
+  /// The recording screen goes in the root overlay, so it covers any page a shortcut finds open.
   void _showListening() {
     if (!mounted) return;
     if (relay.listening != null && _listening == null) {
-      _listening = OverlayEntry(builder: (_) => ListeningOverlay(relay: relay, onSaved: _openVoiceNote));
+      _listening = OverlayEntry(builder: (_) => RecordingScreen(relay: relay, onSaved: _openVoiceNote));
       Overlay.of(context, rootOverlay: true).insert(_listening!);
     } else if (relay.listening == null && _listening != null) {
       _listening!.remove();

@@ -245,14 +245,18 @@ abstract class Relay extends ChangeNotifier {
 
   /// When the phone started listening, or null when it is not.
   DateTime? get listening;
+  /// The sound level from 0 to 1 while the phone listens, only to draw the recording screen; null when it does not.
+  Stream<double>? get level;
+  /// True once a first voice note started on this phone, from any start: *New note* then shows no *Hold to talk*.
+  bool get holdTipSeen;
   /// A hold on *New note*: starts a voice note. Returns the words to show when it can not, such as a refused microphone or one that
   /// did not start; it does not throw.
   Future<String?> startVoiceNote();
-  /// A tap anywhere: keeps the note and writes its words. Returns the words to show for one too short to keep, for a
-  /// microphone that did not stop, or for a note the phone could not keep; then nothing is kept. [listening] is null
-  /// after it in every case.
+  /// A tap anywhere or the back gesture: keeps the note and writes its words. Returns the words to show for one too
+  /// short to keep, for a microphone that did not stop, or for a note the phone could not keep; then nothing is kept.
+  /// [listening] is null after it in every case.
   Future<String?> endVoiceNote();
-  /// *Cancel*: keeps nothing.
+  /// The X, *Cancel*: keeps nothing.
   Future<void> cancelVoiceNote();
   /// *Try again* on a note whose words failed: writes the words of each such note again, from its kept recording.
   Future<void> writeWordsAgain();

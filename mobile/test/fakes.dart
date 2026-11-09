@@ -453,6 +453,13 @@ class FakeMicrophone implements Microphone {
 
   @override
   Future<void> cancel() async => calls.add('cancel');
+
+  /// What [levels] gives, one each 100 ms; empty, as a silent microphone, gives none.
+  List<double> heard = const [];
+
+  @override
+  Stream<double> levels() =>
+    Stream.periodic(const Duration(milliseconds: 100), (index) => heard[index]).take(heard.length);
 }
 
 /// Writes [answer] as every recording's words, or waits for [hold] when set, or throws [error], an Exception or an

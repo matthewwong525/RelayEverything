@@ -104,6 +104,12 @@ String cleanWords(Iterable<String> segments) {
   return kept.join(' ').replaceAll(_spaces, ' ').trim();
 }
 
+/// The iPhone simulator's Metal driver traps when whisper.cpp loads its model there, so the simulator runs it on the
+/// CPU; a real phone keeps the GPU. Only a simulator app runs from a CoreSimulator folder: no flag reaches every launch.
+WhisperConfig whisperConfig({String? executable}) =>
+  (executable ?? Platform.resolvedExecutable).contains('/CoreSimulator/')
+    ? const WhisperConfig(backend: WhisperBackend.cpu) : const WhisperConfig();
+
 /// whisper.cpp through `whisper_cpp_flutter_plus`. The model loads at the first recording and stays loaded. The
 /// binding loads the model and writes the words in a background isolate, and the WAV file is read in one too, so the
 /// timeline never stops.
@@ -120,7 +126,7 @@ class WhisperTranscriber extends Transcriber {
   Future<String> write(File wav, WordsJob job) async {
     final samples = await _readWav(wav.path);
     if (samples.isEmpty) return '';
-    final engine = _engine ??= await WhisperEngine.load(await modelPath());
+    final engine = _engine ??= await WhisperEngine.load(await modelPath(), config: whisperConfig());
     // The time limit can pass while the WAV or the model loads: then the engine starts no job.
     if (job.cancelled) throw StateError('Cancelled at the time limit');
     final task = engine.transcribe(samples, options: const TranscribeOptions(language: 'en', suppressNonSpeechTokens: true));

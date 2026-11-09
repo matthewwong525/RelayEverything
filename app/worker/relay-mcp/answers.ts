@@ -42,7 +42,7 @@ function pageBefore(text: string | undefined, end: number): { before: number; be
 
 /** A note as the caller reads it: a title, as ChatGPT's search looks for, and the time in the zone. */
 const shown = (note: Note, timezone: string) =>
-  ({ ...note, title: note.text.slice(0, 80) || "A ring note with no words", recordedAt: local(note.recordedAt, timezone) });
+  ({ ...note, title: note.text.slice(0, 80) || "A recorded note with no words", recordedAt: local(note.recordedAt, timezone) });
 
 async function notes(db: Db, page: Parameters<typeof notePage>[1], timezone: string) {
   const found = await notePage(db, page);

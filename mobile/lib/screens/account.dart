@@ -86,7 +86,7 @@ class _AccountPageState extends State<AccountPage> {
       Group(children: [
         ListTile(
           title: const Text('Open your Relay Everything page'),
-          subtitle: const Text('Your ring notes, recordings and the notes from all your devices.'),
+          subtitle: const Text('The notes from all your devices, with their recordings.'),
           trailing: const Icon(CupertinoIcons.arrow_up_right_square),
           onTap: () => _open(''),
         ),

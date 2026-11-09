@@ -64,13 +64,13 @@ The plugin calls two routes with the chat key in the header `Authorization: Bear
 ```json
 {
   "sessionId": "5d1c2b7a-0e4f-4a6b-9c3d-8e7f6a5b4c3d",
-  "project": "relay-ring",
+  "project": "my-app",
   "startedAt": 1793800800000,
-  "title": "How thick should the stiffener be?",
+  "title": "Why does the sign-in test fail?",
   "messages": [
-    { "seq": 0, "role": "you", "text": "How thick should the stiffener be?", "at": 1793800800000 },
-    { "seq": 1, "role": "step", "text": "Read pcb/relay.kicad_pcb", "at": 1793800830000 },
-    { "seq": 2, "role": "ai", "text": "0.2 mm steel is enough for a ring this size.", "at": 1793800860000 }
+    { "seq": 0, "role": "you", "text": "Why does the sign-in test fail?", "at": 1793800800000 },
+    { "seq": 1, "role": "step", "text": "Read tests/sign-in.test.ts", "at": 1793800830000 },
+    { "seq": 2, "role": "ai", "text": "The test expects the old button name.", "at": 1793800860000 }
   ]
 }
 ```
@@ -81,6 +81,6 @@ The plugin calls two routes with the chat key in the header `Authorization: Bear
 - When the first `seq` is past `stored`, the answer is `400` with `stored`. Send again from there.
 - Send at most 500 messages and 4 MB at a time, and at most 200,000 characters in one message. A larger send answers `413` and stores nothing.
 
-`POST https://<your-relay-server>/apps/relay/api/chat-saves` adds the AI's summary to a chat this key sent: `{ "sessionId": "...", "title": "Stiffener plan", "text": "Use a 0.2 mm steel stiffener." }`. The answer is `{ "ok": true }`, or `404` when this key sent no chat with that `sessionId`.
+`POST https://<your-relay-server>/apps/relay/api/chat-saves` adds the AI's summary to a chat this key sent: `{ "sessionId": "...", "title": "Sign-in test fix", "text": "Rename the button in the test." }`. The answer is `{ "ok": true }`, or `404` when this key sent no chat with that `sessionId`.
 
 A chat key gets `403` on every other route. Only a signed-in person can list, read or delete chats: [Routes](../../api/reference/) shows each one.

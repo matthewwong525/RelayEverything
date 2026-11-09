@@ -20,7 +20,6 @@ The mark is *Signal R*: a capital R on a 48 by 48 grid, in round strokes 4 units
 - **The app draws the mark in code** (`RelayMark` in [`mobile/lib/brand.dart`](../mobile/lib/brand.dart)), with the same paths. A change to the mark changes both.
 - **The website uses** `site/src/assets/relay-mark.svg` (light) and `relay-mark-dark.svg` in the top bar, and the icon with round corners as `site/public/favicon.svg`. The script writes all three.
 - **The icon stays still.** Only the sync dot moves, and only while it says *Syncing*: [words with every color](#rules-for-every-screen).
-- **The ring circle is not the logo.** It shows only on the ring's own pages.
 
 ## Colors
 

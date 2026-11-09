@@ -13,14 +13,14 @@ API key as `Authorization: Bearer …`, as [Connect a service](../connect-a-serv
 
 `GET /v1/notes` · `listNotes`
 
-With `q`, the notes whose text holds every word, as the `search` tool: `source` picks ring or typed notes, and `limit` is at most 50. Without `q`, every note from `from` to `to`, as the `timeline` tool: both are needed, and `limit` is at most 100. Newest first; read on with `cursor`.
+With `q`, the notes whose text holds every word, as the `search` tool: `source` picks older recorded or typed notes, and `limit` is at most 50. Without `q`, every note from `from` to `to`, as the `timeline` tool: both are needed, and `limit` is at most 100. Newest first; read on with `cursor`.
 
 | Field | In | Type | Required | What it holds |
 |---|---|---|---|---|
 | `q` | query | string | no | The words to find. |
 | `from` | query | string | no | The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
 | `to` | query | string | no | The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
-| `source` | query | "ring" or "typed" | no | Only ring notes, or only typed ones. |
+| `source` | query | "ring" or "typed" | no | Only older recorded notes, or only typed ones. |
 | `limit` | query | integer | no | How many notes, at most 100. |
 | `cursor` | query | string | no | The last answer's `nextCursor`, to read the next page. |
 | `timezone` | query | string | no | An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out. |

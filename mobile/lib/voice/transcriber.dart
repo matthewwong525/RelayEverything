@@ -36,8 +36,7 @@ class WordsJob {
   }
 }
 
-/// Writes the words of one recording. The app's is whisper.cpp on the phone; a test's is a fake. The Relay ring can
-/// call the same one later with its own recording.
+/// Writes the words of one recording. The app's is whisper.cpp on the phone; a test's is a fake.
 abstract class Transcriber {
   // One recording at a time, in order: the engine takes one job. This completes when the last job ends.
   Future<void> _last = Future.value();

@@ -37,7 +37,7 @@
                 },
                 "text": {
                   "type": "string",
-                  "description": "The words: a typed note, or a ring note's transcription."
+                  "description": "The words: a typed note, or an older recorded note's transcription."
                 },
                 "recorded_at": {
                   "type": "string",
@@ -107,7 +107,7 @@
                             "phone",
                             "history"
                           ],
-                          "description": "phone: where a typed note was written. history: the location point nearest a ring note."
+                          "description": "phone: where a typed note was written. history: the location point nearest an older recorded note."
                         }
                       },
                       "required": [
@@ -145,7 +145,7 @@
                       "type": "null"
                     }
                   ],
-                  "description": "A ring note's recording, or null for a typed note or a ring note with words only."
+                  "description": "An older recorded note's recording, or null for a typed note or an older recorded note with words only."
                 },
                 "attachments": {
                   "description": "The note's files: each one's name, type and size, never its bytes; each file's bytes follow in its own note.file. Only a note with files has this list.",
@@ -244,7 +244,7 @@
                 },
                 "text": {
                   "type": "string",
-                  "description": "The words: a typed note, or a ring note's transcription."
+                  "description": "The words: a typed note, or an older recorded note's transcription."
                 },
                 "recorded_at": {
                   "type": "string",
@@ -314,7 +314,7 @@
                             "phone",
                             "history"
                           ],
-                          "description": "phone: where a typed note was written. history: the location point nearest a ring note."
+                          "description": "phone: where a typed note was written. history: the location point nearest an older recorded note."
                         }
                       },
                       "required": [

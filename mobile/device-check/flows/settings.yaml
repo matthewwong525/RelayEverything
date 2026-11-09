@@ -1,5 +1,7 @@
 # Settings: open it from the gear on Home. Signed out, its first row is the Account row, Sign in to Relay Everything,
-# then the Appearance, Notes and Voice notes groups. A tap on the Account row opens the Sign in screen.
+# then the Appearance, Notes and Voice notes groups. A tap on the Account row opens the Sign in screen. Then the flow
+# saves a webhook, which checks only the address's form, with no network, and the webhook Account page offers Sign in
+# to Relay Everything.
 appId: com.matthewwong525.relayApp
 ---
 - launchApp:
@@ -30,3 +32,27 @@ appId: com.matthewwong525.relayApp
 - assertVisible: "Scan a key"
 - assertVisible: "Send to my own webhook instead"
 - takeScreenshot: sign-in
+# Send to my own webhook instead: the address starts as https://, so type the rest, then Save. Save stays above the
+# keyboard, and Flutter's keyboard has no dismiss action Maestro's hideKeyboard can use, so tap Save at once.
+- tapOn: "Send to my own webhook instead"
+- extendedWaitUntil:
+    visible: "My own webhook"
+    timeout: 30000
+- tapOn: "Address"
+- inputText: "example.com/hook"
+- tapOn: "Save"
+# A new install has no notes, so the earlier-notes question shows only if a note was kept.
+- tapOn:
+    text: "Only new notes"
+    optional: true
+# Back in Settings, the Account row joins My own webhook and the webhook's host.
+- extendedWaitUntil:
+    visible: "Appearance"
+    timeout: 30000
+- tapOn: 'My own webhook(.|\n)*'
+- extendedWaitUntil:
+    visible: 'Stop sending(.|\n)*'
+    timeout: 30000
+- assertVisible: 'Sign in to Relay Everything(.|\n)*'
+- assertNotVisible: 'Notes from elsewhere(.|\n)*'
+- takeScreenshot: webhook-account

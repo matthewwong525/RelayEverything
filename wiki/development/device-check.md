@@ -105,4 +105,6 @@ Run `node --test scripts/device-check.test.mjs mobile/device-check/*.test.mjs`: 
 
 **Match a Flutter row by the start of its text.** Flutter joins a card's lines, or a row's title and its small text, into one label, such as `Sign in to Relay Everything\nYour notes stay…`. Maestro matches the whole label, so `assertVisible: "Sign in to Relay Everything"` fails. Write `assertVisible: 'Sign in to Relay Everything(.|\n)*'`, in single quotes. A failed flow keeps its screen's labels in `maestro/<flow>/…/screen-hierarchy/`, in the run's results.
 
+**Never use `hideKeyboard`.** The Flutter app's keyboard has no dismiss action that Maestro can use, so the step fails with *Couldn't hide the keyboard* and the flow ends *broken*. After `inputText`, tap the next button at once, such as `tapOn: "Save"` on the webhook form: the form keeps its buttons above the keyboard.
+
 **Tap an icon button by its label.** A button with no words on the screen, such as the round *New note* or the ⋯ button, has an accessibility label or a tooltip. Maestro matches it as it matches text: `tapOn: "New note"`, `tapOn: "More"`. A Maestro tap is short, so `tapOn: "New note"` opens the *New note* page and never records.

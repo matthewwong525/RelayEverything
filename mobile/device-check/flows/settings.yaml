@@ -32,14 +32,14 @@ appId: com.matthewwong525.relayApp
 - assertVisible: "Scan a key"
 - assertVisible: "Send to my own webhook instead"
 - takeScreenshot: sign-in
-# Send to my own webhook instead: the address starts as https://, so type the rest, then Save.
+# Send to my own webhook instead: the address starts as https://, so type the rest, then Save. Save stays above the
+# keyboard, and Flutter's keyboard has no dismiss action Maestro's hideKeyboard can use, so tap Save at once.
 - tapOn: "Send to my own webhook instead"
 - extendedWaitUntil:
     visible: "My own webhook"
     timeout: 30000
 - tapOn: "Address"
 - inputText: "example.com/hook"
-- hideKeyboard
 - tapOn: "Save"
 # A new install has no notes, so the earlier-notes question shows only if a note was kept.
 - tapOn:

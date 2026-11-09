@@ -32,4 +32,4 @@ Before you start: if `flutter-web-app` is on `main`, skip group 4. If `landing-p
 ## 7. Checks
 
 - [x] 7.1 Run `node --test scripts/product-name.test.mjs`, `(cd app && npm test)`, `(cd site && npm test)`, `(cd mobile && flutter analyze && flutter test)` and `node scripts/public-check.mjs`. Verify: all pass.
-- [ ] 7.2 Run `/save`, then `node scripts/publish-relay-site.mjs --ref HEAD --staging`. Verify on relay-staging.matthewwong525.workers.dev: the docs menu has no *The ring*, `/ring/board/` opens the home page, and a search for *ring* finds only the `source` value `ring`, with no page about the ring device.
+- [x] 7.2 Run `/save`, then `node scripts/publish-relay-site.mjs --ref HEAD --staging`. Verify on relay-staging.matthewwong525.workers.dev: the docs menu has no *The ring*, `/ring/board/` opens the home page, and a search for *ring* finds only the `source` value `ring`, with no page about the ring device.

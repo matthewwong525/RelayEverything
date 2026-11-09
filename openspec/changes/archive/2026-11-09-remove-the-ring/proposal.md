@@ -1,6 +1,6 @@
 # Take the ring out of everything people read
 
-**Status:** building
+**Status:** ready-to-ship
 **Branch:** curvy-platypus
 **Open questions:** none
 
@@ -103,3 +103,4 @@ The Relay Everything ring is gone, but the website still has a whole *The ring* 
 - **2026-11-09** — Check: `site/src/assets/ring/click-test.png` is deleted, which the loosened-checks step reads as a deleted test because of its name, because it is a picture of the ring's click test print on a deleted ring page, not a test.
 - **2026-11-09** — Check: `site/src/assets/ring/wear-test.png` is deleted, which the loosened-checks step reads as a deleted test because of its name, because it is a picture of the ring's wear test print on a deleted ring page, not a test.
 - **2026-11-09** — Saved for the staging check: tasks 1.1 to 7.1 built and passing locally; 7.2 (the staging preview) runs from this save.
+- **2026-11-09** — Archived for publishing: staging showed no ring menu, `/ring/board/` opened the home page with a 301, and only the `source` value `ring` was left; main (#81, #83, #84) merged in and the ring check still passes.

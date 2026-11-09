@@ -321,11 +321,18 @@ class Store extends GeneratedDatabase {
       "(SELECT value FROM state WHERE key = '$_destination'), '$relayServer'), ?, ?, ?)",
       [destination, route, route, jsonEncode(body), DateTime.now().millisecondsSinceEpoch]);
 
-  /// Every waiting upload, or those for [destination], oldest first.
-  Future<List<OutboxItem>> outbox({String? destination}) async => [
-    for (final row in await _rows('SELECT id, destination, route, body, created_at FROM outbox '
-        '${destination == null ? '' : 'WHERE destination = ? '}ORDER BY id', [?destination])) _outboxItem(row),
-  ];
+  /// Every waiting upload, or those for [destination], oldest first. With [private] true only the [privateRoutes]
+  /// uploads, with false only the others, the notes and their changes, deletes and files.
+  Future<List<OutboxItem>> outbox({String? destination, bool? private}) async {
+    final where = [
+      if (destination != null) 'destination = ?',
+      if (private != null) 'route ${private ? '' : 'NOT '}IN ($_privateList)',
+    ];
+    return [
+      for (final row in await _rows('SELECT id, destination, route, body, created_at FROM outbox '
+          '${where.isEmpty ? '' : 'WHERE ${where.join(' AND ')} '}ORDER BY id', [?destination])) _outboxItem(row),
+    ];
+  }
 
   /// The waiting upload [id] as it is now, or null when it is gone.
   Future<OutboxItem?> outboxItem(int id) async {

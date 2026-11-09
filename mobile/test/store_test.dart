@@ -515,6 +515,23 @@ void main() {
         ('calendar', ownWebhook), ('attachment', relayServer)]);
     });
 
+    test('a route filter lists only the notes\' own uploads, or only the private ones, each oldest first', () async {
+      await store.enqueue('health', {'samples': []});
+      await store.enqueue('notes', {'clientId': 'a'});
+      await store.enqueue('locations', {'points': []});
+      await store.enqueue(staysRoute, {'stays': []});
+      await store.enqueue('calendar', {'events': [], 'removed': []});
+      await store.enqueue(noteUpdate, {'clientId': 'a'});
+      await store.enqueue(noteDelete, {'clientId': 'b'});
+      await store.enqueue('attachment', {'id': 'f1'});
+      List<String> routes(List<OutboxItem> items) => [for (final item in items) item.route];
+      expect(routes(await store.outbox(private: false)), ['notes', noteUpdate, noteDelete, 'attachment']);
+      expect(routes(await store.outbox(private: true)), ['health', 'locations', staysRoute, 'calendar']);
+      expect((await store.outbox()).length, 8);
+      expect(await store.outbox(destination: ownWebhook, private: false), isEmpty);
+      expect(routes(await store.outbox(destination: relayServer, private: false)).first, 'notes');
+    });
+
     test('a move of only the private place leaves note rows and drops what the calendar sent', () async {
       await store.enqueue('notes', {'clientId': 'a'});
       await store.enqueue('health', {'samples': [{'type': 'steps'}]});

@@ -206,7 +206,8 @@ abstract class Relay extends ChangeNotifier {
   /// *Sign out*: forgets the key, turns sending off, and deletes the notes from elsewhere.
   Future<void> disconnect();
   Future<void> sync();
-  /// Sends what waits, then reads the notes changed elsewhere: at start, on return to the app, and on pull-down.
+  /// Sends this phone's notes, then reads the notes changed elsewhere: at start, on return to the app, and on pull-down.
+  /// It ends with the notes, while health, places, the calendar and photos may still send after them.
   Future<void> pullNotes();
   /// The note open in the editor, which a pull leaves as it is.
   String? openNote;

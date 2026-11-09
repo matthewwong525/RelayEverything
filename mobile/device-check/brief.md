@@ -10,6 +10,7 @@ a short report.
   Each scenario has a WHEN (what to do) and a THEN (what you must see).
 - **The device's tools:** the *This device* part names them.
 - **The fixed tour:** `out/tour.json` gives each step and whether it passed. `out/tour/` has a screenshot of each step.
+- **Crash reports:** `out/crashes/` gets a file each time the app crashes, within 5 seconds.
 
 ## Rules
 
@@ -32,9 +33,12 @@ a short report.
    check keeps what you found.
 3. For each scenario, do its WHEN on the device. Then take a screenshot and compare it with its THEN. **Update its
    block in `out/claude/report.md` at once**, before you start the next scenario.
-4. Some scenarios need what this device does not have: health data, a real Relay Everything server, a Pebble ring or
+4. **When the app leaves the screen**, such as the device's home screen in place of the app, wait 5 seconds and
+   look in `out/crashes/` with Glob. A file there means the app crashed: Read its first 60 lines, write the scenario
+   as broken with the crash's exception and first lines, and go on to the next scenario. Do not try to find out why.
+5. Some scenarios need what this device does not have: health data, a real Relay Everything server, a Pebble ring or
    a microphone. Mark each of these *could not check* and give the reason. Do not guess.
-5. At the end, write the overall verdict in `out/claude/verdict.txt` and the last line of the report.
+6. At the end, write the overall verdict in `out/claude/verdict.txt` and the last line of the report.
 
 ## What you write
 

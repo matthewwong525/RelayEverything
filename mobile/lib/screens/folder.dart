@@ -89,20 +89,29 @@ Future<void> apply(BuildContext context, Future<String?> change) async {
 }
 
 /// *Sign in*: sets up where to send, a key or the person's own webhook. Then asks about the notes that never went, and
-/// turns sending on there, in the same step. The Account row in Settings and a folder's *Sign in* both start here.
-Future<void> choosePlace(BuildContext context, Relay relay, Scanner? scanner) async {
+/// turns sending on there, in the same step. The Account row in Settings and a folder's *Sign in* both start here. With
+/// [keepWebhook], the webhook Account page's *Sign in to Relay Everything* starts here too: it offers only the sign-in,
+/// and health, places, the calendar and photos stay on the person's own webhook, as *Only my own webhook*. True once
+/// sending starts; a closed sign-in or question changes nothing.
+Future<bool> choosePlace(BuildContext context, Relay relay, Scanner? scanner, {bool keepWebhook = false}) async {
   final place = await Navigator.of(context).push(MaterialPageRoute<SendPlace>(
-    builder: (_) => ConnectScreen(relay: relay, scanner: scanner)));
-  if (place == null || !context.mounted) return;
-  final earlier = await relay.earlierNotes();
+    builder: (_) => ConnectScreen(relay: relay, scanner: scanner, signInOnly: keepWebhook)));
+  if (place == null || !context.mounted) return false;
+  final fromWebhook = relay.settings.place == SendPlace.webhook && place == SendPlace.server;
+  final earlier = await relay.earlierNotes(to: place);
   var sendEarlier = false;
   if (earlier > 0) {
-    if (!context.mounted) return;
-    final choice = await showDialog<bool>(context: context, builder: (context) => _EarlierDialog(count: earlier, place: place));
-    if (choice == null) return;
+    if (!context.mounted) return false;
+    final choice = await showDialog<bool>(context: context,
+      builder: (context) => _EarlierDialog(count: earlier, place: place, fromWebhook: fromWebhook));
+    if (choice == null) return false;
     sendEarlier = choice;
   }
-  if (context.mounted) await apply(context, relay.startSending(sendEarlier: sendEarlier, place: place));
+  if (!context.mounted) return false;
+  final problem = await relay.startSending(sendEarlier: sendEarlier, place: place,
+    privateTo: keepWebhook ? SendPlace.webhook : null);
+  if (problem != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(problem)));
+  return problem == null;
 }
 
 /// A page opened from Home: *‹ Home*, a large title, and its groups. Each switch acts at once and asks for its
@@ -338,18 +347,22 @@ class Group extends StatelessWidget {
 }
 
 /// Asks whether the notes kept only on this phone go too. *Only new notes* keeps no record, so the next turn-on asks
-/// again.
+/// again. With [fromWebhook], the notes went only to the person's own webhook.
 class _EarlierDialog extends StatelessWidget {
-  const _EarlierDialog({required this.count, required this.place});
+  const _EarlierDialog({required this.count, required this.place, this.fromWebhook = false});
 
   final int count;
   final SendPlace place;
+  final bool fromWebhook;
 
   @override
   Widget build(BuildContext context) {
+    final where = fromWebhook
+      ? '${count == 1 ? 'It is' : 'They are'} not on Relay Everything yet.'
+      : '${count == 1 ? 'It was' : 'They were'} only on this phone.';
     return AlertDialog(
       title: Text(count == 1 ? 'Send your earlier note too?' : 'Send your $count earlier notes too?'),
-      content: Text('${count == 1 ? 'It was' : 'They were'} only on this phone. New notes go to '
+      content: Text('$where New notes go to '
         '${place == SendPlace.webhook ? 'your webhook' : 'your Relay Everything server'} from now on.'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Only new notes')),

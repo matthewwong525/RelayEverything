@@ -2159,6 +2159,57 @@ void main() {
       next.dispose();
     });
 
+    test('a sign-in from your own webhook sends notes to Relay Everything, keeps private data and the calendar\'s sent list '
+        'on the webhook, and Send them sends the webhook\'s notes oldest first', () async {
+      await store.set(healthTypes, askedTypes);
+      health.readings = [reading(HealthDataType.STEPS, now.subtract(const Duration(minutes: 30)), now, value: 10)];
+      calendar.items = [meeting('a', now.add(const Duration(hours: 1)))];
+      final relay = controller(photos: photos, network: network);
+      await relay.load();
+      expect(await relay.saveWebhook(hook.address, fixtureSecret), isNull);
+      expect(await relay.startSending(sendEarlier: false, place: SendPlace.webhook), isNull);
+      expect([await relay.setHealth(true), await relay.setCalendar(true)], [isNull, isNull]);
+      await relay.addNote('One');
+      clock = now.add(const Duration(minutes: 1));
+      await relay.addNote('Two');
+      await relay.settled();
+      expect(hookTypes().where((type) => type == 'note.created'), hasLength(2));
+      final calendarKept = await store.calendarSent();
+      expect(calendarKept, isNotEmpty);
+      // The receiver is down: a note and a point wait for it.
+      server.answer = (request) => toHook(request) ? http.Response('', 503) : FakeServer.ok(request);
+      clock = now.add(const Duration(minutes: 2));
+      await store.addPoint(Pin(at: clock, lat: 43.6, lon: -79.3, accuracy: 5));
+      await relay.addNote('Waits');
+      await relay.settled();
+      expect({for (final item in await store.outbox()) item.route}, containsAll(['notes', 'locations']));
+      expect(await relay.connect(code), isNull);
+      // Only the move to the server counts the notes that went to the webhook; the one waiting is not asked about.
+      expect([await relay.earlierNotes(), await relay.earlierNotes(to: SendPlace.server)], [0, 2]);
+      server.answer = FakeServer.ok;
+      server.requests.clear();
+      expect(await relay.startSending(sendEarlier: true, place: SendPlace.server, privateTo: SendPlace.webhook), isNull);
+      await relay.settled();
+      expect([relay.settings.place, relay.settings.privateTo, relay.settings.privatePlace],
+        [SendPlace.server, SendPlace.webhook, SendPlace.webhook]);
+      expect([for (final note in sentNotes()) note['text']], ['Waits', 'One', 'Two']);
+      expect(serverRoutes().where(private.contains), isEmpty);
+      expect(hookTypes(), allOf(contains('location.points'), isNot(contains('note.created'))));
+      expect([await store.calendarSent(), await store.outbox(), relay.status], [calendarKept, isEmpty, SyncStatus.synced]);
+      expect(await relay.earlierNotes(), 0);
+      relay.dispose();
+    });
+
+    test('a sign-in that keeps the webhook needs the webhook kept', () async {
+      await KeyVault(storage).save(connection);
+      final relay = controller();
+      await relay.load();
+      expect(await relay.startSending(sendEarlier: false, place: SendPlace.server, privateTo: SendPlace.webhook),
+        'Set your webhook first.');
+      expect(relay.settings.privateTo, SendPlace.server);
+      relay.dispose();
+    });
+
     test('a webhook lost in a restore keeps sending on: notes go, private data waits and never goes to the server', () async {
       final relay = await signedIn(settings: const Settings(sending: true, health: true, privateTo: SendPlace.webhook));
       expect([relay.settings.sending, relay.privateWebhookMissing, relay.webhookAddress], [true, true, isNull]);

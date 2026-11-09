@@ -15,14 +15,18 @@ typedef Scanner = Future<String?> Function(BuildContext context);
 /// address and a secret to copy, with *Send a test*. A phone that keeps a key offers it in one tap. The Account row in
 /// Settings and a folder's *Sign in* open it, and it closes with the place once that place is set up. With
 /// [privateOnly], the Account page's *Only my own webhook* opens the webhook's form alone: its *Save* keeps the webhook
-/// and closes with [SendPlace.webhook], and the Account page sends private data there; notes stay where they go.
+/// and closes with [SendPlace.webhook], and the Account page sends private data there; notes stay where they go. With
+/// [signInOnly], the webhook Account page's *Sign in to Relay Everything* opens the sign-in alone: the phone sends to
+/// the webhook already.
 class ConnectScreen extends StatefulWidget {
   const ConnectScreen({super.key, required this.relay, Scanner? scanner, Future<void> Function(String text)? copy,
-    this.privateOnly = false}) : scanner = scanner ?? _scan, copy = copy ?? _copy;
+    this.privateOnly = false, this.signInOnly = false}) : scanner = scanner ?? _scan, copy = copy ?? _copy;
 
   final Relay relay;
   /// The webhook's form for health, places, the calendar and photos only, with no way to sign in.
   final bool privateOnly;
+  /// The sign-in with no *Send to my own webhook instead*.
+  final bool signInOnly;
   /// Opens the camera and returns the code it read; a test passes its own.
   final Scanner scanner;
   /// Puts the secret on the clipboard; a test passes its own.
@@ -130,8 +134,10 @@ class _ConnectScreenState extends State<ConnectScreen> {
     Text('This phone has a key for ${widget.relay.server ?? 'your server'}.'),
     const SizedBox(height: 16),
     FilledButton(onPressed: () => Navigator.of(context).pop(SendPlace.server), child: const Text('Send to Relay Everything')),
-    const SizedBox(height: 16),
-    _quiet('Send to my own webhook instead', () => _pick(true), CupertinoIcons.link),
+    if (!widget.signInOnly) ...[
+      const SizedBox(height: 16),
+      _quiet('Send to my own webhook instead', () => _pick(true), CupertinoIcons.link),
+    ],
   ];
 
   List<Widget> _webhook() => [
@@ -166,15 +172,18 @@ class _ConnectScreenState extends State<ConnectScreen> {
   ];
 
   List<Widget> _server() => [
-    const Text('Sign in to Relay Everything, then tap Connect. This phone gets its own key. It sends your notes and keeps '
-      'them the same as on your other devices. Notes stay on this phone until you sign in.'),
+    Text(widget.signInOnly
+      ? 'Sign in to Relay Everything, then tap Connect. This phone gets its own key. It sends your notes and keeps them '
+        'the same as on your other devices. Health, places, calendar and photos still go only to your webhook.'
+      : 'Sign in to Relay Everything, then tap Connect. This phone gets its own key. It sends your notes and keeps them '
+        'the same as on your other devices. Notes stay on this phone until you sign in.'),
     const SizedBox(height: 16),
     FilledButton.icon(onPressed: _busy ? null : () => _signIn(defaultServer), icon: const Icon(CupertinoIcons.arrow_right_square),
       label: Text(_busy ? 'Connecting…' : 'Sign in to connect')),
     const SizedBox(height: 16),
     _quiet('Scan a key', _scanned, CupertinoIcons.qrcode_viewfinder),
     _quiet('Use another server', _otherServer, CupertinoIcons.globe),
-    _quiet('Send to my own webhook instead', () => _pick(true), CupertinoIcons.link),
+    if (!widget.signInOnly) _quiet('Send to my own webhook instead', () => _pick(true), CupertinoIcons.link),
     const SizedBox(height: 24),
     Text('A key comes from Add a device on your Relay Everything page, which shows it once, as a QR code. On this same '
       'phone, copy the key and paste it here.', style: Theme.of(context).textTheme.bodySmall),

@@ -372,7 +372,11 @@ class RelayController extends Relay {
   }
 
   @override
-  Future<int> earlierNotes() => store.earlierCount();
+  Future<int> earlierNotes({SendPlace? to}) => store.earlierCount(fromWebhook: _fromWebhook(to ?? _settings.place));
+
+  /// True when the phone moves from the person's own webhook to a Relay Everything server: the notes that went only to
+  /// the webhook are not on the person's space, so they count as earlier notes.
+  bool _fromWebhook(SendPlace to) => _settings.place == SendPlace.webhook && to == SendPlace.server;
 
   static WebhookProblem? _problemOf(String? saved) {
     if (saved == null) return null;
@@ -382,14 +386,17 @@ class RelayController extends Relay {
   }
 
   /// Moves what waits to [place] in one step, so nothing goes to the place left. A round sending there stops at its next
-  /// upload, and a new round starts after it.
+  /// upload, and a new round starts after it. From the webhook to the server with [privateTo] the webhook, private data
+  /// stays where it went, so the calendar's sent list stays too.
   @override
-  Future<String?> startSending({required bool sendEarlier, SendPlace? place}) async {
+  Future<String?> startSending({required bool sendEarlier, SendPlace? place, SendPlace? privateTo}) async {
     final to = place ?? _settings.place;
     if (!_ready(to)) return to == SendPlace.server ? 'Connect a key first.' : 'Set your webhook first.';
-    final next = _settings.copyWith(sending: true, place: to);
+    if (privateTo == SendPlace.webhook && _webhook == null) return 'Set your webhook first.';
+    final fromWebhook = _fromWebhook(to);
+    final next = _settings.copyWith(sending: true, place: to, privateTo: privateTo);
     await _moveOutbox(next);
-    if (sendEarlier) await store.queueEarlier();
+    if (sendEarlier) await store.queueEarlier(fromWebhook: fromWebhook);
     // The photos waiting on this phone go to the new place too, as the outbox does.
     await _saveSettings(next);
     await _refreshLocal();

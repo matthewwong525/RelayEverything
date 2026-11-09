@@ -175,11 +175,14 @@ abstract class Relay extends ChangeNotifier {
   /// Off: photos wait for Wi-Fi.
   Future<String?> setPhotosOnMobileData(bool on);
 
-  /// How many notes never went to the server: the earlier-notes prompt asks about them when sending turns on.
-  Future<int> earlierNotes();
+  /// How many notes never went to the server: the earlier-notes prompt asks about them when sending turns on [to] a
+  /// place, or the place set before. From the person's own webhook to a Relay Everything server, the notes that went only
+  /// to the webhook count too.
+  Future<int> earlierNotes({SendPlace? to});
   /// Turns sending on to [place], or to the place set before, with its key or webhook already kept. What waits moves
-  /// there too. [sendEarlier] queues the earlier notes too, oldest first.
-  Future<String?> startSending({required bool sendEarlier, SendPlace? place});
+  /// there too. [sendEarlier] queues the earlier notes too, oldest first, as [earlierNotes] counts them. [privateTo]
+  /// also sets where health, places, the calendar and photos go, as [setPrivatePlace] does, in the same step.
+  Future<String?> startSending({required bool sendEarlier, SendPlace? place, SendPlace? privateTo});
 
   /// The person's own webhook, when one is kept: its address and secret.
   String? get webhookAddress;

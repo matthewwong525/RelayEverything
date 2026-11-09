@@ -1,6 +1,6 @@
 # Send health, places, calendar and photos only to your own webhook, while your notes still sync
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** keep-health-location-off-server
 **Open questions:** none
 
@@ -99,3 +99,5 @@ None.
 - **2026-11-09** — Assumed, at build: Home's folder rows keep *Sent 14:05*; the folder pages say *Sent to your webhook 14:05*, as the plan names them.
 - **2026-11-09** — Assumed: a change of the private place clears the last-sent times of health, places and the calendar, because a folder must never say *Sent to your webhook* for data that went to Relay Everything.
 - **2026-11-09** — Saved for final acceptance: built, and a second review found four gaps, all fixed: a folder could say *Sent to your webhook* with the time of a send to Relay Everything, and three website pages (your database, privacy, calendar) still said the phone sends to one place only. `flutter analyze` is clean and all 506 phone tests pass. The iPhone device check (5.2) runs on this saved commit.
+- **2026-11-09** — Check: the iPhone device check on aa443df (run 42540816603) gave *works*: the fixed tour passed all four flows, and Claude saw Settings signed out unchanged, Health asking to sign in with no *Sent to your webhook* line, and the whole-webhook screen with no private-data group. The first run (42540795451) was cancelled by this newer one. The signed-in Account group was not shown on the iPhone, because the check has no account; widget tests cover it.
+- **2026-11-09** — Archived for the ship. Main has not moved since 85e401f; the spec deltas were already in the main specs at the last save.

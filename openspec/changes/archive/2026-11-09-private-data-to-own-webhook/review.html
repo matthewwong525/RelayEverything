@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · private-data-to-own-webhook</title>
+<title>Review · 2026-11-09-private-data-to-own-webhook</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -408,11 +408,11 @@
 })();
 </script>
 </head>
-<body data-change="private-data-to-own-webhook" data-own-back>
+<body data-change="2026-11-09-private-data-to-own-webhook" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>private-data-to-own-webhook</h1>
+  <h1>2026-11-09-private-data-to-own-webhook</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap + Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Open a drawing and tap it to see it full screen.</span></p>
@@ -474,6 +474,8 @@
 <li class="decision card" id="decision-14" data-note="decision-14" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-09</p>Assumed, at build: Home's folder rows keep <i>Sent 14:05</i>; the folder pages say <i>Sent to your webhook 14:05</i>, as the plan names them.</li>
 <li class="decision card" id="decision-15" data-note="decision-15" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-09</p>Assumed: a change of the private place clears the last-sent times of health, places and the calendar, because a folder must never say <i>Sent to your webhook</i> for data that went to Relay Everything.</li>
 <li class="decision card" id="decision-16" data-note="decision-16" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-09</p>Saved for final acceptance: built, and a second review found four gaps, all fixed: a folder could say <i>Sent to your webhook</i> with the time of a send to Relay Everything, and three website pages (your database, privacy, calendar) still said the phone sends to one place only. <code>flutter analyze</code> is clean and all 506 phone tests pass. The iPhone device check (5.2) runs on this saved commit.</li>
+<li class="decision card" id="decision-17" data-note="decision-17" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-09</p>Check: the iPhone device check on aa443df (run 42540816603) gave <i>works</i>: the fixed tour passed all four flows, and Claude saw Settings signed out unchanged, Health asking to sign in with no <i>Sent to your webhook</i> line, and the whole-webhook screen with no private-data group. The first run (42540795451) was cancelled by this newer one. The signed-in Account group was not shown on the iPhone, because the check has no account; widget tests cover it.</li>
+<li class="decision card" id="decision-18" data-note="decision-18" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-09</p>Archived for the ship. Main has not moved since 85e401f; the spec deltas were already in the main specs at the last save.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

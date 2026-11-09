@@ -27,4 +27,4 @@
 ## 5. Checks
 
 - [x] 5.1 `flutter analyze` and `flutter test` in `mobile/`; `node scripts/product-name.test.mjs`; `node scripts/public-check.mjs`. All pass.
-- [ ] 5.2 `/save`, then the iPhone device check on the saved commit with a scenarios file in a temporary folder: the fixed tour passes and the signed-out Account path is unchanged. The signed-in group needs an account the check doesn't have, so 3.1 to 3.3's widget tests cover it.
+- [x] 5.2 `/save`, then the iPhone device check on the saved commit with a scenarios file in a temporary folder: the fixed tour passes and the signed-out Account path is unchanged. The signed-in group needs an account the check doesn't have, so 3.1 to 3.3's widget tests cover it.

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { healthSamples, locationPoints, noteCreated, noteDeleted, noteFile, noteUpdated, photoCreated, webhookTest, type NoteRow } from "./format.ts";
+import { healthSamples, locationPoints, locationStays, noteCreated, noteDeleted, noteFile, noteUpdated, photoCreated, webhookTest, type NoteRow } from "./format.ts";
 import { base64, newSecret } from "./sign.ts";
 import { bodyWithFile, post } from "./send.ts";
 
@@ -37,7 +37,11 @@ it("saves what Relay sends, once each, and refuses a message signed with another
   const messages = [noteCreated(ring, base64(new Uint8Array([0, 0, 0, 24])), at), noteCreated(ring, base64(new Uint8Array([0, 0, 0, 24])), at),
     noteUpdated(placed, at), webhookTest({ id: "hook", name: "Mine" }, at),
     healthSamples([{ id: 2, ...device, type: "steps", start_at: at, end_at: at + 1000, value: 5210, unit: "count", source: "fitness" }], at),
-    locationPoints([{ id: 1, ...device, at, lat: 43.6629, lon: -79.3957, accuracy: 15, place: null }], at)];
+    locationPoints([{ id: 1, ...device, at, lat: 43.6629, lon: -79.3957, accuracy: 15, place: null }], at),
+    locationStays([{ id: 3, ...device, kind: "stay", start_at: at, end_at: at + 600_000, ongoing: 1, lat: 43.6629, lon: -79.3957,
+      name: "Corner Café", address: "Harbord St", event: null, source: "map", mode: null, km: null }], at),
+    locationStays([{ id: 3, ...device, kind: "stay", start_at: at, end_at: at + 3_600_000, ongoing: 0, lat: 43.6629, lon: -79.3957,
+      name: "Corner Café", address: "Harbord St", event: null, source: "map", mode: null, km: null }], at)];
   for (const message of messages) expect((await send(message)).status, message.type).toBe(204);
   const photo = photoCreated({ id: "p0000000-0000-4000-8000-000000000001", ...device, taken_at: at, lat: 38.7139, lon: -9.1394, width: 1600,
     height: 1200, bytes: 4 }, at);
@@ -50,6 +54,9 @@ it("saves what Relay sends, once each, and refuses a message signed with another
     { id: ring.id, place: "Harbord St", lat: 43.6629, audio: "00000018" }]);
   expect(saved.prepare("SELECT id, type, value FROM health_samples").all().map(row => ({ ...row }))).toEqual([{ id: 2, type: "steps", value: 5210 }]);
   expect(saved.prepare("SELECT id, place FROM location_points").all().map(row => ({ ...row }))).toEqual([{ id: 1, place: null }]);
+  // The stay's second message, with its end, updates the first's row.
+  expect(saved.prepare("SELECT id, name, ongoing FROM location_stays").all().map(row => ({ ...row }))).toEqual([
+    { id: 3, name: "Corner Café", ongoing: 0 }]);
   expect(saved.prepare("SELECT id, lat, width, hex(bytes) AS bytes FROM photos").all().map(row => ({ ...row }))).toEqual([
     { id: "p0000000-0000-4000-8000-000000000001", lat: 38.7139, width: 1600, bytes: "FFD8FFD9" }]);
   saved.close();

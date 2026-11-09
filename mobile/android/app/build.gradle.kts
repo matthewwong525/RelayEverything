@@ -65,3 +65,9 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Activity Recognition for a trip's mode (ActivityReceiver.kt); the same version geolocator_android uses.
+    implementation("com.google.android.gms:play-services-location:21.2.0")
+    implementation("androidx.core:core:1.16.0")
+}

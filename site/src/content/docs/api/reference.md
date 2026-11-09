@@ -204,6 +204,27 @@ Send the input as a JSON body.
 | `received` | integer | yes |  |
 | `added` | integer | yes |  |
 
+## Store a phone's stays and trips
+
+`POST /apps/relay/api/stays` · `relay.stays-add` · writes · called by a phone key
+
+Store the stays and trips the phone worked out from its location points, once per device, kind and start. A stay sent again with a later end, or a better name, changes its row.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `stays` | array of any | yes | Up to 500 stays and trips; one that has not changed is skipped. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `received` | integer | yes |  |
+| `changed` | integer | yes |  |
+
 ## Store a phone's calendar events
 
 `POST /apps/relay/api/calendar` · `relay.calendar-add` · writes · called by a phone key
@@ -390,6 +411,17 @@ Send the input as query parameters.
 | `places[].lon` | number | yes |  |
 | `places[].from` | number | yes |  |
 | `places[].to` | number | yes |  |
+| `places[].address` | string | no |  |
+| `places[].event` | string | no |  |
+| `places[].ongoing` | boolean | no |  |
+| `trips` | array of object | yes |  |
+| `trips[].left` | number | yes |  |
+| `trips[].arrived` | number | yes |  |
+| `trips[].mode` | string | yes |  |
+| `trips[].km` | number | yes |  |
+| `trips[].minutes` | number | yes |  |
+| `trips[].from` | string or null | yes |  |
+| `trips[].to` | string or null | yes |  |
 
 ## List the webhooks
 

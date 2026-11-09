@@ -16,8 +16,10 @@ import '../share/inbox.dart';
 import 'calendar.dart';
 import 'health.dart';
 import 'location.dart';
+import 'motion.dart';
 import 'native.dart';
 import 'photos.dart';
+import 'stay_round.dart';
 
 /// The hourly task's name; iPhone also lists it in Info.plist and AppDelegate.swift.
 const syncTask = 'com.matthewwong525.relay.sync';
@@ -37,7 +39,7 @@ void backgroundSync() {
       return await savedRound(store, KeyVault(), health: PhoneHealth(), sender: Sender(),
         native: Platform.isIOS ? PhoneBackground() : null, places: PhonePlaces(), folder: getApplicationSupportDirectory,
         share: Platform.isIOS ? PhoneShareGroup() : null, calendar: PhoneCalendarSource(), photos: PhonePhotos(),
-        network: PhoneNetwork(), pull: true);
+        network: PhoneNetwork(), motion: phoneMotion(), pull: true);
     } on Exception {
       return false;
     } finally {
@@ -50,21 +52,26 @@ void backgroundSync() {
 /// here, so each sends to the place the settings name, the webhook too.
 Future<bool> savedRound(Store store, KeyVault vault, {required HealthSource health, required Sender sender,
   NativeBackground? native, Places? places, DateTime? now, Future<Directory> Function()? folder, ShareGroup? share,
-  CalendarSource? calendar, PhotoSource? photos, Network? network, bool pull = false}) async =>
+  CalendarSource? calendar, PhotoSource? photos, Network? network, Motion? motion, bool pull = false}) async =>
   backgroundRound(store, connection: await vault.read(), webhook: await vault.readWebhook(), health: health, sender: sender,
     native: native, places: places, now: now, folder: folder, share: share, calendar: calendar, photos: photos,
-    network: network, pull: pull);
+    network: network, motion: motion, pull: pull);
+
+/// The phone's own motion sensors.
+Motion phoneMotion() => Platform.isIOS ? PhoneMotion() : AndroidMotion();
+
 
 /// One background round, apart from the plugin that runs it so a test can drive it: the hourly task and an iPhone
 /// wake share it. With [share], it first keeps the notes the iPhone's share card left. With [native], it moves the
 /// points Swift kept. True when it is done; a calendar that could not be read, such as where the iPhone's background
 /// engine has no calendar, does not hold the round back.
 /// It sends to the place the settings name: the server with [connection], or the person's own [webhook], which needs no
-/// key. The photo step runs after the outbox, so a photo waiting for Wi-Fi holds back no note; it runs only with
+/// key. After the points, the timeline step makes stays and trips from them, with [motion] for the mode, unless the
+/// person picked *Only points*; with *Only stays and trips* no point is queued. The photo step runs after the outbox, so a photo waiting for Wi-Fi holds back no note; it runs only with
 /// [photos] and [network] given, and sends to the same place. With [pull], it ends by reading notes changed elsewhere.
 Future<bool> backgroundRound(Store store, {required Connection? connection, Webhook? webhook, required HealthSource health,
   required Sender sender, NativeBackground? native, Places? places, DateTime? now, Future<Directory> Function()? folder,
-  ShareGroup? share, CalendarSource? calendar, PhotoSource? photos, Network? network, bool pull = false}) async {
+  ShareGroup? share, CalendarSource? calendar, PhotoSource? photos, Network? network, Motion? motion, bool pull = false}) async {
   final settings = Settings.decode(await store.get(settingsKey), hasKey: connection != null);
   final api = sender.api(settings, connection: connection, webhook: webhook,
     installId: settings.place == SendPlace.webhook ? await store.installId() : null);
@@ -77,7 +84,9 @@ Future<bool> backgroundRound(Store store, {required Connection? connection, Webh
       // The app keeps them on its next open.
     }
   }
-  if (native != null && settings.history) await drainPoints(store, native, name: places?.nameOf);
+  if (native != null && settings.history) {
+    await drainPoints(store, native, name: places?.nameOf, send: settings.locationSend);
+  }
   var read = true;
   if (settings.health) {
     try {
@@ -94,7 +103,15 @@ Future<bool> backgroundRound(Store store, {required Connection? connection, Webh
       // A refused calendar removes nothing; the next round reads again.
     }
   }
-  await store.queuePoints();
+  if (settings.stays) {
+    try {
+      await syncStays(store, settings, motion: motion, now: now,
+        namer: stayNamer(settings, places: places, native: native, calendar: calendar));
+    } on Exception {
+      // The points stay in the store, and the next round steps them again.
+    }
+  }
+  if (settings.locationSend != LocationSend.stays) await store.queuePoints();
   final notes = await flush(store, api, folder: folder);
   Failure? failure;
   if (photos != null && network != null && settings.photos) {

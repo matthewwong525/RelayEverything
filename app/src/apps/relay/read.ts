@@ -17,7 +17,9 @@ export type Summary = {
   weightKg?: number; restingHeartRate?: number; hrvSdnn?: number; hrvRmssd?: number
   bloodOxygen?: { min: number; average: number }; bloodPressure?: { at: number; upper: number; lower: number }[]
   cycleFlow?: number; mindfulMinutes?: number; waterMl?: number
-  places: { name: string; lat: number; lon: number; from: number; to: number }[]
+  /** One row per stay, or each place once on a day before the phone made stays. */
+  places: { name: string; lat: number; lon: number; from: number; to: number; address?: string; event?: string; ongoing?: true }[]
+  trips: { left: number; arrived: number; mode: string; km: number; minutes: number; from: string | null; to: string | null }[]
   events: { title: string; start: number; end: number; allDay: boolean; people: string[] }[]
 }
 

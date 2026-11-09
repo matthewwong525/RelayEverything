@@ -31,6 +31,12 @@ final samples = item(9, 'health', {'samples': [{'id': 1, 'type': 'steps', 'start
   'end': Date.recorded + 60000, 'value': 120.0, 'unit': 'count', 'source': 'com.apple.health'}]});
 final points = item(10, 'locations', {'points': [{'id': 2, 'at': Date.recorded, 'lat': 43.65, 'lon': -79.38,
   'accuracy': 12.0, 'place': 'King St W'}]});
+final stays = item(16, 'stays', {'stays': [
+  {'kind': 'stay', 'start': Date.recorded - 3600000, 'end': Date.recorded, 'lat': 43.65, 'lon': -79.38, 'name': 'Cafe Nero',
+    'source': 'calendar', 'address': 'King St W', 'event': 'Coffee with Sam'},
+  {'kind': 'trip', 'start': Date.recorded, 'end': Date.recorded + 1200000, 'mode': 'cycling', 'km': 4.2},
+  {'kind': 'stay', 'start': Date.recorded + 1200000, 'end': Date.recorded + 1500000, 'ongoing': true, 'lat': 43.66,
+    'lon': -79.39, 'name': '43.660, -79.390', 'source': 'point'}]});
 
 final calendar = item(13, 'calendar', {'events': [{'key': 'work:a:${Date.recorded}', 'calendar': 'Work',
   'title': 'Board meeting', 'start': Date.recorded, 'end': Date.recorded + 3600000, 'allDay': false, 'location': 'Room 4',
@@ -81,6 +87,19 @@ void main() {
       'source': 'com.apple.health'}]});
     expect(webhook.message(points)!['data'], {'points': [{'id': 2, 'device': device, 'at': '2026-11-04T14:01:00.000Z',
       'lat': 43.65, 'lon': -79.38, 'accuracy': 12.0, 'place': 'King St W'}]});
+    // A stay or trip's id comes from the install id, its kind and its start, so its end, sent later, upserts it.
+    final [cafe, ride, open] = webhook.message(stays)!['data']['stays'] as List;
+    expect(cafe, {'id': isA<int>(), 'device': device, 'kind': 'stay', 'start': '2026-11-04T13:01:00.000Z',
+      'end': '2026-11-04T14:01:00.000Z', 'ongoing': false, 'lat': 43.65, 'lon': -79.38, 'name': 'Cafe Nero',
+      'address': 'King St W', 'event': 'Coffee with Sam', 'source': 'calendar', 'mode': null, 'km': null});
+    expect(ride, {'id': isA<int>(), 'device': device, 'kind': 'trip', 'start': '2026-11-04T14:01:00.000Z',
+      'end': '2026-11-04T14:21:00.000Z', 'ongoing': false, 'lat': null, 'lon': null, 'name': null, 'address': null, 'event': null,
+      'source': null, 'mode': 'cycling', 'km': 4.2});
+    expect([(open as Map)['ongoing'], open['source'], open['address']], [true, 'point', null]);
+    final closed = (webhook.message(item(17, 'stays', {'stays': [{...(stays.body['stays'] as List)[2] as Map, 'ongoing': null}]}))!
+      ['data']['stays'] as List).single as Map;
+    expect([closed['id'], closed['ongoing'], (cafe as Map)['id'] == (ride as Map)['id']], [open['id'], false, false]);
+    expect(webhook.message(item(18, 'stays', {'stays': []})), isNull);
     final [changed, removed] = webhook.message(calendar)!['data']['events'] as List;
     expect(changed, {'id': isA<int>(), 'status': 'changed', 'device': device, 'key': 'work:a:${Date.recorded}',
       'calendar': 'Work', 'title': 'Board meeting', 'start': '2026-11-04T14:01:00.000Z', 'end': '2026-11-04T15:01:00.000Z',
@@ -246,6 +265,7 @@ void main() {
     await webhook.sendFile(file, [1, 2, 3, 4]);
     await webhook.send(samples);
     await webhook.send(points);
+    await webhook.send(stays);
     await webhook.send(calendar);
     await webhook.sendPhoto(photo, [0xff, 0xd8, 0xff, 0xd9]);
     await webhook.test();

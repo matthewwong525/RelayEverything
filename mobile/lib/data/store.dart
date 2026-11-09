@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:drift/drift.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../sync/stays.dart';
 import 'settings.dart';
 
 /// How a note on this phone was made.
@@ -103,6 +104,10 @@ class Pin {
 
   Map<String, dynamic> toJson() =>
     {'at': at.millisecondsSinceEpoch, 'lat': lat, 'lon': lon, 'accuracy': accuracy, if (place != null) 'place': place};
+
+  factory Pin.fromJson(Map<String, dynamic> json) => Pin(at: DateTime.fromMillisecondsSinceEpoch(json['at'] as int),
+    lat: (json['lat'] as num).toDouble(), lon: (json['lon'] as num).toDouble(), accuracy: (json['accuracy'] as num).toDouble(),
+    place: json['place'] as String?);
 }
 
 /// The route of a sent note's change: `PATCH notes` on the server, `note.updated` to a webhook.
@@ -128,6 +133,13 @@ const recordingPrefix = 'audio:';
 
 /// When an upload of health, of location points, or of calendar events last reached the server, in the store's `state`.
 const sentHealth = 'sent.health', sentPoints = 'sent.points', sentCalendar = 'sent.calendar';
+
+/// The open stay or trip, in the store's `state`: lib/sync/stays.dart's [TimelineState]. Not `timeline`, which the first
+/// versions used for the server's timeline and which the app deletes at each open.
+const timelineKey = 'stays.timeline';
+
+/// The outbox route of stays and trips: `POST stays` on the server, `location.stays` to a webhook.
+const staysRoute = 'stays';
 
 /// One waiting upload: a route and the JSON body to send it, where it goes, and when the phone queued it.
 class OutboxItem {
@@ -199,7 +211,14 @@ const _schema = [
   _attachmentsTable,
   _calendarSentTable,
   _photosTable,
+  _trackTable,
+  _motionsTable,
 ];
+
+// The open stay or trip's points and motion changes, by time: lib/sync/stays.dart works them out. Rows go once the
+// stay or trip ends, and all of them when sending or location history turns off.
+const _trackTable = 'CREATE TABLE track (at INTEGER PRIMARY KEY, body TEXT NOT NULL)';
+const _motionsTable = 'CREATE TABLE motions (at INTEGER PRIMARY KEY, body TEXT NOT NULL)';
 
 // A note's files: one row each, in the order they were added. sent_at: when the server took the file. path is null for
 // a file from elsewhere until the person opens it.
@@ -226,7 +245,7 @@ class Store extends GeneratedDatabase {
   Iterable<TableInfo<Table, dynamic>> get allTables => const [];
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(onCreate: (_) async {
@@ -275,6 +294,11 @@ class Store extends GeneratedDatabase {
       await customStatement('ALTER TABLE notes ADD COLUMN $_deletingColumn');
       await customStatement("DELETE FROM state WHERE key = '$noteSyncSeq'");
     }
+    // Version 10 sent points only, with no stays or trips.
+    if (from < 11) {
+      await customStatement(_trackTable);
+      await customStatement(_motionsTable);
+    }
   });
 
   Future<List<QueryRow>> _rows(String sql, [List<Object?> values = const []]) =>
@@ -313,6 +337,7 @@ class Store extends GeneratedDatabase {
   Future<void> moveOutbox(String destination) => transaction(() async {
     if (await this.destination() != destination) await _dropCalendar();
     await set(_destination, destination);
+    // Stays carry no ids: a webhook message makes each from the install id, its kind and its start.
     for (final row in await _rows("SELECT id, body FROM outbox WHERE route IN ('health', 'locations')")) {
       final body = jsonDecode(row.read<String>('body')) as Map<String, dynamic>;
       final items = [for (final item in (body['samples'] ?? body['points']) as List) item as Map<String, dynamic>];
@@ -799,9 +824,35 @@ class Store extends GeneratedDatabase {
   /// Drops the health, location and calendar events that did not go yet, for when sending turns off. Note uploads
   /// stay, so a later turn-on sends them with no second prompt.
   Future<void> dropReadings() => transaction(() async {
-    await _run("DELETE FROM outbox WHERE route IN ('health', 'locations')");
+    await _run("DELETE FROM outbox WHERE route IN ('health', 'locations', '$staysRoute')");
     await _run('DELETE FROM points');
+    await _dropTimeline();
     await _dropCalendar();
+  });
+
+  /// Drops the open stay or trip, its points and its motion, for when location history turns off.
+  Future<void> dropTimeline() => transaction(_dropTimeline);
+
+  /// Queues the open stay as ended, then drops the timeline, for when stays stop while sending goes on:
+  /// the server would otherwise keep the stay as ongoing.
+  Future<void> closeTimeline() => transaction(() async {
+    final open = (await timeline()).closeOpen();
+    if (open != null) await enqueue(staysRoute, {'stays': [open.toJson()]});
+    await _dropTimeline();
+  });
+
+  Future<void> _dropTimeline() async {
+    await _run('DELETE FROM track');
+    await _run('DELETE FROM motions');
+    await remove(timelineKey);
+  }
+
+  /// Drops the points not yet queued, for when the person picks *Only stays and trips*. Points already in the outbox
+  /// are on their way. Returns how many it dropped.
+  Future<int> dropPoints() => transaction(() async {
+    final count = (await _rows('SELECT count(*) AS n FROM points')).single.read<int>('n');
+    await _run('DELETE FROM points');
+    return count;
   });
 
   /// Drops waiting calendar uploads and forgets what was sent, so the calendar turned on again sends its whole window.
@@ -832,9 +883,59 @@ class Store extends GeneratedDatabase {
       }
     });
 
-  /// One point of location history; a second at the same moment is the same point.
-  Future<void> addPoint(Pin point) =>
-    _run('INSERT OR IGNORE INTO points (at, body) VALUES (?, ?)', [point.at.millisecondsSinceEpoch, jsonEncode(point.toJson())]);
+  /// One point of location history; a second at the same moment is the same point. By [send], it waits to go as a point,
+  /// goes into the open stay or trip, or both.
+  /// A point at or before the timeline's cursor is marked late: a round already stepped past its time.
+  Future<void> addPoint(Pin point, {LocationSend send = LocationSend.all}) async {
+    final at = point.at.millisecondsSinceEpoch;
+    if (send != LocationSend.stays) await _run('INSERT OR IGNORE INTO points (at, body) VALUES (?, ?)', [at, jsonEncode(point.toJson())]);
+    if (send == LocationSend.points) return;
+    final cursor = (await timeline()).cursor;
+    final late = cursor != null && !point.at.isAfter(cursor);
+    await _run('INSERT OR IGNORE INTO track (at, body) VALUES (?, ?)', [at, jsonEncode({...point.toJson(), if (late) 'late': true})]);
+  }
+
+  /// The open stay or trip's points, oldest first.
+  Future<List<Pin>> track() async => [
+    for (final row in await _rows('SELECT body FROM track ORDER BY at'))
+      Pin.fromJson(jsonDecode(row.read<String>('body')) as Map<String, dynamic>),
+  ];
+
+  /// The times of the open stay or trip's points that came late.
+  Future<Set<DateTime>> lateTrack() async => {
+    for (final row in await _rows("SELECT at FROM track WHERE json_extract(body, '\$.late')"))
+      DateTime.fromMillisecondsSinceEpoch(row.read<int>('at')),
+  };
+
+  /// Keeps motion changes; a second at the same moment is the same change.
+  Future<void> addMotions(List<MotionChange> changes) => transaction(() async {
+    for (final change in changes) {
+      await _run('INSERT OR IGNORE INTO motions (at, body) VALUES (?, ?)',
+        [change.at.millisecondsSinceEpoch, jsonEncode(change.toJson())]);
+    }
+  });
+
+  /// The motion changes kept, oldest first.
+  Future<List<MotionChange>> motions() async => [
+    for (final row in await _rows('SELECT body FROM motions ORDER BY at')) ?MotionChange.fromJson(jsonDecode(row.read<String>('body'))),
+  ];
+
+  /// The open stay or trip, as the last round left it.
+  Future<TimelineState> timeline() async => TimelineState.decode(await get(timelineKey));
+
+  /// Queues [segments], up to 500 an upload, saves [state], and drops the points and motion it no longer needs, in one
+  /// step: a round cut before it keeps every point, and does the step again.
+  Future<void> queueStays(List<Segment> segments, TimelineState state, {int batch = 500}) => transaction(() async {
+    for (var i = 0; i < segments.length; i += batch) {
+      await enqueue(staysRoute, {'stays': [for (final segment in segments.skip(i).take(batch)) segment.toJson()]});
+    }
+    await set(timelineKey, state.encode());
+    final keep = state.keepFrom?.millisecondsSinceEpoch;
+    if (keep == null) return;
+    await _run('DELETE FROM track WHERE at < ?', [keep]);
+    // The change before the open stay or trip says what the person was doing as it began.
+    await _run('DELETE FROM motions WHERE at < (SELECT max(at) FROM motions WHERE at <= ?)', [keep]);
+  });
 
   /// Gives the point kept at [at] its place name, while it waits in the store. A point already queued stays unnamed.
   Future<void> namePoint(DateTime at, String place) =>
@@ -909,6 +1010,10 @@ class Store extends GeneratedDatabase {
   Future<int> waitingEvents() async => (await _rows(
     "SELECT coalesce(sum(json_array_length(body, '\$.events') + json_array_length(body, '\$.removed')), 0) AS n "
     "FROM outbox WHERE route = 'calendar'")).single.read<int>('n');
+
+  /// Stays and trips waiting to send, in the outbox.
+  Future<int> waitingStays() async => (await _rows(
+    "SELECT coalesce(sum(json_array_length(body, '\$.stays')), 0) AS n FROM outbox WHERE route = '$staysRoute'")).single.read<int>('n');
 
   /// Location points waiting to send: in the outbox, and kept but not yet queued.
   Future<int> waitingPoints() async => (await _rows(

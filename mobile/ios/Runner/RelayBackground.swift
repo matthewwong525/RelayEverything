@@ -1,10 +1,12 @@
 import CoreLocation
+import CoreMotion
 import Flutter
 import HealthKit
+import MapKit
 import UIKit
 
 // The iPhone's background work while the app is closed. lib/sync/native.dart sets the flags on `relay/background`
-// and drains the points; lib/sync/wake.dart runs one round when Health or a place wakes the app.
+// and drains the points, a stay's place and motion; lib/sync/wake.dart runs one round when Health or a place wakes the app.
 
 /// What Dart allows, kept so a relaunch in the background follows it with no Dart running.
 enum RelayFlags {
@@ -207,11 +209,14 @@ final class PlacesWake: NSObject, CLLocationManagerDelegate {
     if kept { wakeToSend() }
   }
 
+  /// Both ends of a visit: a point when it began, and one when it ended. iOS gives an arrival first and the whole visit
+  /// later; the store keeps a repeated time once.
   func locationManager(_ manager: CLLocationManager, didVisit visit: CLVisit) {
     guard RelayFlags.history else { return }
-    let at = visit.departureDate == .distantFuture ? visit.arrivalDate : visit.departureDate
-    PointsFile.add(CLLocation(coordinate: visit.coordinate, altitude: 0, horizontalAccuracy: visit.horizontalAccuracy,
-      verticalAccuracy: -1, timestamp: at))
+    for at in [visit.arrivalDate, visit.departureDate] where at != .distantPast && at != .distantFuture {
+      PointsFile.add(CLLocation(coordinate: visit.coordinate, altitude: 0, horizontalAccuracy: visit.horizontalAccuracy,
+        verticalAccuracy: -1, timestamp: at))
+    }
     wakeToSend()
   }
 
@@ -234,7 +239,70 @@ final class PlacesWake: NSObject, CLLocationManagerDelegate {
   }
 }
 
-/// The channels each engine gets: `relay/files` for backup, and `relay/background` for the flags and the points.
+/// Apple Maps' nearest place of interest within 50 m of a stay, such as a café. One search per stay, so Apple's limit on
+/// map searches is never near.
+enum Venue {
+  static let radius: CLLocationDistance = 50
+
+  static func near(lat: Double, lon: Double, answer: @escaping (String?) -> Void) {
+    let center = CLLocation(latitude: lat, longitude: lon)
+    let request = MKLocalPointsOfInterestRequest(center: center.coordinate, radius: radius)
+    MKLocalSearch(request: request).start { response, _ in
+      let nearest = response?.mapItems
+        .compactMap { item -> (String, CLLocationDistance)? in
+          guard let name = item.name, let place = item.placemark.location else { return nil }
+          return (name, place.distance(from: center))
+        }
+        .filter { $0.1 <= radius }
+        .min { $0.1 < $1.1 }
+      answer(nearest?.0)
+    }
+  }
+}
+
+/// Motion & Fitness: what kind of moving the person did, never steps. Core Motion keeps the last 7 days, so a wake reads
+/// what happened while the app was closed. Each change is `{at, kind, sure}`; *sure* is Apple's high confidence.
+enum MotionHistory {
+  private static let manager = CMMotionActivityManager()
+
+  /// Asks once, with a short read: iOS shows its question on the first read. True when the app may read motion.
+  static func allow(answer: @escaping (Bool) -> Void) {
+    guard CMMotionActivityManager.isActivityAvailable() else { return answer(false) }
+    if CMMotionActivityManager.authorizationStatus() != .notDetermined {
+      return answer(CMMotionActivityManager.authorizationStatus() == .authorized)
+    }
+    let now = Date()
+    manager.queryActivityStarting(from: now.addingTimeInterval(-60), to: now, to: .main) { _, _ in
+      answer(CMMotionActivityManager.authorizationStatus() == .authorized)
+    }
+  }
+
+  /// The changes from `from` to `to`, oldest first. Never asks: with no answer yet, or a no, it gives none.
+  static func read(from: Date, to: Date, answer: @escaping ([[String: Any]]) -> Void) {
+    guard CMMotionActivityManager.isActivityAvailable(), CMMotionActivityManager.authorizationStatus() == .authorized else {
+      return answer([])
+    }
+    manager.queryActivityStarting(from: from, to: to, to: .main) { activities, _ in
+      answer((activities ?? []).compactMap { activity in
+        guard activity.confidence != .low, let kind = kind(of: activity) else { return nil }
+        return ["at": Int(activity.startDate.timeIntervalSince1970 * 1000), "kind": kind, "sure": activity.confidence == .high]
+      })
+    }
+  }
+
+  /// A vehicle first: a car stopped at a light is also *stationary*.
+  private static func kind(of activity: CMMotionActivity) -> String? {
+    if activity.automotive { return "driving" }
+    if activity.cycling { return "cycling" }
+    if activity.running { return "running" }
+    if activity.walking { return "walking" }
+    if activity.stationary { return "stationary" }
+    return nil
+  }
+}
+
+/// The channels each engine gets: `relay/files` for backup, and `relay/background` for the flags, the points, a stay's
+/// place and motion.
 enum RelayChannels {
   static func register(_ messenger: FlutterBinaryMessenger) {
     FlutterMethodChannel(name: "relay/files", binaryMessenger: messenger).setMethodCallHandler { call, result in
@@ -278,6 +346,18 @@ enum RelayChannels {
         result(nil)
       case "drain":
         result(PointsFile.drain())
+      case "venue":
+        let place = call.arguments as? [String: Any] ?? [:]
+        guard let lat = place["lat"] as? Double, let lon = place["lon"] as? Double else { return result(nil) }
+        Venue.near(lat: lat, lon: lon) { name in result(name) }
+      case "motionAllow":
+        MotionHistory.allow { allowed in result(allowed) }
+      case "motion":
+        let span = call.arguments as? [String: Any] ?? [:]
+        guard let from = span["from"] as? Int, let to = span["to"] as? Int else { return result([]) }
+        MotionHistory.read(from: Date(timeIntervalSince1970: Double(from) / 1000), to: Date(timeIntervalSince1970: Double(to) / 1000)) {
+          result($0)
+        }
       default:
         result(FlutterMethodNotImplemented)
       }

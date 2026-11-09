@@ -148,21 +148,38 @@ async function dayHealth(db: Db, spans: Span[]) {
     ...water.total! > 0 && { waterMl: water.total } };
 }
 
-/** One day: how many notes, the health totals, the places visited, each place once, and the calendar's events. */
+/** At most this many stays and trips in one day's summary. */
+const DAY_PLACES = 400;
+
+/** The range's stays and trips, read once, and whether a point lies in one: a point no stay or trip covers reads as
+ *  before stays, as on an old day or a phone that sends only points. Binds `from` as ?1 and `to` as ?2. */
+const COVERS = "WITH c AS MATERIALIZED (SELECT start_at, end_at FROM relay_stays WHERE start_at < ?2 AND end_at >= ?1)";
+const COVERED = "EXISTS (SELECT 1 FROM c WHERE c.start_at <= l.at AND c.end_at >= l.at)";
+
+/** A day's places, one row per stay, and its trips. Points no stay or trip covers give each place once, as before. */
+async function dayPlaces(db: Db, from: number, to: number) {
+  const [{ results }, found] = await Promise.all([db.prepare(`${COVERS} SELECT ${NAME} AS name, AVG(lat) AS lat, AVG(lon) AS lon,
+    MIN(at) AS "from", MAX(at) AS "to" FROM relay_locations l WHERE at >= ?1 AND at < ?2 AND NOT ${COVERED} GROUP BY 1 ORDER BY 4`)
+    .bind(from, to).all<{ name: string; lat: number; lon: number; from: number; to: number }>(), staysIn(db, from, to, DAY_PLACES)]);
+  const stays = found.visits.map(({ name, lat, lon, arrived, left, address, event, ongoing }) =>
+    ({ name, lat, lon, from: arrived, to: left, ...address && { address }, ...event && { event }, ...ongoing && { ongoing } }));
+  return { places: [...results, ...stays].sort((a, b) => a.from - b.from), trips: found.trips };
+}
+
+/** One day: how many notes, the health totals, the places (one row per stay), its trips, and the calendar's events. */
 export async function daySummary(db: Db, from: number, to: number) {
   const spans: Span[] = [[from, to]];
   const [notes, [steps], [sleep], [heart], [workouts], more, bloodPressure, places, events] = await Promise.all([
     db.prepare("SELECT COUNT(*) AS count FROM relay_notes WHERE recorded_at >= ? AND recorded_at < ?").bind(from, to).first<{ count: number }>(),
     healthBuckets(db, "steps", spans), healthBuckets(db, "sleep", spans), healthBuckets(db, "heart_rate", spans),
     healthBuckets(db, "workout", spans), dayHealth(db, spans), pressures(db, from, to),
-    db.prepare(`SELECT ${NAME} AS name, AVG(lat) AS lat, AVG(lon) AS lon, MIN(at) AS "from", MAX(at) AS "to"
-      FROM relay_locations WHERE at >= ? AND at < ? GROUP BY 1 ORDER BY 4`).bind(from, to).all<{ name: string; lat: number; lon: number; from: number; to: number }>(),
+    dayPlaces(db, from, to),
     eventPage(db, { from, to, limit: DAY_EVENTS }),
   ]);
   return { notes: notes!.count, steps: steps.total!, sleepMinutes: sleep.total!,
     heartRate: heart.min === null ? null : { min: heart.min!, max: heart.max!, average: heart.average! },
     workouts: { count: workouts.count!, minutes: workouts.minutes! }, ...more, ...bloodPressure.length > 0 && { bloodPressure },
-    places: places.results,
+    ...places,
     events: events.events.map(({ title, start, end, allDay, people }) => ({ title, start, end, allDay, people: people.flatMap(person => person.name ?? []) })) };
 }
 
@@ -203,17 +220,79 @@ export async function eventPage(db: Db, filter: EventFilter) {
   return { events: page.map(eventShaped), next: last && { at: last.start_at, id: last.id } };
 }
 
-type Visit = { name: string; lat: number; lon: number; arrived: number; left: number };
+type Run = { name: string; lat: number; lon: number; arrived: number; left: number };
+/** A stay: a time in one place. `address` and `event` only when set; `ongoing` only while the person is there. */
+type Visit = Run & { minutes: number; address?: string; event?: string; ongoing?: true };
+/** A trip between two stays, with the names of the stays at each end when they are known. */
+type Trip = { left: number; arrived: number; mode: string; km: number; minutes: number; from: string | null; to: string | null };
+type StayRow = { kind: "stay" | "trip"; start_at: number; end_at: number; ongoing: number; updated_at: number; lat: number | null;
+  lon: number | null; name: string | null; address: string | null; event: string | null; mode: string | null; km: number | null };
 
-/** Visits from `from` to `to`, oldest first: each run of points at one place is one visit. `next` is the first
- *  visit left out, to read on from. */
+const minutesOf = (from: number, to: number) => Math.round((to - from) / MINUTE);
+/** An ongoing stay not sent for this long ended at its end: the phone stopped sending, or was turned off. */
+const STALE = 360 * MINUTE;
+
+/** Visits from points no stay or trip covers: each run of points at one place is one visit, as before stays. A
+ *  covered point ends a run, so a street before and after a stay gives two visits. */
+async function streetRuns(db: Db, from: number, to: number, limit: number): Promise<Visit[]> {
+  const { results } = await db.prepare(`${COVERS} SELECT name, AVG(lat) AS lat, AVG(lon) AS lon, MIN(at) AS arrived,
+      MAX(at) AS "left" FROM (SELECT *, SUM(moved) OVER (ORDER BY at, id) AS visit FROM
+        (SELECT *, run IS NOT lag(run) OVER (ORDER BY at, id) AS moved FROM
+          (SELECT id, at, lat, lon, ${NAME} AS name, IIF(${COVERED}, NULL, ${NAME}) AS run
+            FROM relay_locations l WHERE at >= ?1 AND at < ?2)))
+    WHERE run IS NOT NULL GROUP BY visit ORDER BY arrived LIMIT ?3`).bind(from, to, limit).all<Run>();
+  return results.map(run => ({ ...run, minutes: minutesOf(run.arrived, run.left) }));
+}
+
+/** Where two phones' stays, or trips, overlap, the longer one is kept. */
+function longest(rows: StayRow[]): StayRow[] {
+  const kept: StayRow[] = [];
+  for (const row of rows) {
+    const last = kept.findLast(other => other.kind === row.kind);
+    if (!last || row.start_at >= last.end_at) kept.push(row);
+    else if (row.end_at - row.start_at > last.end_at - last.start_at) kept[kept.lastIndexOf(last)] = row;
+  }
+  return kept;
+}
+
+/** Still going on: sent as ongoing within the last 6 hours. */
+const going = (row: StayRow) => row.ongoing === 1 && Date.now() - Math.max(row.end_at, row.updated_at) < STALE;
+
+const visitOf = (row: StayRow): Visit => ({ name: row.name!, lat: row.lat!, lon: row.lon!, arrived: row.start_at, left: row.end_at,
+  minutes: minutesOf(row.start_at, row.end_at), ...row.address !== null && { address: row.address },
+  ...row.event !== null && { event: row.event }, ...going(row) && { ongoing: true as const } });
+
+/** Rows read at a time, until enough stays remain after `longest` merges two phones' overlaps. */
+const PAGE = 200;
+
+/** The stays and trips that overlap `from` to `to`, oldest first: the first `want` stays, or all, and the trips read
+ *  with them. Each trip names the stays it left and reached. */
+async function staysIn(db: Db, from: number, to: number, want: number) {
+  const read: StayRow[] = [];
+  let rows: StayRow[] = [];
+  // One stay more than wanted, as a row read later can still replace the last stay kept.
+  for (let more = true; more && rows.filter(row => row.kind === "stay").length <= want;) {
+    const { results } = await db.prepare(`SELECT kind, start_at, end_at, ongoing, updated_at, lat, lon, name, address, event, mode,
+      km FROM relay_stays WHERE start_at < ? AND (end_at > ? OR start_at >= ?) ORDER BY start_at, kind, id LIMIT ? OFFSET ?`)
+      .bind(to, from, from, PAGE, read.length).all<StayRow>();
+    read.push(...results);
+    more = results.length === PAGE;
+    rows = longest(read);
+  }
+  const stays = rows.filter(row => row.kind === "stay");
+  const trips = rows.filter(row => row.kind === "trip").map((row): Trip => ({ left: row.start_at, arrived: row.end_at, mode: row.mode!,
+    km: row.km!, minutes: minutesOf(row.start_at, row.end_at),
+    from: stays.findLast(stay => stay.end_at <= row.start_at)?.name ?? null, to: stays.find(stay => stay.start_at >= row.end_at)?.name ?? null }));
+  return { visits: stays.slice(0, want).map(visitOf), trips };
+}
+
+/** Visits and trips from `from` to `to`, oldest first. Points no stay or trip covers give a visit per run of points at
+ *  one place, as before stays. `next` is the first visit left out; the trips are those before it. */
 export async function placeVisits(db: Db, from: number, to: number, limit: number) {
-  const { results } = await db.prepare(`SELECT name, AVG(lat) AS lat, AVG(lon) AS lon, MIN(at) AS arrived, MAX(at) AS "left" FROM
-      (SELECT *, SUM(moved) OVER (ORDER BY at, id) AS visit FROM
-        (SELECT id, at, lat, lon, ${NAME} AS name, ${NAME} IS NOT lag(${NAME}) OVER (ORDER BY at, id) AS moved
-          FROM relay_locations WHERE at >= ? AND at < ?))
-    GROUP BY visit ORDER BY arrived LIMIT ?`).bind(from, to, limit + 1).all<Visit>();
-  return { visits: results.slice(0, limit), next: results[limit]?.arrived ?? null };
+  const [old, found] = await Promise.all([streetRuns(db, from, to, limit + 1), staysIn(db, from, to, limit + 1)]);
+  const visits = [...old, ...found.visits].sort((a, b) => a.arrived - b.arrived);
+  const next = visits[limit]?.arrived ?? null;
+  return { visits: visits.slice(0, limit), trips: found.trips.filter(trip => next === null || trip.left < next), next };
 }
 
 // Chats: each one's title is the newest save's, else the title of its first send. Neither the device nor Claude Code's

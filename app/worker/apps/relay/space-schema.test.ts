@@ -10,7 +10,7 @@ const DIRECTORY = ["relay_people", "relay_logins", "relay_sessions", "relay_sign
   "relay_phone_codes", "relay_inbox_links", "relay_inbox_held"];
 const PERSON = ["relay_devices", "relay_notes", "relay_health", "relay_locations", "relay_chats", "relay_chat_messages",
   "relay_chat_saves", "relay_outbox", "relay_webhooks", "relay_webhook_attempts", "relay_attachments", "relay_calendar_events", "relay_photos",
-  "relay_note_changes"];
+  "relay_note_changes", "relay_stays"];
 
 const tables = (sql: DatabaseSync) => (sql.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'relay\\_%' ESCAPE '\\'")
   .all() as { name: string }[]).map(row => row.name).sort();
@@ -87,7 +87,7 @@ it("widens a space's devices to API keys and connected apps, keeping every devic
   inTransaction(space, last[1]);
   expect(KEEP.map(query => all(space, query))).toEqual(before);
   expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
-  expect(tables(space)).toEqual([...PERSON.filter(name => !["relay_attachments", "relay_calendar_events", "relay_photos", "relay_note_changes"].includes(name)), "relay_device_secrets"].sort());
+  expect(tables(space)).toEqual([...PERSON.filter(name => !["relay_attachments", "relay_calendar_events", "relay_photos", "relay_note_changes", "relay_stays"].includes(name)), "relay_device_secrets"].sort());
   space.exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-api', 'Script', 'rek:d-api', '', 1, 'api'),
     ('d-app', 'Claude', 'app:d-app', '', 1, 'app')`);
   // The table still guards its notes: a note from no device, or a made-up reach, is refused.
@@ -114,7 +114,7 @@ it("frees health types and adds the calendar, keeping every health row, log entr
   inTransaction(space, MIGRATIONS[at][1]);
   expect(queries.map(query => all(space, query))).toEqual(before);
   expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
-  expect(tables(space)).toEqual(PERSON.filter(name => !["relay_photos", "relay_note_changes"].includes(name)).sort());
+  expect(tables(space)).toEqual(PERSON.filter(name => !["relay_photos", "relay_note_changes", "relay_stays"].includes(name)).sort());
   // Every log trigger is back, numbering on from the kept entries, and the log takes the calendar.
   space.exec(`INSERT INTO relay_health (device_id, type, start_at, end_at, value, unit, source, created_at) VALUES ('d-phone', 'weight', 6, 6, 70, 'kg', 'fit', 6);
     INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at) VALUES ('n-2', 'd-phone', 'typed', 'c-2', 'Again.', 7, 7);
@@ -147,7 +147,7 @@ it("logs a note's files when their bytes are sealed, keeping every log entry and
   expect(all(space, "SELECT * FROM relay_outbox WHERE seq <= 2 ORDER BY seq")).toEqual(before[0]);
   expect(queries.slice(1).map(query => all(space, query))).toEqual(before.slice(1));
   expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
-  expect(tables(space)).toEqual(PERSON.filter(name => !["relay_photos", "relay_note_changes"].includes(name)).sort());
+  expect(tables(space)).toEqual(PERSON.filter(name => !["relay_photos", "relay_note_changes", "relay_stays"].includes(name)).sort());
   // Each stored file once, in its note's order; a file only listed waits for its bytes.
   expect(all(space, "SELECT seq, kind, ref, at FROM relay_outbox WHERE seq > 2 ORDER BY seq")).toEqual([
     { seq: 3, kind: "note.file", ref: "f-early", at: 10 }, { seq: 4, kind: "note.file", ref: "f-late", at: 50 }]);
@@ -404,5 +404,33 @@ it("keeps a deleted note's change row at a higher seq, marked deleted, and keeps
   expect(all(space, "SELECT kind, ref FROM relay_outbox WHERE seq > 3 ORDER BY seq")).toEqual([{ kind: "note.created", ref: "n-4" },
     { kind: "note.deleted", ref: "n-2" }]);
   expect(() => space.exec("INSERT INTO relay_outbox (kind, ref, at, logged_at) VALUES ('video', 'v', 1, 1)")).toThrow(/CHECK/);
+  expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
+});
+
+it("adds stays and logs each new and changed one for the webhooks, keeping every log entry, webhook place and log trigger", () => {
+  const space = new DatabaseSync(":memory:");
+  space.exec("PRAGMA foreign_keys = ON");
+  const at = MIGRATIONS.findIndex(([name]) => name === "0013_stays");
+  for (const [, text] of MIGRATIONS.slice(0, at)) inTransaction(space, text);
+  space.exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-phone', 'Phone', 'rek:d-phone', '', 1, 'phone');
+    INSERT INTO relay_locations (device_id, at, lat, lon, accuracy, created_at) VALUES ('d-phone', 5, 43, -79, 5, 5);
+    INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at) VALUES ('n-1', 'd-phone', 'typed', 'c-1', 'One.', 6, 6);
+    INSERT INTO relay_webhooks (id, name, url, secret, kinds, sent_seq, created_at) VALUES ('w-1', 'DB', 'https://db.example.com', 's', '["locations"]', 1, 1);`);
+  const queries = ["SELECT * FROM relay_outbox ORDER BY seq", "SELECT * FROM relay_webhooks", "SELECT * FROM relay_locations"];
+  const before = queries.map(query => all(space, query));
+  const made = triggers(space).sort();
+  inTransaction(space, MIGRATIONS[at][1]);
+  expect(queries.map(query => all(space, query))).toEqual(before);
+  expect(tables(space)).toEqual([...PERSON].sort());
+  expect(triggers(space).sort()).toEqual([...made, "relay_outbox_stay_created", "relay_outbox_stay_updated"].sort());
+  space.exec(`INSERT INTO relay_stays (device_id, kind, start_at, end_at, ongoing, lat, lon, name, source, updated_at, created_at)
+    VALUES ('d-phone', 'stay', 10, 20, 1, 43, -79, 'Corner Café', 'map', 21, 21);
+    UPDATE relay_stays SET end_at = 30, ongoing = 0, updated_at = 31 WHERE start_at = 10;`);
+  expect(all(space, "SELECT kind, ref, at, logged_at FROM relay_outbox WHERE seq > 2 ORDER BY seq")).toEqual([
+    { kind: "stay", ref: "1", at: 10, logged_at: 21 }, { kind: "stay", ref: "1", at: 10, logged_at: 31 }]);
+  expect(() => space.exec(`INSERT INTO relay_stays (device_id, kind, start_at, end_at, updated_at, created_at)
+    VALUES ('d-phone', 'stay', 10, 40, 41, 41)`)).toThrow(/UNIQUE/);
+  expect(() => space.exec(`INSERT INTO relay_stays (device_id, kind, start_at, end_at, updated_at, created_at)
+    VALUES ('d-phone', 'visit', 50, 60, 61, 61)`)).toThrow(/CHECK/);
   expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
 });

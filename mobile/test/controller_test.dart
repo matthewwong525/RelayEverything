@@ -16,6 +16,7 @@ import 'package:relay_app/data/sign_in.dart';
 import 'package:relay_app/data/store.dart';
 import 'package:relay_app/relay.dart';
 import 'package:relay_app/sync/health.dart';
+import 'package:relay_app/sync/motion.dart';
 import 'package:relay_app/sync/native.dart';
 import 'package:relay_app/sync/photos.dart';
 import 'package:relay_app/voice/model.dart';
@@ -35,10 +36,10 @@ void main() {
   late FakeCalendar calendar;
   var clock = now;
 
-  RelayController controller({NativeBackground? native, PhotoSource? photos, Network? network}) => RelayController(store: store,
-    vault: KeyVault(storage), places: places, health: health, apiFor: server.api, signInClient: server.client, webAuth: webAuth.call,
-    clock: () => clock, schedule: (on) async => scheduled.add(on), native: native, webhookFor: server.webhook, calendar: calendar,
-    photos: photos, network: network);
+  RelayController controller({NativeBackground? native, PhotoSource? photos, Network? network, Motion? motion}) => RelayController(
+    store: store, vault: KeyVault(storage), places: places, health: health, apiFor: server.api, signInClient: server.client,
+    webAuth: webAuth.call, clock: () => clock, schedule: (on) async => scheduled.add(on), native: native, webhookFor: server.webhook,
+    calendar: calendar, photos: photos, network: network, motion: motion);
 
   List<Map<String, dynamic>> sentNotes() => [
     for (final request in server.requests) if (request.url.path.endsWith('notes')) jsonDecode(request.body) as Map<String, dynamic>,
@@ -466,7 +467,8 @@ void main() {
       expect([on.copyWith(sending: false).history, on.copyWith(sending: false).health], [false, false]);
       expect(jsonDecode(on.encode()), {'sending': true, 'pinNotes': false, 'history': true, 'health': true, 'calendar': false,
         'calendarsOff': [], 'mode': 'battery', 'place': 'server',
-        'photos': false, 'photosOnMobileData': false, 'appearance': 'system'});
+        'photos': false, 'photosOnMobileData': false, 'appearance': 'system',
+        'locationSend': 'all'});
       final back = Settings.decode(on.encode(), hasKey: false);
       expect([back.sending, back.health], [true, true]);
     });
@@ -484,6 +486,8 @@ void main() {
       // Settings saved before photos have none of their fields: photos read as off.
       final old = Settings.decode(jsonEncode({'sending': true, 'pinNotes': true, 'history': true, 'health': true}), hasKey: true);
       expect([old.sending, old.history, old.health, old.photos, old.photosOnMobileData], [true, true, true, false, false]);
+      // Settings saved before What to send send stays, trips and points.
+      expect([old.locationSend, old.stays], [LocationSend.all, true]);
       expect(Settings.decode(jsonEncode({'pinNotes': true}), hasKey: true).photos, isFalse);
       // Photos go where sending goes: with the webhook they stay on.
       final hooked = on.copyWith(place: SendPlace.webhook);
@@ -541,7 +545,8 @@ void main() {
       expect([relay.settings.sending, relay.settings.pinNotes], [false, true]);
       expect(jsonDecode((await store.get('settings'))!), {'sending': false, 'pinNotes': true, 'history': false, 'health': false,
         'calendar': false, 'calendarsOff': [], 'mode': 'battery', 'place': 'server',
-        'photos': false, 'photosOnMobileData': false, 'appearance': 'system'});
+        'photos': false, 'photosOnMobileData': false, 'appearance': 'system',
+        'locationSend': 'all'});
     });
 
     test('turn each on only with its permission, and schedule the hourly sync only while sending', () async {
@@ -565,7 +570,8 @@ void main() {
       expect(scheduled, [false, true, true, true, true]);
       expect(jsonDecode((await store.get('settings'))!), {'sending': true, 'pinNotes': true, 'history': false, 'health': true,
         'calendar': false, 'calendarsOff': [], 'mode': 'battery', 'place': 'server',
-        'photos': false, 'photosOnMobileData': false, 'appearance': 'system'});
+        'photos': false, 'photosOnMobileData': false, 'appearance': 'system',
+        'locationSend': 'all'});
       expect(places.asked, [false, true, true, false]);
       // Each change started a sync; the last round ends before the store closes.
       await relay.settled();
@@ -1129,6 +1135,118 @@ void main() {
       expect(webAuth.opened.single.host, 'relay.example.com');
       expect(server.requests.every((request) => request.url.host == 'relay.example.com'), isTrue);
       expect(relay.server, 'https://relay.example.com');
+    });
+  });
+
+  group('stays and trips', () {
+    late FakeMotion motion;
+    setUp(() async {
+      motion = FakeMotion();
+      await KeyVault(storage).save(bearer);
+      await store.set('settings', const Settings(sending: true).encode());
+    });
+
+    Future<void> point(DateTime at) async {
+      places.points.add(Pin(at: at, lat: 43.625, lon: -79.375, accuracy: 10));
+      await pumpEventQueue();
+    }
+
+    test('history asks for motion once, and Android keeps motion only while it makes stays and trips', () async {
+      final relay = controller(motion: motion);
+      await relay.load();
+      expect(await relay.setHistory(true), isNull);
+      expect(await relay.setHistory(false), isNull);
+      expect(await relay.setHistory(true), isNull);
+      expect(motion.asked, 1);
+      expect(await relay.setLocationSend(LocationSend.points), isNull);
+      expect([relay.settings.stays, motion.watching], [false, [false, true, false, true, false]]);
+      relay.dispose();
+    });
+
+    test('a refused motion leaves the mode to speed, and the stays still go', () async {
+      motion.allowed = false;
+      final relay = controller(motion: motion);
+      await relay.load();
+      await relay.setHistory(true);
+      await point(now);
+      clock = now.add(const Duration(minutes: 40));
+      await relay.sync();
+      expect(server.routes, containsAll(['stays', 'locations']));
+      expect(motion.asked, 1);
+      relay.dispose();
+    });
+
+    test('Only stays and trips drops the points still waiting, says so, and sends no point', () async {
+      final relay = controller(motion: motion);
+      await relay.load();
+      await relay.setHistory(true);
+      await point(now);
+      expect(await relay.setLocationSend(LocationSend.stays), 'The points still waiting on this phone were dropped.');
+      await point(now.add(const Duration(minutes: 1)));
+      clock = now.add(const Duration(minutes: 40));
+      await relay.sync();
+      expect(server.routes.where((route) => route == 'stays' || route == 'locations'), ['stays']);
+      final stay = (jsonDecode(server.requests.singleWhere((request) => request.url.path.endsWith('/stays')).body)['stays'] as List)
+        .single as Map;
+      expect([stay['start'], stay['ongoing']], [now.millisecondsSinceEpoch, true]);
+      expect(await relay.setLocationSend(LocationSend.stays), isNull);
+      relay.dispose();
+    });
+
+    test('Only points makes no stays, asks no motion, and drops the open stay', () async {
+      await store.set('settings', const Settings(sending: true, locationSend: LocationSend.points).encode());
+      final relay = controller(motion: motion);
+      await relay.load();
+      await relay.setHistory(true);
+      await point(now);
+      clock = now.add(const Duration(minutes: 40));
+      await relay.sync();
+      expect([server.routes.contains('stays'), server.routes.contains('locations'), motion.asked], [false, true, 0]);
+      expect(await store.track(), isEmpty);
+      relay.dispose();
+    });
+
+    test('history off, and sending off, drop the open stay, its points and its motion', () async {
+      final relay = controller(motion: motion);
+      await relay.load();
+      await relay.setHistory(true);
+      await point(now);
+      expect((await store.track()).length, 1);
+      await relay.setHistory(false);
+      expect([await store.track(), await store.get(timelineKey)], [isEmpty, isNull]);
+      await relay.setHistory(true);
+      await point(now.add(const Duration(minutes: 1)));
+      clock = now.add(const Duration(minutes: 40));
+      await relay.sync();
+      await relay.stopSending();
+      expect([await store.track(), await store.get(timelineKey), await store.waitingStays()], [isEmpty, isNull, 0]);
+      relay.dispose();
+    });
+
+    test('history off, or Only points, with sending on, sends the open stay ended first, at the later of its last point and the end already sent', () async {
+      final relay = controller(motion: motion);
+      await relay.load();
+      List<(Object?, Object?)> sent() => [
+        for (final request in server.requests) if (request.url.path.endsWith('/stays'))
+          for (final stay in (jsonDecode(request.body) as Map)['stays'] as List) ((stay as Map)['ongoing'], stay['end']),
+      ];
+      await relay.setHistory(true);
+      await point(now);
+      clock = now.add(const Duration(minutes: 40));
+      await relay.sync();
+      await relay.setHistory(false);
+      await relay.sync();
+      expect(sent(), [(true, clock.millisecondsSinceEpoch), (null, clock.millisecondsSinceEpoch)]);
+      await relay.setHistory(true);
+      final later = now.add(const Duration(minutes: 50));
+      await point(later);
+      clock = now.add(const Duration(minutes: 90));
+      await relay.sync();
+      expect(await relay.setLocationSend(LocationSend.points), isNull);
+      await relay.sync();
+      expect(sent().last, (null, clock.millisecondsSinceEpoch));
+      expect([await store.track(), await store.get(timelineKey)], [isEmpty, isNull]);
+      relay.dispose();
     });
   });
 

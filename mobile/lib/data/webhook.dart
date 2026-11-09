@@ -71,13 +71,14 @@ class WebhookClient implements Outbound {
         'content_type': _type(body['type']), 'size': bytes!.length, 'base64': base64.encode(bytes)}}),
       'health' => ('health.samples', {'samples': [for (final sample in body['samples'] as List) _sample(sample as Map)]}),
       'locations' => ('location.points', {'points': [for (final point in body['points'] as List) _point(point as Map)]}),
+      staysRoute => ('location.stays', {'stays': [for (final stay in body['stays'] as List) _stay(stay as Map)]}),
       'calendar' => ('calendar.events', {'events': [
         for (final event in body['events'] as List) _event(event as Map),
         for (final key in body['removed'] as List) _removed(key as String),
       ]}),
       final route => throw ArgumentError.value(route, 'route'),
     };
-    if ((data['samples'] ?? data['points'] ?? data['events']) case final List rows when rows.isEmpty) return null;
+    if ((data['samples'] ?? data['points'] ?? data['events'] ?? data['stays']) case final List rows when rows.isEmpty) return null;
     return {'version': 1, 'type': type, 'timestamp': _iso(item.createdAt.millisecondsSinceEpoch), 'data': data};
   }
 
@@ -104,6 +105,13 @@ class WebhookClient implements Outbound {
 
   Map<String, dynamic> _point(Map point) => {'id': point['id'], 'device': _device, 'at': _iso(point['at']),
     'lat': point['lat'], 'lon': point['lon'], 'accuracy': point['accuracy'], 'place': point['place']};
+
+  /// A stay or trip in the server's shape. Its id is made as an event's is, from its kind and start, so each change of
+  /// one stay has the same id, and a receiver upserts by it.
+  Map<String, dynamic> _stay(Map stay) => {'id': _eventId('${stay['kind']}:${stay['start']}'), 'device': _device,
+    'kind': stay['kind'], 'start': _iso(stay['start']), 'end': _iso(stay['end']), 'ongoing': stay['ongoing'] == true,
+    'lat': stay['lat'], 'lon': stay['lon'], 'name': stay['name'], 'address': stay['address'], 'event': stay['event'],
+    'source': stay['source'], 'mode': stay['mode'], 'km': stay['km']};
 
   /// An event's id: the first 48 bits of the SHA-256 of the install id and its key, so each change of one occurrence
   /// has the same id, and a receiver upserts by it as it does the server's.

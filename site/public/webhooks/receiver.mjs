@@ -15,6 +15,8 @@ db.exec(`
     value REAL, unit TEXT, source TEXT, PRIMARY KEY (device_id, id));
   CREATE TABLE IF NOT EXISTS location_points (id INTEGER, device_id TEXT, at TEXT, lat REAL, lon REAL,
     accuracy REAL, place TEXT, PRIMARY KEY (device_id, id));
+  CREATE TABLE IF NOT EXISTS location_stays (id INTEGER, device_id TEXT, kind TEXT, start TEXT, "end" TEXT, ongoing INTEGER,
+    lat REAL, lon REAL, name TEXT, address TEXT, event TEXT, source TEXT, mode TEXT, km REAL, PRIMARY KEY (device_id, id));
   CREATE TABLE IF NOT EXISTS files (id TEXT PRIMARY KEY, note_id TEXT, name TEXT, content_type TEXT, size INTEGER,
     bytes BLOB);
   CREATE TABLE IF NOT EXISTS calendar_events (id INTEGER PRIMARY KEY, device_id TEXT, key TEXT, status TEXT, calendar TEXT,
@@ -39,6 +41,7 @@ const note = db.prepare(`INSERT INTO notes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
   lat = excluded.lat, lon = excluded.lon, place = excluded.place, audio = coalesce(excluded.audio, notes.audio)`);
 const sample = db.prepare('INSERT OR REPLACE INTO health_samples VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
 const point = db.prepare('INSERT OR REPLACE INTO location_points VALUES (?, ?, ?, ?, ?, ?, ?)');
+const stay = db.prepare('INSERT OR REPLACE INTO location_stays VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
 // A note lists its files, then each file's bytes come in their own note.file: a file that never comes stays listed.
 const listed = db.prepare('INSERT INTO files VALUES (?, ?, ?, ?, ?, NULL) ON CONFLICT (id) DO NOTHING');
 const file = db.prepare(`INSERT INTO files VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET note_id = excluded.note_id,
@@ -65,6 +68,8 @@ const handlers = {
   'note.file': ({ note_id, file: f }) => file.run(f.id, note_id, f.name, f.content_type, f.size, Buffer.from(f.base64, 'base64')),
   'health.samples': ({ samples }) => samples.forEach(s => sample.run(s.id, s.device.id, s.type, s.start, s.end, s.value, s.unit, s.source)),
   'location.points': ({ points }) => points.forEach(p => point.run(p.id, p.device.id, p.at, p.lat, p.lon, p.accuracy, p.place)),
+  'location.stays': ({ stays }) => stays.forEach(s => stay.run(s.id, s.device.id, s.kind, s.start, s.end, Number(s.ongoing), s.lat,
+    s.lon, s.name, s.address, s.event, s.source, s.mode, s.km)),
   'calendar.events': ({ events }) => events.forEach(e => event.run(e.id, e.device.id, e.key, e.status, e.calendar, e.title, e.start,
     e.end, Number(e.all_day), e.location, e.notes, e.url, JSON.stringify(e.people))),
   'photo.created': ({ photo: p }) => photo.run(p.id, p.device.id, p.device.name, p.taken_at, p.place?.lat ?? null, p.place?.lon ?? null,

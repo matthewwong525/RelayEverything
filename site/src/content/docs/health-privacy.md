@@ -30,7 +30,7 @@ We keep your health and location data only to show it to you, and to send it whe
 - **Cloudflare** runs the shared server, so it keeps your space: [Cloudflare's privacy policy](https://www.cloudflare.com/privacypolicy/).
 - **The webhooks you tick for it.** A webhook gets health, calendar or location data only if you tick that kind for it: [Your own database](../connections/your-database/).
 - **The AI apps you connect** read it only when they ask: [Connect your AI](../connections/connect-your-ai/).
-- **Your own webhook only**, when you pick **Send to my own webhook instead** in the app: then the phone sends it straight there, and the shared server gets none of it.
+- **Your own webhook only**, when you pick **Send to my own webhook instead** in the app, or, signed in, **Only my own webhook** for health, places, calendar and photos: then the phone sends it straight there, and the shared server gets none of it from then on. What it got before stays until you delete it.
 
 No one else gets it, unless a court order or the law makes us give it.
 

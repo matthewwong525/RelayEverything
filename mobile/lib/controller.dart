@@ -161,8 +161,18 @@ class RelayController extends Relay {
   @override WebhookProblem? get webhookProblem => _problem;
   @override Connections? get connections => _connections;
   @override Set<String> get folded => _folded;
+  @override bool get privateWebhookMissing => _settings.sending && _settings.place == SendPlace.server &&
+    _settings.privateTo == SendPlace.webhook && _webhook == null;
 
   Outbound? get _api => _sender.api(_settings, connection: _connection, webhook: _webhook, installId: _installId);
+
+  /// The client for health, points, the calendar and photos: the notes' own, the webhook, or null while they wait.
+  Outbound? get _privateApi =>
+    _sender.privateApi(_settings, connection: _connection, webhook: _webhook, installId: _installId);
+
+  /// Moves what waits to where [settings] sends notes and private data, in one step.
+  Future<void> _moveOutbox(Settings settings) =>
+    store.moveOutbox(destinationOf(settings.place), private: destinationOf(settings.privatePlace));
 
   /// True when [place] has what it sends with: a key for the server, or a webhook's address and secret.
   bool _ready(SendPlace place) => place == SendPlace.server ? _connection != null : _webhook != null;
@@ -177,11 +187,15 @@ class RelayController extends Relay {
     final saved = await store.get(settingsKey);
     _settings = Settings.decode(saved, hasKey: _connection != null);
     // A phone that lost its key or webhook, such as from a restore, can not send: sending reads as off until set again.
+    // A lost webhook for private data alone leaves sending on: notes still go, private data waits, never to the server,
+    // and the Account page asks for the webhook again.
     if (_settings.sending && !_ready(_settings.place)) _settings = _settings.copyWith(sending: false);
     // The first version's settings, read once by the upgrade rule, are saved in today's shape.
     if (_settings.encode() != saved) await store.set(settingsKey, _settings.encode());
-    final destination = destinationOf(_settings.place);
-    if (await store.destination() != destination) await store.moveOutbox(destination);
+    if (await store.destination() != destinationOf(_settings.place) ||
+        await store.privateDestination() != destinationOf(_settings.privatePlace)) {
+      await _moveOutbox(_settings);
+    }
     await store.remove(_oldTimeline);
     _connections = Connections.decode(await store.get(connectionsKey));
     _folded = {for (final header in jsonDecode(await store.get(foldedKey) ?? '[]') as List) if (header is String) header};
@@ -358,13 +372,33 @@ class RelayController extends Relay {
   Future<String?> startSending({required bool sendEarlier, SendPlace? place}) async {
     final to = place ?? _settings.place;
     if (!_ready(to)) return to == SendPlace.server ? 'Connect a key first.' : 'Set your webhook first.';
-    await store.moveOutbox(destinationOf(to));
+    final next = _settings.copyWith(sending: true, place: to);
+    await _moveOutbox(next);
     if (sendEarlier) await store.queueEarlier();
     // The photos waiting on this phone go to the new place too, as the outbox does.
-    await _saveSettings(_settings.copyWith(sending: true, place: to));
+    await _saveSettings(next);
     await _refreshLocal();
+    _syncAfter();
+    return null;
+  }
+
+  /// Starts a round after the one running, or now.
+  void _syncAfter() {
     final running = _syncing;
     unawaited(running == null ? sync() : running.then((_) => sync()));
+  }
+
+  /// Health, places, the calendar and photos go to [place] from now on, with what of them waits. The webhook needs its
+  /// address and secret kept first, and picking it again after the phone lost it sends what waited. Back to the server,
+  /// the calendar's whole window goes there.
+  @override
+  Future<String?> setPrivatePlace(SendPlace place) async {
+    if (place == SendPlace.webhook && _webhook == null) return 'Set your webhook first.';
+    final next = _settings.copyWith(privateTo: place);
+    await _moveOutbox(next);
+    await _saveSettings(next);
+    await _refreshLocal();
+    _syncAfter();
     return null;
   }
 
@@ -938,20 +972,27 @@ class RelayController extends Relay {
     }
     if (_settings.history) await _drain();
     if (_settings.sending) await store.queuePoints();
-    final place = _settings.place;
-    final result = await flush(store, api, clock: _clock, keepGoing: () => _settings.sending && _settings.place == place,
-      folder: folder);
+    final place = _settings.place, privatePlace = _settings.privatePlace;
+    // A switch of either place while the round runs stops it at its next upload; a new round follows.
+    bool still() => _settings.sending && _settings.place == place && _settings.privatePlace == privatePlace;
+    final result = await flush(store, api, clock: _clock, keepGoing: still, folder: folder);
+    // Private data to its own place, the person's webhook, flushed apart, so a receiver that is down holds back no note,
+    // and the other way round. With no webhook kept it waits on the phone, and never goes to the server.
+    final privateApi = _privateApi;
+    final apart = privateApi != null && privateApi.destination != api.destination;
+    final private = apart ? await flush(store, privateApi, clock: _clock, keepGoing: still, folder: folder) : result;
     // New photos, as in the background round: after the outbox, so a photo waiting for Wi-Fi holds back no note. They go
-    // to the same place, the server or the webhook. A refused photo with a key that still answers, such as on an older
-    // server with no photos, comes back as null.
+    // where private data goes, the server or the webhook. A refused photo with a key that still answers, such as on an
+    // older server with no photos, comes back as null.
     Failure? photoFailure;
     final library = photos;
     final kind = network;
     if (_settings.photos && library != null && kind != null) {
-      photoFailure = await syncPhotos(store, api, library, kind, settings: _settings, send: result.failure == null, now: _clock(),
-        keepGoing: () async => _settings.photos && _settings.place == place);
+      photoFailure = await syncPhotos(store, privateApi, library, kind, settings: _settings, send: private.failure == null,
+        now: _clock(), keepGoing: () async => _settings.photos && still());
     }
-    _status = switch (result.failure ?? photoFailure) {
+    // The line on Home is about notes: a failure on the webhook's side shows on the Account page instead.
+    _status = switch (result.failure ?? (apart ? null : photoFailure)) {
       Failure.refused => SyncStatus.refused, null => SyncStatus.synced, _ => SyncStatus.offline };
     // The stop's own state wins.
     if (!_settings.sending) _status = SyncStatus.idle;

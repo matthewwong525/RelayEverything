@@ -204,10 +204,11 @@ class PhoneNetwork implements Network {
 bool photosMayGo(Settings settings, Link link) => link == Link.wifi || (settings.photosOnMobileData && link != Link.none);
 
 /// The photo step of a round, after the outbox: queues the new photos, then, with [send] and a network photos may
-/// use, sends the queue oldest first. Returns why the photo send stopped early, or null. With photos or sending off
-/// it reads no library and sends nothing. [keepGoing] is asked before each photo; when it says no, such as after
+/// use, sends the queue oldest first through [api], the client for private data. Returns why the photo send stopped
+/// early, or null. With photos or sending off it reads no library and sends nothing. With no [api], such as a webhook
+/// the phone lost, the photos queue and wait. [keepGoing] is asked before each photo; when it says no, such as after
 /// *Photos* turns off, the step stops there.
-Future<Failure?> syncPhotos(Store store, Outbound api, PhotoSource source, Network network,
+Future<Failure?> syncPhotos(Store store, Outbound? api, PhotoSource source, Network network,
   {required Settings settings, bool send = true, Future<bool> Function()? keepGoing, DateTime? now}) async {
   if (!settings.sending || !settings.photos) return null;
   final Link link;
@@ -223,7 +224,7 @@ Future<Failure?> syncPhotos(Store store, Outbound api, PhotoSource source, Netwo
     // The library can be closed, such as after photo access was turned off in the phone's Settings; the next round
     // looks again.
   }
-  if (!send || !mayGo) return null;
+  if (!send || !mayGo || api == null) return null;
   return sendPhotos(store, api, keepGoing: keepGoing);
 }
 

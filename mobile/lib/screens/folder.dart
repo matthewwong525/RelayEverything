@@ -30,13 +30,17 @@ String _when(DateTime at, DateTime now) {
   return today ? time : '${at.day}/${at.month} $time';
 }
 
-/// What a folder's switch says about sending: *Sent 14:05 · 3 waiting*, with the date when it was not today.
-String sentLine(SendState state, String what, DateTime now) {
+/// What a folder's switch says about sending: *Sent 14:05 · 3 waiting*, with the date when it was not today. With
+/// [webhook], as when private data goes to the person's own webhook: *Sent to your webhook 14:05 · 3 waiting*.
+String sentLine(SendState state, String what, DateTime now, {bool webhook = false}) {
   final at = state.at;
   final waiting = switch (state.waiting) { 0 => 'none waiting', 1 => '1 $what waiting', final n => '$n ${what}s waiting' };
   if (at == null) return 'Not sent yet · $waiting';
-  return 'Sent ${_when(at, now)} · $waiting';
+  return 'Sent ${webhook ? 'to your webhook ' : ''}${_when(at, now)} · $waiting';
 }
+
+/// True when health, places, the calendar and photos go to the person's own webhook.
+bool _toWebhook(Relay relay) => relay.settings.privatePlace == SendPlace.webhook;
 
 /// The short form a Home row shows: *Sent 14:05*, and *3 waiting* only when some wait.
 String _sentShort(SendState state, DateTime now) =>
@@ -70,11 +74,12 @@ String photosLine(Relay relay) {
 String hostOf(String? address) => Uri.tryParse(address ?? '')?.host ?? '';
 
 /// What the Account page says about the webhook's last problem: a refused file, an answer that was not 2xx, or none.
-String problemLine(WebhookProblem problem, DateTime now) {
+/// [what] names what waits: notes, or the private data that goes only to the webhook.
+String problemLine(WebhookProblem problem, DateTime now, {String what = 'Notes'}) {
   final at = _when(problem.at, now);
   if (problem.file != null) return '${problem.file} was too large for your receiver ($at), so it was not sent.';
-  if (problem.status == null) return 'No answer from your receiver at $at. Notes wait on this phone until it answers.';
-  return 'Your receiver answered ${problem.status} at $at. Notes wait on this phone until it takes them.';
+  if (problem.status == null) return 'No answer from your receiver at $at. $what wait on this phone until it answers.';
+  return 'Your receiver answered ${problem.status} at $at. $what wait on this phone until it takes them.';
 }
 
 /// Runs a change and shows why it could not be, if it could not.
@@ -160,7 +165,7 @@ class LocationPage extends StatelessWidget {
       return [
         Group(children: [SwitchListTile(
           title: const Text('Location history'),
-          subtitle: Text(settings.history ? sentLine(relay.pointsSent, 'point', DateTime.now())
+          subtitle: Text(settings.history ? sentLine(relay.pointsSent, 'point', DateTime.now(), webhook: _toWebhook(relay))
             : 'Where you go, also while the app is closed.'),
           value: settings.history,
           onChanged: settings.sending ? (on) => apply(context, relay.setHistory(on)) : null,
@@ -195,7 +200,7 @@ class HealthPage extends StatelessWidget {
       return [
         Group(children: [SwitchListTile(
           title: const Text('Health'),
-          subtitle: Text(settings.health ? sentLine(relay.healthSent, 'reading', DateTime.now()) : 'Steps, heart rate, sleep and more.'),
+          subtitle: Text(settings.health ? sentLine(relay.healthSent, 'reading', DateTime.now(), webhook: _toWebhook(relay)) : 'Steps, heart rate, sleep and more.'),
           value: settings.health,
           onChanged: settings.sending ? (on) => apply(context, relay.setHealth(on)) : null,
         )]),
@@ -219,7 +224,7 @@ class CalendarPage extends StatelessWidget {
       return [
         Group(children: [SwitchListTile(
           title: const Text('Calendar'),
-          subtitle: Text(settings.calendar ? sentLine(relay.calendarSent, 'event', DateTime.now()) : 'Your phone\'s calendars.'),
+          subtitle: Text(settings.calendar ? sentLine(relay.calendarSent, 'event', DateTime.now(), webhook: _toWebhook(relay)) : 'Your phone\'s calendars.'),
           value: settings.calendar,
           onChanged: settings.sending ? (on) => apply(context, relay.setCalendar(on)) : null,
         )]),
@@ -254,7 +259,7 @@ class PhotosPage extends StatelessWidget {
         Group(children: [
           SwitchListTile(
             title: const Text('Photos'),
-            subtitle: Text(settings.place == SendPlace.webhook && settings.sending
+            subtitle: Text(_toWebhook(relay) && settings.sending
               ? 'Sends new photos, with when and where you took them, to your webhook.'
               : 'Sends new photos, with when and where you took them, so your AI can see them.'),
             value: settings.photos,

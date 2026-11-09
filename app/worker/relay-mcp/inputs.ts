@@ -1,13 +1,14 @@
 // What each connector tool takes, shared by the MCP tools (tools.ts) and the web API (api.ts), so the two can't drift
 // apart: one schema per question, with the same limits. openapi.ts describes the web API from these too.
 import { z } from "zod";
-import { HEALTH_TYPES } from "../apps/relay/queries.ts";
+import { HEALTH_TYPES, MAX_POINTS } from "../apps/relay/queries.ts";
 import { accuracy, latitude, longitude, placeName } from "../apps/relay/store.ts";
 import { knownZone, ZONE } from "./time.ts";
 
 export const MAX_BUCKETS = 400;
 export const LINES = 3;
 export const PART = 200;
+export const POINTS_DAYS = 7;
 
 const zone = z.string().refine(knownZone, "Not a time zone.").optional()
   .describe(`An IANA time zone, such as Europe/London, for days and the times in the answer; ${ZONE} when left out.`);
@@ -41,7 +42,8 @@ export const TOOLS = {
   day_summary: {
     title: "Sum up a day",
     description: "One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, each stay " +
-      "with its name and times, each trip with its mode, km and minutes, and the calendar's events with the people in each.",
+      "with its name and times, each trip with its mode, km and minutes, and the calendar's events with the people in each. Each " +
+      "stay and trip from the phone has an `id`: give it to points for its route.",
     input: { day, timezone: zone },
   },
   health: {
@@ -57,9 +59,19 @@ export const TOOLS = {
   places: {
     title: "Read places visited",
     description: "The stays and trips from one time to another, oldest first: each stay's name, street, where it is, and when you " +
-      "arrived and left; each trip's mode (walking, running, cycling, driving, flying or unknown), km, minutes, and the stays it went between.",
+      "arrived and left; each trip's mode (walking, running, cycling, driving, flying or unknown), km, minutes, and the stays it went between. " +
+      "Each stay and trip from the phone has an `id`: give it to points for its route.",
     input: { from: when("The first time"), to: when("The time to stop before"),
       limit: z.number().int().min(1).max(200).default(100).describe("How many stays, at most 200. Read on from `next`."), timezone: zone },
+  },
+  points: {
+    title: "Read location points",
+    description: "The location points of one stay or trip, by its `id` from places or day_summary, from the phone that made it; or " +
+      `every phone's points from \`from\` to \`to\`, at most ${POINTS_DAYS} days. Each point has its time, lat, lon, accuracy (m) and ` +
+      `street. Oldest first, at most ${MAX_POINTS}, spread evenly with the first and the last; \`total\` says how many there were. ` +
+      "No points means the person keeps only stays and trips, or the phone sent none: do not ask again.",
+    input: { id: z.number().int().positive().optional().describe("The id of a stay or trip, from places or day_summary."),
+      from: when("The first time").optional(), to: when("The time to stop before").optional(), timezone: zone },
   },
   calendar: {
     title: "Read calendar events",

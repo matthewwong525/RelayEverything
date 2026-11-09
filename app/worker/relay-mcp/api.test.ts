@@ -45,6 +45,8 @@ const SAME: [string, WebTool, Record<string, unknown>][] = [
   ["health?type=heart_rate&from=2026-11-03&to=2026-11-05", "health", { type: "heart_rate", from: "2026-11-03", to: "2026-11-05" }],
   ["places?from=2026-11-04&to=2026-11-05&limit=2", "places", { from: "2026-11-04", to: "2026-11-05", limit: 2 }],
   ["places?from=2026-11-07&to=2026-11-08", "places", { from: "2026-11-07", to: "2026-11-08" }],
+  ["points?id=2", "points", { id: 2 }],
+  ["points?from=2026-11-07T09:00&to=2026-11-07T10:00&timezone=Europe%2FLondon", "points", { from: "2026-11-07T09:00", to: "2026-11-07T10:00", timezone: "Europe/London" }],
   ["calendar?from=2026-11-04&to=2026-11-05&limit=1", "calendar", { from: "2026-11-04", to: "2026-11-05", limit: 1 }],
   ["calendar?q=sam&from=2026-11-01&to=2026-12-01", "calendar", { query: "sam", from: "2026-11-01", to: "2026-12-01" }],
   ["health?type=weight&from=2026-11-04&to=2026-11-05", "health", { type: "weight", from: "2026-11-04", to: "2026-11-05" }],
@@ -72,6 +74,13 @@ it("reads on with each answer's cursor, and keeps each tool's limits", async () 
   expect((await call("notes?q=the&limit=many")).json.error_description).toMatch(/^`limit`: /);
   expect((await call("notes?q=the&color=red")).json.error_description).toContain("color");
   expect(await call("notes?q=the&cursor=page-2")).toMatchObject({ status: 400, json: { error_description: "That cursor is not one this connector gave." } });
+});
+
+it("reads a stay's or trip's points by an id sent as text, and refuses an id no stay or trip has", async () => {
+  expect((await call("points?id=2")).json).toMatchObject({ id: 2, kind: "trip", total: 4 });
+  expect(await call("points?id=99")).toMatchObject({ status: 404, json: { error: "not_found", error_description: "No stay or trip has this id." } });
+  expect((await call("points?id=two")).json.error_description).toMatch(/^`id`: /);
+  expect((await call("points?from=2026-11-01&to=2026-11-09")).status).toBe(400);
 });
 
 it("reads only the caller's own space: Ben's note is not found for Ana", async () => {

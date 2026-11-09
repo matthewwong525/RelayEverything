@@ -144,9 +144,9 @@ it("lists a day's stays for the site page, one row per stay, with its trips, onc
     { kind: "stay", start: start + 15 * MINUTE, end: start + 80 * MINUTE, lat: 43.66, lon: -79.39, name: "Corner Café", address: "Lake Drive",
       source: "map" }] });
   const { json } = await call(matthew, "GET", "summary", { day: "2026-11-05" });
-  expect(json.places).toEqual([{ name: "12 Maple Street", lat: 43.65, lon: -79.38, from: start - 2 * 60 * MINUTE, to: start },
-    { name: "Corner Café", lat: 43.66, lon: -79.39, from: start + 15 * MINUTE, to: start + 80 * MINUTE, address: "Lake Drive" }]);
-  expect(json.trips).toEqual([{ left: start, arrived: start + 15 * MINUTE, mode: "driving", km: 6.2, minutes: 15, from: "12 Maple Street",
+  expect(json.places).toEqual([{ id: 1, name: "12 Maple Street", lat: 43.65, lon: -79.38, from: start - 2 * 60 * MINUTE, to: start },
+    { id: 3, name: "Corner Café", lat: 43.66, lon: -79.39, from: start + 15 * MINUTE, to: start + 80 * MINUTE, address: "Lake Drive" }]);
+  expect(json.trips).toEqual([{ id: 2, left: start, arrived: start + 15 * MINUTE, mode: "driving", km: 6.2, minutes: 15, from: "12 Maple Street",
     to: "Corner Café" }]);
 });
 

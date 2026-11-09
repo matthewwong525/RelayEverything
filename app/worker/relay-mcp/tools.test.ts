@@ -55,12 +55,12 @@ it("names itself Relay Everything to the AI app", () => {
   expect(client.getInstructions()).toMatch(/^Relay Everything /);
 });
 
-it("lists twelve tools, each read-only but add_note, which changes and deletes nothing", async () => {
+it("lists thirteen tools, each read-only but add_note, which changes and deletes nothing", async () => {
   const { tools } = await client.listTools();
-  expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "places", "calendar", "search_chats",
-    "read_chat", "photos", "read_photo", "add_note"]);
-  for (const tool of tools.slice(0, 11)) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
-  expect(tools[11].annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+  expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "places", "points", "calendar",
+    "search_chats", "read_chat", "photos", "read_photo", "add_note"]);
+  for (const tool of tools.slice(0, 12)) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+  expect(tools[12].annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
 });
 
 it("finds notes holding every word, in any case, with a title and the time in the zone", async () => {
@@ -173,16 +173,47 @@ it("answers where you went on a Saturday with its stays, by name, and the trips 
   const places = await ask("places", { from: "2026-11-07", to: "2026-11-08" });
   expect(places.visits.map((visit: { name: string; arrived: string }) => [visit.name, visit.arrived])).toEqual([
     ["12 Maple Street", "2026-11-07T07:00:00-05:00"], ["Corner Café", "2026-11-07T09:15:00-05:00"], ["Smile Dental", "2026-11-07T10:40:00-05:00"]]);
-  expect(places.visits[2]).toEqual({ name: "Smile Dental", lat: 43.67, lon: -79.4, arrived: "2026-11-07T10:40:00-05:00",
+  expect(places.visits[2]).toEqual({ id: 5, name: "Smile Dental", lat: 43.67, lon: -79.4, arrived: "2026-11-07T10:40:00-05:00",
     left: "2026-11-07T11:30:00-05:00", minutes: 50, address: "Park Lane", event: "Dentist", ongoing: true });
   expect(places.trips).toEqual([
-    { left: "2026-11-07T09:00:00-05:00", arrived: "2026-11-07T09:15:00-05:00", mode: "driving", km: 6.2, minutes: 15, from: "12 Maple Street", to: "Corner Café" },
-    { left: "2026-11-07T10:20:00-05:00", arrived: "2026-11-07T10:40:00-05:00", mode: "walking", km: 1.4, minutes: 20, from: "Corner Café", to: "Smile Dental" }]);
+    { id: 2, left: "2026-11-07T09:00:00-05:00", arrived: "2026-11-07T09:15:00-05:00", mode: "driving", km: 6.2, minutes: 15, from: "12 Maple Street", to: "Corner Café" },
+    { id: 4, left: "2026-11-07T10:20:00-05:00", arrived: "2026-11-07T10:40:00-05:00", mode: "walking", km: 1.4, minutes: 20, from: "Corner Café", to: "Smile Dental" }]);
   const day = await ask("day_summary", { day: "2026-11-07" });
   expect(day.places.map((place: { name: string; from: string; to: string }) => [place.name, place.from, place.to])).toEqual([
     ["12 Maple Street", "2026-11-07T07:00:00-05:00", "2026-11-07T09:00:00-05:00"], ["Corner Café", "2026-11-07T09:15:00-05:00", "2026-11-07T10:20:00-05:00"],
     ["Smile Dental", "2026-11-07T10:40:00-05:00", "2026-11-07T11:30:00-05:00"]]);
   expect(day.trips.map((trip: { mode: string }) => trip.mode)).toEqual(["driving", "walking"]);
+  expect([day.places.map((place: { id: number }) => place.id), day.trips.map((trip: { id: number }) => trip.id)]).toEqual([[1, 3, 5], [2, 4]]);
+});
+
+const times = (answer: { points: { at: string }[] }) => answer.points.map(point => point.at.slice(11, 16));
+
+it("reads a trip's route by its id, a stay's points from its own phone only, and every phone's points in a range", async () => {
+  expect(await ask("points", { id: 2 })).toEqual({ id: 2, kind: "trip", from: "2026-11-07T09:00:00-05:00", to: "2026-11-07T09:15:00-05:00",
+    timezone: "America/Toronto", total: 4, points: [
+      { at: "2026-11-07T09:02:00-05:00", lat: 43.652, lon: -79.382, accuracy: 8, place: "Maple St" },
+      { at: "2026-11-07T09:06:00-05:00", lat: 43.655, lon: -79.385, accuracy: 9, place: "Queen St W" },
+      { at: "2026-11-07T09:10:00-05:00", lat: 43.658, lon: -79.388, accuracy: 11 },
+      { at: "2026-11-07T09:14:00-05:00", lat: 43.6595, lon: -79.3895, accuracy: 8, place: "Lake Drive" }] });
+  // The iPad's point at 09:45 is in the café stay's time, but the phone made the stay.
+  expect(times(await ask("points", { id: 3 }))).toEqual(["09:30", "10:00"]);
+  const range = await ask("points", { from: "2026-11-07T09:00", to: "2026-11-07T10:00" });
+  expect([range.id, range.kind, range.from, range.total, times(range)])
+    .toEqual([undefined, undefined, "2026-11-07T09:00:00-05:00", 6, ["09:02", "09:06", "09:10", "09:14", "09:30", "09:45"]]);
+  expect(JSON.stringify(range)).not.toMatch(/d0000000|device|iPad/);
+  // Toronto's clocks went back on 1 November, so this week is 169 hours, and still 7 days.
+  expect((await ask("points", { from: "2026-11-01", to: "2026-11-08" })).total).toBe(15);
+  expect(await ask("points", { from: "2026-11-05", to: "2026-11-06" })).toMatchObject({ total: 0, points: [] });
+});
+
+it("refuses points asked by neither id nor range, by both, past 7 days, or for an id no stay or trip has", async () => {
+  const either = { refused: "Give the `id` of a stay or trip, or `from` and `to`: one or the other." };
+  for (const input of [{}, { id: 2, from: "2026-11-07" }, { from: "2026-11-07" }, { id: 2, to: "2026-11-08" }]) {
+    expect(await ask("points", input), JSON.stringify(input)).toEqual(either);
+  }
+  expect(await ask("points", { from: "2026-11-01", to: "2026-11-09" })).toEqual({ refused: "That is more than 7 days: ask for a shorter range." });
+  expect(await ask("points", { id: 99 })).toEqual({ refused: "No stay or trip has this id." });
+  expect((await ask("points", { id: 0 })).refused).toBeDefined();
 });
 
 const CHAT = (n: number) => `c0000000-0000-4000-8000-00000000000${n}`;

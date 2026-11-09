@@ -19,9 +19,9 @@ const output = z.strictObject({
   cycleFlow: z.number().optional(), mindfulMinutes: z.number().optional(), waterMl: z.number().optional(),
   events: z.array(z.strictObject({ title: z.string(), start: z.number(), end: z.number(), allDay: z.boolean(), people: z.array(z.string()) })),
   // One row per stay, or each place once on a day before the phone made stays.
-  places: z.array(z.strictObject({ name: z.string(), lat: z.number(), lon: z.number(), from: z.number(), to: z.number(),
+  places: z.array(z.strictObject({ id: z.number().optional(), name: z.string(), lat: z.number(), lon: z.number(), from: z.number(), to: z.number(),
     address: z.string().optional(), event: z.string().optional(), ongoing: z.literal(true).optional() })),
-  trips: z.array(z.strictObject({ left: z.number(), arrived: z.number(), mode: z.string(), km: z.number(), minutes: z.number(),
+  trips: z.array(z.strictObject({ id: z.number(), left: z.number(), arrived: z.number(), mode: z.string(), km: z.number(), minutes: z.number(),
     from: z.string().nullable(), to: z.string().nullable() })),
 });
 

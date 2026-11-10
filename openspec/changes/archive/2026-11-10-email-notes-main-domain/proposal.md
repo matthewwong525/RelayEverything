@@ -81,3 +81,5 @@ None.
 **2026-11-10** — Assumed: the `/save` task is dropped, because `/ship` runs `/save` and waits for CI before it merges; the live publish and the test mail run after the merge (design.md, Migration Plan).
 
 **2026-11-10** — Archive checkpoint: built and reviewed (review found nothing to fix); local checks passed; saved inside `/ship`.
+
+**2026-11-10** — Merged main: kept its new AI connector callback `mcp.relayeverything.com` beside the new mail domain in `app/wrangler.relay.jsonc`.

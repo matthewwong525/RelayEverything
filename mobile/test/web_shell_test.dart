@@ -156,6 +156,18 @@ void main() {
       await finish(tester);
     });
 
+    testWidgets('an empty folder says how a note gets in it, not that a search found nothing', (tester) async {
+      relay.entries = [];
+      await show(tester, wide);
+      expect(inList('No notes yet'), findsOneWidget);
+      expect(inList('Click New note to write one.'), findsOneWidget);
+      expect(find.textContaining('No notes with'), findsNothing);
+      await tester.tap(inSidebar('Voice notes'));
+      await tester.pumpAndSettle();
+      expect(inList('No voice notes yet'), findsOneWidget);
+      await finish(tester);
+    });
+
     testWidgets('a connection opens in place of the notes', (tester) async {
       await show(tester, wide);
       await tester.tap(inSidebar('Location'));

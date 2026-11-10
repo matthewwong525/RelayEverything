@@ -396,9 +396,29 @@ class NotesPane extends StatelessWidget {
           child: Text(folder.title, style: text.titleLarge?.copyWith(fontWeight: FontWeight.w700)))),
       ]))),
       SliverToBoxAdapter(child: SyncLine(relay: relay, count: countOf(notes.length), onSync: relay.pullNotes)),
-      noteSliver(context, relay, notes, search.text, back: folder.title, picker: picker, sharer: sharer, opener: opener,
-        onOpen: onOpen, selected: selected),
+      if (notes.isEmpty && search.text.trim().isEmpty)
+        SliverToBoxAdapter(child: _EmptyFolder(folder: folder))
+      else
+        noteSliver(context, relay, notes, search.text, back: folder.title, picker: picker, sharer: sharer, opener: opener,
+          onOpen: onOpen, selected: selected),
       const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
+    ]));
+  }
+}
+
+/// An empty folder in the middle pane: its title, then how a note gets in it.
+class _EmptyFolder extends StatelessWidget {
+  const _EmptyFolder({required this.folder});
+
+  final NotesFolder folder;
+
+  @override
+  Widget build(BuildContext context) {
+    final (title, how) = emptyFolderText(folder, web: true);
+    final text = Theme.of(context).textTheme;
+    return Padding(padding: const EdgeInsets.fromLTRB(24, 40, 24, 0), child: Column(spacing: 6, children: [
+      Text(title, textAlign: TextAlign.center, style: text.titleMedium),
+      Text(how, textAlign: TextAlign.center, style: text.bodyMedium?.copyWith(color: brandOf(context).muted)),
     ]));
   }
 }

@@ -1,6 +1,6 @@
 # The Relay Everything web page becomes the phone app, sized for a computer
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** flutter-app-with-notes
 **Open questions:** none
 
@@ -159,3 +159,7 @@ The Relay Everything web page and the phone app look and work differently. The p
 - **2026-11-09** — Check: `app/package.json` runs `build-relay-web.mjs` in `build:app`, adds `../scripts/build-relay-web.test.mjs` to `test`, and removes `uqr`, which only the React page used; no check is taken out.
 
 **2026-11-10** — Built: every task but the live check on the preview. Two review rounds fixed ten problems: phone edits to an open note, coming back to the tab, failed saves, uploads and new notes, the phone's Settings links, deletes at sign-out, a new device in the list, and words typed just before the tab closes.
+
+**2026-11-10** — Assumed: the live check ran on staging, not on the preview, because a preview has no person spaces and the check tool sends its key only to our own site. At 1440 and 390 px every step passed: a note, a dropped file, an edit, the note in a phone's sync and the phone's edit back on the page, delete and Undo, each connection, Chats, each Settings page, `#webhooks`, search, and a 403 for a change from another site. The file picker opens only for a person, so the check dropped the file. One fault was fixed: an empty folder said `No notes with ""`; it now says what goes in it.
+
+**2026-11-10** — Archived for shipping, with the empty-folder fix and the Health picture taken again from the real page, which links the App Store and Android.

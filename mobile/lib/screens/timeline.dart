@@ -308,6 +308,15 @@ class _SyncDotState extends State<_SyncDot> with SingleTickerProviderStateMixin 
   }
 }
 
+/// What an empty [folder] says: its title, then how a note gets in it. In the browser no hold talks.
+(String, String) emptyFolderText(NotesFolder folder, {bool web = false}) => switch (folder) {
+  NotesFolder.all when web => ('No notes yet', 'Click New note to write one.'),
+  NotesFolder.voice when web => ('No voice notes yet', 'Voice notes you say into your phone show here.'),
+  NotesFolder.all => ('No notes yet', 'Tap New note to write one, or hold it to talk.'),
+  NotesFolder.voice => ('No voice notes yet', 'Hold New note to talk.'),
+  NotesFolder.shares => ('No shares yet', 'A note with a photo, a file or a link shows here.'),
+};
+
 /// An empty folder: what goes in it, above the button that makes it.
 class _Empty extends StatelessWidget {
   const _Empty({required this.folder, required this.sending, this.web = false});
@@ -321,13 +330,7 @@ class _Empty extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final muted = theme.textTheme.bodyMedium?.copyWith(color: brandOf(context).muted, height: 1.45);
-    final (title, how) = switch (folder) {
-      NotesFolder.all when web => ('No notes yet', 'Click New note to write one.'),
-      NotesFolder.voice when web => ('No voice notes yet', 'Voice notes you say into your phone show here.'),
-      NotesFolder.all => ('No notes yet', 'Tap New note to write one, or hold it to talk.'),
-      NotesFolder.voice => ('No voice notes yet', 'Hold New note to talk.'),
-      NotesFolder.shares => ('No shares yet', 'A note with a photo, a file or a link shows here.'),
-    };
+    final (title, how) = emptyFolderText(folder, web: web);
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 0, 28, 110),
       child: Column(mainAxisAlignment: MainAxisAlignment.center, spacing: 10, children: [

@@ -43,4 +43,4 @@
 ## 8. Checks
 
 - [x] 8.1 Run `flutter analyze`, `flutter test`, the web build, `npm test` in `app/`, and `node scripts/public-check.mjs`; all pass.
-- [ ] 8.2 `/save`, then on staging sign in at 1440 and 390 px wide: write a note, add a file, edit it, delete and undo, see it on a phone's sync, open each connection, Chats and each Settings page; take the preview pictures.
+- [x] 8.2 `/save`, then on staging sign in at 1440 and 390 px wide: write a note, add a file, edit it, delete and undo, see it on a phone's sync, open each connection, Chats and each Settings page; take the preview pictures.

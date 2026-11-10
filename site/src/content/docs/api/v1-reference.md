@@ -153,11 +153,11 @@ The events from the phone's calendars that overlap one time to another, with eac
 
 `GET /v1/chats` · `searchChats`
 
-Find saved AI chats from Claude Code and Codex whose messages or AI summaries hold every word of the query, newest first, with up to 3 matching lines each.
+Find saved AI chats from Claude Code and Codex whose messages or AI summaries hold every word of the query, newest first, with up to 3 matching lines each. Leave out `q` to list every chat active from `from` to `to`, with no lines.
 
 | Field | In | Type | Required | What it holds |
 |---|---|---|---|---|
-| `q` | query | string | yes | The words to find. |
+| `q` | query | string | no | The words to find. |
 | `from` | query | string | no | Only chats active from this time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
 | `to` | query | string | no | Only chats last active before this time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
 | `limit` | query | integer | no | How many chats, at most 20. |

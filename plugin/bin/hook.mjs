@@ -3,17 +3,21 @@
 // stdin. Each records the session, starts a send that runs on its own, and ends at once, so neither app waits: Codex
 // does not run a hook marked async. The send is `hook.mjs send <session> <wait ms>`, or `hook.mjs pending` at a start.
 // A start on a connected computer also adds the person's topics from the copy of their knowledge web, and starts
-// `hook.mjs sync` to bring the copy up to date on its own; `prompt` adds the topics a message names. Otherwise it
-// prints nothing but one notice, once, when this computer is not connected, because a hook's output joins the chat.
+// `hook.mjs sync` to bring the copy up to date on its own; the first start of the day starts the daily build instead,
+// which syncs first. `prompt` adds the topics a message names. Otherwise it prints nothing but one notice, once, when
+// this computer is not connected, because a hook's output joins the chat.
 import { spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { copyOf, openState, readComputer } from '../lib/config.mjs';
+import { appOf } from '../lib/headless.mjs';
 import { sendPending, sendSession } from '../lib/send.mjs';
 import { SESSION } from '../lib/state.mjs';
 import { matchTopics, projectTopic, readTopic, topicPages, topLevel } from '../lib/topics.mjs';
 import { gitTop, projectName, projectRoot } from '../lib/transcript.mjs';
+import { buildDue, markTried, startRun } from './build.mjs';
 import { sync } from './knowledge.mjs';
+import { computerZone } from './relay.mjs';
 
 const self = fileURLToPath(import.meta.url);
 // The send a session's end starts runs on its own, outside the hook's time limit, so it can wait for a Stop send.
@@ -77,7 +81,7 @@ export function record(store, input, now = Date.now()) {
  * Runs one hook event, and answers what to print. `start` runs a send on its own, as `hook.mjs <args>`. A session
  * ended by /clear is marked cleared, so the save skill, which may keep its old id, finds the chat that follows.
  */
-export async function run(event, input, { env, fetcher = fetch, start = startSend, wait = END_WAIT }) {
+export async function run(event, input, { env, fetcher = fetch, start = startSend, wait = END_WAIT, now = Date.now(), zone = computerZone() }) {
   // Topics only read this computer's copy, so a project with saving off, or RELAY_SAVE=0, still gets them.
   if (event === 'prompt') return readComputer(env) ? context('UserPromptSubmit', topicMatches(copyOf(env), input?.prompt)) : '';
   if (event === 'sync') {
@@ -101,7 +105,11 @@ export async function run(event, input, { env, fetcher = fetch, start = startSen
     if (id && store.sessions()[id]?.cleared) store.update(id, { cleared: false });
     if (Object.values(store.sessions()).some(session => session.pending)) await start(['pending'], env);
     if (readComputer(env)) {
-      await start(['sync'], env);
+      // The build syncs first, so a second sync at once would race it for the copy.
+      if (!env.RELAY_BUILD_RUN && buildDue(env, now, zone)) {
+        markTried(env, now, zone);
+        await start(['build', appOf(env, input?.transcript_path)], env);
+      } else await start(['sync'], env);
       return topics();
     }
     if (store.marked('not-connected')) return '';
@@ -117,6 +125,7 @@ export async function run(event, input, { env, fetcher = fetch, start = startSen
 }
 
 function startSend(args, env) {
+  if (args[0] === 'build') return startRun(env, args[1]);
   spawn(process.execPath, [self, ...args], { detached: true, stdio: 'ignore', env }).unref();
 }
 

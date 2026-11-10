@@ -71,8 +71,9 @@ export function project(lines = [said('you', 'Hello'), said('ai', 'Hi')], { conn
 }
 
 /** A hook's `start` that runs the send at once, in this process, so a test can wait for it. It starts no sync of the
- *  knowledge web, which needs git and its own server. */
-export const inline = fetcher => (args, env) => (args[0] === 'sync' ? undefined : run(args[0], args[1], { env, fetcher, wait: Number(args[2] ?? 0) }));
+ *  knowledge web and no build, which need git and their own server. */
+export const inline = fetcher => (args, env) => (['sync', 'build'].includes(args[0]) ? undefined
+  : run(args[0], args[1], { env, fetcher, wait: Number(args[2] ?? 0) }));
 
 /** A page with its frontmatter. */
 export const page = (title, summary, body = '', updated = '2026-11-10') =>
@@ -98,4 +99,20 @@ export function repoWithWorktree() {
   git(['commit', '--quiet', '--allow-empty', '-m', 'Start'], main);
   git(['worktree', 'add', '--quiet', '-b', 'rural-horse', copy], main);
   return { home, main, copy };
+}
+
+/** A bare repo standing in for the person's web in Artifacts, holding the two start pages. */
+export function web({ format = '# The rules\n' } = {}) {
+  const git = (args, cwd) => execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@localhost', ...args], { cwd, stdio: 'ignore' });
+  const root = mkdtempSync(join(tmpdir(), 'relay-web-'));
+  const start = join(root, 'start');
+  mkdirSync(start);
+  git(['init', '--quiet', '-b', 'main'], start);
+  writeFileSync(join(start, 'README.md'), '# Topics\n');
+  writeFileSync(join(start, 'FORMAT.md'), format);
+  git(['add', '-A'], start);
+  git(['commit', '--quiet', '-m', 'Start'], start);
+  const bare = join(root, 'p-ana.git');
+  git(['clone', '--quiet', '--bare', start, bare], root);
+  return bare;
 }

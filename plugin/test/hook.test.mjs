@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { LINE_CHARACTERS, MOST_TOPICS, NOT_CONNECTED, run } from '../bin/hook.mjs';
-import { copyOf } from '../lib/config.mjs';
+import { build, markTried } from '../bin/build.mjs';
+import { copyOf, forgetComputer } from '../lib/config.mjs';
 import { copy, page, project } from './fake.mjs';
 
 const HOOK = fileURLToPath(new URL('../bin/hook.mjs', import.meta.url));
@@ -20,10 +21,11 @@ function added(printed, event) {
   return hookSpecificOutput.additionalContext;
 }
 
-/** A connected project whose computer holds a copy of the web with these pages. */
+/** A connected project whose computer holds a copy of the web with these pages, and built today already. */
 function withWeb(files, options) {
   const place = project(undefined, options);
   copy(files, copyOf(place.env));
+  markTried(place.env);
   return place;
 }
 
@@ -124,4 +126,35 @@ test('a message is matched fast against 1,000 topics, and the hook runs from std
   const [code] = await once(child, 'exit');
   assert.equal(code, 0);
   assert.equal(added(printed.trim(), 'UserPromptSubmit'), 'Relay Everything topic area-19/part999: Summary 999');
+});
+
+test('the first chat start of the day starts the build on its own, and a second chat, an off switch or a build run starts none', async () => {
+  const place = project();
+  const NOW = Date.parse('2026-11-10T14:00:00Z');
+  const ZONE = 'Europe/London';
+  const starts = [];
+  const begin = (env = place.env, input = place.input, now = NOW) => run('session-start', input, { env, start: args => starts.push(args), now, zone: ZONE });
+  await begin();
+  assert.deepEqual(starts, [['build', 'claude']]);
+  await begin();
+  assert.deepEqual(starts.at(-1), ['sync']);
+  // The next day starts one again, in the app the chat started in.
+  const codex = { ...place.input, transcript_path: join(place.home, 'rollout-2026-11-11T09-00-00-5d1c.jsonl') };
+  await begin(place.env, codex, NOW + 86_400_000);
+  assert.deepEqual(starts.at(-1), ['build', 'codex']);
+  // Turned off on this computer: the chat still gets its sync, and no build.
+  await build(['off'], { env: place.env });
+  await begin(place.env, place.input, NOW + 2 * 86_400_000);
+  assert.deepEqual(starts.at(-1), ['sync']);
+  await build(['on'], { env: place.env });
+  // The build's own chat starts no build: it saves nothing and is marked as a build run.
+  starts.length = 0;
+  await begin({ ...place.env, RELAY_BUILD_RUN: '1' }, place.input, NOW + 3 * 86_400_000);
+  assert.deepEqual(starts, [['sync']]);
+  await begin({ ...place.env, RELAY_SAVE: '0', RELAY_BUILD_RUN: '1' }, place.input, NOW + 3 * 86_400_000);
+  assert.deepEqual(starts, [['sync']]);
+  // A computer that is not connected starts no build.
+  forgetComputer(place.env);
+  await begin(place.env, place.input, NOW + 4 * 86_400_000);
+  assert.deepEqual(starts, [['sync']]);
 });

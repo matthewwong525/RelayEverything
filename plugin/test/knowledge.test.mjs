@@ -6,26 +6,11 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { copyOf, EVERY, knowledge, NO_GIT, NOT_SET_UP, status, sync } from '../bin/knowledge.mjs';
 import { NOT_CONNECTED } from '../bin/relay.mjs';
-import { relayHome, SECRET } from './fake.mjs';
+import { relayHome, SECRET, web } from './fake.mjs';
 
 const PASS = 'art_v1_made-up-pass-for-a-test';
 const MINUTE = 60_000;
 const git = (args, cwd) => execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@localhost', ...args], { cwd, encoding: 'utf8' }).trim();
-
-/** A bare repo standing in for the person's web in Artifacts, holding the two start pages. */
-function web() {
-  const root = mkdtempSync(join(tmpdir(), 'relay-web-'));
-  const start = join(root, 'start');
-  mkdirSync(start);
-  git(['init', '--quiet', '-b', 'main'], start);
-  writeFileSync(join(start, 'README.md'), '# Topics\n');
-  writeFileSync(join(start, 'FORMAT.md'), '# The rules\n');
-  git(['add', '-A'], start);
-  git(['commit', '--quiet', '-m', 'Start'], start);
-  const bare = join(root, 'p-ana.git');
-  git(['clone', '--quiet', '--bare', start, bare], root);
-  return bare;
-}
 
 /** The pass route: the web's address and a pass, or the status it is told to answer. */
 function passes(remote, status = 200) {

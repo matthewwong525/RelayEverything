@@ -112,11 +112,15 @@ A fact or a page SHALL link to the record it came from as `relay:<kind>/<id>`, w
 - **THEN** an AI can read that chat at message 120 through the web API with the computer's key
 
 ### Requirement: Topics grow from use
-The default rules SHALL have one kind of page in the web, a topic, with no set folders for people, projects or places. A topic page SHALL be made when the first fact tags it, and SHALL NOT be made before. A topic that grows big MAY become a folder with its own start page. A chat SHALL NOT get a page in the web; its facts SHALL link to it.
+The default rules SHALL have one kind of page in the web, a topic, with no set folders for people, projects or places. A topic page SHALL be made when the first fact tags it, and SHALL NOT be made before. The default rules SHALL keep topic pages side by side in `topics/`: a topic that grows big SHALL split into smaller pages that link each other, not into a folder, and the pages SHALL link the topics they connect to, so the web is a graph of linked pages. A folder or a topic name with `/` that a web already has MAY stay. A chat SHALL NOT get a page in the web; its facts SHALL link to it.
 
 #### Scenario: The first fact about Sam
 - **WHEN** the first fact tagged `#sam` is added, and the plugin next writes pages
 - **THEN** `topics/sam.md` is made and sums up that fact, and no other folder is made
+
+#### Scenario: A topic splits
+- **WHEN** the `bike` page grows too big under the default rules
+- **THEN** pages such as `topics/bike-battery.md` sit beside `topics/bike.md`, which links them, and no `topics/bike/` folder is made
 
 ### Requirement: Links are written one way
 A fact SHALL link to its sources, and a page MAY link to other pages and to records. No link SHALL be written a second time in the other direction, and no page SHALL list fact ids; a page's facts SHALL be found by its tag, and a record's facts by a memory search for its link.

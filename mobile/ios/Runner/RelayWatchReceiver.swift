@@ -24,8 +24,9 @@ final class RelayWatchReceiver: NSObject, WCSessionDelegate {
   }
 
   func session(_ session: WCSession, didReceive file: WCSessionFile) {
-    // The system deletes the file when this returns, so it moves now, on this thread.
-    guard let id = try? ShortcutsInbox.keepWatchRecording(file.fileURL, metadata: file.metadata) else { return }
+    // The system deletes the file when this returns, so it moves now, on this thread. The watch sends a note again
+    // until it gets kept, so an id taken before writes nothing and gets kept again.
+    guard let id = try? ShortcutsInbox.takeWatchRecording(file.fileURL, metadata: file.metadata) else { return }
     session.transferUserInfo(["kept": id])
     DispatchQueue.main.async {
       if #available(iOS 16, *) { ShortcutsEngine.shared.inboxChanged() }

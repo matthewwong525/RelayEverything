@@ -7,6 +7,8 @@ import Foundation
 enum RelayFolders {
   static var support: URL { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0] }
   static var inbox: URL { support.appendingPathComponent("shortcuts-inbox", isDirectory: true) }
+  /// The ids of the last watch notes this phone took, so a note the watch sends again is not kept twice.
+  static var watchReceived: URL { support.appendingPathComponent("watch-received.json") }
 
   /// A path from Dart, full or from the support folder, as a file URL.
   static func url(_ path: String) -> URL {
@@ -64,5 +66,44 @@ enum ShortcutsInbox {
     try? target.setResourceValues(values)
     try leave(request(id: id, text: "", createdAt: createdAt, files: [], durationMs: durationMs), id: id, in: inbox)
     return id
+  }
+
+  /// Takes a recording the watch handed over and gives the id to answer kept for. An id in [received] was taken
+  /// before: it writes nothing, so a note the person deleted does not come back, and the watch still gets its kept.
+  /// A new id goes into the inbox, then into [received], before the caller answers kept.
+  static func takeWatchRecording(
+    _ file: URL, metadata: [String: Any]?, in inbox: URL = RelayFolders.inbox,
+    received: WatchReceived = WatchReceived()
+  ) throws -> String? {
+    guard let id = metadata?["id"] as? String, isNoteId(id) else { return nil }
+    if received.contains(id) { return id }
+    guard let kept = try keepWatchRecording(file, metadata: metadata, in: inbox) else { return nil }
+    try received.add(kept)
+    return kept
+  }
+}
+
+/// The ids of the last [limit] watch notes the phone took, oldest first, in one small JSON file. A watch note waits
+/// for its kept for at most as long as the person makes [limit] more notes, so an older id is not needed.
+struct WatchReceived {
+  static let limit = 500
+
+  let file: URL
+
+  init(file: URL = RelayFolders.watchReceived) { self.file = file }
+
+  var ids: [String] {
+    guard let data = try? Data(contentsOf: file) else { return [] }
+    return (try? JSONDecoder().decode([String].self, from: data)) ?? []
+  }
+
+  func contains(_ id: String) -> Bool { ids.contains(id) }
+
+  /// Keeps [id] as taken, and lets the oldest go past [limit].
+  func add(_ id: String) throws {
+    var all = ids.filter { $0 != id }
+    all.append(id)
+    try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try JSONEncoder().encode(Array(all.suffix(Self.limit))).write(to: file, options: .atomic)
   }
 }

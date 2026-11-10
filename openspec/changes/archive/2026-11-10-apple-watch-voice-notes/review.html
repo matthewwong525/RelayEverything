@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · apple-watch-voice-notes</title>
+<title>Review · 2026-11-10-apple-watch-voice-notes</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -451,11 +451,11 @@
 })();
 </script>
 </head>
-<body data-change="apple-watch-voice-notes" data-own-back>
+<body data-change="2026-11-10-apple-watch-voice-notes" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>apple-watch-voice-notes</h1>
+  <h1>2026-11-10-apple-watch-voice-notes</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Tap a picture to see it full screen.</span></p>
@@ -513,6 +513,11 @@
 <li class="decision card" id="decision-13" data-note="decision-13" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-10</p>Check: <code>.github/workflows/mobile-ios.yml</code> gains job <code>watch-tests</code>, because the watch app's tests need a watch simulator; nothing is loosened.</li>
 <li class="decision card" id="decision-14" data-note="decision-14" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-10</p>Checkpoint: the watch app, the iPhone receiver, the Fastfile and CI steps, and the docs are written; Flutter analyze and 567 tests pass. The Swift, the Xcode project and the Fastfile were written on Linux and never compiled; this save's Mac CI is their first build.</li>
 <li class="decision card" id="decision-15" data-note="decision-15" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-10</p>Checkpoint: the first Mac CI built and signed the iPhone app with the watch app, and the watch tests passed. One Flutter test, <i>Try again writes only the failed notes</i>, failed once on CI and passed five times here with <code>main</code> merged in, so it is treated as a timing fluke; <code>main</code> is merged and all 705 tests pass.</li>
+<li class="decision card" id="decision-16" data-note="decision-16" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-10</p>After publish: install the TestFlight build on Matthew's Apple Watch, save a note with the iPhone away, and check it shows once in <i>Voice notes</i> with its words when they are near again. This needs his watch, so it is no task.</li>
+<li class="decision card" id="decision-17" data-note="decision-17" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-10</p>Review fix: the watch marks a note delivered when its transfer ends with no error, and sends again only a note never sent or whose transfer failed, because at a cold start the <code>kept</code> answer can come after the launch's send and a deleted note came back. The recording still goes only on <code>kept</code>, because only <code>kept</code> says the iPhone's inbox has it.</li>
+<li class="decision card" id="decision-18" data-note="decision-18" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-10</p>Assumed: the release guide asks for Apple Watch screenshots before the first release, because App Store Connect needs them for an app with a watch app; the submit lane still uploads none.</li>
+<li class="decision card" id="decision-19" data-note="decision-19" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-10</p>Review fix: the watch sends again, at each launch, every note with no transfer in flight, and the iPhone remembers the last 500 watch note ids it took and answers <code>kept</code> with no second note for a repeat, because a transfer the system drops gives no callback and the note waited forever; a deleted note still does not come back. A failed transfer goes at the next saved note or launch, not at once, so an error that repeats does not loop.</li>
+<li class="decision card" id="decision-20" data-note="decision-20" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-10</p>Archive checkpoint: the second look's fixes (no resend of a kept note, no note waiting forever, split inbox tests, the Apple Watch screenshot step) are in; Flutter analyze and 706 tests pass here; this save's Mac CI is the first build of the fixed Swift.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

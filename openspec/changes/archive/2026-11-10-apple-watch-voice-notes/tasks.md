@@ -31,5 +31,11 @@
 ## 5. Checks
 
 - [x] 5.1 `flutter analyze` and `flutter test` in `mobile/`; `node scripts/product-name.test.mjs`; `node scripts/public-check.mjs`.
-- [ ] 5.2 `/save`: the branch's Mobile CI builds and signs the iPhone app with the watch app, and the Swift and watch tests pass.
-- [ ] 5.3 After publish, the TestFlight build installs the watch app on Matthew's watch; a note saved there with the iPhone away shows once in *Voice notes* with its words when they are near again.
+- [x] 5.2 `/save`: the branch's Mobile CI builds and signs the iPhone app with the watch app, and the Swift and watch tests pass.
+
+## 6. Review fixes
+
+- [x] 6.1 Watch queue: handle `session(_:didFinish:error:)`; mark a note delivered after a transfer with no error, or back to not sent after a failed one; still delete the recording on `kept`. After a saved note, send only notes never sent or whose transfer failed (6.4 owns the launch rule). `RelayWatchTests`: a failed transfer goes again.
+- [x] 6.2 `mobile/test/shortcuts_test.dart`: one test where only `inboxChanged` keeps the watch note; one where `inboxChanged` during a drain makes the follow-up drain keep a note that came meanwhile.
+- [x] 6.3 `mobile/README.md` *Release the app* step 1: the App Store page needs Apple Watch screenshots too.
+- [x] 6.4 Lost transfers: `RelayWatchReceiver.swift` keeps the last 500 watch note ids it took in `watch-received.json`, written before `kept`, and for a repeat id answers `kept` and writes nothing; the watch, at launch and when the session is ready, sends again every note with no transfer in flight and no `kept`; a failed `didFinish` goes at the next saved note or launch. `RelayWatchTests`: a note on its way but not in flight at a reload is sent again; `RunnerTests`: a repeated id writes nothing and still answers kept.

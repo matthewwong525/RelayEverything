@@ -1,6 +1,6 @@
 # Keep a voice note from your Apple Watch
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** apple-watch-app
 **Open questions:** none
 
@@ -99,3 +99,8 @@ Non-goals: no typed or dictated notes on the watch, no list of notes on the watc
 - **2026-11-10** — Check: `.github/workflows/mobile-ios.yml` gains job `watch-tests`, because the watch app's tests need a watch simulator; nothing is loosened.
 - **2026-11-10** — Checkpoint: the watch app, the iPhone receiver, the Fastfile and CI steps, and the docs are written; Flutter analyze and 567 tests pass. The Swift, the Xcode project and the Fastfile were written on Linux and never compiled; this save's Mac CI is their first build.
 - **2026-11-10** — Checkpoint: the first Mac CI built and signed the iPhone app with the watch app, and the watch tests passed. One Flutter test, *Try again writes only the failed notes*, failed once on CI and passed five times here with `main` merged in, so it is treated as a timing fluke; `main` is merged and all 705 tests pass.
+- **2026-11-10** — After publish: install the TestFlight build on Matthew's Apple Watch, save a note with the iPhone away, and check it shows once in *Voice notes* with its words when they are near again. This needs his watch, so it is no task.
+- **2026-11-10** — Review fix: the watch marks a note delivered when its transfer ends with no error, and sends again only a note never sent or whose transfer failed, because at a cold start the `kept` answer can come after the launch's send and a deleted note came back. The recording still goes only on `kept`, because only `kept` says the iPhone's inbox has it.
+- **2026-11-10** — Assumed: the release guide asks for Apple Watch screenshots before the first release, because App Store Connect needs them for an app with a watch app; the submit lane still uploads none.
+- **2026-11-10** — Review fix: the watch sends again, at each launch, every note with no transfer in flight, and the iPhone remembers the last 500 watch note ids it took and answers `kept` with no second note for a repeat, because a transfer the system drops gives no callback and the note waited forever; a deleted note still does not come back. A failed transfer goes at the next saved note or launch, not at once, so an error that repeats does not loop.
+- **2026-11-10** — Archive checkpoint: the second look's fixes (no resend of a kept note, no note waiting forever, split inbox tests, the Apple Watch screenshot step) are in; Flutter analyze and 706 tests pass here; this save's Mac CI is the first build of the fixed Swift.

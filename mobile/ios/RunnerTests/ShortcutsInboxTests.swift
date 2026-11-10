@@ -56,6 +56,30 @@ class ShortcutsInboxTests: XCTestCase {
     XCTAssertEqual(try Data(contentsOf: inbox.appendingPathComponent("\(id)/voice.wav")), Data([2]))
   }
 
+  func testARepeatedIdWritesNothingAndStillAnswersKept() throws {
+    let taken = WatchReceived(file: root.appendingPathComponent("watch-received.json"))
+    let metadata: [String: Any] = ["id": id, "createdAt": 1_793_790_000_000, "durationMs": 4200]
+    XCTAssertEqual(try ShortcutsInbox.takeWatchRecording(try received(), metadata: metadata, in: inbox,
+      received: taken), id)
+    XCTAssertEqual(taken.ids, [id])
+    // The app kept the note and the person deleted it; the watch, with no kept, sends it again.
+    try FileManager.default.removeItem(at: inbox)
+    let again = try received([2])
+    XCTAssertEqual(try ShortcutsInbox.takeWatchRecording(again, metadata: metadata, in: inbox, received: taken), id)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: inbox.path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: again.path))
+    XCTAssertEqual(taken.ids, [id])
+  }
+
+  func testTheReceivedListKeepsOnlyTheLastIds() throws {
+    let taken = WatchReceived(file: root.appendingPathComponent("watch-received.json"))
+    let ids = (0...WatchReceived.limit).map { String(format: "%032lx", $0) }
+    for one in ids { try taken.add(one) }
+    XCTAssertEqual(taken.ids, Array(ids.dropFirst()))
+    XCTAssertFalse(taken.contains(ids[0]))
+    XCTAssertTrue(taken.contains(ids[WatchReceived.limit]))
+  }
+
   func testABadIdOrNoLengthIsRefusedAndWritesNothing() throws {
     let file = try received()
     for metadata: [String: Any]? in [

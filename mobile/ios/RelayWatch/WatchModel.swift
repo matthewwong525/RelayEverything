@@ -23,10 +23,14 @@ final class WatchModel: ObservableObject {
       self?.queue.kept(id)
       self?.waiting = self?.queue.notes.count ?? 0
     }
-    // At each launch, a note whose transfer was lost goes again; one still on its way does not.
+    // A delivered note waits for kept. A failed one goes at the next saved note or launch, not at once: the system
+    // already waits for the iPhone, so an error here comes again at once, and sending at once would loop.
+    link.onFinished = { [weak self] id, failed in self?.queue.finished(id, failed: failed) }
+    // At each launch, every note with no transfer in flight goes again. A second copy is harmless: the iPhone answers
+    // kept for an id it took before and keeps nothing.
     link.onReady = { [weak self] in
       guard let self else { return }
-      self.queue.sendWaiting(self.link)
+      self.queue.sendAllWaiting(self.link)
     }
     link.activate()
   }
@@ -60,12 +64,12 @@ final class WatchModel: ObservableObject {
   /// A tap anywhere while it records, or the longest time: keeps the note and hands it to the iPhone.
   func save() {
     guard screen == .recording else { return }
-    guard let recording = recorder.stop(), let note = try? queue.add(recording.0, at: Date(), durationMs: recording.1)
+    guard let recording = recorder.stop(), (try? queue.add(recording.0, at: Date(), durationMs: recording.1)) != nil
     else {
       screen = .main
       return
     }
-    link.send(queue.file(note), metadata: note.metadata)
+    queue.sendWaiting(link)
     waiting = queue.notes.count
     WKInterfaceDevice.current().play(.success)
     screen = .saved

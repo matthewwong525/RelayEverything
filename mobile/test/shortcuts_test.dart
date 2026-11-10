@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:drift/native.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/controller.dart';
@@ -280,34 +281,66 @@ void main() {
       expect(Directory('${folder.path}/shortcuts-inbox').listSync(), isEmpty);
     });
 
-    test('from the Apple Watch while the app runs, a resume and inboxChanged keep it once, at its time, with no place',
-      () async {
-      // The JSON ios/Runner/ShortcutsInbox.swift writes for a watch recording; RunnerTests checks Swift against it.
+    /// Hands over the watch note in test/fixtures/watch-note.json, as ios/Runner/ShortcutsInbox.swift writes it, and
+    /// gives its id.
+    String handOverWatchNote() {
+      // RunnerTests checks Swift against the same JSON.
       final fixture = File('test/fixtures/watch-note.json').readAsStringSync();
       final id = (jsonDecode(fixture) as Map)['id'] as String;
+      recorded(id);
+      File('${folder.path}/$inboxFolder/$id.json').writeAsStringSync(fixture);
+      return id;
+    }
+
+    test('from the Apple Watch while the app runs, inboxChanged alone keeps it once, at its time, with no place',
+      () async {
       await store.set(settingsKey, const Settings(pinNotes: true).encode());
       places.pin = Pin(at: now, lat: 1, lon: 1, accuracy: 1);
       final relay = app();
       await relay.load();
-      void handOver() {
-        recorded(id);
-        File('${folder.path}/$inboxFolder/$id.json').writeAsStringSync(fixture);
-      }
-      handOver();
-      await Future.wait([relay.resume(), ShortcutsBridge(relay).handle(const MethodCall('inboxChanged'))]);
+      final bridge = ShortcutsBridge(relay);
+      final id = handOverWatchNote();
+      await bridge.handle(const MethodCall('inboxChanged'));
       await relay.wordsWritten();
       final entry = relay.entries.single;
       expect([entry.voice, entry.text, entry.at, entry.place, entry.length],
         [true, 'Call the plumber about the kitchen tap', DateTime.fromMillisecondsSinceEpoch(1793790000000), null,
           const Duration(milliseconds: 4200)]);
       // The watch hands the same note again when its kept answer was lost: the phone keeps no second one.
-      handOver();
-      await relay.resume();
+      handOverWatchNote();
+      await bridge.handle(const MethodCall('inboxChanged'));
       await relay.wordsWritten();
       expect(await store.notes(), hasLength(1));
       expect([transcriber.heard, recordings()], [['$id.wav'], ['$id.wav']]);
       expect(Directory('${folder.path}/$inboxFolder').listSync(), isEmpty);
       expect(server.requests, isEmpty);
+    });
+
+    test('inboxChanged during a drain makes it look again, and a note that came meanwhile is kept', () async {
+      await store.close();
+      final held = _HeldStore(tempFolder());
+      store = held;
+      final relay = app();
+      await relay.load();
+      final bridge = ShortcutsBridge(relay);
+      final first = handOverWatchNote(), second = 'b7' * 16;
+      Future<Object?>? during;
+      // The drain has listed the inbox and keeps the first note when the watch hands over a second one.
+      held.beforeHasNote = () async {
+        recorded(second);
+        File('${folder.path}/$inboxFolder/$second.json').writeAsStringSync(jsonEncode({
+          'id': second, 'text': '', 'createdAt': now.millisecondsSinceEpoch, 'files': <Object?>[],
+          'recording': {'path': '$inboxFolder/$second/voice.wav', 'durationMs': 3000},
+        }));
+        during = bridge.handle(const MethodCall('inboxChanged'));
+      };
+      await bridge.handle(const MethodCall('inboxChanged'));
+      expect(during, isNotNull);
+      await during;
+      await relay.wordsWritten();
+      expect([for (final note in await store.notes()) note.clientId], unorderedEquals([first, second]));
+      expect(recordings(), unorderedEquals(['$first.wav', '$second.wav']));
+      expect(Directory('${folder.path}/$inboxFolder').listSync(), isEmpty);
     });
 
     test('kept while the app sweeps for stray recordings, its recording is not deleted as stray', () async {
@@ -366,6 +399,21 @@ void main() {
 
 /// A recorder that runs [beforeSweep] once, when the sweep for stray recordings asks for the voice folder: after it reads
 /// the kept recordings, before it lists the folder.
+/// A store that runs [beforeHasNote] once, at the next hasNote: the first thing the app does to keep an inbox note.
+class _HeldStore extends Store {
+  _HeldStore(Directory folder) : super(NativeDatabase.memory(), folder: () async => folder);
+
+  Future<void> Function()? beforeHasNote;
+
+  @override
+  Future<bool> hasNote(String clientId) async {
+    final hook = beforeHasNote;
+    beforeHasNote = null;
+    if (hook != null) await hook();
+    return super.hasNote(clientId);
+  }
+}
+
 class _SweepRecorder extends VoiceRecorder {
   _SweepRecorder(Directory folder, {required DateTime Function() clock, required this.beforeSweep})
     : super(microphone: FakeMicrophone(), folder: () async => folder, clock: clock);

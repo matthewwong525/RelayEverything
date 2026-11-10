@@ -21,8 +21,9 @@ appId: com.matthewwong525.relayApp
 - assertVisible: 'Connect your AI(.|\n)*Let your AI read your notes(.|\n)*'
 - takeScreenshot: home-other-connections
 - tapOn: 'Connect your AI(.|\n)*'
+# Flutter joins the page's two part names into one label, so match each part inside it.
 - extendedWaitUntil:
-    visible: "Claude Code and Codex"
+    visible: 'Claude Code and Codex(.|\n)*'
     timeout: 30000
 - assertVisible: 'Saved chats(.|\n)*'
 - assertVisible: "Get the plugin"
@@ -33,7 +34,7 @@ appId: com.matthewwong525.relayApp
       text: 'mcp\.relayeverything\.com(.|\n)*'
     direction: DOWN
     timeout: 20000
-- assertVisible: "Claude, ChatGPT and other AI apps"
+- assertVisible: '(.|\n)*Claude, ChatGPT and other AI apps(.|\n)*'
 - takeScreenshot: connect-your-ai
 - scrollUntilVisible:
     element:

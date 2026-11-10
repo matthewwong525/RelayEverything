@@ -35,8 +35,8 @@ appId: com.matthewwong525.relayApp
 - assertNotVisible: "Use another server"
 - takeScreenshot: sign-in
 # The webhook setup has four numbered steps. The address field keeps the label Address and starts as https://, so
-# type the rest, then Save. Save stays above the keyboard, and Flutter's keyboard has no dismiss action Maestro's
-# hideKeyboard can use, so tap Save at once.
+# type the rest, then Save. Save, step 4, sits under the keyboard, and Flutter's keyboard has no dismiss action
+# Maestro's hideKeyboard can use, so scroll the page up to it first.
 - tapOn: 'Don''t want an account\? Use your own webhook'
 - extendedWaitUntil:
     visible: "My own webhook"
@@ -44,6 +44,12 @@ appId: com.matthewwong525.relayApp
 - assertVisible: "1. Your webhook's address"
 - tapOn: "Address"
 - inputText: "example.com/hook"
+- scrollUntilVisible:
+    element:
+      text: "Save"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
 - tapOn: "Save"
 # A new install has no notes, so the earlier-notes question shows only if a note was kept.
 - tapOn:

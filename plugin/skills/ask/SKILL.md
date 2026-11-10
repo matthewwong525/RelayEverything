@@ -1,6 +1,6 @@
 ---
 name: ask
-description: Read the person's Relay Everything (topics, facts, notes, health, sleep, workouts, places and routes, calendar and saved AI chats), or add a note. Use when the person asks about their notes, their day, how they slept, their steps or workouts, where they went, a trip or a stay, their calendar, or a saved chat; asks what was I doing when…, where was I…, what did I decide about…, or remind me what I decided about…; names one of their Relay Everything topics; or asks to note something in Relay Everything.
+description: Read the person's Relay Everything (topics, facts, notes, health, sleep, workouts, places and routes, calendar and saved AI chats), add a note, or keep an agent's own tables in their agents' database. Use when the person asks about their notes, their day, how they slept, their steps or workouts, where they went, a trip or a stay, their calendar, or a saved chat; asks what was I doing when…, where was I…, what did I decide about…, or remind me what I decided about…; names one of their Relay Everything topics; or asks to note something in Relay Everything.
 allowed-tools: Bash(node:*)
 ---
 
@@ -51,6 +51,7 @@ For a question about a note, read both before you answer: a chat can hold the wh
 - `me` says which device this is.
 - `add-note` adds a note with the text from stdin, only when the person asks: `node … add-note <<'NOTE'` … `NOTE`.
 - `add-facts` adds facts from a JSON list on stdin, each with `tags`, `sources` and `fields`, and `replaces` for the facts it replaces. `change-columns` changes the columns from JSON on stdin. `tag fact|note <id> --add <topics> --remove <topics>` changes topics, as a comma list. Read the knowledge web's `FORMAT.md` first, and do these only when the person asks.
+- `db "<sql>" [--params '<JSON list>']` runs a SQLite command in the person's agents' database: a database only for the agents on their computers, where you may make any table, such as `CREATE TABLE reading_list (title TEXT)`. `db --file <path>` runs a file's commands, each ending with `;`, all or none. `db tables` lists the tables other agents made, with their columns and row counts: look there before you make a new one. Relay Everything's notes, health, places, chats and facts are not in it. Never copy health or place data into it.
 - `node "${CLAUDE_PLUGIN_ROOT}/bin/knowledge.mjs" sync` gets this computer's copy of the knowledge web, and sends its changes; `status` says where it is.
 
 Read more with `--limit <n>` and `--cursor <nextCursor>` from the last answer.

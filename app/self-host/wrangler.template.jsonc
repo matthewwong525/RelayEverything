@@ -29,6 +29,7 @@
     "consumers": [{ "queue": "relay-webhooks", "max_batch_size": 10, "max_retries": 10 }]
   },
   // Each person's space, in the install's own spaces Worker: spaces.template.jsonc. Its alarm wakes late webhooks.
-  "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-spaces" }] },
+  "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-spaces" },
+      { "name": "WORKBENCHES", "class_name": "Workbench", "script_name": "relay-spaces" }] },
   "services": [{ "binding": "RELAY_MCP", "service": "relay-mcp", "entrypoint": "Grants" }]
 }

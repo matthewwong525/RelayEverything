@@ -149,3 +149,12 @@ it("deletes Ana's knowledge web after her space, and passes for a person who nev
   expect(await call(ben, "POST", "account-delete", { email: "ben@example.com" }, { KNOWLEDGE })).toEqual({ status: 200, json: { deleted: true } });
   expect(KNOWLEDGE.delete).toHaveBeenLastCalledWith(`p-${BEN}`);
 });
+
+it("deletes Ana's agents' database with her space, and leaves Ben's", async () => {
+  const table = (person: string) => spaces.benches.open(person).bench.run([{ sql: "CREATE TABLE kept (v)", params: [] }]);
+  table(ANA);
+  table(BEN);
+  expect(await call(matthew, "POST", "account-delete", { email: "ana@example.com" })).toEqual({ status: 200, json: { deleted: true } });
+  expect(spaces.benches.open(ANA).bench.tables()).toEqual([]);
+  expect(spaces.benches.open(BEN).bench.tables()).toEqual([{ name: "kept", columns: ["v"], rows: 0 }]);
+});

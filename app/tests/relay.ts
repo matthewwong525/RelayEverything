@@ -5,7 +5,7 @@ import { beforeEach, vi } from "vitest";
 import type { AccessIdentity } from "../worker/access";
 import { handleApp } from "../worker/apps/index";
 import { hashToken } from "../worker/apps/relay/people";
-import { Space } from "../worker/spaces-worker";
+import { Space, Workbench } from "../worker/spaces-worker";
 import { body } from "./body";
 import { fakeEnv } from "./env";
 import { database } from "./employee-access/connections";
@@ -67,9 +67,12 @@ const fromSql = (row: object) => Object.fromEntries(Object.entries(row).map(([na
 function fakeStorage() {
   let sql = new DatabaseSync(":memory:");
   sql.exec("PRAGMA foreign_keys = ON");
-  const state = { alarm: null as number | null, get sql() { return sql; } };
+  const state = { alarm: null as number | null, size: null as number | null, get sql() { return sql; } };
   const storage = {
-    sql: { exec(query: string, ...params: unknown[]) {
+    sql: { get databaseSize() {
+      return state.size ?? Number((sql.prepare("SELECT page_count * page_size AS size FROM pragma_page_count(), pragma_page_size()").get() as
+        { size: number }).size);
+    }, exec(query: string, ...params: unknown[]) {
       // A migration holds several statements, as the runtime's exec takes them; node:sqlite takes those only by exec.
       if (!params.length && /\b(?:CREATE|DROP)\b/.test(query)) { sql.exec(query); return { toArray: () => [], rowsWritten: 0 }; }
       // As on the runtime, rowsWritten counts a trigger's writes too.
@@ -116,8 +119,27 @@ export function fakeSpaces(more: object = {}) {
     return structuredClone(result);
   } });
   const SPACES = { idFromName: (name: string) => ({ name }), get: (id: { name: string }) => stub(id.name) } as unknown as DurableObjectNamespace;
-  return { SPACES, objects, open, sql: (name: string) => open(name).state.sql, alarmOf: (name: string) => open(name).state.alarm,
-    alarm: (name: string) => open(name).space.alarm() };
+  const benches = fakeWorkbenches();
+  return { SPACES, WORKBENCHES: benches.WORKBENCHES, benches, objects, open, sql: (name: string) => open(name).state.sql,
+    alarmOf: (name: string) => open(name).state.alarm, alarm: (name: string) => open(name).space.alarm() };
+}
+
+/** A WORKBENCHES namespace: each name gets the real Workbench class over its own database, called as RPC calls it. */
+function fakeWorkbenches() {
+  const objects = new Map<string, { bench: Workbench; state: ReturnType<typeof fakeStorage>["state"] }>();
+  const open = (name: string) => {
+    let found = objects.get(name);
+    if (!found) {
+      const { storage, state } = fakeStorage();
+      found = { bench: new Workbench({ storage } as unknown as DurableObjectState, {} as never), state };
+      objects.set(name, found);
+    }
+    return found;
+  };
+  const stub = (name: string) => new Proxy({}, { get: (_, method: string) => async (...args: unknown[]) =>
+    structuredClone(await (open(name).bench as unknown as Record<string, (...values: unknown[]) => unknown>)[method](...structuredClone(args))) });
+  const WORKBENCHES = { idFromName: (name: string) => ({ name }), get: (id: { name: string }) => stub(id.name) } as unknown as DurableObjectNamespace;
+  return { WORKBENCHES, open, objects };
 }
 
 export let directoryDb: ReturnType<typeof database>;
@@ -161,7 +183,7 @@ beforeEach(async () => {
 });
 
 export const env = (more: object = {}) =>
-  fakeEnv({ DB: directoryDb.DB, SPACES: spaces.SPACES, RELAY_BUCKET: bucket, RELAY_WEBHOOKS: queue, ...more });
+  fakeEnv({ DB: directoryDb.DB, SPACES: spaces.SPACES, WORKBENCHES: spaces.WORKBENCHES, RELAY_BUCKET: bucket, RELAY_WEBHOOKS: queue, ...more });
 
 const sendsJson = (method: string) => method === "POST" || method === "PATCH";
 

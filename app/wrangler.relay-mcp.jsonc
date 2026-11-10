@@ -17,7 +17,8 @@
     "RELAY_SERVER_URL": "https://app.relayeverything.com"
   },
   "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db", "database_id": "9f8aa624-0d1c-4abf-902a-7b9430286378" }],
-  "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces" }] },
+  "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces" },
+      { "name": "WORKBENCHES", "class_name": "Workbench", "script_name": "relay-everything-spaces" }] },
   // The server's own file store, for read_photo: each photo opens only with its space's file key. Recordings never go out.
   "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes" }],
   // A note an app or API key adds wakes the person's webhooks, as a phone's note does.
@@ -35,7 +36,8 @@
         "RELAY_SERVER_URL": "https://app-staging.relayeverything.com"
       },
       "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db-staging", "database_id": "4f8edf18-ad51-4325-bb98-ec3ca6cc80b0" }],
-      "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces-staging" }] },
+      "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces-staging" },
+      { "name": "WORKBENCHES", "class_name": "Workbench", "script_name": "relay-everything-spaces-staging" }] },
       "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes-staging" }],
       "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-server-webhooks-staging" }] },
       "kv_namespaces": [{ "binding": "OAUTH_KV" }],

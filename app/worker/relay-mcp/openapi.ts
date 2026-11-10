@@ -119,6 +119,10 @@ export const ANSWERS = {
   knowledge_access: z.strictObject({ remote: z.string().describe("The web's git address."),
     token: z.string().describe("The pass: send it to git as `Authorization: Bearer …`, never in the address or a file."),
     expiresAt: z.string().describe("When the pass ends, at most one hour on, as an ISO time.") }),
+  db: z.strictObject({ results: z.array(z.strictObject({ rows: z.array(z.record(z.string(), z.unknown())).describe("The rows it read."),
+    changed: z.number().describe("How many rows it wrote.") })).describe("One for each command, in order.") }),
+  db_tables: z.strictObject({ tables: z.array(z.strictObject({ name: z.string(), columns: z.array(z.string()),
+    rows: z.number().describe("How many rows it holds.") })) }),
   me: z.strictObject({ device: z.string().describe("The key's device name, or the app's name."), adds: z.boolean().describe("Whether it may add notes.") }),
 } satisfies Record<WebTool | "me", z.ZodType>;
 
@@ -183,7 +187,7 @@ const errors = {
   400: refusal("The input can't be read: `error_description` says which field."),
   401: refusal("No token, or one that is not valid: an expired token or a disconnected app."),
   403: refusal("This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, " +
-    "or a caller that is not a computer, for a change to the memory, a topic or the knowledge web."),
+    "or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database."),
   404: refusal("No such note, fact, chat, stay, trip or route in the caller's own space."),
 };
 

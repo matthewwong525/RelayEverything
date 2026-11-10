@@ -1,6 +1,6 @@
 # Relay Everything's person spaces
 
-Each person's Relay Everything data lives in their own space: one SQLite-backed Durable Object, opened only for that person's checked sign-in, device key or AI app grant. This page tells how a space is opened, the check that keeps it that way, the shared directory, the space's migrations, sealed recordings and photos, and the ways in that are not a device, such as email. It is part of [the wiki](README.md); the website's [Privacy](../site/src/content/docs/privacy.md) page owns what a person reads about it, and [the plan](../openspec/changes/archive/2026-11-06-relay-person-spaces/design.md) owns why it has this shape.
+Each person's Relay Everything data lives in their own space: one SQLite-backed Durable Object, opened only for that person's checked sign-in, device key or AI app grant. This page tells how a space is opened, the check that keeps it that way, the shared directory, the space's migrations, the agents' database, sealed recordings and photos, and the ways in that are not a device, such as email. It is part of [the wiki](README.md); the website's [Privacy](../site/src/content/docs/privacy.md) page owns what a person reads about it, and [the plan](../openspec/changes/archive/2026-11-06-relay-person-spaces/design.md) owns why it has this shape.
 
 ## How a space is opened
 
@@ -14,7 +14,7 @@ The [`Space`](../app/worker/spaces-worker.ts) class lives in its own Worker, `re
 
 ## The one-door rule
 
-Only `space.ts` opens a space or the file store. [`space-access.test.ts`](../app/worker/apps/relay/space-access.test.ts) reads the worker source and fails when another file names `SPACES.`, `idFromName` or `RELAY_BUCKET`, or calls `vouch` outside its allowed files. Don't add an exception: an owner screen or tool that opens another person's space breaks the promise on the privacy page. Route tests show Ana's session, key and AI grant each reach only Ana's rows, with Ben's ids in the request.
+Only `space.ts` opens a space, the agents' database or the file store. [`space-access.test.ts`](../app/worker/apps/relay/space-access.test.ts) reads the worker source and fails when another file names `SPACES.`, `WORKBENCHES.`, `idFromName` or `RELAY_BUCKET`, or calls `vouch` outside its allowed files. Don't add an exception: an owner screen or tool that opens another person's space breaks the promise on the privacy page. Route tests show Ana's session, key and AI grant each reach only Ana's rows, with Ben's ids in the request.
 
 ## The directory
 
@@ -23,6 +23,10 @@ The shared D1 database keeps only who has an account and how they sign in, in [`
 ## Space migrations
 
 A space runs [`schema/space-migrations/`](../schema/space-migrations/) in order, in its constructor, and records each step in its `space_migrations` table. A new space table goes in a new numbered file: never edit one a space already ran. [Space migrations](relay-space-migrations.md) tells what each step does and the rules for a step that rebuilds a table.
+
+## The agents' database
+
+Each person also has a second Durable Object, `Workbench`, only for the tables their computers' agents make, so free SQL never reaches the space: [the agents' database](relay-agent-database.md).
 
 ## Ways in
 
@@ -55,7 +59,7 @@ The phone can also send format v1 itself, straight to one webhook, with no space
 
 Three Workers serve Relay Everything, and each deploy goes in this order, because Cloudflare refuses a binding to a Worker that does not exist:
 
-1. The spaces Worker, [`app/wrangler.spaces.jsonc`](../app/wrangler.spaces.jsonc): the `Space` class, with no web address. Wrangler bundles it alone, with no Vite, so it loads no route code (`api/contract.ts`) and no `import.meta.glob`: Cloudflare refuses a Worker that fails at its start. Put a list that a route and a webhook both need in `apps/relay/store.ts`, not in the route. [`spaces-worker.test.ts`](../app/worker/spaces-worker.test.ts) fails, and names the chain of files, when the spaces Worker loads such code.
+1. The spaces Worker, [`app/wrangler.spaces.jsonc`](../app/wrangler.spaces.jsonc): the `Space` and `Workbench` classes, with no web address. Wrangler bundles it alone, with no Vite, so it loads no route code (`api/contract.ts`) and no `import.meta.glob`: Cloudflare refuses a Worker that fails at its start. Put a list that a route and a webhook both need in `apps/relay/store.ts`, not in the route. [`spaces-worker.test.ts`](../app/worker/spaces-worker.test.ts) fails, and names the chain of files, when the spaces Worker loads such code.
 2. The AI connector, [`app/wrangler.relay-mcp.jsonc`](../app/wrangler.relay-mcp.jsonc), which binds `SPACES`.
 3. The shared server, [`app/wrangler.relay.jsonc`](../app/wrangler.relay.jsonc), and the company app, [`app/wrangler.jsonc`](../app/wrangler.jsonc), which both bind `SPACES` and the connector.
 

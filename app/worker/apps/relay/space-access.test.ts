@@ -11,7 +11,7 @@ const app = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const DOOR = "worker/apps/relay/space.ts";
 const VOUCHERS = new Set(["worker/apps/relay/caller.ts", "worker/apps/relay/webhooks/send.ts", "worker/relay-mcp/asker.ts",
   "worker/apps/relay/sign-in/phone.ts", "worker/apps/relay/sign-in/computer.ts", "worker/apps/relay/inbox/links.ts"]);
-const OPENS = /SPACES\.|idFromName|RELAY_BUCKET/g;
+const OPENS = /SPACES\.|WORKBENCHES\.|idFromName|RELAY_BUCKET/g;
 const VOUCH = /\bvouch\(/g;
 /** The inbox's live line is another Durable Object, which holds no person's space. */
 const OTHER_OBJECTS: Record<string, string> = { "worker/apps/inbox/wake.ts": "env.LIVE_LINE.idFromName(" };
@@ -44,6 +44,7 @@ it("checks the spaces Worker too: it runs a space's SQL by RPC, and needs no bin
 it("keeps each allowed file needed: each one really vouches, and space.ts really opens the space", () => {
   for (const path of VOUCHERS) expect(read(path), path).toMatch(VOUCH);
   expect(read(DOOR)).toMatch(/SPACES\.idFromName/);
+  expect(read(DOOR)).toMatch(/WORKBENCHES\.idFromName/);
   expect(read(DOOR)).toMatch(/RELAY_BUCKET/);
   for (const [path, allowed] of Object.entries(OTHER_OBJECTS)) expect(read(path), path).toContain(allowed);
 });
@@ -51,6 +52,7 @@ it("keeps each allowed file needed: each one really vouches, and space.ts really
 it("flags a made-up owner screen that opens another person's space, and a vouch outside the list", () => {
   const screen = `const stub = env.SPACES.get(env.SPACES.idFromName(id));\nconst files = env.RELAY_BUCKET;\nvouch("session", id);`;
   expect(flagged("worker/apps/relay/owner-screen.ts", screen)).toEqual(["SPACES.", "idFromName", "RELAY_BUCKET", "vouch("]);
+  expect(flagged("worker/apps/relay/owner-screen.ts", "env.WORKBENCHES.get(id)")).toEqual(["WORKBENCHES."]);
   expect(flagged(DOOR, screen)).toEqual(["vouch("]);
   expect(flagged("worker/apps/relay/caller.ts", screen)).toEqual(["SPACES.", "idFromName", "RELAY_BUCKET"]);
   expect(flagged("worker/apps/inbox/wake.ts", "env.LIVE_LINE.idFromName(a); env.SPACES.idFromName(b);")).toEqual(["SPACES.", "idFromName"]);
@@ -58,10 +60,15 @@ it("flags a made-up owner screen that opens another person's space, and a vouch 
 
 it("opens a space only for a caller that vouch made, never for one written by hand", () => {
   const opened: string[] = [];
-  const env = { SPACES: { idFromName: (name: string) => opened.push(name), get: () => ({}) } } as unknown as SpaceEnv;
+  const namespace = { idFromName: (name: string) => opened.push(name), get: () => ({}) };
+  const env = { SPACES: namespace, WORKBENCHES: namespace } as unknown as SpaceEnv;
   const forged = { kind: "session", personId: "someone-else" } as unknown as Caller;
   expect(() => spaceOf(env, forged)).toThrow("A space opens only for a checked caller.");
   expect(opened).toEqual([]);
-  expect(spaceOf(env, vouch("session", "ana")).personId).toBe("ana");
+  const space = spaceOf(env, vouch("session", "ana"));
+  expect(space.personId).toBe("ana");
   expect(opened).toEqual(["ana"]);
+  // The agents' database opens on first use, by the same checked person's id.
+  void space.workbench.tables().catch(() => null);
+  expect(opened).toEqual(["ana", "ana"]);
 });

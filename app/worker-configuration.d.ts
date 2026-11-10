@@ -20,6 +20,7 @@ interface __BaseEnv_Env {
 	SKIP_AUTH?: "true";
 	LIVE_LINE?: DurableObjectNamespace /* Line from relay-everything-line-local */ | DurableObjectNamespace /* Line from relay-everything-line */;
 	SPACES?: DurableObjectNamespace /* Space from relay-everything-spaces-local */ | DurableObjectNamespace /* Space from relay-everything-spaces */;
+	WORKBENCHES?: DurableObjectNamespace /* Workbench from relay-everything-spaces-local */ | DurableObjectNamespace /* Workbench from relay-everything-spaces */;
 	MEMORY_BUCKET?: R2Bucket;
 	MEMORY_DB?: D1Database;
 	ARTIFACTS?: Artifacts;
@@ -55,6 +56,7 @@ declare namespace Cloudflare {
 		SKIP_AUTH: "true";
 		LIVE_LINE: DurableObjectNamespace /* Line from relay-everything-line-local */;
 		SPACES: DurableObjectNamespace /* Space from relay-everything-spaces-local */;
+		WORKBENCHES: DurableObjectNamespace /* Workbench from relay-everything-spaces-local */;
 	}
 	interface Env extends __BaseEnv_Env {}
 }

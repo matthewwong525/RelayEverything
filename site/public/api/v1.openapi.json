@@ -299,7 +299,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -457,7 +457,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -793,7 +793,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1333,7 +1333,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1515,7 +1515,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1772,7 +1772,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1972,7 +1972,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2220,7 +2220,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2395,7 +2395,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2631,7 +2631,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2848,7 +2848,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3054,7 +3054,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3176,7 +3176,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3504,7 +3504,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3711,7 +3711,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3924,7 +3924,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4152,7 +4152,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4501,7 +4501,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4623,7 +4623,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4702,7 +4702,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4733,6 +4733,269 @@
           },
           "503": {
             "description": "The knowledge web is still being made: try again in a minute.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/db": {
+      "post": {
+        "operationId": "runDb",
+        "summary": "Run commands in the agents' database",
+        "description": "Run SQLite commands in the person's agents' database, as this computer: a database only their computers' agents use, where any table can be made. Relay Everything's own tables are not in it. Send `sql`, or `batch` for up to 50 commands in one step, all or none. A command is at most 100 KB, an answer at most 5,000 rows and 5 MB, and the database at most 1 GB. A blob reads as `{ \"base64\": … }`. Only a computer's key runs commands.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "sql": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "One SQLite command, such as CREATE TABLE, INSERT or SELECT."
+                  },
+                  "params": {
+                    "default": [],
+                    "description": "The values for its `?` marks, in order.",
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "batch": {
+                    "description": "Several commands, run in order in one step: all or none.",
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "sql": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "One SQLite command, such as CREATE TABLE, INSERT or SELECT."
+                        },
+                        "params": {
+                          "default": [],
+                          "description": "The values for its `?` marks, in order.",
+                          "maxItems": 100,
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "sql"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "rows": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {}
+                            },
+                            "description": "The rows it read."
+                          },
+                          "changed": {
+                            "type": "number",
+                            "description": "How many rows it wrote."
+                          }
+                        },
+                        "required": [
+                          "rows",
+                          "changed"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "One for each command, in order."
+                    }
+                  },
+                  "required": [
+                    "results"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/db/tables": {
+      "get": {
+        "operationId": "listDbTables",
+        "summary": "List the agents' database's tables",
+        "description": "Each table in the person's agents' database, with its columns and how many rows it holds. Only a computer's key reads it.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tables": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "columns": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "rows": {
+                            "type": "number",
+                            "description": "How many rows it holds."
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "columns",
+                          "rows"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "tables"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4797,7 +5060,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic or the knowledge web.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {

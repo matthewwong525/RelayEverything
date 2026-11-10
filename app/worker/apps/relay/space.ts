@@ -45,7 +45,12 @@ type Stub = {
   fileKey(): Promise<ArrayBuffer>;
   watch(personId: string): Promise<void>; sweep(personId: string): Promise<number>; deleteEverything(): Promise<void>;
 };
-export type SpaceEnv = { SPACES: DurableObjectNamespace; RELAY_BUCKET: R2Bucket };
+/** The agents' database's RPC methods: spaces-worker.ts's `Workbench`, which holds no table of the space. */
+type Workbench = {
+  run(statements: Sql[]): Promise<{ results: { rows: Record<string, unknown>[]; changed: number }[] } | { error: string }>;
+  tables(): Promise<{ name: string; columns: string[]; rows: number }[]>;
+};
+export type SpaceEnv = { SPACES: DurableObjectNamespace; WORKBENCHES: DurableObjectNamespace; RELAY_BUCKET: R2Bucket };
 
 const sqlOf = new WeakMap<Statement, Sql>();
 
@@ -152,6 +157,8 @@ export function heldFiles(env: HeldFilesEnv) {
 export type Files = ReturnType<typeof filesOf>;
 export type PersonSpace = {
   personId: string; db: Db; files: Files;
+  /** The agents' database: only what the person's computers' agents make. */
+  workbench: Workbench;
   /** Keeps the webhook alarm set while the space has a webhook. */
   watch(): Promise<void>;
   sweep(): Promise<number>;
@@ -162,9 +169,13 @@ export type PersonSpace = {
 export function spaceOf(env: SpaceEnv, caller: Caller): PersonSpace {
   if (caller[checked] !== true) throw new Error("A space opens only for a checked caller.");
   const stub = env.SPACES.get(env.SPACES.idFromName(caller.personId)) as unknown as Stub;
+  type Bench = Workbench & Pick<Stub, "deleteEverything">;
+  const bench = () => env.WORKBENCHES.get(env.WORKBENCHES.idFromName(caller.personId)) as unknown as Bench;
   return {
     personId: caller.personId, db: dbOf(stub), files: filesOf(env.RELAY_BUCKET, stub, caller.personId),
+    workbench: { run: async statements => bench().run(statements), tables: async () => bench().tables() },
     watch: async () => stub.watch(caller.personId), sweep: async () => stub.sweep(caller.personId),
-    deleteEverything: async () => stub.deleteEverything(),
+    // The agents' database goes first: a space that is gone leaves no way back to it.
+    deleteEverything: async () => { await bench().deleteEverything(); await stub.deleteEverything(); },
   };
 }

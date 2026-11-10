@@ -97,7 +97,8 @@ it("stores a resent fact once per computer, and keeps another computer's fact wi
 });
 
 it("lets an API key and a connected app read the columns, and refuses each a change", async () => {
-  const app = grantAsker({ SPACES: connector.spaces.SPACES, RELAY_BUCKET: bucket as never, RELAY_WEBHOOKS: queue as never },
+  const { SPACES, WORKBENCHES } = connector.spaces;
+  const app = grantAsker({ SPACES, WORKBENCHES, RELAY_BUCKET: bucket as never, RELAY_WEBHOOKS: queue as never },
     { personId: ANA, adds: true, deviceId: "e-1", name: "Claude" })!;
   const ask = async (init: RequestInit = {}) => {
     const answer = await route(new Request("https://relay-mcp.example.com/v1/memory/columns", init), app);

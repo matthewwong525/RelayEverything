@@ -3,6 +3,9 @@ import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { CHAT_KEY, dayIn, NOT_CONNECTED, parseArgs, relay, shiftTime } from '../bin/relay.mjs';
@@ -126,6 +129,24 @@ test('change-columns posts the change from stdin once, and tag adds and removes 
   assert.equal((await ask(['change-columns'], { input: 'nope', fetcher: api.fetcher })).text, 'Give the change as a JSON object on stdin.');
   for (const args of [['tag'], ['tag', 'fc5kk'], ['tag', 'page', 'x'], ['tag', 'fact']]) assert.equal((await ask(args, { fetcher: api.fetcher })).code, 2, args.join(' '));
   assert.equal(api.calls.length, 4);
+});
+
+test('db sends one command with its values, a file\'s commands as one batch, and lists the tables with a GET', async () => {
+  const api = fakeApi();
+  const file = join(mkdtempSync(join(tmpdir(), 'relay-db-')), 'plan.sql');
+  writeFileSync(file, 'CREATE TABLE plans (name TEXT);\nINSERT INTO plans VALUES (\'a;b\');\n\nSELECT * FROM plans;\n');
+  assert.equal((await ask(['db', 'SELECT * FROM plans WHERE name = ?', '--params', '["ring"]'], { fetcher: api.fetcher })).code, 0);
+  assert.equal((await ask(['db', '--file', file], { fetcher: api.fetcher })).code, 0);
+  assert.equal((await ask(['db', 'tables'], { fetcher: api.fetcher })).code, 0);
+  assert.deepEqual(api.calls.map(({ method, path, query, body }) => [method, path, query, body]), [
+    ['POST', '/v1/db', {}, { sql: 'SELECT * FROM plans WHERE name = ?', params: ['ring'] }],
+    ['POST', '/v1/db', {}, { batch: [{ sql: 'CREATE TABLE plans (name TEXT)' }, { sql: "INSERT INTO plans VALUES ('a;b')" }, { sql: 'SELECT * FROM plans' }] }],
+    ['GET', '/v1/db/tables', {}, undefined],
+  ]);
+  assert.equal((await ask(['db'], { fetcher: api.fetcher })).code, 2);
+  assert.equal((await ask(['db', 'SELECT ?', '--params', 'ring'], { fetcher: api.fetcher })).code, 2);
+  assert.equal((await ask(['db', '--file', `${file}.gone`], { fetcher: api.fetcher })).code, 2);
+  assert.equal(api.calls.length, 3);
 });
 
 test('an old chat key is told to connect again, a turned-off key shows the server\'s reason, and other refusals say why', async () => {

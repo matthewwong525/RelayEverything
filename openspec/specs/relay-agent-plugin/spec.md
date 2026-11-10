@@ -142,3 +142,10 @@ The `ask` skill SHALL tell the AI to start from the person's topics and facts, a
 #### Scenario: A question about a note's context
 - **WHEN** the person asks what was going on when they wrote a note
 - **THEN** the AI reads all around that note and searches saved chats with the note's key words, and its answer names the day, the place, the event and any related chat it found
+
+### Requirement: The AI uses the agents' database through a skill
+The plugin SHALL give the AI one command that sends database commands to the person's agents' database and one that lists its tables, with the computer's own key. The skill SHALL tell the AI not to copy health or place data into it.
+
+#### Scenario: Listing tables
+- **WHEN** the AI asks for the agents' database's tables
+- **THEN** it gets each table with its columns and row count

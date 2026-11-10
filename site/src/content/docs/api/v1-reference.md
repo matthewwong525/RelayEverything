@@ -270,6 +270,26 @@ A pass to the person's knowledge web, a git repository of topic pages, for at mo
 
 It takes no input.
 
+## Run commands in the agents' database
+
+`POST /v1/db` · `runDb`
+
+Run SQLite commands in the person's agents' database, as this computer: a database only their computers' agents use, where any table can be made. Relay Everything's own tables are not in it. Send `sql`, or `batch` for up to 50 commands in one step, all or none. A command is at most 100 KB, an answer at most 5,000 rows and 5 MB, and the database at most 1 GB. A blob reads as `{ "base64": … }`. Only a computer's key runs commands.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `sql` | body | string | no | One SQLite command, such as CREATE TABLE, INSERT or SELECT. |
+| `params` | body | array | no | The values for its `?` marks, in order. |
+| `batch` | body | array | no | Several commands, run in order in one step: all or none. |
+
+## List the agents' database's tables
+
+`GET /v1/db/tables` · `listDbTables`
+
+Each table in the person's agents' database, with its columns and how many rows it holds. Only a computer's key reads it.
+
+It takes no input.
+
 ## Check the caller
 
 `GET /v1/me` · `getMe`

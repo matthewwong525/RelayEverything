@@ -1,5 +1,5 @@
-// The spaces Worker: one Durable Object per person, with its own SQLite, holding that person's data. It runs SQL for
-// apps/relay/space.ts, the one file that opens it, and its alarm wakes webhooks that fell behind. wiki/relay-spaces.md
+// The spaces Worker: one Durable Object per person, with its own SQLite, holding that person's data, and a second, the
+// agents' database. Only apps/relay/space.ts opens them; the alarm wakes late webhooks. wiki/relay-spaces.md
 import { DurableObject } from "cloudflare:workers";
 import relay from "../../schema/space-migrations/0001_relay.sql";
 import space from "../../schema/space-migrations/0002_space.sql";
@@ -103,6 +103,64 @@ export class Space extends DurableObject<SpacesEnv> {
   /** Deletes every row, the file key and the alarm. The object then holds nothing; a new sign-in gets a new space. */
   async deleteEverything(): Promise<void> {
     await this.ctx.storage.deleteAlarm();
+    await this.ctx.storage.deleteAll();
+  }
+}
+
+/** What one step to the agents' database may send and get back, and how big the database may grow. */
+export const WORKBENCH_LIMITS = { statementBytes: 100_000, statements: 50, rows: 5_000, answerBytes: 5_000_000, databaseBytes: 1_000_000_000 };
+const SIZES = { statementBytes: "100 KB", answerBytes: "5 MB", databaseBytes: "1 GB" };
+
+/** A row as JSON carries it: a blob, which JSON has no form for, as base64. */
+const shown = (row: Row) => Object.fromEntries(Object.entries(row).map(([name, value]) =>
+  [name, value instanceof ArrayBuffer ? { base64: btoa(Array.from(new Uint8Array(value), byte => String.fromCharCode(byte)).join("")) } : value]));
+
+/** Each person's agents' database: only the tables their computers' agents make. It never opens a space, so no
+ *  command reaches Relay Everything's own tables. wiki/relay-agent-database.md */
+export class Workbench extends DurableObject {
+  /** Runs the statements in one transaction: each one's rows and changed rows, or the reason none of it stayed. A
+   *  limit throws inside the transaction, so nothing the step wrote stays. */
+  run(statements: Sql[]): { results: { rows: Record<string, unknown>[]; changed: number }[] } | { error: string } {
+    const { sql } = this.ctx.storage;
+    try {
+      if (statements.length > WORKBENCH_LIMITS.statements) throw new Error(`Send at most ${WORKBENCH_LIMITS.statements} statements at once.`);
+      if (statements.some(item => new TextEncoder().encode(item.sql).length > WORKBENCH_LIMITS.statementBytes)) {
+        throw new Error(`A statement is at most ${SIZES.statementBytes}.`);
+      }
+      return { results: this.ctx.storage.transactionSync(() => {
+        let rows = 0, bytes = 0;
+        const results = statements.map(({ sql: text, params }) => {
+          const cursor = sql.exec<Row>(text, ...params);
+          const found = cursor.toArray().map(shown);
+          rows += found.length;
+          bytes += JSON.stringify(found).length;
+          if (rows > WORKBENCH_LIMITS.rows) throw new Error(`An answer is at most ${WORKBENCH_LIMITS.rows} rows: add a LIMIT.`);
+          if (bytes > WORKBENCH_LIMITS.answerBytes) throw new Error(`An answer is at most ${SIZES.answerBytes}: add a LIMIT.`);
+          return { rows: found, changed: cursor.rowsWritten };
+        });
+        if (sql.databaseSize > WORKBENCH_LIMITS.databaseBytes) throw new Error(`The agents' database is at most ${SIZES.databaseBytes}.`);
+        return results;
+      }) };
+    } catch (error) {
+      // SQLite and each limit throw an Error.
+      return { error: (error as Error).message };
+    }
+  }
+
+  /** Each table the agents made, with its columns and how many rows it holds. */
+  tables(): { name: string; columns: string[]; rows: number }[] {
+    const { sql } = this.ctx.storage;
+    // sqlite_ and _cf_ tables are SQLite's and Cloudflare's own, which no command reads.
+    const names = sql.exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND substr(name, 1, 7) <> 'sqlite_' " +
+      "AND substr(name, 1, 4) <> '_cf_' ORDER BY name").toArray();
+    const quoted = (name: string) => `"${name.replaceAll('"', '""')}"`;
+    return names.map(({ name }) => ({ name,
+      columns: sql.exec<{ name: string }>("SELECT name FROM pragma_table_info(?)", name).toArray().map(column => column.name),
+      rows: Number(sql.exec<{ count: number }>(`SELECT count(*) AS count FROM ${quoted(name)}`).toArray()[0].count) }));
+  }
+
+  /** Deletes every table the agents made. */
+  async deleteEverything(): Promise<void> {
     await this.ctx.storage.deleteAll();
   }
 }

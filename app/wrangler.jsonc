@@ -47,7 +47,8 @@
   "workers_dev": true,
   // SPACES: each Relay Everything person's own space, in its own Worker (wrangler.spaces.jsonc), which deploys first.
   "durable_objects": { "bindings": [{ "name": "LIVE_LINE", "class_name": "Line", "script_name": "relay-everything-line" },
-    { "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces" }] },
+    { "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces" },
+    { "name": "WORKBENCHES", "class_name": "Workbench", "script_name": "relay-everything-spaces" }] },
   "migrations": [{ "tag": "line-1", "new_sqlite_classes": ["Line"] }, { "tag": "line-2", "deleted_classes": ["Line"] }],
   // The project's own repository, which Connect your assistant hands out. wiki/stack/employee-project.md
   "artifacts": [{ "binding": "ARTIFACTS", "namespace": "wongstack" }],
@@ -92,7 +93,8 @@
         "consumers": [{ "queue": "relay-everything-webhooks-local", "max_batch_size": 10, "max_retries": 10 }]
       },
       "durable_objects": { "bindings": [{ "name": "LIVE_LINE", "class_name": "Line", "script_name": "relay-everything-line-local" },
-        { "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces-local" }] }
+        { "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces-local" },
+        { "name": "WORKBENCHES", "class_name": "Workbench", "script_name": "relay-everything-spaces-local" }] }
     }
   }
 }

@@ -1,19 +1,10 @@
 {
   "name": "relay",
-  "version": "0.2.0",
-  "description": "Saves each Claude Code chat to your Relay Everything server, with a tool to save the AI's summary beside it.",
+  "version": "0.3.0",
+  "description": "Relay Everything for Claude Code and Codex: connect this computer by a sign-in link, save each chat to your Relay Everything, and ask about your notes, health, places, calendar and saved chats.",
   "author": { "name": "Matthew Wong" },
   "homepage": "https://relayeverything.com/connections/claude-code/",
   "repository": "https://github.com/matthewwong525/RelayEverything",
   "license": "MIT",
-  "keywords": ["relay", "chats", "notes"],
-  "userConfig": {
-    "connect_code": {
-      "type": "string",
-      "title": "Relay Everything connect code",
-      "description": "The connect code from *Add a device* → Claude Code on the Relay Everything page. It can only add chats.",
-      "sensitive": true,
-      "required": true
-    }
-  }
+  "keywords": ["relay", "chats", "notes", "codex", "claude-code"]
 }

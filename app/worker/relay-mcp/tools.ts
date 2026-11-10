@@ -31,7 +31,7 @@ const adds = { readOnlyHint: false, destructiveHint: false, idempotentHint: true
 function relayServer(asker: Asker): McpServer {
   const server = new McpServer({ name: "relay", title: "Relay Everything", version: "1.1.0" }, {
     instructions: "Relay Everything holds one person's notes from their phone, with health, sleep, workouts, places and calendar, the " +
-      "Claude Code chats they saved, and the photos their phone sent. points gives the route of a stay or trip that places lists. " +
+      "AI chats they saved from Claude Code and Codex, and the photos their phone sent. points gives the route of a stay or trip that places lists. " +
       "Every tool but add_note only reads; add_note adds a typed note " +
       `when the person asks you to save one, and nothing changes or deletes. Days and times are ${ZONE} unless you pass a timezone.`,
   });

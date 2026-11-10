@@ -116,8 +116,8 @@ Future<bool> choosePlace(BuildContext context, Relay relay, Scanner? scanner, {b
 
 /// A page opened from Home: *‹ Home*, a large title, and its groups. Each switch acts at once and asks for its
 /// permission only when turned on.
-class _FolderPage extends StatelessWidget {
-  const _FolderPage({required this.relay, required this.title, required this.groups});
+class FolderPage extends StatelessWidget {
+  const FolderPage({super.key, required this.relay, required this.title, required this.groups});
 
   final Relay relay;
   final String title;
@@ -169,7 +169,7 @@ class LocationPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _FolderPage(relay: relay, title: 'Location', groups: (context) {
+    return FolderPage(relay: relay, title: 'Location', groups: (context) {
       final settings = relay.settings;
       return [
         Group(children: [SwitchListTile(
@@ -216,7 +216,7 @@ class HealthPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _FolderPage(relay: relay, title: 'Health', groups: (context) {
+    return FolderPage(relay: relay, title: 'Health', groups: (context) {
       final settings = relay.settings;
       return [
         Group(children: [SwitchListTile(
@@ -240,7 +240,7 @@ class CalendarPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _FolderPage(relay: relay, title: 'Calendar', groups: (context) {
+    return FolderPage(relay: relay, title: 'Calendar', groups: (context) {
       final settings = relay.settings;
       return [
         Group(children: [SwitchListTile(
@@ -274,7 +274,7 @@ class PhotosPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _FolderPage(relay: relay, title: 'Photos', groups: (context) {
+    return FolderPage(relay: relay, title: 'Photos', groups: (context) {
       final settings = relay.settings;
       return [
         Group(children: [

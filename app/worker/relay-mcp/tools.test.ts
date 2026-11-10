@@ -261,6 +261,7 @@ it("finds saved chats holding every word, with the matching lines and no device 
   expect([first.chats[0].id, first.nextCursor]).toEqual([CHAT(2), `1793816100000.${CHAT(2)}`]);
   expect((await ask("search_chats", { query: "the", cursor: first.nextCursor })).chats.map((chat: { id: string }) => chat.id)).toEqual([CHAT(1)]);
   expect((await ask("search_chats", { query: "the", to: "2026-11-04T12:00" })).chats.map((chat: { id: string }) => chat.id)).toEqual([CHAT(1)]);
+  expect((await ask("search_chats", { query: "dark mode" })).chats).toMatchObject([{ id: CHAT(3), app: "codex" }]);
 });
 
 it("cuts a long matching line around the word", async () => {
@@ -414,7 +415,7 @@ it("holds no statement but SELECT in the connector or its queries", () => {
     new URL("../apps/relay/queries.ts", import.meta.url), new URL("../apps/relay/points.ts", import.meta.url)];
   expect(files.length).toBeGreaterThan(5);
   const CODE_TAKEN = "DELETE FROM relay_connect_codes WHERE code_sha256 = ? AND expires_at > ? RETURNING person_id";
-  const ALLOWED: Record<string, string[]> = { "auth.ts": [CODE_TAKEN],
+  const ALLOWED: Record<string, string[]> = { "auth.ts": [CODE_TAKEN], "index.ts": ['["POST", "DELETE", "OPTIONS"]'],
     "answers.ts": [APP_DEVICE.slice(0, APP_DEVICE.indexOf("VALUES")), ".bind(adder.deviceId, adder.name, `app:${adder.deviceId}`, Date.now()).run()"],
     "asker.ts": [JSON.stringify(APP_DEVICE_OFF), "db.prepare(APP_DEVICE_OFF).bind(Date.now(), deviceId).run()"] };
   for (const file of files) {

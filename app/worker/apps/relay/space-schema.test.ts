@@ -7,7 +7,7 @@ import { migrate, MIGRATIONS } from "../../spaces-worker";
 // D1 keeps only the directory; each person's data lives in their own space. wiki/relay-spaces.md
 const folder = new URL("../../../../schema/migrations/", import.meta.url);
 const DIRECTORY = ["relay_people", "relay_logins", "relay_sessions", "relay_sign_in_codes", "relay_keys", "relay_connect_codes",
-  "relay_phone_codes", "relay_inbox_links", "relay_inbox_held"];
+  "relay_phone_codes", "relay_inbox_links", "relay_inbox_held", "relay_computer_codes"];
 const PERSON = ["relay_devices", "relay_notes", "relay_health", "relay_locations", "relay_chats", "relay_chat_messages",
   "relay_chat_saves", "relay_outbox", "relay_webhooks", "relay_webhook_attempts", "relay_attachments", "relay_calendar_events", "relay_photos",
   "relay_note_changes", "relay_stays", "relay_nights"];
@@ -464,4 +464,37 @@ it("adds nights and workout details, logging each new or changed night and each 
     VALUES ('d-phone', 'watch', 10, 40, 0, 0, 0, 0, 0, 41, 41)`)).toThrow(/UNIQUE/);
   expect(() => space.exec("INSERT INTO relay_outbox (kind, ref, at, logged_at) VALUES ('video', 'v', 1, 1)")).toThrow(/CHECK/);
   expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
+});
+
+it("widens devices to computers' keys and chats to Codex, keeping every device, chat, message and save", () => {
+  const space = new DatabaseSync(":memory:");
+  space.exec("PRAGMA foreign_keys = ON");
+  const at = MIGRATIONS.findIndex(([name]) => name === "0015_agent_devices");
+  for (const [, text] of MIGRATIONS.slice(0, at)) inTransaction(space, text);
+  space.exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at, reaches) VALUES
+      ('d-phone', 'Phone', 'rek:d-phone', '', 1, NULL, 'phone'), ('d-laptop', 'Laptop', 'rek:d-laptop', '', 2, 3, 'chats');
+    INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at) VALUES ('n-1', 'd-phone', 'typed', 'c-1', 'Hi.', 5, 5);
+    INSERT INTO relay_chats (id, device_id, session_id, project, title, started_at, last_at, message_count, created_at)
+      VALUES ('c-1', 'd-laptop', 's-1', 'ring', 'Ring', 1, 2, 2, 2);
+    INSERT INTO relay_chat_messages (chat_id, seq, role, text, at) VALUES ('c-1', 0, 'you', 'Fix it.', 1), ('c-1', 1, 'ai', 'Fixed.', 2);
+    INSERT INTO relay_chat_saves (id, chat_id, title, text, created_at) VALUES ('s-1', 'c-1', 'Fix', 'It is fixed.', 3);`);
+  expect(() => space.exec("INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('x', 'X', 'rek:x', '', 1, 'agent')")).toThrow(/CHECK/);
+  const queries = ["SELECT * FROM relay_devices ORDER BY id", "SELECT * FROM relay_notes", "SELECT * FROM relay_chats",
+    "SELECT * FROM relay_chat_messages ORDER BY seq", "SELECT * FROM relay_chat_saves"];
+  const before = queries.map(query => all(space, query));
+  inTransaction(space, MIGRATIONS[at][1]);
+  expect(queries.map(query => all(space, query))).toEqual(before);
+  expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
+  expect(tables(space)).toEqual([...PERSON].sort());
+  space.exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-agent', 'Mac', 'rek:d-agent', '', 4, 'agent');
+    INSERT INTO relay_chats (id, device_id, session_id, app, project, title, started_at, last_at, created_at)
+      VALUES ('c-2', 'd-agent', 's-2', 'codex', 'trip', 'Trip', 4, 4, 4);`);
+  expect(all(space, "SELECT app FROM relay_chats ORDER BY id")).toEqual([{ app: "claude-code" }, { app: "codex" }]);
+  expect(() => space.exec("INSERT INTO relay_chats (id, device_id, session_id, app, project, title, started_at, last_at, created_at) VALUES ('c-3', 'd-agent', 's-3', 'cursor', 'x', 'x', 1, 1, 1)"))
+    .toThrow(/CHECK/);
+  // A chat's messages still go with it, and a chat still needs its device.
+  space.exec("DELETE FROM relay_chats WHERE id = 'c-1'");
+  expect(all(space, "SELECT count(*) AS count FROM relay_chat_messages")).toEqual([{ count: 0 }]);
+  expect(() => space.exec("INSERT INTO relay_chats (id, device_id, session_id, project, title, started_at, last_at, created_at) VALUES ('c-4', 'nobody', 's-4', 'x', 'x', 1, 1, 1)"))
+    .toThrow(/FOREIGN KEY/);
 });

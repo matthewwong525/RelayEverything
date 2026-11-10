@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { cookieJar, parseArgs, pkce, trial } from './relay-mcp-trial.mjs';
 
-const STAGING = 'https://relay-everything-mcp-staging.matthewwong525.workers.dev';
+const STAGING = 'https://mcp-staging.relayeverything.com';
 const SERVER = 'https://app-staging.relayeverything.com';
 
 /** The staging connector as an AI app meets it, before anyone signs in. `open` lets /mcp in with no token. */
@@ -16,8 +16,9 @@ function fakeConnector({ open = false } = {}) {
     seen.push({ key, headers: new Headers(init.headers) });
     switch (key) {
       case 'GET /.well-known/oauth-authorization-server': return Response.json({ registration_endpoint: `${STAGING}/register` });
-      case 'GET /.well-known/oauth-protected-resource/mcp': return Response.json({ resource: `${STAGING}/mcp` });
-      case 'POST /mcp': return new Response(null, { status: open ? 200 : 401 });
+      case 'GET /.well-known/oauth-protected-resource': return Response.json({ resource: `${STAGING}/` });
+      case 'POST /mcp': case 'POST /': return new Response(null, { status: open ? 200 : 401 });
+      case 'GET /': return new Response("<h1>Relay Everything's AI connector</h1>");
       case 'GET /v1/me': return new Response(null, { status: new Headers(init.headers).has('Authorization') ? 403 : 401 });
       case 'GET /v1/openapi.json': return Response.json({ openapi: '3.1.0' });
       case 'POST /register': return Response.json({ client_id: 'c1' }, { status: 201 });
@@ -62,6 +63,9 @@ test('the staging trial passes a connector that refuses every stranger, and keep
   assert.equal(passed, true, printed.join('\n'));
   assert.ok(printed.includes('ok refuses a service token'));
   assert.ok(printed.includes('ok refuses an unknown key on the web API'));
+  assert.ok(printed.includes('ok refuses MCP on / with no token'));
+  assert.ok(printed.includes('ok shows a browser a page on its address'));
+  assert.ok(printed.includes('ok names its address as the resource'));
   assert.ok(printed.includes('ok describes the web API with no sign-in'));
   assert.ok(printed.includes("ok sends an approved app on to the server's sign-in"));
   assert.ok(printed.includes('ok the server sends no code to someone not signed in'));
@@ -74,8 +78,8 @@ test('the trial fails a connector that lets /mcp in with no token; the live one 
   const { passed, printed } = await run(fakeConnector({ open: true }));
   assert.equal(passed, false);
   assert.ok(printed.includes('failed refuses /mcp with no token: 200'));
-  const live = await run({ request: async url => ['/mcp', '/v1/me'].includes(new URL(url).pathname) ? new Response(null, { status: 401 })
-    : Response.json({ registration_endpoint: 'https://relay-everything-mcp.matthewwong525.workers.dev/register' }) }, { live: true });
-  assert.deepEqual(live, { passed: true, printed: ['Trying relay-everything-mcp at https://relay-everything-mcp.matthewwong525.workers.dev',
-    'ok answers its OAuth metadata', 'ok refuses /mcp with no token', 'ok refuses the web API with no token'] });
+  const live = await run({ request: async url => ['/', '/mcp', '/v1/me'].includes(new URL(url).pathname) ? new Response(null, { status: 401 })
+    : Response.json({ registration_endpoint: 'https://mcp.relayeverything.com/register' }) }, { live: true });
+  assert.deepEqual(live, { passed: true, printed: ['Trying relay-everything-mcp at https://mcp.relayeverything.com',
+    'ok answers its OAuth metadata', 'ok refuses /mcp with no token', 'ok refuses MCP on / with no token', 'ok refuses the web API with no token'] });
 });

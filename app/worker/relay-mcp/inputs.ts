@@ -101,7 +101,7 @@ export const TOOLS = {
   },
   search_chats: {
     title: "Search saved chats",
-    description: "Find saved Claude Code chats whose messages or AI summaries hold every word of the query, newest first, with up to " +
+    description: "Find saved AI chats from Claude Code and Codex whose messages or AI summaries hold every word of the query, newest first, with up to " +
       `${LINES} matching lines each.`,
     input: { query, from: when("Only chats active from this time").optional(), to: when("Only chats last active before this time").optional(),
       limit: z.number().int().min(1).max(20).default(10).describe("How many chats, at most 20."), cursor, timezone: zone },

@@ -28,7 +28,7 @@ const kinds = [
 ];
 
 const inboxOn = {'on': true, 'address': 'notes-k7q2m9xwab@in.example.com', 'shared': 'notes@in.example.com'};
-const connector = 'https://relay-mcp.example.com/mcp';
+const connector = 'https://mcp.example.com';
 const madeKey = 'rek_MadeUpKeyForTestsOnly0000000000000000000';
 const madeQr = '{"relay":1,"server":"https://relay.example.com","key":"$madeKey"}';
 
@@ -43,6 +43,7 @@ void main() {
     devices = [
       {'id': 'd1', 'name': 'iPhone', 'reaches': 'phone', 'createdAt': now, 'revokedAt': null},
       {'id': 'd2', 'name': 'Laptop', 'reaches': 'chats', 'createdAt': now - 3 * day, 'revokedAt': now - day},
+      {'id': 'd4', 'name': 'Work Mac', 'reaches': 'agent', 'createdAt': now, 'revokedAt': null},
       // A keyless way in that an older server may list: it has no key to turn off.
       {'id': 'd3', 'name': 'Web', 'reaches': 'inbox', 'createdAt': now, 'revokedAt': null},
     ];
@@ -119,20 +120,35 @@ void main() {
     await open(tester, first: SettingsPage.devices);
     expect(find.text('iPhone'), findsOneWidget);
     expect(find.text('Laptop'), findsOneWidget);
+    expect(find.text('Work Mac'), findsOneWidget);
     expect(find.text('Web'), findsNothing);
     expect(find.textContaining('Notes, health, places, calendar and photos · added'), findsOneWidget);
+    // A computer's key from /relay:connect, and an older Claude Code key that only saves chats.
+    expect(find.textContaining(RegExp(r'^Claude Code or Codex · added')), findsOneWidget);
+    expect(find.textContaining(RegExp(r'^Claude Code, saves only · added')), findsOneWidget);
+    expect(find.text('Connect a computer from Claude Code or Codex with /relay:connect.'), findsOneWidget);
     expect(find.text('Off'), findsOneWidget);
-    expect(find.text('Turn off'), findsOneWidget);
+    expect(find.text('Turn off'), findsNWidgets(2));
     space.answers['POST devices/off'] = (body) {
-      devices = [{...devices[0], 'revokedAt': now}, devices[1]];
+      devices = [{...devices[0], 'revokedAt': now}, devices[1], devices[2]];
       return {'id': 'd1', 'revokedAt': now};
     };
-    await press(tester, find.text('Turn off'));
+    await press(tester, find.text('Turn off').first);
     expect(find.text('Turn off iPhone?'), findsOneWidget);
     await press(tester, inDialog('Turn off'));
     expect(space.sent('POST devices/off'), [{'id': 'd1'}]);
-    expect(find.text('Turn off'), findsNothing);
+    expect(find.text('Turn off'), findsOneWidget);
     expect(find.text('Off'), findsNWidgets(2));
+  });
+
+  testWidgets('Add a device makes only a phone or an API key, and says a computer connects with /relay:connect',
+      (tester) async {
+    await open(tester, first: SettingsPage.devices);
+    await press(tester, find.text('Add a device'));
+    final segments = tester.widget<SegmentedButton<Object?>>(find.byWidgetPredicate((widget) => widget is SegmentedButton));
+    expect([for (final segment in segments.segments) (segment.label! as Text).data], ['Phone', 'API key']);
+    expect(inDialog('Claude Code'), findsNothing);
+    expect(inDialog('Connect a computer from Claude Code or Codex with /relay:connect.'), findsOneWidget);
   });
 
   testWidgets('Add a device shows the new key once, as a QR code and as text to copy', (tester) async {
@@ -189,12 +205,12 @@ void main() {
     await press(tester, find.text('Make the key'));
     expect(find.text('The name is too long.'), findsOneWidget);
     space.answers['POST devices'] = (body) => {'id': 'd9', 'name': 'Backup', 'reaches': 'api', 'key': madeKey,
-      'qr': madeQr, 'api': 'https://relay-mcp.example.com/v1'};
+      'qr': madeQr, 'api': 'https://mcp.example.com/v1'};
     await press(tester, find.text('Make the key'));
     expect(space.sent('POST devices').last, {'name': 'Backup', 'reaches': 'api'});
     expect(find.text('Connect Backup'), findsOneWidget);
     expect(find.text(madeKey), findsOneWidget);
-    expect(find.text('curl -H "Authorization: Bearer $madeKey" https://relay-mcp.example.com/v1/me'), findsOneWidget);
+    expect(find.text('curl -H "Authorization: Bearer $madeKey" https://mcp.example.com/v1/me'), findsOneWidget);
     expect(find.byType(QrImageView), findsNothing);
   });
 

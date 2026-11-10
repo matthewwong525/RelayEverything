@@ -4,7 +4,7 @@ import { createElement, lazy, Suspense, type ComponentType, type ReactElement } 
 // app (`"static": true`) has no App.tsx: the Worker serves its files from public/apps/<name>/. wiki/stack/mini-apps.md
 export type MiniApp = { name: string; title: string; description: string; href: string; static?: true }
 
-type Manifest = { title?: unknown; description?: unknown; static?: unknown }
+type Manifest = { title?: unknown; description?: unknown; static?: unknown; href?: unknown }
 
 // A folder name is an address: lowercase letters and digits, joined by hyphens.
 const NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/
@@ -13,6 +13,17 @@ const NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/
 const folderOf = (path: string) => path.split('/')[1]
 
 const text = (value: unknown) => (typeof value === 'string' && value.trim() !== '' ? value : null)
+
+/** The card's outside address when it is a whole https address, else null. */
+function outside(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' && value.startsWith('https://') ? url.href : null
+  } catch {
+    return null
+  }
+}
 
 /** The checked list, sorted by name. Throws, naming the folder, on a bad name, a missing page or app.json, or an
  *  app.json without a title or description, so the `test` check fails before a broken card reaches the home page. */
@@ -30,7 +41,9 @@ export function listApps(manifests: Record<string, unknown>, pages: string[]): M
     if (!title) throw fail('app.json needs a title.')
     const description = text(manifest.description)
     if (!description) throw fail('app.json needs a description.')
-    return { name, title, description, href: `/apps/${name}/`, ...(manifest.static === true && { static: true as const }) }
+    const href = manifest.href === undefined ? `/apps/${name}/` : outside(manifest.href)
+    if (!href) throw fail('app.json\'s href must be an https address, such as "https://example.com/".')
+    return { name, title, description, href, ...(manifest.static === true && { static: true as const }) }
   })
 }
 

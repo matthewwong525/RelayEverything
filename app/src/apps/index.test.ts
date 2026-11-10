@@ -11,7 +11,7 @@ it("lists every app folder in this build, each with a page, a title, a descripti
     expect(app.name, app.name).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
     expect(app.title.trim(), app.name).not.toBe("");
     expect(app.description.trim(), app.name).not.toBe("");
-    expect(app.href).toBe(`/apps/${app.name}/`);
+    expect(app.href).toMatch(new RegExp(`^(?:/apps/${app.name}/|https://.+)$`));
     // A static app's page is the Worker's files, not a React page.
     expect(appPage(app.name) === null, app.name).toBe(!!app.static);
   }
@@ -23,6 +23,20 @@ it("lists a static app with no React page, and refuses one that has both", () =>
   expect(() => listApps({ "./runs/app.json": manifest }, ["./runs/App.tsx"])).toThrow(
     'app/src/apps/runs: a static app has no App.tsx: remove it, or remove "static" from app.json.',
   );
+});
+
+it("opens a card with an https href at that address, and refuses any other href", () => {
+  const manifest = { ...card, static: true, href: "https://app.example.com/" };
+  expect(listApps({ "./runs/app.json": manifest }, [])).toEqual([{ name: "runs", ...card, href: "https://app.example.com/", static: true }]);
+  for (const href of ["http://app.example.com/", "/apps/other/", "//app.example.com/", "javascript:alert(1)", "https:app.example.com", "", 3]) {
+    expect(() => listApps({ "./runs/app.json": { ...manifest, href } }, []), String(href)).toThrow(
+      'app/src/apps/runs: app.json\'s href must be an https address, such as "https://example.com/".',
+    );
+  }
+});
+
+it("opens the Relay Everything card at the shared server", () => {
+  expect(apps.find((app) => app.name === "relay")?.href).toBe("https://app.relayeverything.com/");
 });
 
 it("finds no page for a folder that does not exist", () => {

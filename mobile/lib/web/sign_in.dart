@@ -136,8 +136,8 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-  void _provider(String name) =>
-    _navigate(widget.client.signIn(name, {'next': _next ?? widget.client.base.path}));
+  // Back to the window's own path: `/` on a server, `/apps/relay/` in the company app's local dev.
+  void _provider(String name) => _navigate(widget.client.signIn(name, {'next': _next ?? _page.path}));
 
   void _otherEmail() => setState(() {
     _sentTo = null;

@@ -216,7 +216,7 @@ class _AccountPageState extends State<AccountPage> {
   /// [part] of the person's Relay Everything page, such as `#webhooks`, in the phone's browser.
   Future<void> _open(String part) async {
     final messenger = ScaffoldMessenger.of(context);
-    if (!await (widget.opener ?? openInBrowser)(Uri.parse('${relay.server ?? defaultServer}/apps/relay/$part'))) {
+    if (!await (widget.opener ?? openInBrowser)(Uri.parse('${relay.server ?? defaultServer}/$part'))) {
       messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
     }
   }

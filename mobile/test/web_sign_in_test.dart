@@ -166,6 +166,34 @@ void main() {
     expect(opened.signedIn, 1);
   });
 
+  testWidgets("at the server's top address, Apple and Google come back to /", (tester) async {
+    final opened = await open(tester, Server(), page: 'https://relay.example.com/');
+    await tester.tap(find.text('Sign in with Apple'));
+    await tester.tap(find.text('Sign in with Google'));
+    expect(opened.navigated.map((uri) => uri.toString()), [
+      'https://relay.example.com/apps/relay/sign-in/apple?next=%2F',
+      'https://relay.example.com/apps/relay/sign-in/google?next=%2F',
+    ]);
+  });
+
+  testWidgets("at the top address, goes on to a connect page after signing in, and shows a failed sign-in", (tester) async {
+    const next = '/apps/relay/sign-in/connect?x';
+    var opened = await open(tester, Server(), page: 'https://relay.example.com/?next=${Uri.encodeQueryComponent(next)}');
+    await tester.tap(find.text('Sign in with Google'));
+    expect(opened.navigated.single.queryParameters['next'], next);
+    opened.navigated.clear();
+    await signInWithCode(tester);
+    expect(opened.navigated.single.toString(), 'https://relay.example.com$next');
+    expect(opened.signedIn, 0);
+
+    await tester.pumpWidget(const SizedBox());
+    opened = await open(tester, Server(), page: 'https://relay.example.com/?signIn=failed');
+    expect(find.text('That sign-in did not work. Try again.'), findsOneWidget);
+    await signInWithCode(tester);
+    expect(opened.navigated, isEmpty);
+    expect(opened.signedIn, 1);
+  });
+
   testWidgets('a next that is the page itself just signs in', (tester) async {
     final opened = await open(tester, Server(), page: 'https://relay.example.com/apps/relay/?next=%2Fapps%2Frelay%2F');
     await signInWithCode(tester);

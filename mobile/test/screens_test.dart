@@ -754,7 +754,7 @@ void main() {
     }
     await tester.tap(find.text('Open your Relay Everything page'));
     await tester.pumpAndSettle();
-    expect(opened, [for (final part in ['#webhooks', '#ai-apps', '']) Uri.parse('https://relay.example.com/apps/relay/$part')]);
+    expect(opened, [for (final part in ['#webhooks', '#ai-apps', '']) Uri.parse('https://relay.example.com/$part')]);
     opens = false;
     await tester.tap(find.text('Open your Relay Everything page'));
     await tester.pump();
@@ -1926,7 +1926,7 @@ void main() {
       expect(find.text('Photos already sent stay on your Relay Everything server. Delete them on your page.'), findsOneWidget);
       await tester.tap(find.text('Open my page'));
       await tester.pumpAndSettle();
-      expect([opened, relay.calls], [[Uri.parse('https://relay.example.com/apps/relay/')], isEmpty]);
+      expect([opened, relay.calls], [[Uri.parse('https://relay.example.com/')], isEmpty]);
       expect(find.text('Stop sending photos?'), findsNothing);
       await tester.tap(photosSwitch);
       await tester.pumpAndSettle();

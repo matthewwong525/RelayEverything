@@ -9,7 +9,7 @@ import 'web/space.dart';
 import 'web/web_app.dart';
 import 'web/web_relay.dart';
 
-/// The Relay Everything page, built for the browser: `flutter build web -t lib/main_web.dart --base-href /apps/relay/`.
+/// The Relay Everything page, built for the browser with `--base-href /apps/relay/`, and opened at a server's `/`.
 /// It reaches no phone-only library: `test/web_imports_test.dart` fails on one.
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,7 +17,7 @@ void main() {
   late final WebRelay relay;
   final client = SpaceClient(base: pageOf(Uri.base), onSignedOut: () => relay.signedOut());
   relay = WebRelay(client: client);
-  // The phone's *Webhooks* and *AI apps* rows open `/apps/relay/#webhooks`: Settings opens there once. It is read before
+  // The phone's *Webhooks* and *AI apps* rows open `/#webhooks`: Settings opens there once. It is read before
   // the app starts, because the app then writes its own route in the address.
   SettingsPage? settingsAt = SettingsPage.ofPart(Uri.base.fragment);
   runApp(WebApp(relay: relay, client: client, takeSettingsAt: () {
@@ -30,6 +30,6 @@ void main() {
   unawaited(relay.start());
 }
 
-/// The page's own address, `/apps/relay/` on the server that serves it.
+/// The page's files, API and sign-in, under `/apps/relay/` on the server that serves it, wherever the page opens.
 Uri pageOf(Uri address) => Uri(scheme: address.scheme, host: address.host, port: address.hasPort ? address.port : null,
   path: '/apps/relay/');

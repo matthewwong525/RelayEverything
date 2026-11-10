@@ -11,7 +11,9 @@ type Provider = "apple" | "google";
 type Saved = { provider: Provider; state: string; nonce: string; verifier: string; next: string };
 
 const OAUTH = "relay_oauth";
-const HOME = "/apps/relay/";
+/** The page opens at the server's top address; its files, API and sign-in stay under PAGE. */
+const HOME = "/";
+const PAGE = "/apps/relay/";
 const FAILED = `${HOME}?signIn=failed`;
 
 const PROVIDERS = {
@@ -36,8 +38,8 @@ const PROVIDERS = {
 /** True when the server has this provider's values. */
 export const ready = (provider: Provider, env: SignInEnv) => PROVIDERS[provider].client(env) !== null;
 
-/** Only a path on Relay Everything's page may follow a sign-in, so no link can send a person elsewhere. */
-const safeNext = (next: string | null) => next?.startsWith(HOME) ? next : HOME;
+/** Only the page's address, or a path under its files, may follow a sign-in, so no link sends a person elsewhere. */
+const safeNext = (next: string | null) => next === HOME || next?.startsWith(PAGE) ? next : HOME;
 const callbackOf = (url: URL, provider: Provider) => `${url.origin}/apps/relay/sign-in/${provider}/callback`;
 
 /** The cookie that carries a sign-in's state to its callback. SameSite=None, since Apple's callback is a cross-site

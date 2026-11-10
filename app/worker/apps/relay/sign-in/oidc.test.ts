@@ -7,7 +7,7 @@ const ORIGIN = "https://app.example.com";
 const NOW = Date.UTC(2026, 10, 6, 12);
 const GOOGLE = "google-client.example.com";
 const SERVICES = "com.example.signin";
-const FAILED = "/apps/relay/?signIn=failed";
+const FAILED = "/?signIn=failed";
 const encoder = new TextEncoder();
 const b64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 const part = (value: unknown) => b64(encoder.encode(JSON.stringify(value)));
@@ -69,7 +69,7 @@ async function begin(provider: "apple" | "google", query = "", origin = ORIGIN) 
   const response = await send(new Request(`${origin}/apps/relay/sign-in/${provider}${query}`));
   const location = new URL(response.headers.get("Location")!);
   const cookie = response.headers.get("Set-Cookie")!;
-  const saved = JSON.parse(atob(cookie.split(";")[0].slice("relay_oauth=".length))) as { state: string; nonce: string; verifier: string };
+  const saved = JSON.parse(atob(cookie.split(";")[0].slice("relay_oauth=".length))) as { state: string; nonce: string; verifier: string; next: string };
   return { response, location, cookie, saved, params: location.searchParams };
 }
 
@@ -105,6 +105,15 @@ describe("Sign in with Google", () => {
     expect(count("relay_sessions")).toBe(1);
   });
 
+  it("goes back to the page at / or under /apps/relay/, and to / for any other next", async () => {
+    const cases = [["/", "/"], ["/apps/relay/", "/apps/relay/"], ["//evil.example.com/", "/"], ["/apps/inbox/", "/"],
+      ["/?next=https://evil.example.com/", "/"], ["https://evil.example.com/apps/relay/", "/"]];
+    for (const [next, home] of cases) {
+      const { saved } = await begin("google", `?next=${encodeURIComponent(next)}`);
+      expect(saved.next).toBe(home);
+    }
+  });
+
   it("claims kept mail for the signed-in email", async () => {
     const { cookie, saved } = await begin("google");
     token = () => idToken(claimsFor(GOOGLE, saved.nonce));
@@ -112,10 +121,10 @@ describe("Sign in with Google", () => {
     expect(claimed).toHaveBeenLastCalledWith(expect.objectContaining({ email: "ana@example.com" }));
   });
 
-  it("keeps a linked login's person when the email changes, and sends an unsafe next to the page", async () => {
+  it("keeps a linked login's person when the email changes, and sends an unsafe next to the page's top address", async () => {
     let { cookie, saved } = await begin("google", "?next=https://evil.example.com/");
     token = () => idToken(claimsFor(GOOGLE, saved.nonce));
-    expect((await googleBack(saved.state, cookie)).headers.get("Location")).toBe("/apps/relay/");
+    expect((await googleBack(saved.state, cookie)).headers.get("Location")).toBe("/");
     ({ cookie, saved } = await begin("google"));
     token = () => idToken(claimsFor(GOOGLE, saved.nonce, { email: "ana.new@example.com" }));
     expect((await googleBack(saved.state, cookie)).status).toBe(302);
@@ -199,7 +208,7 @@ describe("Sign in with Apple", () => {
     expect(params.has("code_challenge")).toBe(false);
     token = () => idToken(appleClaims(saved.nonce));
     const response = await back({ code: "a-1", state: saved.state, user: new Blob(["{}"]) }, cookie);
-    expect(response.headers.get("Location")).toBe("/apps/relay/");
+    expect(response.headers.get("Location")).toBe("/");
     expect(count("relay_sessions")).toBe(1);
     const { client_secret: secret, code_verifier: verifier } = Object.fromEntries(requests[0].body);
     expect(verifier).toBeUndefined();

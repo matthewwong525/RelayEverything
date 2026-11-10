@@ -317,7 +317,7 @@ class PhotosPage extends StatelessWidget {
     if (choice == _PhotosChoice.openPage) {
       // Photos stay on: the person deletes what was sent on the page, then can come back and turn them off.
       final messenger = ScaffoldMessenger.of(context);
-      if (!await (opener ?? openInBrowser)(Uri.parse('$server/apps/relay/'))) {
+      if (!await (opener ?? openInBrowser)(Uri.parse('$server/'))) {
         messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
       }
     }

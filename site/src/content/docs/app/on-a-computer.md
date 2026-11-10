@@ -3,13 +3,13 @@ title: On a computer
 description: Open Relay Everything in a browser to read, write, change and delete your notes, see your connections, and change your account's settings.
 ---
 
-Relay Everything on a computer is the same app as on your phone, in a browser. Open `https://<your-relay-server>/apps/relay/` and sign in. You read, write, change and delete your notes there, and your phones get each change at their next sync.
+Relay Everything on a computer is the same app as on your phone, in a browser. Open `https://<your-relay-server>/` and sign in. You read, write, change and delete your notes there, and your phones get each change at their next sync.
 
 ![Relay Everything in a wide browser window: the folders at the left, the notes by day in the middle, and the open note at the right](../../../assets/web/notes-computer.png)
 
 ## Sign in
 
-1. Open `https://<your-relay-server>/apps/relay/`.
+1. Open `https://<your-relay-server>/`.
 2. Enter your email, then click **Email me a code**.
 3. Enter the code from the email.
 

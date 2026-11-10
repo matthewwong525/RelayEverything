@@ -23,7 +23,7 @@ It costs nothing on Cloudflare's free plan. Tell the person this, and ask before
 
 ## The Relay Everything page
 
-The page is the Relay Everything phone app, built for the web. The person does not install Flutter: each Relay Everything release on GitHub holds the page as `relay-web-<commit>.zip`, with its SHA-256 in `relay-web-<commit>.zip.sha256`. `<commit>` is the newest commit that changed `mobile/`. Before `install` or `update` changes anything, it downloads the page for its own copy, checks the SHA-256, and puts the page in `app/public/apps/relay/`. Git ignores that folder.
+The page is the Relay Everything phone app, built for the web. The server opens it at its top address, the `server=` address. The person does not install Flutter: each Relay Everything release on GitHub holds the page as `relay-web-<commit>.zip`, with its SHA-256 in `relay-web-<commit>.zip.sha256`. `<commit>` is the newest commit that changed `mobile/`. Before `install` or `update` changes anything, it downloads the page for its own copy, checks the SHA-256, and puts the page in `app/public/apps/relay/`. Git ignores that folder.
 
 When no release holds the page for the person's copy, the command stops and changes nothing. Its line names a release, such as `v1.2.0`. Run `git fetch --tags`, then `git checkout <that release>`, then run the same command again. The setup needs a copy made with `git clone`, because it reads the commit from git.
 

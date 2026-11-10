@@ -37,7 +37,7 @@ it("asks a signed-in person to connect this phone by its name, and sends one sig
   expect(html).toContain(`value="${CHALLENGE}"`);
   expect((await open(owner, `?challenge=${CHALLENGE}`)).status).toBe(200);
   const out = await open(null);
-  expect(out.headers.get("Location")).toBe(`/apps/relay/?next=${encodeURIComponent(`/apps/relay/sign-in/phone?challenge=${CHALLENGE}&name=Ana%27s%20iPhone`)}`);
+  expect(out.headers.get("Location")).toBe(`/?next=${encodeURIComponent(`/apps/relay/sign-in/phone?challenge=${CHALLENGE}&name=Ana%27s%20iPhone`)}`);
   expect((await open(matthew, "?challenge=short")).status).toBe(400);
   expect((await open(phoneKeyWho)).status).toBe(403);
 });

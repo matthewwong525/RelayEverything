@@ -9,7 +9,7 @@ Email notes work on a server that takes email: the shared server, or [your own s
 
 ## Find your address
 
-1. Sign in on your Relay Everything page, `<your-relay-server>/apps/relay/`.
+1. Sign in on your Relay Everything page, `<your-relay-server>/`.
 2. Click **Settings** at the bottom of the left bar, then **Email notes**. Your address starts with `notes-` and ends with your server's mail domain.
 3. Click **Copy**, and add the address to your contacts or to a mail rule.
 

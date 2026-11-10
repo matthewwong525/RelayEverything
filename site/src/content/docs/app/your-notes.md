@@ -141,7 +141,7 @@ Search reads only the notes on this phone, so it works with no signal and sends 
 
 Tap the round gear button at the top right of Home to open [Settings](../settings/).
 
-To open your Relay Everything page, open Settings, tap the first row with your email, then tap **Open your Relay Everything page**. It shows while the phone sends to your Relay Everything server. It opens `<your-relay-server>/apps/relay/` in the phone's browser. Sign in with your email. The notes from all your devices are there. [Account](../settings/#account)
+To open your Relay Everything page, open Settings, tap the first row with your email, then tap **Open your Relay Everything page**. It shows while the phone sends to your Relay Everything server. It opens `<your-relay-server>/` in the phone's browser. Sign in with your email. The notes from all your devices are there. [Account](../settings/#account)
 
 On a computer, open the same address. The page is the same app as on your phone, sized for a computer: you read, write, change and delete your notes there. [On a computer](../on-a-computer/)
 

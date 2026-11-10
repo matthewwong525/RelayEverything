@@ -10,7 +10,7 @@
   "preview_urls": false,
   // Each space runs schema/space-migrations/*.sql, which the Worker takes in as text.
   "rules": [{ "type": "Text", "globs": ["**/*.sql"], "fallthrough": true }],
-  "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Space"] }],
+  "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space" }, { "name": "WORKBENCHES", "class_name": "Workbench" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Space"] }, { "tag": "v2", "new_sqlite_classes": ["Workbench"] }],
   "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-webhooks" }] }
 }

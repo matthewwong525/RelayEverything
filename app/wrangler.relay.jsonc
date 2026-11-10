@@ -29,7 +29,8 @@
   "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks" }] },
   "send_email": [{ "name": "RELAY_EMAIL" }],
   "ratelimits": [{ "name": "RELAY_SIGN_IN_LIMIT", "namespace_id": "2101", "simple": { "limit": 10, "period": 60 } }],
-  "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces" }] },
+  "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces" },
+      { "name": "WORKBENCHES", "class_name": "Workbench", "script_name": "relay-everything-spaces" }] },
   "services": [{ "binding": "RELAY_MCP", "service": "relay-everything-mcp", "entrypoint": "Grants" }],
   // Each person's knowledge web, deleted with the account; the connector's /v1 gives the pass.
   "artifacts": [{ "binding": "KNOWLEDGE", "namespace": "relay-everything-knowledge" }],
@@ -60,7 +61,8 @@
       },
       "send_email": [{ "name": "RELAY_EMAIL" }],
       "ratelimits": [{ "name": "RELAY_SIGN_IN_LIMIT", "namespace_id": "2102", "simple": { "limit": 10, "period": 60 } }],
-      "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces-staging" }] },
+      "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces-staging" },
+      { "name": "WORKBENCHES", "class_name": "Workbench", "script_name": "relay-everything-spaces-staging" }] },
       "services": [{ "binding": "RELAY_MCP", "service": "relay-everything-mcp-staging", "entrypoint": "Grants" }],
       "artifacts": [{ "binding": "KNOWLEDGE", "namespace": "relay-everything-knowledge-staging" }],
       "triggers": { "crons": ["17 4 * * *"] }

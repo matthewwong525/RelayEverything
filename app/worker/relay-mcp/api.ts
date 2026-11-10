@@ -1,5 +1,5 @@
 // The web API under /v1/: the connector's tools as plain HTTP, each route parsing its tool's own input, so a route and
-// its tool can't differ. It reads; it adds notes, and a computer's facts and topics. wiki/stack/relay-ai-connector.md
+// its tool can't differ. It reads; it adds notes, facts, topics and agents' commands. wiki/stack/relay-ai-connector.md
 import { z } from "zod";
 import { answer, Refusal, type Asker } from "./answers.ts";
 import { INPUTS, TOOLS, WEB, type ToolName, type WebName } from "./inputs.ts";
@@ -48,6 +48,9 @@ export const ROUTES: readonly V1Route[] = [
     description: `${WEB.tag_fact.description} Only a computer's key; it answers the fact's topics.` },
   { method: "POST", path: "/v1/knowledge/access", id: "openKnowledge", summary: WEB.knowledge_access.title, tools: ["knowledge_access"],
     description: `${WEB.knowledge_access.description} A server whose Cloudflare account has no Artifacts answers 501 \`not_set_up\`.` },
+  { method: "POST", path: "/v1/db", id: "runDb", summary: WEB.db.title, tools: ["db"], description: WEB.db.description },
+  { method: "GET", path: "/v1/db/tables", id: "listDbTables", summary: WEB.db_tables.title, tools: ["db_tables"],
+    description: WEB.db_tables.description },
   { method: "GET", path: "/v1/me", id: "getMe", summary: "Check the caller", tools: [],
     description: "The caller's device name, as the phone's key check answers, and whether it may add notes. It reads no data." },
 ];

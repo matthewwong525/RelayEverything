@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// The `ask` skill's one command: reads the person's Relay Everything through the web API, adds a note or facts, or
-// changes the memory's columns and topics, with this computer's key, and prints the JSON answer. `around` and `topic`
-// join several reads into one answer.
+// The `ask` skill's one command: reads the person's Relay Everything through the web API, adds a note or facts,
+// changes the memory's columns and topics, or runs agents' commands, with this computer's key, and prints the JSON
+// answer. `around` and `topic` join several reads into one answer.
 import { randomUUID } from 'node:crypto';
-import { realpathSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { copyOf, readComputer } from '../lib/config.mjs';
 import { withSandbox } from '../lib/sandbox.mjs';
@@ -14,7 +14,7 @@ export const CHAT_KEY = "This computer's key only saves chats. Type /relay:conne
 export const NOT_CONNECTED = 'This computer is not connected to Relay Everything. Type /relay:connect to connect it.';
 const USAGE = 'Commands: me, notes, note <id>, day <YYYY-MM-DD>, health <type>, nights, workouts, places, points <id>, calendar, '
   + 'chats --q <words>, chat <id>, around <note id> or --at <time>, topic <name>, add-note, facts, fact <id>, add-facts, columns, change-columns, '
-  + 'tag <fact|note> <id>. Give fields as --name value, such as --from 2026-11-03 --to 2026-11-04. add-note, add-facts and '
+  + 'tag <fact|note> <id>, db "<sql>" [--params <JSON list>], db --file <path>, db tables. Give fields as --name value, such as --from 2026-11-03 --to 2026-11-04. add-note, add-facts and '
   + 'change-columns read stdin.';
 /** `around`'s window each way, in hours: 2 unless asked, and at most 12. */
 export const AROUND_HOURS = 2;
@@ -47,6 +47,7 @@ const COMMANDS = {
   'change-columns': { path: () => '/memory/columns', send: 'json', zone: false },
   tag: { path: (value, id) => `/${value === 'note' ? 'notes' : 'memory'}/${encodeURIComponent(id)}/tags`, send: 'tags', zone: false,
     needs: 'fact or note, then its id', two: ['fact', 'note'] },
+  db: { path: value => (value === 'tables' ? '/db/tables' : '/db'), send: 'db', zone: false },
 };
 // Other names the skill may use for a field.
 const ALIASES = { per: 'bucket', at: 'createdAt', zone: 'timezone', query: 'q' };
@@ -77,8 +78,23 @@ function json(input) {
 /** A comma list from one `--add` or `--remove`, such as `bike/charging,battery`. */
 const list = text => (text ?? '').split(',').map(tag => tag.trim()).filter(Boolean);
 
+/** A file's commands, one batch: each ends with `;` at the end of a line. */
+const commands = text => text.split(/;[ \t]*$/m).map(sql => sql.trim()).filter(Boolean).map(sql => ({ sql }));
+
+/** What `db` sends: one command, a file's commands, or nothing for `db tables`. */
+function dbBody(value, fields) {
+  if (fields.file) {
+    try { return { body: { batch: commands(readFileSync(fields.file, 'utf8')) } }; } catch { return { error: `Can't read ${fields.file}.` }; }
+  }
+  if (value === 'tables') return {};
+  if (!value) return { error: 'Give a command: node relay.mjs db "<sql>", db --file <path>, or db tables.' };
+  const params = fields.params === undefined ? [] : json(fields.params);
+  return Array.isArray(params) ? { body: { sql: value, params } } : { error: 'Give --params as a JSON list, such as \'["Dune", 1]\'.' };
+}
+
 /** What a command sends: `{ body }`, or `{ error }`, a line that says what to give. */
-function bodyOf(send, fields, input) {
+function bodyOf(send, fields, input, value) {
+  if (send === 'db') return dbBody(value, fields);
   if (send === 'note') {
     const text = String(input ?? '').trim();
     if (!text) return { error: 'Give the note on stdin.' };
@@ -257,7 +273,7 @@ export async function relay(args, { env = process.env, input = '', fetcher = fet
   if (!computer) return { code: 1, text: NOT_CONNECTED };
   if (spec.field) fields[spec.field] = value;
   if (spec.zone !== false && !fields.timezone && zone) fields.timezone = zone;
-  const { body, error: missing } = spec.send ? bodyOf(spec.send, fields, input) : {};
+  const { body, error: missing } = spec.send ? bodyOf(spec.send, fields, input, value) : {};
   if (missing) return { code: 2, text: missing };
   let answer;
   for (const last of [false, true]) {
@@ -277,7 +293,7 @@ const self = fileURLToPath(import.meta.url);
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(self)) {
   const args = process.argv.slice(2);
   let input = '';
-  if (COMMANDS[args[0]]?.send && COMMANDS[args[0]].send !== 'tags') for await (const part of process.stdin) input += part;
+  if (COMMANDS[args[0]]?.send && !['tags', 'db'].includes(COMMANDS[args[0]].send)) for await (const part of process.stdin) input += part;
   const { code, text } = await relay(args, { input });
   console.log(text);
   process.exitCode = code;

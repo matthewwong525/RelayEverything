@@ -48,7 +48,7 @@ If you added the AI connector to Claude Code or Codex before, the connect step n
 
 Ask in plain words, such as *what did I note about the charger?*, *how did I sleep last week?* or *what was I doing when I wrote the battery note?* The AI reads your Relay Everything data through the plugin. Ask *note that the charger needs a new cable*, and it adds a note.
 
-The AI also reads and adds to your memory of facts, and keeps a copy of your knowledge web on the computer, in `knowledge/` in `~/.config/relay-everything/`: [Memory and knowledge web](../../api/knowledge-web/).
+The AI also reads and adds to your memory of facts, and keeps a copy of your knowledge web on the computer, in `knowledge/` in `~/.config/relay-everything/`: [Memory and knowledge web](../../api/knowledge-web/). It can keep its own tables in [your agents' database](../../api/agents-database/).
 
 **The AI starts from your topics.** When a chat starts, the AI gets your top-level topics, one line each, from the copy on your computer:
 

@@ -299,7 +299,8 @@ async function add({ space, adder, env }: Asker, { timezone = ZONE, createdAt, .
   return addNote(env, space, adder.deviceId, { ...note, createdAt: at } satisfies TypedNote);
 }
 
-/** The computer's device, or a refusal: facts, columns, topics and the web are for a computer's key alone. */
+/** The computer's device, or a refusal: facts, columns, topics, the web and the agents' database are for a computer's
+ *  key alone. */
 function computer({ adder }: Asker): string {
   if (adder?.kind !== "agent") throw new Refusal(COMPUTER_ONLY, 403);
   return adder.deviceId;
@@ -318,6 +319,17 @@ const WEB_ANSWERS: { [Name in WebName]: (asker: Asker, input: Input<Name>) => Pr
   change_columns: async (asker, change) => changeColumns(asker.space.db, computer(asker), change),
   tag_fact: async (asker, { id, ...change }) => tagsOf(asker, "fact", id, change),
   tag_note: async (asker, { id, ...change }) => tagsOf(asker, "note", id, change),
+  db: async (asker, { sql, params = [], batch }) => {
+    computer(asker);
+    if ((sql === undefined) === (batch === undefined)) throw new Refusal("Send `sql` or `batch`, not both.");
+    const done = await asker.space.workbench.run(batch ?? [{ sql: sql!, params }]);
+    if ("error" in done) throw new Refusal(done.error);
+    return done;
+  },
+  db_tables: async asker => {
+    computer(asker);
+    return { tables: await asker.space.workbench.tables() };
+  },
   knowledge_access: async asker => {
     computer(asker);
     return knowledgeAccess(asker.env.KNOWLEDGE, asker.space.personId);

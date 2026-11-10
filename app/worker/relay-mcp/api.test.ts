@@ -13,7 +13,7 @@ import { ANSWERS } from "./openapi";
 const spaceRows = readFileSync(new URL("../../tests/relay-space-rows.sql", import.meta.url), "utf8");
 const ID = (n: number) => `a0000000-0000-4000-8000-00000000000${n}`;
 const CHAT = (n: number) => `c0000000-0000-4000-8000-00000000000${n}`;
-const env = (SPACES: DurableObjectNamespace) => ({ SPACES, RELAY_BUCKET: bucket as never, RELAY_WEBHOOKS: queue as never });
+const env = (SPACES: DurableObjectNamespace) => ({ SPACES, WORKBENCHES: spaces.WORKBENCHES, RELAY_BUCKET: bucket as never, RELAY_WEBHOOKS: queue as never });
 
 let spaces: ReturnType<typeof fakeSpaces>;
 let script: Asker;
@@ -196,4 +196,26 @@ it("reads only the caller's own memory: Ben finds none of Ana's facts", async ()
   expect((await call("memory?q=battery", ben)).json.facts).toEqual([]);
   expect(await call("memory/fc5kk", ben)).toMatchObject({ status: 404, json: { error_description: "No fact has this id." } });
   expect((await call("memory/columns", ben)).json.columns).toHaveLength(2);
+});
+
+it("runs a computer's commands in its agents' database, refuses every other caller, and leaves the space as it was", async () => {
+  const laptop = keyAsker(env(spaces.SPACES), vouch("key", ANA, { device: { id: LAPTOP, reaches: "agent" } }) as never);
+  const db = (body: unknown, asker = laptop) => call("db", asker, { method: "POST", body: JSON.stringify(body) });
+  const snapshot = () => ["relay_notes", "relay_memory", "relay_health"].map(table => spaces.sql(ANA).prepare(`SELECT * FROM ${table}`).all());
+  const before = snapshot();
+  expect(await db({ batch: [{ sql: "CREATE TABLE reading_list (title TEXT)" }, { sql: "INSERT INTO reading_list VALUES (?)", params: ["Dune"] }] }))
+    .toMatchObject({ status: 200, json: { results: [{ rows: [] }, { rows: [], changed: 1 }] } });
+  const read = await db({ sql: "SELECT title FROM reading_list" });
+  expect(read.json).toEqual({ results: [{ rows: [{ title: "Dune" }], changed: 0 }] });
+  expect(ANSWERS.db.safeParse(read.json).error).toBeUndefined();
+  expect((await call("db/tables", laptop)).json).toEqual({ tables: [{ name: "reading_list", columns: ["title"], rows: 1 }] });
+  expect(await db({ sql: "DELETE FROM relay_notes" })).toMatchObject({ status: 400, json: { error_description: expect.stringContaining("no such table") } });
+  expect((await db({ sql: "SELECT 1", batch: [{ sql: "SELECT 2" }] })).json.error_description).toBe("Send `sql` or `batch`, not both.");
+  expect((await db({})).status).toBe(400);
+  const app = grantAsker(env(spaces.SPACES), { personId: ANA, adds: true, deviceId: "e-1", name: "Claude" })!;
+  for (const asker of [script, app]) {
+    expect((await db({ sql: "SELECT * FROM reading_list" }, asker)).json).toEqual({ error: "forbidden", error_description: COMPUTER_ONLY });
+    expect((await call("db/tables", asker)).status).toBe(403);
+  }
+  expect(snapshot()).toEqual(before);
 });

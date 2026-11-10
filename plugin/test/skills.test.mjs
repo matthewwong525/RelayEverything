@@ -128,7 +128,7 @@ test('the hooks run in Claude Code and Codex: no async hook, a short end, and th
   }
   assert.equal(hooks.SessionEnd[0].hooks[0].timeout, 3);
   const manifest = JSON.parse(read('.claude-plugin/plugin.json'));
-  assert.equal(manifest.version, '0.4.0');
+  assert.equal(manifest.version, '0.4.1');
   assert.equal(manifest.userConfig, undefined);
   assert.match(manifest.description, /Claude Code/);
   assert.match(manifest.description, /Codex/);

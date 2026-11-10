@@ -425,7 +425,7 @@ it("shows one photo as an image with a line of its time and place, and refuses a
 });
 
 // Only SELECT reaches a space from the connector, but for these writes: a used sign-in code, an app's device row and
-// its turning off. A note is added only through apps/relay/add-note.ts, as a phone's.
+// its turning off. A note is added only through apps/relay/add-note.ts; agents' commands go to their own database.
 const WRITES = /\b(?:INSERT|UPDATE|DELETE|REPLACE|UPSERT|CREATE|DROP|ALTER|PRAGMA|ATTACH|VACUUM)\b|\b(?:db|DB)\.exec\(|\.(?:batch|run)\(/;
 const writes = (source: string) => WRITES.test(source);
 
@@ -437,7 +437,9 @@ it("holds no statement but SELECT in the connector or its queries", () => {
   const CODE_TAKEN = "DELETE FROM relay_connect_codes WHERE code_sha256 = ? AND expires_at > ? RETURNING person_id";
   const ALLOWED: Record<string, string[]> = { "auth.ts": [CODE_TAKEN], "index.ts": ['["POST", "DELETE", "OPTIONS"]'],
     "answers.ts": [APP_DEVICE.slice(0, APP_DEVICE.indexOf("VALUES")), ".bind(adder.deviceId, adder.name, `app:${adder.deviceId}`, Date.now()).run()"],
-    "asker.ts": [JSON.stringify(APP_DEVICE_OFF), "db.prepare(APP_DEVICE_OFF).bind(Date.now(), deviceId).run()"] };
+    "asker.ts": [JSON.stringify(APP_DEVICE_OFF), "db.prepare(APP_DEVICE_OFF).bind(Date.now(), deviceId).run()"],
+    "inputs.ts": ['"One SQLite command, such as CREATE TABLE, INSERT or SELECT."'] };
+  ALLOWED["answers.ts"].push("asker.space.workbench.run(");
   for (const file of files) {
     let source = readFileSync(file, "utf8");
     for (const allowed of ALLOWED[file.pathname.split("/").pop()!] ?? []) {

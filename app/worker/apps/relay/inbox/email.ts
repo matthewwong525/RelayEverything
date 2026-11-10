@@ -19,8 +19,8 @@ const CLOUDFLARE = "mx.cloudflare.net";
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: " " };
 
 /** A server's bindings, where a preview has no spaces. */
-type MailEnv = Omit<HeldEnv, "SPACES"> & Partial<Pick<HeldEnv, "SPACES">>;
-const hasSpaces = (env: MailEnv): env is HeldEnv => !!env.SPACES;
+type MailEnv = Omit<HeldEnv, "SPACES" | "WORKBENCHES"> & Partial<Pick<HeldEnv, "SPACES" | "WORKBENCHES">>;
+const hasSpaces = (env: MailEnv): env is HeldEnv => !!env.SPACES && !!env.WORKBENCHES;
 
 /** Mail for this server's mail domain: a note, kept mail, or a refusal. Off, the server refuses all mail. */
 export async function email(message: Mail, env: MailEnv): Promise<void> {

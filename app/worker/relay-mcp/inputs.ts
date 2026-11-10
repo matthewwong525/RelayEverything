@@ -167,6 +167,10 @@ export const TOOLS = {
   },
 } satisfies Record<string, { title: string; description: string; input: z.ZodRawShape }>;
 
+const sqlValue = z.union([z.string(), z.number(), z.null()]);
+const statement = { sql: z.string().min(1).describe("One SQLite command, such as CREATE TABLE, INSERT or SELECT."),
+  params: z.array(sqlValue).max(100).default([]).describe("The values for its `?` marks, in order.") };
+
 const column = z.string().max(30).describe("The column's name: a lower-case letter, then letters, digits or _.");
 const note = z.string().max(200).describe("What the column holds, for the AIs that fill it.");
 
@@ -213,6 +217,20 @@ export const WEB = {
     title: "Change a note's topics",
     description: "Add and remove a note's topics, as this computer: the note's words stay as the person wrote them.",
     input: { id: z.string().max(64).describe("The note's id."), ...tagChange },
+  },
+  db: {
+    title: "Run commands in the agents' database",
+    description: "Run SQLite commands in the person's agents' database, as this computer: a database only their computers' agents " +
+      "use, where any table can be made. Relay Everything's own tables are not in it. Send `sql`, or `batch` for up to 50 commands " +
+      "in one step, all or none. A command is at most 100 KB, an answer at most 5,000 rows and 5 MB, and the database at most 1 GB. " +
+      "A blob reads as `{ \"base64\": … }`. Only a computer's key runs commands.",
+    input: { sql: statement.sql.optional(), params: statement.params.optional(),
+      batch: z.array(z.strictObject(statement)).min(1).optional().describe("Several commands, run in order in one step: all or none.") },
+  },
+  db_tables: {
+    title: "List the agents' database's tables",
+    description: "Each table in the person's agents' database, with its columns and how many rows it holds. Only a computer's key reads it.",
+    input: {},
   },
   knowledge_access: {
     title: "Open the knowledge web",

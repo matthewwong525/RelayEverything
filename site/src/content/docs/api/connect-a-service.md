@@ -3,7 +3,7 @@ title: Connect a service
 description: Let your own script or service read your Relay Everything notes, health, sleep, workouts, calendar, places and chats, and add notes, through the web API with an API key or your own sign-in.
 ---
 
-The web API lets your own script or service read your Relay Everything data and add notes. It answers the same questions as the [AI connector](../../connections/connect-your-ai/), as plain HTTP with JSON. It reads, and it adds notes. A connected computer's key also adds facts to your memory and changes topics: [Memory and knowledge web](../knowledge-web/). It can't delete anything.
+The web API lets your own script or service read your Relay Everything data and add notes. It answers the same questions as the [AI connector](../../connections/connect-your-ai/), as plain HTTP with JSON. It reads, and it adds notes. A connected computer's key also adds facts to your memory and changes topics: [Memory and knowledge web](../knowledge-web/). It can't delete anything in your space. A computer's key also runs its own commands in [your agents' database](../agents-database/).
 
 The web API is on your AI connector's address, under `/v1/`. When the connector is at `https://mcp.relayeverything.com`, the API is at `https://mcp.relayeverything.com/v1/`. Your own server's connector works the same way: `https://<your-relay-server>/v1/`. The **AI apps** page of Settings, on your Relay Everything page, shows the connector's address.
 

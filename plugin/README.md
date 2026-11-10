@@ -53,6 +53,16 @@ Ask in your own words, for example *how did I sleep last night?*, *find my notes
 
 To add a note, ask *note in Relay Everything that …*.
 
+## A database for your agents
+
+Your agents get a database of their own, apart from your notes, health and places. An agent can make any table there and keep its own data, such as a reading list or a plan. Only this computer and your other connected computers reach it, and deleting your account deletes it.
+
+- `relay.mjs db "<sql>"` runs one SQLite command; `--params '["Dune"]'` gives its `?` values.
+- `relay.mjs db --file plan.sql` runs a file's commands, each ending with `;`, all or none.
+- `relay.mjs db tables` lists the tables, their columns and how many rows each holds.
+
+A command is at most 100 KB, 50 commands go in one step, an answer is at most 5,000 rows and 5 MB, and the database is at most 1 GB. Your notes, health, places, chats and facts are not in it, so no command can change them.
+
 ## Save a chat
 
 Type `/relay:save` in Claude Code, or `$relay:save` in Codex, or ask *save this to Relay Everything*. The AI writes a title and a summary of what you decided and why. Relay Everything keeps them beside the chat.

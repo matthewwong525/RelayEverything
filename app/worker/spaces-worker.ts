@@ -116,7 +116,7 @@ const shown = (row: Row) => Object.fromEntries(Object.entries(row).map(([name, v
   [name, value instanceof ArrayBuffer ? { base64: btoa(Array.from(new Uint8Array(value), byte => String.fromCharCode(byte)).join("")) } : value]));
 
 /** Each person's agents' database: only the tables their computers' agents make. It never opens a space, so no
- *  command reaches Relay Everything's own tables. wiki/relay-spaces.md#the-agents-database */
+ *  command reaches Relay Everything's own tables. wiki/relay-agent-database.md */
 export class Workbench extends DurableObject {
   /** Runs the statements in one transaction: each one's rows and changed rows, or the reason none of it stayed. A
    *  limit throws inside the transaction, so nothing the step wrote stays. */

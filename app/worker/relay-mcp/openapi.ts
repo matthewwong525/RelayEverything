@@ -14,12 +14,13 @@ const note = z.strictObject({
   attachments: z.array(z.strictObject({ id: z.string(), name: z.string(), type: z.string(), size: z.number().describe("In bytes."),
     ready: z.boolean().describe("Whether the file's bytes have arrived.") })).describe("The note's files: names, types and sizes, never the bytes."),
 });
-const visit = z.strictObject({ name: z.string().describe("The best name the phone found: a calendar event's place, a place on the map, the street, or the coordinates."),
+const stayId = z.number().int().describe("The stay's or trip's id: give it to `GET /v1/points` for its points.");
+const visit = z.strictObject({ id: stayId.optional(), name: z.string().describe("The best name the phone found: a calendar event's place, a place on the map, the street, or the coordinates."),
   lat: z.number(), lon: z.number(), arrived: at, left: at, minutes: z.number(),
   address: z.string().optional().describe("The street, when the name came from the calendar or the map."),
   event: z.string().optional().describe("The calendar event that named the stay."),
   ongoing: z.literal(true).optional().describe("You are still there.") }).describe("A stay: a time in one place.");
-const trip = z.strictObject({ left: at, arrived: at, mode: z.string().describe("walking, running, cycling, driving, flying or unknown."),
+const trip = z.strictObject({ id: stayId, left: at, arrived: at, mode: z.string().describe("walking, running, cycling, driving, flying or unknown."),
   km: z.number(), minutes: z.number(), from: z.string().nullable().describe("The name of the stay it left."),
   to: z.string().nullable().describe("The name of the stay it reached.") }).describe("A trip between two stays.");
 const totals = { steps: z.number(), sleepMinutes: z.number(), heartRate: z.strictObject({ min: z.number(), max: z.number(), average: z.number() }).nullable(),
@@ -61,7 +62,7 @@ export const ANSWERS = {
   day_summary: z.strictObject({ day: z.string(), timezone: z.string(), notes: z.number(), ...totals, ...more,
     nights: z.array(night).describe("The nights and naps that ended in the day, oldest first, without their timelines. Of nights that overlap, the one with the most sleep."),
     workouts: totals.workouts.extend({ items: z.array(workout).describe("The day's workouts, oldest first; one that two sources kept is given once.") }),
-    places: z.array(z.strictObject({ name: z.string(), lat: z.number(), lon: z.number(), from: at, to: at, address: z.string().optional(),
+    places: z.array(z.strictObject({ id: stayId.optional(), name: z.string(), lat: z.number(), lon: z.number(), from: at, to: at, address: z.string().optional(),
       event: z.string().optional(), ongoing: z.literal(true).optional() }))
       .describe("One row per stay, in order. Points with no stay, as on a day before the phone made stays, give each place once."),
     trips: z.array(trip).describe("The trips between the day's stays, in order."),
@@ -76,6 +77,12 @@ export const ANSWERS = {
   nights: z.strictObject({ nights: z.array(night.extend({ stages: z.array(step).optional().describe("The stage timeline, in time order: only with `stages`.") })),
     nextCursor }),
   workouts: z.strictObject({ workouts: z.array(workout), nextCursor }),
+  points: z.strictObject({ id: z.number().int().optional().describe("The stay's or trip's id, when asked by id."),
+    kind: z.enum(["stay", "trip"]).optional(), from: at, to: at.describe("A stay or trip still going on reads to now."), timezone: z.string(),
+    total: z.number().int().describe("How many points there were in all: more than `points` holds when they were thinned."),
+    points: z.array(z.strictObject({ at, lat: z.number(), lon: z.number(), accuracy: z.number().describe("How sure the phone was, in meters."),
+      place: z.string().optional().describe("The street, when the phone named one.") }))
+      .describe("Oldest first, at most 500, spread evenly with the first and the last.") }),
   calendar: z.strictObject({ events: z.array(event), nextCursor }),
   search_chats: z.strictObject({ chats: z.array(z.strictObject({ ...chat, lines: z.array(z.strictObject({ role, text: z.string() })) })), nextCursor }),
   read_chat: z.strictObject({ ...chat, saves: z.array(z.strictObject({ id: z.string(), title: z.string(), text: z.string(), createdAt: at })),
@@ -128,7 +135,7 @@ const errors = {
   400: refusal("The input can't be read: `error_description` says which field."),
   401: refusal("No token, or one that is not valid: an expired token or a disconnected app."),
   403: refusal("This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes."),
-  404: refusal("No such note, chat or route in the caller's own space."),
+  404: refusal("No such note, chat, stay, trip or route in the caller's own space."),
 };
 
 /** The whole document, for a server at `origin`. */

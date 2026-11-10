@@ -19,17 +19,18 @@ Then ask, for example: *What did I note on 4 November?*, *What is on my day?*, *
 
 ## What the AI can read and add
 
-The connector has fourteen tools. Thirteen only read, and one adds a note. Each tool reaches only the space of the person who connected the app. Each answer has a limit, so one question can't copy all of your space.
+The connector has fifteen tools. Fourteen only read, and one adds a note. Each tool reaches only the space of the person who connected the app. Each answer has a limit, so one question can't copy all of your space.
 
 - **search**: notes that hold every word you give, newest first.
 - **fetch**: one note, the places you stayed near it in time, and its day's health totals.
 - **timeline**: every note from one time to another, a page at a time.
-- **day_summary**: one day's notes count, health totals, nights of sleep, workouts, places, trips and events. Each place is a stay with its name and times; each trip has its mode, km and minutes; each event has its title, times and people.
+- **day_summary**: one day's notes count, health totals, nights of sleep, workouts, places, trips and events. Each place is a stay with its name and times; each trip has its mode, km and minutes; each event has its title, times and people. Each stay and trip has an id for **points**.
 - **health**: one health type, such as steps, sleep, weight or blood pressure, one value per hour or per day. [Health](../../app/health/#what-it-reads) lists the types.
 - **nights**: each night of sleep, newest first: when you went to bed, fell asleep and woke, and the minutes in core, deep and REM sleep and awake. Ask for the stages to get each night's stage timeline.
 - **workouts**: each workout, newest first, with its kind, such as running, its minutes, km and calories.
 - **calendar**: the events from one time to another, with title, times, place, notes and people. Give words to find events that hold them, newest first, such as a person's name. [Calendar](../../app/calendar/)
-- **places**: each stay at a place, with its name, street, and when you arrived and left, and each trip between two stays: walking, running, cycling, driving or flying, with its km and minutes. So *Where did I go on Saturday?* gets one short answer. Days from before your phone made stays give each street, as before. [Location](../../app/location/)
+- **places**: each stay at a place, with its name, street, and when you arrived and left, and each trip between two stays: walking, running, cycling, driving or flying, with its km and minutes. So *Where did I go on Saturday?* gets one short answer. Days from before your phone made stays give each street, as before. Each stay and trip has an id for **points**. [Location](../../app/location/)
+- **points**: the points of one stay or trip, by its id: for a trip, its route. It gives only the points of the phone that made that stay or trip, and a stay you are still in reads to now. Or it gives every phone's points from one time to another, up to 7 days. Each point has its time, where it was, how sure the phone was, and its street. It gives at most 500 points, spread evenly with the first and the last, and says how many there were in all. With **Only stays and trips**, there are no points to give.
 - **search_chats**: [saved Claude Code chats](../claude-code/) that hold every word you give, with the lines that match.
 - **read_chat**: one saved chat, a part at a time, with the AI's saved summary.
 - **photos**: the [photos your phones sent](../../app/photos/) from one time to another, newest first, with when and where you took each one. It can show only the photos near a place, up to 500 km. It lists at most 50 photos a page.

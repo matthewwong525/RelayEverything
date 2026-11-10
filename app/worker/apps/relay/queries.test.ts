@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
-import { ANA, db, env, NOW } from "../../../tests/relay";
+import { ANA, call, db, env, NOW, phone } from "../../../tests/relay";
+import { MAX_POINTS, rangePoints, stayPoints } from "./points";
 import { chatLines, daySummary, distanceKm, healthBuckets, nightPage, noteById, notePage, photoById, photoPage, placeVisits,
   workoutPage } from "./queries";
 import { spaceOf, vouch } from "./space";
@@ -15,8 +16,8 @@ const reading = (type: string, start: number, value: number, { end = start, sour
     .run(device, type, start, end, value, source);
 const typed = (id: string, text: string, at: number) => db.sql.prepare(`INSERT INTO relay_notes (id, device_id, source, client_id, text,
   recorded_at, created_at) VALUES (?, 'd-phone', 'typed', ?, ?, ?, 0)`).run(id, `client-${id}`, text, at);
-const point = (at: number, place: string | null, lat = 43.65) => db.sql.prepare(`INSERT INTO relay_locations (device_id, at, lat, lon,
-  accuracy, place, created_at) VALUES ('d-phone', ?, ?, -79.38, 10, ?, 0)`).run(at, lat, place);
+const point = (at: number, place: string | null, lat = 43.65, device = "d-phone") => db.sql.prepare(`INSERT INTO relay_locations (device_id,
+  at, lat, lon, accuracy, place, created_at) VALUES (?, ?, ?, -79.38, 10, ?, 0)`).run(device, at, lat, place);
 
 it("counts each hour's steps once: the largest device, after each device's largest source", async () => {
   steps("d-phone", "Health Connect", NOW, 1000);
@@ -69,9 +70,10 @@ it("reads stays and trips in order, each trip with the stays at its ends, and an
   saturday();
   const { visits, trips, next } = await placeVisits(session(), NOW - 3 * HOUR, NOW + HOUR, 10);
   expect(visits).toEqual([
-    { name: "12 Maple Street", lat: 43.65, lon: -79.38, arrived: NOW - 2 * HOUR, left: NOW, minutes: 120 },
-    { name: "Corner Café", lat: 43.65, lon: -79.38, arrived: NOW + 15 * MIN, left: NOW + 25 * MIN, minutes: 10, address: "Lake Drive", ongoing: true }]);
-  expect(trips).toEqual([{ left: NOW, arrived: NOW + 15 * MIN, mode: "driving", km: 6.2, minutes: 15, from: "12 Maple Street", to: "Corner Café" }]);
+    { id: 1, name: "12 Maple Street", lat: 43.65, lon: -79.38, arrived: NOW - 2 * HOUR, left: NOW, minutes: 120 },
+    { id: 3, name: "Corner Café", lat: 43.65, lon: -79.38, arrived: NOW + 15 * MIN, left: NOW + 25 * MIN, minutes: 10, address: "Lake Drive",
+      ongoing: true }]);
+  expect(trips).toEqual([{ id: 2, left: NOW, arrived: NOW + 15 * MIN, mode: "driving", km: 6.2, minutes: 15, from: "12 Maple Street", to: "Corner Café" }]);
   expect(next).toBeNull();
   // A range inside a stay still gets the stay.
   expect((await placeVisits(session(), NOW - HOUR, NOW - HOUR / 2, 10)).visits.map(visit => visit.name)).toEqual(["12 Maple Street"]);
@@ -114,8 +116,8 @@ it("reads a day before the space's first stay as before: street runs, and each p
   expect(day.places).toEqual([
     { name: "Queen St W", lat: 43.65, lon: -79.38, from: NOW - 26 * HOUR, to: NOW - 25 * HOUR },
     { name: "Bay St", lat: 43.65, lon: -79.38, from: NOW - 24.5 * HOUR, to: NOW - 24.5 * HOUR },
-    { name: "12 Maple Street", lat: 43.65, lon: -79.38, from: NOW - 2 * HOUR, to: NOW },
-    { name: "Corner Café", lat: 43.65, lon: -79.38, from: NOW + 15 * MIN, to: NOW + 25 * MIN, address: "Lake Drive", ongoing: true }]);
+    { id: 1, name: "12 Maple Street", lat: 43.65, lon: -79.38, from: NOW - 2 * HOUR, to: NOW },
+    { id: 3, name: "Corner Café", lat: 43.65, lon: -79.38, from: NOW + 15 * MIN, to: NOW + 25 * MIN, address: "Lake Drive", ongoing: true }]);
   expect(day.trips).toHaveLength(1);
 });
 
@@ -157,6 +159,55 @@ it("pages on past the rows three phones' overlapping stays take, so no later vis
   expect([first.visits.length, first.visits.at(-1)!.name, first.next, first.trips.length]).toEqual([100, "Stay 99", NOW + 100 * HOUR, 100]);
   const second = await placeVisits(session(), first.next!, NOW + 200 * HOUR, 100);
   expect([second.visits.length, second.visits[0].name, second.next]).toEqual([20, "Stay 100", null]);
+});
+
+it("keeps a stay's id while the phone sends it again as it goes on", async () => {
+  const cafe = { kind: "stay", start: NOW - HOUR, end: NOW - 30 * MIN, ongoing: true, lat: 43.651, lon: -79.383, name: "Corner Café", source: "map" };
+  await call(phone, "POST", "stays", { stays: [{ kind: "trip", start: NOW - 2 * HOUR, end: NOW - HOUR, mode: "walking", km: 1.4 }, cafe] });
+  const [before] = (await placeVisits(session(), NOW - 2 * HOUR, NOW, 10)).visits;
+  await call(phone, "POST", "stays", { stays: [{ ...cafe, end: NOW }] });
+  const [after] = (await placeVisits(session(), NOW - 2 * HOUR, NOW, 10)).visits;
+  expect([before.id, after.id, after.left]).toEqual([2, 2, NOW]);
+});
+
+const at = (points: { at: number }[]) => points.map(item => item.at);
+
+it("reads a stay's or trip's points from its own phone, start to end, with the street only when it has one", async () => {
+  saturday();
+  point(NOW - 3 * HOUR, "Before");
+  point(NOW, "Maple St");
+  point(NOW + 5 * MIN, null);
+  point(NOW + 10 * MIN, "Queen St W", 43.66, "d-ipad");
+  point(NOW + 15 * MIN, "Lake Drive");
+  const trip = await stayPoints(session(), 2);
+  expect(trip).toEqual({ kind: "trip", start: NOW, end: NOW + 15 * MIN, total: 3, points: [
+    { at: NOW, lat: 43.65, lon: -79.38, accuracy: 10, place: "Maple St" }, { at: NOW + 5 * MIN, lat: 43.65, lon: -79.38, accuracy: 10 },
+    { at: NOW + 15 * MIN, lat: 43.65, lon: -79.38, accuracy: 10, place: "Lake Drive" }] });
+  expect(at((await rangePoints(session(), NOW, NOW + 15 * MIN)).points)).toEqual([NOW, NOW + 5 * MIN, NOW + 10 * MIN]);
+  expect(await stayPoints(session(), 9)).toBeNull();
+  expect(await rangePoints(session(), NOW + HOUR, NOW + 2 * HOUR)).toEqual({ total: 0, points: [] });
+});
+
+it("reads a stay still going on to now, past the end its phone sent", async () => {
+  segment("stay", NOW - HOUR, NOW - 30 * MIN, { name: "Corner Café", ongoing: 1, updated_at: NOW - 30 * MIN });
+  segment("stay", NOW - 9 * HOUR, NOW - 7 * HOUR, { name: "Gone quiet", ongoing: 1 });
+  point(NOW - 40 * MIN, "Lake Drive");
+  point(NOW - 10 * MIN, "Lake Drive");
+  point(NOW - 8 * HOUR, "Elm Road");
+  point(NOW - 6 * HOUR, "Elm Road");
+  expect(await stayPoints(session(), 1)).toMatchObject({ end: NOW, total: 2 });
+  expect(await stayPoints(session(), 2)).toMatchObject({ end: NOW - 7 * HOUR, total: 1 });
+});
+
+it("keeps at most 500 of a long trip's points, evenly, with the first and the last, and says how many there were", async () => {
+  segment("trip", NOW, NOW + 3120 * MIN);
+  const insert = db.sql.prepare(`INSERT INTO relay_locations (device_id, at, lat, lon, accuracy, created_at) VALUES ('d-phone', ?, 43.65, -79.38, 10, 0)`);
+  for (let i = 0; i < 3120; i++) insert.run(NOW + i * MIN);
+  const { total, points } = (await stayPoints(session(), 1))!;
+  expect([total, points.length, points[0].at, points.at(-1)!.at]).toEqual([3120, MAX_POINTS, NOW, NOW + 3119 * MIN]);
+  const gaps = new Set(points.slice(1).map((item, index) => (item.at - points[index].at) / MIN));
+  expect([...gaps].sort()).toEqual([6, 7]);
+  expect(await rangePoints(session(), NOW, NOW + 3120 * MIN)).toEqual({ total, points });
 });
 
 it("reads one note by its id, and null for an id it lacks", async () => {

@@ -18,6 +18,8 @@ export function home(env = process.env) {
 
 export const keyFile = env => join(home(env), 'computer.json');
 export const stateDir = env => join(home(env), 'state');
+/** This computer's copy of the person's knowledge web. */
+export const copyOf = env => join(home(env), 'knowledge');
 
 /** Makes the folder, readable only by this login. */
 export function ensureHome(env) {

@@ -1,7 +1,7 @@
 // Reads a Claude Code transcript (JSONL) into Relay Everything's chat messages: what you typed, the AI's text, and one line per
 // step. Tool output, thinking, helper chats and lines this reader does not know are never sent.
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, relative } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 export const MESSAGE_CHARACTERS = 200_000;
 export const TITLE_CHARACTERS = 80;
@@ -111,13 +111,48 @@ export function readChat(text, { cwd, hide = value => value }) {
   return { title, startedAt: messages[0]?.at ?? null, messages, hasYou: !!first };
 }
 
-/** The git top folder of `cwd`, else `cwd`: the key for saving off, and the project's name. */
-export function projectRoot(cwd) {
+/**
+ * The main repository of a git worktree at `at`, whose `.git` is a file: its `gitdir` line names
+ * `<main>/.git/worktrees/<name>`, and `commondir` there names `<main>/.git`. Read as files, with no git call, so a hook
+ * stays fast. Null for a link that is broken, or that has no `commondir`, as a submodule's has not.
+ */
+function mainRepository(at) {
+  try {
+    const gitdir = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(join(at, '.git'), 'utf8'))?.[1];
+    if (!gitdir) return null;
+    const own = resolve(at, gitdir);
+    const common = resolve(own, readFileSync(join(own, 'commondir'), 'utf8').trim());
+    if (!statSync(common).isDirectory()) return null;
+    return basename(common) === '.git' ? dirname(common) : common.replace(/\.git$/, '');
+  } catch {
+    return null;
+  }
+}
+
+/** The git top folder of `cwd`, a worktree's own, else `cwd`. */
+export function gitTop(cwd) {
   for (let at = cwd; ; at = dirname(at)) {
     if (existsSync(join(at, '.git'))) return at;
     if (dirname(at) === at) return cwd;
   }
 }
+
+/**
+ * The project of `cwd`: the key for saving off, and the project's name. A worktree counts as its main repository, so
+ * every workspace copy of a project shares its name and its saving off; a broken link counts as the worktree itself.
+ */
+export function projectRoot(cwd) {
+  const top = gitTop(cwd);
+  try {
+    return statSync(join(top, '.git')).isFile() ? mainRepository(top) ?? top : top;
+  } catch {
+    return top;
+  }
+}
+
+/** Whether saving is off for a project, or for a worktree of it by an entry made before worktrees counted as their
+ *  main repository. */
+export const savingOff = (store, root, top = root) => store.isOff(root) || (top !== root && store.isOff(top));
 
 export const projectName = root => basename(root).slice(0, 200) || 'a project';
 

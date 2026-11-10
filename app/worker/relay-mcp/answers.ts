@@ -1,27 +1,26 @@
 // Each connector question's answer, shared by the MCP tools and the web API so one input answers the same through
 // either. Reads are capped; a note is added only through add-note.ts. No answer holds a key, file name or device id.
 import { addNote, type TypedNote } from "../apps/relay/add-note.ts";
+import { knowledgeAccess } from "../apps/relay/knowledge.ts";
+import { addFacts, changeColumns, changeTags, columnChanges, columnsOf, factPage, factWithHistory, tagOf,
+  type Fact } from "../apps/relay/memory.ts";
 import { chatById, chatLines, chatMessages, chatPage, daySummary, eventPage, healthBuckets, nightPage, noteById, notePage, photoById,
   photoPage, placeVisits, workoutPage, type CalendarEvent, type Chat, type HealthType, type Note, type Photo,
   type Span } from "../apps/relay/queries.ts";
 import { rangePoints, stayPoints } from "../apps/relay/points.ts";
+import { Refusal } from "../apps/relay/refusal.ts";
 import type { Db, PersonSpace } from "../apps/relay/space.ts";
 import type { McpEnv } from "./env.ts";
-import { LINES, MAX_BUCKETS, PART, POINTS_DAYS, type Input, type ToolName } from "./inputs.ts";
+import { LINES, MAX_BUCKETS, PART, POINTS_DAYS, type Input, type ToolName, type WebName } from "./inputs.ts";
 import { dayOf, HOUR, instant, local, nextDay, startOfDay, ZONE } from "./time.ts";
+
+export { Refusal };
 
 const NEAR = HOUR / 2;
 const LINE_CHARACTERS = 300;
 export const RECONNECT = "Connect this app to Relay Everything again to let it add notes. Its reads still work.";
+export const COMPUTER_ONLY = "Only a connected computer's key can do this. Connect a computer with the Relay Everything plugin.";
 
-/** A question the caller can fix: the tool answers it as an error the AI reads, the web API with this status. */
-export class Refusal extends Error {
-  readonly status: 400 | 403 | 404;
-  constructor(message: string, status: 400 | 403 | 404 = 400) {
-    super(message);
-    this.status = status;
-  }
-}
 
 /** A range from the caller's text, refused unless both ends read as times and `from` comes first. */
 function range(from: string, to: string, timezone: string): Span {
@@ -142,10 +141,11 @@ function line(text: string, words: string[]): string {
   return `${start ? "…" : ""}${text.slice(start, start + LINE_CHARACTERS)}${start + LINE_CHARACTERS < text.length ? "…" : ""}`;
 }
 
+/** A page of chats, each with its lines that hold a word; with no words, every chat in the time, with no lines. */
 async function chatsFound(db: Db, words: string[], page: Parameters<typeof chatPage>[1], timezone: string) {
   const found = await chatPage(db, { ...page, words });
   const chats = await Promise.all(found.chats.map(async chat => ({ ...chatShown(chat, timezone),
-    lines: (await chatLines(db, chat.id, words, LINES)).map(({ role, text }) => ({ role, text: line(text, words) })) })));
+    lines: words.length ? (await chatLines(db, chat.id, words, LINES)).map(({ role, text }) => ({ role, text: line(text, words) })) : [] })));
   return { chats, nextCursor: nextCursor(found) };
 }
 
@@ -191,17 +191,30 @@ async function readPhoto(space: PersonSpace, { id, timezone = ZONE }: Input<"rea
   return new Picture(base64(bytes), "image/jpeg", photoLine(photo!, timezone));
 }
 
-/** Who adds a note: an API key's own device, or a connected app's, made on its first note. Null for an app connected
- *  before the consent page said it can add. */
-type Adder = { deviceId: string; name: string; kind: "api" | "app" } | null;
+/** Who adds a note: an API key's or a computer key's own device, or a connected app's, made on its first note. Null
+ *  for an app connected before the consent page said it can add. Only a computer (`agent`) adds facts and topics. */
+type Adder = { deviceId: string; name: string; kind: "api" | "agent" | "app" } | null;
 
 /** The caller's own space and what it may do: every caller reads; `adder` says whether and as whom it adds. */
-export type Asker = { space: PersonSpace; adder: Adder; env: Pick<McpEnv, "RELAY_WEBHOOKS"> };
+export type Asker = { space: PersonSpace; adder: Adder; env: Pick<McpEnv, "RELAY_WEBHOOKS" | "KNOWLEDGE"> };
+
+/** A fact as the caller reads it: its time in the zone. */
+const factShown = (fact: Fact, timezone: string) => ({ ...fact, createdAt: local(fact.createdAt, timezone) });
+
+/** Where a page of facts starts: the cursor's fact, but never past the range's end. */
+function factBefore(text: string | undefined, end: number): { before: number; beforeId?: string } {
+  if (text === undefined) return { before: end };
+  const [, before, beforeId] = /^(\d{13})\.(f[a-z2-7]{4,6})$/.exec(text) ?? [];
+  if (!before) throw new Refusal("That cursor is not one this connector gave.");
+  return Number(before) < end ? { before: Number(before), beforeId } : { before: end };
+}
 
 const READS = {
-  search: async (db, { query, from = "2001-01-01", to = "2286-01-01", source, limit, cursor: text, timezone = ZONE }) => {
+  search: async (db, { query, tag, from = "2001-01-01", to = "2286-01-01", source, limit, cursor: text, timezone = ZONE }) => {
+    if (query === undefined && tag === undefined) throw new Refusal("Give the words to find, a tag, or both.");
     const [after, end] = range(from, to, timezone);
-    return notes(db, { after, source, words: query.split(/\s+/).slice(0, 10), limit, ...pageBefore(text, end) }, timezone);
+    return notes(db, { after, source, words: query?.split(/\s+/).slice(0, 10), tag: tag && tagOf(tag), limit, ...pageBefore(text, end) },
+      timezone);
   },
   fetch: async (db, { id, timezone = ZONE }) => {
     const note = await noteById(db, id);
@@ -242,7 +255,7 @@ const READS = {
   },
   search_chats: async (db, { query, from = "2001-01-01", to = "2286-01-01", limit, cursor: text, timezone = ZONE }) => {
     const [after, end] = range(from, to, timezone);
-    return chatsFound(db, query.split(/\s+/).slice(0, 10), { after, limit, ...pageBefore(text, end) }, timezone);
+    return chatsFound(db, query?.split(/\s+/).slice(0, 10) ?? [], { after, limit, ...pageBefore(text, end) }, timezone);
   },
   read_chat: async (db, { id, cursor: text, timezone = ZONE }) => {
     const chat = await chatById(db, id);
@@ -255,6 +268,19 @@ const READS = {
     const [after, end] = range(from, to, timezone);
     const found = await photoPage(db, { after, near, limit, ...pageBefore(text, end) });
     return { photos: found.photos.map(photo => photoShown(photo, timezone)), nextCursor: nextCursor(found) };
+  },
+  memory: async (db, { query, tag, source, from = "2001-01-01", to = "2286-01-01", all, where, limit, cursor: text, timezone = ZONE }) => {
+    const [after, end] = range(from, to, timezone);
+    const found = await factPage(db, { words: query?.split(/\s+/).slice(0, 10), tag: tag && tagOf(tag), source, after, all, where, limit,
+      ...factBefore(text, end) });
+    return { facts: found.facts.map(fact => factShown(fact, timezone)), columns: found.columns, nextCursor: found.next };
+  },
+  read_fact: async (db, { id, timezone = ZONE }) => {
+    const fact = await factWithHistory(db, id);
+    if (!fact) throw new Refusal("No fact has this id.", 404);
+    const { replacedFacts, replacedByFact, ...own } = fact;
+    return { ...factShown(own, timezone), replacedFacts: replacedFacts.map(older => factShown(older, timezone)),
+      replacedByFact: replacedByFact && factShown(replacedByFact, timezone) };
   },
 } satisfies { [Name in Exclude<ToolName, "add_note" | "read_photo">]: (db: Db, input: Input<Name>) => Promise<unknown> };
 
@@ -274,8 +300,34 @@ async function add({ space, adder, env }: Asker, { timezone = ZONE, createdAt, .
   return addNote(env, space, adder.deviceId, { ...note, createdAt: at } satisfies TypedNote);
 }
 
+/** The computer's device, or a refusal: facts, columns, topics and the web are for a computer's key alone. */
+function computer({ adder }: Asker): string {
+  if (adder?.kind !== "agent") throw new Refusal(COMPUTER_ONLY, 403);
+  return adder.deviceId;
+}
+
+async function tagsOf(asker: Asker, kind: "fact" | "note", id: string, change: { add: string[]; remove: string[] }) {
+  const changed = await changeTags(asker.space.db, computer(asker), kind, id, change);
+  if (!changed) throw new Refusal(`No ${kind} has this id.`, 404);
+  return changed;
+}
+
+/** The web API's own questions: the columns read for any caller; the rest change, for a computer's key. */
+const WEB_ANSWERS: { [Name in WebName]: (asker: Asker, input: Input<Name>) => Promise<unknown> } = {
+  add_facts: async (asker, { facts }) => addFacts(asker.space.db, computer(asker), facts),
+  columns: async ({ space }, { changes }) => ({ ...await columnsOf(space.db), ...changes && { changes: await columnChanges(space.db) } }),
+  change_columns: async (asker, change) => changeColumns(asker.space.db, computer(asker), change),
+  tag_fact: async (asker, { id, ...change }) => tagsOf(asker, "fact", id, change),
+  tag_note: async (asker, { id, ...change }) => tagsOf(asker, "note", id, change),
+  knowledge_access: async asker => {
+    computer(asker);
+    return knowledgeAccess(asker.env.KNOWLEDGE, asker.space.personId);
+  },
+};
+
 /** The answer to one question, for the caller's own space. */
-export function answer<Name extends ToolName>(name: Name, asker: Asker, input: Input<Name>): Promise<unknown> {
+export function answer<Name extends ToolName | WebName>(name: Name, asker: Asker, input: Input<Name>): Promise<unknown> {
+  if (name in WEB_ANSWERS) return (WEB_ANSWERS[name as WebName] as (asker: Asker, input: unknown) => Promise<unknown>)(asker, input);
   if (name === "add_note") return add(asker, input as Input<"add_note">);
   if (name === "read_photo") return readPhoto(asker.space, input as Input<"read_photo">);
   const read = READS[name as Exclude<ToolName, "add_note" | "read_photo">] as (db: Db, input: unknown) => Promise<unknown>;

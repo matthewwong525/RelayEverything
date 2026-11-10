@@ -60,12 +60,32 @@ it("names itself Relay Everything to the AI app", () => {
   expect(client.getInstructions()).toMatch(/^Relay Everything /);
 });
 
-it("lists fifteen tools, each read-only but add_note, which changes and deletes nothing", async () => {
+it("lists seventeen tools, each read-only but add_note, which changes and deletes nothing", async () => {
   const { tools } = await client.listTools();
   expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "nights", "workouts", "places",
-    "points", "calendar", "search_chats", "read_chat", "photos", "read_photo", "add_note"]);
-  for (const tool of tools.slice(0, 14)) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
-  expect(tools[14].annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+    "points", "calendar", "search_chats", "read_chat", "photos", "read_photo", "memory", "read_fact", "add_note"]);
+  for (const tool of tools.slice(0, 16)) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+  expect(tools[16].annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+  expect(client.getInstructions()).toContain("search the memory first");
+});
+
+it("answers what the person decided from the live facts, reads a replaced one, and changes no fact", async () => {
+  const { sql, SPACES } = seeded();
+  client = await connect(SPACES);
+  const before = sql.prepare("SELECT * FROM relay_memory ORDER BY id").all();
+  const found = await ask("memory", { query: "battery" });
+  expect(found.facts).toEqual([{ id: "fc5kk", fields: { kind: "decision", text: "The battery is now 50 mAh, for a full day." },
+    tags: ["battery", "ring/charging"], sources: [`relay:chat/${CHAT(2)}#2`], replaces: ["fb4tt"], replacedBy: null, device: "Laptop",
+    createdAt: "2026-11-04T13:16:40-05:00" }]);
+  expect(found.columns.map((column: { name: string }) => column.name)).toEqual(["kind", "text"]);
+  expect((await ask("memory", { tag: "battery", all: true })).facts.map((fact: { id: string }) => fact.id)).toEqual(["fc5kk", "fb4tt"]);
+  expect((await ask("memory", { where: { kind: "fact" } })).facts.map((fact: { id: string }) => fact.id)).toEqual(["fd7mm"]);
+  expect(await ask("read_fact", { id: "fb4tt" })).toMatchObject({ replacedBy: "fc5kk", replacedByFact: { id: "fc5kk" }, replacedFacts: [] });
+  expect(await ask("read_fact", { id: "fzzzz" })).toEqual({ refused: "No fact has this id." });
+  expect(ids(await ask("search", { tag: "ring/charging" }))).toEqual([ID(3)]);
+  expect(await ask("search", {})).toEqual({ refused: "Give the words to find, a tag, or both." });
+  expect(sql.prepare("SELECT * FROM relay_memory ORDER BY id").all()).toEqual(before);
+  client = await connect(seeded().SPACES);
 });
 
 it("finds notes holding every word, in any case, with a title and the time in the zone", async () => {
@@ -262,6 +282,19 @@ it("finds saved chats holding every word, with the matching lines and no device 
   expect((await ask("search_chats", { query: "the", cursor: first.nextCursor })).chats.map((chat: { id: string }) => chat.id)).toEqual([CHAT(1)]);
   expect((await ask("search_chats", { query: "the", to: "2026-11-04T12:00" })).chats.map((chat: { id: string }) => chat.id)).toEqual([CHAT(1)]);
   expect((await ask("search_chats", { query: "dark mode" })).chats).toMatchObject([{ id: CHAT(3), app: "codex" }]);
+});
+
+it("lists every chat active in a week with no words, newest first, a page at a time, with no lines", async () => {
+  const week = { from: "2026-11-01", to: "2026-11-08" };
+  const all = await ask("search_chats", week);
+  expect(all.chats.map((chat: { id: string; messages: number; lines: unknown[] }) => [chat.id, chat.messages, chat.lines]))
+    .toEqual([[CHAT(2), 3, []], [CHAT(1), 4, []], [CHAT(3), 2, []]]);
+  expect(all.chats[0].lastAt).toBe("2026-11-04T13:15:00-05:00");
+  const first = await ask("search_chats", { ...week, limit: 2 });
+  expect([first.chats.length, first.nextCursor]).toEqual([2, `1793801400000.${CHAT(1)}`]);
+  expect((await ask("search_chats", { ...week, cursor: first.nextCursor })).chats.map((chat: { id: string }) => chat.id)).toEqual([CHAT(3)]);
+  expect((await ask("search_chats", { ...week, query: "stiffener" })).chats.map((chat: { id: string }) => chat.id)).toEqual([CHAT(1)]);
+  expect((await ask("search_chats", { from: "2026-11-05", to: "2026-11-08" })).chats).toEqual([]);
 });
 
 it("cuts a long matching line around the word", async () => {

@@ -13,11 +13,12 @@ API key as `Authorization: Bearer …`, as [Connect a service](../connect-a-serv
 
 `GET /v1/notes` · `listNotes`
 
-With `q`, the notes whose text holds every word, as the `search` tool: `source` picks older recorded or typed notes, and `limit` is at most 50. Without `q`, every note from `from` to `to`, as the `timeline` tool: both are needed, and `limit` is at most 100. Newest first; read on with `cursor`.
+With `q`, the notes whose text holds every word, as the `search` tool; with `tag`, the notes on that topic and its parts: `source` picks older recorded or typed notes, and `limit` is at most 50. Without `q` or `tag`, every note from `from` to `to`, as the `timeline` tool: both are needed, and `limit` is at most 100. Newest first; read on with `cursor`.
 
 | Field | In | Type | Required | What it holds |
 |---|---|---|---|---|
 | `q` | query | string | no | The words to find. |
+| `tag` | query | string | no | A topic, such as battery or bike/charging: it finds its parts too, so bike finds bike/charging. |
 | `from` | query | string | no | The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
 | `to` | query | string | no | The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
 | `source` | query | "ring" or "typed" | no | Only older recorded notes, or only typed ones. |
@@ -152,11 +153,11 @@ The events from the phone's calendars that overlap one time to another, with eac
 
 `GET /v1/chats` · `searchChats`
 
-Find saved AI chats from Claude Code and Codex whose messages or AI summaries hold every word of the query, newest first, with up to 3 matching lines each.
+Find saved AI chats from Claude Code and Codex whose messages or AI summaries hold every word of the query, newest first, with up to 3 matching lines each. Leave out `q` to list every chat active from `from` to `to`, with no lines.
 
 | Field | In | Type | Required | What it holds |
 |---|---|---|---|---|
-| `q` | query | string | yes | The words to find. |
+| `q` | query | string | no | The words to find. |
 | `from` | query | string | no | Only chats active from this time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
 | `to` | query | string | no | Only chats last active before this time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
 | `limit` | query | integer | no | How many chats, at most 20. |
@@ -174,6 +175,100 @@ Read one saved chat by its id: the AI's saved summaries, then its messages in or
 | `id` | path | string | yes | The chat's id, from search_chats. |
 | `cursor` | query | string | no | The last answer's `nextCursor`, to read the next part. |
 | `timezone` | query | string | no | An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out. |
+
+## Change a note's topics
+
+`POST /v1/notes/{id}/tags` · `tagNote`
+
+Add and remove a note's topics, as this computer: the note's words stay as the person wrote them. Only a computer's key; it answers the note's topics.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `id` | path | string | yes | The note's id. |
+| `add` | body | array | no | Topics to add. |
+| `remove` | body | array | no | Topics to remove. |
+
+## Search the memory
+
+`GET /v1/memory` · `searchMemory`
+
+The memory's facts, newest first, as the `memory` tool: `q` finds every word in the text columns, `tag` a topic and its parts, `source` the facts from one record, such as relay:chat/<id>, and any column its value as its own field, such as `kind=decision`. Only live facts, unless `all=true`. The answer lists the memory's columns.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `q` | query | string | no | The words to find. |
+| `tag` | query | string | no | A topic, such as battery or bike/charging: it finds its parts too, so bike finds bike/charging. |
+| `source` | query | string | no | A record's link, such as relay:chat/<id> or relay:note/<id>: it finds its messages too. |
+| `from` | query | string | no | Only facts added from this time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
+| `to` | query | string | no | Only facts added before this time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
+| `all` | query | boolean | no | Add the facts that were replaced. |
+| `where` | query | object | no | A value for each of the person's columns, such as { "kind": "decision" }. In the web API, send each as its own field. |
+| `limit` | query | integer | no | How many facts, at most 50. |
+| `cursor` | query | string | no | The last answer's `nextCursor`, to read the next page. |
+| `timezone` | query | string | no | An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out. |
+
+## Add facts
+
+`POST /v1/memory` · `addFacts`
+
+Add up to 50 facts to the memory, all or none, as this computer. Each fact needs a tag, a source and every required column, and each value must fit its column's type. A fact can't be changed or deleted: name the facts it replaces instead. Send the same `clientId` again after a lost answer, and the fact is stored once. Only a computer's key adds. 201 when any was added.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `facts` | body | array | yes | The facts to add. |
+
+## Read the memory's columns
+
+`GET /v1/memory/columns` · `getColumns`
+
+The memory's live columns, each with its type, whether it is required, and its note; the removed ones; and, with `changes`, each column change with its device and time.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `changes` | query | boolean | no | Add the last 100 column changes. |
+
+## Change the memory's columns
+
+`POST /v1/memory/columns` · `changeColumns`
+
+Add, change and remove the memory's columns, all or none, at most 20 live. A column's type never changes; a removed column's values stay in the facts that have them. Only a computer's key changes columns. It answers the columns.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `add` | body | array | no | Columns to add. |
+| `change` | body | array | no | Columns whose note or `required` changes. |
+| `remove` | body | array | no | Columns to remove. |
+
+## Read one fact
+
+`GET /v1/memory/{id}` · `getFact`
+
+Read one fact of the memory by its id, with the facts it replaced and the fact that replaced it.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `id` | path | string | yes | The fact's id, such as fk3x9. |
+| `timezone` | query | string | no | An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out. |
+
+## Change a fact's topics
+
+`POST /v1/memory/{id}/tags` · `tagFact`
+
+Add and remove a fact's topics, as this computer: its words and sources stay as they are, and it keeps at least one topic. Only a computer's key; it answers the fact's topics.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `id` | path | string | yes | The fact's id, such as fk3x9. |
+| `add` | body | array | no | Topics to add. |
+| `remove` | body | array | no | Topics to remove. |
+
+## Open the knowledge web
+
+`POST /v1/knowledge/access` · `openKnowledge`
+
+A pass to the person's knowledge web, a git repository of topic pages, for at most one hour: its git address, the pass to send as `Authorization: Bearer`, and when it ends. The first ask makes the web. Only a computer's key gets one. A server whose Cloudflare account has no Artifacts answers 501 `not_set_up`.
+
+It takes no input.
 
 ## Check the caller
 

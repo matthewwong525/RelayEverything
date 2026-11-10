@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import { NOT_CONNECTED as HOOK_NOT_CONNECTED, record, run } from '../bin/hook.mjs';
 import { findSession, NOT_CONNECTED, OFF, parseSave, save } from '../bin/save.mjs';
 import { forgetComputer, writeComputer } from '../lib/config.mjs';
-import { computer, fakeServer, inline, project, said, SECRET, SESSION } from './fake.mjs';
+import { computer, fakeServer, inline, project, repoWithWorktree, said, SECRET, SESSION } from './fake.mjs';
 
 const SAVE = fileURLToPath(new URL('../bin/save.mjs', import.meta.url));
 const ROLLOUT = fileURLToPath(new URL('./fixtures/codex-rollout.jsonl', import.meta.url));
@@ -69,6 +69,18 @@ test('after /clear the old id is not this chat: save takes the chat that follows
   assert.equal(server.calls.length, 0);
 });
 
+test('with no id it knows, save takes the newest chat in this worktree, not another worktree of the same repository', () => {
+  const place = project();
+  const { main, copy } = repoWithWorktree();
+  const now = Date.now();
+  record(place.store, { ...place.input, session_id: 'in-worktree-01', cwd: copy }, now);
+  record(place.store, { ...place.input, session_id: 'in-main-repo-01', cwd: main }, now + 1000);
+  // Both record the main repository as their project, but each is found only in its own folder.
+  assert.equal(place.store.sessions()['in-worktree-01'].root, main);
+  assert.equal(findSession(place.store, { session: '', env: {}, cwd: copy }), 'in-worktree-01');
+  assert.equal(findSession(place.store, { session: '', env: {}, cwd: main }), 'in-main-repo-01');
+});
+
 test('save sends nothing when saving is off, when RELAY_SAVE is 0, or when the computer is not connected', async () => {
   const place = project();
   const server = fakeServer();
@@ -125,9 +137,10 @@ test('the start hook says once, as a notice, that this computer is not connected
   await run('stop', place.input, { env: place.env, start: inline(down.fetch) });
   assert.equal(place.store.sessions()[SESSION].pending, true);
   await run('session-start', place.input, { env: place.env, start });
-  assert.deepEqual(starts, [['pending']]);
+  // The first connected start of the day starts the build, which syncs the copy first.
+  assert.deepEqual(starts, [['pending'], ['build', 'claude']]);
   assert.equal(await run('stop', place.input, { env: { ...place.env, RELAY_SAVE: '0' }, start }), '');
-  assert.equal(starts.length, 1);
+  assert.equal(starts.length, 2);
 });
 
 test('runs as the skill runs it: the text on stdin, the session id as an argument, against a local server', async () => {

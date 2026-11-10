@@ -17,6 +17,6 @@ export const sidebar = [
     { label: 'Example skill and tables', link: '/connections/#an-example-skill-and-tables', badge: soon },
   ] },
   { label: 'Server API', items: ['api/keys', 'api/reference', 'api/recordings', 'api/files'] },
-  { label: 'Web API', items: ['api/connect-a-service', 'api/v1-reference'] },
+  { label: 'Web API', items: ['api/connect-a-service', 'api/knowledge-web', 'api/v1-reference'] },
   { label: 'About', items: ['privacy'] },
 ];

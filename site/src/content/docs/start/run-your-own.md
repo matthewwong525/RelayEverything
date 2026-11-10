@@ -18,6 +18,8 @@ The AI follows Relay Everything's setup guide. It asks you to make a Cloudflare 
 
 :::note
 Cloudflare's free plan is enough. Cloudflare asks you to turn on two parts once, in its dashboard: R2, for recordings, and Zero Trust, for your login. Both are free, but Cloudflare can ask for a payment card before it turns on R2.
+
+The [knowledge web](../../api/knowledge-web/) needs Cloudflare Artifacts, on the Workers Paid plan. On the free plan, your server works the same, with your memory of facts, but with no knowledge web: a computer that asks for it is told that it is not set up.
 :::
 
 ## What you get

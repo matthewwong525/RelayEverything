@@ -139,3 +139,13 @@ it("deletes a note's files with the account", async () => {
   expect((await call(matthew, "POST", "account-delete", { email: "ana@example.com" })).status).toBe(200);
   expect([...bucket.objects.keys()]).toEqual([`people/${BEN}/d`]);
 });
+
+it("deletes Ana's knowledge web after her space, and passes for a person who never opened one", async () => {
+  const held = new Set([`p-${ANA}`]);
+  const order: string[] = [];
+  const KNOWLEDGE = { delete: vi.fn(async (name: string) => { order.push(spaces.objects.has(ANA) ? "space kept" : "space gone"); return held.delete(name); }) };
+  expect(await call(matthew, "POST", "account-delete", { email: "ana@example.com" }, { KNOWLEDGE })).toEqual({ status: 200, json: { deleted: true } });
+  expect([KNOWLEDGE.delete.mock.calls, order, [...held]]).toEqual([[[`p-${ANA}`]], ["space gone"], []]);
+  expect(await call(ben, "POST", "account-delete", { email: "ben@example.com" }, { KNOWLEDGE })).toEqual({ status: 200, json: { deleted: true } });
+  expect(KNOWLEDGE.delete).toHaveBeenLastCalledWith(`p-${BEN}`);
+});

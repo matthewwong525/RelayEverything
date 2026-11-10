@@ -5,10 +5,11 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { record } from '../bin/hook.mjs';
+import { codexPrompt, helpers, USAGE } from '../bin/build.mjs';
 import { ago, run, saving } from '../bin/saving.mjs';
-import { forgetComputer, readState } from '../lib/config.mjs';
+import { forgetComputer, openState, readState } from '../lib/config.mjs';
 import { sendSession } from '../lib/send.mjs';
-import { fakeServer, project, SESSION } from './fake.mjs';
+import { fakeServer, project, repoWithWorktree, SESSION } from './fake.mjs';
 
 const bin = name => fileURLToPath(new URL(`../bin/${name}`, import.meta.url));
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -52,6 +53,31 @@ test('/relay:saving only looks where it can not write, and says so when asked to
   assert.equal(place.store.isOff(place.root), false);
 });
 
+test('/relay:saving off in a repository holds in each worktree of it, made before or after, and names the repository', async () => {
+  const place = project();
+  const { main, copy } = repoWithWorktree();
+  assert.equal(saving(place.store, main, 'off', place.env)[0], 'Saving to Relay Everything is off for WongOS.');
+  assert.equal(saving(place.store, copy, undefined, place.env)[0], 'Saving to Relay Everything is off for WongOS.');
+  // A chat in a new worktree records the repository, and nothing from it is sent.
+  const input = { ...place.input, cwd: copy };
+  record(place.store, input);
+  assert.deepEqual([place.store.sessions()[SESSION].root, place.store.sessions()[SESSION].project], [main, 'WongOS']);
+  const server = fakeServer();
+  assert.equal(await sendSession(SESSION, { env: place.env, store: place.store, fetcher: server.fetch }), 'off');
+  assert.equal(server.calls.length, 0);
+  // On from the worktree turns it on for the repository, and a chat there is sent under its name.
+  assert.equal(saving(place.store, copy, 'on', place.env)[0], 'Saving to Relay Everything is on for WongOS.');
+  assert.equal(await sendSession(SESSION, { env: place.env, store: place.store, fetcher: server.fetch }), 'sent');
+  assert.equal(server.calls[0].body.project, 'WongOS');
+  // An entry made for the worktree alone, before worktrees counted as their repository, still holds until turned on.
+  const older = openState(place.env);
+  older.setOff(copy, true);
+  assert.equal(saving(older, copy, undefined, place.env)[0], 'Saving to Relay Everything is off for WongOS.');
+  assert.equal(await sendSession(SESSION, { env: place.env, store: older, fetcher: server.fetch }), 'off');
+  saving(older, copy, 'on', place.env);
+  assert.equal(older.isOff(copy), false);
+});
+
 test('/relay:saving says when the project last sent a chat: the newest send of its sessions, not another project\'s', async () => {
   const place = project();
   const server = fakeServer();
@@ -70,22 +96,32 @@ test('/relay:saving says when the project last sent a chat: the newest send of i
 });
 
 test('each skill names itself and runs its own script from the plugin\'s folder', () => {
-  for (const [skill, script] of [['connect', 'connect.mjs'], ['ask', 'relay.mjs'], ['save', 'save.mjs'], ['saving', 'saving.mjs']]) {
+  for (const [skill, script] of [['connect', 'connect.mjs'], ['ask', 'relay.mjs'], ['save', 'save.mjs'], ['saving', 'saving.mjs'], ['build', 'build.mjs']]) {
     const text = read(`skills/${skill}/SKILL.md`);
     assert.match(text, new RegExp(`^---\\nname: ${skill}\\ndescription: .*Relay Everything`), skill);
     assert.ok(text.includes(`node "\${CLAUDE_PLUGIN_ROOT}/bin/${script}"`), skill);
     assert.ok(text.includes('In Codex it is empty: use the folder two levels above this file'), skill);
     assert.ok(text.includes('**In Codex, run each command here outside the sandbox.** Ask for escalated permissions'), skill);
-    assert.ok(text.length < 4000, `${skill} stays short`);
+    assert.ok(text.length < (skill === 'ask' ? 6000 : 4000), `${skill} stays short`);
   }
-  assert.match(read('skills/ask/SKILL.md'), /this computer's time zone/);
+  const ask = read('skills/ask/SKILL.md');
+  assert.match(ask, /this computer's time zone/);
+  // The skill names each command relay.mjs takes, and its usage line names each one the skill lists.
+  const usage = /^const USAGE = ([\s\S]*?);$/m.exec(read('bin/relay.mjs'))[1];
+  for (const command of ['me', 'notes', 'note', 'day', 'health', 'nights', 'workouts', 'places', 'points', 'calendar', 'chats', 'chat',
+    'around', 'topic', 'add-note', 'facts', 'fact', 'add-facts', 'columns', 'change-columns', 'tag']) {
+    assert.ok(ask.includes(`\`${command} `) || ask.includes(`\`${command}\``), `ask names ${command}`);
+    assert.match(usage, new RegExp(`[ ']${command}[ ,.]`), `usage names ${command}`);
+  }
+  for (const part of ['Start from your topics', 'Follow the threads']) assert.ok(ask.includes(part), part);
+  assert.match(ask, /^description: .*what was I doing when.*where was I.*what did I decide about/m);
   assert.ok(read('skills/save/SKILL.md').includes('--session "${CLAUDE_SESSION_ID}"'));
 });
 
 test('the hooks run in Claude Code and Codex: no async hook, a short end, and the plugin\'s folder in each command', () => {
   const { hooks } = JSON.parse(read('hooks/hooks.json'));
-  assert.deepEqual(Object.keys(hooks), ['SessionStart', 'Stop', 'SessionEnd']);
-  const events = { SessionStart: 'session-start', Stop: 'stop', SessionEnd: 'session-end' };
+  assert.deepEqual(Object.keys(hooks), ['SessionStart', 'UserPromptSubmit', 'Stop', 'SessionEnd']);
+  const events = { SessionStart: 'session-start', UserPromptSubmit: 'prompt', Stop: 'stop', SessionEnd: 'session-end' };
   for (const [event, groups] of Object.entries(hooks)) {
     const [hook] = groups.flatMap(group => group.hooks);
     assert.equal(hook.async, undefined, `${event}: Codex does not run an async hook`);
@@ -93,8 +129,35 @@ test('the hooks run in Claude Code and Codex: no async hook, a short end, and th
   }
   assert.equal(hooks.SessionEnd[0].hooks[0].timeout, 3);
   const manifest = JSON.parse(read('.claude-plugin/plugin.json'));
-  assert.equal(manifest.version, '0.3.0');
+  assert.equal(manifest.version, '0.5.0');
   assert.equal(manifest.userConfig, undefined);
   assert.match(manifest.description, /Claude Code/);
   assert.match(manifest.description, /Codex/);
+});
+
+test('/relay:build maps off, on, now and nothing to its commands', () => {
+  const text = read('skills/build/SKILL.md');
+  for (const command of ['status', 'off', 'on', 'now']) assert.ok(text.includes(`bin/build.mjs" ${command}\n`), command);
+  assert.match(text, /^argument-hint: "\[off\|on\|now\]"$/m);
+});
+
+test('the build\'s prompts name only build.mjs commands that exist, stay short, and become the helpers and Codex\'s prompt', () => {
+  const commands = new Set([...USAGE.matchAll(/(?:^Commands: |, )([a-z-]+)/g)].map(found => found[1]));
+  for (const name of ['PROMPT.md', 'reader.md', 'gardener.md', 'CODEX.md']) {
+    const text = read(`build/${name}`);
+    assert.ok(text.length < 6000, `${name} stays under 6000 characters`);
+    const named = [...text.matchAll(/\{\{build\}\} ([a-z-]+)/g)].map(found => found[1]);
+    for (const command of named) assert.ok(commands.has(command), `${name} names ${command}`);
+    // Claude Code's narrow grant refuses a heredoc or `<` that holds JSON, so the facts go as one argument.
+    assert.doesNotMatch(text, /\{\{build\}\} [^`\n]*<</, `${name} sends no heredoc`);
+    // relay.mjs shows only to say that FORMAT.md's commands go through build.mjs.
+    assert.doesNotMatch(text.replaceAll('Where it names `relay.mjs`', ''), /relay\.mjs/, name);
+  }
+  const shape = helpers('node /plugin/bin/build.mjs');
+  assert.deepEqual(Object.keys(shape), ['reader', 'gardener']);
+  assert.deepEqual(shape.reader.tools, ['Read', 'Grep', 'Glob', 'Bash']);
+  assert.ok(shape.gardener.tools.includes('Write'));
+  assert.ok(shape.reader.prompt.includes('node /plugin/bin/build.mjs check-facts') && !shape.reader.prompt.includes('{{build}}'));
+  const codex = codexPrompt('node /plugin/bin/build.mjs');
+  for (const part of ['node /plugin/bin/build.mjs work', '# Read chats and notes into facts', '# Write and tidy the topic pages']) assert.ok(codex.includes(part), part);
 });

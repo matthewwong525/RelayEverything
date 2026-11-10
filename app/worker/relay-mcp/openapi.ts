@@ -1,8 +1,9 @@
 // The web API's OpenAPI 3.1 document, made from the tools' inputs, the routes and the answers here, so it can't go
 // stale. /v1/openapi.json serves it; `npm run relay:api-doc` writes the website's copy and reference page.
 import { z } from "zod";
-import { ROUTES, type V1Route, type WebTool } from "./api.ts";
-import { TOOLS } from "./inputs.ts";
+import { TYPES } from "../apps/relay/memory.ts";
+import { CODES, ROUTES, type V1Route, type WebTool } from "./api.ts";
+import { INPUTS } from "./inputs.ts";
 
 const at = z.string().describe("A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00.");
 const nextCursor = z.string().nullable().describe("Send it as `cursor` to read the next page; null on the last one.");
@@ -53,6 +54,19 @@ const chat = { id: z.string(), title: z.string(), project: z.string().describe("
   startedAt: at, lastAt: at, messages: z.number(), savedByAi: z.boolean() };
 const role = z.enum(["you", "ai", "step"]);
 const photo = z.strictObject({ id: z.string(), takenAt: at, lat: z.number().nullable(), lon: z.number().nullable(), width: z.number(), height: z.number() });
+const fact = z.strictObject({ id: z.string().describe("The fact's id, such as fk3x9."),
+  fields: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]))
+    .describe("The fact's value for each column, such as kind and text; a removed column's value stays."),
+  tags: z.array(z.string()).describe("The topics it is about."), sources: z.array(z.string()).describe("The records it came from, as relay: links."),
+  replaces: z.array(z.string()).describe("The ids of the facts it replaced."),
+  replacedBy: z.string().nullable().describe("The id of the fact that replaced it; null for a live fact."),
+  device: z.string().describe("The name of the computer that added it."), createdAt: at });
+const column = z.strictObject({ name: z.string(), type: z.enum(TYPES), required: z.boolean().describe("Whether each new fact needs it."),
+  note: z.string().describe("What it holds, for the AIs that fill it.") });
+const columns = { columns: z.array(column).describe("The live columns."),
+  removed: z.array(z.strictObject({ name: z.string(), type: z.enum(TYPES), removedAt: z.number().describe("Unix time in milliseconds.") }))
+    .describe("The removed columns: a name comes back only with its old type.") };
+const topics = z.strictObject({ id: z.string(), tags: z.array(z.string()).describe("Its topics now.") });
 
 /** What each tool answers, and `me`: api.test.ts checks every answer against these. */
 export const ANSWERS = {
@@ -89,6 +103,22 @@ export const ANSWERS = {
     messages: z.array(z.strictObject({ seq: z.number(), role, text: z.string(), at })), nextCursor }),
   photos: z.strictObject({ photos: z.array(photo), nextCursor }),
   add_note: z.strictObject({ id: z.string().describe("The note's id."), added: z.boolean().describe("False when this clientId was added before.") }),
+  memory: z.strictObject({ facts: z.array(fact), columns: columns.columns, nextCursor }),
+  read_fact: fact.extend({ replacedFacts: z.array(fact).describe("The facts it replaced."),
+    replacedByFact: fact.nullable().describe("The fact that replaced it.") }),
+  add_facts: z.strictObject({ facts: z.array(z.strictObject({ clientId: z.string(), id: z.string().describe("The fact's id."),
+    added: z.boolean().describe("False when this clientId was added before.") })) }),
+  columns: z.strictObject({ ...columns, changes: z.array(z.strictObject({ name: z.string(), change: z.enum(["add", "change", "remove"]),
+    column: z.strictObject({ name: z.string(), type: z.enum(TYPES), required: z.boolean().optional(), note: z.string().optional() })
+      .describe("The column as the change left it."),
+    device: z.string().describe("The name of the computer that changed it."), at: z.number().describe("Unix time in milliseconds.") }))
+    .optional().describe("The last 100 changes, newest first: only with `changes`.") }),
+  change_columns: z.strictObject(columns),
+  tag_fact: topics,
+  tag_note: topics,
+  knowledge_access: z.strictObject({ remote: z.string().describe("The web's git address."),
+    token: z.string().describe("The pass: send it to git as `Authorization: Bearer …`, never in the address or a file."),
+    expiresAt: z.string().describe("When the pass ends, at most one hour on, as an ISO time.") }),
   me: z.strictObject({ device: z.string().describe("The key's device name, or the app's name."), adds: z.boolean().describe("Whether it may add notes.") }),
 } satisfies Record<WebTool | "me", z.ZodType>;
 
@@ -100,16 +130,32 @@ const json = (schema: z.ZodType, io: "input" | "output" = "output") => {
 const ERROR = { $ref: "#/components/schemas/Error" };
 const refusal = (description: string) => ({ description, content: { "application/json": { schema: ERROR } } });
 
+type Fields = { properties: Record<string, Json>; required?: string[] };
+const inputOf = (name: WebTool) => json(z.object(INPUTS[name].input), "input") as Fields;
+const inPath = (route: V1Route, key: string) => route.path.includes(`{${key}}`);
+
 /** A route's query or path fields from its tools' inputs: `query` is sent as `q`. A field the tools share takes the
- *  last tool's limits, and is required only when every tool needs it. */
+ *  last tool's limits, and is required only when every tool needs it. A POST's other fields are its body. */
 function parameters(route: V1Route) {
-  const inputs = route.tools.map(name => json(z.object(TOOLS[name].input), "input") as { properties: Record<string, Json>; required?: string[] });
+  const inputs = route.tools.map(inputOf);
   const fields = new Map(inputs.flatMap(({ properties }) => Object.entries(properties)));
-  return [...fields].map(([key, { description, ...schema }]) => {
-    const where = route.path.includes(`{${key}}`) ? "path" : "query";
+  return [...fields].filter(([key]) => route.method === "GET" || inPath(route, key)).map(([key, { description, ...schema }]) => {
+    const where = inPath(route, key) ? "path" : "query";
     const required = where === "path" || inputs.every(input => input.required?.includes(key));
-    return { name: key === "query" && route.q ? "q" : key, in: where, required, description, schema };
+    // A record, as a memory column's value, is sent as one field for each key.
+    const spread = schema.type === "object" ? { style: "form", explode: true } : {};
+    return { name: key === "query" && route.q ? "q" : key, in: where, required, description, schema, ...spread };
   });
+}
+
+/** A POST's JSON body: its question's fields but those in the path; none when it takes no input. */
+function requestBody(route: V1Route) {
+  const { properties, required = [] } = inputOf(route.tools[0]);
+  const own = Object.entries(properties).filter(([key]) => !inPath(route, key));
+  if (!own.length) return {};
+  const schema = { type: "object", additionalProperties: false, properties: Object.fromEntries(own),
+    required: required.filter(key => !inPath(route, key)) };
+  return { requestBody: { required: true, content: { "application/json": { schema } } } };
 }
 
 /** The answer schema of a route that runs `names`. Equal answers give one schema: two equal oneOf branches match
@@ -122,34 +168,38 @@ export function answerSchema(names: readonly (keyof typeof ANSWERS)[]) {
 function operation(route: V1Route) {
   const schema = answerSchema(route.tools.length ? route.tools : ["me"]);
   const ok = { description: "The answer.", content: { "application/json": { schema } } };
+  const path = parameters(route);
   return {
     operationId: route.id, summary: route.summary, description: route.description,
-    ...(route.method === "POST"
-      ? { requestBody: { required: true, content: { "application/json": { schema: json(z.object(TOOLS.add_note.input), "input") } } },
-        responses: { 201: { ...ok, description: "Added." }, 200: { ...ok, description: "Added before: the same note." } } }
-      : { parameters: parameters(route), responses: { 200: ok } }),
+    ...route.method === "GET" || path.length ? { parameters: path } : {},
+    ...route.method === "POST" && requestBody(route),
+    responses: route.adds ? { 201: { ...ok, description: "Added." }, 200: { ...ok, description: "Added before: the same one." } } : { 200: ok },
+    ...route.tools.includes("knowledge_access") && { more: { 501: refusal("The knowledge web is not set up on this server."),
+      503: refusal("The knowledge web is still being made: try again in a minute.") } },
   };
 }
 
 const errors = {
   400: refusal("The input can't be read: `error_description` says which field."),
   401: refusal("No token, or one that is not valid: an expired token or a disconnected app."),
-  403: refusal("This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes."),
-  404: refusal("No such note, chat, stay, trip or route in the caller's own space."),
+  403: refusal("This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, " +
+    "or a caller that is not a computer, for a change to the memory, a topic or the knowledge web."),
+  404: refusal("No such note, fact, chat, stay, trip or route in the caller's own space."),
 };
 
 /** The whole document, for a server at `origin`. */
 export function openApi(origin: string) {
   const paths: Record<string, Json> = {};
   for (const route of ROUTES) {
-    const { responses, ...rest } = operation(route);
-    paths[route.path] = { ...paths[route.path], [route.method.toLowerCase()]: { ...rest, responses: { ...responses, ...errors } } };
+    const { responses, more, ...rest } = operation(route);
+    paths[route.path] = { ...paths[route.path], [route.method.toLowerCase()]: { ...rest, responses: { ...responses, ...errors, ...more } } };
   }
   return {
     openapi: "3.1.0",
     info: { title: "Relay Everything API", version: "1.0.0",
-      description: "Read one person's Relay Everything notes, health, sleep, workouts, places, calendar and saved chats, and add notes. It changes and deletes nothing. " +
-        "Each caller reaches only the space of the person who connected it or made its key." },
+      description: "Read one person's Relay Everything notes, health, sleep, workouts, places, calendar, saved chats and memory, and add notes. " +
+        "A computer's key also adds facts, changes the memory's columns and the topics of facts and notes, and opens the knowledge web. " +
+        "It deletes nothing. Each caller reaches only the space of the person who connected it or made its key." },
     servers: [{ url: origin }],
     security: [{ oauth2: [] }, { apiKey: [] }],
     paths,
@@ -160,10 +210,11 @@ export function openApi(origin: string) {
           "same token works on `/mcp` and here. An app connected before adding notes reads only; connect it again to add.",
         flows: { authorizationCode: { authorizationUrl: `${origin}/authorize`, tokenUrl: `${origin}/token`, refreshUrl: `${origin}/token`, scopes: {} } } },
         apiKey: { type: "http", scheme: "bearer", bearerFormat: "rek_…", description: "An API key, made on the person's Relay Everything page with " +
-          "*Add an API key*: send it as `Authorization: Bearer rek_…`. A phone's or a chat key is refused here." },
+          "*Add an API key*, or a computer's key from the Relay Everything plugin: send it as `Authorization: Bearer rek_…`. A phone's or a chat " +
+          "key is refused here." },
       },
       schemas: { Error: { type: "object", required: ["error", "error_description"], additionalProperties: false,
-        properties: { error: { type: "string", enum: ["invalid_request", "invalid_token", "forbidden", "not_found", "method_not_allowed"] },
+        properties: { error: { type: "string", enum: Object.values(CODES) },
           error_description: { type: "string", description: "What went wrong, in words to show a person." } } } },
     },
   };
@@ -179,9 +230,11 @@ const HEAD = "| Field | In | Type | Required | What it holds |\n|---|---|---|---
 /** The website's reference page for the web API, made from the document. */
 export function v1Reference(document = openApi("https://<your-relay-server>")): string {
   const sections = Object.entries(document.paths).flatMap(([path, methods]) => Object.entries(methods as Record<string, Operation>).map(([method, op]) => {
-    const fields = op.parameters?.map(field => `| \`${field.name}\` | ${field.in} | ${cell(typeOf(field.schema))} | ${field.required ? "yes" : "no"} | ${cell(field.description)} |`)
-      ?? Object.entries(op.requestBody!.content["application/json"].schema.properties).map(([name, field]) => `| \`${name}\` | body | ${
-        cell(typeOf(field))} | ${op.requestBody!.content["application/json"].schema.required?.includes(name) ? "yes" : "no"} | ${cell(field.description as string)} |`);
+    const sent = op.requestBody?.content["application/json"].schema;
+    const fields = [...(op.parameters ?? []).map(field => `| \`${field.name}\` | ${field.in} | ${cell(typeOf(field.schema))} | ${
+      field.required ? "yes" : "no"} | ${cell(field.description)} |`),
+    ...Object.entries(sent?.properties ?? {}).map(([name, field]) => `| \`${name}\` | body | ${
+      cell(typeOf(field))} | ${sent!.required?.includes(name) ? "yes" : "no"} | ${cell(field.description as string)} |`)];
     return [`## ${op.summary}`, `\`${method.toUpperCase()} ${path}\` · \`${op.operationId}\``, op.description,
       fields.length ? `${HEAD}\n${fields.join("\n")}` : "It takes no input."].join("\n\n");
   }));

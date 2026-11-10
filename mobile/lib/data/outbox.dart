@@ -28,12 +28,14 @@ const webhookProblemKey = 'webhook.problem';
 /// flush apart, in their own order: one place that fails holds back nothing for the other. Each upload is read again
 /// just before it goes, so a switch of place in the middle of a round stops it there; so does an upload already gone.
 /// [keepGoing] is asked before each upload; when it says no, such as after *Stop sending*, the round stops there.
+/// With [private] true it sends only the [privateRoutes] uploads, with false only the notes' own, so a round sends the
+/// notes first, and a health upload that fails holds back no note; null sends all.
 Future<FlushResult> flush(Store store, Outbound api, {DateTime Function()? clock, bool Function()? keepGoing,
-  Future<Directory> Function()? folder}) async {
+  Future<Directory> Function()? folder, bool? private}) async {
   var sent = 0, dropped = 0;
   final now = clock ?? DateTime.now;
   final webhook = api.destination == ownWebhook;
-  for (final listed in await store.outbox(destination: api.destination)) {
+  for (final listed in await store.outbox(destination: api.destination, private: private)) {
     if (keepGoing != null && !keepGoing()) break;
     // A switch of place can move the outbox while this round runs, and no background round has [keepGoing]: read each
     // upload again, so one moved since the list never goes to the place left.

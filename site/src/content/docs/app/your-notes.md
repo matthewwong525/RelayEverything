@@ -1,6 +1,6 @@
 ---
 title: Notes
-description: Home and its folders, read, search and change the notes you write on your phone, as in Apple Notes, with text styles, checklists, photos and files, and open your Relay Everything page for ring notes.
+description: Home and its folders, read, search and change the notes you write on your phone, as in Apple Notes, with text styles, checklists, photos and files, and open your Relay Everything page.
 ---
 
 The Relay Everything app opens on **Home**, a screen of folders. Your notes are the first folders. The app shows the notes that you type or say into this phone, and keeps them on the phone. Once you sign in to Relay Everything, it also shows the notes from your other phones, email, Claude Code and your AI apps: [Your notes on every phone](#your-notes-on-every-phone).
@@ -118,11 +118,13 @@ Each phone that you sign in on shows all your notes, as in Apple Notes. It gets 
 
 New notes and changes come in when you open the app, when you come back to it, when you pull down the list, and every hour in the background. A note from somewhere else shows where it came from, under its title in the list and at the top of the note.
 
+Notes go first. Each time, the phone sends your notes, then gets the new notes. Only then does it send [health](../health/), [places](../location/), the [calendar](../calendar/) and [photos](../photos/). A note that you write while they send goes before the rest. If a health, place, calendar or photo upload fails, your notes still go and come in. That data waits on the phone and goes on a later sync.
+
 - **Edit anywhere.** Change a note on one phone, and your other phones, your page and your AI get the new words at their next sync. Each of your webhooks gets one [`note.updated`](../../connections/your-database/#noteupdated) message.
 - **Delete anywhere.** Delete a note on one phone, and it goes from your other phones at their next sync, and from your page and your AI: [Delete a note](#delete-a-note). A note open on another phone stays until you leave it, then goes.
 - **The newer change wins.** If two phones change the same note before they sync, the change made later stays on every phone and on your page, even when the older change arrives last.
 - **Files on tap.** A note from somewhere else lists its files by name and size. Tap one to download it and open it. Only that file downloads, so the phone uses no space or data for files you never open. You add files only to the notes you wrote on this phone.
-- **Voice recordings stay on their phone.** A voice note from another phone shows its words with no recording. A ring note's recording downloads and opens on tap, as a file does.
+- **Voice recordings stay on their phone.** A voice note from another phone shows its words with no recording. An older recorded note's recording downloads and opens on tap, as a file does.
 - **Signing out** with **Sign out** on the [Account](../settings/#account) page deletes the notes from somewhere else, and their files, from this phone. The notes that you wrote on this phone stay.
 
 Signed out, the phone gets no notes and makes no network call. Notes it got before stay until you sign out. With **My own webhook**, the phone sends only to your webhook and gets no notes. To get your notes on every phone and keep your own database too, sign in to Relay Everything and add your webhook on your Relay Everything page: your server sends every note and change from every phone to it.
@@ -139,7 +141,7 @@ Search reads only the notes on this phone, so it works with no signal and sends 
 
 Tap the round gear button at the top right of Home to open [Settings](../settings/).
 
-To open your Relay Everything page, open Settings, tap the first row with your email, then tap **Open your Relay Everything page**. It shows while the phone sends to your Relay Everything server. It opens `<your-relay-server>/apps/relay/` in the phone's browser. Sign in with your email. Your ring notes, their recordings, and the notes from all your devices are there. [Account](../settings/#account)
+To open your Relay Everything page, open Settings, tap the first row with your email, then tap **Open your Relay Everything page**. It shows while the phone sends to your Relay Everything server. It opens `<your-relay-server>/apps/relay/` in the phone's browser. Sign in with your email. The notes from all your devices, and their recordings, are there. [Account](../settings/#account)
 
 ## Write a note
 
@@ -177,11 +179,7 @@ To keep a web page, a photo or a file from another app, use its share button: [S
 
 ## Talk a note
 
-Hold **New note**: an amber ring fills round it in half a second, and the phone buzzes. Until your first voice note, a tip above the button says **Hold to talk**. Let go, and talk: the phone keeps listening on its own full screen, with bars that move with your voice. Tap anywhere on the screen to save, or tap the **X** at the top right to keep nothing. The phone writes the words itself. [Voice notes](../voice-notes/)
-
-## Where a ring note's place comes from
-
-A ring note keeps the place it already has, which you see on your Relay Everything page. Relay Everything gives no ring note a place later: a ring note with no place keeps none. [Location](../location/) tells how a typed note gets its place.
+Hold **New note**: an amber circle fills round it in half a second, and the phone buzzes. Until your first voice note, a tip above the button says **Hold to talk**. Let go, and talk: the phone keeps listening on its own full screen, with bars that move with your voice. Tap anywhere on the screen to save, or tap the **X** at the top right to keep nothing. The phone writes the words itself. [Voice notes](../voice-notes/)
 
 ## The sync state
 
@@ -191,7 +189,7 @@ The line under the **Home** title gives the sync state, such as *Synced*. Under 
 |---|---|---|
 | **On this phone** | No dot | You are signed out. Your notes stay on this phone, and the app sends nothing. [Connect a phone](../../start/connect-a-phone/) to sign in. |
 | **Synced** | Green, still | Your server has all the notes from this phone. |
-| **Syncing** | Amber, pulses | The phone sends notes now. If the phone is set to reduce motion, the dot stays still. |
+| **Syncing** | Amber, pulses | The phone sends and gets notes now. It shows only for notes: health, places, the calendar and photos can still send after it ends. If the phone is set to reduce motion, the dot stays still. |
 | **2 waiting** | Hollow | Notes made with no signal. They show **Waiting to send** and go on the next sync. |
 | **Offline** | Hollow | The phone can not reach your server. You lose nothing. |
 | **Key refused** | Red | The server refused this phone's key. [Connect the phone](../../start/connect-a-phone/) with a new key. |

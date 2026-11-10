@@ -96,7 +96,7 @@ Every message is a `POST` with a JSON body in one envelope:
 }
 ```
 
-`source` is `ring` or `typed`. `place` is null when the note has none. `from` says where the place came from: `phone` for a typed note's own place, `history` for an older ring note's place, taken from the location history. Relay Everything gives no note a place this way now. `audio` is a ring note's recording in base64, or null.
+`source` is `ring` or `typed`. `place` is null when the note has none. `from` says where the place came from: `phone` for a typed note's own place, `history` for an older recorded note's place, taken from the location history. Relay Everything gives no note a place this way now. `audio` is an older recorded note's recording in base64, or null.
 
 ### A note's files
 
@@ -363,7 +363,7 @@ const payload = new Webhook(process.env.RELAY_WEBHOOK_SECRET).verify(body, heade
 - Answer with a `2xx` status within 15 seconds. Relay Everything does not follow a redirect.
 - After any other answer, Relay Everything tries the same message again after 30 s, 2 min, 10 min, 30 min, 1 h, 2 h, 4 h, 6 h and 8 h: about a day. Then the card shows **Failing**, with the last answer and how many items wait. If a send is lost, your space wakes itself every 15 minutes while it has a webhook, and sends what waits. **Try again now** sends them all, in order, from where it stopped.
 - A retry can send a message you already saved, when your answer was lost. Its id and body are the same. So save each note, point and event by its `id`, as an upsert. Save a health sample by its device, type, start, end and source: a phone from before an update gave it another `id`.
-- From your server, accept bodies up to 34 MB. A ring note's recording is about 100 KB a minute, a file is up to 25 MB, a photo is up to 3 MB, and base64 makes each a third larger. To accept less, answer `413` to a `note.file` or a `photo.created` that is too large.
+- From your server, accept bodies up to 34 MB. An older recorded note's recording is about 100 KB a minute, a file is up to 25 MB, a photo is up to 3 MB, and base64 makes each a third larger. To accept less, answer `413` to a `note.file` or a `photo.created` that is too large.
 
 ## When the format changes
 

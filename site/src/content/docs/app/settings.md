@@ -27,11 +27,21 @@ Signed in, tap the row to open the **Account** page:
 | **AI apps** | The names of the AI apps you connected, such as *Claude*. Tap it to add or remove one on your Relay Everything page. [Connect your AI](../../connections/connect-your-ai/) |
 | **Webhooks** | The names of the webhooks you added, such as *My database*. Tap it to add or remove one on your Relay Everything page. [Your own database](../../connections/your-database/) |
 | **Health, places, calendar and photos** | Where they go: **Relay Everything** (the default), or **Only my own webhook**. [Below](#health-places-calendar-and-photos-only-to-your-webhook) |
-| **Open your Relay Everything page** | Opens `<your-relay-server>/apps/relay/` in the phone's browser, with your ring notes, their recordings, and the notes from all your devices. [Notes](../your-notes/#the-gear-and-your-relay-everything-page) |
+| **Open your Relay Everything page** | Opens `<your-relay-server>/apps/relay/` in the phone's browser, with the notes from all your devices, and their recordings. [Notes](../your-notes/#the-gear-and-your-relay-everything-page) |
 | **Server** | The server this phone sends to. Change it to try a preview. [Connect a phone](../../start/connect-a-phone/#try-a-preview) |
 | **Sign out** | In red. Asks first, then removes this phone's key and stops sending. Your notes from this phone stay here. Notes from your other devices leave this phone. You sign in again to send again. [Connect a phone](../../start/connect-a-phone/#sign-out) |
 
-With your own webhook, the Account page shows its address with **Send a test**, the last answer that was not `2xx` or a file too large for your receiver, **Notes from elsewhere**, and **Stop sending** in red. **Stop sending** asks first. It keeps the webhook's address and secret on the phone, so you can send there again with no new secret.
+With your own webhook, the Account page shows its address with **Send a test**, the last answer that was not `2xx` or a file too large for your receiver, **Sign in to Relay Everything**, and **Stop sending** in red. **Stop sending** asks first. It keeps the webhook's address and secret on the phone, so you can send there again with no new secret.
+
+### Sign in and keep your webhook
+
+On the webhook Account page, tap **Sign in to Relay Everything** to sync your notes with your page, your AI and your other phones. It opens the same **Sign in** as the Account row, with no **Send to my own webhook instead**. After you sign in:
+
+- Your notes go to Relay Everything. Health, places, calendar and photos still go only to your webhook, as with [**Only my own webhook**](#health-places-calendar-and-photos-only-to-your-webhook). The Account page shows your account with **Only my own webhook** picked.
+- If notes already went to your webhook, the app asks *Send your 12 earlier notes too?*: *They are not on Relay Everything yet.* **Send them** puts them on your page, oldest first, with their files. **Only new notes** leaves them only at your webhook.
+- Your webhook gets no more notes from the phone. To get your notes there too, add it under **Webhooks** on your Relay Everything page, and the server sends them on. A short message at the bottom of the screen says so. [Your own database](../../connections/your-database/)
+
+Go back from **Sign in**, or close the sign-in, to change nothing: the phone still sends everything to your webhook.
 
 Signing out or stopping stops health, the calendar, location history and photos, and deletes what of them did not go yet.
 
@@ -44,6 +54,8 @@ Signed in, you can keep your personal data off Relay Everything and still sync y
 - With no webhook on the phone, the pick first opens the webhook's form: type its address, copy its secret, **Send a test**, then **Save**. Go back to change nothing. A webhook you added on your Relay Everything page does not count, because the server never gives its secret to a phone.
 - The group then shows the webhook's address, **Send a test**, and its last failure, if any.
 - What already went to Relay Everything stays on your page. Delete it there if you want it gone.
+
+A phone that sends everything to your webhook gets here in one step: [sign in and keep your webhook](#sign-in-and-keep-your-webhook).
 
 What you give up: your AI apps and your Relay Everything page show none of your health, places, calendar or photos from then on. Nothing retries for you on a server: when the phone is off or offline, the data waits for the phone's next round. A receiver that is down holds back only this data; your notes still sync, and the other way round.
 

@@ -63,4 +63,4 @@ Turn off **Photos** in the **Photos** folder. The phone stops sending, and delet
 1. Open your Relay Everything page, and sign in: [Sign up](../../start/sign-up/).
 2. On the **Photos** card, click **Delete all photos**, then confirm.
 
-It deletes every photo your phones sent, and your AI can't see them any more. Your ring recordings, notes, health and places stay. The copies a webhook already got stay in your own database. You can't undo it. The card shows how many photos your space holds, but not the photos.
+It deletes every photo your phones sent, and your AI can't see them any more. Your recordings, notes, health and places stay. The copies a webhook already got stay in your own database. You can't undo it. The card shows how many photos your space holds, but not the photos.

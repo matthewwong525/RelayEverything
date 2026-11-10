@@ -14,15 +14,15 @@ const device = z.strictObject({
 const place = z.strictObject({
   lat: z.number(), lon: z.number(), accuracy: z.number().nullable().describe("In meters."),
   name: z.string().nullable().describe("The place's name from the phone's address lookup, such as a street."),
-  from: z.enum(["phone", "history"]).describe("phone: where a typed note was written. history: the location point nearest a ring note."),
+  from: z.enum(["phone", "history"]).describe("phone: where a typed note was written. history: the location point nearest an older recorded note."),
 });
 const note = z.strictObject({
   id: z.string().describe("The note's id, the same in every message about this note: a UUID, or the phone's own note id when the phone sends to its own webhook."),
-  source: z.enum(["ring", "typed"]), text: z.string().describe("The words: a typed note, or a ring note's transcription."),
+  source: z.enum(["ring", "typed"]), text: z.string().describe("The words: a typed note, or an older recorded note's transcription."),
   recorded_at: iso, created_at: iso.describe("When Relay Everything stored it."), device, place: place.nullable(),
 });
 const audio = z.strictObject({ content_type: z.literal("audio/mp4"), base64: z.string() }).nullable()
-  .describe("A ring note's recording, or null for a typed note or a ring note with words only.");
+  .describe("An older recorded note's recording, or null for a typed note or an older recorded note with words only.");
 const attachment = z.strictObject({
   id: z.string().describe("The file's id, from the phone that sent it."), name: z.string().describe("The file's name, such as warranty.pdf."),
   content_type: z.string().describe("Such as application/pdf."), size: z.number().int().min(0).describe("In bytes."),

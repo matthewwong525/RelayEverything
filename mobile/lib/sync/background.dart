@@ -27,9 +27,9 @@ const syncTask = 'com.matthewwong525.relay.sync';
 // The app and the background round share one connection, so their writes never collide.
 Store openStore() => Store(driftDatabase(name: 'relay', native: const DriftNativeOptions(shareAcrossIsolates: true)));
 
-/// The background round: health since the last read, the calendar's changes, the location points kept, then every
-/// waiting upload, then new photos, each to the server or the person's own webhook. With sending off it reads, keeps and
-/// sends nothing.
+/// The background round: the notes waiting and the notes changed elsewhere first, then health since the last read, the
+/// calendar's changes, the location points kept and their uploads, then new photos, each to the server or the person's
+/// own webhook. With sending off it reads, keeps and sends nothing.
 @pragma('vm:entry-point')
 void backgroundSync() {
   Workmanager().executeTask((task, input) async {
@@ -65,13 +65,13 @@ Motion phoneMotion() => Platform.isIOS ? PhoneMotion() : AndroidMotion();
 /// points Swift kept. True when it is done; a calendar that could not be read, such as where the iPhone's background
 /// engine has no calendar, does not hold the round back.
 /// It sends notes to the place the settings name: the server with [connection], or the person's own [webhook], which
-/// needs no key. Health, points, stays and trips, the calendar and photos go to [Settings.privatePlace]: the same place,
+/// needs no key. With [pull], it then reads the notes changed elsewhere, after the notes' flush emptied. Only then it
+/// reads and sends health, points, stays and trips, the calendar and photos, to [Settings.privatePlace]: the same place,
 /// or only the webhook, flushed apart after the notes, so one place that fails holds back nothing for the other. With no
 /// webhook for them, they wait on the phone and never go to the server. After the points, the timeline step makes stays
 /// and trips from them, with [motion] for the mode, unless the person picked *Only points*; with *Only stays and trips*
-/// no point is queued. The photo step runs after the outbox, so a photo waiting for Wi-Fi holds back no note; it runs
-/// only with [photos] and [network] given. With [pull], it ends by reading notes changed elsewhere, after the notes'
-/// flush emptied.
+/// no point is queued. The photo step runs after the outbox, so a photo waiting for Wi-Fi holds back nothing else; it
+/// runs only with [photos] and [network] given.
 Future<bool> backgroundRound(Store store, {required Connection? connection, Webhook? webhook, required HealthSource health,
   required Sender sender, NativeBackground? native, Places? places, DateTime? now, Future<Directory> Function()? folder,
   ShareGroup? share, CalendarSource? calendar, PhotoSource? photos, Network? network, Motion? motion, bool pull = false}) async {
@@ -86,6 +86,17 @@ Future<bool> backgroundRound(Store store, {required Connection? connection, Webh
       if (group != null) await drainShareInbox(group, (await folder()).path, store, send: settings.sending);
     } on Exception {
       // The app keeps them on its next open.
+    }
+  }
+  // The notes first, then the notes changed elsewhere: a short wake gets them through before the rest.
+  final notes = await flush(store, api, folder: folder, private: false);
+  // Only after the notes' uploads emptied, so this phone's own changes are on the server before it reads.
+  var pulled = true;
+  if (pull && notes.failure == null) {
+    try {
+      await syncNotes(store, sender, settings: settings, connection: connection);
+    } on ApiException {
+      pulled = false;
     }
   }
   if (native != null && settings.history) {
@@ -116,11 +127,12 @@ Future<bool> backgroundRound(Store store, {required Connection? connection, Webh
     }
   }
   if (settings.locationSend != LocationSend.stays) await store.queuePoints();
-  final notes = await flush(store, api, folder: folder);
-  // Private data to its own place: flushed apart, so it waits behind no note. With no client for it, such as a webhook
-  // lost in a restore, it waits; that is no failure of the round, as no retry can send it before the person sets it.
+  // Private data to its place: the notes' server, flushed after the notes, or its own webhook, so one place that fails
+  // holds back nothing for the other. With no client for it, such as a webhook lost in a restore, it waits; that is no
+  // failure of the round, as no retry can send it before the person sets it.
   final apart = privateApi != null && privateApi.destination != api.destination;
-  final private = apart ? await flush(store, privateApi, folder: folder) : notes;
+  final private = privateApi == null ? const FlushResult()
+    : await flush(store, privateApi, folder: folder, private: apart ? null : true);
   Failure? failure;
   if (photos != null && network != null && settings.photos) {
     // The app can turn photos off while this round runs: it reads the switch again before each photo.
@@ -130,17 +142,9 @@ Future<bool> backgroundRound(Store store, {required Connection? connection, Webh
         return now.photos && now.place == settings.place && now.privatePlace == settings.privatePlace;
       });
   }
-  // Only after the outbox emptied, so this phone's own changes are on the server before it reads.
-  if (pull && notes.failure == null) {
-    try {
-      await syncNotes(store, sender, settings: settings, connection: connection);
-    } on ApiException {
-      return false;
-    }
-  }
   // A refused photo from a key that still answers, such as on an older server with no photos, comes back as null; a
   // turned-off key fails the round, as for the notes.
-  return notes.failure == null && private.failure == null && read && failure == null;
+  return notes.failure == null && pulled && private.failure == null && read && failure == null;
 }
 
 /// Turns the hourly round on while sending and history, health, the calendar or photos are on, and off otherwise.

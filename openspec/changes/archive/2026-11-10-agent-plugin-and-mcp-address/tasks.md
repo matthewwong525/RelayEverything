@@ -49,4 +49,4 @@
 - [x] 7.2 `/save`, then wait for CI, `flutter test` included, and the preview.
 - [x] 7.3 On staging, from this computer, in a separate `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `RELAY_EVERYTHING_HOME` (nothing in the real setups): install the plugin from GitHub at this branch in Claude Code and in Codex, Codex with its default `workspace-write` sandbox and no bypass, approving each command to run outside the sandbox; `/relay:connect https://app-staging.relayeverything.com`, confirm the link with the staging session; a Claude Code chat and a Codex chat each show on staging with their app; *what did I note …?* answers a seeded note in both; *save this* adds a summary; saving off sends nothing; a fake `relay` connector is pointed out and not removed unasked. Write the steps into the plugin's docs where they differ.
 - [x] 7.4 `node scripts/relay-mcp-trial.mjs --staging` against `https://mcp-staging.relayeverything.com`, and an MCP `initialize` with a token on both `/` and `/mcp`.
-- [ ] 7.5 The iPhone device check with the new flow.
+- [x] 7.5 The iPhone device check with the new flow.

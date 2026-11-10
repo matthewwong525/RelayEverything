@@ -1,6 +1,6 @@
 # One Relay Everything plugin for Claude Code and Codex, the AI connector at mcp.relayeverything.com, and Other connections on the phone
 
-**Status:** building
+**Status:** ready-to-ship
 **Branch:** mcp-plugin-other-connections
 **Open questions:** none
 
@@ -201,3 +201,5 @@ The AI connector has a long, hard-to-type address. The Claude Code plugin saves 
 **2026-11-10** — Assumed: this save leaves the main specs as they are, and the archive in `/ship` applies the deltas, because only the archive's own sync deletes the retired `relay-claude-plugin` spec, and a hand sync first would leave the archive nothing to retire.
 
 **2026-11-10** — Staging trials: the connector trial passed on `/` and `/mcp`, and the plugin trial passed in Claude Code and in Codex with its sandbox on. The first iPhone check failed at the new step: the *AI chat transcripts* row lay under the search bar, so the tap opened Search. The flow now centers the row first.
+
+**2026-11-10** — Archived for publishing: every task done; the third iPhone check passed with the new step.

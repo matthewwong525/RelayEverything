@@ -68,3 +68,4 @@ Agents want to keep their own data next to yours, and today they can't make a si
 - **2026-11-10** — Assumed: only a computer key reaches the agents' database; API keys, the AI connector and phone keys are refused, because the plugin runs only on computers.
 - **2026-11-10** — Assumed: deleting the space deletes its agents' database in the same step, so every place that deletes a space can't forget it.
 - **2026-11-10** — Assumed: a blob reads back as `{ "base64": … }`, because JSON has no bytes, and a blob that read as `{}` would lose data without a word.
+- **2026-11-10** — Archive checkpoint: merged `main` (#104, the daily knowledge build) into the branch; the plugin goes to `0.5.1` on top of its `0.5.0`, and the memory plan moved to its own branch, `relay-memory-plugin-plan`.

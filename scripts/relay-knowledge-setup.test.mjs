@@ -75,3 +75,8 @@ test('the website shows the default FORMAT.md word for word', () => {
   const body = format.replace(/^# .*\n\n/, '');
   assert.ok(site.endsWith(`\n${body}`), 'site/src/content/docs/api/knowledge-web.md must end with schema/knowledge/FORMAT.md, after its title');
 });
+
+test('the plugin keeps the default FORMAT.md word for word, to give a web that still has an old default', () => {
+  const format = readFileSync(join(repoRoot, 'schema', 'knowledge', 'FORMAT.md'), 'utf8');
+  assert.equal(readFileSync(join(repoRoot, 'plugin', 'build', 'FORMAT.md'), 'utf8'), format, 'plugin/build/FORMAT.md must equal schema/knowledge/FORMAT.md');
+});

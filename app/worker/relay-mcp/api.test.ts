@@ -55,6 +55,7 @@ const SAME: [string, WebTool, Record<string, unknown>][] = [
   ["calendar?q=sam&from=2026-11-01&to=2026-12-01", "calendar", { query: "sam", from: "2026-11-01", to: "2026-12-01" }],
   ["health?type=weight&from=2026-11-04&to=2026-11-05", "health", { type: "weight", from: "2026-11-04", to: "2026-11-05" }],
   ["chats?q=stiffener", "search_chats", { query: "stiffener" }],
+  ["chats?from=2026-11-01&to=2026-11-08&limit=2", "search_chats", { from: "2026-11-01", to: "2026-11-08", limit: 2 }],
   [`chats/${CHAT(1)}`, "read_chat", { id: CHAT(1) }],
   ["notes?tag=ring", "search", { tag: "ring" }],
   ["memory?q=battery", "memory", { query: "battery" }],
@@ -87,6 +88,15 @@ it("reads on with each answer's cursor, and keeps each tool's limits", async () 
   expect((await call("nights?from=2026-11-01&to=2026-11-05&cursor=1793767200001")).json.nights).toHaveLength(1);
   expect((await call("nights?from=2026-11-01&to=2026-11-05&stages=yes")).json.error_description).toMatch(/^`stages`: /);
   expect(await call("notes?q=the&cursor=page-2")).toMatchObject({ status: 400, json: { error_description: "That cursor is not one this connector gave." } });
+});
+
+it("lists a week's chats with no words, reads on with the cursor, and still filters by words", async () => {
+  const first = await call("chats?from=2026-11-01&to=2026-11-08&limit=2");
+  expect((first.json.chats as { id: string; lines: unknown[] }[]).map(chat => [chat.id, chat.lines])).toEqual([[CHAT(2), []], [CHAT(1), []]]);
+  const rest = await call(`chats?from=2026-11-01&to=2026-11-08&cursor=${first.json.nextCursor}`);
+  expect((rest.json.chats as { id: string }[]).map(chat => chat.id)).toEqual([CHAT(3)]);
+  expect((await call("chats?q=stiffener&from=2026-11-01&to=2026-11-08")).json.chats).toMatchObject([{ id: CHAT(1) }]);
+  expect((await call("chats?q=")).status).toBe(400);
 });
 
 it("reads a stay's or trip's points by an id sent as text, and refuses an id no stay or trip has", async () => {

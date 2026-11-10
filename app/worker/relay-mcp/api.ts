@@ -30,7 +30,7 @@ export const ROUTES: readonly V1Route[] = [
   { method: "GET", path: "/v1/calendar", id: "listEvents", summary: TOOLS.calendar.title, tools: ["calendar"], q: true,
     description: TOOLS.calendar.description.replace("`query`", "`q`") },
   { method: "GET", path: "/v1/chats", id: "searchChats", summary: TOOLS.search_chats.title, tools: ["search_chats"], q: true,
-    description: TOOLS.search_chats.description },
+    description: TOOLS.search_chats.description.replace("`query`", "`q`") },
   { method: "GET", path: "/v1/chats/{id}", id: "getChat", summary: TOOLS.read_chat.title, tools: ["read_chat"], description: TOOLS.read_chat.description },
   { method: "POST", path: "/v1/notes/{id}/tags", id: "tagNote", summary: WEB.tag_note.title, tools: ["tag_note"],
     description: `${WEB.tag_note.description} Only a computer's key; it answers the note's topics.` },

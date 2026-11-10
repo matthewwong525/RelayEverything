@@ -7,7 +7,7 @@
 
 ## 2. The plugin
 
-- [x] 2.1 Add `relay.mjs db`, `db --file` and `db tables`, and a line in the `ask` skill; version `0.4.1`. Test in `plugin/test/`.
+- [x] 2.1 Add `relay.mjs db`, `db --file` and `db tables`, and a line in the `ask` skill; version `0.5.1`. Test in `plugin/test/`.
 
 ## 3. Docs and checks
 

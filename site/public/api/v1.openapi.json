@@ -2657,12 +2657,12 @@
       "get": {
         "operationId": "searchChats",
         "summary": "Search saved chats",
-        "description": "Find saved AI chats from Claude Code and Codex whose messages or AI summaries hold every word of the query, newest first, with up to 3 matching lines each.",
+        "description": "Find saved AI chats from Claude Code and Codex whose messages or AI summaries hold every word of the query, newest first, with up to 3 matching lines each. Leave out `q` to list every chat active from `from` to `to`, with no lines.",
         "parameters": [
           {
             "name": "q",
             "in": "query",
-            "required": true,
+            "required": false,
             "description": "The words to find.",
             "schema": {
               "type": "string",

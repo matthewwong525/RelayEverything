@@ -8,7 +8,7 @@ Relay Everything keeps two things that your own AI writes from your chats and no
 - **Your memory**: a table of short facts in your own space, such as *the bike's battery is 500 Wh*. Each fact has topics, called tags, and links to the chat or note it came from. A fact is only added, never changed: a new fact replaces an old one, and the old one stays readable, marked replaced.
 - **Your knowledge web**: one page for each topic, in a git repository that only your computers can reach. A page sums up the live facts on its topic.
 
-A computer connected with the [Relay Everything plugin](../../connections/claude-code/) writes both. Your [AI connector](../../connections/connect-your-ai/) and your API keys read the memory. A phone's key reaches neither.
+A computer connected with the [Relay Everything plugin](../../connections/claude-code/) writes both: once a day, [your own AI builds them](../../connections/claude-code/#your-web-builds-itself) from your chats and notes. Your [AI connector](../../connections/connect-your-ai/) and your API keys read the memory. A phone's key reaches neither.
 
 ## Your memory's columns
 
@@ -29,6 +29,7 @@ Any plugin with a computer's key reaches the memory and the web in the same way.
 3. **Add facts.** `POST /v1/memory` with `{ "facts": [ … ] }`, up to 50 at a time. Give each fact your own `clientId`, so a resend after a lost answer is kept once. All of the facts are added, or none.
 4. **Find facts.** `GET /v1/memory?tag=battery`, `?q=words`, `?source=relay:chat/<id>`, or any column as its own field, such as `?kind=decision`. Add `all=true` for replaced facts too.
 5. **Change topics.** `POST /v1/memory/{id}/tags` and `POST /v1/notes/{id}/tags` with `{ "add": ["bike/charging"], "remove": ["bike"] }`. A fact keeps at least one topic.
+6. **List your chats.** `GET /v1/chats?from=2026-11-03&to=2026-11-10` with no `q` lists every saved chat active in that time, newest first, each with its message count and last time. Read one from a message on with `GET /v1/chats/{id}?cursor=<seq>`. The daily build keeps what it read in [the builder's record](#the-builders-record).
 
 Only a computer's key changes the memory and opens the web: an API key and the AI connector read the memory, and change nothing in it. The [Web API reference](../v1-reference/) lists each route's fields.
 
@@ -42,7 +43,7 @@ Your AI reads this page before it writes a fact or a page. Change it, and your A
 
 - A fact is one row in your memory. Each fact has one short sentence in `text`, and one kind in `kind`: `fact`, `decision`, `preference`, `plan`, `open` or `reference`.
 - Read the memory's columns with `relay.mjs columns`, and fill each column that fits.
-- Tags name topics, such as `battery` or `bike/charging`. A fact has at least one tag.
+- Tags name topics, such as `battery` or `bike-charger`. A fact has at least one tag, and a tag for each topic it touches.
 - A fact has at least one source: a link to the record it came from.
 - When a fact changes, add a new fact that replaces the old one. Never add the same fact two times.
 - Add facts with `relay.mjs add-facts`.
@@ -50,21 +51,22 @@ Your AI reads this page before it writes a fact or a page. Change it, and your A
 A sample fact:
 
 ```json
-{ "tags": ["bike/battery"], "sources": ["relay:chat/7f3a#120"], "replaces": ["fk2pq"],
+{ "tags": ["bike-battery"], "sources": ["relay:chat/7f3a#120"], "replaces": ["fk2pq"],
   "fields": { "kind": "decision", "text": "The bike's battery is 500 Wh, not 400 Wh." } }
 ```
 
 ## Pages
 
 - Each page is a topic, in `topics/`. The first fact with a tag makes its page. Make no page before that.
-- One subject, one page. A topic that grows big becomes a folder, with a `README.md` that links its parts.
-- Names are lowercase words with hyphens, the same as the tag: the tag `bike/battery` is `topics/bike/battery.md`.
+- One subject, one page. Pages sit side by side in `topics/`, with no folders: your web is a graph of linked pages, not a tree.
+- Names are lowercase words with hyphens, the same as the tag: the tag `bike-battery` is `topics/bike-battery.md`. A folder or a name with `/` that your web already has stays as it is.
+- A topic that grows big splits into smaller pages beside it, such as `bike-battery` and `bike-charger`. The first page keeps a short summary and links each smaller page. It never becomes a folder.
 - Each page starts with `title`, `summary` (one line) and `updated` in its frontmatter.
-- `README.md` lists each top-level topic with its summary.
+- `README.md` lists each topic with its summary.
 - A page sums up the live facts with its tag, in plain sentences. It lists no fact ids.
-- A page links other pages by their path. A chat gets no page: its facts link to it.
+- A page links the topics it connects to, with a few words that say how: topics that share a fact, a note or a chat. It also links a topic wherever it names it. A chat gets no page: its facts link to it.
 
-A sample page, `topics/bike/battery.md`:
+A sample page, `topics/bike-battery.md`:
 
 ```markdown
 ---
@@ -74,7 +76,7 @@ updated: 2026-11-10
 ---
 # Bike battery
 
-The battery is 500 Wh: 400 Wh did not last a long ride. It charges on the [charging dock](charging.md).
+The battery is 500 Wh: 400 Wh did not last a long ride. It charges on the [charging dock](bike-charger.md).
 ```
 
 ## Look
@@ -86,3 +88,7 @@ To answer a question: read `README.md`, read the topic's page, run `relay.mjs fa
 - A link to a record is `relay:<kind>/<id>`. The kind is `note`, `chat`, `day`, `night`, `workout`, `stay`, `event` or `photo`. A chat link can name a message: `relay:chat/<id>#<number>`.
 - Never copy a health value or a place's coordinates into a fact or a page. Link its day, night, workout or stay.
 - Write each link one way only. A fact links its sources; a page links pages and records. Find a page's facts by its tag, and a record's facts with `relay.mjs facts --source <link>`.
+
+## The builder's record
+
+`.relay/` is not a topic. It holds the daily build's record: `read.log` lists each chat and note it read, and `builds.log` each day's build. Only the build writes there.

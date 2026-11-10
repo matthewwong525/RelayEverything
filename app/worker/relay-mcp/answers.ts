@@ -141,10 +141,11 @@ function line(text: string, words: string[]): string {
   return `${start ? "…" : ""}${text.slice(start, start + LINE_CHARACTERS)}${start + LINE_CHARACTERS < text.length ? "…" : ""}`;
 }
 
+/** A page of chats, each with its lines that hold a word; with no words, every chat in the time, with no lines. */
 async function chatsFound(db: Db, words: string[], page: Parameters<typeof chatPage>[1], timezone: string) {
   const found = await chatPage(db, { ...page, words });
   const chats = await Promise.all(found.chats.map(async chat => ({ ...chatShown(chat, timezone),
-    lines: (await chatLines(db, chat.id, words, LINES)).map(({ role, text }) => ({ role, text: line(text, words) })) })));
+    lines: words.length ? (await chatLines(db, chat.id, words, LINES)).map(({ role, text }) => ({ role, text: line(text, words) })) : [] })));
   return { chats, nextCursor: nextCursor(found) };
 }
 
@@ -254,7 +255,7 @@ const READS = {
   },
   search_chats: async (db, { query, from = "2001-01-01", to = "2286-01-01", limit, cursor: text, timezone = ZONE }) => {
     const [after, end] = range(from, to, timezone);
-    return chatsFound(db, query.split(/\s+/).slice(0, 10), { after, limit, ...pageBefore(text, end) }, timezone);
+    return chatsFound(db, query?.split(/\s+/).slice(0, 10) ?? [], { after, limit, ...pageBefore(text, end) }, timezone);
   },
   read_chat: async (db, { id, cursor: text, timezone = ZONE }) => {
     const chat = await chatById(db, id);

@@ -3,7 +3,7 @@ title: Save AI chat transcripts
 description: Save each Claude Code and Codex chat to your Relay Everything server with the Relay Everything plugin, ask about your data from the chat, and find your chats on your Relay Everything page.
 ---
 
-The Relay Everything plugin for Claude Code and Codex saves each chat to your Relay Everything server as you talk. You find a chat on the Relay Everything page by a word, and your AI can search it through the [AI connector](../connect-your-ai/). The plugin also lets the AI in the chat read your notes, health, places and calendar, and add a note, when you ask it.
+The Relay Everything plugin for Claude Code and Codex saves each chat to your Relay Everything server as you talk. You find a chat on the Relay Everything page by a word, and your AI can search it through the [AI connector](../connect-your-ai/). The plugin also lets the AI in the chat read your notes, health, places and calendar, and add a note, when you ask it. Once a day, your own AI builds your knowledge web from your chats and notes.
 
 ## Install the plugin
 
@@ -73,6 +73,32 @@ AI:  You wrote it at 14:20 at the workshop, 20 minutes after
 ```
 
 The AI can also read the route of a stay or a trip, such as *which way did I walk to the station?*
+
+## Your web builds itself
+
+Once a day, your own AI builds your memory and your knowledge web on this computer. The first chat of the day starts the build in the background, and your chat never waits. You pick nothing: no topic, no tag.
+
+- **Helpers read your chats and notes.** A chat is read when it has been quiet for an hour, so the chat you are in waits for tomorrow. A chat that grew is read again from where the last read stopped. Each helper adds short facts, each with its topics and a link to the message or note it came from. Before it adds a fact, it looks at the facts you already have: it adds a new one, replaces an old one that changed, or adds nothing.
+- **Your notes get topics.** Your words stay as you wrote them.
+- **A helper writes your topic pages, side by side.** It sums up each topic's facts, splits a big topic into smaller linked pages, links topics that share a fact, a note or a chat, and keeps `README.md` current. When it makes a new topic, it looks back for older facts and notes that fit.
+- **Your past fills in a part each day.** Each build reads the newest unread chats and notes first: at most 20 chats and 100 notes. A record of what was read stays in your web, in `.relay/`, so nothing is read twice, on any of your computers.
+- **One computer builds each day.** With two computers, the first to claim the day in your web builds, and the other stops.
+- **Health and places stay where they are.** The build has no command that reads your health, places, calendar or photos. A note's place does not reach it. A page links the day, and the AI reads that day only when you ask.
+
+The build runs in the app the chat started in, Claude Code or Codex, on your own plan: it uses your allowance, as a chat does. It stops after 30 minutes, and the next day goes on from what it read. To use a smaller model for it, set `RELAY_BUILD_MODEL`, such as `RELAY_BUILD_MODEL=haiku`. The build's own chat is not saved.
+
+Type `/relay:build` (`$relay:build` in Codex) to see the last build:
+
+```text
+The daily build is on for this computer: it starts with the first chat of each day.
+Last build: 2026-11-10 09:14, on Laptop
+  12 chats, 40 notes read
+  18 facts added, 3 replaced
+  2 new topics: garden, sam
+Still to read: 31 chats, 220 notes
+```
+
+`/relay:build off` stops the daily build on this computer, `/relay:build on` starts it again, and `/relay:build now` starts one at once. Facts and topics that a build added stay when you turn it off.
 
 ## Save a summary
 

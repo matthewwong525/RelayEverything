@@ -284,6 +284,19 @@ it("finds saved chats holding every word, with the matching lines and no device 
   expect((await ask("search_chats", { query: "dark mode" })).chats).toMatchObject([{ id: CHAT(3), app: "codex" }]);
 });
 
+it("lists every chat active in a week with no words, newest first, a page at a time, with no lines", async () => {
+  const week = { from: "2026-11-01", to: "2026-11-08" };
+  const all = await ask("search_chats", week);
+  expect(all.chats.map((chat: { id: string; messages: number; lines: unknown[] }) => [chat.id, chat.messages, chat.lines]))
+    .toEqual([[CHAT(2), 3, []], [CHAT(1), 4, []], [CHAT(3), 2, []]]);
+  expect(all.chats[0].lastAt).toBe("2026-11-04T13:15:00-05:00");
+  const first = await ask("search_chats", { ...week, limit: 2 });
+  expect([first.chats.length, first.nextCursor]).toEqual([2, `1793801400000.${CHAT(1)}`]);
+  expect((await ask("search_chats", { ...week, cursor: first.nextCursor })).chats.map((chat: { id: string }) => chat.id)).toEqual([CHAT(3)]);
+  expect((await ask("search_chats", { ...week, query: "stiffener" })).chats.map((chat: { id: string }) => chat.id)).toEqual([CHAT(1)]);
+  expect((await ask("search_chats", { from: "2026-11-05", to: "2026-11-08" })).chats).toEqual([]);
+});
+
 it("cuts a long matching line around the word", async () => {
   const { sql, SPACES } = seeded();
   sql.exec(`INSERT INTO relay_chat_messages (chat_id, seq, role, text, at) VALUES ('${CHAT(2)}', 3, 'ai', '${"a".repeat(500)} needle ${"b".repeat(500)}', 1793816200000)`);

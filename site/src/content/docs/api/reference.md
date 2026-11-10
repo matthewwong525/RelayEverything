@@ -155,7 +155,7 @@ Send the input as query parameters.
 
 `POST /apps/relay/api/health` · `relay.samples-add` · writes · called by a phone key
 
-Store health samples from Apple Health or Health Connect, such as steps, sleep, weight and blood pressure, once per type, time span and source.
+Store health samples from Apple Health or Health Connect, such as steps, sleep, weight and blood pressure, once per type, time span and source. A workout sent again with its kind, distance and calories fills them on a row that has none.
 
 ### Input
 
@@ -170,6 +170,9 @@ Send the input as a JSON body.
 | `samples[].value` | number | yes |  |
 | `samples[].unit` | string | yes |  |
 | `samples[].source` | string | yes |  |
+| `samples[].kind` | string | no | A workout's kind, such as running. |
+| `samples[].distance` | number | no | A workout's distance, in meters. |
+| `samples[].calories` | number | no | A workout's calories, in kcal. |
 
 ### Output
 
@@ -217,6 +220,41 @@ Send the input as a JSON body.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `stays` | array of any | yes | Up to 500 stays and trips; one that has not changed is skipped. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `received` | integer | yes |  |
+| `changed` | integer | yes |  |
+
+## Store a phone's nights
+
+`POST /apps/relay/api/nights` · `relay.nights-add` · writes · called by a phone key
+
+Store the nights the phone grouped from its sleep readings, once per device, source and start, each with its stage minutes and timeline. A night sent again with a later end or other stages changes its row.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `nights` | array of object | yes | Up to 500 nights; one that has not changed is skipped. |
+| `nights[].source` | string | yes | The app or watch that tracked the sleep. |
+| `nights[].start` | integer | yes |  |
+| `nights[].end` | integer | yes |  |
+| `nights[].asleepAt` | integer | no | When the person fell asleep. |
+| `nights[].wokeAt` | integer | no | When the person woke. |
+| `nights[].asleep` | number | yes | Minutes asleep, in any stage. |
+| `nights[].core` | number | yes |  |
+| `nights[].deep` | number | yes |  |
+| `nights[].rem` | number | yes |  |
+| `nights[].awake` | number | yes |  |
+| `nights[].stages` | array of object | yes | The stage timeline, in time order: at most 400 steps. |
+| `nights[].stages[].stage` | "asleep" or "core" or "deep" or "rem" or "awake" | yes |  |
+| `nights[].stages[].start` | integer | yes |  |
+| `nights[].stages[].end` | integer | yes |  |
 
 ### Output
 
@@ -382,9 +420,31 @@ Send the input as query parameters.
 | `heartRate.min` | number | yes |  |
 | `heartRate.max` | number | yes |  |
 | `heartRate.average` | number | yes |  |
+| `nights` | array of object | yes |  |
+| `nights[].start` | number | yes |  |
+| `nights[].end` | number | yes |  |
+| `nights[].asleepAt` | number or null | yes |  |
+| `nights[].wokeAt` | number or null | yes |  |
+| `nights[].minutes` | object | yes |  |
+| `nights[].minutes.asleep` | number | yes |  |
+| `nights[].minutes.core` | number | yes |  |
+| `nights[].minutes.deep` | number | yes |  |
+| `nights[].minutes.rem` | number | yes |  |
+| `nights[].minutes.awake` | number | yes |  |
+| `nights[].source` | string | yes |  |
+| `nights[].device` | string | yes |  |
 | `workouts` | object | yes |  |
 | `workouts.count` | number | yes |  |
 | `workouts.minutes` | number | yes |  |
+| `workouts.items` | array of object | yes |  |
+| `workouts.items[].kind` | string or null | yes |  |
+| `workouts.items[].start` | number | yes |  |
+| `workouts.items[].end` | number | yes |  |
+| `workouts.items[].minutes` | number | yes |  |
+| `workouts.items[].km` | number or null | yes |  |
+| `workouts.items[].calories` | number or null | yes |  |
+| `workouts.items[].source` | string | yes |  |
+| `workouts.items[].device` | string | yes |  |
 | `weightKg` | number | no |  |
 | `restingHeartRate` | number | no |  |
 | `hrvSdnn` | number | no |  |

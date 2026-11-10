@@ -654,7 +654,7 @@ class RelayController extends Relay {
     if (on && !_settings.sending) return _sendFirst;
     if (on && !await health.allow()) return 'Relay Everything may not read your health data. Allow it in the phone\'s health settings.';
     // Health starts from now: the next rounds read new readings, and the last 90 days a week at a time.
-    if (on) await startHealth(store, _clock());
+    await (on ? startHealth(store, _clock()) : stopHealth(store));
     await _saveSettings(_settings.copyWith(health: on));
     if (on) unawaited(sync());
     return null;

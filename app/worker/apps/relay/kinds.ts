@@ -2,8 +2,8 @@
 // not in `missing`. How to add a kind: wiki/relay-webhook-changes.md.
 import type { Files } from "./space.ts";
 import { MINUTE, type Db } from "./store.ts";
-import { calendarEvents, healthSamples, locationPoints, locationStays, noteCreated, noteDeleted, noteFile, noteUpdated, photoCreated, type AttachmentRow, type EventRow,
-  type HealthRow, type LocationRow, type NoteRow, type PhotoRow, type StayRow } from "./webhooks/format.ts";
+import { calendarEvents, healthNights, healthSamples, locationPoints, locationStays, noteCreated, noteDeleted, noteFile, noteUpdated, photoCreated, type AttachmentRow, type EventRow,
+  type HealthRow, type LocationRow, type NightRow, type NoteRow, type PhotoRow, type StayRow } from "./webhooks/format.ts";
 import { base64 } from "./webhooks/sign.ts";
 
 type Part = "webhook" | "api" | "tool" | "docs";
@@ -103,9 +103,12 @@ export const KINDS: DataKind[] = [
     build: note,
     api: ["/v1/notes", "/v1/notes/{id}"], tools: ["search", "fetch", "timeline", "add_note"], docs: "app/your-notes" },
   { id: "health", label: "Health", detail: "steps, heart rate, sleep, weight and more", sensitive: true,
-    log: ["health"], messages: ["health.samples"],
-    build: async (_files, db, group) => healthSamples(await rowsOf<HealthRow>(db, "relay_health", group), loggedAt(group)),
-    api: ["/v1/health"], tools: ["health"], docs: "app/health" },
+    log: ["health", "night"], messages: ["health.samples", "health.nights"],
+    // A night or workout changed twice in one group goes once, as it is now.
+    build: async (_files, db, group) => group[0].kind === "night"
+      ? healthNights(await rowsOf<NightRow>(db, "relay_nights", group), loggedAt(group))
+      : healthSamples(await rowsOf<HealthRow>(db, "relay_health", group), loggedAt(group)),
+    api: ["/v1/health", "/v1/nights", "/v1/workouts"], tools: ["health", "nights", "workouts"], docs: "app/health" },
   { id: "locations", label: "Location history", detail: "", sensitive: true,
     log: ["location", "stay"], messages: ["location.points", "location.stays"],
     // A stay changed twice in one group goes once, as it is now.

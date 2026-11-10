@@ -1,6 +1,6 @@
 ---
 title: Connect your AI
-description: Let the Claude app, ChatGPT or Claude Code read your Relay Everything notes, health, calendar, places, chats and photos, and add notes, with one connector address and your own sign-in.
+description: Let the Claude app, ChatGPT or Claude Code read your Relay Everything notes, health, sleep, workouts, calendar, places, chats and photos, and add notes, with one connector address and your own sign-in.
 ---
 
 Relay Everything's AI connector lets an AI chat app read your Relay Everything data when you ask it a question, and add a note when you ask it to save one. It can't change or delete anything. Each person with a Relay Everything account can connect their own apps, and each app reads only that person's own space.
@@ -19,13 +19,15 @@ Then ask, for example: *What did I note on 4 November?*, *What is on my day?*, *
 
 ## What the AI can read and add
 
-The connector has twelve tools. Eleven only read, and one adds a note. Each tool reaches only the space of the person who connected the app. Each answer has a limit, so one question can't copy all of your space.
+The connector has fourteen tools. Thirteen only read, and one adds a note. Each tool reaches only the space of the person who connected the app. Each answer has a limit, so one question can't copy all of your space.
 
 - **search**: notes that hold every word you give, newest first.
 - **fetch**: one note, the places you stayed near it in time, and its day's health totals.
 - **timeline**: every note from one time to another, a page at a time.
-- **day_summary**: one day's notes count, health totals, places, trips and events. Each place is a stay with its name and times; each trip has its mode, km and minutes; each event has its title, times and people.
+- **day_summary**: one day's notes count, health totals, nights of sleep, workouts, places, trips and events. Each place is a stay with its name and times; each trip has its mode, km and minutes; each event has its title, times and people.
 - **health**: one health type, such as steps, sleep, weight or blood pressure, one value per hour or per day. [Health](../../app/health/#what-it-reads) lists the types.
+- **nights**: each night of sleep, newest first: when you went to bed, fell asleep and woke, and the minutes in core, deep and REM sleep and awake. Ask for the stages to get each night's stage timeline.
+- **workouts**: each workout, newest first, with its kind, such as running, its minutes, km and calories.
 - **calendar**: the events from one time to another, with title, times, place, notes and people. Give words to find events that hold them, newest first, such as a person's name. [Calendar](../../app/calendar/)
 - **places**: each stay at a place, with its name, street, and when you arrived and left, and each trip between two stays: walking, running, cycling, driving or flying, with its km and minutes. So *Where did I go on Saturday?* gets one short answer. Days from before your phone made stays give each street, as before. [Location](../../app/location/)
 - **search_chats**: [saved Claude Code chats](../claude-code/) that hold every word you give, with the lines that match.
@@ -40,7 +42,7 @@ The same sign-in opens the web API, for your own scripts and services: [Connect 
 
 ## What leaves Relay Everything
 
-When an app uses a tool, the answer goes to that app's company: Anthropic for Claude, OpenAI for ChatGPT. Their own terms then apply to it. An answer can hold a note's words, its time, the place name and coordinates, the device name, health totals, calendar events with their people, a chat's messages, and a photo with its time and place.
+When an app uses a tool, the answer goes to that app's company: Anthropic for Claude, OpenAI for ChatGPT. Their own terms then apply to it. An answer can hold a note's words, its time, the place name and coordinates, the device name, health totals, nights of sleep with their stages, workouts, calendar events with their people, a chat's messages, and a photo with its time and place.
 
 An answer never holds a recording, a device key, or a device's or delivery's id. The app gets only what a tool answers for one question, not a copy of your data.
 

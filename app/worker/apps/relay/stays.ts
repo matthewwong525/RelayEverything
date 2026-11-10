@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { defineAction, type ActionCall } from "../../api/contract.ts";
 import { asDevice } from "./caller.ts";
-import { BATCH, latitude, longitude, placeName, STAY_SOURCES, time, TRIP_MODES, type Db } from "./store.ts";
+import { BATCH, latitude, longitude, placeName, STAY_SOURCES, time, TRIP_MODES, type Db, updateWhenChanged } from "./store.ts";
 import { wake } from "./webhooks/send.ts";
 
 const span = { start: time, end: time, ongoing: z.boolean().optional().describe("True while the person is still there.") };
@@ -28,9 +28,7 @@ async function save(db: Db, device: string, rows: Segment[]): Promise<number> {
     SELECT ?1, ${field("kind")}, ${field("start")}, ${field("end")}, coalesce(${field("ongoing")}, 0),
       ${["lat", "lon", "name", "address", "event", "source", "mode", "km"].map(field).join(", ")}, ?2, ?2
     FROM json_each(?3) WHERE true
-    ON CONFLICT (device_id, kind, start_at) DO UPDATE SET ${FIELDS.map(name => `${name} = excluded.${name}`).join(", ")},
-      updated_at = excluded.updated_at
-    WHERE ${FIELDS.map(name => `${name} IS NOT excluded.${name}`).join(" OR ")}
+    ON CONFLICT (device_id, kind, start_at) ${updateWhenChanged(FIELDS)}
     RETURNING id`).bind(device, Date.now(), JSON.stringify(rows)).all();
   return results.length;
 }

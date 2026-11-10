@@ -40,8 +40,9 @@ export const TOOLS = {
   },
   day_summary: {
     title: "Sum up a day",
-    description: "One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, each stay " +
-      "with its name and times, each trip with its mode, km and minutes, and the calendar's events with the people in each.",
+    description: "One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, the nights " +
+      "or naps that ended that day with their stage minutes, each workout with its kind, km and calories, each stay with its name and " +
+      "times, each trip with its mode, km and minutes, and the calendar's events with the people in each.",
     input: { day, timezone: zone },
   },
   health: {
@@ -53,6 +54,23 @@ export const TOOLS = {
     input: { type: z.enum(HEALTH_TYPES).describe("Which health data."), from: when("The first time"),
       to: when("The time to stop before"), bucket: z.enum(["hour", "day"]).default("day").describe(`One value per hour or per day, at most ${MAX_BUCKETS}.`),
       timezone: zone },
+  },
+  nights: {
+    title: "Read nights of sleep",
+    description: "The nights, and naps, that end from one time to another, newest first: when the person went to bed, fell asleep and " +
+      "woke, and the minutes asleep, in core (light), deep and REM sleep, and awake. Of nights that overlap, as from a watch and the " +
+      "phone's bedtime, the one with the most sleep. Give `stages` to add each night's stage timeline, such as to see when deep sleep came.",
+    input: { from: when("The first time"), to: when("The time to stop before"),
+      stages: z.boolean().default(false).describe("Add each night's stage timeline, in time order."),
+      limit: z.number().int().min(1).max(100).default(31).describe("How many nights, at most 100."), cursor, timezone: zone },
+  },
+  workouts: {
+    title: "Read workouts",
+    description: "The workouts that start from one time to another, newest first, each with its kind (such as running or " +
+      "traditional_strength_training), minutes, km and calories when the phone has them. A workout from before the phone sent its " +
+      "kind has `kind` null. Calories are active calories from an iPhone and total calories from Android.",
+    input: { from: when("The first time"), to: when("The time to stop before"),
+      limit: z.number().int().min(1).max(100).default(50).describe("How many workouts, at most 100."), cursor, timezone: zone },
   },
   places: {
     title: "Read places visited",

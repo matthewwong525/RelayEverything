@@ -16,7 +16,7 @@ export const sessionCookie = (url: URL) => url.protocol === "https:" ? SESSION_C
 /** A key's reach: POST and `GET key` (its own name); a phone also reads `GET connections` (email and names) and its
  *  person's notes and files, and changes or deletes any note. `GET chats` and a send share an address. */
 const REACH: Record<Reach, { routes: RegExp; refusal: string }> = {
-  phone: { routes: /^\/apps\/relay\/api\/(?:notes|attachments|health|locations|stays|calendar|photos)$/, refusal: "A device key can only send to Relay Everything." },
+  phone: { routes: /^\/apps\/relay\/api\/(?:notes|attachments|health|nights|locations|stays|calendar|photos)$/, refusal: "A device key can only send to Relay Everything." },
   chats: { routes: /^\/apps\/relay\/api\/(?:chats|chat-saves)$/, refusal: "A chat key can only send chats." },
   api: { routes: /^$/, refusal: "An API key works only on the web API, at your AI connector's address under /v1/." },
 };

@@ -49,18 +49,23 @@ const ID = (n: number) => `a0000000-0000-4000-8000-00000000000${n}`;
 const ids = (answer: { notes: { id: string }[] }) => answer.notes.map(note => note.id);
 const harbord = { name: "Harbord St", lat: 43.6629, lon: -79.3957, arrived: "2026-11-04T08:00:00-05:00", left: "2026-11-04T08:00:00-05:00", minutes: 0 };
 const day = { steps: 8690, sleepMinutes: 450, heartRate: { min: 68, max: 121, average: 95 }, workouts: { count: 1, minutes: 40 } };
+const run = { kind: "running", start: "2026-11-04T13:00:00-05:00", end: "2026-11-04T13:40:00-05:00", minutes: 40, km: 5.1, calories: 410,
+  source: "com.google.android.apps.fitness", device: "Android phone" };
+const night = { start: "2026-11-03T23:40:00-05:00", end: "2026-11-04T07:30:00-05:00", asleepAt: "2026-11-04T00:00:00-05:00",
+  wokeAt: "2026-11-04T07:25:00-05:00", minutes: { asleep: 425, core: 250, deep: 80, rem: 95, awake: 25 },
+  source: "com.google.android.apps.fitness", device: "Android phone" };
 
 it("names itself Relay Everything to the AI app", () => {
   expect(client.getServerVersion()).toMatchObject({ name: "relay", title: "Relay Everything" });
   expect(client.getInstructions()).toMatch(/^Relay Everything /);
 });
 
-it("lists twelve tools, each read-only but add_note, which changes and deletes nothing", async () => {
+it("lists fourteen tools, each read-only but add_note, which changes and deletes nothing", async () => {
   const { tools } = await client.listTools();
-  expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "places", "calendar", "search_chats",
-    "read_chat", "photos", "read_photo", "add_note"]);
-  for (const tool of tools.slice(0, 11)) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
-  expect(tools[11].annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+  expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "nights", "workouts", "places",
+    "calendar", "search_chats", "read_chat", "photos", "read_photo", "add_note"]);
+  for (const tool of tools.slice(0, 13)) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+  expect(tools[13].annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
 });
 
 it("finds notes holding every word, in any case, with a title and the time in the zone", async () => {
@@ -105,7 +110,8 @@ it("reads one note with the places near it and its day's health", async () => {
 });
 
 it("sums up a day, and an empty one", async () => {
-  expect(await ask("day_summary", { day: "2026-11-04" })).toEqual({ day: "2026-11-04", timezone: "America/Toronto", notes: 3, ...day, places: [
+  expect(await ask("day_summary", { day: "2026-11-04" })).toEqual({ day: "2026-11-04", timezone: "America/Toronto", notes: 3, ...day,
+    workouts: { ...day.workouts, items: [run] }, nights: [night], places: [
     { name: "Harbord St", lat: 43.6629, lon: -79.3957, from: "2026-11-04T08:00:00-05:00", to: "2026-11-04T08:00:00-05:00" },
     { name: "King St W", lat: 43.6487, lon: -79.3817, from: "2026-11-04T12:00:00-05:00", to: "2026-11-04T12:00:00-05:00" },
     { name: "Kensington Ave", lat: 43.6544, lon: -79.4006, from: "2026-11-04T17:00:00-05:00", to: "2026-11-04T17:30:00-05:00" }],
@@ -114,7 +120,7 @@ it("sums up a day, and an empty one", async () => {
       { title: "Lunch with Sam", start: "2026-11-04T12:00:00-05:00", end: "2026-11-04T13:00:00-05:00", allDay: false, people: ["Sam Lee"] }],
     trips: [] });
   expect(await ask("day_summary", { day: "2026-11-05" })).toMatchObject({ notes: 0, steps: 0, sleepMinutes: 0, heartRate: null,
-    workouts: { count: 0, minutes: 0 }, places: [], trips: [] });
+    workouts: { count: 0, minutes: 0, items: [] }, nights: [], places: [], trips: [] });
   expect((await ask("day_summary", { day: "2026-13-45" })).refused).toContain("Not a day.");
 });
 
@@ -141,6 +147,30 @@ it("reads the new health types: the day's latest weight and blood pressure's ran
   expect((await ask("health", { type: "blood_pressure_systolic", from: "2026-11-04", to: "2026-11-05" })).values[0])
     .toMatchObject({ min: 118, max: 118, average: 118 });
   expect((await ask("health", { type: "water", from: "2026-11-04", to: "2026-11-05" })).values[0].total).toBe(0);
+});
+
+it("reads nights newest first, the one with the most sleep of two that overlap, with stages only when asked", async () => {
+  const first = await ask("nights", { from: "2026-11-01", to: "2026-11-05", limit: 1 });
+  expect(first).toEqual({ nights: [night], nextCursor: "1793767200001" });
+  expect((await ask("nights", { from: "2026-11-01", to: "2026-11-05", cursor: first.nextCursor })).nights).toEqual([{
+    start: "2026-11-02T23:30:00-05:00", end: "2026-11-03T07:00:00-05:00", asleepAt: null, wokeAt: null,
+    minutes: { asleep: 0, core: 0, deep: 0, rem: 0, awake: 0 }, source: "com.urbandroid.sleep", device: "Android phone" }]);
+  expect((await ask("nights", { from: "2026-11-04", to: "2026-11-05", stages: true })).nights[0].stages).toEqual([
+    { stage: "awake", start: "2026-11-03T23:40:00-05:00", end: "2026-11-04T00:00:00-05:00" },
+    { stage: "core", start: "2026-11-04T00:00:00-05:00", end: "2026-11-04T02:00:00-05:00" },
+    { stage: "deep", start: "2026-11-04T02:00:00-05:00", end: "2026-11-04T03:20:00-05:00" }]);
+  expect(await ask("nights", { from: "2026-11-01", to: "2026-11-05", cursor: "page-2" })).toEqual({ refused: "That cursor is not one this connector gave." });
+  expect((await ask("nights", { from: "2026-11-01", to: "2026-11-05", limit: 101 })).refused).toBeDefined();
+});
+
+it("reads workouts newest first, with their kind, km and calories", async () => {
+  const walk = { kind: null, start: "2026-11-07T10:20:00-05:00", end: "2026-11-07T10:40:00-05:00", minutes: 20, km: null, calories: null,
+    source: "com.google.android.apps.fitness", device: "Android phone" };
+  expect(await ask("workouts", { from: "2026-11-01", to: "2026-11-08" })).toEqual({ workouts: [walk, run], nextCursor: null });
+  const first = await ask("workouts", { from: "2026-11-01", to: "2026-11-08", limit: 1 });
+  expect(first).toEqual({ workouts: [walk], nextCursor: "1794064740001" });
+  expect(await ask("workouts", { from: "2026-11-01", to: "2026-11-08", cursor: first.nextCursor })).toEqual({ workouts: [run], nextCursor: null });
+  expect(await ask("workouts", { from: "2026-11-05", to: "2026-11-07" })).toEqual({ workouts: [], nextCursor: null });
 });
 
 it("reads calendar events by time or words, never a removed one, a page at a time", async () => {

@@ -129,7 +129,7 @@ it("connects a person's AI app after they approve it by name and sign in on the 
   const token = await connect();
   const answer = await listTools(token);
   expect(answer.status).toBe(200);
-  expect((await answer.json() as { result: { tools: unknown[] } }).result.tools).toHaveLength(12);
+  expect((await answer.json() as { result: { tools: unknown[] } }).result.tools).toHaveLength(14);
 });
 
 it("reads only the space of the person who signed in", async () => {

@@ -1,8 +1,8 @@
 // Each connector question's answer, shared by the MCP tools and the web API so one input answers the same through
 // either. Reads are capped; a note is added only through add-note.ts. No answer holds a key, file name or device id.
 import { addNote, type TypedNote } from "../apps/relay/add-note.ts";
-import { chatById, chatLines, chatMessages, chatPage, daySummary, eventPage, healthBuckets, noteById, notePage, photoById, photoPage,
-  placeVisits, type CalendarEvent, type Chat, type HealthType, type Note, type Photo, type Span } from "../apps/relay/queries.ts";
+import { chatById, chatLines, chatMessages, chatPage, daySummary, eventPage, healthBuckets, nightPage, noteById, notePage, photoById, photoPage,
+  placeVisits, workoutPage, type CalendarEvent, type Chat, type HealthType, type Note, type Photo, type Span } from "../apps/relay/queries.ts";
 import type { Db, PersonSpace } from "../apps/relay/space.ts";
 import type { McpEnv } from "./env.ts";
 import { LINES, MAX_BUCKETS, PART, type Input, type ToolName } from "./inputs.ts";
@@ -62,13 +62,30 @@ function buckets(from: number, to: number, size: "hour" | "day", timezone: strin
   return spans;
 }
 
+/** A night or a workout as the caller reads it: its times in the zone. */
+const nightShown = <Night extends { start: number; end: number; asleepAt: number | null; wokeAt: number | null }>(night: Night, timezone: string) =>
+  ({ ...night, start: local(night.start, timezone), end: local(night.end, timezone),
+    asleepAt: night.asleepAt === null ? null : local(night.asleepAt, timezone), wokeAt: night.wokeAt === null ? null : local(night.wokeAt, timezone) });
+const workoutShown = <Workout extends { start: number; end: number }>(workout: Workout, timezone: string) =>
+  ({ ...workout, start: local(workout.start, timezone), end: local(workout.end, timezone) });
+
 async function summary(db: Db, date: string, timezone: string) {
-  const { places, trips, events, bloodPressure, ...totals } = await daySummary(db, startOfDay(date, timezone), startOfDay(nextDay(date), timezone));
+  const { places, trips, events, bloodPressure, nights, workouts, ...totals } =
+    await daySummary(db, startOfDay(date, timezone), startOfDay(nextDay(date), timezone));
   return { day: date, timezone, ...totals,
+    nights: nights.map(night => nightShown(night, timezone)),
+    workouts: { ...workouts, items: workouts.items.map(workout => workoutShown(workout, timezone)) },
     ...bloodPressure && { bloodPressure: bloodPressure.map(reading => ({ ...reading, at: local(reading.at, timezone) })) },
     places: places.map(place => ({ ...place, from: local(place.from, timezone), to: local(place.to, timezone) })),
     trips: trips.map(trip => spanShown(trip, timezone)),
     events: events.map(event => ({ ...event, start: local(event.start, timezone), end: local(event.end, timezone) })) };
+}
+
+/** Where a page of nights or workouts starts: the last answer's cursor, a time. */
+function timeBefore(text: string | undefined): number | undefined {
+  if (text === undefined) return undefined;
+  if (!/^\d{13}$/.test(text)) throw new Refusal("That cursor is not one this connector gave.");
+  return Number(text);
 }
 
 /** Where an event page starts: the last answer's cursor, the start and id of the event before. */
@@ -167,7 +184,8 @@ const READS = {
     if (!note) throw new Refusal("No note has this id.", 404);
     const [nearby, { day: date, steps, sleepMinutes, heartRate, workouts }] = await Promise.all([
       visits(db, note.recordedAt - NEAR, note.recordedAt + NEAR, 20, timezone), summary(db, dayOf(note.recordedAt, timezone), timezone)]);
-    return { ...shown(note, timezone), placesNearby: nearby.visits, day: { day: date, steps, sleepMinutes, heartRate, workouts } };
+    return { ...shown(note, timezone), placesNearby: nearby.visits,
+      day: { day: date, steps, sleepMinutes, heartRate, workouts: { count: workouts.count, minutes: workouts.minutes } } };
   },
   timeline: async (db, { from, to, limit, cursor: text, timezone = ZONE }) => {
     const [after, end] = range(from, to, timezone);
@@ -177,6 +195,19 @@ const READS = {
   health: async (db, { type, from, to, bucket, timezone = ZONE }) => {
     const values = await healthBuckets(db, type as HealthType, buckets(...range(from, to, timezone), bucket, timezone));
     return { type, bucket, timezone, values: values.map(value => ({ ...value, from: local(value.from, timezone), to: local(value.to, timezone) })) };
+  },
+  nights: async (db, { from, to, stages, limit, cursor: text, timezone = ZONE }) => {
+    const [start, end] = range(from, to, timezone);
+    const found = await nightPage(db, { from: start, to: end, before: timeBefore(text), limit }, stages);
+    return { nights: found.nights.map(night => ({ ...nightShown(night, timezone),
+      ...night.stages && { stages: night.stages.map(step => ({ ...step, start: local(step.start, timezone), end: local(step.end, timezone) })) } })),
+    nextCursor: found.next === null ? null : String(found.next) };
+  },
+  workouts: async (db, { from, to, limit, cursor: text, timezone = ZONE }) => {
+    const [start, end] = range(from, to, timezone);
+    const found = await workoutPage(db, { from: start, to: end, before: timeBefore(text), limit });
+    return { workouts: found.workouts.map(workout => workoutShown(workout, timezone)),
+      nextCursor: found.next === null ? null : String(found.next) };
   },
   places: async (db, { from, to, limit, timezone = ZONE }) => visits(db, ...range(from, to, timezone), limit, timezone),
   calendar: async (db, { from, to, query, limit, cursor: text, timezone = ZONE }) => {

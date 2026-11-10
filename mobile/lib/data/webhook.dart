@@ -70,6 +70,7 @@ class WebhookClient implements Outbound {
       'attachment' => ('note.file', {'note_id': body['noteClientId'], 'file': {'id': body['id'], 'name': body['name'],
         'content_type': _type(body['type']), 'size': bytes!.length, 'base64': base64.encode(bytes)}}),
       'health' => ('health.samples', {'samples': [for (final sample in body['samples'] as List) _sample(sample as Map)]}),
+      nightsRoute => ('health.nights', {'nights': [for (final night in body['nights'] as List) _night(night as Map)]}),
       'locations' => ('location.points', {'points': [for (final point in body['points'] as List) _point(point as Map)]}),
       staysRoute => ('location.stays', {'stays': [for (final stay in body['stays'] as List) _stay(stay as Map)]}),
       'calendar' => ('calendar.events', {'events': [
@@ -78,7 +79,10 @@ class WebhookClient implements Outbound {
       ]}),
       final route => throw ArgumentError.value(route, 'route'),
     };
-    if ((data['samples'] ?? data['points'] ?? data['events'] ?? data['stays']) case final List rows when rows.isEmpty) return null;
+    if ((data['samples'] ?? data['points'] ?? data['events'] ?? data['stays'] ?? data['nights']) case final List rows
+        when rows.isEmpty) {
+      return null;
+    }
     return {'version': 1, 'type': type, 'timestamp': _iso(item.createdAt.millisecondsSinceEpoch), 'data': data};
   }
 
@@ -99,9 +103,23 @@ class WebhookClient implements Outbound {
     };
   }
 
-  Map<String, dynamic> _sample(Map sample) => {'id': sample['id'], 'device': _device, 'type': sample['type'],
+  /// A sample in the server's shape; only a workout has kind, distance and calories. Its id comes from the fields the
+  /// server keeps it once by, so a reading the 90-day redo sends again has the same id, and a receiver upserts it.
+  Map<String, dynamic> _sample(Map sample) => {
+    'id': _eventId('sample:${sample['type']}:${sample['start']}:${sample['end']}:${sample['source']}'), 'device': _device,
+    'type': sample['type'],
     'start': _iso(sample['start']), 'end': _iso(sample['end']), 'value': sample['value'], 'unit': sample['unit'],
-    'source': sample['source']};
+    'source': sample['source'],
+    if (sample['type'] == 'workout') ...{'kind': sample['kind'], 'distance': sample['distance'], 'calories': sample['calories']}};
+
+  /// A night in the server's shape. Its id comes from its source and start, as a stay's does, so a receiver upserts it.
+  Map<String, dynamic> _night(Map night) => {'id': _eventId('night:${night['source']}:${night['start']}'), 'device': _device,
+    'source': night['source'], 'start': _iso(night['start']), 'end': _iso(night['end']),
+    'asleep_at': night['asleepAt'] == null ? null : _iso(night['asleepAt']),
+    'woke_at': night['wokeAt'] == null ? null : _iso(night['wokeAt']),
+    'minutes': {for (final stage in ['asleep', 'core', 'deep', 'rem', 'awake']) stage: night[stage]},
+    'stages': [for (final step in (night['stages'] as List).cast<Map>())
+      {'stage': step['stage'], 'start': _iso(step['start']), 'end': _iso(step['end'])}]};
 
   Map<String, dynamic> _point(Map point) => {'id': point['id'], 'device': _device, 'at': _iso(point['at']),
     'lat': point['lat'], 'lon': point['lon'], 'accuracy': point['accuracy'], 'place': point['place']};

@@ -57,7 +57,7 @@ Read one note by its id, with the places you stayed within 30 minutes of it and 
 
 `GET /v1/days/{day}` · `getDay`
 
-One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, each stay with its name and times, each trip with its mode, km and minutes, and the calendar's events with the people in each.
+One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, the nights or naps that ended that day with their stage minutes, each workout with its kind, km and calories, each stay with its name and times, each trip with its mode, km and minutes, and the calendar's events with the people in each.
 
 | Field | In | Type | Required | What it holds |
 |---|---|---|---|---|
@@ -76,6 +76,35 @@ One value per hour or day for one kind of health data: steps, sleep, mindful min
 | `from` | query | string | yes | The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
 | `to` | query | string | yes | The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
 | `bucket` | query | "hour" or "day" | no | One value per hour or per day, at most 400. |
+| `timezone` | query | string | no | An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out. |
+
+## Read nights of sleep
+
+`GET /v1/nights` · `listNights`
+
+The nights, and naps, that end from one time to another, newest first: when the person went to bed, fell asleep and woke, and the minutes asleep, in core (light), deep and REM sleep, and awake. Of nights that overlap, as from a watch and the phone's bedtime, the one with the most sleep. Give `stages` to add each night's stage timeline, such as to see when deep sleep came.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `from` | query | string | yes | The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
+| `to` | query | string | yes | The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
+| `stages` | query | boolean | no | Add each night's stage timeline, in time order. |
+| `limit` | query | integer | no | How many nights, at most 100. |
+| `cursor` | query | string | no | The last answer's `nextCursor`, to read the next page. |
+| `timezone` | query | string | no | An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out. |
+
+## Read workouts
+
+`GET /v1/workouts` · `listWorkouts`
+
+The workouts that start from one time to another, newest first, each with its kind (such as running or traditional_strength_training), minutes, km and calories when the phone has them. A workout from before the phone sent its kind has `kind` null. Calories are active calories from an iPhone and total calories from Android.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `from` | query | string | yes | The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
+| `to` | query | string | yes | The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
+| `limit` | query | integer | no | How many workouts, at most 100. |
+| `cursor` | query | string | no | The last answer's `nextCursor`, to read the next page. |
 | `timezone` | query | string | no | An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out. |
 
 ## Read places visited

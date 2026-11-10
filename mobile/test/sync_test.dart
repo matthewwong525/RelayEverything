@@ -291,7 +291,7 @@ void main() {
       expect([for (final message in messages) message['type']], ['health.samples', 'location.points']);
       final sample = (messages[0]['data']['samples'] as List).single as Map;
       final point = (messages[1]['data']['points'] as List).single as Map;
-      expect([sample['id'], point['id'], sample['device']['id']], [1, 2, await store.installId()]);
+      expect([sample['id'], point['id'], sample['device']['id']], [isA<int>(), 1, await store.installId()]);
       expect(server.requests.every((request) => request.url.toString() == hook.address), isTrue);
     });
 

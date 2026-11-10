@@ -43,7 +43,7 @@ What you give up:
 - **Your Relay Everything page and your AI can not read it**, because none of it is on the server.
 - **A failing receiver holds back the rest.** The phone sends in order, so it keeps each item, and all after it, until your receiver answers `2xx`. The **Account** page in Settings shows the last answer. It never drops an item for a `400`. Only a file your receiver refuses with `413` is dropped, and the **Account** page names it. A photo your receiver refuses with `413` is dropped too. A photo that waits does not hold back your notes.
 
-From the phone, `device.id` is the phone's own id, a UUID the app makes once. A note's `created_at` is the same as its `recorded_at`: the note's own time, which for a voice note is when it was recorded. Its `note.updated` has the same one. The message's `timestamp` is when the phone queued the message. Health samples and points are numbered on the phone, so save them by `device.id` and `id` together. A calendar event's `id` is made from the phone's id and the event's `key`, so each change of one event has the same `id`. A stay's or a trip's `id` is made from the phone's id, its `kind` and its `start` in the same way. A removed event from the phone has only its `key`, `id` and `start`. A photo's `id` is the phone's own id for it, a UUID.
+From the phone, `device.id` is the phone's own id, a UUID the app makes once. A note's `created_at` is the same as its `recorded_at`: the note's own time, which for a voice note is when it was recorded. Its `note.updated` has the same one. The message's `timestamp` is when the phone queued the message. Points are numbered on the phone, so save them by `device.id` and `id` together. A health sample's `id` is made from the phone's id and the sample's `type`, `start`, `end` and `source`, so the same sample sent again has the same `id`. An older version of the app numbered its samples, so a sample it sent can come again with a new `id`: keep one sample for each `device.id`, `type`, `start`, `end` and `source`, as Relay Everything does. A calendar event's `id` is made from the phone's id and the event's `key`, so each change of one event has the same `id`. A stay's or a trip's `id` is made from the phone's id, its `kind` and its `start` in the same way. A removed event from the phone has only its `key`, `id` and `start`. A photo's `id` is the phone's own id for it, a UUID.
 
 ## The message
 
@@ -66,6 +66,7 @@ Every message is a `POST` with a JSON body in one envelope:
 | `note.updated` | A phone changes a note, from any device or way in. Always after the note's `note.created`. | `note`, with its latest words, without `audio` |
 | `note.deleted` | A phone deletes a note, from any device or way in. Always after the note's `note.created`. | `note`: its `id` and `deleted_at` |
 | `health.samples` | A phone sends health samples. | `samples`: up to 500 |
+| `health.nights` | A phone sends new or changed nights of sleep. | `nights`: up to 500, each with its stages |
 | `location.points` | A phone sends location points. | `points`: up to 500 |
 | `location.stays` | A phone sends new or changed stays and trips. | `stays`: up to 500, each a `stay` or a `trip` |
 | `calendar.events` | A phone sends new, changed or removed calendar events. | `events`: up to 500, each with its `status` |
@@ -218,6 +219,42 @@ Relay Everything sends `note.deleted` when a phone deletes a note. Any signed-in
 
 A blood pressure reading is two samples with the same `start`: the upper and the lower number. A later version can add a type, so keep a sample whose `type` you do not know.
 
+A `workout` sample also has three fields, each `null` when the phone does not have it:
+
+```json
+{ "id": 7, "device": { "id": "d0000000-0000-4000-8000-000000000001", "name": "iPhone" }, "type": "workout",
+  "start": "2026-11-04T11:10:00.000Z", "end": "2026-11-04T11:42:00.000Z", "value": 32, "unit": "min",
+  "source": "com.apple.health", "kind": "running", "distance": 5100, "calories": 410 }
+```
+
+`kind` is what you did, such as `running`, `walking` or `traditional_strength_training`. `distance` is in meters. `calories` is in kcal: from an iPhone, the active calories, as Apple Health shows them; from Android, all the calories burned in the workout's time. A workout sent before these fields came, sent again with them, comes again with the same `device.id`, `type`, `start`, `end` and `source`: save it as an upsert by those fields. From the phone, it also has the same `id`, but only if the phone first sent it after the update that made ids from these fields. Other types have none of the three fields.
+
+### `health.nights`
+
+```json
+{
+  "version": 1,
+  "type": "health.nights",
+  "timestamp": "2026-11-05T12:00:00.000Z",
+  "data": {
+    "nights": [
+      { "id": 3, "device": { "id": "d0000000-0000-4000-8000-000000000001", "name": "iPhone" }, "source": "com.apple.health.watch",
+        "start": "2026-11-05T04:05:00.000Z", "end": "2026-11-05T11:55:00.000Z",
+        "asleep_at": "2026-11-05T04:20:00.000Z", "woke_at": "2026-11-05T11:55:00.000Z",
+        "minutes": { "asleep": 430, "core": 245, "deep": 75, "rem": 110, "awake": 25 },
+        "stages": [
+          { "stage": "core", "start": "2026-11-05T04:20:00.000Z", "end": "2026-11-05T05:10:00.000Z" },
+          { "stage": "deep", "start": "2026-11-05T05:10:00.000Z", "end": "2026-11-05T06:05:00.000Z" }
+        ] }
+    ]
+  }
+}
+```
+
+The phone groups its sleep readings into nights. Each app or watch that tracks your sleep makes its own night, named in `source`, so two sources can give the same night: keep both, or keep the one with the most `asleep` minutes. A nap is a short night. `start` and `end` are the first and last reading, such as when you went to bed. `asleep_at` and `woke_at` are when you fell asleep and last woke, `null` for a night with only a bedtime. `minutes` gives the minutes in each stage: `core` is light sleep, and `asleep` is all the sleep in any stage. `stages` is the night's timeline, in time order, at most 400 steps. A stage is `asleep` (asleep, with no stage known), `core`, `deep`, `rem` or `awake`; a later version can add one. A source with no stages, such as a phone's bedtime, gives an empty list.
+
+A night can come again when the watch writes more of it, with the same `id`: save it as an upsert by `device.id` and `id`. The phone still sends each night's sleep as `sleep` samples too, so a day's sleep total from `health.samples` stays the same. Health's tick takes both messages.
+
 ### `location.points`
 
 ```json
@@ -325,7 +362,7 @@ const payload = new Webhook(process.env.RELAY_WEBHOOK_SECRET).verify(body, heade
 - Each webhook gets every item it takes, in the order Relay Everything stored them, with none skipped but a file or a photo your receiver refuses with `413`.
 - Answer with a `2xx` status within 15 seconds. Relay Everything does not follow a redirect.
 - After any other answer, Relay Everything tries the same message again after 30 s, 2 min, 10 min, 30 min, 1 h, 2 h, 4 h, 6 h and 8 h: about a day. Then the card shows **Failing**, with the last answer and how many items wait. If a send is lost, your space wakes itself every 15 minutes while it has a webhook, and sends what waits. **Try again now** sends them all, in order, from where it stopped.
-- A retry can send a message you already saved, when your answer was lost. Its id and body are the same. So save each note, sample, point and event by its `id`, as an upsert.
+- A retry can send a message you already saved, when your answer was lost. Its id and body are the same. So save each note, point and event by its `id`, as an upsert. Save a health sample by its device, type, start, end and source: a phone from before an update gave it another `id`.
 - From your server, accept bodies up to 34 MB. A ring note's recording is about 100 KB a minute, a file is up to 25 MB, a photo is up to 3 MB, and base64 makes each a third larger. To accept less, answer `413` to a `note.file` or a `photo.created` that is too large.
 
 ## When the format changes
@@ -381,6 +418,22 @@ CREATE TABLE relay_health_samples (
   value double precision NOT NULL,
   unit text NOT NULL,
   source text NOT NULL,
+  kind text,
+  distance double precision,
+  calories double precision,
+  PRIMARY KEY (device_id, id),
+  UNIQUE (device_id, type, start_at, end_at, source)
+);
+CREATE TABLE relay_health_nights (
+  id bigint NOT NULL,
+  device_id text NOT NULL,
+  source text NOT NULL,
+  start_at timestamptz NOT NULL,
+  end_at timestamptz NOT NULL,
+  asleep_at timestamptz,
+  woke_at timestamptz,
+  minutes jsonb NOT NULL,
+  stages jsonb NOT NULL,
   PRIMARY KEY (device_id, id)
 );
 CREATE TABLE relay_calendar_events (
@@ -443,7 +496,7 @@ Save a note with `INSERT ... ON CONFLICT (id) DO UPDATE`, and keep the stored `a
 
 ## An example receiver
 
-[`receiver.mjs`](../../webhooks/receiver.mjs) is about 80 lines of Node with no packages. It checks each signature and saves notes, their files, samples, points, stays and trips, calendar events and photos in a SQLite file, so it needs no database server. It keeps a message of a type it does not know in its `other_messages` table, by its `webhook-id`, and answers `204`. It needs Node 22.13 or later.
+[`receiver.mjs`](../../webhooks/receiver.mjs) is about 100 lines of Node with no packages. It checks each signature and saves notes, their files, samples, workouts, nights, points, stays and trips, calendar events and photos in a SQLite file, so it needs no database server. It keeps one sample for each device, type, start, end and source. It keeps a message of a type it does not know in its `other_messages` table, by its `webhook-id`, and answers `204`. It needs Node 22.13 or later.
 
 ```bash
 curl -O https://relayeverything.com/webhooks/receiver.mjs

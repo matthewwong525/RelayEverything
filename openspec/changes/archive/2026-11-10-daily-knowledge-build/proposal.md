@@ -1,6 +1,6 @@
 # Your own Claude builds your knowledge web each day: helpers on your computer read your chats and notes into facts and topics, with no AI on the server
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** black-owl
 **Open questions:** none
 
@@ -127,6 +127,9 @@ Your memory table and your knowledge web are live, and the AI reads your topics 
 - **2026-11-10** — Assumed: `new=` names the topics first used in the run: a topic is known when the copy has its page or an earlier `done` line named it new, because a topic on notes only has no page and would be new each day; the record is already in `builds.log`, which syncs between computers.
 - **2026-11-10** — Assumed: a web whose `FORMAT.md` is still the old default word for word gets the new default at the start of a build, and a `FORMAT.md` the person changed stays as it is, because webs from part 1 keep the old copy, which says to make folders. The plugin can't read `schema/`, so it keeps the default in `plugin/build/FORMAT.md` and the old default's SHA-256; a test checks the copy equals `schema/knowledge/FORMAT.md`.
 - **2026-11-10** — Built: the chat list with no words on the server, `build.mjs` and its helpers, the daily start, `/relay:build`, the side-by-side rules and the docs. A second look found five problems (a note read passed its nearby places and the day's health, the gardener could not delete a joined page, a shared day counted as a link, a notes-only topic showed as new each day, and older webs kept the folder rule); all are fixed and reread. Saved for the CI check before the staging trial.
+- **2026-11-10** — The staging trial, with a made-up person (4 chats, 6 notes, a day of health and places), passed after one fix: Claude Code's narrow permission refuses a `<<` or `<` input that holds `{`, so the note reader could add no fact; `check-facts` and `add-facts` now take the list as one argument, and a test refuses a prompt that sends a heredoc. Then a chat start took 4 s, the build ended in about 3.5 minutes with 21 facts, all with `relay:` sources, 14 side-by-side pages, links between topics that share a chat, and no health value or place in any page or fact; a second chat started no build; Codex built the same way. The test person and their web were deleted.
+- **2026-11-10** — The trial found that `CODEX_HOME` set in a shell made a Claude Code chat start a Codex build; the transcript now decides the app first, and `CODEX_HOME` alone decides nothing.
+- **2026-11-10** — Archived for publish: the staging trial passed in Claude Code and Codex; the trial's two fixes (facts as one argument, the app picked by the transcript) are saved with the archive.
 
 ## Capabilities
 

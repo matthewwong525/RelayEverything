@@ -45,7 +45,7 @@ The agent gets one Bash grant: `node <plugin>/bin/build.mjs`. Its commands are `
 
 ### The gate is code that shows, the helper decides
 
-`check-facts` reads candidate facts on stdin and answers, for each, the live facts that share a tag and the closest word matches (`GET /v1/memory?tag=` and `?q=`, at most 5 each). The reader helper then adds, adds with `replaces`, or drops. This mirrors the memory store's write gate. Each fact gets a `clientId` made from its source and text, so a resend after a lost answer stores it once.
+`check-facts` takes candidate facts as a JSON list in its one argument and answers, for each, the live facts that share a tag and the closest word matches (`GET /v1/memory?tag=` and `?q=`, at most 5 each). The reader helper then adds, adds with `replaces`, or drops. This mirrors the memory store's write gate. `add-facts` takes its list the same way. Claude Code's `Bash(node <build.mjs>:*)` grant, in `dontAsk`, refuses a heredoc or a `<` whose text holds `{`, so the list goes as one quoted argument; stdin still works for a person. Each fact gets a `clientId` made from its source and text, so a resend after a lost answer stores it once.
 
 ### A graph of pages: what code finds, what the helper writes
 
@@ -62,7 +62,7 @@ Readers give a fact or a note every topic it touches, not only the main one, bec
 - **Claude Code:** `claude -p <prompt> --agents <plugin>/build/agents.json --permission-mode dontAsk --allowedTools Read Write Edit Glob Grep Task "Bash(node <build.mjs>:*)" --add-dir <copy> --no-session-persistence --settings '{"disableAllHooks":true}'`, with cwd the copy. The two helpers, `reader` and `gardener`, come from `plugin/build/reader.md` and `gardener.md`; `run` builds the `--agents` JSON from them, so they never show in the person's own agent list.
 - **Codex:** `codex exec --ephemeral --skip-git-repo-check --sandbox workspace-write -c sandbox_workspace_write.network_access=true -c 'sandbox_workspace_write.writable_roots=[<copy>]' -c approval_policy="never" <prompt>`, cwd the copy. The prompt tells it to do the readers' work, then the gardener's, in order.
 
-The app is the one the starting chat came from: Codex when the hook's environment has `CODEX_HOME` or `PLUGIN_ROOT` without `CLAUDE_PLUGIN_ROOT`, else Claude Code. The child gets `RELAY_SAVE=0` and `RELAY_BUILD_RUN=1`. `RELAY_BUILD_MODEL` sets `--model` or `-m`. `run` kills the child after 30 minutes, then syncs, so done work is sent.
+The app is the one the starting chat came from: the transcript decides first (a Codex `rollout-` file, else Claude Code); with no transcript, Codex when the environment has `CODEX_THREAD_ID`, or `PLUGIN_ROOT` without `CLAUDE_PLUGIN_ROOT`, else Claude Code. `CODEX_HOME` alone decides nothing, because a person may set it in a shell that also runs Claude Code. The child gets `RELAY_SAVE=0` and `RELAY_BUILD_RUN=1`. `RELAY_BUILD_MODEL` sets `--model` or `-m`. `run` kills the child after 30 minutes, then syncs, so done work is sent.
 
 ### The prompt and the helpers
 

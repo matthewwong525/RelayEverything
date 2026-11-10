@@ -35,3 +35,4 @@ For each new topic, search the older facts and notes for ones that fit it: `{{bu
 
 - Never copy a health value, a heart rate, a distance, a route, an address or a location point into a page. Link the day instead: `relay:day/<YYYY-MM-DD>`.
 - Never write in `.relay/`, and never run `git` or any other command.
+- Start each Bash call with `{{build}}`: the grant refuses a `cd`, a loop or a variable.

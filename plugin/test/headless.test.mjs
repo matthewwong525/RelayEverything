@@ -30,7 +30,9 @@ test('the app is the one the chat started in, and the child saves no chat and st
   assert.equal(appOf({ CLAUDE_PLUGIN_ROOT: '/plugin' }, '/home/ana/.claude/projects/x/5d1c.jsonl'), 'claude');
   assert.equal(appOf({}, '/home/ana/.codex/sessions/2026/11/10/rollout-2026-11-10T09-00-00-5d1c.jsonl'), 'codex');
   assert.equal(appOf({ CODEX_THREAD_ID: '5d1c' }), 'codex');
-  assert.equal(appOf({ CODEX_HOME: '/home/ana/.codex' }), 'codex');
+  // CODEX_HOME set in the shell does not make a Claude Code chat a Codex one.
+  assert.equal(appOf({ CODEX_HOME: '/home/ana/.codex', CLAUDE_PLUGIN_ROOT: '/plugin' }, '/home/ana/.claude/projects/x/5d1c.jsonl'), 'claude');
+  assert.equal(appOf({ CODEX_HOME: '/home/ana/.codex' }), 'claude');
   assert.equal(appOf({ PLUGIN_ROOT: '/plugin' }), 'codex');
   assert.equal(appOf({ PLUGIN_ROOT: '/plugin', CLAUDE_PLUGIN_ROOT: '/plugin' }), 'claude');
   assert.equal(appOf({}), 'claude');

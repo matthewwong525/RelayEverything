@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · daily-knowledge-build</title>
+<title>Review · 2026-11-10-daily-knowledge-build</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -442,11 +442,11 @@
 })();
 </script>
 </head>
-<body data-change="daily-knowledge-build" data-own-back>
+<body data-change="2026-11-10-daily-knowledge-build" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>daily-knowledge-build</h1>
+  <h1>2026-11-10-daily-knowledge-build</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Tap a picture to see it full screen.</span></p>
@@ -543,6 +543,9 @@
 <li class="decision card" id="decision-38" data-note="decision-38" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-10</p>Assumed: <code>new=</code> names the topics first used in the run: a topic is known when the copy has its page or an earlier <code>done</code> line named it new, because a topic on notes only has no page and would be new each day; the record is already in <code>builds.log</code>, which syncs between computers.</li>
 <li class="decision card" id="decision-39" data-note="decision-39" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-10</p>Assumed: a web whose <code>FORMAT.md</code> is still the old default word for word gets the new default at the start of a build, and a <code>FORMAT.md</code> the person changed stays as it is, because webs from part 1 keep the old copy, which says to make folders. The plugin can't read <code>schema/</code>, so it keeps the default in <code>plugin/build/FORMAT.md</code> and the old default's SHA-256; a test checks the copy equals <code>schema/knowledge/FORMAT.md</code>.</li>
 <li class="decision card" id="decision-40" data-note="decision-40" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-10</p>Built: the chat list with no words on the server, <code>build.mjs</code> and its helpers, the daily start, <code>/relay:build</code>, the side-by-side rules and the docs. A second look found five problems (a note read passed its nearby places and the day's health, the gardener could not delete a joined page, a shared day counted as a link, a notes-only topic showed as new each day, and older webs kept the folder rule); all are fixed and reread. Saved for the CI check before the staging trial.</li>
+<li class="decision card" id="decision-41" data-note="decision-41" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-10</p>The staging trial, with a made-up person (4 chats, 6 notes, a day of health and places), passed after one fix: Claude Code's narrow permission refuses a <code>&lt;&lt;</code> or <code>&lt;</code> input that holds <code>{</code>, so the note reader could add no fact; <code>check-facts</code> and <code>add-facts</code> now take the list as one argument, and a test refuses a prompt that sends a heredoc. Then a chat start took 4 s, the build ended in about 3.5 minutes with 21 facts, all with <code>relay:</code> sources, 14 side-by-side pages, links between topics that share a chat, and no health value or place in any page or fact; a second chat started no build; Codex built the same way. The test person and their web were deleted.</li>
+<li class="decision card" id="decision-42" data-note="decision-42" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-10</p>The trial found that <code>CODEX_HOME</code> set in a shell made a Claude Code chat start a Codex build; the transcript now decides the app first, and <code>CODEX_HOME</code> alone decides nothing.</li>
+<li class="decision card" id="decision-43" data-note="decision-43" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-10</p>Archived for publish: the staging trial passed in Claude Code and Codex; the trial's two fixes (facts as one argument, the app picked by the transcript) are saved with the archive.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

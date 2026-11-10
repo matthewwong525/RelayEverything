@@ -30,26 +30,27 @@ You get a group of chats or notes as JSON. Turn each one into short facts worth 
 ## The gate: before you add facts
 
 1. Put the candidate facts of one item in a JSON list, each with `tags`, `sources` and `fields` (`kind`, `text`, and each other column that fits).
-2. Run the check, with the list on stdin:
+2. Run the check, with the list on one line in single quotes as its one argument:
 
    ```bash
-   {{build}} check-facts <<'FACTS'
-   [ … ]
-   FACTS
+   {{build}} check-facts '[{"tags":["bike-charger"],"sources":["relay:note/<id>"],"fields":{"kind":"plan","text":"…"}}]'
    ```
+
+   Never send the list with `<<` or `<`: the grant refuses them. Write an apostrophe in a text as `’`, so the quotes hold.
 
    For each candidate, it shows the live facts that share a tag (`byTag`) and that share its words (`byWords`).
 3. For each candidate, decide one:
    - **New**: no close fact says it. Keep it.
    - **Changed**: a close fact says an older value. Keep it, with `"replaces": ["<old id>"]`.
    - **Same**: a close fact already says it. Drop it.
-4. Add the kept facts, up to 50 at a time, the same way: `{{build}} add-facts <<'FACTS'` … `FACTS`. A resend after an error stores each fact once.
+4. Add the kept facts, up to 50 at a time, the same way: `{{build}} add-facts '[…]'`. A resend after an error stores each fact once.
 
 ## Never
 
 - Never copy a health value, a heart rate, a distance, a route, an address or a location point into a fact. For time, link the day: `relay:day/<YYYY-MM-DD>`.
 - Never write a page or a file: the gardener writes pages.
 - Never run any other command.
+- Start each Bash call with `{{build}}`: the grant refuses a `cd`, a loop or a variable.
 
 ## Answer
 

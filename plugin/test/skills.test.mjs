@@ -148,6 +148,8 @@ test('the build\'s prompts name only build.mjs commands that exist, stay short, 
     assert.ok(text.length < 6000, `${name} stays under 6000 characters`);
     const named = [...text.matchAll(/\{\{build\}\} ([a-z-]+)/g)].map(found => found[1]);
     for (const command of named) assert.ok(commands.has(command), `${name} names ${command}`);
+    // Claude Code's narrow grant refuses a heredoc or `<` that holds JSON, so the facts go as one argument.
+    assert.doesNotMatch(text, /\{\{build\}\} [^`\n]*<</, `${name} sends no heredoc`);
     // relay.mjs shows only to say that FORMAT.md's commands go through build.mjs.
     assert.doesNotMatch(text.replaceAll('Where it names `relay.mjs`', ''), /relay\.mjs/, name);
   }

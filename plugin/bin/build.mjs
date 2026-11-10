@@ -25,8 +25,8 @@ export const MOST_CLOSE = 5;
 export const MOST_RELATED = 10;
 const MOST_PAGES = 200;
 const ID = /^[\w-]{1,64}$/;
-export const USAGE = 'Commands: work, chat <id> [--after <seq>], note <id>..., notes --q|--tag, facts --q|--tag|--source, columns, check-facts, '
-  + 'related <topic>, add-facts, tag fact|note <id> --add --remove, remove-page topics/<name>.md, done chat <id> <seq> | done note <id>, '
+export const USAGE = 'Commands: work, chat <id> [--after <seq>], note <id>..., notes --q|--tag, facts --q|--tag|--source, columns, check-facts <json>, '
+  + 'related <topic>, add-facts <json>, tag fact|note <id> --add --remove, remove-page topics/<name>.md, done chat <id> <seq> | done note <id>, '
   + 'status, off, on, now.';
 export const CHATS_WAIT = 'Your Relay Everything server lists chats only with search words, so chats wait for a newer server.';
 
@@ -132,7 +132,7 @@ const shortFact = fact => ({ id: fact.id, kind: fact.fields?.kind, text: fact.fi
 
 async function addFacts(options) {
   const facts = factsIn(options.input);
-  if (!Array.isArray(facts) || !facts.every(fact => fact && typeof fact === 'object')) return { code: 2, text: 'Give the facts as a JSON list on stdin.' };
+  if (!Array.isArray(facts) || !facts.every(fact => fact && typeof fact === 'object')) return { code: 2, text: 'Give the facts as a JSON list: add-facts \'<json>\'.' };
   const sent = facts.map(fact => ({ clientId: clientIdOf(fact), ...fact }));
   const done = await relay(['add-facts'], { ...options, input: JSON.stringify(sent) });
   if (done.code === 0) {
@@ -147,7 +147,7 @@ async function addFacts(options) {
 /** For each candidate fact, the live facts that share a tag and those that hold its longest words, MOST_CLOSE each. */
 async function checkFacts(options) {
   const facts = factsIn(options.input);
-  if (!Array.isArray(facts)) return { code: 2, text: 'Give the candidate facts as a JSON list on stdin.' };
+  if (!Array.isArray(facts)) return { code: 2, text: 'Give the candidate facts as a JSON list: check-facts \'<json>\'.' };
   const read = async args => {
     const done = await relay(['facts', ...args, '--limit', String(MOST_CLOSE)], options);
     if (done.code !== 0) throw done;
@@ -453,6 +453,9 @@ export function startRun(env, app) {
   spawn(process.execPath, [self, 'run', '--app', app], { detached: true, stdio: 'ignore', env }).unref();
 }
 
+/** The commands that take a JSON list: as their one argument, or on stdin when it has none. */
+const JSON_INPUT = ['add-facts', 'check-facts'];
+
 /** Runs one command and answers `{ code, text }`. */
 export async function build(args, { env = process.env, input = '', fetcher = fetch, zone = computerZone(), start = startRun } = {}) {
   const { command, value, second, fields } = parseArgs(args);
@@ -473,13 +476,15 @@ export async function build(args, { env = process.env, input = '', fetcher = fet
   const computer = readComputer(env);
   if (!computer) return { code: 1, text: NOT_CONNECTED };
   const ids = args.slice(1).filter(arg => !arg.startsWith('--'));
-  return AGENT[command]({ value, second, fields, ids, env, input, fetcher, zone, computer });
+  // The facts come as one argument: Claude Code's narrow grant refuses a heredoc or `<` that holds `{`. Stdin still works.
+  const given = JSON_INPUT.includes(command) && value !== undefined ? value : input;
+  return AGENT[command]({ value, second, fields, ids, env, input: given, fetcher, zone, computer });
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(self)) {
   const args = process.argv.slice(2);
   let input = '';
-  if (['add-facts', 'check-facts'].includes(args[0])) for await (const part of process.stdin) input += part;
+  if (JSON_INPUT.includes(args[0]) && args[1] === undefined) for await (const part of process.stdin) input += part;
   const { code, text } = await build(args, { input });
   console.log(text);
   process.exitCode = code;

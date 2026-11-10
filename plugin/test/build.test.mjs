@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, readFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { build, buildDue, CHATS_WAIT, claims, clientIdOf, FORMAT, MOST_CHATS, MOST_NOTES, readRecord, readSettings, run, status,
   USAGE, work } from '../bin/build.mjs';
 import { sync } from '../bin/knowledge.mjs';
@@ -187,6 +188,30 @@ test('check-facts shows the live facts that share a tag and those that share the
   assert.deepEqual(shown.byTag[0], { id: 'fa1', kind: 'fact', text: 'The battery is 400 Wh.', tags: ['bike-battery'] });
   assert.deepEqual(shown.byWords.map(one => one.id).slice(0, 2), ['fa1', 'fa2']);
   assert.ok(server.calls.every(call => call.method === 'GET' && Number(call.query.limit) === 5));
+});
+
+test('add-facts and check-facts take the list as their one argument, as the narrow grant allows, and stdin still works', async () => {
+  const env = { ...homeWith(), RELAY_BUILD_RUN: '1' };
+  const server = fakeWeb();
+  const facts = [{ tags: ['bike-charger'], sources: ['relay:note/n1'], fields: { kind: 'plan', text: 'Order Sam’s 2 m XT60 cable.' } }];
+  const [shown] = JSON.parse((await ask(env, ['check-facts', JSON.stringify(facts)], server)).text);
+  assert.equal(shown.text, 'Order Sam’s 2 m XT60 cable.');
+  assert.equal((await ask(env, ['add-facts', JSON.stringify(facts)], server)).code, 0);
+  assert.equal((await ask(env, ['add-facts'], server, { input: JSON.stringify(facts) })).code, 0);
+  assert.deepEqual(server.facts.map(one => one.clientId), [clientIdOf(facts[0])]);
+  assert.equal((await ask(env, ['add-facts', 'no'], server, { input: JSON.stringify(facts) })).code, 2);
+});
+
+test('the command line with the list as an argument answers without waiting for stdin', async () => {
+  const child = spawn(process.execPath, [fileURLToPath(new URL('../bin/build.mjs', import.meta.url)), 'check-facts', '[]'],
+    { env: { ...process.env, ...relayHome({ connected: false }) }, stdio: ['pipe', 'pipe', 'ignore'] });
+  let out = '';
+  child.stdout.on('data', part => { out += part; });
+  // stdin stays open: an old build would wait on it for ever.
+  const code = await Promise.race([new Promise(done => child.on('exit', done)), new Promise(done => setTimeout(() => done('waited'), 5000))]);
+  child.kill();
+  assert.equal(code, 1);
+  assert.match(out, /not connected/);
 });
 
 test('related ranks the topics that share a fact, a chat or a note, says when a page links one, and finds none for a lone topic', async () => {

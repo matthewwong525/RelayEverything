@@ -43,6 +43,10 @@ const SAME: [string, WebTool, Record<string, unknown>][] = [
   ["days/2026-11-07", "day_summary", { day: "2026-11-07" }],
   ["health?type=steps&from=2026-11-04T07:00&to=2026-11-04T10:00&bucket=hour", "health", { type: "steps", from: "2026-11-04T07:00", to: "2026-11-04T10:00", bucket: "hour" }],
   ["health?type=heart_rate&from=2026-11-03&to=2026-11-05", "health", { type: "heart_rate", from: "2026-11-03", to: "2026-11-05" }],
+  ["nights?from=2026-11-01&to=2026-11-05&limit=1", "nights", { from: "2026-11-01", to: "2026-11-05", limit: 1 }],
+  ["nights?from=2026-11-04&to=2026-11-05&stages=true", "nights", { from: "2026-11-04", to: "2026-11-05", stages: true }],
+  ["nights?from=2026-11-04&to=2026-11-05&stages=false", "nights", { from: "2026-11-04", to: "2026-11-05", stages: false }],
+  ["workouts?from=2026-11-01&to=2026-11-08", "workouts", { from: "2026-11-01", to: "2026-11-08" }],
   ["places?from=2026-11-04&to=2026-11-05&limit=2", "places", { from: "2026-11-04", to: "2026-11-05", limit: 2 }],
   ["places?from=2026-11-07&to=2026-11-08", "places", { from: "2026-11-07", to: "2026-11-08" }],
   ["points?id=2", "points", { id: 2 }],
@@ -73,6 +77,8 @@ it("reads on with each answer's cursor, and keeps each tool's limits", async () 
   expect((await call("notes?limit=2")).json.error_description).toMatch(/`from`: .*; `to`: /);
   expect((await call("notes?q=the&limit=many")).json.error_description).toMatch(/^`limit`: /);
   expect((await call("notes?q=the&color=red")).json.error_description).toContain("color");
+  expect((await call("nights?from=2026-11-01&to=2026-11-05&cursor=1793767200001")).json.nights).toHaveLength(1);
+  expect((await call("nights?from=2026-11-01&to=2026-11-05&stages=yes")).json.error_description).toMatch(/^`stages`: /);
   expect(await call("notes?q=the&cursor=page-2")).toMatchObject({ status: 400, json: { error_description: "That cursor is not one this connector gave." } });
 });
 

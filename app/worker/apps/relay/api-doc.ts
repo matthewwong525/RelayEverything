@@ -50,9 +50,11 @@ function rows(schema: Schema, prefix = ""): string[] {
 
 const table = (lines: string[]) => [HEAD, ...lines].join("\n");
 const json = (value: unknown) => `\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\``;
+/** The note changes the page makes too, as the space's Web device: caller.ts's asDeviceOrPage. */
+const PAGE_WRITES = new Set(["POST /apps/relay/api/notes", "PATCH /apps/relay/api/notes", "DELETE /apps/relay/api/notes"]);
 const caller = (method: string, path: string) => reaches("chats", method, path)
   ? reaches("phone", method, path) ? "any device key" : "a Claude Code chat key only"
-  : reaches("phone", method, path) ? method === "GET" ? "a signed-in person or a phone key" : "a phone key"
+  : reaches("phone", method, path) ? method === "GET" || PAGE_WRITES.has(`${method} ${path}`) ? "a signed-in person or a phone key" : "a phone key"
     : "a signed-in person only, not a device key";
 
 function described({ method, path, action }: { method: string; path: string; action: Action }): string {

@@ -46,9 +46,12 @@ it("refuses another device's note or an unknown one, and leaves the note as it w
   expect(log().map(([kind]) => kind)).toEqual(["note.created"]);
 });
 
-it("takes a change only from a phone's device key", async () => {
+it("takes a change only from a phone's device key or the page, which sent no note by this clientId", async () => {
   await sent();
-  for (const who of [matthew, laptop, lost, checker, null]) expect(await edit(who), JSON.stringify(who)).toMatchObject({ status: 403 });
+  for (const who of [laptop, lost, checker]) expect(await edit(who), JSON.stringify(who)).toMatchObject({ status: 403 });
+  expect((await edit(null)).status).toBe(401);
+  // The page changes notes as the space's Web device, which sent none by this clientId.
+  expect(await edit(matthew)).toMatchObject({ status: 404 });
   expect(rows("relay_notes").map(row => row.text)).toEqual(["Desk lamp"]);
 });
 

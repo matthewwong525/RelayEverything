@@ -11,9 +11,9 @@ lists the codes.
 
 ## Store a typed note
 
-`POST /apps/relay/api/notes` · `relay.notes-add` · writes · called by a phone key
+`POST /apps/relay/api/notes` · `relay.notes-add` · writes · called by a signed-in person or a phone key
 
-Store a note typed on a Relay Everything phone, once per phone and clientId.
+Store a note typed on a Relay Everything phone or page, once per device and clientId. A note from the page is named by your space's Web device.
 
 ### Input
 
@@ -43,9 +43,9 @@ Send the input as a JSON body.
 
 ## Change a note
 
-`PATCH /apps/relay/api/notes` · `relay.notes-edit` · writes · called by a phone key
+`PATCH /apps/relay/api/notes` · `relay.notes-edit` · writes · called by a signed-in person or a phone key
 
-Change the words of any note in your space, and list the files added since to a note this phone sent. The newer change wins: a change made before the note's last one gets 409. Webhooks get it as note.updated.
+Change the words of any note in your space, and list the files added since to a note this device sent. The page changes notes as your space's Web device. The newer change wins: a change made before the note's last one gets 409. Webhooks get it as note.updated.
 
 ### Input
 
@@ -54,14 +54,14 @@ Send the input as a JSON body.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `id` | string | no | The server's id for the note, as GET notes gives it: any note in your space. |
-| `clientId` | string | no | Or the phone's own id for a note it sent, as POST notes sent it. |
+| `clientId` | string | no | Or the device's own id for a note it sent, as POST notes sent it. |
 | `text` | string | yes | What the note says now, in place of its words before. It can be empty only when the note has files. |
 | `attachments` | array of object | no | All of the note's files now, up to 10. A file the server lacks is added: send its bytes after, with POST attachments. |
 | `attachments[].id` | string | yes | The phone's own id for the file: its upload names it. |
 | `attachments[].name` | string | yes | The file's name, such as `warranty.pdf`. |
 | `attachments[].type` | string | yes | The file's content type, such as `application/pdf`; empty when the phone does not know it. |
 | `attachments[].size` | integer | yes | The file's size in bytes, up to 25 MB. |
-| `editedAt` | integer | no | When the phone made the change, in Unix ms; now when left out. A later time is taken as now. |
+| `editedAt` | integer | no | When the device made the change, in Unix ms; now when left out. A later time is taken as now. |
 
 ### Output
 
@@ -76,11 +76,11 @@ Send the input as a JSON body.
 |---|---|
 | `not_found` | Your space has no note with this id, or this device sent no note with this clientId. |
 | `older` | The note changed after this change was made, so the newer words stay: GET notes gives them. |
-| `not_own` | Add a file only to a note this phone sent. |
+| `not_own` | Add a file only to a note this device sent. |
 
 ## Delete a note
 
-`DELETE /apps/relay/api/notes` · `relay.notes-delete` · writes · called by a phone key
+`DELETE /apps/relay/api/notes` · `relay.notes-delete` · writes · called by a signed-in person or a phone key
 
 Delete any note in your space, with its files and recording, from the page, the AI apps and every phone at its next sync. Webhooks get it as note.deleted. It can't be undone.
 
@@ -91,7 +91,7 @@ Send the input as query parameters.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `id` | string | no | The server's id for the note, as GET notes gives it: any note in your space. |
-| `clientId` | string | no | Or the phone's own id for a note it sent, as POST notes sent it. |
+| `clientId` | string | no | Or the device's own id for a note it sent, as POST notes sent it. |
 
 ### Output
 
@@ -129,7 +129,7 @@ Send the input as query parameters.
 | `notes` | array of object or object | yes | Each note as below; with `deleted=1`, a deleted note is only its `id`, `clientId` and `deleted: true`. |
 | `notes[].id` | string | yes |  |
 | `notes[].clientId` | string or null | yes | The sending device's own id for the note. |
-| `notes[].mine` | boolean | yes | True when the calling phone sent the note. |
+| `notes[].mine` | boolean | yes | True when the calling phone sent the note, or, for the page, your space's Web device did. |
 | `notes[].source` | "ring" or "typed" | yes |  |
 | `notes[].text` | string | yes |  |
 | `notes[].recordedAt` | number | yes |  |
@@ -155,7 +155,7 @@ Send the input as query parameters.
 
 `POST /apps/relay/api/health` · `relay.samples-add` · writes · called by a phone key
 
-Store health samples from Apple Health or Health Connect, such as steps, sleep, weight and blood pressure, once per type, time span and source.
+Store health samples from Apple Health or Health Connect, such as steps, sleep, weight and blood pressure, once per type, time span and source. A workout sent again with its kind, distance and calories fills them on a row that has none.
 
 ### Input
 
@@ -170,6 +170,9 @@ Send the input as a JSON body.
 | `samples[].value` | number | yes |  |
 | `samples[].unit` | string | yes |  |
 | `samples[].source` | string | yes |  |
+| `samples[].kind` | string | no | A workout's kind, such as running. |
+| `samples[].distance` | number | no | A workout's distance, in meters. |
+| `samples[].calories` | number | no | A workout's calories, in kcal. |
 
 ### Output
 
@@ -217,6 +220,41 @@ Send the input as a JSON body.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `stays` | array of any | yes | Up to 500 stays and trips; one that has not changed is skipped. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `received` | integer | yes |  |
+| `changed` | integer | yes |  |
+
+## Store a phone's nights
+
+`POST /apps/relay/api/nights` · `relay.nights-add` · writes · called by a phone key
+
+Store the nights the phone grouped from its sleep readings, once per device, source and start, each with its stage minutes and timeline. A night sent again with a later end or other stages changes its row.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `nights` | array of object | yes | Up to 500 nights; one that has not changed is skipped. |
+| `nights[].source` | string | yes | The app or watch that tracked the sleep. |
+| `nights[].start` | integer | yes |  |
+| `nights[].end` | integer | yes |  |
+| `nights[].asleepAt` | integer | no | When the person fell asleep. |
+| `nights[].wokeAt` | integer | no | When the person woke. |
+| `nights[].asleep` | number | yes | Minutes asleep, in any stage. |
+| `nights[].core` | number | yes |  |
+| `nights[].deep` | number | yes |  |
+| `nights[].rem` | number | yes |  |
+| `nights[].awake` | number | yes |  |
+| `nights[].stages` | array of object | yes | The stage timeline, in time order: at most 400 steps. |
+| `nights[].stages[].stage` | "asleep" or "core" or "deep" or "rem" or "awake" | yes |  |
+| `nights[].stages[].start` | integer | yes |  |
+| `nights[].stages[].end` | integer | yes |  |
 
 ### Output
 
@@ -382,9 +420,31 @@ Send the input as query parameters.
 | `heartRate.min` | number | yes |  |
 | `heartRate.max` | number | yes |  |
 | `heartRate.average` | number | yes |  |
+| `nights` | array of object | yes |  |
+| `nights[].start` | number | yes |  |
+| `nights[].end` | number | yes |  |
+| `nights[].asleepAt` | number or null | yes |  |
+| `nights[].wokeAt` | number or null | yes |  |
+| `nights[].minutes` | object | yes |  |
+| `nights[].minutes.asleep` | number | yes |  |
+| `nights[].minutes.core` | number | yes |  |
+| `nights[].minutes.deep` | number | yes |  |
+| `nights[].minutes.rem` | number | yes |  |
+| `nights[].minutes.awake` | number | yes |  |
+| `nights[].source` | string | yes |  |
+| `nights[].device` | string | yes |  |
 | `workouts` | object | yes |  |
 | `workouts.count` | number | yes |  |
 | `workouts.minutes` | number | yes |  |
+| `workouts.items` | array of object | yes |  |
+| `workouts.items[].kind` | string or null | yes |  |
+| `workouts.items[].start` | number | yes |  |
+| `workouts.items[].end` | number | yes |  |
+| `workouts.items[].minutes` | number | yes |  |
+| `workouts.items[].km` | number or null | yes |  |
+| `workouts.items[].calories` | number or null | yes |  |
+| `workouts.items[].source` | string | yes |  |
+| `workouts.items[].device` | string | yes |  |
 | `weightKg` | number | no |  |
 | `restingHeartRate` | number | no |  |
 | `hrvSdnn` | number | no |  |

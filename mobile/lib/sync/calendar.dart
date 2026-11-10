@@ -3,18 +3,11 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:device_calendar_plus/device_calendar_plus.dart' as plugin;
 
+import '../data/phone_calendar.dart';
 import '../data/settings.dart';
 import '../data/store.dart';
 
-/// One calendar on the phone: Google, iCloud, Outlook, work or subscribed. [account] is where it comes from, such as
-/// an email address, to tell two calendars of the same name apart.
-class PhoneCalendar {
-  const PhoneCalendar({required this.id, required this.name, this.account});
-
-  final String id;
-  final String name;
-  final String? account;
-}
+export '../data/phone_calendar.dart';
 
 /// One person on an event.
 class EventPerson {

@@ -3,7 +3,7 @@ import { Webhook } from "standardwebhooks";
 import { afterEach, expect, it, vi } from "vitest";
 import { z } from "zod";
 import * as format from "./format.ts";
-import { calendarEvents, healthSamples, jsonSchema, locationPoints, locationStays, message, noteCreated, noteDeleted, noteFile, noteUpdated, photoCreated,
+import { calendarEvents, healthNights, healthSamples, jsonSchema, locationPoints, locationStays, message, noteCreated, noteDeleted, noteFile, noteUpdated, photoCreated,
   webhookTest, type NoteRow } from "./format.ts";
 import { base64, newSecret, signedHeaders } from "./sign.ts";
 
@@ -95,6 +95,35 @@ it("publishes a schema that takes a field or a value added later, while the serv
   expect(jsonSchema()).not.toContain('"grows"');
 });
 
+it("sends a workout with its kind, distance and calories, null when it has none, and no such field on another type", () => {
+  const run = { id: 5, ...device, type: "workout" as const, start_at: AT, end_at: AT + 1_920_000, value: 32, unit: "min", source: "watch",
+    kind: "running", distance: 5100, calories: 410 };
+  const built = healthSamples([run, { ...run, id: 6, kind: null, distance: null, calories: null },
+    { id: 7, ...device, type: "steps", start_at: AT, end_at: AT + 1000, value: 10, unit: "count", source: "fitness", kind: null }], AT);
+  expect(message.parse(built)).toEqual(built);
+  const { samples } = built.data as { samples: Record<string, unknown>[] };
+  expect(samples.map(({ kind, distance, calories }) => [kind, distance, calories])).toEqual([["running", 5100, 410], [null, null, null],
+    [undefined, undefined, undefined]]);
+  expect(samples[2]).not.toHaveProperty("kind");
+});
+
+it("sends a night with its times, stage minutes and timeline in ISO 8601, and null times for a bedtime only", () => {
+  const stages = [{ stage: "core", start: AT, end: AT + 3_000_000 }, { stage: "deep", start: AT + 3_000_000, end: AT + 6_300_000 }];
+  const row = { id: 3, ...device, source: "watch", start_at: AT - 900_000, end_at: AT + 27_000_000, asleep_at: AT, woke_at: AT + 26_700_000,
+    asleep: 430, core: 245, deep: 75, rem: 110, awake: 25, stages: JSON.stringify(stages) };
+  const built = healthNights([row, { ...row, id: 4, asleep_at: null, woke_at: null, asleep: 0, core: 0, deep: 0, rem: 0, awake: 0, stages: "[]" }], AT);
+  expect(message.parse(built)).toEqual(built);
+  const { nights } = built.data as { nights: Record<string, unknown>[] };
+  expect(nights[0]).toEqual({ id: 3, device: { id: device.device_id, name: "iPad" }, source: "watch", start: "2026-11-04T13:46:02.000Z",
+    end: "2026-11-04T21:31:02.000Z", asleep_at: "2026-11-04T14:01:02.000Z", woke_at: "2026-11-04T21:26:02.000Z",
+    minutes: { asleep: 430, core: 245, deep: 75, rem: 110, awake: 25 },
+    stages: [{ stage: "core", start: "2026-11-04T14:01:02.000Z", end: "2026-11-04T14:51:02.000Z" },
+      { stage: "deep", start: "2026-11-04T14:51:02.000Z", end: "2026-11-04T15:46:02.000Z" }] });
+  expect(nights[1]).toMatchObject({ asleep_at: null, woke_at: null, stages: [] });
+  expect(() => message.parse({ ...built, data: { nights: [{ ...nights[0], stages: [{ stage: "in_bed", start: nights[0].start, end: nights[0].end }] }] } }))
+    .toThrow();
+});
+
 it("sends calendar events with their status, people and times in ISO 8601", () => {
   const meeting = { id: 7, ...device, event_key: "work:5F1C2B:1793800800000", calendar: "Work", title: "Board meeting", start_at: AT,
     end_at: AT + 3_600_000, all_day: 0, location: "Office, room 2", notes: null, url: null,
@@ -149,7 +178,7 @@ it("takes a note's file with its bytes, which the server and the phone both send
     file: { id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 4, base64: "AAAAGA==" } } };
   expect(message.parse(file)).toEqual(file);
   expect(() => message.parse({ ...file, data: { ...file.data, file: { ...file.data.file, base64: undefined } } })).toThrow();
-  expect(Object.keys(format).sort()).toEqual(["calendarEvents", "healthSamples", "jsonSchema", "locationPoints", "locationStays", "message", "noteCreated",
+  expect(Object.keys(format).sort()).toEqual(["calendarEvents", "healthNights", "healthSamples", "jsonSchema", "locationPoints", "locationStays", "message", "noteCreated",
     "noteDeleted", "noteFile", "noteUpdated", "photoCreated", "webhookTest"]);
 });
 
@@ -158,7 +187,7 @@ const fixtures = new URL("../../../../../mobile/test/fixtures/webhook/", import.
 
 it("takes each message the phone builds, and its signature passes the server's own signing", async () => {
   const names = readdirSync(fixtures).filter(name => name.endsWith(".json")).sort();
-  expect(names).toEqual(["calendar.events.json", "health.samples.json", "location.points.json", "location.stays.json", "note.created.json", "note.deleted.json",
+  expect(names).toEqual(["calendar.events.json", "health.nights.json", "health.samples.json", "location.points.json", "location.stays.json", "note.created.json", "note.deleted.json",
     "note.file.json", "note.updated.json", "photo.created.json", "webhook.test.json"]);
   for (const name of names) {
     const { secret, headers, body } = JSON.parse(readFileSync(new URL(name, fixtures), "utf8")) as

@@ -75,7 +75,7 @@ The **Location** folder shows when the points last went, and how many wait, such
 
 ## Only to your own webhook
 
-Signed in to Relay Everything, you can send your location history only to your own webhook and still sync your notes. On the Account page, under **Health, places, calendar and photos**, pick **Only my own webhook**. The phone then sends each point straight to your receiver as `location.points`, and each stay and trip as `location.stays`, and Relay Everything gets none of them. The **Location** folder then says *Sent to your webhook* and the time. A note's pinned place is part of the note, so it still syncs with the note: turn off **Pin notes to where I am** to keep it off too. The points already sent stay on your page. [Settings](../settings/#health-places-calendar-and-photos-only-to-your-webhook)
+Signed in to Relay Everything, you can send your location history only to your own webhook and still sync your notes. On the Account page, under **Health, places, calendar and photos**, pick **Only my own webhook**. The phone then sends each point straight to your receiver as `location.points`, and each stay and trip as `location.stays`, and Relay Everything gets none of them. The **Location** folder then says *Sent to your webhook* and the time. A note's pinned place is part of the note, so it still syncs with the note: turn off **Pin notes to where I am** to keep it off too. The points already sent stay in your space. [Settings](../settings/#health-places-calendar-and-photos-only-to-your-webhook)
 
 ## Turn it off
 

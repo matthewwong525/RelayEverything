@@ -27,8 +27,17 @@ final update = item(11, noteUpdate, {'clientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6
 final deleted = item(15, noteDelete, {'clientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'id': 's1'});
 final file = item(8, 'attachment', {'noteClientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'id': 'f1',
   'path': 'attachments/f1.jpg', 'name': 'receipt.jpg', 'type': 'image/jpeg'});
-final samples = item(9, 'health', {'samples': [{'id': 1, 'type': 'steps', 'start': Date.recorded,
-  'end': Date.recorded + 60000, 'value': 120.0, 'unit': 'count', 'source': 'com.apple.health'}]});
+final samples = item(9, 'health', {'samples': [{'type': 'steps', 'start': Date.recorded,
+  'end': Date.recorded + 60000, 'value': 120.0, 'unit': 'count', 'source': 'com.apple.health'},
+  {'type': 'workout', 'start': Date.recorded, 'end': Date.recorded + 1920000, 'value': 32.0, 'unit': 'min',
+    'source': 'com.apple.health', 'kind': 'running', 'distance': 5100.0, 'calories': 410.0}]});
+final nights = item(19, nightsRoute, {'nights': [
+  {'source': 'com.apple.health.watch', 'start': Date.recorded - 28800000, 'end': Date.recorded, 'asleepAt': Date.recorded - 27900000,
+    'wokeAt': Date.recorded - 600000, 'asleep': 435.0, 'core': 250.0, 'deep': 75.0, 'rem': 110.0, 'awake': 25.0, 'stages': [
+      {'stage': 'core', 'start': Date.recorded - 27900000, 'end': Date.recorded - 24900000},
+      {'stage': 'deep', 'start': Date.recorded - 24900000, 'end': Date.recorded - 20400000}]},
+  {'source': 'com.apple.health', 'start': Date.recorded - 28800000, 'end': Date.recorded, 'asleep': 0.0, 'core': 0.0,
+    'deep': 0.0, 'rem': 0.0, 'awake': 0.0, 'stages': []}]});
 final points = item(10, 'locations', {'points': [{'id': 2, 'at': Date.recorded, 'lat': 43.65, 'lon': -79.38,
   'accuracy': 12.0, 'place': 'King St W'}]});
 final stays = item(16, 'stays', {'stays': [
@@ -82,9 +91,33 @@ void main() {
     expect(webhook.message(later)!['data']['note']['created_at'], webhook.message(note)!['data']['note']['created_at']);
     expect(webhook.message(file, [1, 2, 3, 4])!['data'], {'note_id': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'file': {'id': 'f1',
       'name': 'receipt.jpg', 'content_type': 'image/jpeg', 'size': 4, 'base64': 'AQIDBA=='}});
-    expect(webhook.message(samples)!['data'], {'samples': [{'id': 1, 'device': device, 'type': 'steps',
+    // Only a workout carries its kind, distance and calories, null when the phone has none.
+    final built = webhook.message(samples)!['data']['samples'] as List;
+    expect(built, [{'id': isA<int>(), 'device': device, 'type': 'steps',
       'start': '2026-11-04T14:01:00.000Z', 'end': '2026-11-04T14:02:00.000Z', 'value': 120.0, 'unit': 'count',
-      'source': 'com.apple.health'}]});
+      'source': 'com.apple.health'}, {'id': isA<int>(), 'device': device, 'type': 'workout', 'start': '2026-11-04T14:01:00.000Z',
+      'end': '2026-11-04T14:33:00.000Z', 'value': 32.0, 'unit': 'min', 'source': 'com.apple.health', 'kind': 'running',
+      'distance': 5100.0, 'calories': 410.0}]);
+    // A sample's id comes from its type, start, end and source: the 90-day redo, or an id an older phone kept, keeps it.
+    final [steps, workout] = [for (final sample in built) (sample as Map)['id'] as int];
+    final old = item(20, 'health', {'samples': [{...(samples.body['samples'] as List)[1] as Map, 'id': 3}..remove('kind')
+      ..remove('distance')]});
+    expect(((webhook.message(old)!['data']['samples'] as List).single as Map), allOf(containsPair('kind', null),
+      containsPair('distance', null), containsPair('calories', 410.0), containsPair('id', workout)));
+    final longer = item(22, 'health', {'samples': [{...(samples.body['samples'] as List)[0] as Map, 'end': Date.recorded + 120000}]});
+    final other = WebhookClient(hook, installId: '1b2c3d4e-5f60-4718-8a9b-0c1d2e3f4a5b', deviceName: 'Android phone');
+    expect([steps == workout, steps > 0 && steps < 1 << 48, (webhook.message(longer)!['data']['samples'] as List).single['id'] == steps,
+      (other.message(samples)!['data']['samples'] as List).first['id'] == steps], [false, true, false, false]);
+    // A night's id comes from the install id, its source and its start, so the same night sent again upserts it.
+    final [watched, bedtime] = webhook.message(nights)!['data']['nights'] as List;
+    expect(watched, {'id': isA<int>(), 'device': device, 'source': 'com.apple.health.watch', 'start': '2026-11-04T06:01:00.000Z',
+      'end': '2026-11-04T14:01:00.000Z', 'asleep_at': '2026-11-04T06:16:00.000Z', 'woke_at': '2026-11-04T13:51:00.000Z',
+      'minutes': {'asleep': 435.0, 'core': 250.0, 'deep': 75.0, 'rem': 110.0, 'awake': 25.0}, 'stages': [
+        {'stage': 'core', 'start': '2026-11-04T06:16:00.000Z', 'end': '2026-11-04T07:06:00.000Z'},
+        {'stage': 'deep', 'start': '2026-11-04T07:06:00.000Z', 'end': '2026-11-04T08:21:00.000Z'}]});
+    expect([(bedtime as Map)['asleep_at'], bedtime['woke_at'], bedtime['stages'], bedtime['id'] == (watched as Map)['id']],
+      [null, null, isEmpty, false]);
+    expect(webhook.message(item(21, nightsRoute, {'nights': []})), isNull);
     expect(webhook.message(points)!['data'], {'points': [{'id': 2, 'device': device, 'at': '2026-11-04T14:01:00.000Z',
       'lat': 43.65, 'lon': -79.38, 'accuracy': 12.0, 'place': 'King St W'}]});
     // A stay or trip's id comes from the install id, its kind and its start, so its end, sent later, upserts it.
@@ -266,6 +299,7 @@ void main() {
     await webhook.send(samples);
     await webhook.send(points);
     await webhook.send(stays);
+    await webhook.send(nights);
     await webhook.send(calendar);
     await webhook.sendPhoto(photo, [0xff, 0xd8, 0xff, 0xd9]);
     await webhook.test();

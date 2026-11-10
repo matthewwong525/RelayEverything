@@ -126,9 +126,9 @@ String destinationOf(SendPlace place) => place == SendPlace.webhook ? ownWebhook
 /// own id, and the next health or point id.
 const _destination = 'outbox.destination', _private = 'outbox.private', _installId = 'install.id', _nextId = 'ids.next';
 
-/// The routes of the person's private data: health, location points, stays and trips, and calendar events. They may go
-/// to another place than notes, the person's own webhook.
-const privateRoutes = {'health', 'locations', 'stays', 'calendar'};
+/// The routes of the person's private data: health, nights, location points, stays and trips, and calendar events. They
+/// may go to another place than notes, the person's own webhook.
+const privateRoutes = {'health', nightsRoute, 'locations', 'stays', 'calendar'};
 final _privateList = privateRoutes.map((route) => "'$route'").join(', ');
 
 /// The last change number a pull of notes read, in the store's `state`: the next pull asks for the changes after it.
@@ -146,6 +146,13 @@ const timelineKey = 'stays.timeline';
 
 /// The outbox route of stays and trips: `POST stays` on the server, `location.stays` to a webhook.
 const staysRoute = 'stays';
+
+/// The outbox route of nights: `POST nights` on the server, `health.nights` to a webhook.
+const nightsRoute = 'nights';
+
+/// lib/sync/health.dart's list of the nights and sleep and workout samples queued lately, and its 90-day redo mark, in
+/// the store's `state`. Sending turned off forgets both; a new private place forgets the list.
+const healthSent = 'health.sent', healthDetail = 'health.detail';
 
 /// One waiting upload: a route and the JSON body to send it, where it goes, and when the phone queued it.
 class OutboxItem {
@@ -351,24 +358,24 @@ class Store extends GeneratedDatabase {
   Future<String> privateDestination() async => await get(_private) ?? await destination();
 
   /// Sends every waiting upload, and each new one, to [destination], and the [privateRoutes] ones to [private], or to
-  /// [destination] with none given, in one step. Health and points queued before they had ids get them here, as a
-  /// webhook message needs them. A new private place has none of the calendar, so the phone forgets what went and the
+  /// [destination] with none given, in one step. Points queued before they had ids get them here, as a webhook message
+  /// needs them. A new private place has none of the calendar, so the phone forgets what went and the
   /// next read sends the whole window there. It also forgets when health, points and the calendar last sent, so a
   /// folder never says *Sent to your webhook* for a send that went to the server.
   Future<void> moveOutbox(String destination, {String? private}) => transaction(() async {
     final privateTo = private ?? destination;
     if (await privateDestination() != privateTo) {
       await _dropCalendar();
-      for (final key in [sentHealth, sentPoints, sentCalendar]) {
+      for (final key in [sentHealth, sentPoints, sentCalendar, healthSent]) {
         await remove(key);
       }
     }
     await set(_destination, destination);
     await set(_private, privateTo);
-    // Stays carry no ids: a webhook message makes each from the install id, its kind and its start.
-    for (final row in await _rows("SELECT id, body FROM outbox WHERE route IN ('health', 'locations')")) {
+    // Samples, nights and stays carry no ids: a webhook message makes each from the install id and its own fields.
+    for (final row in await _rows("SELECT id, body FROM outbox WHERE route = 'locations'")) {
       final body = jsonDecode(row.read<String>('body')) as Map<String, dynamic>;
-      final items = [for (final item in (body['samples'] ?? body['points']) as List) item as Map<String, dynamic>];
+      final items = [for (final item in body['points'] as List) item as Map<String, dynamic>];
       final missing = items.where((item) => item['id'] == null).toList();
       if (missing.isEmpty) continue;
       var id = await _takeIds(missing.length);
@@ -390,20 +397,26 @@ class Store extends GeneratedDatabase {
     return made;
   });
 
-  /// The first of [count] new ids for health readings or points, unique on this phone. Run it inside a transaction.
+  /// The first of [count] new ids for points, unique on this phone. Run it inside a transaction.
   Future<int> _takeIds(int count) async {
     final first = int.tryParse(await get(_nextId) ?? '') ?? 1;
     await set(_nextId, '${first + count}');
     return first;
   }
 
-  /// Queues health readings, 500 to a batch, each with its own id, so a message sent again keeps the same ids.
+  /// Queues health readings, 500 to a batch. They carry no ids: a webhook message makes each from its type, start, end
+  /// and source, so a reading the 90-day redo sends again keeps its id.
   Future<void> queueSamples(List<Map<String, dynamic>> samples) => transaction(() async {
-    var id = await _takeIds(samples.length);
     for (var at = 0; at < samples.length; at += 500) {
-      await enqueue('health', {'samples': [
-        for (final sample in samples.sublist(at, min(at + 500, samples.length))) {...sample, 'id': id++},
-      ]});
+      await enqueue('health', {'samples': samples.sublist(at, min(at + 500, samples.length))});
+    }
+  });
+
+  /// Queues [nights], 30 to a batch, so 30 full timelines stay under the server's 1 MB. They carry no ids: a webhook
+  /// message makes each from its source and start.
+  Future<void> queueNights(List<Map<String, dynamic>> nights) => transaction(() async {
+    for (var at = 0; at < nights.length; at += 30) {
+      await enqueue(nightsRoute, {'nights': nights.sublist(at, min(at + 30, nights.length))});
     }
   });
 
@@ -867,11 +880,13 @@ class Store extends GeneratedDatabase {
     ],
   );
 
-  /// Drops the health, location and calendar events that did not go yet, for when sending turns off. Note uploads
-  /// stay, so a later turn-on sends them with no second prompt.
+  /// Drops the health, nights, location and calendar events that did not go yet, and health's sent list and redo mark,
+  /// for when sending turns off. Note uploads stay, so a later turn-on sends them with no second prompt.
   Future<void> dropReadings() => transaction(() async {
-    await _run("DELETE FROM outbox WHERE route IN ('health', 'locations', '$staysRoute')");
+    await _run("DELETE FROM outbox WHERE route IN ('health', '$nightsRoute', 'locations', '$staysRoute')");
     await _run('DELETE FROM points');
+    await remove(healthSent);
+    await remove(healthDetail);
     await _dropTimeline();
     await _dropCalendar();
   });

@@ -1,30 +1,30 @@
-// PATCH notes: new words for any note in the phone's space, by the server's `id` or by the phone's own `clientId`, and
-// files added since to a note it sent. Logs one note.updated; a change older than the note's last one changes nothing.
+// PATCH notes: new words for any note in the space, from a phone or the page, by `id` or the device's own `clientId`,
+// and files added to a note it sent. Logs one note.updated; a change older than the note's last one changes nothing.
 import { z } from "zod";
 import { defineAction, type ActionCall } from "../../api/contract.ts";
 import { addFiles } from "./add-note.ts";
-import { asDevice } from "./caller.ts";
+import { asDeviceOrPage } from "./caller.ts";
 import { CLIENT_ID, hasWords, noteFiles, noteText, withTypes } from "./notes.ts";
 import type { PersonSpace } from "./space.ts";
-import { refused, time } from "./store.ts";
+import { time } from "./store.ts";
 import { wake } from "./webhooks/send.ts";
 
 const editInput = z.strictObject({
   id: z.string().max(64).optional().describe("The server's id for the note, as GET notes gives it: any note in your space."),
-  clientId: z.string().regex(CLIENT_ID).optional().describe("Or the phone's own id for a note it sent, as POST notes sent it."),
+  clientId: z.string().regex(CLIENT_ID).optional().describe("Or the device's own id for a note it sent, as POST notes sent it."),
   text: noteText.describe("What the note says now, in place of its words before. It can be empty only when the note has files."),
   attachments: noteFiles.optional()
     .describe("All of the note's files now, up to 10. A file the server lacks is added: send its bytes after, with POST attachments."),
-  editedAt: time.optional().describe("When the phone made the change, in Unix ms; now when left out. A later time is taken as now."),
+  editedAt: time.optional().describe("When the device made the change, in Unix ms; now when left out. A later time is taken as now."),
 }).refine(edit => (edit.id === undefined) !== (edit.clientId === undefined), "Give the note's id or its clientId, not both.")
   .refine(hasWords, "Give the note words or a file.");
 type Edit = z.infer<typeof editInput>;
 type Stored = { id: string; text: string; device_id: string; client_id: string | null; edited_at: number | null };
 
-const REFUSAL = "Only a Relay Everything phone key can change a note.";
+const REFUSAL = "Only a phone key or the Relay Everything page can change a note.";
 const ERRORS = { not_found: "Your space has no note with this id, or this device sent no note with this clientId.",
   older: "The note changed after this change was made, so the newer words stay: GET notes gives them.",
-  not_own: "Add a file only to a note this phone sent." };
+  not_own: "Add a file only to a note this device sent." };
 
 const failed = (code: keyof typeof ERRORS, status: number) => Response.json({ error: { code, message: ERRORS[code] } }, { status });
 
@@ -66,12 +66,10 @@ async function editNote(env: Parameters<typeof wake>[0], space: PersonSpace, dev
 
 export const noteEdit = defineAction({
   operationId: "relay.notes-edit", summary: "Change a note",
-  description: "Change the words of any note in your space, and list the files added since to a note this phone sent. "
+  description: "Change the words of any note in your space, and list the files added since to a note this device sent. "
+    + "The page changes notes as your space's Web device. "
     + "The newer change wins: a change made before the note's last one gets 409. Webhooks get it as note.updated.",
   input: editInput, output: z.strictObject({ id: z.string(), updated: z.boolean().describe("False when the words were the same and no file was new.") }),
   encoding: "json", effect: "write", agentAvailable: false, requiresIdentity: false, errors: ERRORS, examples: [],
-  handler: asDevice<ActionCall>(REFUSAL, async ({ space, device, env, call }) => {
-    if (device.reaches !== "phone") return refused(403, REFUSAL);
-    return editNote(env, space, device.id, call.input as Edit);
-  }),
+  handler: asDeviceOrPage<ActionCall>(REFUSAL, async ({ space, deviceId, env, call }) => editNote(env, space, deviceId, call.input as Edit)),
 });

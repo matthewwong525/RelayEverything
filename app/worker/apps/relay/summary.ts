@@ -1,5 +1,5 @@
-// GET summary: one day on the site page: notes, health totals, places, trips and calendar events. When two phones,
-// or a phone and its watch, count the same steps or sleep, the larger count is the day's.
+// GET summary: one day on the site page: notes, health totals, nights, workouts, places, trips and calendar events.
+// When two phones, or a phone and its watch, count the same steps or sleep, the larger count is the day's.
 import { z } from "zod";
 import { defineAction, type ActionCall } from "../../api/contract.ts";
 import { asPerson } from "./caller.ts";
@@ -11,7 +11,13 @@ const DAY = 24 * 60 * MINUTE;
 const output = z.strictObject({
   day: z.string(), notes: z.number(), steps: z.number(), sleepMinutes: z.number(),
   heartRate: z.strictObject({ min: z.number(), max: z.number(), average: z.number() }).nullable(),
-  workouts: z.strictObject({ count: z.number(), minutes: z.number() }),
+  // The nights that ended in the day, oldest first, with no timeline; of nights that overlap, the one most asleep.
+  nights: z.array(z.strictObject({ start: z.number(), end: z.number(), asleepAt: z.number().nullable(), wokeAt: z.number().nullable(),
+    minutes: z.strictObject({ asleep: z.number(), core: z.number(), deep: z.number(), rem: z.number(), awake: z.number() }),
+    source: z.string(), device: z.string() })),
+  workouts: z.strictObject({ count: z.number(), minutes: z.number(), items: z.array(z.strictObject({ kind: z.string().nullable(),
+    start: z.number(), end: z.number(), minutes: z.number(), km: z.number().nullable(), calories: z.number().nullable(), source: z.string(),
+    device: z.string() })) }),
   // The other health values: each only when the day has some.
   weightKg: z.number().optional(), restingHeartRate: z.number().optional(), hrvSdnn: z.number().optional(), hrvRmssd: z.number().optional(),
   bloodOxygen: z.strictObject({ min: z.number(), average: z.number() }).optional(),

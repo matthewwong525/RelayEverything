@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { ANA, call, db, env, NOW, phone } from "../../../tests/relay";
-import { chatLines, daySummary, distanceKm, healthBuckets, MAX_POINTS, noteById, notePage, photoById, photoPage, placeVisits, rangePoints,
-  stayPoints } from "./queries";
+import { chatLines, daySummary, distanceKm, healthBuckets, MAX_POINTS, nightPage, noteById, notePage, photoById, photoPage, placeVisits,
+  rangePoints, stayPoints, workoutPage } from "./queries";
 import { spaceOf, vouch } from "./space";
 
 const HOUR = 3_600_000;
@@ -301,7 +301,41 @@ it("sums the new health types: latest weight, each blood pressure reading, highe
     cycleFlow: 3, waterMl: 750, mindfulMinutes: 15, events: [{ title: "Stand-up", people: ["Ana"] }],
     bloodPressure: [{ at: NOW, upper: 121, lower: 79 }, { at: NOW + HOUR, upper: 117, lower: 75 }] });
   const empty = await daySummary(session(), NOW - 48 * HOUR, NOW - 24 * HOUR);
-  expect(Object.keys(empty).sort()).toEqual(["events", "heartRate", "notes", "places", "sleepMinutes", "steps", "trips", "workouts"]);
+  expect(Object.keys(empty).sort()).toEqual(["events", "heartRate", "nights", "notes", "places", "sleepMinutes", "steps", "trips", "workouts"]);
   expect((await healthBuckets(session(), "cycle_flow", [[NOW, NOW + HOUR], [NOW + HOUR, NOW + 2 * HOUR], [NOW + 2 * HOUR, NOW + 3 * HOUR]]))
     .map(bucket => bucket.flow)).toEqual([1, 3, null]);
+});
+
+const night = (device: string, source: string, start: number, end: number, asleep: number) => db.sql.prepare(`INSERT INTO relay_nights
+  (device_id, source, start_at, end_at, asleep, core, deep, rem, awake, updated_at, created_at) VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0)`)
+  .run(device, source, start, end, asleep);
+const workout = (device: string, start: number, kind: string | null, distance: number | null = null) => db.sql.prepare(`INSERT INTO
+  relay_health (device_id, type, start_at, end_at, value, unit, source, kind, distance, created_at) VALUES (?, 'workout', ?, ?, 30, 'min',
+  'Health', ?, ?, 0)`).run(device, start, start + HOUR / 2, kind, distance);
+
+it("pages nights newest first, keeping the night with the most sleep of those that overlap, past a page of overlaps", async () => {
+  for (let i = 0; i < 150; i++) {
+    night("d-phone", "Watch", NOW + i * 24 * HOUR, NOW + i * 24 * HOUR + 8 * HOUR, 400 + i);
+    night("d-phone", "Bedtime", NOW + i * 24 * HOUR + HOUR, NOW + i * 24 * HOUR + 8 * HOUR, 0);
+  }
+  const first = await nightPage(session(), { from: NOW, to: NOW + 200 * 24 * HOUR, limit: 120 }, false);
+  expect([first.nights.length, first.nights[0].minutes.asleep, first.nights.at(-1)!.minutes.asleep]).toEqual([120, 549, 430]);
+  expect(first.nights.every(item => item.source === "Watch")).toBe(true);
+  const second = await nightPage(session(), { from: NOW, to: NOW + 200 * 24 * HOUR, before: first.next!, limit: 120 }, false);
+  expect([second.nights.length, second.nights[0].minutes.asleep, second.next]).toEqual([30, 429, null]);
+});
+
+it("gives a workout two phones keep once, with its details, and pages on without losing one", async () => {
+  workout("d-phone", NOW, null);
+  workout("d-ipad", NOW + 30_000, "running", 5123);
+  workout("d-ipad", NOW + 2 * HOUR + 10_000, "yoga");
+  workout("d-phone", NOW + 2 * HOUR, "yoga");
+  workout("d-phone", NOW + 4 * HOUR, "walking");
+  const all = await workoutPage(session(), { from: NOW, to: NOW + 24 * HOUR, limit: 10 });
+  expect(all.workouts.map(({ kind, km, minutes }) => [kind, km, minutes])).toEqual([["walking", null, 30], ["yoga", null, 30], ["running", 5.12, 30]]);
+  const first = await workoutPage(session(), { from: NOW, to: NOW + 24 * HOUR, limit: 2 });
+  const rest = await workoutPage(session(), { from: NOW, to: NOW + 24 * HOUR, before: first.next!, limit: 2 });
+  expect([...first.workouts, ...rest.workouts].map(item => item.kind)).toEqual(["walking", "yoga", "running"]);
+  expect(rest.next).toBeNull();
+  expect((await daySummary(session(), NOW - HOUR, NOW + 23 * HOUR)).workouts.items.map(item => item.kind)).toEqual(["running", "yoga", "walking"]);
 });

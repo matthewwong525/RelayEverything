@@ -12,6 +12,7 @@ import 'package:relay_app/brand.dart';
 import 'package:relay_app/editor/markdown.dart';
 import 'package:relay_app/relay.dart';
 import 'package:relay_app/screens/connect.dart';
+import 'package:relay_app/screens/connected_names.dart' show ConnectedNamesPage;
 import 'package:relay_app/screens/hold_to_talk.dart';
 import 'package:relay_app/screens/folder.dart';
 import 'package:relay_app/screens/note_bars.dart';
@@ -21,6 +22,8 @@ import 'package:relay_app/screens/settings.dart' show SettingsScreen;
 import 'package:relay_app/screens/timeline.dart' show TimelineScreen;
 
 class FakeRelay extends Relay {
+  /// The phone app, or the browser for a test of the web page.
+  @override RelayPlatform platform = RelayPlatform.phone;
   @override bool connected = false;
   @override String? server;
   @override List<Entry> entries = [];
@@ -735,11 +738,23 @@ void main() {
     expect(find.text('My database, Zapier'), findsOneWidget);
     expect(countOn('Webhooks', 2), findsOneWidget);
     expect(find.text('https://relay.example.com'), findsOneWidget);
-    await tester.tap(find.text('Webhooks'));
-    await tester.tap(find.text('AI apps'));
+    // Each row opens a page of names only, with a link to change them on the Relay Everything page.
+    for (final (title, names) in [('Webhooks', ['My database', 'Zapier']), ('AI apps', ['Claude'])]) {
+      await tester.tap(find.text(title));
+      await tester.pumpAndSettle();
+      expect(find.byType(ConnectedNamesPage), findsOneWidget);
+      for (final name in names) {
+        expect(find.text(name), findsOneWidget);
+      }
+      expect(find.textContaining('This phone reads only their names.'), findsOneWidget);
+      await tester.tap(find.text('Change on your Relay Everything page'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+    }
     await tester.tap(find.text('Open your Relay Everything page'));
     await tester.pumpAndSettle();
-    expect(opened, [for (final part in ['#webhooks', '#ai-apps', '']) Uri.parse('https://relay.example.com/apps/relay/$part')]);
+    expect(opened, [for (final part in ['#webhooks', '#ai-apps', '']) Uri.parse('https://relay.example.com/$part')]);
     opens = false;
     await tester.tap(find.text('Open your Relay Everything page'));
     await tester.pump();
@@ -1911,7 +1926,7 @@ void main() {
       expect(find.text('Photos already sent stay on your Relay Everything server. Delete them on your page.'), findsOneWidget);
       await tester.tap(find.text('Open my page'));
       await tester.pumpAndSettle();
-      expect([opened, relay.calls], [[Uri.parse('https://relay.example.com/apps/relay/')], isEmpty]);
+      expect([opened, relay.calls], [[Uri.parse('https://relay.example.com/')], isEmpty]);
       expect(find.text('Stop sending photos?'), findsNothing);
       await tester.tap(photosSwitch);
       await tester.pumpAndSettle();

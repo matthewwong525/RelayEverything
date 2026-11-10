@@ -75,6 +75,6 @@ You can stop at any time: sign out in the app, or [delete your account](../priva
 
 ## Contact
 
-- Write to the contact address on the shared server's sign-in screen, [app.relayeverything.com](https://app.relayeverything.com). It is also on your account card when you are signed in.
+- Write to the contact address on the shared server's sign-in screen, [app.relayeverything.com](https://app.relayeverything.com). It is also on the **Account** page in Settings on your Relay Everything page when you are signed in.
 - By post: [LEGAL-TODO: company legal name], [LEGAL-TODO: postal address].
 - Text **HELP** to +1 (833) 865-4321.

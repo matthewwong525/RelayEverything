@@ -21,6 +21,8 @@ export const ROUTES: readonly V1Route[] = [
   { method: "GET", path: "/v1/notes/{id}", id: "getNote", summary: TOOLS.fetch.title, tools: ["fetch"], description: TOOLS.fetch.description },
   { method: "GET", path: "/v1/days/{day}", id: "getDay", summary: TOOLS.day_summary.title, tools: ["day_summary"], description: TOOLS.day_summary.description },
   { method: "GET", path: "/v1/health", id: "getHealth", summary: TOOLS.health.title, tools: ["health"], description: TOOLS.health.description },
+  { method: "GET", path: "/v1/nights", id: "listNights", summary: TOOLS.nights.title, tools: ["nights"], description: TOOLS.nights.description },
+  { method: "GET", path: "/v1/workouts", id: "listWorkouts", summary: TOOLS.workouts.title, tools: ["workouts"], description: TOOLS.workouts.description },
   { method: "GET", path: "/v1/places", id: "listPlaces", summary: TOOLS.places.title, tools: ["places"], description: TOOLS.places.description },
   { method: "GET", path: "/v1/points", id: "listPoints", summary: TOOLS.points.title, tools: ["points"], description: TOOLS.points.description },
   { method: "GET", path: "/v1/calendar", id: "listEvents", summary: TOOLS.calendar.title, tools: ["calendar"], q: true,
@@ -41,9 +43,14 @@ export const problem = (status: Status, description: string, headers: Record<str
 
 const patterns = new Map(ROUTES.map(route => [route, new RegExp(`^${route.path.replace(/\{(\w+)\}/g, "(?<$1>[^/]+)")}$`)]));
 
-/** The tool's fields that take a number: a query parameter is text until it is read as one. */
-const numbers = (name: ToolName) => new Set(Object.entries(z.toJSONSchema(z.object(TOOLS[name].input), { io: "input" }).properties!)
-  .filter(([, field]) => typeof field === "object" && (field.type === "number" || field.type === "integer")).map(([key]) => key));
+/** The tool's fields that take a number or a boolean: a query parameter is text until it is read as one. */
+const typed = (name: ToolName) => new Map(Object.entries(z.toJSONSchema(z.object(TOOLS[name].input), { io: "input" }).properties!)
+  .flatMap(([key, field]) => typeof field === "object" && ["number", "integer", "boolean"].includes(String(field.type))
+    ? [[key, field.type === "boolean" ? "boolean" : "number"] as const] : []));
+
+/** A query parameter as its field's type; text that is not one stays text, so the field's check refuses it. */
+const read = (text: string, type: "number" | "boolean") =>
+  type === "number" ? Number(text) : text === "true" ? true : text === "false" ? false : text;
 
 /** The JSON body of a POST, or null when it is not a JSON object. */
 async function body(request: Request): Promise<Record<string, unknown> | null> {
@@ -87,7 +94,7 @@ export async function v1(request: Request, asker: Asker): Promise<Response> {
   const q = route.q === true && "q" in fields;
   const name = route.tools[q || route.tools.length === 1 ? 0 : 1];
   if (q) { fields.query = fields.q; delete fields.q; }
-  for (const key of route.method === "GET" ? numbers(name) : []) if (typeof fields[key] === "string") fields[key] = Number(fields[key]);
+  for (const [key, type] of route.method === "GET" ? typed(name) : []) if (typeof fields[key] === "string") fields[key] = read(fields[key], type);
   Object.assign(fields, Object.fromEntries(Object.entries(match!.groups ?? {}).map(([key, value]) => [key, decoded(value)])));
   const parsed = z.strictObject(TOOLS[name].input).safeParse(fields);
   if (!parsed.success) return problem(400, complaints(parsed.error, route.q === true));

@@ -1,5 +1,5 @@
 // A person's devices on the Relay Everything page: make a key, list the devices, turn one off. The directory keeps only
-// each key's SHA-256; a connected app's device row shows on the AI apps card instead.
+// each key's SHA-256; an AI app's device shows on the AI apps card, and the keyless Email and Web devices nowhere.
 import { z } from "zod";
 import { defineAction, type ActionCall } from "../../api/contract.ts";
 import { asPerson, CHECKER_PERSON } from "./caller.ts";
@@ -71,7 +71,9 @@ export const deviceOff = defineAction({
   encoding: "json", effect: "write", agentAvailable: false, requiresIdentity: false, errors: ERRORS, examples: [],
   handler: asPerson<ActionCall>(async ({ space, caller, env, call }) => {
     const { id } = call.input as { id: string };
-    const row = await space.db.prepare("UPDATE relay_devices SET revoked_at = coalesce(revoked_at, ?) WHERE id = ? RETURNING revoked_at")
+    // Only a device the list shows: a keyless way in, such as the page's Web device, has no key to turn off.
+    const row = await space.db.prepare(`UPDATE relay_devices SET revoked_at = coalesce(revoked_at, ?) WHERE id = ? AND reaches NOT IN ('app', 'inbox')
+      RETURNING revoked_at`)
       .bind(Date.now(), id).first<{ revoked_at: number }>();
     if (!row) return Response.json({ error: { code: "not_found", message: ERRORS.not_found } }, { status: 404 });
     await directory(env).prepare("UPDATE relay_keys SET revoked_at = coalesce(revoked_at, ?) WHERE person_id = ? AND device_id = ?")

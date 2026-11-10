@@ -9,6 +9,7 @@ import { email } from "./apps/relay/inbox/email.ts";
 import { sweep } from "./apps/relay/inbox/held.ts";
 import type { InboxEnv } from "./apps/relay/inbox/links.ts";
 import { signIn, type SignInEnv } from "./apps/relay/sign-in/index.ts";
+import { staticPage } from "./static-page.ts";
 
 const PAGE = "/apps/relay/";
 const PHONE_KEY = "/apps/relay/sign-in/phone/key";
@@ -45,8 +46,10 @@ export default {
     const api = relayRoute(request, env, url, identity);
     if (api) return api;
     if (/^\/(?:apps\/[^/]+\/)?api(?:\/|$)/.test(url.pathname)) return Response.json({ error: "Not found" }, { status: 404 });
-    if (url.pathname === "/") return Response.redirect(new URL(PAGE, url).href, 302);
-    return env.ASSETS.fetch(request);
+    // The page is the phone app built for the web, in public/apps/relay/. It opens at /: its <base href> loads its
+    // files from PAGE, and PAGE answers with it too, because the files live there.
+    if (url.pathname === "/") return env.ASSETS.fetch(new Request(new URL(`${PAGE}${url.search}`, url), request));
+    return staticPage(request, env.ASSETS, ["relay"]) ?? env.ASSETS.fetch(request);
   },
 
   // Mail to the server's mail domain, from Cloudflare Email Routing: wiki/relay-spaces.md#ways-in

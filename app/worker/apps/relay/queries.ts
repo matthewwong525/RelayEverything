@@ -166,21 +166,93 @@ async function dayPlaces(db: Db, from: number, to: number) {
   return { places: [...results, ...stays].sort((a, b) => a.from - b.from), trips: found.trips };
 }
 
-/** One day: how many notes, the health totals, the places (one row per stay), its trips, and the calendar's events. */
+/** At most this many nights, and workouts, in one day's summary. */
+const DAY_NIGHTS = 10;
+const DAY_WORKOUTS = 50;
+
+/** One day: how many notes, the health totals, the nights that ended in it and its workouts, the places (one row per
+ *  stay), its trips, and the calendar's events. */
 export async function daySummary(db: Db, from: number, to: number) {
   const spans: Span[] = [[from, to]];
-  const [notes, [steps], [sleep], [heart], [workouts], more, bloodPressure, places, events] = await Promise.all([
+  const [notes, [steps], [sleep], [heart], [workouts], more, bloodPressure, places, events, nights, items] = await Promise.all([
     db.prepare("SELECT COUNT(*) AS count FROM relay_notes WHERE recorded_at >= ? AND recorded_at < ?").bind(from, to).first<{ count: number }>(),
     healthBuckets(db, "steps", spans), healthBuckets(db, "sleep", spans), healthBuckets(db, "heart_rate", spans),
     healthBuckets(db, "workout", spans), dayHealth(db, spans), pressures(db, from, to),
     dayPlaces(db, from, to),
     eventPage(db, { from, to, limit: DAY_EVENTS }),
+    nightPage(db, { from, to, limit: DAY_NIGHTS }, false), workoutPage(db, { from, to, limit: DAY_WORKOUTS }),
   ]);
   return { notes: notes!.count, steps: steps.total!, sleepMinutes: sleep.total!,
     heartRate: heart.min === null ? null : { min: heart.min!, max: heart.max!, average: heart.average! },
-    workouts: { count: workouts.count!, minutes: workouts.minutes! }, ...more, ...bloodPressure.length > 0 && { bloodPressure },
+    nights: nights.nights.reverse(),
+    workouts: { count: workouts.count!, minutes: workouts.minutes!, items: items.workouts.reverse() },
+    ...more, ...bloodPressure.length > 0 && { bloodPressure },
     ...places,
     events: events.events.map(({ title, start, end, allDay, people }) => ({ title, start, end, allDay, people: people.flatMap(person => person.name ?? []) })) };
+}
+
+/** Rows read at a time, newest first, until enough are kept after duplicates merge. */
+const PAGE = 200;
+
+/** Up to `limit` rows, newest first, read PAGE at a time: a row that `same` matches with the last one kept merges into
+ *  it, and replaces it when `better`. `more` says a row past the page was kept. */
+async function newest<Row>(read: (offset: number) => Promise<Row[]>, limit: number, same: (row: Row, kept: Row) => boolean,
+  better: (row: Row, kept: Row) => boolean) {
+  const kept: Row[] = [];
+  for (let offset = 0, more = true; more && kept.length <= limit; offset += PAGE) {
+    const rows = await read(offset);
+    more = rows.length === PAGE;
+    for (const row of rows) {
+      const last = kept.at(-1);
+      if (last && same(row, last)) {
+        if (better(row, last)) kept[kept.length - 1] = row;
+      } else if (kept.push(row) > limit) break;
+    }
+  }
+  return { rows: kept.slice(0, limit), more: kept.length > limit };
+}
+
+/** A page of a newest-first read: from `from` up to `to`, and before `before`, the last page's cursor. */
+type HealthFilter = { from: number; to: number; before?: number; limit: number };
+
+type NightRow = { id: number; source: string; start_at: number; end_at: number; asleep_at: number | null; woke_at: number | null;
+  asleep: number; core: number; deep: number; rem: number; awake: number; stages: string; device: string };
+type SleepStep = { stage: string; start: number; end: number };
+
+const nightShaped = (row: NightRow) => ({ start: row.start_at, end: row.end_at, asleepAt: row.asleep_at, wokeAt: row.woke_at,
+  minutes: { asleep: Math.round(row.asleep), core: Math.round(row.core), deep: Math.round(row.deep), rem: Math.round(row.rem),
+    awake: Math.round(row.awake) }, source: row.source, device: row.device });
+
+/** The nights that end from `from` up to `to`, newest first, with each timeline when `stages`. Of nights that overlap,
+ *  the one most asleep is kept, as a watch's over the phone's bedtime. `next`: nights that end by the last start. */
+export async function nightPage(db: Db, { from, to, before = to, limit }: HealthFilter, stages: boolean) {
+  const end = Math.min(to, before);
+  const found = await newest(async offset => (await db.prepare(`SELECT n.id, n.source, n.start_at, n.end_at, n.asleep_at, n.woke_at,
+      n.asleep, n.core, n.deep, n.rem, n.awake, n.stages, d.name AS device FROM relay_nights n JOIN relay_devices d ON d.id = n.device_id
+      WHERE n.end_at >= ? AND n.end_at < ? ORDER BY n.end_at DESC, n.id DESC LIMIT ? OFFSET ?`)
+    .bind(from, end, PAGE, offset).all<NightRow>()).results, limit,
+  (row, kept) => row.end_at > kept.start_at, (row, kept) => row.asleep > kept.asleep);
+  return { nights: found.rows.map(row => ({ ...nightShaped(row), ...stages && { stages: JSON.parse(row.stages) as SleepStep[] } })),
+    next: found.more ? found.rows.at(-1)!.start_at + 1 : null };
+}
+
+type WorkoutRow = { id: number; start_at: number; end_at: number; source: string; kind: string | null; distance: number | null;
+  calories: number | null; device: string };
+
+const workoutShaped = (row: WorkoutRow) => ({ kind: row.kind, start: row.start_at, end: row.end_at,
+  minutes: Math.round((row.end_at - row.start_at) / MINUTE), km: row.distance === null ? null : Math.round(row.distance / 10) / 100,
+  calories: row.calories === null ? null : Math.round(row.calories), source: row.source, device: row.device });
+
+/** The workouts that start from `from` up to `to`, newest first. One workout that two phones or sources both keep,
+ *  starting within a minute, is given once, with its details when one of them has them. */
+export async function workoutPage(db: Db, { from, to, before = to, limit }: HealthFilter) {
+  const end = Math.min(to, before);
+  const found = await newest(async offset => (await db.prepare(`SELECT h.id, h.start_at, h.end_at, h.source, h.kind, h.distance,
+      h.calories, d.name AS device FROM relay_health h JOIN relay_devices d ON d.id = h.device_id
+      WHERE h.type = 'workout' AND h.start_at >= ? AND h.start_at < ? ORDER BY h.start_at DESC, h.id DESC LIMIT ? OFFSET ?`)
+    .bind(from, end, PAGE, offset).all<WorkoutRow>()).results, limit,
+  (row, kept) => kept.start_at - row.start_at < MINUTE, (row, kept) => row.kind !== null && kept.kind === null);
+  return { workouts: found.rows.map(workoutShaped), next: found.more ? found.rows.at(-1)!.start_at - MINUTE + 1 : null };
 }
 
 // Calendar events from the phone: a removed one is kept for its webhooks, and no read shows it.
@@ -263,8 +335,6 @@ const visitOf = (row: StayRow): Visit => ({ id: row.id, name: row.name!, lat: ro
   minutes: minutesOf(row.start_at, row.end_at), ...row.address !== null && { address: row.address },
   ...row.event !== null && { event: row.event }, ...going(row) && { ongoing: true as const } });
 
-/** Rows read at a time, until enough stays remain after `longest` merges two phones' overlaps. */
-const PAGE = 200;
 
 /** The stays and trips that overlap `from` to `to`, oldest first: the first `want` stays, or all, and the trips read
  *  with them. Each trip names the stays it left and reached. */

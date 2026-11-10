@@ -7,6 +7,31 @@ import '../brand.dart';
 import '../relay.dart';
 import 'hold_to_talk.dart' show clockOf;
 
+/// A picture of a note: the app's copy on the phone, or the person's space's file route in the browser. [cacheWidth] keeps
+/// a small picture small in memory.
+class EntryImage extends StatelessWidget {
+  const EntryImage({super.key, required this.file, this.width, this.height, this.cacheWidth, required this.fallback});
+
+  final EntryFile file;
+  final double? width;
+  final double? height;
+  final int? cacheWidth;
+  /// Shows when the picture does not load.
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget failed(BuildContext context, Object _, StackTrace? _) => fallback;
+    if (file.onPhone) {
+      return Image.file(File(file.path), width: width, height: height, fit: BoxFit.cover, cacheWidth: cacheWidth,
+        errorBuilder: failed);
+    }
+    final url = file.url;
+    if (url == null) return fallback;
+    return Image.network(url, width: width, height: height, fit: BoxFit.cover, cacheWidth: cacheWidth, errorBuilder: failed);
+  }
+}
+
 /// A picture, full width; a tap opens it.
 class NotePicture extends StatelessWidget {
   const NotePicture({super.key, required this.file, required this.relay});
@@ -26,9 +51,8 @@ class NotePicture extends StatelessWidget {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(14),
           child: ConstrainedBox(constraints: const BoxConstraints(minHeight: 180), child: ColoredBox(color: brand.accentSoft,
-            child: Image.file(File(file.path), width: double.infinity, fit: BoxFit.cover, cacheWidth: 1080,
-            errorBuilder: (context, _, _) => Container(height: 180, color: brand.accentSoft,
-              child: Icon(CupertinoIcons.photo, color: brand.muted))))),
+            child: EntryImage(file: file, width: double.infinity, cacheWidth: 1080,
+              fallback: Container(height: 180, color: brand.accentSoft, child: Icon(CupertinoIcons.photo, color: brand.muted))))),
         ),
       ),
     );
@@ -36,7 +60,7 @@ class NotePicture extends StatelessWidget {
 }
 
 /// Any other file, or one not on the phone yet: its name and size in a card row; a tap downloads it if needed, then
-/// opens it.
+/// opens it. In the browser a tap opens the file in a new tab.
 class NoteFileRow extends StatelessWidget {
   const NoteFileRow({super.key, required this.file, required this.relay});
 
@@ -54,9 +78,9 @@ class NoteFileRow extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(spacing: 10, children: [
-            Icon(file.onPhone ? CupertinoIcons.doc : CupertinoIcons.cloud_download, size: 20, color: brand.muted),
+            Icon(file.ready ? CupertinoIcons.doc : CupertinoIcons.cloud_download, size: 20, color: brand.muted),
             Expanded(child: Text(file.name, overflow: TextOverflow.ellipsis)),
-            Text([if (file.size > 0) sizeLabel(file.size), if (!file.onPhone) 'Download'].join(' · '),
+            Text([if (file.size > 0) sizeLabel(file.size), if (!file.ready) 'Download'].join(' · '),
               style: TextStyle(fontSize: 13, color: brand.muted)),
           ]),
         ),

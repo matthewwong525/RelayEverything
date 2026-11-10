@@ -1,0 +1,9 @@
+{
+  "secret": "whsec_cmVsYXktZXZlcnl0aGluZy13ZWJob29rLWZpeHR1cmU=",
+  "headers": {
+    "webhook-id": "0f5c2a64-1d6e-4b7a-9c3e-2a8d5b7f6e10:19",
+    "webhook-timestamp": "1793801100",
+    "webhook-signature": "v1,b1+3OqN2UpBqk11Am+iDxZOPPCMkFRvnNy5P8262+FQ="
+  },
+  "body": "{\"version\":1,\"type\":\"health.nights\",\"timestamp\":\"2026-11-04T14:01:02.000Z\",\"data\":{\"nights\":[{\"id\":186880677651726,\"device\":{\"id\":\"0f5c2a64-1d6e-4b7a-9c3e-2a8d5b7f6e10\",\"name\":\"Android phone\"},\"source\":\"com.apple.health.watch\",\"start\":\"2026-11-04T06:01:00.000Z\",\"end\":\"2026-11-04T14:01:00.000Z\",\"asleep_at\":\"2026-11-04T06:16:00.000Z\",\"woke_at\":\"2026-11-04T13:51:00.000Z\",\"minutes\":{\"asleep\":435.0,\"core\":250.0,\"deep\":75.0,\"rem\":110.0,\"awake\":25.0},\"stages\":[{\"stage\":\"core\",\"start\":\"2026-11-04T06:16:00.000Z\",\"end\":\"2026-11-04T07:06:00.000Z\"},{\"stage\":\"deep\",\"start\":\"2026-11-04T07:06:00.000Z\",\"end\":\"2026-11-04T08:21:00.000Z\"}]},{\"id\":64843721816941,\"device\":{\"id\":\"0f5c2a64-1d6e-4b7a-9c3e-2a8d5b7f6e10\",\"name\":\"Android phone\"},\"source\":\"com.apple.health\",\"start\":\"2026-11-04T06:01:00.000Z\",\"end\":\"2026-11-04T14:01:00.000Z\",\"asleep_at\":null,\"woke_at\":null,\"minutes\":{\"asleep\":0.0,\"core\":0.0,\"deep\":0.0,\"rem\":0.0,\"awake\":0.0},\"stages\":[]}]}}"
+}

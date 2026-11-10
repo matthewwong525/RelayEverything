@@ -13,6 +13,11 @@ db.exec(`
     device_id TEXT, device_name TEXT, lat REAL, lon REAL, place TEXT, audio BLOB);
   CREATE TABLE IF NOT EXISTS health_samples (id INTEGER, device_id TEXT, type TEXT, start TEXT, "end" TEXT,
     value REAL, unit TEXT, source TEXT, PRIMARY KEY (device_id, id));
+  CREATE INDEX IF NOT EXISTS health_samples_by_time ON health_samples (device_id, type, start);
+  CREATE TABLE IF NOT EXISTS workouts (id INTEGER, device_id TEXT, kind TEXT, distance REAL, calories REAL,
+    PRIMARY KEY (device_id, id));
+  CREATE TABLE IF NOT EXISTS health_nights (id INTEGER, device_id TEXT, source TEXT, start TEXT, "end" TEXT, asleep_at TEXT,
+    woke_at TEXT, asleep REAL, core REAL, deep REAL, rem REAL, awake REAL, stages TEXT, PRIMARY KEY (device_id, id));
   CREATE TABLE IF NOT EXISTS location_points (id INTEGER, device_id TEXT, at TEXT, lat REAL, lon REAL,
     accuracy REAL, place TEXT, PRIMARY KEY (device_id, id));
   CREATE TABLE IF NOT EXISTS location_stays (id INTEGER, device_id TEXT, kind TEXT, start TEXT, "end" TEXT, ongoing INTEGER,
@@ -40,6 +45,14 @@ function signed(headers, body) {
 const note = db.prepare(`INSERT INTO notes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET text = excluded.text,
   lat = excluded.lat, lon = excluded.lon, place = excluded.place, audio = coalesce(excluded.audio, notes.audio)`);
 const sample = db.prepare('INSERT OR REPLACE INTO health_samples VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+// One sample per device, type, start, end and source, as on the server: an older phone numbered its samples, so a
+// sample can come again with a new id. These drop the row, and its workout row, kept under another id.
+const sameSample = `SELECT id FROM health_samples WHERE device_id = ?1 AND type = ?2 AND start = ?3 AND "end" = ?4 AND source IS ?5 AND id != ?6`;
+const dropWorkout = db.prepare(`DELETE FROM workouts WHERE device_id = ?1 AND id IN (${sameSample})`);
+const dropSample = db.prepare(`DELETE FROM health_samples WHERE id IN (${sameSample}) AND device_id = ?1`);
+// A workout's kind, distance and calories, in their own table, so a database made before them still takes samples.
+const workout = db.prepare('INSERT OR REPLACE INTO workouts VALUES (?, ?, ?, ?, ?)');
+const night = db.prepare('INSERT OR REPLACE INTO health_nights VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
 const point = db.prepare('INSERT OR REPLACE INTO location_points VALUES (?, ?, ?, ?, ?, ?, ?)');
 const stay = db.prepare('INSERT OR REPLACE INTO location_stays VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
 // A note lists its files, then each file's bytes come in their own note.file: a file that never comes stays listed.
@@ -66,7 +79,15 @@ const handlers = {
   'note.updated': saveNote,
   'note.deleted': ({ note: { id } }) => { dropFiles.run(id); dropNote.run(id); },
   'note.file': ({ note_id, file: f }) => file.run(f.id, note_id, f.name, f.content_type, f.size, Buffer.from(f.base64, 'base64')),
-  'health.samples': ({ samples }) => samples.forEach(s => sample.run(s.id, s.device.id, s.type, s.start, s.end, s.value, s.unit, s.source)),
+  'health.samples': ({ samples }) => samples.forEach(s => {
+    const same = [s.device.id, s.type, s.start, s.end, s.source, s.id];
+    dropWorkout.run(...same);
+    dropSample.run(...same);
+    sample.run(s.id, s.device.id, s.type, s.start, s.end, s.value, s.unit, s.source);
+    if (s.type === 'workout') workout.run(s.id, s.device.id, s.kind ?? null, s.distance ?? null, s.calories ?? null);
+  }),
+  'health.nights': ({ nights }) => nights.forEach(n => night.run(n.id, n.device.id, n.source, n.start, n.end, n.asleep_at, n.woke_at,
+    n.minutes.asleep, n.minutes.core, n.minutes.deep, n.minutes.rem, n.minutes.awake, JSON.stringify(n.stages))),
   'location.points': ({ points }) => points.forEach(p => point.run(p.id, p.device.id, p.at, p.lat, p.lon, p.accuracy, p.place)),
   'location.stays': ({ stays }) => stays.forEach(s => stay.run(s.id, s.device.id, s.kind, s.start, s.end, Number(s.ongoing), s.lat,
     s.lon, s.name, s.address, s.event, s.source, s.mode, s.km)),

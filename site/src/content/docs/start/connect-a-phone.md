@@ -23,7 +23,7 @@ On your own server, tap **Use another server**, and enter its address, such as `
 
 To connect with no sign-in on the phone, make the key on your Relay Everything page.
 
-1. Open `https://<your-relay-server>/apps/relay/` on a computer or another phone, and sign in.
+1. Open `https://<your-relay-server>/` on a computer or another phone, and sign in.
 2. Open **Settings**, then **Devices**. Click **Add a device**, and give it a name, such as `Android phone`.
 3. The page shows the key once, as a QR code. Keep the page open while you connect.
 

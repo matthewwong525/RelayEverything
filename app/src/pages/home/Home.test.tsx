@@ -31,6 +31,8 @@ it("lists every app in this build after safe app-access readback", async () => {
 
   await screen.findByRole("region", { name: "Make it yours" });
   expect(hrefs()).toEqual(apps.map((app) => app.href));
+  // A card with an outside href, such as Relay Everything's, links to that site.
+  expect(hrefs()).toContain("https://app.relayeverything.com/");
   expect(greyed()).toEqual([]);
   expect(screen.queryByText(/Loading/)).toBeNull();
 });

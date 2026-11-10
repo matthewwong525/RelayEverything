@@ -197,15 +197,6 @@ jobs:
         working-directory: ${{ steps.app.outputs.dir }}
         run: npm ci --no-audit --no-fund
 
-      # The app's build puts the Relay Everything page, the phone app built for
-      # the web, in public/apps/relay/ (scripts/build-relay-web.mjs), with the
-      # Flutter that mobile/pubspec.yaml names. A phone-only import fails here.
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        if: ${{ steps.app.outputs.configured == 'true' }}
-        with:
-          flutter-version-file: mobile/pubspec.yaml
-          cache: true
-
       # A wired pack repo has build:app, and `cf-build.sh --build-only` builds
       # it for the branch's Worker without touching a database. An unwired repo
       # just has build.

@@ -46,8 +46,9 @@ export default {
     const api = relayRoute(request, env, url, identity);
     if (api) return api;
     if (/^\/(?:apps\/[^/]+\/)?api(?:\/|$)/.test(url.pathname)) return Response.json({ error: "Not found" }, { status: 404 });
-    if (url.pathname === "/") return Response.redirect(new URL(PAGE, url).href, 302);
-    // The page is the phone app built for the web, in public/apps/relay/.
+    // The page is the phone app built for the web, in public/apps/relay/. It opens at /: its <base href> loads its
+    // files from PAGE, and PAGE answers with it too, because the files live there.
+    if (url.pathname === "/") return env.ASSETS.fetch(new Request(new URL(`${PAGE}${url.search}`, url), request));
     return staticPage(request, env.ASSETS, ["relay"]) ?? env.ASSETS.fetch(request);
   },
 

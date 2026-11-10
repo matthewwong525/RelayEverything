@@ -23,7 +23,7 @@ enum SettingsPage {
   const SettingsPage(this.title, this.part, this.icon);
 
   final String title;
-  /// The page's part of the address, such as `#webhooks` in `/apps/relay/#webhooks`: the phone's *Webhooks* and
+  /// The page's part of the address, such as `#webhooks` in `/#webhooks`: the phone's *Webhooks* and
   /// *AI apps* rows open Settings on that page.
   final String part;
   final IconData icon;

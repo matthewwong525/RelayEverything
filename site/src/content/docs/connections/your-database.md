@@ -13,7 +13,7 @@ To keep your data off Relay Everything completely, [send from the phone](#send-f
 
 ## Add a webhook
 
-1. Open your Relay Everything page, `https://<your-relay-server>/apps/relay/`, and sign in.
+1. Open your Relay Everything page, `https://<your-relay-server>/`, and sign in.
 2. Click **Settings** at the bottom of the left bar, then **Webhooks**, then **Add a webhook**.
 3. Give it a name and its address. The address must start with `https://`. It can't be this computer, a private network, or your Relay Everything server itself.
 4. Tick **Health**, **Calendar**, **Location history** or **Photos** only for a database you control: they are sensitive. Notes always go.

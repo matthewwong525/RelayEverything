@@ -59,7 +59,7 @@ class ConnectedNamesPage extends StatelessWidget {
 
   Future<void> _open(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
-    final address = Uri.parse('${relay.server ?? defaultServer}/apps/relay/${kind.part}');
+    final address = Uri.parse('${relay.server ?? defaultServer}/${kind.part}');
     if (!await (opener ?? openInBrowser)(address)) {
       messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
     }

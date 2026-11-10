@@ -7,7 +7,7 @@ You make your Relay Everything account on your server's Relay Everything page. T
 
 ## Make your account
 
-1. Open your server's Relay Everything page, `https://<your-relay-server>/apps/relay/`.
+1. Open your server's Relay Everything page, `https://<your-relay-server>/`.
 2. Enter your email, then click **Email me a code**.
 3. Enter the 6-digit code from the email. It works for 10 minutes, and for 5 tries.
 

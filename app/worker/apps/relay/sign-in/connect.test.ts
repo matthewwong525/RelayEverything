@@ -41,7 +41,7 @@ it("admits the owner Access signed in on a self-hosted server", async () => {
 
 it("sends a person who is not signed in to sign in first, and back here after", async () => {
   const response = await connect("?state=s-1");
-  expect(response.headers.get("Location")).toBe(`/apps/relay/?next=${encodeURIComponent("/apps/relay/sign-in/connect?state=s-1")}`);
+  expect(response.headers.get("Location")).toBe(`/?next=${encodeURIComponent("/apps/relay/sign-in/connect?state=s-1")}`);
 });
 
 it("refuses a device key, a turned-off key, no state, a long state, and a server with no connector", async () => {

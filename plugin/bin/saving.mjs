@@ -6,7 +6,7 @@ import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { home, openState, readComputer, readState } from '../lib/config.mjs';
 import { withSandbox } from '../lib/sandbox.mjs';
-import { projectName, projectRoot } from '../lib/transcript.mjs';
+import { gitTop, projectName, projectRoot, savingOff } from '../lib/transcript.mjs';
 
 const MINUTE = 60_000;
 
@@ -29,10 +29,14 @@ function lastSent(store, root, now) {
 /** The lines to print for `choice` in the project at `cwd`. */
 export function saving(store, cwd, choice, env = {}, now = Date.now()) {
   const root = projectRoot(cwd);
+  const top = gitTop(cwd);
   const name = projectName(root);
-  if (choice === 'on' || choice === 'off') store.setOff(root, choice === 'off');
-  else if (choice) return [`Type /relay:saving on, /relay:saving off, or /relay:saving to see which it is.`];
-  const lines = store.isOff(root)
+  if (choice === 'on' || choice === 'off') {
+    store.setOff(root, choice === 'off');
+    // An entry for this worktree alone, made before worktrees counted as their main repository, goes with an on.
+    if (choice === 'on' && top !== root) store.setOff(top, false);
+  } else if (choice) return [`Type /relay:saving on, /relay:saving off, or /relay:saving to see which it is.`];
+  const lines = savingOff(store, root, top)
     ? [`Saving to Relay Everything is off for ${name}.`, 'Chats in this project stay on this computer. Type /relay:saving on to save them again.']
     : [`Saving to Relay Everything is on for ${name}.`, 'Each chat here goes to your Relay Everything server as you talk, from Claude Code or Codex. Type /relay:saving off to stop.'];
   lines.push(lastSent(store, root, now));

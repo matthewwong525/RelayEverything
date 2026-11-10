@@ -1,6 +1,6 @@
 # The Relay Everything plugin starts from your topics, pulls a thread in one step, reads around a moment, and knows a project in every workspace
 
-**Status:** planned
+**Status:** ready-to-ship
 **Branch:** plugin-follows-threads
 **Open questions:** none
 **Builds on:** knowledge-web (part 1). Part 2, which fills the web, comes later; until then the web is empty and the topic hooks show nothing.
@@ -104,6 +104,15 @@ Your Relay Everything now has a memory of facts and a web of topic pages (part 1
 - **2026-11-10** — Assumed: a project's topic is the topic with the project's name, such as `wongos`, because topics are named by tags and a project has no other link to the web.
 - **2026-11-10** — Assumed: the topic pull reads the page and its links from the copy and makes three reads of the web API, facts, notes and the chats its facts name (at most 3), because more chats would be the raw data the AI should not start from.
 - **2026-11-10** — Assumed: Codex gets the same hooks where it runs them; where it does not, the skill still tells the AI to look at the topics first.
+- **2026-11-10** — Check: the `ask` skill's size limit in `plugin/test/skills.test.mjs` rises from 4000 to 6000 characters, because the skill now teaches the topic list, the topic pull and the threads table; the other skills stay under 4000.
+- **2026-11-10** — Assumed: a note's time is its `recordedAt`, else its `createdAt`, because `recordedAt` is when the person said it, and the read around it starts there.
+- **2026-11-10** — Assumed: `around` makes two hourly health reads, steps and heart rate, because they show what the person did in those hours, and more kinds would make the answer long.
+- **2026-11-10** — Assumed: the topic hooks print `additionalContext` JSON and run only on a connected computer, because that is the shape Claude Code and Codex both add to the AI's context, and an unconnected computer has no copy of the web.
+- **2026-11-10** — Assumed: with saving off, the topic list still shows, and `RELAY_SAVE=0` starts no sync, because the list only reads this computer's copy, and `RELAY_SAVE=0` asks for no work on its own.
+- **2026-11-10** — Assumed: an old saving-off entry made for one worktree still holds until `/relay:saving on`, because turning saving on by itself would send chats the person asked to keep.
+- **2026-11-10** — Assumed: `around` reads health in whole hours, so a window from 12:20 to 16:20 gets the hours from 12:00 to 17:00, because the server sums health by the clock hour.
+- **2026-11-10** — Assumed: the live trial ran on staging with a test person, connected by the form the Connect button sends, and the plugin loaded from this checkout with `--plugin-dir`, because a test topic must not reach the person's real web, and it needs no one to click; the test person and their web were deleted after.
+- **2026-11-10** — Assumed: the `ask` skill tells the AI to read all around a note and search saved chats, always both, because in the first trial the AI stopped after `around` and missed the chats the spec asks for.
 
 ## Capabilities
 
@@ -122,3 +131,4 @@ Your Relay Everything now has a memory of facts and a web of topic pages (part 1
 - `plugin/test/relay.test.mjs`, `plugin/test/skills.test.mjs`: tests for the new commands and the skill text.
 - `plugin/README.md`, `plugin/.claude-plugin/plugin.json` (version 0.4.0), `site/src/content/docs/connections/claude-code.md`, `wiki/stack/relay-chats.md`.
 - No server change: every read uses a web API route that exists.
+- **2026-11-10** — Archived after the staging trial passed: the topic list at chat start, a topic named in a message, the topic pull, `around` a note with its day, place, event and health, and the chat search on a note's words; the test person and their web were deleted after.

@@ -13,12 +13,18 @@ The start and the ask need no person: the secret protects them, so they pass a s
 ## How a chat travels
 
 1. The computer's key goes as `Authorization: Bearer`. On the server it reaches only `POST chats`, `POST chat-saves` and `GET key`; [`caller.ts`](../../app/worker/apps/relay/caller.ts) checks the method and path. It reads through the connector's `/v1/`, as an API key does. An older chat key (`reaches = 'chats'`, from plugin 0.2) still sends, and `/v1/` refuses it with a line that says to run `/relay:connect`. A phone key can't reach a chat route.
-2. The plugin's hooks run `bin/hook.mjs` in both apps: `SessionStart` notes the session and sends any send that failed before, `Stop` sends the new messages, and `SessionEnd` starts a detached send so the app's short end budget never cuts it.
+2. The plugin's hooks run `bin/hook.mjs` in both apps: `SessionStart` notes the session and sends any send that failed before, `Stop` sends the new messages, and `SessionEnd` starts a detached send so the app's short end budget never cuts it. A session's project is its git top folder, and a worktree counts as its main repository (read from the `.git` file's `gitdir` and `commondir`, with no `git` call), so saving off and the project's name hold in each workspace copy.
 3. [`lib/transcript.mjs`](../../plugin/lib/transcript.mjs) reads a Claude Code transcript and [`lib/codex.mjs`](../../plugin/lib/codex.mjs) a Codex rollout: what you typed, the AI's text, and one line per tool step. Tool output, thinking, helper chats and unknown lines are never sent. [`lib/hide.mjs`](../../plugin/lib/hide.mjs) replaces key shapes and `.env` values with `[hidden]` first.
 4. [`chats.ts`](../../app/worker/apps/relay/chats.ts) stores messages once each by `(chat, seq)` and answers only `stored`. A gap answers 400 with `stored`, and the plugin sends again from there, as after a delete. `app` is `claude-code` or `codex`; the first send keeps it, and none means `claude-code`.
 5. A person reads and deletes through [`chat-read.ts`](../../app/worker/apps/relay/chat-read.ts); every device key is refused there. The connector's `search_chats` and `read_chat` and `/v1/chats` read through [`queries.ts`](../../app/worker/apps/relay/queries.ts), each with the chat's `app`.
 
 `POST chats` is a bare route, not a contract action: the contract turns a 413 into a 400 and drops `stored` from an error. Its fields are on the website page, through `HAND_PAGES` in [`api-doc.ts`](../../app/worker/apps/relay/api-doc.ts).
+
+## How the AI reads
+
+The `ask` skill runs `bin/relay.mjs`, which maps each command to one `/v1/` route with the computer's key. Two commands join reads into one answer, and a part that fails goes under `errors` by name: `around` reads a note, then its day, notes, places, calendar and hourly steps and heart rate in a window of 2 to 12 hours each way; `topic` reads a page and its links from the copy of the knowledge web, then the topic's facts, notes and up to 3 chats its facts name. A refused key stops the whole answer.
+
+[`lib/topics.mjs`](../../plugin/lib/topics.mjs) reads the copy as plain files. At `SessionStart` the hook prints the top-level topics, at most 40, and starts `knowledge.mjs sync` detached; at `UserPromptSubmit` it adds at most 3 topics the message names. Both only read the copy, so they run with saving off or `RELAY_SAVE=0`, but not on a computer that is not connected.
 
 ## Change the plugin
 

@@ -1,8 +1,9 @@
 // Test helpers: a fake Relay Everything server that keeps chats as the real routes do, a made-up project and
 // transcript, and a Relay Everything folder of its own, so no test reads or writes this computer's real one.
+import { execFileSync } from 'node:child_process';
 import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { run } from '../bin/hook.mjs';
 import { openState, stateDir, writeComputer } from '../lib/config.mjs';
 
@@ -69,5 +70,32 @@ export function project(lines = [said('you', 'Hello'), said('ai', 'Hi')], { conn
   };
 }
 
-/** A hook's `start` that runs the send at once, in this process, so a test can wait for it. */
-export const inline = fetcher => (args, env) => run(args[0], args[1], { env, fetcher, wait: Number(args[2] ?? 0) });
+/** A hook's `start` that runs the send at once, in this process, so a test can wait for it. It starts no sync of the
+ *  knowledge web, which needs git and its own server. */
+export const inline = fetcher => (args, env) => (args[0] === 'sync' ? undefined : run(args[0], args[1], { env, fetcher, wait: Number(args[2] ?? 0) }));
+
+/** A page with its frontmatter. */
+export const page = (title, summary, body = '', updated = '2026-11-10') =>
+  `---\ntitle: ${title}\n${summary === undefined ? '' : `summary: ${summary}\n`}updated: ${updated}\n---\n# ${title}\n\n${body}\n`;
+
+/** A made-up copy of a knowledge web, in `dir` or a new folder: the paths and texts it is given. */
+export function copy(files, dir = mkdtempSync(join(tmpdir(), 'relay-copy-'))) {
+  for (const [path, text] of Object.entries(files)) {
+    mkdirSync(dirname(join(dir, path)), { recursive: true });
+    writeFileSync(join(dir, path), text);
+  }
+  return dir;
+}
+
+/** A real git repository named WongOS with one commit, and a worktree of it named rural-horse elsewhere. */
+export function repoWithWorktree() {
+  const home = mkdtempSync(join(tmpdir(), 'relay-worktree-'));
+  const main = join(home, 'WongOS');
+  const copy = join(home, 'workspaces', 'rural-horse');
+  const git = (args, cwd) => execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@localhost', '-c', 'commit.gpgsign=false', ...args], { cwd, stdio: 'ignore' });
+  mkdirSync(main);
+  git(['init', '--quiet', '-b', 'main'], main);
+  git(['commit', '--quiet', '--allow-empty', '-m', 'Start'], main);
+  git(['worktree', 'add', '--quiet', '-b', 'rural-horse', copy], main);
+  return { home, main, copy };
+}

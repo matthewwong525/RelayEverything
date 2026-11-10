@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ensureHome, home, readComputer } from '../lib/config.mjs';
+import { copyOf, ensureHome, home, readComputer } from '../lib/config.mjs';
 import { withSandbox } from '../lib/sandbox.mjs';
 import { api, reason } from '../lib/server.mjs';
 import { NOT_CONNECTED } from './relay.mjs';
@@ -19,7 +19,7 @@ const USAGE = 'Commands: sync [--now], status.';
 // Commits made here name the computer; the address is not a real one, so no email goes to the server.
 const AUTHOR = name => ['-c', `user.name=${name || 'Relay Everything'}`, '-c', 'user.email=knowledge@localhost'];
 
-export const copyOf = env => join(home(env), 'knowledge');
+export { copyOf };
 const stateFile = env => join(home(env), 'knowledge.json');
 
 function lastSync(env) {

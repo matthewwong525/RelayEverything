@@ -44,7 +44,12 @@ If you used version 0.2 of the plugin, type `/relay:connect` one time. The old k
 
 ## Ask about your data
 
-Ask in your own words, for example *how did I sleep last night?* or *find my notes about the battery*. The AI uses the plugin's `ask` skill. Times are in this computer's time zone, unless you name a different zone.
+Ask in your own words, for example *how did I sleep last night?*, *find my notes about the battery*, or *what was I doing when I wrote the battery note?* The AI uses the plugin's `ask` skill. Times are in this computer's time zone, unless you name a different zone.
+
+- **Your topics come first.** When a chat starts, the AI gets your top-level topics, one line each, from this computer's copy of your knowledge web. When your message names a topic, the AI gets that topic's summary. Both read only the copy on this computer: no network call, and the chat never waits. The copy syncs on its own when a chat starts, at most once in 15 minutes.
+- **One step pulls a topic.** `relay.mjs topic battery` gets the page, the topics it links and those that link it, the newest facts and notes on it, and the chats its facts came from.
+- **One step reads around a moment.** `relay.mjs around <note id>`, or `--at <time>`, gets the note, its day, and the notes, places, calendar events and hourly steps and heart rate from 2 hours before to 2 hours after. `--hours` sets the window, up to 12 hours each way.
+- **The route of a stay or a trip.** `relay.mjs points <id>` gets its location points.
 
 To add a note, ask *note in Relay Everything that …*.
 
@@ -55,6 +60,7 @@ Type `/relay:save` in Claude Code, or `$relay:save` in Codex, or ask *save this 
 ## Turn saving off
 
 - In one project: type `/relay:saving off`. Type `/relay:saving on` to save again, or `/relay:saving` to see which it is and when the project last sent a chat. This works for Claude Code and Codex.
+- A git worktree counts as its main repository. Saving off holds in each workspace copy of the project, new ones too, and each chat there shows under the project's name.
 - For one run: start the app with `RELAY_SAVE=0`, for example `RELAY_SAVE=0 claude` or `RELAY_SAVE=0 codex`.
 
 To delete a chat from Relay Everything, open it on your Relay Everything page and click **Delete**. If the chat is still open, turn saving off first. If you do not, the plugin sends it again with your next message.
@@ -65,7 +71,7 @@ After each answer, the plugin sends the new messages of the chat to your Relay E
 
 - each message that you typed, and each answer that the AI wrote, word for word.
 - one line for each step of the AI, such as `Ran: npm test` or `Edited src/app.ts`. It never sends the output of the step.
-- the name of the project folder, the title of the chat, the times, and the app: Claude Code or Codex.
+- the name of the project folder (for a git worktree, the name of its main repository), the title of the chat, the times, and the app: Claude Code or Codex.
 
 The plugin never sends the thinking of the AI, the contents of a file, the output of a command, or the chat of a helper agent. Before a message goes from your computer, the plugin replaces keys, tokens, and each value of 8 or more characters in the `.env` and `.dev.vars` files of the project, with `[hidden]`.
 

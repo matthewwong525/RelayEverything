@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · plugin-follows-threads</title>
+<title>Review · 2026-11-10-plugin-follows-threads</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -442,11 +442,11 @@
 })();
 </script>
 </head>
-<body data-change="plugin-follows-threads" data-own-back>
+<body data-change="2026-11-10-plugin-follows-threads" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>plugin-follows-threads</h1>
+  <h1>2026-11-10-plugin-follows-threads</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Tap a picture to see it full screen.</span></p>
@@ -524,6 +524,15 @@
 <li class="decision card" id="decision-19" data-note="decision-19" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-10</p>Assumed: a project's topic is the topic with the project's name, such as <code>wongos</code>, because topics are named by tags and a project has no other link to the web.</li>
 <li class="decision card" id="decision-20" data-note="decision-20" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-10</p>Assumed: the topic pull reads the page and its links from the copy and makes three reads of the web API, facts, notes and the chats its facts name (at most 3), because more chats would be the raw data the AI should not start from.</li>
 <li class="decision card" id="decision-21" data-note="decision-21" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-10</p>Assumed: Codex gets the same hooks where it runs them; where it does not, the skill still tells the AI to look at the topics first.</li>
+<li class="decision card" id="decision-22" data-note="decision-22" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-10</p>Check: the <code>ask</code> skill's size limit in <code>plugin/test/skills.test.mjs</code> rises from 4000 to 6000 characters, because the skill now teaches the topic list, the topic pull and the threads table; the other skills stay under 4000.</li>
+<li class="decision card" id="decision-23" data-note="decision-23" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-10</p>Assumed: a note's time is its <code>recordedAt</code>, else its <code>createdAt</code>, because <code>recordedAt</code> is when the person said it, and the read around it starts there.</li>
+<li class="decision card" id="decision-24" data-note="decision-24" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-10</p>Assumed: <code>around</code> makes two hourly health reads, steps and heart rate, because they show what the person did in those hours, and more kinds would make the answer long.</li>
+<li class="decision card" id="decision-25" data-note="decision-25" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-10</p>Assumed: the topic hooks print <code>additionalContext</code> JSON and run only on a connected computer, because that is the shape Claude Code and Codex both add to the AI's context, and an unconnected computer has no copy of the web.</li>
+<li class="decision card" id="decision-26" data-note="decision-26" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-10</p>Assumed: with saving off, the topic list still shows, and <code>RELAY_SAVE=0</code> starts no sync, because the list only reads this computer's copy, and <code>RELAY_SAVE=0</code> asks for no work on its own.</li>
+<li class="decision card" id="decision-27" data-note="decision-27" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-10</p>Assumed: an old saving-off entry made for one worktree still holds until <code>/relay:saving on</code>, because turning saving on by itself would send chats the person asked to keep.</li>
+<li class="decision card" id="decision-28" data-note="decision-28" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-10</p>Assumed: <code>around</code> reads health in whole hours, so a window from 12:20 to 16:20 gets the hours from 12:00 to 17:00, because the server sums health by the clock hour.</li>
+<li class="decision card" id="decision-29" data-note="decision-29" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-10</p>Assumed: the live trial ran on staging with a test person, connected by the form the Connect button sends, and the plugin loaded from this checkout with <code>--plugin-dir</code>, because a test topic must not reach the person's real web, and it needs no one to click; the test person and their web were deleted after.</li>
+<li class="decision card" id="decision-30" data-note="decision-30" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-10</p>Assumed: the <code>ask</code> skill tells the AI to read all around a note and search saved chats, always both, because in the first trial the AI stopped after <code>around</code> and missed the chats the spec asks for.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

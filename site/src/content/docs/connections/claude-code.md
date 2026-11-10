@@ -46,9 +46,33 @@ If you added the AI connector to Claude Code or Codex before, the connect step n
 
 ## Ask about your data
 
-Ask in plain words, such as *what did I note about the charger?* or *how did I sleep last week?* The AI reads your Relay Everything data through the plugin. Ask *note that the charger needs a new cable*, and it adds a note.
+Ask in plain words, such as *what did I note about the charger?*, *how did I sleep last week?* or *what was I doing when I wrote the battery note?* The AI reads your Relay Everything data through the plugin. Ask *note that the charger needs a new cable*, and it adds a note.
 
-The AI also reads and adds to your memory of facts, and keeps a copy of your knowledge web on the computer, in `knowledge/` in the plugin's folder: [Memory and knowledge web](../../api/knowledge-web/).
+The AI also reads and adds to your memory of facts, and keeps a copy of your knowledge web on the computer, in `knowledge/` in `~/.config/relay-everything/`: [Memory and knowledge web](../../api/knowledge-web/).
+
+**The AI starts from your topics.** When a chat starts, the AI gets your top-level topics, one line each, from the copy on your computer:
+
+```text
+Relay Everything topics, from your knowledge web:
+battery  Stays 40 mAh; charger cable open
+bike     Commuter bike: lights, lock, tires
+sam      Friend from the bike club
+```
+
+When your message names a topic, such as *is the battery still 40 mAh?*, the AI also gets that topic's summary. Both read only the copy on your computer, so the chat never waits for the network. The copy syncs on its own when a chat starts, at most once in 15 minutes.
+
+**One step pulls a topic.** The AI gets the topic's page, the topics it links and those that link it, its newest facts and notes, and up to 3 saved chats that its facts came from. From there it opens a fact's source.
+
+**One step reads around a moment.** Ask about a note, and the AI reads its day, and the notes, places, calendar events and hourly steps and heart rate from 2 hours before to 2 hours after:
+
+```text
+You: what was going on when I wrote the battery note?
+AI:  You wrote it at 14:20 at the workshop, 20 minutes after
+     "Bike fitting" on your calendar. You walked 6,100 steps that
+     day. A saved chat on Nov 3 talks about the same battery.
+```
+
+The AI can also read the route of a stay or a trip, such as *which way did I walk to the station?*
 
 ## Save a summary
 
@@ -60,7 +84,7 @@ After each answer, the plugin sends the chat's new messages:
 
 - each message you typed, and each answer the AI wrote, word for word;
 - one line for each step the AI took, such as `Ran: npm test` or `Read src/app.ts`, never the step's output;
-- the app, the project's folder name, the chat's title and the times.
+- the app, the project's folder name (for a git worktree, its main repository's name), the chat's title and the times.
 
 It never sends the AI's thinking, a file's contents, a command's output or a helper's own chat. Before a message leaves your computer, the plugin replaces keys and tokens, and each value of 8 characters or more in the project's `.env` and `.dev.vars`, with `[hidden]`.
 
@@ -74,7 +98,7 @@ Your AI can search the chats too: the [AI connector](../connect-your-ai/) has th
 
 ## Turn saving off
 
-- **In one project:** type `/relay:saving off` (`$relay:saving off` in Codex). Type `/relay:saving on` to save again, or `/relay:saving` to see which it is and when the project last sent a chat.
+- **In one project:** type `/relay:saving off` (`$relay:saving off` in Codex). Type `/relay:saving on` to save again, or `/relay:saving` to see which it is and when the project last sent a chat. A git worktree counts as its main repository, so saving off holds in each workspace copy of the project, new ones too.
 - **For one run:** start the app with `RELAY_SAVE=0`, such as `RELAY_SAVE=0 claude` or `RELAY_SAVE=0 codex`.
 - **On one computer:** click **Turn off** beside its key, in **Settings**, **Devices** on your Relay Everything page. To also delete the key from the computer, ask the AI to *forget the Relay Everything key*.
 

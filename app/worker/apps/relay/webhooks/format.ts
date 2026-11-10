@@ -1,8 +1,8 @@
-// Format v1 of what a webhook receives: one envelope, ten types; mobile/lib/data/webhook.dart builds it too. The
+// Format v1 of what a webhook receives: one envelope, eleven types; mobile/lib/data/webhook.dart builds it too. The
 // source of the public site/public/webhooks/v1.schema.json, which takes fields and values it does not list.
 import { z } from "zod";
 import { HEALTH_TYPES, type HealthType } from "../queries.ts";
-import { STAY_SOURCES, TRIP_MODES } from "../store.ts";
+import { SLEEP_STAGES, STAY_SOURCES, TRIP_MODES } from "../store.ts";
 
 /** A list of values that can get a new one: the schema publishes it as text, with the values known today. */
 const GROWS = { grows: true };
@@ -14,15 +14,15 @@ const device = z.strictObject({
 const place = z.strictObject({
   lat: z.number(), lon: z.number(), accuracy: z.number().nullable().describe("In meters."),
   name: z.string().nullable().describe("The place's name from the phone's address lookup, such as a street."),
-  from: z.enum(["phone", "history"]).describe("phone: where a typed note was written. history: the location point nearest a ring note."),
+  from: z.enum(["phone", "history"]).describe("phone: where a typed note was written. history: the location point nearest an older recorded note."),
 });
 const note = z.strictObject({
   id: z.string().describe("The note's id, the same in every message about this note: a UUID, or the phone's own note id when the phone sends to its own webhook."),
-  source: z.enum(["ring", "typed"]), text: z.string().describe("The words: a typed note, or a ring note's transcription."),
+  source: z.enum(["ring", "typed"]), text: z.string().describe("The words: a typed note, or an older recorded note's transcription."),
   recorded_at: iso, created_at: iso.describe("When Relay Everything stored it."), device, place: place.nullable(),
 });
 const audio = z.strictObject({ content_type: z.literal("audio/mp4"), base64: z.string() }).nullable()
-  .describe("A ring note's recording, or null for a typed note or a ring note with words only.");
+  .describe("An older recorded note's recording, or null for a typed note or an older recorded note with words only.");
 const attachment = z.strictObject({
   id: z.string().describe("The file's id, from the phone that sent it."), name: z.string().describe("The file's name, such as warranty.pdf."),
   content_type: z.string().describe("Such as application/pdf."), size: z.number().int().min(0).describe("In bytes."),
@@ -33,6 +33,22 @@ const ownId = "Unique in this Relay Everything server, or on the phone when the 
 const sample = z.strictObject({
   id: z.number().int().describe(ownId), device, type: z.enum(HEALTH_TYPES).meta(GROWS),
   start: iso, end: iso, value: z.number(), unit: z.string(), source: z.string().describe("The app or watch that counted it."),
+  kind: z.string().nullable().optional()
+    .describe("Only on a workout: what the person did, such as running or traditional_strength_training; null when the phone did not say."),
+  distance: z.number().nullable().optional().describe("Only on a workout: how far, in meters; null when the phone has none."),
+  calories: z.number().nullable().optional()
+    .describe("Only on a workout: the calories it used, in kcal: active calories from an iPhone, total calories from Android; null when the phone has none."),
+});
+const night = z.strictObject({
+  id: z.number().int().describe("Unique in this Relay Everything server, or made from the phone's install id, the source and the start when the phone sends to its own webhook: upsert by it."),
+  device, source: z.string().describe("The app or watch that tracked the sleep: each one makes its own night."),
+  start: iso.describe("The night's first reading, such as going to bed."), end: iso.describe("The night's last reading."),
+  asleep_at: iso.nullable().describe("When the person fell asleep; null for a night with only a bedtime."),
+  woke_at: iso.nullable().describe("When the person last woke; null for a night with only a bedtime."),
+  minutes: z.strictObject({ asleep: z.number().describe("Asleep in any stage."), core: z.number().describe("Core, or light, sleep."),
+    deep: z.number(), rem: z.number(), awake: z.number().describe("Awake in the night.") }).describe("Minutes in each stage."),
+  stages: z.array(z.strictObject({ stage: z.enum(SLEEP_STAGES).meta(GROWS).describe("asleep: asleep, with no stage known."), start: iso, end: iso }))
+    .describe("The night's stage timeline, in time order, at most 400 steps; empty for a source with no stages."),
 });
 const point = z.strictObject({
   id: z.number().int().describe(ownId), device, at: iso, lat: z.number(), lon: z.number(),
@@ -81,6 +97,8 @@ export const message = z.discriminatedUnion("type", [
     id: z.string().describe("The deleted note's id, as its note.created gave it."), deleted_at: iso.describe("When it was deleted.") }) }),
     "A note was deleted on a phone, with its files and recording: delete the note's row and its files by its id. It can't be undone."),
   envelope("health.samples", z.strictObject({ samples: z.array(sample).min(1).max(BATCH) }), "Health samples, in the order Relay Everything stored them."),
+  envelope("health.nights", z.strictObject({ nights: z.array(night).min(1).max(BATCH) }),
+    "Nights the phone grouped from its sleep readings, one per app or watch, new or changed, in the order Relay Everything stored them. A night can come again as the watch writes more of it: upsert by its id."),
   envelope("location.points", z.strictObject({ points: z.array(point).min(1).max(BATCH) }), "Location points, in the order Relay Everything stored them."),
   envelope("location.stays", z.strictObject({ stays: z.array(stay).min(1).max(BATCH) }),
     "Stays and trips the phone worked out from its points, new or changed, in the order Relay Everything stored them. A stay comes when it is 5 minutes long, with ongoing true, again as its end moves on, and again when it ends: upsert by its id."),
@@ -102,7 +120,10 @@ export type NoteRow = { id: string; source: "ring" | "typed"; text: string; reco
   place_from: "phone" | "history" | null; audio_key: string | null; edited_at?: number | null };
 export type AttachmentRow = { id: string; name: string; content_type: string; size: number };
 export type HealthRow = { id: number; device_id: string; device_name: string; type: HealthType;
-  start_at: number; end_at: number; value: number; unit: string; source: string };
+  start_at: number; end_at: number; value: number; unit: string; source: string;
+  kind?: string | null; distance?: number | null; calories?: number | null };
+export type NightRow = { id: number; device_id: string; device_name: string; source: string; start_at: number; end_at: number;
+  asleep_at: number | null; woke_at: number | null; asleep: number; core: number; deep: number; rem: number; awake: number; stages: string };
 export type LocationRow = { id: number; device_id: string; device_name: string; at: number; lat: number; lon: number; accuracy: number;
   place: string | null };
 export type StayRow = { id: number; device_id: string; device_name: string; kind: "stay" | "trip"; start_at: number; end_at: number;
@@ -145,9 +166,21 @@ export const noteUpdated = (row: NoteRow, at: number, files: AttachmentRow[] = [
 /** A deleted note: the row is gone, so the message holds only its id and when it went. */
 export const noteDeleted = (id: string, at: number) => wrap("note.deleted", { note: { id, deleted_at: isoOf(at) } }, at);
 
+const workoutOf = (row: HealthRow) => row.type === "workout"
+  ? { kind: row.kind ?? null, distance: row.distance ?? null, calories: row.calories ?? null } : {};
+
 export const healthSamples = (rows: HealthRow[], at: number) => wrap("health.samples", { samples: rows.map(row => ({
   id: row.id, device: deviceOf(row), type: row.type, start: isoOf(row.start_at), end: isoOf(row.end_at), value: row.value,
-  unit: row.unit, source: row.source })) }, at);
+  unit: row.unit, source: row.source, ...workoutOf(row) })) }, at);
+
+const isoOrNull = (ms: number | null) => ms === null ? null : isoOf(ms);
+
+export const healthNights = (rows: NightRow[], at: number) => wrap("health.nights", { nights: rows.map(row => ({
+  id: row.id, device: deviceOf(row), source: row.source, start: isoOf(row.start_at), end: isoOf(row.end_at),
+  asleep_at: isoOrNull(row.asleep_at), woke_at: isoOrNull(row.woke_at),
+  minutes: { asleep: row.asleep, core: row.core, deep: row.deep, rem: row.rem, awake: row.awake },
+  stages: (JSON.parse(row.stages) as { stage: (typeof SLEEP_STAGES)[number]; start: number; end: number }[])
+    .map(step => ({ stage: step.stage, start: isoOf(step.start), end: isoOf(step.end) })) })) }, at);
 
 export const locationPoints = (rows: LocationRow[], at: number) => wrap("location.points", { points: rows.map(row => ({
   id: row.id, device: deviceOf(row), at: isoOf(row.at), lat: row.lat, lon: row.lon, accuracy: row.accuracy, place: row.place })) }, at);

@@ -13,14 +13,14 @@ API key as `Authorization: Bearer …`, as [Connect a service](../connect-a-serv
 
 `GET /v1/notes` · `listNotes`
 
-With `q`, the notes whose text holds every word, as the `search` tool: `source` picks ring or typed notes, and `limit` is at most 50. Without `q`, every note from `from` to `to`, as the `timeline` tool: both are needed, and `limit` is at most 100. Newest first; read on with `cursor`.
+With `q`, the notes whose text holds every word, as the `search` tool: `source` picks older recorded or typed notes, and `limit` is at most 50. Without `q`, every note from `from` to `to`, as the `timeline` tool: both are needed, and `limit` is at most 100. Newest first; read on with `cursor`.
 
 | Field | In | Type | Required | What it holds |
 |---|---|---|---|---|
 | `q` | query | string | no | The words to find. |
 | `from` | query | string | no | The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
 | `to` | query | string | no | The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
-| `source` | query | "ring" or "typed" | no | Only ring notes, or only typed ones. |
+| `source` | query | "ring" or "typed" | no | Only older recorded notes, or only typed ones. |
 | `limit` | query | integer | no | How many notes, at most 100. |
 | `cursor` | query | string | no | The last answer's `nextCursor`, to read the next page. |
 | `timezone` | query | string | no | An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out. |
@@ -57,7 +57,7 @@ Read one note by its id, with the places you stayed within 30 minutes of it and 
 
 `GET /v1/days/{day}` · `getDay`
 
-One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, each stay with its name and times, each trip with its mode, km and minutes, and the calendar's events with the people in each.
+One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, the nights or naps that ended that day with their stage minutes, each workout with its kind, km and calories, each stay with its name and times, each trip with its mode, km and minutes, and the calendar's events with the people in each. Each stay and trip from the phone has an `id`: give it to points for its route.
 
 | Field | In | Type | Required | What it holds |
 |---|---|---|---|---|
@@ -78,17 +78,59 @@ One value per hour or day for one kind of health data: steps, sleep, mindful min
 | `bucket` | query | "hour" or "day" | no | One value per hour or per day, at most 400. |
 | `timezone` | query | string | no | An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out. |
 
+## Read nights of sleep
+
+`GET /v1/nights` · `listNights`
+
+The nights, and naps, that end from one time to another, newest first: when the person went to bed, fell asleep and woke, and the minutes asleep, in core (light), deep and REM sleep, and awake. Of nights that overlap, as from a watch and the phone's bedtime, the one with the most sleep. Give `stages` to add each night's stage timeline, such as to see when deep sleep came.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `from` | query | string | yes | The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
+| `to` | query | string | yes | The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
+| `stages` | query | boolean | no | Add each night's stage timeline, in time order. |
+| `limit` | query | integer | no | How many nights, at most 100. |
+| `cursor` | query | string | no | The last answer's `nextCursor`, to read the next page. |
+| `timezone` | query | string | no | An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out. |
+
+## Read workouts
+
+`GET /v1/workouts` · `listWorkouts`
+
+The workouts that start from one time to another, newest first, each with its kind (such as running or traditional_strength_training), minutes, km and calories when the phone has them. A workout from before the phone sent its kind has `kind` null. Calories are active calories from an iPhone and total calories from Android.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `from` | query | string | yes | The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
+| `to` | query | string | yes | The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
+| `limit` | query | integer | no | How many workouts, at most 100. |
+| `cursor` | query | string | no | The last answer's `nextCursor`, to read the next page. |
+| `timezone` | query | string | no | An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out. |
+
 ## Read places visited
 
 `GET /v1/places` · `listPlaces`
 
-The stays and trips from one time to another, oldest first: each stay's name, street, where it is, and when you arrived and left; each trip's mode (walking, running, cycling, driving, flying or unknown), km, minutes, and the stays it went between.
+The stays and trips from one time to another, oldest first: each stay's name, street, where it is, and when you arrived and left; each trip's mode (walking, running, cycling, driving, flying or unknown), km, minutes, and the stays it went between. Each stay and trip from the phone has an `id`: give it to points for its route.
 
 | Field | In | Type | Required | What it holds |
 |---|---|---|---|---|
 | `from` | query | string | yes | The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
 | `to` | query | string | yes | The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
 | `limit` | query | integer | no | How many stays, at most 200. Read on from `next`. |
+| `timezone` | query | string | no | An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out. |
+
+## Read location points
+
+`GET /v1/points` · `listPoints`
+
+The location points of one stay or trip, by its `id` from places or day_summary, from the phone that made it; or every phone's points from `from` to `to`, at most 7 days. Each point has its time, lat, lon, accuracy (m) and street. Oldest first, at most 500, spread evenly with the first and the last; `total` says how many there were. No points means the person keeps only stays and trips, or the phone sent none: do not ask again.
+
+| Field | In | Type | Required | What it holds |
+|---|---|---|---|---|
+| `id` | query | integer | no | The id of a stay or trip, from places or day_summary. |
+| `from` | query | string | no | The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
+| `to` | query | string | no | The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
 | `timezone` | query | string | no | An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out. |
 
 ## Read calendar events

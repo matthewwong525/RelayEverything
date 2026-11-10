@@ -22,6 +22,13 @@ const _on = Settings(sending: true);
 
 bool _isPull(http.Request request) => request.method == 'GET' && request.url.path == '/apps/relay/api/notes';
 
+/// A pull, then the rest of its round: [RelayController.pullNotes] ends with the notes, while health and photos may
+/// still send, and a test closes the store only after them.
+Future<void> _pullAll(RelayController relay) async {
+  await relay.pullNotes();
+  await relay.settled();
+}
+
 void main() {
   late Store store;
   setUp(() => store = memoryStore());
@@ -132,14 +139,15 @@ void main() {
       await relay.load();
     }
 
-    test('on return sends what waits first, then pulls', () async {
+    test('on return sends what waits first, then pulls, then reads the names', () async {
       final server = FakeServer((request) => _isPull(request) ? notesPage([pulledNote('s1')], next: 1) : FakeServer.ok(request));
       final relay = relayFor(server);
       await sendToServer(relay);
       await relay.addNote('Buy milk', sendNow: false);
       await relay.resume();
+      await relay.settled();
       expect([for (final request in server.requests) (request.method, request.url.path.split('/').last)],
-        [('POST', 'notes'), ('GET', 'connections'), ('GET', 'notes')]);
+        [('POST', 'notes'), ('GET', 'notes'), ('GET', 'connections')]);
       expect([for (final entry in relay.entries) entry.from], containsAll([null, 'Email']));
     });
 
@@ -149,10 +157,10 @@ void main() {
         : notesPage(deleted ? [{'id': 's1', 'clientId': null, 'deleted': true}] : [pulledNote('s1')], next: deleted ? 2 : 1));
       final relay = relayFor(server);
       await sendToServer(relay);
-      await relay.pullNotes();
+      await _pullAll(relay);
       expect([for (final entry in relay.entries) entry.text], ['Flight moved to 9:40']);
       deleted = true;
-      await relay.pullNotes();
+      await _pullAll(relay);
       expect(relay.entries, isEmpty);
     });
 
@@ -168,7 +176,7 @@ void main() {
       await sendToServer(relay);
       final shown = <int>[];
       relay.addListener(() => shown.add(relay.entries.length));
-      await relay.pullNotes();
+      await _pullAll(relay);
       expect(shown.toSet().toList(), containsAllInOrder([1, 2, 3]));
     });
 
@@ -176,7 +184,7 @@ void main() {
       final server = FakeServer((request) => _isPull(request) ? FakeServer.json({}, 401) : FakeServer.ok(request));
       final relay = relayFor(server);
       await sendToServer(relay);
-      await relay.pullNotes();
+      await _pullAll(relay);
       expect(relay.status, SyncStatus.refused);
     });
 
@@ -186,7 +194,7 @@ void main() {
       final relay = relayFor(server);
       await sendToServer(relay);
       await relay.addNote('Buy milk');
-      await relay.pullNotes();
+      await _pullAll(relay);
       expect([for (final entry in relay.entries) (entry.text, entry.from)], [('Buy milk', null), ('Flight moved to 9:40', 'Email')]);
       expect(await store.get(noteSyncSeq), '3');
       await relay.disconnect();
@@ -212,7 +220,7 @@ void main() {
       await tester.drag(find.text('No notes yet'), const Offset(0, 300));
       await tester.pump();
       // The pull-down's pull reads the store in real time: wait for that same pull, which a second call joins.
-      await tester.runAsync(relay.pullNotes);
+      await tester.runAsync(() => _pullAll(relay));
       await tester.pumpAndSettle();
       expect(relay.entries, isNotEmpty);
       expect(find.text('Flight moved to 9:40'), findsOneWidget);
@@ -235,7 +243,7 @@ void main() {
         opened.add(file.path);
         return true;
       });
-      await tester.runAsync(relay.pullNotes);
+      await tester.runAsync(() => _pullAll(relay));
       await tester.pumpAndSettle();
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Flight moved to 9:40'));
@@ -256,7 +264,7 @@ void main() {
           next: 1)
         : FakeServer.ok(request));
       final relay = await openApp(tester, server);
-      await tester.runAsync(relay.pullNotes);
+      await tester.runAsync(() => _pullAll(relay));
       await tester.pumpAndSettle();
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Call the dentist about Thursday'));

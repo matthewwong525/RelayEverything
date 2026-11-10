@@ -14,16 +14,29 @@ const note = z.strictObject({
   attachments: z.array(z.strictObject({ id: z.string(), name: z.string(), type: z.string(), size: z.number().describe("In bytes."),
     ready: z.boolean().describe("Whether the file's bytes have arrived.") })).describe("The note's files: names, types and sizes, never the bytes."),
 });
-const visit = z.strictObject({ name: z.string().describe("The best name the phone found: a calendar event's place, a place on the map, the street, or the coordinates."),
+const stayId = z.number().int().describe("The stay's or trip's id: give it to `GET /v1/points` for its points.");
+const visit = z.strictObject({ id: stayId.optional(), name: z.string().describe("The best name the phone found: a calendar event's place, a place on the map, the street, or the coordinates."),
   lat: z.number(), lon: z.number(), arrived: at, left: at, minutes: z.number(),
   address: z.string().optional().describe("The street, when the name came from the calendar or the map."),
   event: z.string().optional().describe("The calendar event that named the stay."),
   ongoing: z.literal(true).optional().describe("You are still there.") }).describe("A stay: a time in one place.");
-const trip = z.strictObject({ left: at, arrived: at, mode: z.string().describe("walking, running, cycling, driving, flying or unknown."),
+const trip = z.strictObject({ id: stayId, left: at, arrived: at, mode: z.string().describe("walking, running, cycling, driving, flying or unknown."),
   km: z.number(), minutes: z.number(), from: z.string().nullable().describe("The name of the stay it left."),
   to: z.string().nullable().describe("The name of the stay it reached.") }).describe("A trip between two stays.");
 const totals = { steps: z.number(), sleepMinutes: z.number(), heartRate: z.strictObject({ min: z.number(), max: z.number(), average: z.number() }).nullable(),
   workouts: z.strictObject({ count: z.number(), minutes: z.number() }) };
+const minutes = z.strictObject({ asleep: z.number().describe("Asleep in any stage."), core: z.number().describe("Core, or light, sleep."),
+  deep: z.number(), rem: z.number(), awake: z.number().describe("Awake in the night.") }).describe("Minutes in each stage.");
+const night = z.strictObject({ start: at.describe("The first reading, such as going to bed."), end: at.describe("The last reading."),
+  asleepAt: at.nullable().describe("When the person fell asleep; null for a night with only a bedtime."),
+  wokeAt: at.nullable().describe("When the person last woke; null for a night with only a bedtime."), minutes,
+  source: z.string().describe("The app or watch that tracked it."), device: z.string().describe("The name of the phone that sent it.") })
+  .describe("A night or a nap.");
+const step = z.strictObject({ stage: z.string().describe("asleep (no stage known), core, deep, rem or awake."), start: at, end: at });
+const workout = z.strictObject({ kind: z.string().nullable().describe("Such as running or traditional_strength_training; null for a workout from before the phone sent it."),
+  start: at, end: at, minutes: z.number(), km: z.number().nullable(),
+  calories: z.number().nullable().describe("In kcal: active calories from an iPhone, total calories from Android."),
+  source: z.string().describe("The app or watch that recorded it."), device: z.string().describe("The name of the phone that sent it.") });
 /** The day's other health values: each is there only when the day has some. */
 const more = { weightKg: z.number().optional().describe("The latest weight, in kg."), restingHeartRate: z.number().optional(),
   hrvSdnn: z.number().optional().describe("Heart rate variability from iPhone, in ms."),
@@ -47,7 +60,9 @@ export const ANSWERS = {
   timeline: z.strictObject({ notes: z.array(note), nextCursor }),
   fetch: note.extend({ placesNearby: z.array(visit), day: z.strictObject({ day: z.string(), ...totals }) }),
   day_summary: z.strictObject({ day: z.string(), timezone: z.string(), notes: z.number(), ...totals, ...more,
-    places: z.array(z.strictObject({ name: z.string(), lat: z.number(), lon: z.number(), from: at, to: at, address: z.string().optional(),
+    nights: z.array(night).describe("The nights and naps that ended in the day, oldest first, without their timelines. Of nights that overlap, the one with the most sleep."),
+    workouts: totals.workouts.extend({ items: z.array(workout).describe("The day's workouts, oldest first; one that two sources kept is given once.") }),
+    places: z.array(z.strictObject({ id: stayId.optional(), name: z.string(), lat: z.number(), lon: z.number(), from: at, to: at, address: z.string().optional(),
       event: z.string().optional(), ongoing: z.literal(true).optional() }))
       .describe("One row per stay, in order. Points with no stay, as on a day before the phone made stays, give each place once."),
     trips: z.array(trip).describe("The trips between the day's stays, in order."),
@@ -59,6 +74,15 @@ export const ANSWERS = {
   places: z.strictObject({ visits: z.array(visit).describe("The stays, oldest first. Points with no stay or trip, as before the phone made stays, give each run of points at one place."),
     trips: z.array(trip).describe("The trips between the stays, before `next`."),
     next: at.nullable().describe("The first visit left out: read on from it.") }),
+  nights: z.strictObject({ nights: z.array(night.extend({ stages: z.array(step).optional().describe("The stage timeline, in time order: only with `stages`.") })),
+    nextCursor }),
+  workouts: z.strictObject({ workouts: z.array(workout), nextCursor }),
+  points: z.strictObject({ id: z.number().int().optional().describe("The stay's or trip's id, when asked by id."),
+    kind: z.enum(["stay", "trip"]).optional(), from: at, to: at.describe("A stay or trip still going on reads to now."), timezone: z.string(),
+    total: z.number().int().describe("How many points there were in all: more than `points` holds when they were thinned."),
+    points: z.array(z.strictObject({ at, lat: z.number(), lon: z.number(), accuracy: z.number().describe("How sure the phone was, in meters."),
+      place: z.string().optional().describe("The street, when the phone named one.") }))
+      .describe("Oldest first, at most 500, spread evenly with the first and the last.") }),
   calendar: z.strictObject({ events: z.array(event), nextCursor }),
   search_chats: z.strictObject({ chats: z.array(z.strictObject({ ...chat, lines: z.array(z.strictObject({ role, text: z.string() })) })), nextCursor }),
   read_chat: z.strictObject({ ...chat, saves: z.array(z.strictObject({ id: z.string(), title: z.string(), text: z.string(), createdAt: at })),
@@ -111,7 +135,7 @@ const errors = {
   400: refusal("The input can't be read: `error_description` says which field."),
   401: refusal("No token, or one that is not valid: an expired token or a disconnected app."),
   403: refusal("This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes."),
-  404: refusal("No such note, chat or route in the caller's own space."),
+  404: refusal("No such note, chat, stay, trip or route in the caller's own space."),
 };
 
 /** The whole document, for a server at `origin`. */
@@ -124,7 +148,7 @@ export function openApi(origin: string) {
   return {
     openapi: "3.1.0",
     info: { title: "Relay Everything API", version: "1.0.0",
-      description: "Read one person's Relay Everything notes, health, places, calendar and saved chats, and add notes. It changes and deletes nothing. " +
+      description: "Read one person's Relay Everything notes, health, sleep, workouts, places, calendar and saved chats, and add notes. It changes and deletes nothing. " +
         "Each caller reaches only the space of the person who connected it or made its key." },
     servers: [{ url: origin }],
     security: [{ oauth2: [] }, { apiKey: [] }],

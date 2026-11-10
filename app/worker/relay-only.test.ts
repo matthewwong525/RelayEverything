@@ -11,7 +11,7 @@ const { default: worker } = await import("./relay-only");
 // A test sends a plain Request, which has no Cloudflare edge properties.
 const fetch = worker.fetch as (request: Request, env: object) => Promise<Response>;
 
-const assets = { fetch: vi.fn(async () => new Response("the Relay Everything page")) };
+const assets = { fetch: vi.fn(async (_request: Request) => new Response("the Relay Everything page")) };
 /** A call as `as`: Access's identity when it is one, else its key or cookie; `more` adds bindings. */
 async function send(as: Who, method: string, path: string, input?: object, more: object = {}) {
   who.current = as && "kind" in as ? as : null;
@@ -34,11 +34,20 @@ it("serves Relay Everything's routes to the owner and its devices, with a device
   expect((await send(null, "GET", "/apps/relay/api/timeline")).status).toBe(401);
 });
 
-it("has no WongStack route, sends / to the Relay Everything page, and serves the page from its files", async () => {
+it("has no WongStack route, opens the Relay Everything page at /, and serves the page from its files", async () => {
   for (const path of ["/apps/inbox/api/items", "/api/health", "/apps/relay/api", "/apps/relay/api/nothing"]) expect((await send(matthew, "GET", path)).status).toBe(404);
-  expect(await send(matthew, "GET", "/")).toMatchObject({ status: 302, location: "https://relay.example.com/apps/relay/" });
+  assets.fetch.mockClear();
+  for (const as of [matthew, null]) {
+    expect(await send(as, "GET", "/")).toEqual({ status: 200, location: null, json: "the Relay Everything page" });
+  }
+  expect(await send(null, "GET", "/?next=%2Fapps%2Frelay%2Fsign-in%2Fconnect%3Fstate%3Dx")).toMatchObject({ status: 200, location: null });
   expect((await send(matthew, "GET", "/apps/relay/")).status).toBe(200);
-  expect(assets.fetch).toHaveBeenCalledOnce();
+  expect((await send(matthew, "GET", "/apps/relay/notes")).status).toBe(200);
+  expect((await send(matthew, "GET", "/robots.txt")).status).toBe(200);
+  expect(assets.fetch.mock.calls.map(([request]) => new URL(request.url).pathname))
+    .toEqual(["/apps/relay/", "/apps/relay/", "/apps/relay/", "/apps/relay/", "/apps/relay/", "/robots.txt"]);
+  expect(new URL(assets.fetch.mock.calls[2][0].url).search).toBe("?next=%2Fapps%2Frelay%2Fsign-in%2Fconnect%3Fstate%3Dx");
+  expect((await send(phone, "GET", "/apps/relay/api/key")).json).toEqual({ device: "Android phone" });
 });
 
 it("behind Access, refuses a call with no person and no key, and lets a key and the owner's email through", async () => {

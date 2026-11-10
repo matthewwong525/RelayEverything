@@ -49,18 +49,23 @@ const ID = (n: number) => `a0000000-0000-4000-8000-00000000000${n}`;
 const ids = (answer: { notes: { id: string }[] }) => answer.notes.map(note => note.id);
 const harbord = { name: "Harbord St", lat: 43.6629, lon: -79.3957, arrived: "2026-11-04T08:00:00-05:00", left: "2026-11-04T08:00:00-05:00", minutes: 0 };
 const day = { steps: 8690, sleepMinutes: 450, heartRate: { min: 68, max: 121, average: 95 }, workouts: { count: 1, minutes: 40 } };
+const run = { kind: "running", start: "2026-11-04T13:00:00-05:00", end: "2026-11-04T13:40:00-05:00", minutes: 40, km: 5.1, calories: 410,
+  source: "com.google.android.apps.fitness", device: "Android phone" };
+const night = { start: "2026-11-03T23:40:00-05:00", end: "2026-11-04T07:30:00-05:00", asleepAt: "2026-11-04T00:00:00-05:00",
+  wokeAt: "2026-11-04T07:25:00-05:00", minutes: { asleep: 425, core: 250, deep: 80, rem: 95, awake: 25 },
+  source: "com.google.android.apps.fitness", device: "Android phone" };
 
 it("names itself Relay Everything to the AI app", () => {
   expect(client.getServerVersion()).toMatchObject({ name: "relay", title: "Relay Everything" });
   expect(client.getInstructions()).toMatch(/^Relay Everything /);
 });
 
-it("lists twelve tools, each read-only but add_note, which changes and deletes nothing", async () => {
+it("lists fifteen tools, each read-only but add_note, which changes and deletes nothing", async () => {
   const { tools } = await client.listTools();
-  expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "places", "calendar", "search_chats",
-    "read_chat", "photos", "read_photo", "add_note"]);
-  for (const tool of tools.slice(0, 11)) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
-  expect(tools[11].annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+  expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "nights", "workouts", "places",
+    "points", "calendar", "search_chats", "read_chat", "photos", "read_photo", "add_note"]);
+  for (const tool of tools.slice(0, 14)) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+  expect(tools[14].annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
 });
 
 it("finds notes holding every word, in any case, with a title and the time in the zone", async () => {
@@ -105,7 +110,8 @@ it("reads one note with the places near it and its day's health", async () => {
 });
 
 it("sums up a day, and an empty one", async () => {
-  expect(await ask("day_summary", { day: "2026-11-04" })).toEqual({ day: "2026-11-04", timezone: "America/Toronto", notes: 3, ...day, places: [
+  expect(await ask("day_summary", { day: "2026-11-04" })).toEqual({ day: "2026-11-04", timezone: "America/Toronto", notes: 3, ...day,
+    workouts: { ...day.workouts, items: [run] }, nights: [night], places: [
     { name: "Harbord St", lat: 43.6629, lon: -79.3957, from: "2026-11-04T08:00:00-05:00", to: "2026-11-04T08:00:00-05:00" },
     { name: "King St W", lat: 43.6487, lon: -79.3817, from: "2026-11-04T12:00:00-05:00", to: "2026-11-04T12:00:00-05:00" },
     { name: "Kensington Ave", lat: 43.6544, lon: -79.4006, from: "2026-11-04T17:00:00-05:00", to: "2026-11-04T17:30:00-05:00" }],
@@ -114,7 +120,7 @@ it("sums up a day, and an empty one", async () => {
       { title: "Lunch with Sam", start: "2026-11-04T12:00:00-05:00", end: "2026-11-04T13:00:00-05:00", allDay: false, people: ["Sam Lee"] }],
     trips: [] });
   expect(await ask("day_summary", { day: "2026-11-05" })).toMatchObject({ notes: 0, steps: 0, sleepMinutes: 0, heartRate: null,
-    workouts: { count: 0, minutes: 0 }, places: [], trips: [] });
+    workouts: { count: 0, minutes: 0, items: [] }, nights: [], places: [], trips: [] });
   expect((await ask("day_summary", { day: "2026-13-45" })).refused).toContain("Not a day.");
 });
 
@@ -141,6 +147,30 @@ it("reads the new health types: the day's latest weight and blood pressure's ran
   expect((await ask("health", { type: "blood_pressure_systolic", from: "2026-11-04", to: "2026-11-05" })).values[0])
     .toMatchObject({ min: 118, max: 118, average: 118 });
   expect((await ask("health", { type: "water", from: "2026-11-04", to: "2026-11-05" })).values[0].total).toBe(0);
+});
+
+it("reads nights newest first, the one with the most sleep of two that overlap, with stages only when asked", async () => {
+  const first = await ask("nights", { from: "2026-11-01", to: "2026-11-05", limit: 1 });
+  expect(first).toEqual({ nights: [night], nextCursor: "1793767200001" });
+  expect((await ask("nights", { from: "2026-11-01", to: "2026-11-05", cursor: first.nextCursor })).nights).toEqual([{
+    start: "2026-11-02T23:30:00-05:00", end: "2026-11-03T07:00:00-05:00", asleepAt: null, wokeAt: null,
+    minutes: { asleep: 0, core: 0, deep: 0, rem: 0, awake: 0 }, source: "com.urbandroid.sleep", device: "Android phone" }]);
+  expect((await ask("nights", { from: "2026-11-04", to: "2026-11-05", stages: true })).nights[0].stages).toEqual([
+    { stage: "awake", start: "2026-11-03T23:40:00-05:00", end: "2026-11-04T00:00:00-05:00" },
+    { stage: "core", start: "2026-11-04T00:00:00-05:00", end: "2026-11-04T02:00:00-05:00" },
+    { stage: "deep", start: "2026-11-04T02:00:00-05:00", end: "2026-11-04T03:20:00-05:00" }]);
+  expect(await ask("nights", { from: "2026-11-01", to: "2026-11-05", cursor: "page-2" })).toEqual({ refused: "That cursor is not one this connector gave." });
+  expect((await ask("nights", { from: "2026-11-01", to: "2026-11-05", limit: 101 })).refused).toBeDefined();
+});
+
+it("reads workouts newest first, with their kind, km and calories", async () => {
+  const walk = { kind: null, start: "2026-11-07T10:20:00-05:00", end: "2026-11-07T10:40:00-05:00", minutes: 20, km: null, calories: null,
+    source: "com.google.android.apps.fitness", device: "Android phone" };
+  expect(await ask("workouts", { from: "2026-11-01", to: "2026-11-08" })).toEqual({ workouts: [walk, run], nextCursor: null });
+  const first = await ask("workouts", { from: "2026-11-01", to: "2026-11-08", limit: 1 });
+  expect(first).toEqual({ workouts: [walk], nextCursor: "1794064740001" });
+  expect(await ask("workouts", { from: "2026-11-01", to: "2026-11-08", cursor: first.nextCursor })).toEqual({ workouts: [run], nextCursor: null });
+  expect(await ask("workouts", { from: "2026-11-05", to: "2026-11-07" })).toEqual({ workouts: [], nextCursor: null });
 });
 
 it("reads calendar events by time or words, never a removed one, a page at a time", async () => {
@@ -173,16 +203,47 @@ it("answers where you went on a Saturday with its stays, by name, and the trips 
   const places = await ask("places", { from: "2026-11-07", to: "2026-11-08" });
   expect(places.visits.map((visit: { name: string; arrived: string }) => [visit.name, visit.arrived])).toEqual([
     ["12 Maple Street", "2026-11-07T07:00:00-05:00"], ["Corner Café", "2026-11-07T09:15:00-05:00"], ["Smile Dental", "2026-11-07T10:40:00-05:00"]]);
-  expect(places.visits[2]).toEqual({ name: "Smile Dental", lat: 43.67, lon: -79.4, arrived: "2026-11-07T10:40:00-05:00",
+  expect(places.visits[2]).toEqual({ id: 5, name: "Smile Dental", lat: 43.67, lon: -79.4, arrived: "2026-11-07T10:40:00-05:00",
     left: "2026-11-07T11:30:00-05:00", minutes: 50, address: "Park Lane", event: "Dentist", ongoing: true });
   expect(places.trips).toEqual([
-    { left: "2026-11-07T09:00:00-05:00", arrived: "2026-11-07T09:15:00-05:00", mode: "driving", km: 6.2, minutes: 15, from: "12 Maple Street", to: "Corner Café" },
-    { left: "2026-11-07T10:20:00-05:00", arrived: "2026-11-07T10:40:00-05:00", mode: "walking", km: 1.4, minutes: 20, from: "Corner Café", to: "Smile Dental" }]);
+    { id: 2, left: "2026-11-07T09:00:00-05:00", arrived: "2026-11-07T09:15:00-05:00", mode: "driving", km: 6.2, minutes: 15, from: "12 Maple Street", to: "Corner Café" },
+    { id: 4, left: "2026-11-07T10:20:00-05:00", arrived: "2026-11-07T10:40:00-05:00", mode: "walking", km: 1.4, minutes: 20, from: "Corner Café", to: "Smile Dental" }]);
   const day = await ask("day_summary", { day: "2026-11-07" });
   expect(day.places.map((place: { name: string; from: string; to: string }) => [place.name, place.from, place.to])).toEqual([
     ["12 Maple Street", "2026-11-07T07:00:00-05:00", "2026-11-07T09:00:00-05:00"], ["Corner Café", "2026-11-07T09:15:00-05:00", "2026-11-07T10:20:00-05:00"],
     ["Smile Dental", "2026-11-07T10:40:00-05:00", "2026-11-07T11:30:00-05:00"]]);
   expect(day.trips.map((trip: { mode: string }) => trip.mode)).toEqual(["driving", "walking"]);
+  expect([day.places.map((place: { id: number }) => place.id), day.trips.map((trip: { id: number }) => trip.id)]).toEqual([[1, 3, 5], [2, 4]]);
+});
+
+const times = (answer: { points: { at: string }[] }) => answer.points.map(point => point.at.slice(11, 16));
+
+it("reads a trip's route by its id, a stay's points from its own phone only, and every phone's points in a range", async () => {
+  expect(await ask("points", { id: 2 })).toEqual({ id: 2, kind: "trip", from: "2026-11-07T09:00:00-05:00", to: "2026-11-07T09:15:00-05:00",
+    timezone: "America/Toronto", total: 4, points: [
+      { at: "2026-11-07T09:02:00-05:00", lat: 43.652, lon: -79.382, accuracy: 8, place: "Maple St" },
+      { at: "2026-11-07T09:06:00-05:00", lat: 43.655, lon: -79.385, accuracy: 9, place: "Queen St W" },
+      { at: "2026-11-07T09:10:00-05:00", lat: 43.658, lon: -79.388, accuracy: 11 },
+      { at: "2026-11-07T09:14:00-05:00", lat: 43.6595, lon: -79.3895, accuracy: 8, place: "Lake Drive" }] });
+  // The iPad's point at 09:45 is in the café stay's time, but the phone made the stay.
+  expect(times(await ask("points", { id: 3 }))).toEqual(["09:30", "10:00"]);
+  const range = await ask("points", { from: "2026-11-07T09:00", to: "2026-11-07T10:00" });
+  expect([range.id, range.kind, range.from, range.total, times(range)])
+    .toEqual([undefined, undefined, "2026-11-07T09:00:00-05:00", 6, ["09:02", "09:06", "09:10", "09:14", "09:30", "09:45"]]);
+  expect(JSON.stringify(range)).not.toMatch(/d0000000|device|iPad/);
+  // Toronto's clocks went back on 1 November, so this week is 169 hours, and still 7 days.
+  expect((await ask("points", { from: "2026-11-01", to: "2026-11-08" })).total).toBe(15);
+  expect(await ask("points", { from: "2026-11-05", to: "2026-11-06" })).toMatchObject({ total: 0, points: [] });
+});
+
+it("refuses points asked by neither id nor range, by both, past 7 days, or for an id no stay or trip has", async () => {
+  const either = { refused: "Give the `id` of a stay or trip, or `from` and `to`: one or the other." };
+  for (const input of [{}, { id: 2, from: "2026-11-07" }, { from: "2026-11-07" }, { id: 2, to: "2026-11-08" }]) {
+    expect(await ask("points", input), JSON.stringify(input)).toEqual(either);
+  }
+  expect(await ask("points", { from: "2026-11-01", to: "2026-11-09" })).toEqual({ refused: "That is more than 7 days: ask for a shorter range." });
+  expect(await ask("points", { id: 99 })).toEqual({ refused: "No stay or trip has this id." });
+  expect((await ask("points", { id: 0 })).refused).toBeDefined();
 });
 
 const CHAT = (n: number) => `c0000000-0000-4000-8000-00000000000${n}`;
@@ -238,7 +299,7 @@ it("titles a note with no words, and lets a database fault through as an error, 
   sql.exec(`INSERT INTO relay_notes (id, device_id, source, delivery_id, text, recorded_at, created_at) VALUES
     ('${ID(8)}', 'd0000000-0000-4000-8000-000000000002', 'ring', 'empty-delivery', '', 1793900000000, 0)`);
   client = await connect(SPACES);
-  expect((await ask("fetch", { id: ID(8) })).title).toBe("A ring note with no words");
+  expect((await ask("fetch", { id: ID(8) })).title).toBe("A recorded note with no words");
   client = await connect({ idFromName: () => ({}), get: () => ({ query: async () => { throw new Error("The space is down"); } }) } as never);
   const { content, isError } = await client.callTool({ name: "fetch", arguments: { id: ID(1) } }) as { content: { text: string }[]; isError?: boolean };
   expect([isError, content[0].text]).toEqual([true, expect.stringContaining("The space is down")]);
@@ -350,7 +411,7 @@ const writes = (source: string) => WRITES.test(source);
 it("holds no statement but SELECT in the connector or its queries", () => {
   const folder = new URL(".", import.meta.url);
   const files = [...readdirSync(folder).filter(name => name.endsWith(".ts") && !name.endsWith(".test.ts")).map(name => new URL(name, folder)),
-    new URL("../apps/relay/queries.ts", import.meta.url)];
+    new URL("../apps/relay/queries.ts", import.meta.url), new URL("../apps/relay/points.ts", import.meta.url)];
   expect(files.length).toBeGreaterThan(5);
   const CODE_TAKEN = "DELETE FROM relay_connect_codes WHERE code_sha256 = ? AND expires_at > ? RETURNING person_id";
   const ALLOWED: Record<string, string[]> = { "auth.ts": [CODE_TAKEN],

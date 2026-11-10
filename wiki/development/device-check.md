@@ -6,7 +6,8 @@ The device check opens the Relay Everything phone app on an iPhone simulator, on
 flowchart LR
   V["/verify"] --> M[Mac on GitHub]
   M --> B[Build while the iPhone starts]
-  B --> T[Fixed tour]
+  B --> T[Tour, with a second try]
+  T --> E[Tour's result on the pull request]
   T --> C[Claude tries the change]
   C --> R[Report, pictures, video, step log]
   V --> S[Second Mac: Swift tests]
@@ -18,16 +19,18 @@ flowchart LR
 
 [`.github/workflows/mobile-device-check.yml`](../../.github/workflows/mobile-device-check.yml) runs two jobs at the same time, each on its own Mac. Job `iphone` runs these steps:
 
-1. **Checks the commit.** A run started by hand stops if the branch is not at the saved commit, so a later push is never checked in its place.
+1. **Checks the commit.** A run started by hand stops if the branch is not at the saved commit, so a later push is never checked in its place. It also stops, as *could not check*, when an extra tour step it names is not in `flows/`.
 2. **Starts an iPhone** on the newest iOS the Mac has ([`iphone-boot.sh`](../../mobile/device-check/iphone-boot.sh)). It boots while the app builds.
 3. **Builds the app for the simulator.** The build needs no signing key. It names the booted iPhone, because Flutter refuses a simulator build of an app with a watch app when no device is named. A failed build ends the run as *broken*, with the end of the build log.
-4. **Opens the app on the iPhone.** [`iphone-open.sh`](../../mobile/device-check/iphone-open.sh) waits for the boot, installs the app, starts a video and opens the app.
-5. **Runs the fixed tour.** [Maestro](https://maestro.mobile.dev) flows in [`mobile/device-check/flows/`](../../mobile/device-check/flows/) open the notes list, write, save and search a note, style a line with *Aa*, and open Settings, with a screenshot of each. [`tour.sh`](../../mobile/device-check/tour.sh) runs them in one Maestro run, and `tour.json` comes from its JUnit file. The tour uses no AI, so it costs nothing and gives the same pictures each run. If the timeline does not open, the run ends as *broken* and Claude does not start.
-6. **Claude tries the change.** Claude runs on the same Mac, with [the brief](../../mobile/device-check/brief.md) and the scenarios to check. It writes its report first, with each scenario *not yet checked*, and updates it after each scenario, so a stop keeps what it found. It runs each tap flow through [`flow.sh`](../../mobile/device-check/flow.sh), which stops a flow after 90 seconds and tries it once more.
+4. **Opens the app on the iPhone.** [`iphone-open.sh`](../../mobile/device-check/iphone-open.sh) waits for the boot, installs the app, starts a video and opens the app. Then [`crashes.sh`](../../mobile/device-check/crashes.sh) copies each new crash report of the app to `out/crashes/` every 5 seconds, so Claude can read a crash as it works.
+5. **Runs the tour.** [Maestro](https://maestro.mobile.dev) flows in [`mobile/device-check/flows/`](../../mobile/device-check/flows/) open the notes list, write, save and search a note, style a line with *Aa*, and open Settings, with a screenshot of each. [`tour.sh`](../../mobile/device-check/tour.sh) runs them in one Maestro run, then [the check's extra steps](device-check-tour.md#extra-tour-steps). The tour uses no AI, so it costs nothing and gives the same pictures each run. [A failed step runs once more](device-check-tour.md#a-failed-step-runs-once-more). A step that fails twice, or a crash, ends the run as *broken*, and Claude does not start: a sure failure shows at about 25 minutes, with no wait for Claude's part of up to 20 minutes.
+6. **Claude tries the change.** Claude runs on the same Mac, with [the brief](../../mobile/device-check/brief.md) and the scenarios to check. It writes its report first, with each scenario *not yet checked*, and updates it after each scenario, so a stop keeps what it found. It runs each tap flow through [`flow.sh`](../../mobile/device-check/flow.sh), which stops a flow after 120 seconds and tries it once more. When the app leaves the screen, Claude reads `out/crashes/`: a file there means a crash, so it writes the scenario as broken and goes on.
 7. **Writes Claude's step log.** [`steps.mjs`](../../mobile/device-check/steps.mjs) reads the action's log, or Claude Code's session file when Claude ran out of time, and writes `claude/steps.md`: each command Claude ran, each one that was refused, and how Claude ended.
-8. **Keeps the results** as the run's file `device-check-iphone`: `report.md`, `verdict.txt`, `tour/`, `claude/`, `run.mp4` and the logs. `phone.log` holds the iPhone's system log for the app, Shortcuts and App Intents, and `crashes/` the app's crash reports: read them when a step fails with no words on the screen.
+8. **Keeps the results** as the run's file `device-check-iphone`: `report.md`, `verdict.txt`, `tour/`, `claude/`, `run.mp4` and the logs. `phone.log` holds the iPhone's system log for the app, Shortcuts and App Intents, and `crashes/` the app's crash reports: read them when a step fails with no words on the screen. When `crashes/` holds a report, [`crash.mjs`](../../mobile/device-check/crash.mjs) writes `crash.txt`: the crash's exception, signal, and the first 8 frames of the crashed thread. `report.md` then starts with *The app crashed* and those lines, and the verdict is *broken*. A re-check lists the scenarios it left out under *Passed in the last check*, with that check's link.
 
 Job `swift-tests` runs the Swift tests on a second Mac: `RunnerTests` for the share card and the inbox, then `RelayWatchTests` for the watch app on the newest watch simulator ([`watch-tests.sh`](../../mobile/device-check/watch-tests.sh)). It keeps `swift-tests.log` and `watch-tests.log` as the file `device-check-swift`. A failed Swift test fails the run. Job `report` waits for both and puts `report.md` and the Swift tests' result on the pull request.
+
+**The tour's result comes first.** After the tour, job `iphone` keeps `tour.json`, `tour/`, `reason.txt` and `crash.txt` as the file `device-check-tour`. Job `tour-report`, on GitHub's Linux machine, asks for that file each 30 seconds, then puts a short note on the pull request: the tour passed and Claude is checking, with the steps that needed a second try, or the tour is broken and why. It runs no branch code, because it holds the write token. It posts nothing when job `iphone` ends with no tour, such as after a failed build. `device-check.mjs` reads the same file and prints `tour=`.
 
 **A newer check of a branch stops the older one**, so only the newest commit is checked. The stopped run shows *cancelled* and posts nothing. A release's tour is never stopped.
 
@@ -36,33 +39,35 @@ Each run ends with one verdict:
 | Verdict | Means |
 |---|---|
 | `works` | Each scenario Claude could check showed its THEN. |
-| `broken` | The app did not build or open, a tour step failed, a scenario showed a different result, or the Swift tests failed. |
+| `broken` | The app did not build or open, a tour step failed twice, the app crashed, a scenario showed a different result, or the Swift tests failed. |
 | `could-not-check` | Claude checked no scenario and said why, Claude had no key, or the branch was not at the saved commit. The report says why. |
 | `no-verdict` | Claude stopped before its final verdict: out of turns, out of time, or after refused commands. The run fails, and the report says why, keeps the scenarios Claude already wrote, and points to `claude/steps.md`. |
 
 A *works* is evidence, not a gate. The pictures and the video are always there to look at.
 
-A release uses the fixed tour and the Swift tests as a gate: [`mobile-ci.yml`](../../.github/workflows/mobile-ci.yml) calls the check with `tour_only`, Claude does not start, and the run fails unless each step of `tour.json` passed and the Swift tests passed. [Builds on GitHub](../../mobile/README.md#builds-on-github) says how a release runs.
+[The tour](device-check-tour.md) says how a failed step runs once more, how a check adds steps, and how to write a flow.
+
+A release uses the fixed tour and the Swift tests as a gate: [`mobile-ci.yml`](../../.github/workflows/mobile-ci.yml) calls the check with `tour_only`, Claude does not start, and the run fails unless each step of `tour.json` passed and the Swift tests passed. [Builds on GitHub](../../mobile/README.md#builds-on-github) says how a release runs. **A job in the check that asks for a new permission needs it in `mobile-ci.yml`'s `tour` job too**: a called workflow gets no more than its caller gives, and GitHub refuses the whole Mobile CI run (`startup_failure`) before any job starts, even a skipped one.
 
 - **To see the launch screen, read the first seconds of `run.mp4`**: the video starts before the app opens, and no picture shows it. Take frames with `ffmpeg -i run.mp4 -t 12 -vf fps=4 f%03d.png`.
-- **A tour step that fails with *iOS driver not ready in time* is Maestro's own start, not the app**: the report still says *broken* and Claude does not start. Look at the step's picture in `tour/` and at the later steps to see if the app opened, then run the check once more or ask the person.
-- **Prove a key flow in the fixed tour, not through Claude.** Each `maestro test` Claude starts by hand can stall for minutes, and its taps by screen position miss. A flow in [`tour.sh`](../../mobile/device-check/tour.sh) runs in seconds each time and also gates a release. *Aa* on the note page is checked this way, in `note-styles.yaml`.
-- **A flow that needs more than the app stays out of the tour, and Claude runs it by name.** `shortcut-note.yaml` needs the Shortcuts app, and `voice-note.yaml` needs the speech model and a microphone. The tour checks only what a fresh install shows, such as the *Hold to talk* tip in `new-note.yaml`.
 - **The simulator writes a voice note's words on the CPU, not the GPU.** whisper.cpp crashes the app when it loads its model through the simulator's Metal driver, so [`whisperConfig`](../../mobile/lib/voice/transcriber.dart) picks the CPU when the app runs from a `/CoreSimulator/` folder. The `SIMULATOR_DEVICE_NAME` flag does not reach an app that Maestro opens. A crash after a save, with `ggml_metal` frames in `crashes/`, means this broke.
-- **A tour wait gives a screen 30 seconds to show its words**: a wait ends as soon as they show, so a fast run loses nothing. One slow runner showed each word after a 10-second wait ran out, and the check called a working app *broken*. Before you change the app, look at the step's picture in `tour/`: words on screen mean a slow runner.
-- **A tour flow taps a button by its words or tooltip**, such as `tapOn: "Settings"` for Home's gear. A change that renames or removes a button the tour taps updates its flow in [`flows/`](../../mobile/device-check/flows/) in the same change, or every later check and release ends *broken*.
-- **A step that fails once, then passes on the next check, is a missed tap, not a stale flow.** For example, `new-note` once failed at *Cancel*: Maestro tapped Search and the app opened nothing, and the runs before and after passed. Run the check once more before you change a flow.
 - **Booting the iPhone beside the build saves no time**: the two share one Mac, so build and boot take about 11 minutes together or one after the other. A faster check needs less work on the Mac, not more at once.
-- **A row low on Home sits under Search and New note**: scroll it to the middle (`scrollUntilVisible` with `centerElement: true`) before a tap, or the tap opens the search box.
+- **A build cache saves too little to keep.** Three checks on 2026-11-09 kept `mobile/build/ios` and Xcode's `DerivedData` with `actions/cache`: the build took 6 to 9 minutes, not 11, but the restore took 2.5 to 3 minutes, so the run saved about 1 minute. Keep a cache only when it saves 2 minutes or more.
 - **The home-screen icon is never shown**: the tour and Claude stay inside the app. Check a new icon on a real phone after the next TestFlight build.
 
 ## Start it
 
 The check never runs on a push. Start it in one of three ways:
 
-- **From [`/verify`](staging-walkthrough.md).** For a change to `mobile/`, [the rule for the phone app](../../.agents/rules/mobile.md) runs `node scripts/device-check.mjs run --ref <branch> --sha <commit> --pr <n> --scenarios-file <file>`. The script starts the check, waits up to 50 minutes, downloads the results to a temporary folder (the Swift tests' in `swift/`) and prints `result=`, `run=`, `folder=` and `reason=`. A check that a newer one stopped prints `result=cancelled`. It asks GitHub each 30 seconds whether the run has ended, so a read that fails once does not end the wait.
+- **From [`/verify`](staging-walkthrough.md).** For a change to `mobile/`, [the rule for the phone app](../../.agents/rules/mobile.md) runs `node scripts/device-check.mjs run --ref <branch> --sha <commit> --pr <n> --scenarios-file <file> --recheck`, with `--flows <name,name>` for [extra tour steps](device-check-tour.md#extra-tour-steps). The script starts the check, waits up to 50 minutes, downloads the results to a temporary folder (the Swift tests' in `swift/`) and prints `result=`, `run=`, `folder=` and `reason=`. Once the tour ends, it prints `tour=passed` or `tour=broken`, with `tour_reason=`. A check that a newer one stopped prints `result=cancelled`. It asks GitHub each 30 seconds whether the run has ended, so a read that fails once does not end the wait.
 - **With the label.** Put the label *check on iPhone* on a pull request. The check runs on the pull request's newest commit, then posts its report there. To run it again, take the label off and put it on again.
-- **By hand on GitHub**, with the inputs `sha`, `pr`, `scenarios` and `model`.
+- **By hand on GitHub**, with the inputs `sha`, `pr`, `scenarios`, `model`, `flows` and `passed_before`.
+
+### Re-check only what did not work
+
+After a fix, `--recheck` gives Claude only the scenarios that were not *works* in the branch's newest finished check started by hand that reached Claude; a check that stopped at the tour is skipped. The script downloads that check's `claude/report.md`, reads each `Scenario:` block's `Verdict:`, and leaves out each block of the scenarios file with the same name, case and spaces aside. It also leaves out the names in that check's `passed-before.txt`, the scenarios it skipped as passed, so a second re-check does not try them again. A block it can't match stays. It sends the names it left out, with that check's link, as `passed_before`, and the report lists them under *Passed in the last check*. The tour still runs in full. This saves about 5 to 10 minutes of Claude for each re-check.
+
+With no earlier check, a report it can't read, no name that matches, or no scenario left, every scenario goes, and the script prints `recheck=none` with `recheck_reason=`. Otherwise it prints `recheck=` with the last check's link and `recheck_skipped=` with the names.
 
 **GitHub starts a new workflow by hand only after it knows the workflow:** once the workflow is on the default branch, or after one run of it on any branch. Before that, `gh workflow run` fails. `device-check.mjs` then puts the label on the pull request, so the check runs from the branch's own copy of the workflow, and later starts work by hand. A label start has no inputs: Claude reads the open change's specs that name the phone app.
 
@@ -70,7 +75,7 @@ A new push to a labelled pull request does not run the check again. That keeps t
 
 ## The key and what it costs
 
-- **GitHub's Macs cost nothing**, because the repository is public, so the second Mac costs nothing too. A run takes about 15 to 20 minutes.
+- **GitHub's Macs cost nothing**, because the repository is public, so the second Mac costs nothing too. The tour's result comes at about 25 minutes, and the full report after Claude's part, at about 30 to 45. The build takes about 11 minutes and each tour step 1 to 4.
 - **Claude uses the repository secret `CLAUDE_CODE_OAUTH_TOKEN`**, a token from a Claude subscription, so each run uses that plan's usage and costs nothing more. Today it is the operations@claymoo.com *Personal Ultra* plan. Make a new one with `claude setup-token`: it prints a sign-in link, and the code from the signed-in page goes back into it. The token lasts a year: the one in use now was made on 2026-11-06, so make a new one before 2027-11-06, or the Claude step fails. Copy it to GitHub with `gh secret set CLAUDE_CODE_OAUTH_TOKEN`, through stdin, and keep it in `.env`. An Anthropic API key in `ANTHROPIC_API_KEY` works in its place, billed for each run. With neither, the tour still runs and the report says *Claude skipped: no key*.
 - **Each run uses Sonnet 5.5, with at most 80 turns and 20 minutes.** The brief asks Claude to stop after 60 tool calls, so it has turns left to write its verdict. A scenario takes about 4 tool calls: write a flow, run it, take a picture, look at it. A run started by hand can ask for another model, such as `claude-opus-5-5`. The Claude step's summary on GitHub gives the cost each run would have with an API key.
 
@@ -102,7 +107,3 @@ Relay Everything has no Windows app yet. When it has one, add a job `windows` be
 ## Change the check
 
 Run `node --test scripts/device-check.test.mjs mobile/device-check/*.test.mjs`: CI does not run them. Check the workflow with `npx --yes @action-validator/cli .github/workflows/mobile-device-check.yml` before you save it.
-
-**Match a Flutter row by the start of its text.** Flutter joins a card's lines, or a row's title and its small text, into one label, such as `Sign in to Relay Everything\nYour notes stay…`. Maestro matches the whole label, so `assertVisible: "Sign in to Relay Everything"` fails. Write `assertVisible: 'Sign in to Relay Everything(.|\n)*'`, in single quotes. A failed flow keeps its screen's labels in `maestro/<flow>/…/screen-hierarchy/`, in the run's results.
-
-**Tap an icon button by its label.** A button with no words on the screen, such as the round *New note* or the ⋯ button, has an accessibility label or a tooltip. Maestro matches it as it matches text: `tapOn: "New note"`, `tapOn: "More"`. A Maestro tap is short, so `tapOn: "New note"` opens the *New note* page and never records.

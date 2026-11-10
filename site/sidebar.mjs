@@ -9,7 +9,7 @@ export const sidebar = [
     { label: 'Install the app', slug: 'start/install' },
     { label: 'Connect a phone', slug: 'start/connect-a-phone' },
   ] },
-  { label: 'Use the app', items: ['app/your-notes', 'app/voice-notes', 'app/share', 'app/shortcuts', 'app/email', 'app/health', 'app/calendar', 'app/location', 'app/photos', 'app/settings'] },
+  { label: 'Use the app', items: ['app/your-notes', 'app/on-a-computer', 'app/voice-notes', 'app/share', 'app/shortcuts', 'app/email', 'app/health', 'app/calendar', 'app/location', 'app/photos', 'app/settings'] },
   { label: 'Connections', items: [
     { label: 'Your own database', slug: 'connections/your-database' },
     'connections/connect-your-ai',
@@ -18,6 +18,5 @@ export const sidebar = [
   ] },
   { label: 'Server API', items: ['api/keys', 'api/reference', 'api/recordings', 'api/files'] },
   { label: 'Web API', items: ['api/connect-a-service', 'api/v1-reference'] },
-  { label: 'The ring', items: ['ring/how-it-works', 'ring/parts-and-battery', 'ring/board', 'ring/models'] },
   { label: 'About', items: ['privacy'] },
 ];

@@ -2,10 +2,12 @@
 // Relay Everything in a person's own Cloudflare account: the server, page and spaces, the database, bucket and queue,
 // the AI connector, and the Access login for the owner's email. Each step is skipped when done. app/self-host/SETUP.md
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PAGE, sha256, webCommit, zipName } from '../../scripts/build-relay-web.mjs';
 import { isMain, parseCli, usageError } from '../../scripts/lib-cli.mjs';
+import { unzip } from '../../scripts/lib-zip.mjs';
 import { redirectedConfig, stripJsonc } from '../../scripts/lib-wrangler-config.mjs';
 import { cloudflare } from '../../scripts/relay-mcp-setup.mjs';
 
@@ -23,6 +25,9 @@ const APP = join(HERE, '..');
 const OLD = join(APP, '..', 'self-host');
 export const FILES = { config: join(HERE, 'wrangler.jsonc'), mcp: join(HERE, 'wrangler.mcp.jsonc'), spaces: join(HERE, 'wrangler.spaces.jsonc'),
   env: join(HERE, '.env') };
+// The page is built in CI, so an install needs no Flutter: each release on GitHub holds the page of its commit.
+const RELEASES = 'https://api.github.com/repos/matthewwong525/RelayEverything/releases';
+const WEB = { commit: () => webCommit(join(APP, '..')), folder: join(APP, PAGE) };
 
 /** What each part's name is, from the install's name. */
 export const names = name => ({ worker: name, database: `${name}-db`, bucket: `${name}-notes`, queue: `${name}-webhooks`, mcp: `${name}-mcp`,
@@ -121,6 +126,55 @@ const writeJson = (file, value) => writeFileSync(file, `${JSON.stringify(value, 
 const runWrangler = (args, input, env) => execFileSync('npx', ['wrangler', ...args], { cwd: APP, input, stdio: ['pipe', 'inherit', 'inherit'], env: { ...env, CI: '1' } });
 const runBuild = files => execFileSync('npm', ['run', 'build:relay-only'], { cwd: APP, stdio: ['ignore', 'inherit', 'inherit'],
   env: { ...process.env, RELAY_CONFIG: files.config } });
+
+/** The GitHub release that holds the page built from `commit`, with its SHA-256 file, and the newest full release
+ *  that holds any page, for a person whose commit has none. */
+async function findPage(get, commit) {
+  const name = zipName(commit);
+  let fallback;
+  for (let page = 1; page <= 5; page += 1) {
+    const releases = await get(`${RELEASES}?per_page=100&page=${page}`, 'json');
+    for (const release of releases) {
+      const asset = file => release.assets.find(item => item.name === file);
+      if (asset(name) && asset(`${name}.sha256`)) return { zip: asset(name), hash: asset(`${name}.sha256`) };
+      fallback ??= !release.prerelease && !release.draft && release.assets.some(item => /^relay-web-[0-9a-f]{40}\.zip$/.test(item.name))
+        ? release.tag_name : undefined;
+    }
+    if (releases.length < 100) break;
+  }
+  return { fallback };
+}
+
+/** Puts the Relay Everything page built from this commit in public/apps/relay/, after checking its SHA-256. Throws,
+ *  naming the release to use, when no release holds it or it does not match: nothing is made, and nothing goes live. */
+export async function fetchPage(request, { commit, folder }) {
+  const get = async (url, as) => {
+    const answer = await request(url, { method: 'GET', headers: { 'User-Agent': 'relay-everything-setup' } });
+    if (!answer.ok) throw new Error(`GitHub answered ${answer.status} for ${url}`);
+    return answer[as]();
+  };
+  let sha;
+  try {
+    sha = commit();
+  } catch {
+    throw new Error('this folder is not a git clone of Relay Everything: clone it as SETUP.md says, then run this again');
+  }
+  const found = await findPage(get, sha);
+  if (!found.zip) {
+    throw new Error(`no release holds the Relay Everything page for commit ${sha.slice(0, 7)}, so nothing was changed. Use a release: ` +
+      `run git fetch --tags, then git checkout ${found.fallback ?? 'the newest v<x.y.z> tag'}, then run this command again`);
+  }
+  const data = Buffer.from(await get(found.zip.browser_download_url, 'arrayBuffer'));
+  if (sha256(data) !== (await get(found.hash.browser_download_url, 'text')).trim().split(/\s+/)[0]) {
+    throw new Error(`${found.zip.name} does not match its SHA-256 in the release, so nothing was changed. Run this command again`);
+  }
+  rmSync(folder, { recursive: true, force: true });
+  for (const [file, bytes] of unzip(data)) {
+    mkdirSync(dirname(join(folder, file)), { recursive: true });
+    writeFileSync(join(folder, file), bytes);
+  }
+  return found.zip.name;
+}
 
 /** Find a part by its name in a list, or make it. */
 async function ensure(list, find, make) {
@@ -262,7 +316,8 @@ async function accountOf(cf, env) {
 
 /** One run. Cloudflare's API, wrangler, the build and the output come in as arguments, so a test can stand in for
  *  each. */
-export async function setup({ args, env, request = fetch, wrangler = runWrangler, build = runBuild, log = console.log, files = FILES }) {
+export async function setup({ args, env, request = fetch, wrangler = runWrangler, build = runBuild, log = console.log, files = FILES,
+  web = WEB }) {
   const parsed = parseCommand(args);
   if (parsed.problem) throw Object.assign(new Error(parsed.problem), { usage: true });
   if (!env.CLOUDFLARE_API_TOKEN) throw new Error('CLOUDFLARE_API_TOKEN is missing: put it in app/self-host/.env (SETUP.md)');
@@ -270,6 +325,8 @@ export async function setup({ args, env, request = fetch, wrangler = runWrangler
   const account = await accountOf(cf, env);
   const root = `/accounts/${account}`;
   const io = { wrangler: (more, input) => wrangler(more, input, { ...env, CLOUDFLARE_ACCOUNT_ID: account }), build: () => build(files), log, files };
+  // The page first, so a commit with no built page stops the install or update before anything is made.
+  const page = async () => log(`ok page ${await fetchPage(request, web)}`);
   const installed = existsSync(files.config) && JSON.parse(readFileSync(files.config, 'utf8'));
   const name = installed && !args.includes('--name') ? installed.name : parsed.name;
 
@@ -278,11 +335,13 @@ export async function setup({ args, env, request = fetch, wrangler = runWrangler
     log(lines.join('\n'));
     if (lines.some(line => !line.startsWith('ok'))) return 'refused';
     if (parsed.command === 'check') return 'ok';
+    await page();
     await install(io, cf, root, { name, email: parsed.email, account });
     return 'ok';
   }
   if (parsed.command === 'update') {
     if (!installed) throw new Error('no install here: run install first, or copy app/self-host/wrangler.jsonc and wrangler.mcp.jsonc back');
+    await page();
     await update(io, cf, root, installed);
     return 'ok';
   }

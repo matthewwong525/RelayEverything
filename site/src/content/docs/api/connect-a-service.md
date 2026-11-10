@@ -1,11 +1,11 @@
 ---
 title: Connect a service
-description: Let your own script or service read your Relay Everything notes, health, calendar, places and chats, and add notes, through the web API with an API key or your own sign-in.
+description: Let your own script or service read your Relay Everything notes, health, sleep, workouts, calendar, places and chats, and add notes, through the web API with an API key or your own sign-in.
 ---
 
 The web API lets your own script or service read your Relay Everything data and add notes. It answers the same questions as the [AI connector](../../connections/connect-your-ai/), as plain HTTP with JSON. It reads, and it adds notes. It can't change or delete anything.
 
-The web API is on your AI connector's address, under `/v1/`. When the connector is at `https://<your-relay-server>/mcp`, the API is at `https://<your-relay-server>/v1/`. The **AI apps** card on your Relay Everything page shows the connector's address.
+The web API is on your AI connector's address, under `/v1/`. When the connector is at `https://<your-relay-server>/mcp`, the API is at `https://<your-relay-server>/v1/`. The **AI apps** page of Settings, on your Relay Everything page, shows the connector's address.
 
 Each caller reaches only the space of the person who made its key or connected it. There are two ways in.
 
@@ -13,7 +13,7 @@ Each caller reaches only the space of the person who made its key or connected i
 
 An API key is for a script or a service that runs on its own, such as a backup job.
 
-1. On your Relay Everything page, click **Add a device** and pick **API key**.
+1. On your Relay Everything page, open **Settings**, then **Devices**. Click **Add a device** and pick **API key**.
 2. Give it a name you know it by, then click **Make the key**. The page shows the key once, with a `curl` example.
 3. Keep the key in your script's secret store. Never put it in a file you share.
 
@@ -36,7 +36,7 @@ An app that has its own users signs each person in with OAuth, as the Claude app
 2. Send the person to `/authorize` with PKCE (S256). They click **Connect**, then sign in to Relay Everything.
 3. Trade the code at `/token` for an access token and a refresh token.
 
-Leave out `resource`, or send `https://<your-relay-server>/mcp` as it. The same token then works on `/mcp` and on `/v1/`. An access token lasts one hour; refresh it at `/token`. The app shows on the person's **AI apps** card, and **Disconnect** stops it at once. An app connected before the API could add notes only reads: connect it again to add.
+Leave out `resource`, or send `https://<your-relay-server>/mcp` as it. The same token then works on `/mcp` and on `/v1/`. An access token lasts one hour; refresh it at `/token`. The app shows on the person's **AI apps** page in Settings, and **Disconnect** stops it at once. An app connected before the API could add notes only reads: connect it again to add.
 
 The [OpenAPI file](/api/v1.openapi.json) names each step's address. Load it into Swagger, Postman or a code generator to make a client.
 
@@ -49,9 +49,12 @@ curl "https://<your-relay-server>/v1/notes?q=milk&limit=5" \
 
 - `GET /v1/notes?q=…`: notes that hold every word, newest first. Without `q`, give `from` and `to` for every note in that time.
 - `GET /v1/notes/{id}`: one note, the places near it in time, and its day's health totals.
-- `GET /v1/days/{day}`: one day's notes count, health totals, places and events.
+- `GET /v1/days/{day}`: one day's notes count, health totals, nights, workouts, places and events.
 - `GET /v1/health?type=steps&from=…&to=…`: health values, one per hour or per day. `type` is any type in [Health](../../app/health/#what-it-reads), such as `weight` or `blood_pressure_systolic`.
-- `GET /v1/places?from=…&to=…`: each stay at a place.
+- `GET /v1/nights?from=…&to=…`: each night of sleep, newest first, with its stage minutes. Add `stages=true` for each night's stage timeline.
+- `GET /v1/workouts?from=…&to=…`: each workout, newest first, with its kind, minutes, km and calories.
+- `GET /v1/places?from=…&to=…`: each stay at a place, and each trip, each with its `id`.
+- `GET /v1/points?id=…`: the points of one stay or trip, at most 500. Or give `from` and `to`, up to 7 days, for every phone's points in that time.
 - `GET /v1/calendar?from=…&to=…`: calendar events by start, with title, times, place, notes and people. Add `q` for events that hold every word, newest first: [Calendar](../../app/calendar/).
 - `GET /v1/chats?q=…` and `GET /v1/chats/{id}`: saved Claude Code chats.
 

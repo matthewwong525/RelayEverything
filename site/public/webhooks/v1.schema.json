@@ -37,7 +37,7 @@
                 },
                 "text": {
                   "type": "string",
-                  "description": "The words: a typed note, or a ring note's transcription."
+                  "description": "The words: a typed note, or an older recorded note's transcription."
                 },
                 "recorded_at": {
                   "type": "string",
@@ -107,7 +107,7 @@
                             "phone",
                             "history"
                           ],
-                          "description": "phone: where a typed note was written. history: the location point nearest a ring note."
+                          "description": "phone: where a typed note was written. history: the location point nearest an older recorded note."
                         }
                       },
                       "required": [
@@ -145,7 +145,7 @@
                       "type": "null"
                     }
                   ],
-                  "description": "A ring note's recording, or null for a typed note or a ring note with words only."
+                  "description": "An older recorded note's recording, or null for a typed note or an older recorded note with words only."
                 },
                 "attachments": {
                   "description": "The note's files: each one's name, type and size, never its bytes; each file's bytes follow in its own note.file. Only a note with files has this list.",
@@ -244,7 +244,7 @@
                 },
                 "text": {
                   "type": "string",
-                  "description": "The words: a typed note, or a ring note's transcription."
+                  "description": "The words: a typed note, or an older recorded note's transcription."
                 },
                 "recorded_at": {
                   "type": "string",
@@ -314,7 +314,7 @@
                             "phone",
                             "history"
                           ],
-                          "description": "phone: where a typed note was written. history: the location point nearest a ring note."
+                          "description": "phone: where a typed note was written. history: the location point nearest an older recorded note."
                         }
                       },
                       "required": [
@@ -539,6 +539,39 @@
                   "source": {
                     "type": "string",
                     "description": "The app or watch that counted it."
+                  },
+                  "kind": {
+                    "description": "Only on a workout: what the person did, such as running or traditional_strength_training; null when the phone did not say.",
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "distance": {
+                    "description": "Only on a workout: how far, in meters; null when the phone has none.",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "calories": {
+                    "description": "Only on a workout: the calories it used, in kcal: active calories from an iPhone, total calories from Android; null when the phone has none.",
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -566,6 +599,196 @@
         "data"
       ],
       "description": "Health samples, in the order Relay Everything stored them."
+    },
+    {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "type": {
+          "type": "string",
+          "const": "health.nights"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+          "description": "When Relay Everything, or the phone that sends to its own webhook, stored what this message holds."
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "nights": {
+              "minItems": 1,
+              "maxItems": 500,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "Unique in this Relay Everything server, or made from the phone's install id, the source and the start when the phone sends to its own webhook: upsert by it."
+                  },
+                  "device": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "description": "The device key's id in Relay Everything, or the phone's own install id when the phone sends to its own webhook."
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name"
+                    ],
+                    "description": "The phone or other device that sent the item."
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "The app or watch that tracked the sleep: each one makes its own night."
+                  },
+                  "start": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                    "description": "The night's first reading, such as going to bed."
+                  },
+                  "end": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                    "description": "The night's last reading."
+                  },
+                  "asleep_at": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                        "description": "A time in ISO 8601, UTC."
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "When the person fell asleep; null for a night with only a bedtime."
+                  },
+                  "woke_at": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                        "description": "A time in ISO 8601, UTC."
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "When the person last woke; null for a night with only a bedtime."
+                  },
+                  "minutes": {
+                    "type": "object",
+                    "properties": {
+                      "asleep": {
+                        "type": "number",
+                        "description": "Asleep in any stage."
+                      },
+                      "core": {
+                        "type": "number",
+                        "description": "Core, or light, sleep."
+                      },
+                      "deep": {
+                        "type": "number"
+                      },
+                      "rem": {
+                        "type": "number"
+                      },
+                      "awake": {
+                        "type": "number",
+                        "description": "Awake in the night."
+                      }
+                    },
+                    "required": [
+                      "asleep",
+                      "core",
+                      "deep",
+                      "rem",
+                      "awake"
+                    ],
+                    "description": "Minutes in each stage."
+                  },
+                  "stages": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "stage": {
+                          "type": "string",
+                          "description": "asleep: asleep, with no stage known.",
+                          "examples": [
+                            "asleep",
+                            "core",
+                            "deep",
+                            "rem",
+                            "awake"
+                          ]
+                        },
+                        "start": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                          "description": "A time in ISO 8601, UTC."
+                        },
+                        "end": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                          "description": "A time in ISO 8601, UTC."
+                        }
+                      },
+                      "required": [
+                        "stage",
+                        "start",
+                        "end"
+                      ]
+                    },
+                    "description": "The night's stage timeline, in time order, at most 400 steps; empty for a source with no stages."
+                  }
+                },
+                "required": [
+                  "id",
+                  "device",
+                  "source",
+                  "start",
+                  "end",
+                  "asleep_at",
+                  "woke_at",
+                  "minutes",
+                  "stages"
+                ]
+              }
+            }
+          },
+          "required": [
+            "nights"
+          ]
+        }
+      },
+      "required": [
+        "version",
+        "type",
+        "timestamp",
+        "data"
+      ],
+      "description": "Nights the phone grouped from its sleep readings, one per app or watch, new or changed, in the order Relay Everything stored them. A night can come again as the watch writes more of it: upsert by its id."
     },
     {
       "type": "object",

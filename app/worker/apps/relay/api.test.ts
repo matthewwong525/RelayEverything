@@ -37,8 +37,9 @@ it("stores a typed note once per phone, with the place its phone sent", async ()
     ["note-0001", "typed", 43.65, "Home", "phone"], ["note-0002", "typed", null, null, null]]);
 });
 
-it("refuses a note from a person, a revoked key or another machine, and a malformed one", async () => {
-  for (const who of [matthew, lost, checker, null]) expect((await call(who, "POST", "notes", typed("note-0003"))).status).toBe(403);
+it("refuses a note from a revoked key, a chat key or no one, and a malformed one", async () => {
+  // A signed-in person writes from the page as the space's Web device: page-notes.test.ts.
+  for (const [who, status] of [[lost, 403], [laptop, 403], [null, 401]] as const) expect((await call(who, "POST", "notes", typed("note-0003"))).status).toBe(status);
   for (const wrong of [typed("short"), typed("note-0004", { lat: 43.6 }), typed("note-0005", { text: "" }), typed("note-0006", { createdAt: NOW / 1000 })]) {
     expect((await call(phone, "POST", "notes", wrong)).status, JSON.stringify(wrong)).toBe(400);
   }
@@ -127,11 +128,12 @@ it("sums a day for the site page: notes, the larger phone's steps and sleep, hea
   const { status, json } = await call(matthew, "GET", "summary", { day: "2026-11-05", offset: -300 });
   expect(status).toBe(200);
   expect(json).toEqual({ day: "2026-11-05", notes: 1, steps: 8214, sleepMinutes: 450, heartRate: { min: 61, max: 90, average: 76 },
-    workouts: { count: 1, minutes: 45 }, places: [
+    nights: [], workouts: { count: 1, minutes: 45, items: [{ kind: null, start: start + 3 * 60 * MINUTE, end: start + 3 * 60 * MINUTE + 45 * MINUTE,
+      minutes: 45, km: null, calories: null, source: expect.any(String), device: "Android phone" }] }, places: [
       { name: "Queen St W", lat: 43.6487, lon: -79.3962, from: start + 60 * MINUTE, to: start + 90 * MINUTE },
       { name: "43.663, -79.396", lat: 43.6629, lon: -79.3957, from: start + 3 * 60 * MINUTE, to: start + 3 * 60 * MINUTE }], trips: [], events: [] });
   expect((await call(matthew, "GET", "summary", { day: "2026-11-04" })).json).toEqual({ day: "2026-11-04", notes: 1, steps: 0, sleepMinutes: 0,
-    heartRate: null, workouts: { count: 0, minutes: 0 }, places: [], trips: [], events: [] });
+    heartRate: null, nights: [], workouts: { count: 0, minutes: 0, items: [] }, places: [], trips: [], events: [] });
   for (const day of ["yesterday", "2026-13-45"]) expect((await call(matthew, "GET", "summary", { day })).status).toBe(400);
   for (const [who, status] of [[phone, 403], [null, 401]] as const) expect((await call(who, "GET", "summary", { day: "2026-11-05" })).status).toBe(status);
 });
@@ -144,9 +146,9 @@ it("lists a day's stays for the site page, one row per stay, with its trips, onc
     { kind: "stay", start: start + 15 * MINUTE, end: start + 80 * MINUTE, lat: 43.66, lon: -79.39, name: "Corner Café", address: "Lake Drive",
       source: "map" }] });
   const { json } = await call(matthew, "GET", "summary", { day: "2026-11-05" });
-  expect(json.places).toEqual([{ name: "12 Maple Street", lat: 43.65, lon: -79.38, from: start - 2 * 60 * MINUTE, to: start },
-    { name: "Corner Café", lat: 43.66, lon: -79.39, from: start + 15 * MINUTE, to: start + 80 * MINUTE, address: "Lake Drive" }]);
-  expect(json.trips).toEqual([{ left: start, arrived: start + 15 * MINUTE, mode: "driving", km: 6.2, minutes: 15, from: "12 Maple Street",
+  expect(json.places).toEqual([{ id: 1, name: "12 Maple Street", lat: 43.65, lon: -79.38, from: start - 2 * 60 * MINUTE, to: start },
+    { id: 3, name: "Corner Café", lat: 43.66, lon: -79.39, from: start + 15 * MINUTE, to: start + 80 * MINUTE, address: "Lake Drive" }]);
+  expect(json.trips).toEqual([{ id: 2, left: start, arrived: start + 15 * MINUTE, mode: "driving", km: 6.2, minutes: 15, from: "12 Maple Street",
     to: "Corner Café" }]);
 });
 
@@ -230,5 +232,6 @@ it("answers an empty name for a key whose device is no longer in the space", asy
 
 it("answers 503 on a server with no spaces, as a preview has none", async () => {
   expect((await call(phone, "POST", "notes", typed("note-0099"), { SPACES: undefined })).status).toBe(503);
+  expect((await call(phone, "GET", "key", {}, { SPACES: undefined })).status).toBe(503);
   expect((await call(matthew, "GET", "timeline", {}, { SPACES: undefined })).status).toBe(503);
 });

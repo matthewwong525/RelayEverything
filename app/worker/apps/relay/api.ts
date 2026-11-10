@@ -14,6 +14,7 @@ import { deviceAdd, deviceOff, devices } from "./device.ts";
 import { noteEdit } from "./edit-note.ts";
 import { inbox, inboxAddress, inboxSweep } from "./inbox/routes.ts";
 import { key } from "./key.ts";
+import { nights } from "./nights.ts";
 import { notes } from "./notes.ts";
 import { noteSync } from "./note-sync.ts";
 import { photoAdd, photoCount, photoDelete } from "./photos.ts";
@@ -33,6 +34,7 @@ export const routes = new Map<string, Route>([
   ["POST health", health],
   ["POST locations", locations],
   ["POST stays", stays],
+  ["POST nights", nights],
   ["POST calendar", calendar],
   ["POST photos", photoAdd],
   ["GET photos", photoCount],

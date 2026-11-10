@@ -15,11 +15,13 @@ The Relay Everything website is Relay Everything's public home page and docs, at
 3. Link other pages relatively, such as `../keys/`, so a new address later breaks no link.
 4. Name the server *your Relay Everything server* and write its address as `https://<your-relay-server>/...`, never the private site's address.
 
-Describe Relay Everything as a way to get your own notes, health and location off your phone and devices, into a place you choose, where your own AI can read them. Do not describe it as a smart ring first: the ring is one way to take notes, and it may never ship. Do not describe it as a memory platform: Relay Everything has no plugin format, no `relay init` and no access roles, and developers use their own database and tools. A connection that is not built yet shows as *Coming*, with no steps. Say the app keeps notes on the phone by default, and sending to your Relay Everything server is an add-on the person turns on: never say the app syncs everything from the start.
+Describe Relay Everything as a way to get your own notes, health and location off your phone and devices, into a place you choose, where your own AI can read them. Do not describe it as a memory platform: Relay Everything has no plugin format, no `relay init` and no access roles, and developers use their own database and tools. A connection that is not built yet shows as *Coming*, with no steps. Say the app keeps notes on the phone by default, and sending to your Relay Everything server is an add-on the person turns on: never say the app syncs everything from the start.
 
 A page's folder can't be named `notes/`: [the public check](open-source.md#the-public-check) refuses any `notes/` folder as private notes, so the notes page is `app/your-notes/`.
 
-The ring pictures in `site/src/assets/ring/` are finished pictures, not renders: the ring's models left the repository, so a new model brings its own pictures.
+No text people read names the ring: it is gone. The notes it sent stay in people's spaces, and a page that must name them calls them *older recorded notes*. [`scripts/product-name.test.mjs`](../scripts/product-name.test.mjs) fails on the word *ring* in any file people read outside the wiki; a quoted value such as `'ring'` and a hyphenated name such as `relay-ring` pass. Call the shape that fills round *New note* a *circle*. An old `/ring/` address opens the home page through `site/public/_redirects`.
+
+The pictures of the Relay Everything page in `site/src/assets/web/` are screenshots of the Flutter app in a browser, with sample notes and no real person's data. [On a computer](../site/src/content/docs/app/on-a-computer.md) owns how the page works. Keep each file name when you take a new screenshot, so no page needs an edit. A change to the page's look or layout takes new screenshots in the same change.
 
 ## Legal pages and the contact address
 

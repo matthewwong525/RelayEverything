@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 // Puts away what WongStack leaves behind, touching nothing it did not make: every destructive step checks ownership
-// first. USAGE below lists the commands. The sweep closes no workspace: a chat closes only through `close`, which
-// `/close` runs when the person picks it.
+// first. USAGE below lists the commands; the sweep closes no chat, it only cleans leftovers.
 
 import { execFileSync, spawn } from 'node:child_process';
 import {

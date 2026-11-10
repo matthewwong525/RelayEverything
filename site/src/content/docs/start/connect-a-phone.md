@@ -23,8 +23,8 @@ On your own server, tap **Use another server**, and enter its address, such as `
 
 To connect with no sign-in on the phone, make the key on your Relay Everything page.
 
-1. Open `https://<your-relay-server>/apps/relay/` on a computer or another phone, and sign in.
-2. Click **Add a device**, and give it a name, such as `Android phone`.
+1. Open `https://<your-relay-server>/` on a computer or another phone, and sign in.
+2. Open **Settings**, then **Devices**. Click **Add a device**, and give it a name, such as `Android phone`.
 3. The page shows the key once, as a QR code. Keep the page open while you connect.
 
 The key starts with `rek_`. It adds data only to your own space. [Keys](../../api/keys/) tells more about keys.
@@ -51,7 +51,7 @@ With your own webhook, the **Account** page has **Stop sending** in place of **S
 ## Turn a phone off
 
 - **On the phone:** [sign out](#sign-out).
-- **From the Relay Everything page:** find the phone in your list of devices, and click **Turn off**. That key stops at once, and the other keys go on.
+- **From the Relay Everything page:** open **Settings**, then **Devices**. Find the phone, and click **Turn off**. That key stops at once, and the other keys go on.
 
 ## Try a preview
 

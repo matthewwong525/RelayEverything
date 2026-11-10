@@ -23,13 +23,14 @@ VALUES
 INSERT INTO relay_attachments (id, note_id, name, content_type, size, file_key, created_at) VALUES
   ('f0000000000040008000000000000001', 'a0000000-0000-4000-8000-000000000002', 'streetcar.jpg', 'image/jpeg', 184320,
    'people/seed/attachments/f0000000000040008000000000000001', 1793811705000);
-INSERT INTO relay_health (device_id, type, start_at, end_at, value, unit, source, created_at) VALUES
-  ('d0000000-0000-4000-8000-000000000001', 'sleep', 1793768400000, 1793795400000, 450, 'min', 'com.google.android.apps.fitness', 1793833200000),
-  ('d0000000-0000-4000-8000-000000000001', 'steps', 1793797200000, 1793811600000, 5210, 'count', 'com.google.android.apps.fitness', 1793833200000),
-  ('d0000000-0000-4000-8000-000000000001', 'steps', 1793811600000, 1793833200000, 3480, 'count', 'com.google.android.apps.fitness', 1793833200000),
-  ('d0000000-0000-4000-8000-000000000001', 'heart_rate', 1793800800000, 1793800800000, 68, 'bpm', 'com.google.android.apps.fitness', 1793833200000),
-  ('d0000000-0000-4000-8000-000000000001', 'heart_rate', 1793815200000, 1793815200000, 121, 'bpm', 'com.google.android.apps.fitness', 1793833200000),
-  ('d0000000-0000-4000-8000-000000000001', 'workout', 1793815200000, 1793817600000, 40, 'min', 'com.google.android.apps.fitness', 1793833200000);
+INSERT INTO relay_health (device_id, type, start_at, end_at, value, unit, source, created_at, kind, distance, calories) VALUES
+  ('d0000000-0000-4000-8000-000000000001', 'sleep', 1793768400000, 1793795400000, 450, 'min', 'com.google.android.apps.fitness', 1793833200000, NULL, NULL, NULL),
+  ('d0000000-0000-4000-8000-000000000001', 'steps', 1793797200000, 1793811600000, 5210, 'count', 'com.google.android.apps.fitness', 1793833200000, NULL, NULL, NULL),
+  ('d0000000-0000-4000-8000-000000000001', 'steps', 1793811600000, 1793833200000, 3480, 'count', 'com.google.android.apps.fitness', 1793833200000, NULL, NULL, NULL),
+  ('d0000000-0000-4000-8000-000000000001', 'heart_rate', 1793800800000, 1793800800000, 68, 'bpm', 'com.google.android.apps.fitness', 1793833200000, NULL, NULL, NULL),
+  ('d0000000-0000-4000-8000-000000000001', 'heart_rate', 1793815200000, 1793815200000, 121, 'bpm', 'com.google.android.apps.fitness', 1793833200000, NULL, NULL, NULL),
+  ('d0000000-0000-4000-8000-000000000001', 'workout', 1793815200000, 1793817600000, 40, 'min', 'com.google.android.apps.fitness', 1793833200000,
+   'running', 5100, 410);
 
 -- Relay chats: a made-up Claude Code chat key and two chats from Wednesday 4 November 2026, one with the AI's summary.
 INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at, reaches) VALUES
@@ -98,3 +99,29 @@ INSERT INTO relay_stays (device_id, kind, start_at, end_at, ongoing, lat, lon, n
   ('d0000000-0000-4000-8000-000000000001', 'stay', 1794060900000, 1794064800000, 0, 43.66, -79.39, 'Corner Café', 'Lake Drive', NULL, 'map', NULL, NULL, 1794064800000, 1794064800000),
   ('d0000000-0000-4000-8000-000000000001', 'trip', 1794064800000, 1794066000000, 0, NULL, NULL, NULL, NULL, NULL, NULL, 'walking', 1.4, 1794066000000, 1794066000000),
   ('d0000000-0000-4000-8000-000000000001', 'stay', 1794066000000, 1794069000000, 1, 43.67, -79.4, 'Smile Dental', 'Park Lane', 'Dentist', 'calendar', NULL, NULL, 1794069000000, 1794069000000);
+-- The points behind that Saturday: home, the drive, the café with one point from the iPad too, the walk, the dentist.
+INSERT INTO relay_locations (device_id, at, lat, lon, accuracy, place, created_at) VALUES
+  ('d0000000-0000-4000-8000-000000000001', 1794052800000, 43.65, -79.38, 10, 'Maple St', 1794069000000),
+  ('d0000000-0000-4000-8000-000000000001', 1794056400000, 43.65, -79.38, 12, 'Maple St', 1794069000000),
+  ('d0000000-0000-4000-8000-000000000001', 1794060120000, 43.652, -79.382, 8, 'Maple St', 1794069000000),
+  ('d0000000-0000-4000-8000-000000000001', 1794060360000, 43.655, -79.385, 9, 'Queen St W', 1794069000000),
+  ('d0000000-0000-4000-8000-000000000001', 1794060600000, 43.658, -79.388, 11, NULL, 1794069000000),
+  ('d0000000-0000-4000-8000-000000000001', 1794060840000, 43.6595, -79.3895, 8, 'Lake Drive', 1794069000000),
+  ('d0000000-0000-4000-8000-000000000001', 1794061800000, 43.66, -79.39, 15, 'Lake Drive', 1794069000000),
+  ('d0000000-0000-4000-8000-000000000002', 1794062700000, 43.66, -79.39, 30, 'Lake Drive', 1794069000000),
+  ('d0000000-0000-4000-8000-000000000001', 1794063600000, 43.66, -79.39, 14, 'Lake Drive', 1794069000000),
+  ('d0000000-0000-4000-8000-000000000001', 1794065400000, 43.665, -79.395, 10, 'Park Lane', 1794069000000),
+  ('d0000000-0000-4000-8000-000000000001', 1794066600000, 43.67, -79.4, 12, 'Park Lane', 1794069000000);
+-- The nights that ended on 3 and 4 November: the sleep app's bedtime alone on the 3rd, then the fitness app's night with
+-- its stages, and the bedtime that overlaps it, which the reads leave out because it has fewer minutes asleep.
+INSERT INTO relay_nights (device_id, source, start_at, end_at, asleep_at, woke_at, asleep, core, deep, rem, awake, stages, updated_at, created_at) VALUES
+  ('d0000000-0000-4000-8000-000000000001', 'com.urbandroid.sleep', 1793680200000, 1793707200000, NULL, NULL, 0, 0, 0, 0, 0, '[]',
+   1793710000000, 1793710000000),
+  ('d0000000-0000-4000-8000-000000000001', 'com.google.android.apps.fitness', 1793767200000, 1793795400000, 1793768400000, 1793795100000,
+   425, 250, 80, 95, 25, '[{"stage":"awake","start":1793767200000,"end":1793768400000},{"stage":"core","start":1793768400000,"end":1793775600000},{"stage":"deep","start":1793775600000,"end":1793780400000}]',
+   1793833200000, 1793833200000),
+  ('d0000000-0000-4000-8000-000000000001', 'com.urbandroid.sleep', 1793768400000, 1793795400000, NULL, NULL, 0, 0, 0, 0, 0, '[]',
+   1793833200000, 1793833200000);
+-- The Saturday's walk, from before the phone sent a workout's details.
+INSERT INTO relay_health (device_id, type, start_at, end_at, value, unit, source, created_at) VALUES
+  ('d0000000-0000-4000-8000-000000000001', 'workout', 1794064800000, 1794066000000, 20, 'min', 'com.google.android.apps.fitness', 1794066000000);

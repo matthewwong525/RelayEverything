@@ -9,13 +9,16 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { isMain, parseCli, usageError } from './lib-cli.mjs';
 
 const USAGE = `usage: node scripts/device-check.mjs run --ref <branch> --sha <commit> [--pr <n>] [--scenarios-file <file>]
-       [--model <id>] [--platform iphone]
+       [--flows <name,name>] [--recheck] [--model <id>] [--platform iphone]
 
 Starts .github/workflows/mobile-device-check.yml on the branch for the saved commit, waits up to 50 minutes, and
-downloads the report, pictures and video to a new temporary folder. Until the workflow is on the default branch,
-GitHub can't start it by hand: with --pr, the check then starts by the "check on iPhone" label, and Claude reads the
-open change's specs in place of --scenarios-file. Prints result=works|broken|could-not-check|no-verdict|cancelled|
-timeout|failed, start=, run=, folder= and reason=. Exits 0 only on works.`;
+downloads the report, pictures and video to a new temporary folder. --flows adds tour steps from
+mobile/device-check/flows/. --recheck sends only the scenarios that were not works, nor skipped as passed, in the
+branch's newest finished check that reached Claude, and prints recheck= (that check's link, or none) and
+recheck_skipped= or recheck_reason=. Prints tour= and tour_reason= once the tour ends. Until the workflow is on the default branch, GitHub can't start it by hand: with
+--pr, the check then starts by the "check on iPhone" label, runs the fixed tour alone, and Claude reads the open
+change's specs in place of --scenarios-file. Prints result=works|broken|could-not-check|no-verdict|cancelled|timeout|
+failed, start=, run=, folder= and reason=. Exits 0 only on works.`;
 
 export const WORKFLOW = 'mobile-device-check.yml';
 export const LABEL = 'check on iPhone';
@@ -74,11 +77,96 @@ export function checkValues(values, positionals) {
   if (values.pr !== undefined && !/^\d+$/.test(values.pr)) return '--pr takes a pull request number';
   if (!PLATFORMS.includes(values.platform)) return `--platform takes ${PLATFORMS.join(', ')}`;
   if (!/^claude-[a-z0-9-]+$/.test(values.model)) return '--model takes a Claude model ID';
+  if (values.flows !== undefined && !/^[a-z0-9-]+(,[a-z0-9-]+)*$/.test(values.flows)) {
+    return '--flows takes flow names split by commas, such as voice-note';
+  }
   return null;
 }
 
-function dispatch({ ref, sha, pr, model, scenarios }) {
-  const fields = { sha, model, ...(pr && { pr }), ...(scenarios && { scenarios }) };
+/** The tour's result from its tour.json entries and reason.txt: passed only when each step passed and nothing
+ * crashed. Null with no entries. */
+export function tourOutcome(entries, { reason = '', crashed = false } = {}) {
+  if (!Array.isArray(entries) || !entries.length) return null;
+  const failed = entries.filter(entry => !entry.passed).map(entry => entry.flow);
+  if (failed.length || crashed) {
+    return { tour: 'broken', reason: reason || `the tour failed at ${failed.join(', ')}` };
+  }
+  const second = entries.filter(entry => entry.tries === 2).map(entry => entry.flow);
+  const again = second.length ? `; passed on the second try: ${second.join(', ')}` : '';
+  return { tour: 'passed', reason: `${entries.length} steps passed${again}; Claude is checking now` };
+}
+
+/** Each `Scenario:` line's name and the verdict below it, from Claude's report. */
+export function scenarioVerdicts(report) {
+  const verdicts = [];
+  for (const line of (report ?? '').split('\n')) {
+    const name = scenarioName(line);
+    if (name) verdicts.push({ name, verdict: '' });
+    const verdict = line.match(/^\s*Verdict:\s*(\S+)/i)?.[1].toLowerCase();
+    if (verdict && verdicts.length && !verdicts.at(-1).verdict) verdicts.at(-1).verdict = verdict;
+  }
+  return verdicts;
+}
+
+/** The name on a `Scenario: <name>` line, also as a Markdown heading or list item, or null. */
+function scenarioName(line) {
+  return line.match(/^[\s#*-]*Scenario:\**\s*(.+?)\s*$/i)?.[1].replace(/\*/g, '').trim() || null;
+}
+
+const sameName = name => name.toLowerCase().replace(/\s+/g, ' ').trim();
+
+/** The scenarios file cut to the blocks that were not works in the last check. `carried` names the scenarios that
+ * check itself skipped as passed; they count as works unless its report tried them. A block whose name the report does
+ * not hold stays. Gives the text to send, the names left out, or why every scenario goes. */
+export function recheckScenarios(scenarios, report, carried = []) {
+  const verdicts = scenarioVerdicts(report);
+  const tried = new Set(verdicts.map(each => sameName(each.name)));
+  const works = new Set([
+    ...verdicts.filter(each => each.verdict === 'works').map(each => sameName(each.name)),
+    ...carried.map(sameName).filter(name => !tried.has(name)),
+  ]);
+  if (!works.size) return { scenarios, passed: [], reason: 'the last check has no scenario that works' };
+  const kept = [];
+  const passed = [];
+  let skipping = false;
+  for (const line of scenarios.split('\n')) {
+    const name = scenarioName(line);
+    if (name) skipping = works.has(sameName(name));
+    if (name && skipping) passed.push(name);
+    if (!skipping) kept.push(line);
+  }
+  if (!passed.length) return { scenarios, passed, reason: 'no scenario in the file matches one that worked' };
+  if (!kept.some(line => scenarioName(line))) {
+    return { scenarios, passed: [], reason: 'every scenario worked in the last check, so each is tried again' };
+  }
+  return { scenarios: kept.join('\n').trim(), passed };
+}
+
+/** The finished checks started by hand that were not cancelled, newest first. */
+export function finishedChecks(runs) {
+  return runs
+    .filter(run => run.event === 'workflow_dispatch' && run.conclusion && !['cancelled', 'skipped'].includes(run.conclusion))
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+}
+
+/** The newest finished check that reached Claude, its report, and the names it carried as passed, or null.
+ * `read(run)` gives the run's `claude/report.md` and `passed-before.txt`, '' for a file it lacks. */
+export function lastReport(runs, read) {
+  for (const run of finishedChecks(runs)) {
+    const { report, passedBefore } = read(run);
+    if (!report) continue;
+    // passed-before.txt: that check's own last link, then one name per line (finish.sh).
+    const carried = passedBefore.split('\n').slice(1).map(name => name.trim()).filter(Boolean);
+    return { run, report, carried };
+  }
+  return null;
+}
+
+function dispatch({ ref, sha, pr, model, scenarios, flows, passedBefore }) {
+  const fields = {
+    sha, model, ...(pr && { pr }), ...(scenarios && { scenarios }), ...(flows && { flows: flows.split(',').join(' ') }),
+    ...(passedBefore && { passed_before: passedBefore }),
+  };
   return gh(['workflow', 'run', WORKFLOW, '--ref', ref, ...Object.entries(fields).flatMap(([k, v]) => ['-f', `${k}=${v}`])]);
 }
 
@@ -90,8 +178,8 @@ function label(pr) {
 }
 
 /** How the check started: `workflow_dispatch`, `pull_request`, or an error line. */
-function start(values, scenarios) {
-  const started = dispatch({ ...values, scenarios });
+function start(values, scenarios, passedBefore) {
+  const started = dispatch({ ...values, scenarios, passedBefore });
   if (started.status === 0) return { event: 'workflow_dispatch' };
   if (!dispatchMissing(started.stderr)) return { error: 'GitHub did not start the check' };
   if (!values.pr) return { error: 'the workflow is not on the default branch yet; give --pr to start it by the label' };
@@ -123,6 +211,49 @@ function readResult(folder, name) {
   }
 }
 
+/** Reads the branch's newest finished check that reached Claude and cuts the scenarios to what was not works.
+ * Prints recheck= lines. */
+function recheck(ref, scenarios) {
+  const none = reason => {
+    console.log('recheck=none');
+    console.log(`recheck_reason=${reason}`);
+    return { scenarios, passedBefore: '' };
+  };
+  if (!scenarios) return none('no --scenarios-file to cut');
+  const runs = listRuns(ref, 'workflow_dispatch');
+  if (!finishedChecks(runs).length) return none('no finished check of this branch');
+  const last = lastReport(runs, run => {
+    const folder = mkdtempSync(join(tmpdir(), 'device-check-last-'));
+    gh(['run', 'download', String(run.databaseId), '-n', 'device-check-iphone', '-D', folder]);
+    return { report: readResult(folder, join('claude', 'report.md')), passedBefore: readResult(folder, 'passed-before.txt') };
+  });
+  if (!last) return none('no finished check of this branch has a Claude report');
+  const cut = recheckScenarios(scenarios, last.report, last.carried);
+  if (!cut.passed.length) return none(cut.reason);
+  console.log(`recheck=${last.run.url}`);
+  console.log(`recheck_skipped=${cut.passed.join('; ')}`);
+  return { scenarios: cut.scenarios, passedBefore: [last.run.url, ...cut.passed].join('\n') };
+}
+
+/** Downloads the run's tour file once job iphone uploads it, and prints tour= and tour_reason=. True once printed. */
+function printTour(id) {
+  const listed = gh(['api', `repos/{owner}/{repo}/actions/runs/${id}/artifacts`, '--jq', '.artifacts[].name']);
+  if (listed.status !== 0 || !listed.stdout.split('\n').includes('device-check-tour')) return false;
+  const folder = mkdtempSync(join(tmpdir(), 'device-check-tour-'));
+  if (gh(['run', 'download', String(id), '-n', 'device-check-tour', '-D', folder]).status !== 0) return false;
+  let entries = null;
+  try {
+    entries = JSON.parse(readResult(folder, 'tour.json'));
+  } catch {
+    // No tour.json: the tour stopped before it wrote one.
+  }
+  const outcome = tourOutcome(entries, { reason: readResult(folder, 'reason.txt'), crashed: !!readResult(folder, 'crash.txt') })
+    ?? { tour: 'broken', reason: readResult(folder, 'reason.txt') || 'the tour did not finish' };
+  console.log(`tour=${outcome.tour}`);
+  console.log(`tour_reason=${outcome.reason.replace(/\s+/g, ' ')}`);
+  return true;
+}
+
 /** True once `status()` says completed, false at `until` (ms). A failed read waits and asks again. */
 export async function waitDone(status, { until, every = 30_000 }) {
   while (Date.now() < until) {
@@ -139,9 +270,15 @@ function runStatus(id) {
 }
 
 async function collect(run, { platform, ref }) {
-  if (!await waitDone(() => runStatus(run.databaseId), { until: Date.now() + WATCH_MS })) {
+  let toured = false;
+  const status = () => {
+    toured ||= printTour(run.databaseId);
+    return runStatus(run.databaseId);
+  };
+  if (!await waitDone(status, { until: Date.now() + WATCH_MS })) {
     return { result: resultOf({ timedOut: true }) };
   }
+  if (!toured) printTour(run.databaseId);
   const viewed = gh(['run', 'view', String(run.databaseId), '--json', 'jobs']);
   const jobs = viewed.status === 0 ? JSON.parse(viewed.stdout).jobs : [];
   const cancelled = jobs.some(job => job.name === platform && job.conclusion === 'cancelled');
@@ -161,9 +298,10 @@ async function collect(run, { platform, ref }) {
 export async function main(values, positionals) {
   const problem = checkValues(values, positionals);
   if (problem) usageError(USAGE, problem);
-  const scenarios = values['scenarios-file'] ? readFileSync(values['scenarios-file'], 'utf8').trim() : '';
+  const given = values['scenarios-file'] ? readFileSync(values['scenarios-file'], 'utf8').trim() : '';
+  const { scenarios, passedBefore } = values.recheck ? recheck(values.ref, given) : { scenarios: given, passedBefore: '' };
   const after = Date.now() - CLOCK_SLACK_MS;
-  const started = start(values, scenarios);
+  const started = start(values, scenarios, passedBefore);
   if (started.error) return { result: 'failed', reason: started.error };
   const kind = started.event === 'workflow_dispatch' ? 'by-hand' : 'label';
   const run = await waitForRun(values, started.event, after);
@@ -177,6 +315,7 @@ if (isMain(import.meta.url)) {
     allowPositionals: true,
     options: {
       ref: { type: 'string' }, sha: { type: 'string' }, pr: { type: 'string' }, 'scenarios-file': { type: 'string' },
+      flows: { type: 'string' }, recheck: { type: 'boolean', default: false },
       model: { type: 'string', default: 'claude-sonnet-5-5' }, platform: { type: 'string', default: 'iphone' },
     },
   });

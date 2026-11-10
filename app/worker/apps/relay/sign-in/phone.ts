@@ -44,7 +44,7 @@ export async function phone(request: Request, env: SignInEnv, identity: Identity
   if (!CHALLENGE.test(challenge)) return page("<h1>Relay Everything</h1><p>This connect link is not valid. Start again from the Relay Everything app.</p>", 400);
   const caller = await callerOf(request, env, identity);
   if (caller instanceof Response) return caller;
-  if (!caller) return redirect(`/apps/relay/?next=${encodeURIComponent(url.pathname + url.search)}`);
+  if (!caller) return redirect(`/?next=${encodeURIComponent(url.pathname + url.search)}`);
   if (!isPerson(caller)) return answer(403, "forbidden", "Sign in as a person to connect a phone.");
   return page(`<h1>Connect this phone?</h1>
 <form method="post"><input type="hidden" name="challenge" value="${challenge}">

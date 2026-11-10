@@ -1,13 +1,13 @@
 ---
 title: Save Claude Code chats
-description: Save each Claude Code chat to your Relay Everything server with the Relay Everything plugin, find it on the Relay Everything page, and let your AI search it.
+description: Save each Claude Code chat to your Relay Everything server with the Relay Everything plugin, find it on your Relay Everything page, and let your AI search it.
 ---
 
 The Relay Everything plugin for Claude Code saves each chat to your Relay Everything server as you talk. You find a chat on the Relay Everything page by a word, and your AI can search it through the [AI connector](../connect-your-ai/). Ask *save this to Relay Everything*, and the AI also writes a title and a summary of what you decided, kept beside the chat.
 
 ## Make a connect code
 
-You make one connect code for each computer, on your Relay Everything page: click **Add a device**, name it, such as `Laptop`, and pick Claude Code as its kind.
+You make one connect code for each computer, on your Relay Everything page: open **Settings**, then **Devices**, click **Add a device**, name it, such as `Laptop`, and pick Claude Code as its kind.
 
 The code shows once. It is a [chat key](../../api/keys/#a-chat-key) that can only add chats to your own space. It can't read, change or delete anything.
 
@@ -41,7 +41,7 @@ A send that fails waits on your computer, and the next start of Claude Code send
 
 ## Read your chats
 
-The **Chats** card on the Relay Everything page lists your chats, newest first. Type words in its search to find the chats that hold all of them. Open a chat to read it: the AI's saved summary shows at the top, marked *Written by the AI*, and each step shows as a grey line.
+On the Relay Everything page, click **Claude Code chats**, under **Other connections** in the left bar. It lists your chats, newest first. Type words in its search to find the chats that hold all of them. Open a chat to read it: the AI's saved summary shows at the top, marked *Written by the AI*, and each step shows as a grey line.
 
 Your AI can search the chats too: the [AI connector](../connect-your-ai/) has the tools `search_chats` and `read_chat`.
 
@@ -49,7 +49,7 @@ Your AI can search the chats too: the [AI connector](../connect-your-ai/) has th
 
 - **In one project:** type `/relay:saving off` in Claude Code. Type `/relay:saving on` to save again, or `/relay:saving` to see which it is and when the project last sent a chat.
 - **For one run:** start Claude Code with `RELAY_SAVE=0 claude`.
-- **On one computer:** click **Turn off** beside its key on your Relay Everything page, or remove the plugin with `/plugin uninstall relay@relay`.
+- **On one computer:** click **Turn off** beside its key, in **Settings**, **Devices** on your Relay Everything page, or remove the plugin with `/plugin uninstall relay@relay`.
 
 ## Delete a chat
 
@@ -64,13 +64,13 @@ The plugin calls two routes with the chat key in the header `Authorization: Bear
 ```json
 {
   "sessionId": "5d1c2b7a-0e4f-4a6b-9c3d-8e7f6a5b4c3d",
-  "project": "relay-ring",
+  "project": "my-app",
   "startedAt": 1793800800000,
-  "title": "How thick should the stiffener be?",
+  "title": "Why does the sign-in test fail?",
   "messages": [
-    { "seq": 0, "role": "you", "text": "How thick should the stiffener be?", "at": 1793800800000 },
-    { "seq": 1, "role": "step", "text": "Read pcb/relay.kicad_pcb", "at": 1793800830000 },
-    { "seq": 2, "role": "ai", "text": "0.2 mm steel is enough for a ring this size.", "at": 1793800860000 }
+    { "seq": 0, "role": "you", "text": "Why does the sign-in test fail?", "at": 1793800800000 },
+    { "seq": 1, "role": "step", "text": "Read tests/sign-in.test.ts", "at": 1793800830000 },
+    { "seq": 2, "role": "ai", "text": "The test expects the old button name.", "at": 1793800860000 }
   ]
 }
 ```
@@ -81,6 +81,6 @@ The plugin calls two routes with the chat key in the header `Authorization: Bear
 - When the first `seq` is past `stored`, the answer is `400` with `stored`. Send again from there.
 - Send at most 500 messages and 4 MB at a time, and at most 200,000 characters in one message. A larger send answers `413` and stores nothing.
 
-`POST https://<your-relay-server>/apps/relay/api/chat-saves` adds the AI's summary to a chat this key sent: `{ "sessionId": "...", "title": "Stiffener plan", "text": "Use a 0.2 mm steel stiffener." }`. The answer is `{ "ok": true }`, or `404` when this key sent no chat with that `sessionId`.
+`POST https://<your-relay-server>/apps/relay/api/chat-saves` adds the AI's summary to a chat this key sent: `{ "sessionId": "...", "title": "Sign-in test fix", "text": "Rename the button in the test." }`. The answer is `{ "ok": true }`, or `404` when this key sent no chat with that `sessionId`.
 
 A chat key gets `403` on every other route. Only a signed-in person can list, read or delete chats: [Routes](../../api/reference/) shows each one.

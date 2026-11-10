@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
@@ -5,7 +7,8 @@ import '../brand.dart';
 import '../data/connection.dart' show defaultServer;
 import '../relay.dart';
 import 'back_to.dart';
-import 'connect.dart' show ConnectScreen, ServerDialog;
+import 'connect.dart' show ConnectScreen, Scanner, ServerDialog;
+import 'connected_names.dart';
 import 'folder.dart';
 
 /// Where this phone's account stands: signed in to a Relay Everything server, sending to the person's own webhook, or
@@ -21,15 +24,17 @@ AccountState accountOf(Relay relay) {
 
 /// *Account*, opened from the Account row in Settings. Signed in: the email and server, *AI apps* and *Webhooks* by
 /// name, where health, places, the calendar and photos go, *Open your Relay Everything page*, the server to change,
-/// and *Sign out*. With the person's own webhook: its
-/// address, *Send a test*, *Notes from elsewhere* and *Stop sending*. Adding or removing an AI app or a webhook is on
-/// the web page.
+/// and *Sign out*. With the person's own webhook: its address, *Send a test*, *Sign in to Relay Everything* and *Stop
+/// sending*. Signing in there sends notes to Relay Everything and keeps the webhook for health, places, the calendar and
+/// photos, then says how to get notes at the webhook too. Adding or removing an AI app or a webhook is on the web page.
 class AccountPage extends StatefulWidget {
-  const AccountPage({super.key, required this.relay, this.opener});
+  const AccountPage({super.key, required this.relay, this.opener, this.scanner});
 
   final Relay relay;
   /// Opens the Relay Everything page; a test passes its own.
   final Opener? opener;
+  /// Opens the camera for *Scan a key* in the sign-in; Settings passes its own.
+  final Scanner? scanner;
 
   @override
   State<AccountPage> createState() => _AccountPageState();
@@ -75,14 +80,14 @@ class _AccountPageState extends State<AccountPage> {
         subtitle: names?.email == null ? null : Text(hostOf(server)),
       )]),
       Group(title: 'Connections', children: [
-        _connected(CupertinoIcons.sparkles, 'AI apps', names?.aiApps, '#ai-apps'),
-        _connected(CupertinoIcons.link, 'Webhooks', names?.webhooks, '#webhooks'),
+        _connected(ConnectedKind.aiApps, names?.aiApps),
+        _connected(ConnectedKind.webhooks, names?.webhooks),
       ]),
       ..._private(context),
       Group(children: [
         ListTile(
           title: const Text('Open your Relay Everything page'),
-          subtitle: const Text('Your ring notes, recordings and the notes from all your devices.'),
+          subtitle: const Text('The notes from all your devices, with their recordings.'),
           trailing: const Icon(CupertinoIcons.arrow_up_right_square),
           onTap: () => _open(''),
         ),
@@ -101,14 +106,14 @@ class _AccountPageState extends State<AccountPage> {
     ];
   }
 
-  /// *AI apps* or *Webhooks*: the names the server last gave, and a tap to that [part] of the page, where the person
-  /// adds or removes one.
-  Widget _connected(IconData icon, String title, List<String>? names, String part) => FolderRow(
-    icon: icon, title: title,
+  /// *AI apps* or *Webhooks*: the names the server last gave, and a tap to their page, which links to the Relay
+  /// Everything page, where the person adds or removes one.
+  Widget _connected(ConnectedKind kind, List<String>? names) => FolderRow(
+    icon: kind.icon, title: kind.title,
     line: switch (names) { null => 'See them on your page', [] => 'None yet', final names => names.join(', ') },
     count: names == null || names.isEmpty ? null : names.length,
-    trailing: CupertinoIcons.arrow_up_right_square,
-    onTap: () => _open(part));
+    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => ConnectedNamesPage(relay: relay, kind: kind, opener: widget.opener))));
 
   /// *Health, places, calendar and photos*: to Relay Everything with the notes, or only to the person's own webhook. With
   /// the webhook picked: its host, *Send a test* and its last failure, or *Set your webhook again* when the phone lost
@@ -182,14 +187,14 @@ class _AccountPageState extends State<AccountPage> {
         if (relay.webhookProblem case final problem?) ListTile(
           subtitle: Text(problemLine(problem, DateTime.now()), style: TextStyle(color: danger)),
         ),
-        ListTile(
-          title: const Text('Notes from elsewhere'),
-          subtitle: const Text('Sync is off while the phone sends to your own webhook. To get notes from your other '
-            'phones and email here, sign in to Relay Everything, then add your webhook on your Relay Everything page.'),
-          trailing: const Icon(CupertinoIcons.arrow_up_right_square),
-          onTap: () => _open('#webhooks'),
-        ),
       ]),
+      Group(children: [ListTile(
+        title: const Text('Sign in to Relay Everything'),
+        subtitle: const Text('Sync your notes with your page, your AI and your other phones. Health, places, calendar and '
+          'photos still go only to your webhook.'),
+        trailing: const Icon(CupertinoIcons.chevron_forward),
+        onTap: () => _signIn(context),
+      )]),
       Group(children: [ListTile(
         title: Text('Stop sending', style: TextStyle(color: danger)),
         subtitle: const Text('New notes stay on this phone. The phone keeps your webhook\'s address and secret.'),
@@ -198,10 +203,20 @@ class _AccountPageState extends State<AccountPage> {
     ];
   }
 
+  /// The sign-in, with the webhook kept for private data. Once signed in, the page shows the account, and a message says
+  /// the webhook gets no notes from the phone until the person adds it on their page.
+  Future<void> _signIn(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (!await choosePlace(context, relay, widget.scanner, keepWebhook: true)) return;
+    unawaited(relay.refreshConnections());
+    messenger.showSnackBar(const SnackBar(content: Text('Signed in. To get your notes at your webhook too, add it under '
+      'Webhooks on your Relay Everything page.')));
+  }
+
   /// [part] of the person's Relay Everything page, such as `#webhooks`, in the phone's browser.
   Future<void> _open(String part) async {
     final messenger = ScaffoldMessenger.of(context);
-    if (!await (widget.opener ?? openInBrowser)(Uri.parse('${relay.server ?? defaultServer}/apps/relay/$part'))) {
+    if (!await (widget.opener ?? openInBrowser)(Uri.parse('${relay.server ?? defaultServer}/$part'))) {
       messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
     }
   }

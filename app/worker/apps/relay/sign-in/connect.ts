@@ -16,7 +16,7 @@ export async function connect(request: Request, env: SignInEnv, identity: Identi
   if (!env.RELAY_MCP_CALLBACK) return answer(503, "unavailable", "This server has no AI connector.");
   const caller = await callerOf(request, env, identity);
   if (caller instanceof Response) return caller;
-  if (!caller) return redirect(`/apps/relay/?next=${encodeURIComponent(url.pathname + url.search)}`);
+  if (!caller) return redirect(`/?next=${encodeURIComponent(url.pathname + url.search)}`);
   if (caller.kind !== "session" && caller.kind !== "access") return answer(403, "forbidden", "Sign in as a person to connect an AI app.");
   const code = randomToken();
   await directory(env).prepare("INSERT INTO relay_connect_codes (code_sha256, person_id, expires_at) VALUES (?, ?, ?)")

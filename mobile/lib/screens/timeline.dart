@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
@@ -12,6 +11,7 @@ import 'back_to.dart';
 import 'days.dart';
 import 'folder.dart' show Opener;
 import 'hold_to_talk.dart';
+import 'note_blocks.dart' show EntryImage;
 import 'note_editor.dart';
 
 const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -28,7 +28,8 @@ String rowTime(BuildContext context, DateTime at, DateTime now) {
 /// One notes folder's notes, newest first and grouped by day, as Apple Notes lists them: *‹ Home*, a large title with the
 /// count and the sync state, and at the bottom *Search*, which finds notes in this folder only, and *New note*.
 class TimelineScreen extends StatefulWidget {
-  const TimelineScreen({super.key, required this.relay, this.folder = NotesFolder.all, this.picker, this.sharer, this.opener});
+  const TimelineScreen({super.key, required this.relay, this.folder = NotesFolder.all, this.picker, this.sharer, this.opener,
+    this.onOpen, this.onBack});
 
   final Relay relay;
   final NotesFolder folder;
@@ -38,6 +39,10 @@ class TimelineScreen extends StatefulWidget {
   final Sharer? sharer;
   /// Opens a link in a note; a test passes its own.
   final Opener? opener;
+  /// Opens a note, or a new one for null, where the browser's layout holds it, in place of a new page.
+  final NoteOpener? onOpen;
+  /// Goes back to Home where the browser's layout holds it.
+  final VoidCallback? onBack;
 
   @override
   State<TimelineScreen> createState() => _TimelineScreenState();
@@ -74,7 +79,7 @@ class _TimelineScreenState extends State<TimelineScreen> {
               edgeOffset: 140,
               child: CustomScrollView(physics: const AlwaysScrollableScrollPhysics(), slivers: [
                 SliverAppBar.large(
-                  leading: const BackTo('Home'),
+                  leading: BackTo('Home', onPressed: widget.onBack),
                   leadingWidth: BackTo.widthOf('Home'),
                   title: Text(_title),
                   expandedHeight: 140,
@@ -83,22 +88,26 @@ class _TimelineScreenState extends State<TimelineScreen> {
                 ),
                 if (modelShows(relay)) modelSliver(relay),
                 if (notes.isEmpty)
-                  SliverFillRemaining(hasScrollBody: false, child: _Empty(folder: widget.folder, sending: relay.settings.sending))
+                  SliverFillRemaining(hasScrollBody: false,
+                    child: _Empty(folder: widget.folder, sending: relay.settings.sending, web: relay.web))
                 else
                   noteSliver(context, relay, notes, _search.text, back: _title, picker: widget.picker, sharer: widget.sharer,
-                    opener: widget.opener),
+                    opener: widget.opener, onOpen: widget.onOpen),
                 const SliverPadding(padding: EdgeInsets.only(bottom: 110)),
               ]),
             ),
             NotesDock(relay: relay, search: _search, focus: _searchFocus,
-              onWrite: () => openPage(context, NoteEditor(relay: relay, picker: widget.picker, sharer: widget.sharer,
-                opener: widget.opener, back: _title))),
+              onWrite: () => widget.onOpen != null ? widget.onOpen!(null) : openPage(context, NoteEditor(relay: relay,
+                picker: widget.picker, sharer: widget.sharer, opener: widget.opener, back: _title))),
           ]);
         },
       ),
     );
   }
 }
+
+/// Opens [entry], or a new note for null, where the browser's layout holds it.
+typedef NoteOpener = void Function(Entry? entry);
 
 /// Pushes [page] over the one open now.
 void openPage(BuildContext context, Widget page) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
@@ -113,9 +122,9 @@ Widget modelSliver(Relay relay) =>
   SliverPadding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), sliver: SliverToBoxAdapter(child: ModelCard(relay: relay)));
 
 /// [notes] that hold [query], grouped by day, or a line that says none does. A tap opens a note, whose back button
-/// says [back].
+/// says [back], or calls [onOpen]. The [selected] note's row shows it is open.
 Widget noteSliver(BuildContext context, Relay relay, List<Entry> notes, String query,
-  {required String back, FilesPicker? picker, Sharer? sharer, Opener? opener}) {
+  {required String back, FilesPicker? picker, Sharer? sharer, Opener? opener, NoteOpener? onOpen, String? selected}) {
   final shown = [for (final entry in notes) if (entryMatches(entry, query)) entry];
   if (shown.isEmpty) {
     return SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(32), child: Text('No notes with "${query.trim()}"',
@@ -127,8 +136,9 @@ Widget noteSliver(BuildContext context, Relay relay, List<Entry> notes, String q
       for (final (name, group) in groupByDay(shown, DateTime.now()))
         _DayGroup(name: name, children: [
           for (final entry in group)
-            _NoteRow(entry: entry, relay: relay, onTap: () => openPage(context,
-              NoteEditor(entry: entry, relay: relay, picker: picker, sharer: sharer, opener: opener, back: back))),
+            _NoteRow(entry: entry, relay: relay, selected: selected != null && entry.id == selected,
+              onTap: () => onOpen != null ? onOpen(entry) : openPage(context,
+                NoteEditor(entry: entry, relay: relay, picker: picker, sharer: sharer, opener: opener, back: back))),
         ]),
     ]),
   );
@@ -155,7 +165,7 @@ class SyncLine extends StatelessWidget {
     final strong = TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: brand.ink);
     final (state, label) = switch (relay.status) {
       SyncStatus.syncing => (_Dot.syncing, 'Syncing'),
-      SyncStatus.refused => (_Dot.refused, 'Key refused'),
+      SyncStatus.refused => (_Dot.refused, relay.web ? 'Not loaded' : 'Key refused'),
       SyncStatus.offline => (_Dot.waiting, relay.waiting > 0 ? '${relay.waiting} waiting' : 'Offline'),
       _ => relay.waiting > 0 ? (_Dot.waiting, '${relay.waiting} waiting') : (_Dot.synced, 'Synced'),
     };
@@ -298,22 +308,29 @@ class _SyncDotState extends State<_SyncDot> with SingleTickerProviderStateMixin 
   }
 }
 
+/// What an empty [folder] says: its title, then how a note gets in it. In the browser no hold talks.
+(String, String) emptyFolderText(NotesFolder folder, {bool web = false}) => switch (folder) {
+  NotesFolder.all when web => ('No notes yet', 'Click New note to write one.'),
+  NotesFolder.voice when web => ('No voice notes yet', 'Voice notes you say into your phone show here.'),
+  NotesFolder.all => ('No notes yet', 'Tap New note to write one, or hold it to talk.'),
+  NotesFolder.voice => ('No voice notes yet', 'Hold New note to talk.'),
+  NotesFolder.shares => ('No shares yet', 'A note with a photo, a file or a link shows here.'),
+};
+
 /// An empty folder: what goes in it, above the button that makes it.
 class _Empty extends StatelessWidget {
-  const _Empty({required this.folder, required this.sending});
+  const _Empty({required this.folder, required this.sending, this.web = false});
 
   final NotesFolder folder;
   final bool sending;
+  /// In the browser no hold talks, and voice notes come from the phone.
+  final bool web;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final muted = theme.textTheme.bodyMedium?.copyWith(color: brandOf(context).muted, height: 1.45);
-    final (title, how) = switch (folder) {
-      NotesFolder.all => ('No notes yet', 'Tap New note to write one, or hold it to talk.'),
-      NotesFolder.voice => ('No voice notes yet', 'Hold New note to talk.'),
-      NotesFolder.shares => ('No shares yet', 'A note with a photo, a file or a link shows here.'),
-    };
+    final (title, how) = emptyFolderText(folder, web: web);
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 0, 28, 110),
       child: Column(mainAxisAlignment: MainAxisAlignment.center, spacing: 10, children: [
@@ -384,10 +401,12 @@ void showDeleted(ScaffoldMessengerState? messenger, Relay relay, String id) {
 /// the words; then its kind, length, place and send state. A first picture shows small at the right. A tap opens it;
 /// a swipe to the left, or a screen reader's *Delete*, deletes it with *Undo*.
 class _NoteRow extends StatelessWidget {
-  const _NoteRow({required this.entry, required this.relay, required this.onTap});
+  const _NoteRow({required this.entry, required this.relay, required this.onTap, this.selected = false});
 
   final Entry entry;
   final Relay relay;
+  /// The note open beside the list in the browser's wide layout.
+  final bool selected;
   final VoidCallback onTap;
 
   @override
@@ -395,8 +414,8 @@ class _NoteRow extends StatelessWidget {
     final brand = brandOf(context);
     final muted = TextStyle(fontSize: 13, color: brand.muted);
     final meta = [if (entry.length != null) clockOf(entry.length!), entry.place, sendState(entry)].whereType<String>();
-    final picture = entry.files.where((file) => file.picture && file.onPhone).firstOrNull;
-    final row = InkWell(
+    final picture = entry.files.where((file) => file.picture && file.ready).firstOrNull;
+    final row = Material(color: selected ? brand.accentSoft : Colors.transparent, child: InkWell(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
@@ -421,7 +440,7 @@ class _NoteRow extends StatelessWidget {
           if (picture != null) _Thumbnail(file: picture),
         ]),
       ),
-    );
+    ));
     if (entry.id.isEmpty) return row;
     // A node of its own, so a screen reader's *Delete* is on this row, not on the whole card.
     return Semantics(
@@ -458,9 +477,8 @@ class _Thumbnail extends StatelessWidget {
       message: file.name,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        child: Image.file(File(file.path), width: 48, height: 48, fit: BoxFit.cover, cacheWidth: 144,
-          errorBuilder: (context, _, _) => Container(width: 48, height: 48, color: brand.accentSoft,
-            child: Icon(CupertinoIcons.photo, color: brand.muted))),
+        child: EntryImage(file: file, width: 48, height: 48, cacheWidth: 144,
+          fallback: Container(width: 48, height: 48, color: brand.accentSoft, child: Icon(CupertinoIcons.photo, color: brand.muted))),
       ),
     );
   }

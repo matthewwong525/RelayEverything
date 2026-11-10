@@ -16,7 +16,7 @@ export const sessionCookie = (url: URL) => url.protocol === "https:" ? SESSION_C
 /** A key's reach: POST and `GET key` (its own name); a phone also reads `GET connections` (email and names) and its
  *  person's notes and files, and changes or deletes any note. `GET chats` and a send share an address. */
 const REACH: Record<Reach, { routes: RegExp; refusal: string }> = {
-  phone: { routes: /^\/apps\/relay\/api\/(?:notes|attachments|health|locations|stays|calendar|photos)$/, refusal: "A device key can only send to Relay Everything." },
+  phone: { routes: /^\/apps\/relay\/api\/(?:notes|attachments|health|nights|locations|stays|calendar|photos)$/, refusal: "A device key can only send to Relay Everything." },
   chats: { routes: /^\/apps\/relay\/api\/(?:chats|chat-saves)$/, refusal: "A chat key can only send chats." },
   api: { routes: /^$/, refusal: "An API key works only on the web API, at your AI connector's address under /v1/." },
 };
@@ -106,7 +106,9 @@ export async function relayGate(request: Request, env: CallerEnv, identity: Iden
   if (caller?.device && !reaches(caller.device.reaches, request.method, pathname)) return refused(403, REACH[caller.device.reaches].refusal);
   // A browser sends its cookie from any site, so a change by cookie needs the page's own Origin.
   const changes = !["GET", "HEAD", "OPTIONS"].includes(request.method);
-  if (caller?.kind === "session" && changes && request.headers.get("Origin") !== new URL(request.url).origin) {
+  // Access's cookie goes from any site too, so a change by Access email needs it as well.
+  const byCookie = caller?.kind === "session" || caller?.kind === "access";
+  if (byCookie && changes && request.headers.get("Origin") !== new URL(request.url).origin) {
     return refused(403, "This change must come from the Relay Everything page.");
   }
   return null;
@@ -146,4 +148,31 @@ export const asDevice = <C extends Call>(refusal: string, run: (context: Context
     if (!caller?.device) return refused(403, refusal);
     const space = openSpace(env, caller);
     return space instanceof Response ? space : run({ space, caller, device: caller.device, request, env, call });
+  };
+
+/** The page's own device in the space: the notes a signed-in person writes on the page name it, as emailed notes name
+ *  *Email*. It has no key, so the list of devices leaves it out with the inbox's. */
+const WEB = { name: "Web", token: "page:web" };
+
+/** The space's Web device's id: `make` adds it on the page's first write; a read only looks, and finds null before. */
+export async function webDevice(space: PersonSpace, make: boolean): Promise<string | null> {
+  if (!make) return (await space.db.prepare("SELECT id FROM relay_devices WHERE token_client_id = ?").bind(WEB.token).first<{ id: string }>())?.id ?? null;
+  const row = await space.db.prepare(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at, reaches)
+    VALUES (?, ?, ?, '', ?, NULL, 'inbox') ON CONFLICT (token_client_id) DO UPDATE SET token_id = excluded.token_id RETURNING id`)
+    .bind(crypto.randomUUID(), WEB.name, WEB.token, Date.now()).first<{ id: string }>();
+  return row!.id;
+}
+
+/** A note route for a phone key, named by its own device, or for a signed-in person on the page, named by the space's
+ *  Web device. A chat or API key is refused; no key gains reach. */
+export const asDeviceOrPage = <C extends Call>(refusal: string, run: (context: Context<C> & { deviceId: string }) => Promise<Response>) =>
+  async (request: Request, env: Env, call: C): Promise<Response> => {
+    const caller = await callerOf(request, env, call.identity);
+    if (caller instanceof Response) return caller;
+    if (!caller) return refused(401, "Sign in to Relay Everything.");
+    if (caller.device && caller.device.reaches !== "phone") return refused(403, refusal);
+    const space = openSpace(env, caller);
+    if (space instanceof Response) return space;
+    const deviceId = caller.device?.id ?? await webDevice(space, true);
+    return run({ space, caller, deviceId: deviceId!, request, env, call });
   };

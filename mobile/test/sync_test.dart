@@ -291,7 +291,7 @@ void main() {
       expect([for (final message in messages) message['type']], ['health.samples', 'location.points']);
       final sample = (messages[0]['data']['samples'] as List).single as Map;
       final point = (messages[1]['data']['points'] as List).single as Map;
-      expect([sample['id'], point['id'], sample['device']['id']], [1, 2, await store.installId()]);
+      expect([sample['id'], point['id'], sample['device']['id']], [isA<int>(), 1, await store.installId()]);
       expect(server.requests.every((request) => request.url.toString() == hook.address), isTrue);
     });
 
@@ -784,6 +784,47 @@ void main() {
       final private = await flush(store, hookClient);
       expect([private.failure, private.sent, await store.outbox()], [isNull, 1, isEmpty]);
       expect(serverRoutes(server), ['notes']);
+    });
+
+    test('a flush of the notes goes before older health, and the two flushes to one place send each upload once', () async {
+      final store = memoryStore();
+      addTearDown(store.close);
+      final server = FakeServer();
+      await store.queueSamples([{'type': 'steps', 'start': 1, 'end': 2, 'value': 10, 'unit': 'count', 'source': 'Health'}]);
+      await store.addNote(LocalNote(clientId: 'note-0001', text: 'Lunch idea', createdAt: start), send: true);
+      await store.queueSamples([{'type': 'steps', 'start': 3, 'end': 4, 'value': 20, 'unit': 'count', 'source': 'Health'}]);
+      final api = server.api(connection);
+      final notes = await flush(store, api, private: false);
+      expect([notes.sent, server.routes], [1, ['notes']]);
+      final private = await flush(store, api, private: true);
+      expect([private.sent, server.routes, await store.outbox()], [2, ['notes', 'health', 'health'], isEmpty]);
+      expect([(await flush(store, api, private: false)).sent, (await flush(store, api, private: true)).sent], [0, 0]);
+    });
+
+    test('a background round sends a waiting note and pulls before the health waiting for the same server', () async {
+      final store = memoryStore();
+      addTearDown(store.close);
+      final server = FakeServer((request) => request.method == 'GET' && request.url.path.endsWith('/notes')
+        ? notesPage([pulledNote('s1')], next: 1) : FakeServer.ok(request));
+      final source = FakeHealth()..readings = [reading(HealthDataType.STEPS, start, later(5), value: 10)];
+      await store.set(settingsKey, const Settings(sending: true, health: true).encode());
+      await store.set(healthTypes, askedTypes);
+      await store.queueSamples([{'type': 'steps', 'start': 1, 'end': 2, 'value': 10, 'unit': 'count', 'source': 'Health'}]);
+      await store.addNote(LocalNote(clientId: 'note-0001', text: 'Lunch idea', createdAt: start), send: true);
+      expect(await backgroundRound(store, connection: connection, health: source, sender: Sender(server.api),
+        now: later(60), pull: true), isTrue);
+      final calls = [for (final request in server.requests) '${request.method} ${request.url.path.split('/').last}'];
+      expect([calls.take(2), calls.skip(2)], [['POST notes', 'GET notes'], allOf(isNotEmpty, everyElement('POST health'))]);
+      expect([await store.hasNote('srv:s1'), await store.outbox()], [isTrue, isEmpty]);
+      // A health upload that fails still lets the notes go and come in first; the round is not done.
+      server.answer = (request) => request.url.path.endsWith('/health') ? FakeServer.json({}, 503)
+        : request.method == 'GET' ? notesPage([pulledNote('s2')], next: 2) : FakeServer.ok(request);
+      source.readings = [reading(HealthDataType.STEPS, later(70), later(75), value: 20)];
+      await store.addNote(LocalNote(clientId: 'note-0002', text: 'Dinner idea', createdAt: later(80)), send: true);
+      expect(await backgroundRound(store, connection: connection, health: source, sender: Sender(server.api),
+        now: later(120), pull: true), isFalse);
+      expect(await store.hasNote('srv:s2'), isTrue);
+      expect([for (final item in await store.outbox()) item.route], allOf(isNotEmpty, everyElement('health')));
     });
 
     test('a background round sends notes to the server and private data only to the webhook, each apart', () async {

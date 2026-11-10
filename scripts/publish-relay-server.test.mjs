@@ -41,6 +41,7 @@ test('staging spaces, connector and server deploy in order, then the live server
   assert.equal(go(runner), `result=deployed ref=${SHA} workers=${ALL}`);
   assert.deepEqual(runner.calls.map(call => call.line), [
     'npm ci --no-audit --no-fund',
+    'node ../scripts/build-relay-web.mjs',
     'npx wrangler deploy -c wrangler.spaces.jsonc --env staging',
     'npx wrangler deploy -c wrangler.relay-mcp.jsonc --env staging',
     'npm run build:relay-only',
@@ -48,7 +49,7 @@ test('staging spaces, connector and server deploy in order, then the live server
     'npm run build:relay-only',
     'npx wrangler deploy',
   ]);
-  const builds = runner.calls.filter(call => call.line.includes('build'));
+  const builds = runner.calls.filter(call => call.line.includes('build:relay-only'));
   assert.deepEqual(builds.map(call => [call.env, call.config]), [['staging', 'wrangler.relay.jsonc'], [undefined, 'wrangler.relay.jsonc']]);
   assert.ok(runner.calls.filter(call => call.line === 'npx wrangler deploy').every(call => call.env === undefined));
 });
@@ -56,7 +57,7 @@ test('staging spaces, connector and server deploy in order, then the live server
 test('a staging server failure stops before live', () => {
   const runner = fakeRunner({ fail: (_cmd, args, env) => args.includes('build:relay-only') && env.CLOUDFLARE_ENV === 'staging' });
   assert.equal(go(runner), `result=failed step=staging-server ref=${SHA}`);
-  assert.equal(runner.calls.filter(call => call.line.includes('build')).length, 1);
+  assert.equal(runner.calls.filter(call => call.line.includes('build:relay-only')).length, 1);
   assert.ok(!runner.calls.some(call => call.line === 'npx wrangler deploy'));
 });
 
@@ -81,8 +82,14 @@ test('--staging-only leaves live alone, and an install failure names its step', 
   const runner = fakeRunner();
   assert.equal(go(runner, { stagingOnly: true }),
     `result=deployed ref=${SHA} workers=relay-everything-spaces-staging,relay-everything-mcp-staging,relay-everything-server-staging`);
-  assert.equal(runner.calls.filter(call => call.line.includes('build')).length, 1);
+  assert.equal(runner.calls.filter(call => call.line.includes('build:relay-only')).length, 1);
   assert.equal(go(fakeRunner({ fail: cmd => cmd === 'npm' })), `result=failed step=install ref=${SHA}`);
+});
+
+test('a failed page build stops before any deploy', () => {
+  const runner = fakeRunner({ fail: cmd => cmd === 'node' });
+  assert.equal(go(runner), `result=failed step=web ref=${SHA}`);
+  assert.ok(!runner.calls.some(call => call.line.includes('wrangler')));
 });
 
 test('an unknown --ref still prints one result line', () => {

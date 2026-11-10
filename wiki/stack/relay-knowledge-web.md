@@ -20,4 +20,4 @@ Each Relay Everything person has a memory of facts, a table in their own [space]
 
 ## Cost
 
-Artifacts needs Workers Paid. There is no charge for each repo. 10,000 operations a month are free, then $0.15 for each 1,000. A sync is about 2 to 3 operations.
+Artifacts needs Workers Paid. There is no charge for each repo. 10,000 operations a month are free, then $0.15 for each 1,000. A sync is about 2 to 3 operations. In Artifacts analytics, each sync's pass shows as one `token_create` event, a sync with nothing new makes no pull, and a read of a repo makes no event. Cloudflare's pricing names only create, push, pull and clone as billed operations.

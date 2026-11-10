@@ -33,6 +33,6 @@
 
 ## 6. Checks
 
-- [ ] 6.1 Run `npm test` in `app/` and `plugin/`, `node scripts/public-check.mjs`, and `node scripts/product-name.test.mjs`; all pass
-- [ ] 6.2 On staging: connect a computer, run `knowledge.mjs sync`, see `README.md` and `FORMAT.md`, add a column, add two facts (one replacing the other) and find them by tag from the connector, add a page, sync from a second folder and see it; a phone key is refused; read the account's Artifacts usage before and after to see whether an empty pull and a pass count as operations, and write the answer in the wiki page
-- [ ] 6.3 `/save` after the checks, then check the staging preview against each scenario in the specs
+- [x] 6.1 Run `npm test` in `app/` and `plugin/`, `node scripts/public-check.mjs`, and `node scripts/product-name.test.mjs`; all pass
+- [x] 6.2 On staging: connect a computer, run `knowledge.mjs sync`, see `README.md` and `FORMAT.md`, add a column, add two facts (one replacing the other) and find them by tag from the connector, add a page, sync from a second folder and see it; a phone key is refused; read the account's Artifacts usage before and after to see whether an empty pull and a pass count as operations, and write the answer in the wiki page
+- [x] 6.3 `/save` after the checks, then check the staging preview against each scenario in the specs

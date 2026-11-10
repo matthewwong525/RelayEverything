@@ -108,6 +108,16 @@ node scripts/relay-mcp-trial.mjs --live       # the live connector: its metadata
 
 With no sign-in, it checks each step up to the server's sign-in: the metadata, an app's registration, the consent page, and the hand-off to the server. It also checks that a made-up sign-in answer, a made-up code, a wrong token and a service token are each refused. It can't sign in by itself. With `--sign-in`, it shows a link; you click **Connect** and sign in, and the app's token then reads a made-up note, and adds one through `add_note` and through `/v1/notes`. Disconnect the app **Relay Everything trial** on the preview's **AI apps** card after.
 
+### On this computer
+
+A preview has no person spaces, so a branch's new route or tool can't be tried there. Shared staging can run it only after a [staging-only deploy](../relay-spaces.md#the-workers-and-their-order), which other chats' checks share. To keep made-up data off staging, run the whole stack on this computer, each step from `app/`:
+
+1. The spaces Worker: `npx wrangler dev -c wrangler.spaces.jsonc --env local --port 8799`.
+2. The app: `npm run dev`, signed in as the [local stand-in](cloudflare-access.md#local-development). Make a phone or API key with `POST /apps/relay/api/devices`.
+3. The connector: copy `wrangler.relay-mcp.jsonc` to a throwaway file in `app/`, with no `env`, `RELAY_MCP_ADDRESS` and `RELAY_SERVER_URL` on `localhost`, `SPACES` bound to `relay-everything-spaces-local`, the `-local` queue, and the D1 named `relay-everything-db-local`. Run `npx wrangler dev -c <that file> --port 8798`, then read `/v1/` with the API key. Delete the file after.
+
+Times go as milliseconds since 1970. A webhook can't get a message here: the sender refuses any address that is not public `https`. So read the space's `relay_outbox` rows (in `app/.wrangler/state/v3/do/`) and each webhook's `waiting` count instead. Turn each key off after.
+
 ## Where the code is
 
 - [`app/worker/relay-mcp/`](../../app/worker/relay-mcp/index.ts): the connector Worker, its sign-in pages, its tools and the web API.

@@ -1,7 +1,8 @@
 import { expect, it } from "vitest";
 import { ANA, call, db, env, NOW, phone } from "../../../tests/relay";
-import { chatLines, daySummary, distanceKm, healthBuckets, MAX_POINTS, nightPage, noteById, notePage, photoById, photoPage, placeVisits,
-  rangePoints, stayPoints, workoutPage } from "./queries";
+import { MAX_POINTS, rangePoints, stayPoints } from "./points";
+import { chatLines, daySummary, distanceKm, healthBuckets, nightPage, noteById, notePage, photoById, photoPage, placeVisits,
+  workoutPage } from "./queries";
 import { spaceOf, vouch } from "./space";
 
 const HOUR = 3_600_000;

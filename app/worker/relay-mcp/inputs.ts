@@ -1,7 +1,8 @@
 // What each connector tool takes, shared by the MCP tools (tools.ts) and the web API (api.ts), so the two can't drift
 // apart: one schema per question, with the same limits. openapi.ts describes the web API from these too.
 import { z } from "zod";
-import { HEALTH_TYPES, MAX_POINTS } from "../apps/relay/queries.ts";
+import { MAX_POINTS } from "../apps/relay/points.ts";
+import { HEALTH_TYPES } from "../apps/relay/queries.ts";
 import { accuracy, latitude, longitude, placeName } from "../apps/relay/store.ts";
 import { knownZone, ZONE } from "./time.ts";
 

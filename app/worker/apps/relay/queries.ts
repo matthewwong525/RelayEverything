@@ -298,7 +298,7 @@ type Run = { name: string; lat: number; lon: number; arrived: number; left: numb
 type Visit = { id?: number } & Run & { minutes: number; address?: string; event?: string; ongoing?: true };
 /** A trip between two stays, with the names of the stays at each end when they are known. */
 type Trip = { id: number; left: number; arrived: number; mode: string; km: number; minutes: number; from: string | null; to: string | null };
-type StayRow = { id: number; kind: "stay" | "trip"; start_at: number; end_at: number; ongoing: number; updated_at: number; lat: number | null;
+export type StayRow = { id: number; kind: "stay" | "trip"; start_at: number; end_at: number; ongoing: number; updated_at: number; lat: number | null;
   lon: number | null; name: string | null; address: string | null; event: string | null; mode: string | null; km: number | null };
 
 const minutesOf = (from: number, to: number) => Math.round((to - from) / MINUTE);
@@ -329,7 +329,7 @@ function longest(rows: StayRow[]): StayRow[] {
 }
 
 /** Still going on: sent as ongoing within the last 6 hours. */
-const going = (row: Pick<StayRow, "ongoing" | "end_at" | "updated_at">) => row.ongoing === 1 && Date.now() - Math.max(row.end_at, row.updated_at) < STALE;
+export const going = (row: Pick<StayRow, "ongoing" | "end_at" | "updated_at">) => row.ongoing === 1 && Date.now() - Math.max(row.end_at, row.updated_at) < STALE;
 
 const visitOf = (row: StayRow): Visit => ({ id: row.id, name: row.name!, lat: row.lat!, lon: row.lon!, arrived: row.start_at, left: row.end_at,
   minutes: minutesOf(row.start_at, row.end_at), ...row.address !== null && { address: row.address },
@@ -365,35 +365,6 @@ export async function placeVisits(db: Db, from: number, to: number, limit: numbe
   const next = visits[limit]?.arrived ?? null;
   return { visits: visits.slice(0, limit), trips: found.trips.filter(trip => next === null || trip.left < next), next };
 }
-
-/** At most this many points in one answer: more are kept one per equal step, with the first and the last. */
-export const MAX_POINTS = 500;
-type PointRow = { at: number; lat: number; lon: number; accuracy: number; place: string | null; total: number };
-
-/** The points `where` picks, oldest first, thinned in SQL so at most MAX_POINTS leave the space, and their count. */
-async function thinnedPoints(db: Db, where: string, values: (number | string)[]) {
-  // Integer division keeps the first row of each of MAX_POINTS - 1 equal steps; the first and the last row always pass.
-  const { results } = await db.prepare(`WITH p AS (SELECT at, lat, lon, accuracy, place, ROW_NUMBER() OVER (ORDER BY at, id) AS n,
-      COUNT(*) OVER () AS total FROM relay_locations WHERE ${where})
-    SELECT at, lat, lon, accuracy, place, total FROM p WHERE total <= ${MAX_POINTS} OR n = 1
-      OR (n - 1) * ${MAX_POINTS - 1} / (total - 1) > (n - 2) * ${MAX_POINTS - 1} / (total - 1) ORDER BY n`)
-    .bind(...values).all<PointRow>();
-  return { total: results[0]?.total ?? 0,
-    points: results.map(({ at, lat, lon, accuracy, place }) => ({ at, lat, lon, accuracy, ...place !== null && { place } })) };
-}
-
-/** One stay's or trip's points, from its own phone only; one still going reads to now. Null for no such id. */
-export async function stayPoints(db: Db, id: number) {
-  const row = await db.prepare("SELECT device_id, kind, start_at, end_at, ongoing, updated_at FROM relay_stays WHERE id = ?")
-    .bind(id).first<Pick<StayRow, "kind" | "start_at" | "end_at" | "ongoing" | "updated_at"> & { device_id: string }>();
-  if (!row) return null;
-  const end = going(row) ? Math.max(Date.now(), row.end_at) : row.end_at;
-  const found = await thinnedPoints(db, "device_id = ? AND at >= ? AND at <= ?", [row.device_id, row.start_at, end]);
-  return { kind: row.kind, start: row.start_at, end, ...found };
-}
-
-/** Every phone's points from `from` to before `to`. */
-export const rangePoints = (db: Db, from: number, to: number) => thinnedPoints(db, "at >= ? AND at < ?", [from, to]);
 
 // Chats: each one's title is the newest save's, else the title of its first send. Neither the device nor Claude Code's
 // session id leaves here.

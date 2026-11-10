@@ -411,7 +411,7 @@ const writes = (source: string) => WRITES.test(source);
 it("holds no statement but SELECT in the connector or its queries", () => {
   const folder = new URL(".", import.meta.url);
   const files = [...readdirSync(folder).filter(name => name.endsWith(".ts") && !name.endsWith(".test.ts")).map(name => new URL(name, folder)),
-    new URL("../apps/relay/queries.ts", import.meta.url)];
+    new URL("../apps/relay/queries.ts", import.meta.url), new URL("../apps/relay/points.ts", import.meta.url)];
   expect(files.length).toBeGreaterThan(5);
   const CODE_TAKEN = "DELETE FROM relay_connect_codes WHERE code_sha256 = ? AND expires_at > ? RETURNING person_id";
   const ALLOWED: Record<string, string[]> = { "auth.ts": [CODE_TAKEN],

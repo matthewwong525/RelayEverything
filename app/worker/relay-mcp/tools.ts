@@ -1,5 +1,5 @@
 // The connector's tools over one person's notes, health, places, points, calendar, chats and photos: fourteen that
-// only read, and one that adds a typed note. Answers come from answers.ts, as the web API's do; each input, from inputs.ts.
+// only read, and one that adds a typed note. Answers come from answers.ts, as the web API's do; inputs, from inputs.ts.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { answer, Picture, Refusal, type Asker } from "./answers.ts";

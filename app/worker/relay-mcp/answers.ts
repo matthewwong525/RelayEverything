@@ -2,8 +2,9 @@
 // either. Reads are capped; a note is added only through add-note.ts. No answer holds a key, file name or device id.
 import { addNote, type TypedNote } from "../apps/relay/add-note.ts";
 import { chatById, chatLines, chatMessages, chatPage, daySummary, eventPage, healthBuckets, nightPage, noteById, notePage, photoById,
-  photoPage, placeVisits, rangePoints, stayPoints, workoutPage, type CalendarEvent, type Chat, type HealthType, type Note, type Photo,
+  photoPage, placeVisits, workoutPage, type CalendarEvent, type Chat, type HealthType, type Note, type Photo,
   type Span } from "../apps/relay/queries.ts";
+import { rangePoints, stayPoints } from "../apps/relay/points.ts";
 import type { Db, PersonSpace } from "../apps/relay/space.ts";
 import type { McpEnv } from "./env.ts";
 import { LINES, MAX_BUCKETS, PART, POINTS_DAYS, type Input, type ToolName } from "./inputs.ts";

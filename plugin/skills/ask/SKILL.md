@@ -21,8 +21,13 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/relay.mjs" <command> [value] [--field value ...]
 - `health <type> --from <time> --to <time> [--per hour|day]`. Types: steps, heart_rate, sleep, workout, weight, resting_heart_rate, hrv_sdnn, hrv_rmssd, blood_oxygen, blood_pressure_systolic, blood_pressure_diastolic, cycle_flow, mindful, water.
 - `nights`, `workouts`, `places`, `calendar [--q "words"]`: each with `--from <time> --to <time>`. Add `--stages` to `nights` for each night's stage timeline.
 - `chats --q "words"` finds saved AI chats; `chat <id>` reads one.
+- `facts --q "words"` searches the memory of facts; `--tag <topic>` finds a topic and its parts, `--source relay:chat/<id>` the facts from one record, and `--<column> <value>`, such as `--kind decision`, one column's value. Add `--all` for replaced facts too. `fact <id>` reads one, with what it replaced.
+- `notes --tag <topic>` finds the notes on a topic.
+- `columns` lists the memory's columns.
 - `me` says which device this is.
 - `add-note` adds a note with the text from stdin, only when the person asks: `node … add-note <<'NOTE'` … `NOTE`.
+- `add-facts` adds facts from a JSON list on stdin, each with `tags`, `sources` and `fields`, and `replaces` for the facts it replaces. `change-columns` changes the columns from JSON on stdin. `tag fact|note <id> --add <topics> --remove <topics>` changes topics, as a comma list. Read the knowledge web's `FORMAT.md` first, and do these only when the person asks.
+- `node "${CLAUDE_PLUGIN_ROOT}/bin/knowledge.mjs" sync` gets this computer's copy of the knowledge web, and sends its changes; `status` says where it is.
 
 Read more with `--limit <n>` and `--cursor <nextCursor>` from the last answer.
 

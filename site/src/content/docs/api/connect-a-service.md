@@ -3,7 +3,7 @@ title: Connect a service
 description: Let your own script or service read your Relay Everything notes, health, sleep, workouts, calendar, places and chats, and add notes, through the web API with an API key or your own sign-in.
 ---
 
-The web API lets your own script or service read your Relay Everything data and add notes. It answers the same questions as the [AI connector](../../connections/connect-your-ai/), as plain HTTP with JSON. It reads, and it adds notes. It can't change or delete anything.
+The web API lets your own script or service read your Relay Everything data and add notes. It answers the same questions as the [AI connector](../../connections/connect-your-ai/), as plain HTTP with JSON. It reads, and it adds notes. A connected computer's key also adds facts to your memory and changes topics: [Memory and knowledge web](../knowledge-web/). It can't delete anything.
 
 The web API is on your AI connector's address, under `/v1/`. When the connector is at `https://mcp.relayeverything.com`, the API is at `https://mcp.relayeverything.com/v1/`. Your own server's connector works the same way: `https://<your-relay-server>/v1/`. The **AI apps** page of Settings, on your Relay Everything page, shows the connector's address.
 
@@ -57,6 +57,8 @@ curl "https://<your-relay-server>/v1/notes?q=milk&limit=5" \
 - `GET /v1/points?id=…`: the points of one stay or trip, at most 500. Or give `from` and `to`, up to 7 days, for every phone's points in that time.
 - `GET /v1/calendar?from=…&to=…`: calendar events by start, with title, times, place, notes and people. Add `q` for events that hold every word, newest first: [Calendar](../../app/calendar/).
 - `GET /v1/chats?q=…` and `GET /v1/chats/{id}`: saved AI chats from Claude Code and Codex, each with its app.
+- `GET /v1/notes?tag=…`: the notes on a topic and its parts.
+- `GET /v1/memory?q=…`, `?tag=…`, `?source=…` or `?<column>=…`: facts in your memory, newest first. `GET /v1/memory/{id}` reads one fact, and `GET /v1/memory/columns` the memory's columns. [Memory and knowledge web](../knowledge-web/)
 
 Times are a day, such as `2026-11-04`, or an ISO time. Add `timezone`, such as `Europe/London`, to read days and times in your zone. A long answer gives `nextCursor`: send it as `cursor` to read the next page.
 
@@ -83,8 +85,10 @@ A refused call answers with a status and an error:
 |---|---|---|
 | `400` | `invalid_request` | A field is missing or wrong. `error_description` names it. |
 | `401` | `invalid_token` | No token, an expired token, or a disconnected app. |
-| `403` | `forbidden` | An unknown key, a phone's key, an older chat key, a turned-off key, or an app that must connect again to add. |
+| `403` | `forbidden` | An unknown key, a phone's key, an older chat key, a turned-off key, an app that must connect again to add, or a key that is not a computer's on a route that only a computer's key can use. |
 | `404` | `not_found` | No such note, chat or route in your own space. |
-| `405` | `method_not_allowed` | The route doesn't take this method: the API never changes or deletes. |
+| `405` | `method_not_allowed` | The route doesn't take this method: the API never deletes. |
+| `501` | `not_set_up` | The server has no knowledge web, as its Cloudflare account has no Artifacts. |
+| `503` | `try_again` | Your knowledge web is still being made. Try again in a minute. |
 
 [Web API reference](../v1-reference/) lists each route's fields.

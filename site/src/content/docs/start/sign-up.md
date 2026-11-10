@@ -29,7 +29,7 @@ Each phone and each Claude Code computer gets its own key. A key adds data to yo
 
 ## Delete your account
 
-On the Relay Everything page, open **Settings**, then **Account**, and click **Delete my account**. Type your email to confirm. Relay Everything deletes your space, your recordings, your device keys, your sign-ins and your connected AI apps. You can't undo it. The notes on your phone stay on your phone.
+On the Relay Everything page, open **Settings**, then **Account**, and click **Delete my account**. Type your email to confirm. Relay Everything deletes your space with your memory, your knowledge web, your recordings, your device keys, your sign-ins and your connected AI apps. You can't undo it. The notes on your phone stay on your phone.
 
 ## Questions and privacy requests
 

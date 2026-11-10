@@ -28,6 +28,7 @@ The pack uses **merge = deploy**, independent staging and branch previews. [One 
 - [Connect your tools](connect-your-tools.md) — right after install, or when you name one tool: which tools work now, how a new one is added with one key link and one yes, and a teammate's message for the owner.
 - [The knowledge reader](knowledge-reader.md) — the Knowledge app: company knowledge's pages at their newest save, search, who can read them, and pages marked public.
 - [Relay Everything's AI connector](relay-ai-connector.md) — connect the Claude app or ChatGPT to read Relay Everything's notes, health and places: the address, what leaves Relay Everything, disconnecting, and setup.
+- [Relay Everything's memory and knowledge web](relay-knowledge-web.md) — each person's memory of facts in their space, and their web of topic pages in Cloudflare Artifacts: the namespaces, the start repo, the setup script, the pass and the plugin's copy.
 - [Relay Everything's AI chat transcripts](relay-chats.md) — how the Relay Everything plugin connects a computer and saves Claude Code and Codex chats to the server: the computer's key, the hooks, hiding keys, and how to change and try the plugin.
 - [Mini apps](mini-apps.md) — small apps from one request, part of the main app under `/apps/`: the same loop and checks as any change, and a card each on the home page.
 - [Cloudflare Access](cloudflare-access.md) — automatic email login, native Worker and preview coverage, signed identity, and separate machine access.

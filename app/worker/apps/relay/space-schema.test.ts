@@ -11,9 +11,9 @@ const DIRECTORY = ["relay_people", "relay_logins", "relay_sessions", "relay_sign
 const PERSON = ["relay_devices", "relay_notes", "relay_health", "relay_locations", "relay_chats", "relay_chat_messages",
   "relay_chat_saves", "relay_outbox", "relay_webhooks", "relay_webhook_attempts", "relay_attachments", "relay_calendar_events", "relay_photos",
   "relay_note_changes", "relay_stays", "relay_nights"];
+const MEMORY = ["relay_memory", "relay_memory_tags", "relay_memory_columns", "relay_memory_column_changes", "relay_note_tags", "relay_tag_changes"];
 
-const tables = (sql: DatabaseSync) => (sql.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'relay\\_%' ESCAPE '\\'")
-  .all() as { name: string }[]).map(row => row.name).sort();
+const tables = (sql: DatabaseSync) => (sql.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'relay\\_%' ESCAPE '\\'").all() as { name: string }[]).map(row => row.name).sort();
 
 it("leaves a new D1 with the directory and none of the old shared tables after every migration", () => {
   const d1 = new DatabaseSync(":memory:");
@@ -29,7 +29,7 @@ it("gives a new space each person's tables and none of the directory's, with no 
   const space = new DatabaseSync(":memory:");
   space.exec("PRAGMA foreign_keys = ON");
   for (const [, text] of MIGRATIONS) space.exec(text);
-  expect(tables(space)).toEqual([...PERSON].sort());
+  expect(tables(space)).toEqual([...PERSON, ...MEMORY].sort());
   expect(triggers(space)).not.toContain("relay_outbox_note_updated");
   expect(triggers(space)).toContain("relay_outbox_note_created");
 });
@@ -225,7 +225,7 @@ it("runs the files and photos migrations on a staging space that ran the first 0
   migrate(storage);
   migrate(storage);
   expect(queries.map(query => all(sql, query))).toEqual(before);
-  expect(tables(sql)).toEqual([...PERSON].sort());
+  expect(tables(sql)).toEqual([...PERSON, ...MEMORY].sort());
   expect(all(sql, "PRAGMA foreign_key_check")).toEqual([]);
   // Every log trigger is there once: a new photo and a sealed file each log one row.
   sql.exec(`INSERT INTO relay_photos (id, device_id, client_id, taken_at, width, height, bytes, file_key, created_at) VALUES ('p-2', 'd-phone', 'c-2', 8, 1, 1, 1, 'k2', 9);
@@ -268,7 +268,7 @@ it("skips the note edits migration on a staging space that ran it first as 0008_
   }
   migrate(storage);
   migrate(storage);
-  expect(tables(sql)).toEqual([...PERSON].sort());
+  expect(tables(sql)).toEqual([...PERSON, ...MEMORY].sort());
   expect(all(sql, "SELECT name FROM pragma_table_info('relay_notes') WHERE name = 'edited_at'")).toEqual([{ name: "edited_at" }]);
 });
 
@@ -332,7 +332,7 @@ it("lets a new space and a space made before email take the Email device, keepin
     for (const [, text] of MIGRATIONS.slice(done)) inTransaction(space, text);
     space.exec("INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-mail', 'Email', 'inbox:email', '', 1, 'inbox')");
     expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
-    expect(tables(space)).toEqual([...PERSON].sort());
+    expect(tables(space)).toEqual([...PERSON, ...MEMORY].sort());
   }
 });
 

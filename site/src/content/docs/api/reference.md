@@ -1228,7 +1228,7 @@ It takes no input.
 
 `POST /apps/relay/api/account-delete` · `relay.account-delete` · writes · called by a signed-in person only, not a device key
 
-Delete your account: your notes, recordings, photos, health, places, chats, devices, webhooks and AI apps. It can't be undone.
+Delete your account: your notes, recordings, photos, health, places, chats, memory, knowledge web, devices, webhooks and AI apps. It can't be undone.
 
 ### Input
 

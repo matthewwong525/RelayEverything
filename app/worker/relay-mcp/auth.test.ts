@@ -129,7 +129,7 @@ it("connects a person's AI app after they approve it by name and sign in on the 
   const token = await connect();
   const answer = await listTools(token);
   expect(answer.status).toBe(200);
-  expect((await answer.json() as { result: { tools: unknown[] } }).result.tools).toHaveLength(15);
+  expect((await answer.json() as { result: { tools: unknown[] } }).result.tools).toHaveLength(17);
 });
 
 it("reads only the space of the person who signed in", async () => {
@@ -255,7 +255,7 @@ it("takes MCP on its bare address as on /mcp, with one token, and shows a browse
   for (const path of ["/", "/mcp"]) {
     const answer = await mcp({ method: "tools/list" }, token, {}, path);
     expect([path, answer.status]).toEqual([path, 200]);
-    expect((await answer.json() as { result: { tools: unknown[] } }).result.tools).toHaveLength(15);
+    expect((await answer.json() as { result: { tools: unknown[] } }).result.tools).toHaveLength(17);
   }
   const refused = await mcp({ method: "tools/list" }, undefined, {}, "/");
   expect([refused.status, refused.headers.get("WWW-Authenticate")])

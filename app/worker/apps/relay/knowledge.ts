@@ -44,13 +44,17 @@ async function repoOf(knowledge: Artifacts, personId: string, wait: (ms: number)
   }
 }
 
+/** The repo's details, its git address in them. The real handle answers `remote` only through `info()`, though the
+ *  generated types list it on the handle itself. */
+const infoOf = (repo: ArtifactsRepo) => (repo as unknown as { info(): Promise<ArtifactsRepoInfo> }).info();
+
 /** A one-hour write pass to the person's own web: its git address, the pass, and when it ends. No binding, as on a
  *  server without Artifacts, is 501. */
 export async function knowledgeAccess(knowledge: Artifacts | undefined, personId: string, wait = sleep) {
   if (!knowledge) throw new Refusal(NOT_SET_UP, 501);
   const repo = await repoOf(knowledge, personId, wait);
   const pass = await repo.createToken("write", PASS_SECONDS);
-  return { remote: repo.remote, token: pass.plaintext, expiresAt: pass.expiresAt };
+  return { remote: (await infoOf(repo)).remote, token: pass.plaintext, expiresAt: pass.expiresAt };
 }
 
 /** Deletes the person's web with their account; a person who never opened one has none to delete. */

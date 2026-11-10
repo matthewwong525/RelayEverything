@@ -6,14 +6,16 @@ import { knowledgeAccess, NOT_SET_UP } from "./knowledge";
 
 const at = Date.UTC(2026, 10, 10, 12);
 
-/** A stand-in Artifacts namespace: `start` when asked, and a forked repo answers FORK_IN_PROGRESS `forking` times. */
+/** A stand-in Artifacts namespace: `start` when asked, and a forked repo answers FORK_IN_PROGRESS `forking` times.
+ *  Its handles give `remote` only through `info()`, as the real ones do. */
 function fakeArtifacts({ start = true, forking = 0 } = {}) {
   const repos = new Map<string, { forking: number }>(start ? [["start", { forking: 0 }]] : []);
   const forks: unknown[][] = [];
   const passes: unknown[][] = [];
   const failure = (code: string) => Object.assign(new Error(code), { name: "ArtifactsError", code });
   const handle = (name: string) => ({
-    name, remote: `https://account.artifacts.cloudflare.net/git/relay-everything-knowledge/${name}.git`,
+    name,
+    info: async () => ({ name, remote: `https://account.artifacts.cloudflare.net/git/relay-everything-knowledge/${name}.git` }),
     createToken: async (scope: string, ttl: number) => {
       passes.push([name, scope, ttl]);
       return { id: "t-1", plaintext: `art_v1_${name}`, scope, expiresAt: new Date(at + ttl * 1000).toISOString() };

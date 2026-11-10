@@ -161,6 +161,7 @@ Relay Everything holds the raw data: every note, chat message, place and health 
 - **2026-11-10** — Check: `app/package.json` loosens nothing: it adds `scripts/relay-knowledge-setup.test.mjs` to the `test` script's list of node tests, so the setup script and the website's copy of `FORMAT.md` are checked.
 - **2026-11-10** — Check: `app/self-host/bindings.test.mjs` no longer asks the install's connector for `artifacts KNOWLEDGE`. The install leaves it out because Artifacts needs Workers Paid, and its server then answers that the web is not set up. Each other binding of the connector is still checked.
 - **2026-11-10** — Built: the memory table, its columns and tags, note topics, the knowledge web pass, the plugin's copy, and the docs; the staging start repository is made. A second look found five problems (a fact id shared by two computers, a spec line on phone keys, a stale wiki count, two missing tests); all are fixed. Saved for the CI check and the staging trial.
+- **2026-11-10** — The staging trial found that the real Artifacts handle gives its git address only through `info()`, so the pass had no address and `sync` stopped; the route now reads it there, and the test's stand-in handle works the same way. Every other step of the trial passed. A pass shows as one Artifacts event on each sync, and a sync with nothing new makes no pull.
 
 ## Capabilities
 

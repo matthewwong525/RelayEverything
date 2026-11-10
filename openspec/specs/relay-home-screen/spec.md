@@ -7,12 +7,12 @@ The phone app opens on Home: the notes folders and a folder for each kind of pho
 
 ### Requirement: Home holds the notes folders and the phone's data
 
-The phone app SHALL open on a *Home* screen with three groups of folders: the notes folders *Notes*, *Voice notes* and *Shares*; *On this phone*, with *Location*, *Health*, *Calendar* and *Photos*; and *Other connections*, with *AI chat transcripts*. Home SHALL have no *Connections* section and no row for sending, AI apps or webhooks. Each notes folder SHALL show how many notes it holds. *Notes* SHALL hold every note, *Voice notes* only voice notes, and *Shares* only notes with a photo, a file or a link. Home SHALL show no folder for a feature that does not work yet. A person SHALL be able to fold *On this phone* and *Other connections*, and the phone SHALL remember it. A tap on a section name SHALL fold or open it with no highlight behind the name, as in Apple Notes.
+The phone app SHALL open on a *Home* screen with three groups of folders: the notes folders *Notes*, *Voice notes* and *Shares*; *On this phone*, with *Location*, *Health*, *Calendar* and *Photos*; and *Other connections*, with *Connect your AI* and *Email notes*, in that order. Each row in *Other connections* SHALL carry one line that says what it does. Home SHALL have no *Connections* section and no row for sending or webhooks. Each notes folder SHALL show how many notes it holds. *Notes* SHALL hold every note, *Voice notes* only voice notes, and *Shares* only notes with a photo, a file or a link. Home SHALL show no folder for a feature that does not work yet. A person SHALL be able to fold *On this phone* and *Other connections*, and the phone SHALL remember it. A tap on a section name SHALL fold or open it with no highlight behind the name, as in Apple Notes.
 
 #### Scenario: Opening the app
 
 - **WHEN** the person opens the app with 3 typed notes, 2 voice notes and 1 note with a photo
-- **THEN** Home shows *Notes* 6, *Voice notes* 2 and *Shares* 1, *On this phone* and *Other connections* below them, and no *Connections* section
+- **THEN** Home shows *Notes* 6, *Voice notes* 2 and *Shares* 1, *On this phone* below them, then *Other connections* with *Connect your AI* and *Email notes*, each with its line, and no *Connections* section
 
 #### Scenario: A first open
 
@@ -36,49 +36,6 @@ Home SHALL have the one *New note* button, which writes on a tap and talks on a 
 
 - **WHEN** the person taps the Settings button on Home
 - **THEN** Settings opens, with no menu first
-
-### Requirement: Settings opens on the account
-
-Settings SHALL show an Account row first, then *Appearance*, *Pin notes to where I am*, the speech model, and at the bottom the app's version and build number. Signed in to a Relay Everything server, the row SHALL show the account's email and the server. With sending to the person's own webhook, it SHALL say *My own webhook* and the webhook's address. Otherwise it SHALL say *Sign in to Relay Everything* and that notes stay on the phone until the person signs in. Health, the calendar, location history and photos SHALL NOT be in Settings.
-
-#### Scenario: Signed out
-
-- **WHEN** the person opens Settings on a new install
-- **THEN** the first row says *Sign in to Relay Everything*, then the *Appearance*, *Notes* and *Voice notes* groups and the version, and no request leaves the phone
-
-#### Scenario: Signed in
-
-- **WHEN** the person signed in as you@example.com on app.relayeverything.com and opens Settings
-- **THEN** the first row shows you@example.com and app.relayeverything.com, and a tap opens the Account page
-
-### Requirement: The Account page shows the connection
-
-Signed in to a Relay Everything server, the Account page SHALL show the account's email and server, *AI apps* and *Webhooks* with the names the server last gave, where health, places, calendar and photos go, *Open your Relay Everything page*, the server to change, and *Sign out*. A tap on *AI apps* or *Webhooks* SHALL open that part of the person's Relay Everything page. The private data choice SHALL offer *Relay Everything* and *Only my own webhook*, SHALL say that data already sent stays on the person's page, and, with *Only my own webhook* picked, SHALL show the webhook's address, *Send a test* and its last failure. Picking *Only my own webhook* with no webhook on the phone SHALL first open the webhook's setup, and SHALL change nothing if the person leaves it. *Sign out* SHALL ask first, then remove the phone's key and stop sending; notes from this phone SHALL stay on it. With sending to the person's own webhook, the page SHALL show its address, *Send a test*, *Sign in to Relay Everything* and *Stop sending*, and SHALL show no AI apps or webhooks list. Signing in from there SHALL keep the webhook for health, places, calendar and photos, as *Only my own webhook*, SHALL send notes to Relay Everything, and SHALL tell the person that their webhook gets notes only once they add it on their Relay Everything page. A closed or failed sign-in SHALL change nothing. The phone SHALL ask the server for the names and email only while it sends to a Relay Everything server.
-
-#### Scenario: Signed in with connections
-
-- **WHEN** the phone sends to a Relay Everything server and the person connected Claude and two webhooks
-- **THEN** the Account page shows *AI apps* with *Claude*, *Webhooks* with both names and 2, and a tap on *Webhooks* opens the webhooks part of the person's page in the browser
-
-#### Scenario: Signing out
-
-- **WHEN** the person taps *Sign out* and confirms
-- **THEN** the phone forgets its key, sending stops, the notes written on this phone stay, and Settings shows *Sign in to Relay Everything*
-
-#### Scenario: Picking the webhook for private data
-
-- **WHEN** a signed-in person with no webhook on the phone taps *Only my own webhook*, enters an address, and saves
-- **THEN** the group shows *Only my own webhook* picked with the webhook's address and *Send a test*, and the *Health* folder says its readings go to the webhook
-
-#### Scenario: Signing in from the webhook page
-
-- **WHEN** the phone sends everything to the person's own webhook, and the person taps *Sign in to Relay Everything* on the Account page and signs in
-- **THEN** the Account page shows the signed-in account with *Only my own webhook* picked, new notes go to Relay Everything, health readings still go only to the webhook, and a message says to add the webhook on the Relay Everything page to get notes there too
-
-#### Scenario: Closing the sign-in
-
-- **WHEN** the person taps *Sign in to Relay Everything* on the webhook Account page and closes the sign-in
-- **THEN** the phone still sends everything to the webhook, and the Account page is unchanged
 
 ### Requirement: Sync now sits beside the sync state
 
@@ -105,3 +62,19 @@ While sending is on, the sync state under the title of Home and of each notes fo
 #### Scenario: Open it signed in
 - **WHEN** a person signed in to Relay Everything taps *AI chat transcripts*, then the link
 - **THEN** the browser opens the saved chats on their Relay Everything web page
+
+### Requirement: Connect your AI and Email notes show what is connected
+
+*Connect your AI* SHALL open a page with two parts. *Claude Code and Codex* SHALL list each of the person's computers with the plugin, with when it last saved a chat, then *Saved chats*, which opens the person's saved chats and says only the plugin saves them, and *Get the plugin*. *Claude, ChatGPT and other AI apps* SHALL show the AI connector's address to copy, and each connected AI app with the day it connected. On the phone, disconnecting a computer or an app SHALL open the person's Relay Everything page. *Email notes* SHALL open a page that says a mail sent or forwarded becomes a note, and, signed in, shows two addresses, each with *Copy*: the shared notes address, which takes mail only from the person's sign-in email, and their private address, which takes mail from anyone. Signed out, both pages SHALL make no network call, SHALL show no address but the AI connector's, and SHALL offer *Sign in*.
+
+#### Scenario: Connect your AI, signed in
+- **WHEN** a signed-in person with the plugin on their laptop and Claude connected opens *Connect your AI*
+- **THEN** the page shows the laptop with its last saved chat, *Saved chats*, the address to copy, and *Claude* with the day it connected
+
+#### Scenario: Email notes, signed in
+- **WHEN** a signed-in person opens *Email notes*
+- **THEN** the page shows the shared notes address, marked as taking mail only from their sign-in email, and their private address, marked as taking mail from anyone
+
+#### Scenario: Email notes, signed out
+- **WHEN** a person with sending off opens *Email notes*
+- **THEN** the page says what email notes do, shows no address, offers *Sign in*, and no request leaves the phone

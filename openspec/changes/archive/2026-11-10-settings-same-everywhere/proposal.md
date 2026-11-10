@@ -1,6 +1,6 @@
 # One simple Settings on the phone and the web, with developer options under Advanced
 
-**Status:** built, saving
+**Status:** shipping
 **Branch:** simpler-settings-match-mobile-web
 **Open questions:** none
 
@@ -112,3 +112,5 @@ Non-goals: no new data on the web's Location, Health, Calendar and Photos pages;
 - **2026-11-10** — Timing (build): the test gates of each task, and task 1.1's `flutter analyze` before any edit, ran once at the end, after all source and tests were written.
 - **2026-11-10** — Assumed: the plugin's words that sent people to *Devices* now name *Connect your AI*, because the Devices page is gone; the plugin's behavior does not change.
 - **2026-11-10** — Assumed: the shared notes address shows as `notes@relayeverything.com`, because main moved note mail to the main domain while this was building; the page reads it from the server's mail domain.
+- **2026-11-10** — Assumed: the web check ran in headless Chromium on this computer, on the saved commit with a stand-in person, after publishing it to staging, because signing in on staging needs Matthew's email code; Settings, Account with Advanced, API keys, Connect your AI, Email notes and `#chats` showed as planned, and the iPhone check runs in `/verify`.
+- **2026-11-10** — Archived at ship; the web check passed and the iPhone check runs on the pull request.

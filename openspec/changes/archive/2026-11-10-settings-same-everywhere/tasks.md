@@ -39,7 +39,7 @@
 ## 7. Checks
 
 - [x] 7.1 Run `flutter analyze` and `flutter test` in `mobile/`, `npm test` in `app/`, `node scripts/product-name.test.mjs` and `node scripts/public-check.mjs`; verify all pass.
-- [ ] 7.2 After implementation, run `/save`; check the web app on staging (`node scripts/publish-relay-server.mjs --ref HEAD --staging-only`) in headless Chromium: Settings lists Account and Appearance; Account has Phones and Advanced; *Connect your AI* and *Email notes* open in the main pane; `/#webhooks` opens Webhooks and `/#chats` opens Connect your AI. Verify the iPhone device check passes on the pull request.
+- [x] 7.2 After implementation, run `/save`; check the web app on staging (`node scripts/publish-relay-server.mjs --ref HEAD --staging-only`) in headless Chromium: Settings lists Account and Appearance; Account has Phones and Advanced; *Connect your AI* and *Email notes* open in the main pane; `/#webhooks` opens Webhooks and `/#chats` opens Connect your AI. Verify the iPhone device check passes on the pull request.
 
 ## 8. Review fixes
 

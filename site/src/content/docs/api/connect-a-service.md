@@ -1,6 +1,6 @@
 ---
 title: Connect a service
-description: Let your own script or service read your Relay Everything notes, health, calendar, places and chats, and add notes, through the web API with an API key or your own sign-in.
+description: Let your own script or service read your Relay Everything notes, health, sleep, workouts, calendar, places and chats, and add notes, through the web API with an API key or your own sign-in.
 ---
 
 The web API lets your own script or service read your Relay Everything data and add notes. It answers the same questions as the [AI connector](../../connections/connect-your-ai/), as plain HTTP with JSON. It reads, and it adds notes. It can't change or delete anything.
@@ -49,8 +49,10 @@ curl "https://<your-relay-server>/v1/notes?q=milk&limit=5" \
 
 - `GET /v1/notes?q=…`: notes that hold every word, newest first. Without `q`, give `from` and `to` for every note in that time.
 - `GET /v1/notes/{id}`: one note, the places near it in time, and its day's health totals.
-- `GET /v1/days/{day}`: one day's notes count, health totals, places and events.
+- `GET /v1/days/{day}`: one day's notes count, health totals, nights, workouts, places and events.
 - `GET /v1/health?type=steps&from=…&to=…`: health values, one per hour or per day. `type` is any type in [Health](../../app/health/#what-it-reads), such as `weight` or `blood_pressure_systolic`.
+- `GET /v1/nights?from=…&to=…`: each night of sleep, newest first, with its stage minutes. Add `stages=true` for each night's stage timeline.
+- `GET /v1/workouts?from=…&to=…`: each workout, newest first, with its kind, minutes, km and calories.
 - `GET /v1/places?from=…&to=…`: each stay at a place.
 - `GET /v1/calendar?from=…&to=…`: calendar events by start, with title, times, place, notes and people. Add `q` for events that hold every word, newest first: [Calendar](../../app/calendar/).
 - `GET /v1/chats?q=…` and `GET /v1/chats/{id}`: saved Claude Code chats.

@@ -14,7 +14,7 @@ class FlushResult {
 }
 
 // Settings shows when health, places and the calendar last landed, so a person sees when the iPhone stopped them.
-const _sentKeys = {'health': sentHealth, 'locations': sentPoints, staysRoute: sentPoints, 'calendar': sentCalendar};
+const _sentKeys = {'health': sentHealth, nightsRoute: sentHealth, 'locations': sentPoints, staysRoute: sentPoints, 'calendar': sentCalendar};
 
 /// The last time the person's webhook did not take an upload, in the store's `state`, for Settings:
 /// `{at, status, file}`. A status of null is no answer; a `file` is one dropped as too large.

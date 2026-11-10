@@ -11,8 +11,8 @@ Relay Everything can keep your health data beside your notes. It reads it from A
 | --- | --- | --- |
 | Steps | count | the day's steps |
 | Heart rate | bpm | lowest, average and highest |
-| Sleep | minutes | the night's sleep |
-| Workouts | minutes | how many, and their minutes |
+| Sleep | minutes, and each night's stages | the night's sleep |
+| Workouts | minutes, kind, km and calories | how many, and their minutes |
 | Weight | kg | the latest |
 | Resting heart rate | bpm | average |
 | Heart rate variability | ms | average |
@@ -23,6 +23,14 @@ Relay Everything can keep your health data beside your notes. It reads it from A
 | Water | ml | total |
 
 Mindful minutes come from an iPhone only: Health Connect does not give them to the app yet. Heart rate variability keeps the phone's own measure, because the two can't be compared: an iPhone sends SDNN (`hrv_sdnn`), and Android sends RMSSD (`hrv_rmssd`).
+
+## Nights and workouts
+
+The app makes each night from the phone's sleep readings: when you went to bed, fell asleep and woke, the minutes of core (light), deep and REM sleep and of awake time, and the timeline of stages. A watch gives the stages. A phone with only your bedtime gives a night with no stages. Each app or watch makes its own night, and your AI reads the one with the most sleep. A nap is a night of its own.
+
+Each workout goes with its kind, such as running, and its distance and calories when the phone has them. An iPhone gives active calories. Android gives total calories, which also count the calories you burn at rest.
+
+On Android, the app also asks to read distance and total calories. Health Connect gives the app workouts only with them: if you refuse, the app sends no workouts from Android. Allow both in Health Connect to send them.
 
 ## Turn it on
 
@@ -39,6 +47,8 @@ When you turn on **Health**, the app sends the last 90 days, so your AI has hist
 
 A phone that already sent health gets the same 90 days one time after the update, for every type.
 
+After the update that adds nights, the app reads the last 90 days of sleep and workouts one more time, one week each round. Your old nights then get their stages, and your old workouts their kind, distance and calories. Nothing goes twice: Relay Everything keeps each reading once. When the app sends to [your own webhook](../../connections/your-database/), a reading that goes again has the same id. A reading the app sent there before this update had a different id, so keep one reading for each device, type, start, end and source. The [example receiver](../../connections/your-database/#an-example-receiver) does this.
+
 ## When it sends
 
 The app sends new health data each time you open it. While it is closed, it sends too:
@@ -48,6 +58,8 @@ The app sends new health data each time you open it. While it is closed, it send
 
 The **Health** folder, and its row on Home, show when the data last went, and how many readings wait, such as *Sent 14:05 · 3 readings waiting*. Open the app to send at once.
 
+Each round reads sleep and workouts from the last 36 hours, because a watch writes the whole night when you wake. A night or workout that did not change does not go again.
+
 Each sample is kept once for its type, time and source, however often the phone sends it.
 
 ## A day's totals
@@ -56,7 +68,7 @@ The server counts each day's totals, as the table in [What it reads](#what-it-re
 
 ## Only to your own webhook
 
-Signed in to Relay Everything, you can send your health data only to your own webhook and still sync your notes. On the Account page, under **Health, places, calendar and photos**, pick **Only my own webhook**. The phone then sends each reading straight to your receiver as `health.samples`, and Relay Everything gets none. The **Health** folder then says *Sent to your webhook* and the time. Your AI shows no new readings, and the readings already sent stay in your space. [Settings](../settings/#health-places-calendar-and-photos-only-to-your-webhook)
+Signed in to Relay Everything, you can send your health data only to your own webhook and still sync your notes. On the Account page, under **Health, places, calendar and photos**, pick **Only my own webhook**. The phone then sends each reading straight to your receiver as `health.samples`, and each night as `health.nights`, and Relay Everything gets none. The **Health** folder then says *Sent to your webhook* and the time. Your AI shows no new readings, and the readings already sent stay in your space. [Settings](../settings/#health-places-calendar-and-photos-only-to-your-webhook)
 
 ## Turn it off
 

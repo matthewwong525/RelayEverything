@@ -128,11 +128,12 @@ it("sums a day for the site page: notes, the larger phone's steps and sleep, hea
   const { status, json } = await call(matthew, "GET", "summary", { day: "2026-11-05", offset: -300 });
   expect(status).toBe(200);
   expect(json).toEqual({ day: "2026-11-05", notes: 1, steps: 8214, sleepMinutes: 450, heartRate: { min: 61, max: 90, average: 76 },
-    workouts: { count: 1, minutes: 45 }, places: [
+    nights: [], workouts: { count: 1, minutes: 45, items: [{ kind: null, start: start + 3 * 60 * MINUTE, end: start + 3 * 60 * MINUTE + 45 * MINUTE,
+      minutes: 45, km: null, calories: null, source: expect.any(String), device: "Android phone" }] }, places: [
       { name: "Queen St W", lat: 43.6487, lon: -79.3962, from: start + 60 * MINUTE, to: start + 90 * MINUTE },
       { name: "43.663, -79.396", lat: 43.6629, lon: -79.3957, from: start + 3 * 60 * MINUTE, to: start + 3 * 60 * MINUTE }], trips: [], events: [] });
   expect((await call(matthew, "GET", "summary", { day: "2026-11-04" })).json).toEqual({ day: "2026-11-04", notes: 1, steps: 0, sleepMinutes: 0,
-    heartRate: null, workouts: { count: 0, minutes: 0 }, places: [], trips: [], events: [] });
+    heartRate: null, nights: [], workouts: { count: 0, minutes: 0, items: [] }, places: [], trips: [], events: [] });
   for (const day of ["yesterday", "2026-13-45"]) expect((await call(matthew, "GET", "summary", { day })).status).toBe(400);
   for (const [who, status] of [[phone, 403], [null, 401]] as const) expect((await call(who, "GET", "summary", { day: "2026-11-05" })).status).toBe(status);
 });

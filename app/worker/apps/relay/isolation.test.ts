@@ -27,6 +27,8 @@ it("lets Ana's session, phone key and Access email reach only Ana's rows", async
   await call(phone, "POST", "locations", { points: [{ at: NOW, lat: 43.65, lon: -79.38, accuracy: 10 }] });
   await call(phone, "POST", "stays", { stays: [{ kind: "stay", start: NOW, end: NOW + 600_000, lat: 43.65, lon: -79.38, name: "Corner Café",
     source: "map" }] });
+  await call(phone, "POST", "nights", { nights: [{ source: "watch", start: NOW - 480 * 60_000, end: NOW, asleep: 420, core: 250, deep: 70,
+    rem: 100, awake: 20, stages: [] }] });
   await call(phone, "POST", "calendar", { events: [{ key: "w:1:1", calendar: "Work", title: "Ana's meeting", start: NOW, end: NOW + 60_000,
     allDay: false, people: [] }], removed: [] });
   expect(rows("relay_notes").map(row => row.text)).toEqual(["Ana's note"]);
@@ -35,6 +37,7 @@ it("lets Ana's session, phone key and Access email reach only Ana's rows", async
   expect([rows("relay_health").length, rows("relay_locations").length]).toEqual([1, 1]);
   expect([rows("relay_health", BEN), rows("relay_locations", BEN), rows("relay_stays", BEN)]).toEqual([[], [], []]);
   expect(rows("relay_stays")).toHaveLength(1);
+  expect([rows("relay_nights").length, rows("relay_nights", BEN).length]).toEqual([1, 0]);
   for (const who of [matthew, owner]) expect(await texts(who)).toEqual(["Ana's note"]);
   expect((await call(ben, "GET", "summary", { day: "2026-11-05" })).json).toMatchObject({ notes: 1, steps: 0, places: [], events: [] });
   expect((await call(matthew, "GET", "summary", { day: "2026-11-05" })).json.events).toMatchObject([{ title: "Ana's meeting" }]);

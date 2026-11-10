@@ -3,7 +3,7 @@
   "info": {
     "title": "Relay Everything API",
     "version": "1.0.0",
-    "description": "Read one person's Relay Everything notes, health, places, calendar and saved chats, and add notes. It changes and deletes nothing. Each caller reaches only the space of the person who connected it or made its key."
+    "description": "Read one person's Relay Everything notes, health, sleep, workouts, places, calendar and saved chats, and add notes. It changes and deletes nothing. Each caller reaches only the space of the person who connected it or made its key."
   },
   "servers": [
     {
@@ -801,7 +801,7 @@
       "get": {
         "operationId": "getDay",
         "summary": "Sum up a day",
-        "description": "One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, each stay with its name and times, each trip with its mode, km and minutes, and the calendar's events with the people in each.",
+        "description": "One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, the nights or naps that ended that day with their stage minutes, each workout with its kind, km and calories, each stay with its name and times, each trip with its mode, km and minutes, and the calendar's events with the people in each.",
         "parameters": [
           {
             "name": "day",
@@ -881,11 +881,83 @@
                         },
                         "minutes": {
                           "type": "number"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Such as running or traditional_strength_training; null for a workout from before the phone sent it."
+                              },
+                              "start": {
+                                "type": "string",
+                                "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                              },
+                              "end": {
+                                "type": "string",
+                                "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                              },
+                              "minutes": {
+                                "type": "number"
+                              },
+                              "km": {
+                                "anyOf": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "calories": {
+                                "anyOf": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "In kcal: active calories from an iPhone, total calories from Android."
+                              },
+                              "source": {
+                                "type": "string",
+                                "description": "The app or watch that recorded it."
+                              },
+                              "device": {
+                                "type": "string",
+                                "description": "The name of the phone that sent it."
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "start",
+                              "end",
+                              "minutes",
+                              "km",
+                              "calories",
+                              "source",
+                              "device"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "description": "The day's workouts, oldest first; one that two sources kept is given once."
                         }
                       },
                       "required": [
                         "count",
-                        "minutes"
+                        "minutes",
+                        "items"
                       ],
                       "additionalProperties": false
                     },
@@ -955,6 +1027,98 @@
                     },
                     "waterMl": {
                       "type": "number"
+                    },
+                    "nights": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "start": {
+                            "type": "string",
+                            "description": "The first reading, such as going to bed."
+                          },
+                          "end": {
+                            "type": "string",
+                            "description": "The last reading."
+                          },
+                          "asleepAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "When the person fell asleep; null for a night with only a bedtime."
+                          },
+                          "wokeAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "When the person last woke; null for a night with only a bedtime."
+                          },
+                          "minutes": {
+                            "type": "object",
+                            "properties": {
+                              "asleep": {
+                                "type": "number",
+                                "description": "Asleep in any stage."
+                              },
+                              "core": {
+                                "type": "number",
+                                "description": "Core, or light, sleep."
+                              },
+                              "deep": {
+                                "type": "number"
+                              },
+                              "rem": {
+                                "type": "number"
+                              },
+                              "awake": {
+                                "type": "number",
+                                "description": "Awake in the night."
+                              }
+                            },
+                            "required": [
+                              "asleep",
+                              "core",
+                              "deep",
+                              "rem",
+                              "awake"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Minutes in each stage."
+                          },
+                          "source": {
+                            "type": "string",
+                            "description": "The app or watch that tracked it."
+                          },
+                          "device": {
+                            "type": "string",
+                            "description": "The name of the phone that sent it."
+                          }
+                        },
+                        "required": [
+                          "start",
+                          "end",
+                          "asleepAt",
+                          "wokeAt",
+                          "minutes",
+                          "source",
+                          "device"
+                        ],
+                        "additionalProperties": false,
+                        "description": "A night or a nap."
+                      },
+                      "description": "The nights and naps that ended in the day, oldest first, without their timelines. Of nights that overlap, the one with the most sleep."
                     },
                     "places": {
                       "type": "array",
@@ -1107,6 +1271,7 @@
                     "sleepMinutes",
                     "heartRate",
                     "workouts",
+                    "nights",
                     "places",
                     "trips",
                     "events"
@@ -1292,6 +1457,463 @@
                     "bucket",
                     "timezone",
                     "values"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/nights": {
+      "get": {
+        "operationId": "listNights",
+        "summary": "Read nights of sleep",
+        "description": "The nights, and naps, that end from one time to another, newest first: when the person went to bed, fell asleep and woke, and the minutes asleep, in core (light), deep and REM sleep, and awake. Of nights that overlap, as from a watch and the phone's bedtime, the one with the most sleep. Give `stages` to add each night's stage timeline, such as to see when deep sleep came.",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "description": "The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset.",
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "description": "The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset.",
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "stages",
+            "in": "query",
+            "required": false,
+            "description": "Add each night's stage timeline, in time order.",
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "How many nights, at most 100.",
+            "schema": {
+              "default": 31,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "The last answer's `nextCursor`, to read the next page.",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "required": false,
+            "description": "An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "nights": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "start": {
+                            "type": "string",
+                            "description": "The first reading, such as going to bed."
+                          },
+                          "end": {
+                            "type": "string",
+                            "description": "The last reading."
+                          },
+                          "asleepAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "When the person fell asleep; null for a night with only a bedtime."
+                          },
+                          "wokeAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "When the person last woke; null for a night with only a bedtime."
+                          },
+                          "minutes": {
+                            "type": "object",
+                            "properties": {
+                              "asleep": {
+                                "type": "number",
+                                "description": "Asleep in any stage."
+                              },
+                              "core": {
+                                "type": "number",
+                                "description": "Core, or light, sleep."
+                              },
+                              "deep": {
+                                "type": "number"
+                              },
+                              "rem": {
+                                "type": "number"
+                              },
+                              "awake": {
+                                "type": "number",
+                                "description": "Awake in the night."
+                              }
+                            },
+                            "required": [
+                              "asleep",
+                              "core",
+                              "deep",
+                              "rem",
+                              "awake"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Minutes in each stage."
+                          },
+                          "source": {
+                            "type": "string",
+                            "description": "The app or watch that tracked it."
+                          },
+                          "device": {
+                            "type": "string",
+                            "description": "The name of the phone that sent it."
+                          },
+                          "stages": {
+                            "description": "The stage timeline, in time order: only with `stages`.",
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "stage": {
+                                  "type": "string",
+                                  "description": "asleep (no stage known), core, deep, rem or awake."
+                                },
+                                "start": {
+                                  "type": "string",
+                                  "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                                },
+                                "end": {
+                                  "type": "string",
+                                  "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                                }
+                              },
+                              "required": [
+                                "stage",
+                                "start",
+                                "end"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "start",
+                          "end",
+                          "asleepAt",
+                          "wokeAt",
+                          "minutes",
+                          "source",
+                          "device"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Send it as `cursor` to read the next page; null on the last one."
+                    }
+                  },
+                  "required": [
+                    "nights",
+                    "nextCursor"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workouts": {
+      "get": {
+        "operationId": "listWorkouts",
+        "summary": "Read workouts",
+        "description": "The workouts that start from one time to another, newest first, each with its kind (such as running or traditional_strength_training), minutes, km and calories when the phone has them. A workout from before the phone sent its kind has `kind` null. Calories are active calories from an iPhone and total calories from Android.",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "description": "The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset.",
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "description": "The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset.",
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "How many workouts, at most 100.",
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "The last answer's `nextCursor`, to read the next page.",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "required": false,
+            "description": "An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "workouts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Such as running or traditional_strength_training; null for a workout from before the phone sent it."
+                          },
+                          "start": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "end": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "minutes": {
+                            "type": "number"
+                          },
+                          "km": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "calories": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "In kcal: active calories from an iPhone, total calories from Android."
+                          },
+                          "source": {
+                            "type": "string",
+                            "description": "The app or watch that recorded it."
+                          },
+                          "device": {
+                            "type": "string",
+                            "description": "The name of the phone that sent it."
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "start",
+                          "end",
+                          "minutes",
+                          "km",
+                          "calories",
+                          "source",
+                          "device"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Send it as `cursor` to read the next page; null on the last one."
+                    }
+                  },
+                  "required": [
+                    "workouts",
+                    "nextCursor"
                   ],
                   "additionalProperties": false
                 }

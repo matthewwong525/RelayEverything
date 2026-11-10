@@ -264,20 +264,25 @@ class FakeWebAuth {
   }
 }
 
+/// The phone's health store: each read gives the [readings] of its types that start in its window, as an iPhone reads.
+/// [reads] keeps each read of the other types, [lateReads] each read of sleep and workouts.
 class FakeHealth implements HealthSource {
   bool allowed = true;
   List<HealthDataPoint> readings = [];
   Object? error;
   final reads = <(DateTime, DateTime)>[];
+  final lateReads = <(DateTime, DateTime)>[];
 
   @override
   Future<bool> allow() async => allowed;
 
   @override
-  Future<List<HealthDataPoint>> read(DateTime from, DateTime to) async {
-    reads.add((from, to));
+  Future<List<HealthDataPoint>> read(DateTime from, DateTime to, Iterable<HealthDataType> types) async {
+    final wanted = types.toSet();
+    (wanted.any(lateTypes.contains) ? lateReads : reads).add((from, to));
     if (error != null) throw error!;
-    return readings;
+    return [for (final point in readings)
+      if (wanted.contains(point.type) && !point.dateFrom.isBefore(from) && !point.dateFrom.isAfter(to)) point];
   }
 }
 

@@ -31,6 +31,9 @@
     <uses-permission android:name="android.permission.health.READ_BLOOD_PRESSURE"/>
     <uses-permission android:name="android.permission.health.READ_MENSTRUATION"/>
     <uses-permission android:name="android.permission.health.READ_HYDRATION"/>
+    <!-- A workout's distance and calories: the health package reads them inside each workout's time. -->
+    <uses-permission android:name="android.permission.health.READ_DISTANCE"/>
+    <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED"/>
     <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"/>
     <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY"/>
     <!-- Your calendar, read only. The calendar plugin asks for both, as one calendar permission; the app never writes an event. -->

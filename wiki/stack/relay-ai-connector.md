@@ -1,6 +1,6 @@
 # Relay Everything's AI connector
 
-Relay Everything's AI connector lets an AI chat app, such as the Claude app or ChatGPT, read your Relay Everything notes, health, calendar, places, saved chats and photos when you ask it a question, and add a note when you ask it to save one. It can't change or delete a note. The same Worker answers the [web API](#the-web-api) under `/v1/`, for scripts and services. It is part of [the Cloudflare stack](README.md): its own Worker, `relay-everything-mcp`, beside the main app.
+Relay Everything's AI connector lets an AI chat app, such as the Claude app or ChatGPT, read your Relay Everything notes, health, sleep, workouts, calendar, places, saved chats and photos when you ask it a question, and add a note when you ask it to save one. It can't change or delete a note. The same Worker answers the [web API](#the-web-api) under `/v1/`, for scripts and services. It is part of [the Cloudflare stack](README.md): its own Worker, `relay-everything-mcp`, beside the main app.
 
 | Where | Address to add |
 | --- | --- |
@@ -23,13 +23,15 @@ Then ask, for example: *What did I note on 4 November?*, *How many steps did I w
 
 ## What the app can read and add
 
-The connector has twelve tools: eleven read, and `add_note` adds. Each answer has a limit, so one question can't copy all of Relay Everything.
+The connector has fourteen tools: thirteen read, and `add_note` adds. Each answer has a limit, so one question can't copy all of Relay Everything.
 
 - **search**: notes that hold every word you give, newest first.
 - **fetch**: one note, the places you stayed near it in time, and its day's health totals.
 - **timeline**: every note from one time to another, a page at a time.
-- **day_summary**: one day's notes count, health totals, places, trips and events (title, start, end and people's names). `places` has one row per stay (`name`, `lat`, `lon`, `from`, `to`, and `address`, `event` and `ongoing` when it has them); `trips` has each trip's `mode`, `km`, `minutes`, and the names of the stays it went `from` and `to`. A health type with no readings that day is left out.
+- **day_summary**: one day's notes count, health totals, the `nights` that ended that day (no stage timeline), each workout in `workouts.items`, places, trips and events (title, start, end and people's names). `places` has one row per stay (`name`, `lat`, `lon`, `from`, `to`, and `address`, `event` and `ongoing` when it has them); `trips` has each trip's `mode`, `km`, `minutes`, and the names of the stays it went `from` and `to`. A health type with no readings that day is left out.
 - **health**: one type from `HEALTH_TYPES` in `queries.ts`, one value per hour or per day.
+- **nights**: the nights that end from one time to another, newest first, from `relay_nights`: bed, asleep and woke times and the minutes in each stage. `stages: true` adds each night's stage timeline. Of nights that overlap, as a watch's night and the phone's bedtime, `nightPage` keeps the one with the most minutes asleep. `nextCursor` reads on.
+- **workouts**: the workouts that start from one time to another, newest first, with `kind`, `minutes`, `km` and `calories`. `workoutPage` gives a workout that two phones or sources keep, starting within a minute, once, with its details when one has them. A workout from before the phone sent details has `kind` null.
 - **calendar**: events from `relay_calendar_events` between two times, by start, or newest first with `q`; removed events are skipped. `GET /v1/calendar` is the same read. `fetch` stays notes and chats.
 - **places**: `visits`, the stays from one time to another (name, street as `address`, the calendar `event` that named it, `lat`, `lon`, `arrived`, `left`, `minutes`, and `ongoing` while you are still there), and `trips` between them (`mode`, `km`, `minutes`, `from` and `to`), with `next` to read on. The phone works out stays and trips ([phone sync](../relay-phone-sync.md)), and the server keeps them in `relay_stays`. For points that no stay or trip covers, `placeVisits` in [`queries.ts`](../../app/worker/apps/relay/queries.ts) gives the old runs of points at one street, so old days and a phone on *Only points* answer as before; where two phones' stays overlap, it keeps the longer one, and it reads on until the page is full. A stay not sent for 6 hours reads as ended, not `ongoing`.
 - **search_chats**: saved Claude Code chats that hold every word you give, with the lines that match ([Relay Everything's Claude Code chats](relay-chats.md)).
@@ -42,7 +44,7 @@ To read a photo, the connector binds the same file store as the app, `RELAY_BUCK
 
 ## What leaves Relay Everything
 
-When an app uses a tool, the answer goes to that app's company: Anthropic for Claude, OpenAI for ChatGPT. Their own terms then apply to it. An answer can hold a note's words, its time, the place name and coordinates, the device name, health totals, calendar events with their people, a chat's messages, and one photo with its time and place.
+When an app uses a tool, the answer goes to that app's company: Anthropic for Claude, OpenAI for ChatGPT. Their own terms then apply to it. An answer can hold a note's words, its time, the place name and coordinates, the device name, health totals, nights of sleep with their stages, workouts, calendar events with their people, a chat's messages, and one photo with its time and place.
 
 An answer never holds a recording, a device key, or a device's or delivery's id. The app gets only what a tool answers for one question, not a copy of the database.
 

@@ -1,4 +1,4 @@
-// The connector's tools over one person's notes, health, places, calendar, chats and photos: eleven that only read,
+// The connector's tools over one person's notes, health, places, calendar, chats and photos: thirteen that only read,
 // and one that adds a typed note. Each answer comes from answers.ts, as the web API's does; each input, from inputs.ts.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
@@ -30,7 +30,7 @@ const adds = { readOnlyHint: false, destructiveHint: false, idempotentHint: true
 /** A fresh server per request: the connector keeps no session between calls. */
 function relayServer(asker: Asker): McpServer {
   const server = new McpServer({ name: "relay", title: "Relay Everything", version: "1.1.0" }, {
-    instructions: "Relay Everything holds one person's notes from their phone, with health, places and calendar, the " +
+    instructions: "Relay Everything holds one person's notes from their phone, with health, sleep, workouts, places and calendar, the " +
       "Claude Code chats they saved, and the photos their phone sent. Every tool but add_note only reads; add_note adds a typed note " +
       `when the person asks you to save one, and nothing changes or deletes. Days and times are ${ZONE} unless you pass a timezone.`,
   });

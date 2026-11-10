@@ -378,17 +378,19 @@ void main() {
       expect({for (final item in await store.outbox()) item.destination}, {relayServer});
     });
 
-    test('gives each sample and point an id once, and fills ids in uploads queued before ids', () async {
+    test('gives each point an id once, fills ids in points queued before ids, and gives samples none', () async {
       await store.enqueue('health', {'samples': [{'type': 'steps'}]});
       await store.enqueue('locations', {'points': [{'lat': 1}]});
       await store.queueSamples([for (var i = 0; i < 501; i++) {'type': 'steps'}]);
       await store.addPoint(Pin(at: at, lat: 1, lon: 1, accuracy: 1));
       await store.queuePoints();
       await store.moveOutbox(ownWebhook);
-      final rows = [for (final item in await store.outbox()) ...(item.body['samples'] ?? item.body['points']) as List];
-      final all = [for (final row in rows) (row as Map)['id']];
-      expect([all.length, all.toSet().length, all.every((id) => id is int && id > 0)], [504, 504, true]);
-      expect([for (final item in await store.outbox()) item.route], ['health', 'locations', 'health', 'health', 'locations']);
+      final outbox = await store.outbox();
+      final points = [for (final item in outbox) ...?item.body['points'] as List?];
+      final samples = [for (final item in outbox) ...?item.body['samples'] as List?];
+      expect([for (final point in points) (point as Map)['id']], unorderedEquals([1, 2]));
+      expect([samples.length, samples.every((sample) => !(sample as Map).containsKey('id'))], [502, true]);
+      expect([for (final item in outbox) item.route], ['health', 'locations', 'health', 'health', 'locations']);
       final id = await store.installId();
       expect([id, await store.installId()], [matches(RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')), id]);
     });

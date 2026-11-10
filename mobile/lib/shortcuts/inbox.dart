@@ -3,8 +3,8 @@ import 'dart:io';
 
 import '../data/attachments.dart';
 
-/// The folder, in the app's support folder, where *Add a note* leaves a note when the app does not answer in time.
-/// `ios/Runner/RelayIntents.swift` writes it: `<id>.json` for each note, and `<id>/` for its files.
+/// The folder, in the app's support folder, where *Add a note* leaves a note the app did not answer in time, and the
+/// Apple Watch each voice note. `ios/Runner/ShortcutsInbox.swift` writes `<id>.json` for each, `<id>/` for its files.
 const inboxFolder = 'shortcuts-inbox';
 
 /// One note a shortcut left in the inbox.

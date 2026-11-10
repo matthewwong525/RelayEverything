@@ -12,17 +12,6 @@ import UniformTypeIdentifiers
 // starts on `shortcutsMain` and stays warm while the process lives. When neither answers in 20 seconds, Add a note
 // leaves its note in `shortcuts-inbox/`, and the app keeps it the next time it opens.
 
-/// The app's support folder, the same one Dart's getApplicationSupportDirectory gives.
-enum RelayFolders {
-  static var support: URL { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0] }
-  static var inbox: URL { support.appendingPathComponent("shortcuts-inbox", isDirectory: true) }
-
-  /// A path from Dart, full or from the support folder, as a file URL.
-  static func url(_ path: String) -> URL {
-    path.hasPrefix("/") ? URL(fileURLWithPath: path) : support.appendingPathComponent(path)
-  }
-}
-
 @available(iOS 16, *)
 enum RelayIntentError: Error, CustomLocalizedStringResourceConvertible {
   /// The app's own words, such as a note with nothing in it.
@@ -74,6 +63,7 @@ final class ShortcutsEngine {
   private var appChannel: FlutterMethodChannel?
   private var appReady = false
   private var pendingVoice = false
+  private var pendingInbox = false
   private var engine: FlutterEngine?
   private var engineChannel: FlutterMethodChannel?
   private var engineReady = false
@@ -96,6 +86,10 @@ final class ShortcutsEngine {
 
   private func appIsReady() {
     appReady = true
+    if pendingInbox {
+      pendingInbox = false
+      appChannel?.invokeMethod("inboxChanged", arguments: nil)
+    }
     if pendingVoice {
       pendingVoice = false
       appChannel?.invokeMethod("startVoiceNote", arguments: nil)
@@ -108,6 +102,16 @@ final class ShortcutsEngine {
       channel.invokeMethod("startVoiceNote", arguments: nil)
     } else {
       pendingVoice = true
+    }
+  }
+
+  /// Tells the app's engine a note waits in the inbox, now or once it is ready. With no app engine, the next open keeps
+  /// it, so no background engine starts for it.
+  func inboxChanged() {
+    if appReady, let channel = appChannel {
+      channel.invokeMethod("inboxChanged", arguments: nil)
+    } else if appChannel != nil {
+      pendingInbox = true
     }
   }
 
@@ -430,7 +434,7 @@ struct AddNoteIntent: AppIntent {
     }
     let id = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
     let createdAt = Date()
-    let folder = RelayFolders.inbox.appendingPathComponent(id, isDirectory: true)
+    let folder = ShortcutsInbox.folder(id)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     // Shortcuts deletes its own copy of each file once this returns, so the app keeps one first. A file over the limit
     // is never read: the size comes from its URL, and the copy goes by URL too.
@@ -462,12 +466,8 @@ struct AddNoteIntent: AppIntent {
         "type": file.type?.preferredMIMEType ?? "",
       ])
     }
-    var request: [String: Any] = [
-      "id": id, "text": words, "createdAt": Int(createdAt.timeIntervalSince1970 * 1000), "files": list,
-    ]
-    if let durationMs {
-      request["recording"] = ["path": "shortcuts-inbox/\(id)/voice.wav", "durationMs": durationMs] as [String: Any]
-    }
+    let request = ShortcutsInbox.request(
+      id: id, text: words, createdAt: Int(createdAt.timeIntervalSince1970 * 1000), files: list, durationMs: durationMs)
     do {
       let answer = try await ShortcutsEngine.shared.call("add", request)
       guard let note = answer as? [String: Any], let entity = RelayNoteEntity(note) else {
@@ -483,8 +483,7 @@ struct AddNoteIntent: AppIntent {
     } catch {
       // No engine answered: the note waits in the inbox, and the app keeps it on its next open. The same id keeps a
       // note the engine saved late from being kept twice.
-      let data = try JSONSerialization.data(withJSONObject: request)
-      try data.write(to: RelayFolders.inbox.appendingPathComponent("\(id).json"), options: .atomic)
+      try ShortcutsInbox.leave(request, id: id)
       let entity = RelayNoteEntity(
         id: id, text: words, createdAt: createdAt, place: nil, kind: durationMs == nil ? "Typed" : "Voice",
         files: list.compactMap { file in

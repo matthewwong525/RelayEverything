@@ -1,5 +1,5 @@
-// The connector Worker: the OAuth provider answers sign-in, tokens and /mcp; /v1/ takes a token or an API key; Grants
-// lets the Relay Everything server list and end one person's connections over a service binding.
+// The connector Worker: the OAuth provider answers sign-in, tokens and MCP on / and /mcp; /v1/ takes a token or an API
+// key; Grants lets the Relay Everything server list and end one person's connections over a service binding.
 import { getOAuthApi, OAuthProvider, type OAuthProviderOptions } from "@cloudflare/workers-oauth-provider";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { apiKeyCaller, KEY } from "../apps/relay/caller.ts";
@@ -13,8 +13,8 @@ import { mcpHandler } from "./tools.ts";
 
 const IDLE = 30 * 24 * 3600;
 
-/** The provider's settings. Its one resource is the environment's own /mcp address, which every token is bound to:
- *  the installed provider refuses a route outside it, so /v1/ is answered before the provider (design Decision 7). */
+/** The provider's settings. Every token is bound to its one resource, the bare origin on our server, which covers /
+ *  and /mcp; the route stays /mcp, as / would take /authorize and /callback too. /v1/ is answered before it. */
 const options = (env: McpEnv): OAuthProviderOptions<McpEnv> => ({
   apiRoute: "/mcp", apiHandler: mcpHandler, defaultHandler: authHandler,
   authorizeEndpoint: "/authorize", tokenEndpoint: "/token", clientRegistrationEndpoint: "/register",
@@ -29,10 +29,18 @@ const options = (env: McpEnv): OAuthProviderOptions<McpEnv> => ({
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Authorization, Content-Type",
   "Access-Control-Allow-Methods": "GET, POST", "Access-Control-Max-Age": "86400" };
 
+/** The address as a person types it, with no slash at its end: `https://mcp.example.com`, or `…/mcp`. */
+const shownAddress = (address: string) => address.replace(/\/$/, "");
+
+/** True when a token's audience names this resource: `https://mcp.example.com` and `https://mcp.example.com/` are one.
+ *  This provider binds each token to one resource, so a list or no audience never matches. */
+const sameResource = (audience: string | string[] | undefined, address: string) => shownAddress(String(audience)) === shownAddress(address);
+
 /** Tells a caller with no valid token where to read how to get one, as /mcp's own refusal does. */
 const challenge = (env: McpEnv) => {
   const address = new URL(env.RELAY_MCP_ADDRESS);
-  return { "WWW-Authenticate": `Bearer resource_metadata="${address.origin}/.well-known/oauth-protected-resource${address.pathname}"` };
+  const path = address.pathname === "/" ? "" : address.pathname;
+  return { "WWW-Authenticate": `Bearer resource_metadata="${address.origin}/.well-known/oauth-protected-resource${path}"` };
 };
 
 /** An API key's caller, or the refusal caller.ts gave, in the API's own error shape. */
@@ -48,7 +56,7 @@ async function keyCaller(env: McpEnv, header: string): Promise<Asker | Response>
 /** A connected app's caller: a live token this provider made for its one resource, whose grant names a person. */
 async function tokenCaller(env: McpEnv, token: string): Promise<Asker | Response> {
   const found = await getOAuthApi(options(env), env).unwrapToken<GrantProps>(token);
-  const asker = found?.audience === env.RELAY_MCP_ADDRESS ? grantAsker(env, found.grant.props) : null;
+  const asker = found && sameResource(found.audience, env.RELAY_MCP_ADDRESS) ? grantAsker(env, found.grant.props) : null;
   return asker ?? problem(401, "This token is not valid: it ended, or its app was disconnected. Connect the app again.", challenge(env));
 }
 
@@ -64,9 +72,34 @@ async function api(request: Request, env: McpEnv): Promise<Response> {
   return asker instanceof Response ? asker : v1(request, asker);
 }
 
+/** True for an MCP call on the bare address: a POST, a delete that ends a session, a preflight, or a GET that opens
+ *  an event stream. A browser's plain GET gets the page instead. */
+const isMcp = (request: Request) => ["POST", "DELETE", "OPTIONS"].includes(request.method)
+  || (request.method === "GET" && (request.headers.get("Accept") ?? "").includes("text/event-stream"));
+
+/** The short page a browser gets on the bare address: what it is, and the address to add. */
+const homePage = (env: McpEnv) => {
+  // The address comes from the Worker's own settings, never from a request.
+  const address = shownAddress(env.RELAY_MCP_ADDRESS);
+  return new Response(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Relay Everything AI connector</title><body style="font-family:system-ui;max-width:32rem;margin:3rem auto;padding:0 1rem;line-height:1.5">
+<h1>Relay Everything's AI connector</h1>
+<p>Add <b>${address}</b> to your AI app, such as the Claude app or ChatGPT, as a connector. The app then asks you to sign in to Relay Everything.</p>
+<p>It lets the app read your notes, health, calendar, places, photos and saved chats, and add notes, when you ask it.</p>
+<p><a href="https://relayeverything.com/connections/connect-your-ai/">How to connect your AI app</a></p></body>`,
+  { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" } });
+};
+
 export default {
   async fetch(request: Request, env: McpEnv, ctx: ExecutionContext): Promise<Response> {
-    if (!new URL(request.url).pathname.startsWith("/v1/")) return new OAuthProvider(options(env)).fetch(request, env, ctx);
+    const url = new URL(request.url);
+    if (url.pathname === "/" && new URL(env.RELAY_MCP_ADDRESS).pathname === "/") {
+      if (!isMcp(request)) return request.method === "GET" || request.method === "HEAD" ? homePage(env) : new Response("Not found", { status: 404 });
+      // MCP on the bare address is the same call on /mcp: the token's audience, the bare origin, covers both.
+      url.pathname = "/mcp";
+      return new OAuthProvider(options(env)).fetch(new Request(url, request), env, ctx);
+    }
+    if (!url.pathname.startsWith("/v1/")) return new OAuthProvider(options(env)).fetch(request, env, ctx);
     const answer = await api(request, env);
     const headers = new Headers(answer.headers);
     for (const [name, value] of Object.entries(CORS)) headers.set(name, value);
@@ -84,7 +117,7 @@ export class Grants extends WorkerEntrypoint<McpEnv> {
   async list(personId: string) {
     const { items } = await this.grantsOf(personId);
     const apps = items.map(grant => ({ id: grant.id, name: String(grant.metadata.name), connectedAt: grant.createdAt * 1000 }));
-    return { address: this.env.RELAY_MCP_ADDRESS, apps: apps.sort((a, b) => b.connectedAt - a.connectedAt) };
+    return { address: shownAddress(this.env.RELAY_MCP_ADDRESS), apps: apps.sort((a, b) => b.connectedAt - a.connectedAt) };
   }
 
   /** Ends one of the person's connections: its tokens stop working at once, and its device row shows it off. False

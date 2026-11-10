@@ -45,7 +45,14 @@ class ConnectionPlace extends WebPlace {
 
 class ChatsPlace extends WebPlace {
   const ChatsPlace();
+
+  /// The page's part of the address that opens the chats: the phone's *Read them on the web* opens `/#chats`.
+  static const part = 'chats';
 }
+
+/// The place an address's part names, such as `chats` or the app's own `/chats`; null for any other part.
+WebPlace? placeOfPart(String part) => (part.startsWith('/') ? part.substring(1) : part) == ChatsPlace.part
+  ? const ChatsPlace() : null;
 
 /// The connections the left bar lists under *Other connections*, with their names and icons.
 const _connections = [
@@ -63,7 +70,7 @@ const _folderIcons = {
 /// it. It holds the open note in one place, so a resize keeps the note and the words not yet saved.
 class WebShell extends StatefulWidget {
   const WebShell({super.key, required this.relay, required this.client, this.opener, this.picker, this.sharer, this.drops,
-    this.settingsAt});
+    this.settingsAt, this.placeAt});
 
   final Relay relay;
   final SpaceClient client;
@@ -75,15 +82,17 @@ class WebShell extends StatefulWidget {
   final Stream<List<NewFile>>? drops;
   /// The Settings page the page's address named, such as `#webhooks`: Settings opens on it once the notes show.
   final SettingsPage? settingsAt;
+  /// The place the page's address named, such as `#chats`: the page opens on it in place of the notes.
+  final WebPlace? placeAt;
 
   @override
   State<WebShell> createState() => WebShellState();
 }
 
 class WebShellState extends State<WebShell> {
-  WebPlace _place = const FolderPlace(NotesFolder.all);
+  late WebPlace _place = widget.placeAt ?? const FolderPlace(NotesFolder.all);
   /// On the phone's pages: Home shows, not a folder.
-  bool _home = true;
+  late bool _home = widget.placeAt == null;
   /// The note open now, or null with [_open] for a new one.
   Entry? _entry;
   bool _open = false;
@@ -283,7 +292,8 @@ class WebShellState extends State<WebShell> {
         onFolder: (folder) => _go(FolderPlace(folder)), onSettings: _settings, otherConnections: [
           for (final (kind, title, icon) in _connections)
             FolderRow(icon: icon, title: title, onTap: () => _go(ConnectionPlace(kind))),
-          FolderRow(icon: CupertinoIcons.chat_bubble_2, title: 'Claude Code chats', onTap: () => _go(const ChatsPlace())),
+          FolderRow(icon: CupertinoIcons.chat_bubble_2, title: 'AI chat transcripts', line: 'Claude Code and Codex',
+            onTap: () => _go(const ChatsPlace())),
         ]);
     }
     return PopScope(
@@ -358,7 +368,7 @@ class Sidebar extends StatelessWidget {
         Padding(padding: const EdgeInsets.fromLTRB(22, 20, 16, 6),
           child: Text('Other connections', style: text.labelLarge?.copyWith(color: brand.muted))),
         for (final (kind, title, icon) in _connections) row(icon, title, ConnectionPlace(kind)),
-        row(CupertinoIcons.chat_bubble_2, 'Claude Code chats', const ChatsPlace()),
+        row(CupertinoIcons.chat_bubble_2, 'AI chat transcripts', const ChatsPlace()),
       ])),
       Divider(height: 1, color: brand.line),
       const SizedBox(height: 8),

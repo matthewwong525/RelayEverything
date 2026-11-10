@@ -20,6 +20,7 @@ import 'package:relay_app/screens/note_editor.dart';
 import 'package:relay_app/screens/round_button.dart' show ButtonPill;
 import 'package:relay_app/screens/settings.dart' show SettingsScreen;
 import 'package:relay_app/screens/timeline.dart' show TimelineScreen;
+import 'package:relay_app/screens/transcripts.dart' show CommandBox, TranscriptsPage;
 
 class FakeRelay extends Relay {
   /// The phone app, or the browser for a test of the web page.
@@ -2412,6 +2413,112 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Location'), findsOneWidget);
     expect(relay.folded, isEmpty);
+  });
+
+  testWidgets('Home shows the notes folders, On this phone, then Other connections with AI chat transcripts, which folds',
+      (tester) async {
+    tallScreen(tester);
+    await tester.pumpWidget(RelayApp(relay: relay));
+    double top(Finder finder) => tester.getTopLeft(finder).dy;
+    final transcripts = find.widgetWithText(ListTile, 'AI chat transcripts');
+    expect(find.text('Other connections'), findsOneWidget);
+    expect(find.descendant(of: transcripts, matching: find.text('Claude Code and Codex')), findsOneWidget);
+    expect(top(find.widgetWithText(ListTile, 'Shares')), lessThan(top(find.widgetWithText(ListTile, 'Location'))));
+    expect(top(find.widgetWithText(ListTile, 'Photos')), lessThan(top(find.text('Other connections'))));
+    expect(top(find.text('Other connections')), lessThan(top(transcripts)));
+    expect(find.ancestor(of: find.text('Other connections'), matching: find.byType(InkWell)), findsNothing);
+    await tester.tap(find.text('Other connections'));
+    await tester.pumpAndSettle();
+    expect(transcripts, findsNothing);
+    expect(find.widgetWithText(ListTile, 'Location'), findsOneWidget, reason: 'each section folds alone');
+    expect([relay.calls, relay.folded], [['fold Other connections true'], {'Other connections'}]);
+    // A new start reads what the phone kept.
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(RelayApp(relay: relay));
+    expect(transcripts, findsNothing);
+    await tester.tap(find.text('Other connections'));
+    await tester.pumpAndSettle();
+    expect(transcripts, findsOneWidget);
+    expect(relay.folded, isEmpty);
+  });
+
+  group('AI chat transcripts', () {
+    const commands = ['/plugin marketplace add matthewwong525/RelayEverything', '/plugin install relay@relay',
+      'codex plugin marketplace add matthewwong525/RelayEverything', 'codex plugin add relay@relay', '/relay:connect'];
+
+    /// Keeps what the page copies, as the phone's clipboard would.
+    List<String> catchCopies(WidgetTester tester) {
+      final copied = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') copied.add((call.arguments as Map)['text'] as String);
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+      return copied;
+    }
+
+    testWidgets('signed out or with your own webhook, the page gives the steps to copy, and no link', (tester) async {
+      tallScreen(tester);
+      final copied = catchCopies(tester);
+      final opened = <Uri>[];
+      for (final (settings, connected) in [(const Settings(), false), (const Settings(), true),
+        (const Settings(sending: true, place: SendPlace.webhook), false)]) {
+        relay
+          ..settings = settings
+          ..connected = connected
+          ..server = connected ? 'https://relay.example.com' : null;
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpWidget(RelayApp(relay: relay, opener: (address) async {
+          opened.add(address);
+          return true;
+        }));
+        await openFolder(tester, 'AI chat transcripts');
+        expect(find.byType(TranscriptsPage), findsOneWidget);
+        expect(find.text('AI chat transcripts'), findsWidgets);
+        expect(find.textContaining('saves your Claude Code and Codex chats word for word'), findsOneWidget);
+        for (final command in commands) {
+          expect(find.text(command), findsOneWidget, reason: command);
+        }
+        expect(find.textContaining('Then click Connect.'), findsOneWidget);
+        expect(find.text('Read them on the web'), findsNothing, reason: '$settings');
+      }
+      final connect = find.descendant(of: find.widgetWithText(CommandBox, '/relay:connect'), matching: find.byTooltip('Copy'));
+      await tester.ensureVisible(connect);
+      await tester.tap(connect);
+      await tester.pumpAndSettle();
+      expect(copied, ['/relay:connect']);
+      expect(find.byTooltip('Copied'), findsOneWidget);
+      expect([opened, relay.calls], [isEmpty, isEmpty]);
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+      expect(find.text('Other connections'), findsOneWidget);
+    });
+
+    testWidgets('signed in, Read them on the web opens the chats on your Relay Everything page', (tester) async {
+      tallScreen(tester);
+      final opened = <Uri>[];
+      var opens = true;
+      relay
+        ..connected = true
+        ..server = 'https://relay.example.com'
+        ..settings = const Settings(sending: true);
+      await tester.pumpWidget(RelayApp(relay: relay, opener: (address) async {
+        opened.add(address);
+        return opens;
+      }));
+      await openFolder(tester, 'AI chat transcripts');
+      final read = find.widgetWithText(FilledButton, 'Read them on the web');
+      expect(read, findsOneWidget);
+      await tester.ensureVisible(read);
+      await tester.tap(read);
+      await tester.pumpAndSettle();
+      expect(opened, [Uri.parse('https://relay.example.com/#chats')]);
+      opens = false;
+      await tester.tap(read);
+      await tester.pump();
+      expect(find.text('The browser did not open. Try again.'), findsOneWidget);
+      expect(relay.calls, isEmpty);
+    });
   });
 
   testWidgets('Home asks the server for the account and names as it opens', (tester) async {

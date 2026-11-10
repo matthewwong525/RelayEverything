@@ -12,12 +12,13 @@ import 'hold_to_talk.dart';
 import 'note_editor.dart';
 import 'settings.dart';
 import 'timeline.dart';
+import 'transcripts.dart';
 
 export 'folder.dart' show Opener;
 
-/// The first screen, as Apple Notes' *Folders*: the notes folders, *On this phone*, the Settings gear, and at the bottom
-/// *Search*, which finds notes in every folder, and *New note*. It also holds what each page needs once:
-/// the notices, the recording screen and *Start a voice note* from Shortcuts.
+/// The first screen, as Apple Notes' *Folders*: the notes folders, *On this phone*, *Other connections*, the Settings
+/// gear, and at the bottom *Search*, which finds notes in every folder, and *New note*. It also holds what each page
+/// needs once: the notices, the recording screen and *Start a voice note* from Shortcuts.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.relay, this.scanner, this.opener, this.picker, this.sharer,
     this.voiceRequests, this.onOpen, this.onFolder, this.onSettings, this.otherConnections});
@@ -37,7 +38,8 @@ class HomeScreen extends StatefulWidget {
   final NoteOpener? onOpen;
   final ValueChanged<NotesFolder>? onFolder;
   final VoidCallback? onSettings;
-  /// In the browser: the rows of *Other connections*, in place of *On this phone*.
+  /// In the browser: the rows of *Other connections*, in place of *On this phone* and the phone's own *Other
+  /// connections*.
   final List<Widget>? otherConnections;
 
   @override
@@ -182,7 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
               picker: widget.picker, sharer: widget.sharer, opener: widget.opener))),
       ]),
       if (widget.otherConnections case final rows?) ..._section('Other connections', rows)
-      else ..._section('On this phone', [
+      else ...[..._section('On this phone', [
         FolderRow(icon: CupertinoIcons.location, title: 'Location', line: locationLine(relay, now),
           onTap: () => _open(LocationPage(relay: relay, scanner: scanner))),
         FolderRow(icon: CupertinoIcons.heart, title: 'Health', line: healthLine(relay, now),
@@ -191,7 +193,10 @@ class _HomeScreenState extends State<HomeScreen> {
           onTap: () => _open(CalendarPage(relay: relay, scanner: scanner))),
         FolderRow(icon: CupertinoIcons.photo, title: 'Photos', line: photosLine(relay),
           onTap: () => _open(PhotosPage(relay: relay, scanner: scanner, opener: widget.opener))),
-      ]),
+      ]), ..._section('Other connections', [
+        FolderRow(icon: CupertinoIcons.chat_bubble_2, title: 'AI chat transcripts', line: 'Claude Code and Codex',
+          onTap: () => _open(TranscriptsPage(relay: relay, opener: widget.opener))),
+      ])],
     ];
   }
 

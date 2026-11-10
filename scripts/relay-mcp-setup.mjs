@@ -85,7 +85,7 @@ export async function setup({ args, env, request = fetch, wrangler = runWrangler
   log(reportLine(`worker ${goal.worker}`, exists ? '' : 'deployed'));
 
   log(`Sign-in: ${goal.server}, back to ${goal.callback}`);
-  log(`Connect address: ${goal.address}`);
+  log(`Connect address: ${goal.address.replace(/\/$/, '')}`);
 }
 
 async function main() {

@@ -30,10 +30,19 @@ end
 
 default_platform(:ios)
 
-# Each signed part of the app: its Xcode target and its bundle id.
+# Each signed part of the app: its Xcode target and its bundle id. The watch app and its watch face button ship inside
+# the iPhone app, each with its own App Store profile.
 SIGNED_TARGETS = {
   "Runner" => "com.matthewwong525.relayApp",
-  "ShareExtension" => "com.matthewwong525.relayApp.share"
+  "ShareExtension" => "com.matthewwong525.relayApp.share",
+  "RelayWatch" => "com.matthewwong525.relayApp.watchkitapp",
+  "RelayWatchWidget" => "com.matthewwong525.relayApp.watchkitapp.widget"
+}.freeze
+
+# The name Apple's account shows for a bundle id this build registers: letters, digits and spaces only.
+BUNDLE_NAMES = {
+  "RelayWatch" => "Relay Everything Watch",
+  "RelayWatchWidget" => "Relay Everything Watch Button"
 }.freeze
 
 # App Store states in which a version is already sent: a rerun of the release job sends it no second time.
@@ -57,6 +66,20 @@ platform :ios do
     )
   end
 
+  # A profile needs its bundle id on Apple's account: the first build registers a missing one, and later builds find it.
+  # Watch apps register on the iOS platform, as Apple signs them with iOS App Store profiles.
+  private_lane :ensure_bundle_ids do
+    SIGNED_TARGETS.each do |target, bundle_id|
+      next if Spaceship::ConnectAPI::BundleId.find(bundle_id)
+      UI.message("Registering the bundle id #{bundle_id} with Apple.")
+      Spaceship::ConnectAPI::BundleId.create(
+        name: BUNDLE_NAMES.fetch(target, "Relay Everything"),
+        platform: Spaceship::ConnectAPI::BundleIdPlatform::IOS,
+        identifier: bundle_id
+      )
+    end
+  end
+
   # Signs, archives and exports the .ipa, then checks its speech parts. Returns the App Store Connect key.
   private_lane :build_signed do
     setup_ci
@@ -77,6 +100,7 @@ platform :ios do
       File.delete(p12_path) if File.exist?(p12_path)
     end
 
+    ensure_bundle_ids
     # sigh takes only the certificate in this keychain: it reuses Apple's valid profile for it, or makes one.
     profiles = SIGNED_TARGETS.to_h do |target, bundle_id|
       get_provisioning_profile(api_key: api_key, app_identifier: bundle_id, team_id: team_id)
@@ -97,7 +121,7 @@ platform :ios do
       scheme: "Runner",
       configuration: "Release",
       export_method: "app-store",
-      # A CocoaPods resource bundle can need a team; the two app targets above sign manually all the same.
+      # A CocoaPods resource bundle can need a team; the signed targets above sign manually all the same.
       xcargs: "DEVELOPMENT_TEAM=#{team_id}",
       export_options: { signingStyle: "manual", teamID: team_id, provisioningProfiles: profiles }
     )

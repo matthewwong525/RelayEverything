@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { handleApp } from "../index";
 import { hashToken } from "./people";
-import { call, checker, env, laptop, lost, matthew, NOW, ipad, phone, request, rows } from "../../../tests/relay";
+import { ANA, call, checker, db, directoryDb, env, laptop, lost, makeKey, matthew, NOW, ipad, phone, request, rows } from "../../../tests/relay";
 
 const MINUTE = 60_000;
 const SESSION = "0b6f3c1e-5d2a-4e8b-9c7f-1a2b3c4d5e6f";
@@ -81,6 +81,20 @@ it("takes chats only from a chat key: a phone, an iPad, a person or a revoked ke
     expect((await call(who, "POST", "chat-saves", { sessionId: SESSION, title: "T", text: "S" })).status).toBe(403);
   }
   expect(chatRows()).toEqual([]);
+});
+
+it("takes chats from a computer's key, and keeps the app of the first send: Codex, or Claude Code when none is named", async () => {
+  const computer = { bearer: makeKey("computer") };
+  db.sql.prepare(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at, reaches)
+    VALUES ('d-computer', 'Work laptop', 'rek:d-computer', '', ?, NULL, 'agent')`).run(NOW);
+  directoryDb.sql.prepare("INSERT INTO relay_keys (key_sha256, person_id, device_id, reaches, created_at) VALUES (?, ?, 'd-computer', 'agent', ?)")
+    .run(await hashToken(computer.bearer), ANA, NOW);
+  expect((await call(computer, "POST", "chats", chat([said(0)], { app: "codex" }))).json).toEqual({ stored: 1 });
+  expect((await call(computer, "POST", "chats", chat([said(1)], { app: "claude-code" }))).json).toEqual({ stored: 2 });
+  expect((await call(computer, "POST", "chat-saves", { sessionId: SESSION, title: "Plan", text: "Summary" })).status).toBe(200);
+  expect((await call(laptop, "POST", "chats", chat([said(0)], { sessionId: "another-session-0001" }))).json).toEqual({ stored: 1 });
+  expect(chatRows().map(row => [row.device_id, row.app])).toEqual([["d-computer", "codex"], ["d-laptop", "claude-code"]]);
+  expect((await call(computer, "POST", "chats", chat([said(0)], { sessionId: "third-session-0001", app: "cursor" }))).status).toBe(400);
 });
 
 it("keeps a save beside the chat, and shows the newest save's title as the chat's", async () => {

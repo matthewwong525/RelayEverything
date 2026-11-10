@@ -16,6 +16,7 @@ import 'package:relay_app/screens/note_blocks.dart';
 import 'package:relay_app/screens/note_editor.dart';
 import 'package:relay_app/screens/settings.dart';
 import 'package:relay_app/screens/timeline.dart' show TimelineScreen;
+import 'package:relay_app/web/chats.dart' show ChatsView;
 import 'package:relay_app/web/connection_page.dart';
 import 'package:relay_app/web/settings_dialog.dart';
 import 'package:relay_app/web/shell.dart';
@@ -54,14 +55,14 @@ void main() {
 
   tearDown(() => drops.close());
 
-  Future<void> show(WidgetTester tester, Size size, {SettingsPage? settingsAt}) async {
+  Future<void> show(WidgetTester tester, Size size, {SettingsPage? settingsAt, WebPlace? placeAt}) async {
     tester.view
       ..physicalSize = size
       ..devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(MaterialApp(theme: brandTheme(Brightness.light),
       home: WebShell(relay: relay, client: space.client, drops: drops.stream, opener: (_) async => true,
-        settingsAt: settingsAt)));
+        settingsAt: settingsAt, placeAt: placeAt)));
     await tester.pumpAndSettle();
   }
 
@@ -105,10 +106,10 @@ void main() {
       expect(sidebarCount('Notes', 3), findsOneWidget);
       expect(sidebarCount('Voice notes', 1), findsOneWidget);
       expect(sidebarCount('Shares', 1), findsOneWidget);
-      for (final title in ['Other connections', 'Location', 'Health', 'Calendar', 'Photos', 'Claude Code chats']) {
+      for (final title in ['Other connections', 'Location', 'Health', 'Calendar', 'Photos', 'AI chat transcripts']) {
         expect(inSidebar(title), findsOneWidget, reason: title);
       }
-      expect(tester.getTopLeft(inSidebar('Settings')).dy, greaterThan(tester.getTopLeft(inSidebar('Claude Code chats')).dy + 100),
+      expect(tester.getTopLeft(inSidebar('Settings')).dy, greaterThan(tester.getTopLeft(inSidebar('AI chat transcripts')).dy + 100),
         reason: 'Settings sits at the bottom of the left bar');
       await finish(tester);
     });
@@ -194,7 +195,7 @@ void main() {
     testWidgets("the phone's links to Webhooks and AI apps open Settings on that page, over the notes", (tester) async {
       space.answers['GET inbox'] = (_) => {'email': {'on': false}};
       space.answers['GET webhooks'] = (_) => {'webhooks': <Object>[], 'kinds': <Object>[]};
-      space.answers['GET ai-apps'] = (_) => {'address': 'https://relay-mcp.example.com/mcp', 'apps': <Object>[]};
+      space.answers['GET ai-apps'] = (_) => {'address': 'https://mcp.example.com', 'apps': <Object>[]};
       for (final kind in ConnectedKind.values) {
         final page = SettingsPage.ofPart(Uri.parse('https://relay.example.com/apps/relay/${kind.part}').fragment);
         expect(page, isNotNull, reason: kind.part);
@@ -210,6 +211,22 @@ void main() {
       expect(SettingsPage.ofPart('/webhooks'), SettingsPage.webhooks, reason: "the app's own route in the address");
       expect(SettingsPage.ofPart(''), isNull);
       expect(SettingsPage.ofPart('/'), isNull);
+    });
+
+    testWidgets("the phone's Read them on the web opens /#chats on the AI chat transcripts", (tester) async {
+      space.answers['GET chats'] = (_) => {'chats': <Object>[], 'next': null, 'nextId': null};
+      final place = placeOfPart(Uri.parse('https://relay.example.com/#chats').fragment);
+      expect(place, isA<ChatsPlace>());
+      await show(tester, wide, placeAt: place);
+      expect(find.byType(ChatsView), findsOneWidget);
+      expect(find.byType(NotesPane), findsNothing);
+      expect(space.count('GET chats'), 1);
+      await tester.tap(inSidebar('Notes'));
+      await tester.pumpAndSettle();
+      expect(find.byType(NotesPane), findsOneWidget);
+      expect(placeOfPart('/chats'), isA<ChatsPlace>(), reason: "the app's own route in the address");
+      expect([placeOfPart(''), placeOfPart('webhooks'), placeOfPart('chats/1')], everyElement(isNull));
+      await finish(tester);
     });
   });
 
@@ -234,7 +251,7 @@ void main() {
       expect(find.byType(HomeScreen), findsOneWidget);
       expect(find.text('Other connections'), findsOneWidget);
       expect(find.text('On this phone'), findsNothing);
-      expect(find.text('Claude Code chats'), findsOneWidget);
+      expect(find.text('AI chat transcripts'), findsOneWidget);
       await tester.tap(find.text('Voice notes').first);
       await tester.pumpAndSettle();
       expect(find.byType(TimelineScreen), findsOneWidget);
@@ -252,6 +269,17 @@ void main() {
       await tester.pumpAndSettle();
       expect(relay.calls, isNot(contains('voice start')));
       expect(find.byType(NoteEditor), findsOneWidget, reason: 'a long press is a tap: it writes');
+      await finish(tester);
+    });
+
+    testWidgets('/#chats opens the AI chat transcripts as a page with Home to go back', (tester) async {
+      space.answers['GET chats'] = (_) => {'chats': <Object>[], 'next': null, 'nextId': null};
+      await show(tester, narrow, placeAt: const ChatsPlace());
+      expect(find.byType(ChatsView), findsOneWidget);
+      expect(find.byType(HomeScreen), findsNothing);
+      await tester.tap(find.text('Home'));
+      await tester.pumpAndSettle();
+      expect(find.byType(HomeScreen), findsOneWidget);
       await finish(tester);
     });
 
@@ -423,7 +451,7 @@ void main() {
       expect(find.text('Speech model'), findsOneWidget);
     });
 
-    testWidgets("the phone's Home keeps On this phone and the hold to talk", (tester) async {
+    testWidgets("the phone's Home keeps On this phone, its own Other connections and the hold to talk", (tester) async {
       relay
         ..platform = RelayPlatform.phone
         ..entries = [];
@@ -434,7 +462,9 @@ void main() {
       await tester.pumpWidget(MaterialApp(theme: brandTheme(Brightness.light), home: HomeScreen(relay: relay)));
       await tester.pumpAndSettle();
       expect(find.text('On this phone'), findsOneWidget);
-      expect(find.text('Other connections'), findsNothing);
+      // On the phone, Other connections holds only AI chat transcripts: the steps, not the chats.
+      expect(find.text('Other connections'), findsOneWidget);
+      expect(find.text('AI chat transcripts'), findsOneWidget);
       expect(recordAction(tester), [CustomSemanticsAction.getIdentifier(const CustomSemanticsAction(label: 'Record a voice note'))]);
     });
   });

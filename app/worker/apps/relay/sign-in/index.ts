@@ -1,7 +1,8 @@
-// Relay Everything's own sign-in, under /apps/relay/sign-in/: email code, Apple, Google, sign-out, and the AI
-// connector's and phone's hand-offs. The directory keeps each session, code and key as a SHA-256. wiki/relay-spaces.md
+// Relay Everything's own sign-in, under /apps/relay/sign-in/: email, Apple, Google, sign-out, and the AI connector's,
+// phone's and computer's hand-offs. The directory keeps each session, code and key as a SHA-256. wiki/relay-spaces.md
 import type { DirectoryEnv } from "../people.ts";
 import type { Identity } from "../store.ts";
+import { computer, computerConfirm, computerKey, computerStart } from "./computer.ts";
 import { connect } from "./connect.ts";
 import { code, email, methods } from "./email.ts";
 import { callback, start } from "./oidc.ts";
@@ -37,10 +38,14 @@ const ROUTES = new Map<string, Handler>([
   ["GET phone", phone],
   ["POST phone", phoneConfirm],
   ["POST phone/key", phoneKey],
+  ["POST computer/start", computerStart],
+  ["GET computer", computer],
+  ["POST computer", computerConfirm],
+  ["POST computer/key", computerKey],
 ]);
-// Apple posts its answer from its own site, and the phone app from no site: the state cookie and the app's secret,
-// not the Origin, protect those.
-const CROSS_SITE = new Set(["POST apple/callback", "POST phone/key"]);
+// Apple posts its answer from its own site, and the apps from no site: the state cookie and the app's or computer's
+// secret, not the Origin, protect those. A computer's start makes only a link that a signed-in person must confirm.
+const CROSS_SITE = new Set(["POST apple/callback", "POST phone/key", "POST computer/start", "POST computer/key"]);
 
 /** A sign-in route's answer, or null for an address outside the sign-in. */
 export async function signIn(request: Request, env: SignInEnv, identity: Identity, wait?: Wait): Promise<Response | null> {

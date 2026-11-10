@@ -14,7 +14,7 @@ const HAND_PAGES: Record<string, HandPage> = {
   "POST attachments": { summary: "Send a note's file, after its note", page: "../files/#send-a-file" },
   "GET attachment": { summary: "Open a note's file", page: "../files/#open-a-file" },
   "POST photos": { summary: "Send a photo from the phone, with a phone key", page: "../../app/photos/#what-the-phone-sends" },
-  "POST chats": { summary: "Send a Claude Code chat's new messages, with a chat key", page: "../../connections/claude-code/#what-the-server-receives" },
+  "POST chats": { summary: "Send a Claude Code or Codex chat's new messages, with a computer's key", page: "../../connections/claude-code/#what-the-server-receives" },
 };
 const ENCODING: Record<Action["encoding"], string> = {
   none: "It takes no input.", query: "Send the input as query parameters.", json: "Send the input as a JSON body.",
@@ -53,7 +53,7 @@ const json = (value: unknown) => `\`\`\`json\n${JSON.stringify(value, null, 2)}\
 /** The note changes the page makes too, as the space's Web device: caller.ts's asDeviceOrPage. */
 const PAGE_WRITES = new Set(["POST /apps/relay/api/notes", "PATCH /apps/relay/api/notes", "DELETE /apps/relay/api/notes"]);
 const caller = (method: string, path: string) => reaches("chats", method, path)
-  ? reaches("phone", method, path) ? "any device key" : "a Claude Code chat key only"
+  ? reaches("phone", method, path) ? "any device key" : "a computer's key, or an older chat key, only"
   : reaches("phone", method, path) ? method === "GET" || PAGE_WRITES.has(`${method} ${path}`) ? "a signed-in person or a phone key" : "a phone key"
     : "a signed-in person only, not a device key";
 

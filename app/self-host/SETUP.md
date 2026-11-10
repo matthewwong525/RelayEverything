@@ -42,7 +42,7 @@ When no release holds the page for the person's copy, the command stops and chan
 4. **Install:** `node app/self-host/setup.mjs install --email <the person's email>`. Their email is the only login. Add `--name <name>` for another name. It prints `server=` and `connector=`.
 5. **Sign in:** the person opens the `server=` address, enters their email, and types the code Cloudflare sends. Their first visit makes their account and their own empty space. Only the owner's email gets an account. To let other people make one, the owner sets `RELAY_SIGN_UP` to `open` in `app/self-host/wrangler.jsonc` and runs `update`. To show people an address for questions and privacy requests on their account card, the owner sets `RELAY_CONTACT_EMAIL` to that address the same way. With no address set, the server shows no such line. `update` keeps both settings.
 6. **Keys:** on the Relay Everything page, the person taps *Add a device* for each phone and each Claude Code computer. The page shows the key once, as a QR code. Never ask for a key in the chat. Then point them to [Connect a phone](https://relayeverything.com/start/connect-a-phone/).
-7. **AI connector:** the person adds the `connector=` address to their AI, as [Connect your AI](https://relayeverything.com/connections/connect-your-ai/) shows. The AI app sends them to their server's own login.
+7. **AI connector:** the person adds the `connector=` address to their AI, as [Connect your AI](https://relayeverything.com/connections/connect-your-ai/) shows. The AI app sends them to their server's own login. In Claude Code or Codex, the person uses the plugin instead: `/relay:connect <the server= address>` ([Save AI chat transcripts](https://relayeverything.com/connections/claude-code/)).
 
 ## Email notes
 
@@ -54,7 +54,7 @@ Email is off until the person asks for it. It needs a domain of theirs on Cloudf
 
 ## Update my Relay Everything
 
-When the person asks to update: `git pull`, then `npm ci` in `app/`, then `node app/self-host/setup.mjs update`. It gets [the Relay Everything page](#the-relay-everything-page) for the new copy, writes the server's settings again from this repository, applies the new database changes, then puts the new server live. If there is no page for the copy, or a database change fails, it stops, and the old server stays live. The data stays.
+When the person asks to update: `git pull`, then `npm ci` in `app/`, then `node app/self-host/setup.mjs update`. It gets [the Relay Everything page](#the-relay-everything-page) for the new copy, writes the server's settings again from this repository, applies the new database changes, then puts the new server live. If there is no page for the copy, or a database change fails, it stops, and the old server stays live. The data stays. When the connector's address changed, such as from `…/mcp` to the bare address, `update` says so: the person connects each AI app again at the new address.
 
 A copy on a release tag has no branch to pull. To update it, run `git fetch --tags`, then `git checkout` the newest `v<x.y.z>` tag, then continue with `npm ci`.
 

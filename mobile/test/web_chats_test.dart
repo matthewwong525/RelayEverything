@@ -8,19 +8,19 @@ import 'package:relay_app/brand.dart';
 import 'package:relay_app/web/chats.dart';
 import 'package:relay_app/web/space.dart';
 
-// Saved Claude Code chats in the browser, with a stand-in server, as App.test.tsx tested the React page.
+// Saved AI chat transcripts in the browser, with a stand-in server, as App.test.tsx tested the React page.
 final base = Uri.parse('https://relay.example.com/apps/relay/');
 final now = DateTime.now().millisecondsSinceEpoch;
 const chat1 = 'c0000000-0000-4000-8000-000000000001';
 const chat2 = 'c0000000-0000-4000-8000-000000000002';
 const chat3 = 'c0000000-0000-4000-8000-000000000003';
 
-Map<String, Object?> listed(String id, String title, {bool savedByAi = false, int messages = 4}) =>
-  {'id': id, 'title': title, 'project': 'relay-app', 'app': 'claude-code', 'startedAt': now, 'lastAt': now,
+Map<String, Object?> listed(String id, String title, {bool savedByAi = false, int messages = 4, String? app = 'claude-code'}) =>
+  {'id': id, 'title': title, 'project': 'relay-app', 'app': ?app, 'startedAt': now, 'lastAt': now,
     'messages': messages, 'savedByAi': savedByAi};
 
-final chats = {'chats': [listed(chat1, 'Stiffener plan', savedByAi: true), listed(chat2, 'Fix the webhook signature', messages: 1)],
-  'next': null, 'nextId': null};
+final chats = {'chats': [listed(chat1, 'Stiffener plan', savedByAi: true),
+  listed(chat2, 'Fix the webhook signature', messages: 1, app: 'codex')], 'next': null, 'nextId': null};
 final oneChat = {'chat': listed(chat1, 'Stiffener plan', savedByAi: true), 'next': 2,
   'saves': [{'id': 'e1', 'title': 'Stiffener plan', 'text': 'Use a 0.2 mm steel stiffener.', 'createdAt': now}],
   'messages': [
@@ -80,9 +80,12 @@ void main() {
       testWidgets('lists saved chats, finds them by a word, and says when none match', (tester) async {
         final server = Server();
         await open(tester, server, wide: wide);
-        expect(find.text('Claude Code chats'), findsOneWidget);
+        expect(find.text('AI chat transcripts'), findsOneWidget);
         expect(find.text('Stiffener plan'), findsOneWidget);
         expect(find.text('Saved by the AI'), findsOneWidget);
+        // Each chat names its app in a small tag.
+        expect([find.text('Claude Code'), find.text('Codex')], everyElement(findsOneWidget));
+        expect(tester.getTopLeft(find.text('Codex')).dy, greaterThan(tester.getTopLeft(find.text('Fix the webhook signature')).dy));
         expect(find.textContaining(RegExp(r'^relay-app · .* · 1 message$')), findsOneWidget);
         expect(find.textContaining(RegExp(r'^relay-app · .* · 4 messages$')), findsOneWidget);
 
@@ -106,7 +109,9 @@ void main() {
         expect(find.text('Use a 0.2 mm steel stiffener.'), findsOneWidget);
         expect(find.text('How thick should the stiffener be?'), findsOneWidget);
         expect(find.text('Read pcb/board.kicad_pcb'), findsOneWidget);
-        expect(find.textContaining(RegExp(r'^relay-app · .* · Claude Code$')), findsOneWidget);
+        expect(find.textContaining(RegExp(r'^relay-app · [^·]*$')), findsOneWidget);
+        expect(find.descendant(of: find.byType(BrandTag), matching: find.text('Claude Code')),
+          wide ? findsNWidgets(2) : findsOneWidget, reason: 'the open chat names its app, and the wide list beside it too');
         final save = tester.getTopLeft(find.text('Use a 0.2 mm steel stiffener.'));
         expect(tester.getTopLeft(find.text('0.2 mm is enough.')).dy, greaterThan(save.dy));
         await tester.tap(find.text('Show more messages'));
@@ -205,7 +210,13 @@ void main() {
     });
   }
 
-  testWidgets('says how to start when there are no chats, and how to connect Claude Code', (tester) async {
+  test('a chat with no app came from Claude Code', () {
+    expect([for (final app in [null, 'claude-code', 'codex']) ChatSummary.fromJson(listed(chat1, 'Plan', app: app)).appName],
+      ['Claude Code', 'Claude Code', 'Codex']);
+  });
+
+  testWidgets('says how to start when there are no chats, and how to connect a computer from Claude Code or Codex',
+      (tester) async {
     final server = Server();
     server.answers['GET chats'] = () => json({'chats': <Object>[], 'next': null, 'nextId': null});
     final opened = <Uri>[];
@@ -218,11 +229,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('No chats yet'), findsOneWidget);
     expect(find.text('Pick a chat to read it.'), findsOneWidget);
-    await tester.tap(find.text('Connect Claude Code'));
+    await tester.tap(find.text('Connect a computer'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('can only add chats'), findsOneWidget);
-    expect(find.text('/plugin marketplace add matthewwong525/RelayEverything'), findsOneWidget);
-    expect(find.text('/plugin install relay@relay'), findsOneWidget);
+    expect(find.textContaining('saves your Claude Code and Codex chats word for word'), findsOneWidget);
+    for (final command in ['/plugin marketplace add matthewwong525/RelayEverything', '/plugin install relay@relay',
+      'codex plugin marketplace add matthewwong525/RelayEverything', 'codex plugin add relay@relay', '/relay:connect']) {
+      expect(find.text(command), findsOneWidget, reason: command);
+    }
+    expect(find.textContaining('can read all your Relay Everything data'), findsOneWidget);
     expect(find.textContaining('run your own Relay Everything server'), findsOneWidget);
     await tester.tap(find.text('Read the guide'));
     expect(opened.single.toString(), 'https://relayeverything.com/connections/claude-code/');

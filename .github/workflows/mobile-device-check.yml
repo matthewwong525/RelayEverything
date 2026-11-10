@@ -129,7 +129,8 @@ jobs:
         working-directory: mobile
         run: |
           set -o pipefail
-          if flutter pub get 2>&1 | tee "$OUT/build.log" && flutter build ios --simulator --debug 2>&1 | tee -a "$OUT/build.log"; then
+          # The watch app inside needs the iPhone's id: Flutter refuses a simulator build of a watch companion without it.
+          if flutter pub get 2>&1 | tee "$OUT/build.log" && flutter build ios --simulator --debug -d "$DEVICE_UDID" 2>&1 | tee -a "$OUT/build.log"; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
           else
             bash device-check/broken.sh "The app does not build for the simulator." "$OUT/build.log"
@@ -258,7 +259,8 @@ jobs:
           fi
           echo "Every step of the fixed tour passed."
 
-  # The share card's Swift rules against the Dart ones (RunnerTests), on a second Mac at the same time as job iphone.
+  # The Swift rules against the Dart ones (RunnerTests) and the watch app's (RelayWatchTests), on a second Mac at the
+  # same time as job iphone.
   swift-tests:
     if: >-
       ${{ inputs.tour_only || github.event_name == 'workflow_dispatch' || (github.event.label.name == 'check on iPhone'
@@ -306,13 +308,12 @@ jobs:
           set -o pipefail
           flutter pub get
           flutter build ios --simulator --debug --config-only
-          if xcodebuild test -workspace ios/Runner.xcworkspace -scheme Runner -destination "id=$DEVICE_UDID" \
-            -only-testing:RunnerTests 2>&1 | tee "$OUT/swift-tests.log" | tail -n 40; then
-            echo passed > "$OUT/swift-tests.txt"
-          else
-            echo failed > "$OUT/swift-tests.txt"
-            exit 1
-          fi
+          result=passed
+          xcodebuild test -workspace ios/Runner.xcworkspace -scheme Runner -destination "id=$DEVICE_UDID" \
+            -only-testing:RunnerTests 2>&1 | tee "$OUT/swift-tests.log" | tail -n 40 || result=failed
+          bash device-check/watch-tests.sh || result=failed
+          echo "$result" > "$OUT/swift-tests.txt"
+          [ "$result" = passed ]
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
@@ -413,9 +414,9 @@ jobs:
         run: |
           if ! [[ "$PR" =~ ^[0-9]+$ ]]; then echo "::error::pr must be a pull request number."; exit 1; fi
           case "$SWIFT" in
-            success) swift="The share card's Swift tests passed." ;;
-            failure) swift="**The share card's Swift tests failed.** The file \`device-check-swift\` has the log." ;;
-            *) swift="The share card's Swift tests did not finish ($SWIFT)." ;;
+            success) swift="The Swift tests passed: the share card, the inbox and the watch app." ;;
+            failure) swift="**The Swift tests failed.** The file \`device-check-swift\` has the logs." ;;
+            *) swift="The Swift tests did not finish ($SWIFT)." ;;
           esac
           {
             if [ -f result/report.md ]; then head -c 60000 result/report.md; else echo "The iPhone check made no report. Open the run."; fi

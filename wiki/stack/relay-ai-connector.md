@@ -4,12 +4,16 @@ Relay Everything's AI connector lets an AI chat app, such as the Claude app or C
 
 | Where | Address to add |
 | --- | --- |
-| Live | `https://relay-everything-mcp.matthewwong525.workers.dev/mcp` |
-| Previews | `https://relay-everything-mcp-staging.matthewwong525.workers.dev/mcp` |
+| Live | `https://mcp.relayeverything.com` |
+| Previews | `https://mcp-staging.relayeverything.com` |
 
-The **AI apps** card at the bottom of the Relay Everything page shows the address, with a *Copy* button, and every app you connected.
+The **AI apps** card at the bottom of the Relay Everything page shows the address, with a *Copy* button, and every app you connected. `/mcp` on the same host also works.
 
-**The old address no longer answers.** An app you connected at `https://relay-ring-mcp.matthewwong525.workers.dev/mcp` must connect again at the address above: the old Worker read the old shared tables, which are gone.
+**The old addresses no longer answer.** The Worker has `workers_dev` off, so `…workers.dev/mcp` is gone. An app you connected there must connect again at the address above: each token is bound to the address it was made for.
+
+### Why the bare address
+
+The OAuth provider (`@cloudflare/workers-oauth-provider`) binds each token's audience to `resourceMetadata.resource` exactly. So `RELAY_MCP_ADDRESS` is the bare origin with a slash, `https://mcp.relayeverything.com/`: a resource whose path is `/` covers every path, `/mcp` and `/v1/` included. The provider's `apiRoute` stays `/mcp`, because `/` as a route would also take `/authorize` and `/callback`. So `index.ts` sends an MCP call on exactly `/` (a `POST`, a `DELETE`, a preflight, or a `GET` that accepts `text/event-stream`) to the provider as the same call on `/mcp`. A plain browser `GET /` gets a short page that names the address. The metadata is at `/.well-known/oauth-protected-resource`, with no path after it. A custom domain on a Worker comes with its deploy (`routes` with `custom_domain: true`): setup makes nothing for it.
 
 ## Connect an app
 
@@ -17,7 +21,7 @@ You connect each app one time. Each app opens a sign-in page: you click **Connec
 
 - **The Claude app** (web, desktop or phone): open **Settings → Connectors → Add custom connector**. Type `Relay Everything` as the name and paste the address. Click **Connect**, then sign in. On a new chat, turn Relay Everything on in the tools menu.
 - **ChatGPT**: open **Settings → Apps & Connectors → Advanced settings** and turn on **Developer mode**. Then click **Create**, type `Relay Everything`, paste the address and pick **OAuth** for the sign-in. Click **Create**, then sign in. In a chat, pick Relay Everything from the developer-mode tools.
-- **Claude Code**: run `claude mcp add --transport http relay <address>`, then type `/mcp` in Claude Code and pick `relay` to sign in.
+- **Claude Code and Codex**: use the plugin, not the connector: `/relay:connect` gives the computer its own key, which reads the same data through `/v1/` and saves chats ([Relay Everything's AI chat transcripts](relay-chats.md)). Both at once give the AI each tool two times, so `/relay:connect` names a connector it finds and its remove command.
 
 Then ask, for example: *What did I note on 4 November?*, *How many steps did I walk last week?* or *Show me the photos from the trip to Lisbon.* Days are Toronto days unless you name another time zone.
 
@@ -35,7 +39,7 @@ The connector has fifteen tools: fourteen read, and `add_note` adds. Each answer
 - **calendar**: events from `relay_calendar_events` between two times, by start, or newest first with `q`; removed events are skipped. `GET /v1/calendar` is the same read. `fetch` stays notes and chats.
 - **places**: `visits`, the stays from one time to another (`id`, name, street as `address`, the calendar `event` that named it, `lat`, `lon`, `arrived`, `left`, `minutes`, and `ongoing` while you are still there), and `trips` between them (`id`, `mode`, `km`, `minutes`, `from` and `to`), with `next` to read on. The phone works out stays and trips ([phone sync](../relay-phone-sync.md)), and the server keeps them in `relay_stays`. For points that no stay or trip covers, `placeVisits` in [`queries.ts`](../../app/worker/apps/relay/queries.ts) gives the old runs of points at one street, so old days and a phone on *Only points* answer as before; where two phones' stays overlap, it keeps the longer one, and it reads on until the page is full. A stay not sent for 6 hours reads as ended, not `ongoing`.
 - **points**: the location points of one stay or trip, by its `id` from `places` or `day_summary`, which is the `relay_stays` row id, so an ongoing stay keeps it as the phone sends it again. By id it reads only the points of the phone that made that stay or trip, start to end, and to now while it is `ongoing`. Or give `from` and `to`, at most 7 days, for every phone's points. `stayPoints` and `rangePoints` in [`points.ts`](../../app/worker/apps/relay/points.ts) thin the points in one SQL statement to at most `MAX_POINTS` (500), evenly, with the first and the last, and give `total`. No points (`total: 0`) is an answer, not a refusal: the person may keep only stays and trips. `GET /v1/points` is the same read.
-- **search_chats**: saved Claude Code chats that hold every word you give, with the lines that match ([Relay Everything's Claude Code chats](relay-chats.md)).
+- **search_chats**: saved chats from Claude Code and Codex, each with its `app`, that hold every word you give, with the lines that match ([Relay Everything's AI chat transcripts](relay-chats.md)).
 - **read_chat**: one saved chat, a part at a time, with the AI's saved summaries.
 - **photos**: photos the phones sent, from one time to another, newest first: each one's id, time taken, place (`lat`, `lon`), width and height, with `nextCursor` for the next page. `near` (`lat`, `lon`, `km` up to 500) keeps only photos near a point; `limit` is at most 50.
 - **read_photo**: one photo by its id, as an image (`image/jpeg`), plus a text line with its time and place, for an app that drops images. An unknown id is a tool error.
@@ -66,8 +70,8 @@ An app stays connected while you use it. Its access token works for one hour, an
 
 `/v1/` is the connector's tools as plain HTTP with JSON, for a person's own scripts and services. The website owns how to use it: [Connect a service](../../site/src/content/docs/api/connect-a-service.md). Each route parses its tool's own input from `inputs.ts` and answers through `answers.ts`, so a route and its tool can't differ; `openapi.ts` makes the OpenAPI file, served at `/v1/openapi.json` with no sign-in.
 
-- **An API key** (`reaches = 'api'`), made with *Add a device*, goes through `apiKeyCaller` in `caller.ts`. A phone or chat key gets `403`.
-- **A connected app's token** works too. The installed OAuth provider refuses any route outside its one resource, `/mcp`, so `index.ts` answers `/v1/` before the provider: it checks the token with the provider's `unwrapToken` and needs the `/mcp` audience. A service leaves out `resource`, or sends the `/mcp` address.
+- **An API key** (`reaches = 'api'`), made with *Add a device*, or **a computer's key** (`reaches = 'agent'`), made by `/relay:connect`, goes through `apiKeyCaller` in `caller.ts`. A phone key gets `403`; an older chat key gets `403` that says to run `/relay:connect`.
+- **A connected app's token** works too. `index.ts` answers `/v1/` before the provider: it checks the token with the provider's `unwrapToken`, and its audience must name the same resource as `RELAY_MCP_ADDRESS` (`sameResource`, so a slash at the end makes no difference). A service leaves out `resource`, or sends the bare address.
 
 A refusal answers `{ "error", "error_description" }`, and every answer is open to any web page (CORS `*`): it takes a bearer token, never a cookie. After a route change, run `npm run relay:api-doc` in `app/`: it writes the website's OpenAPI file and reference page, which name `<your-relay-server>`.
 
@@ -104,7 +108,7 @@ The trial script connects to the staging connector as an AI app does, and prints
 ```bash
 node scripts/relay-mcp-trial.mjs              # staging, no sign-in
 node scripts/relay-mcp-trial.mjs --sign-in    # staging, then you sign in once in a browser on this computer
-node scripts/relay-mcp-trial.mjs --live       # the live connector: its metadata, and /mcp and /v1/ refused with no token
+node scripts/relay-mcp-trial.mjs --live       # the live connector: its metadata, its page, and /, /mcp and /v1/ refused with no token
 ```
 
 With no sign-in, it checks each step up to the server's sign-in: the metadata, an app's registration, the consent page, and the hand-off to the server. It also checks that a made-up sign-in answer, a made-up code, a wrong token and a service token are each refused. It can't sign in by itself. With `--sign-in`, it shows a link; you click **Connect** and sign in, and the app's token then reads a made-up note, and adds one through `add_note` and through `/v1/notes`. Disconnect the app **Relay Everything trial** on the preview's **AI apps** card after.

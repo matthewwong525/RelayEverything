@@ -1,18 +1,18 @@
-// Reads a Claude Code transcript (JSONL) into Relay's chat messages: what you typed, the AI's text, and one line per
+// Reads a Claude Code transcript (JSONL) into Relay Everything's chat messages: what you typed, the AI's text, and one line per
 // step. Tool output, thinking, helper chats and lines this reader does not know are never sent.
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative } from 'node:path';
 
 export const MESSAGE_CHARACTERS = 200_000;
-const TITLE_CHARACTERS = 80;
+export const TITLE_CHARACTERS = 80;
 const STEP_CHARACTERS = 200;
 const NOT_TYPED = /^(?:<task-notification>|<local-command-std(?:out|err)>|<local-command-caveat>|<bash-std(?:out|err)>|<system-reminder>|\[Request interrupted by user)/;
 // A `!command` you ran in Claude Code: kept as a step, like the AI's own commands; its output lines are NOT_TYPED.
 const BASH_INPUT = /^<bash-input>([\s\S]*?)<\/bash-input>/;
 
-const firstLine = value => String(value ?? '').trim().split('\n')[0].slice(0, STEP_CHARACTERS);
+export const firstLine = value => String(value ?? '').trim().split('\n')[0].slice(0, STEP_CHARACTERS);
 
-function shortPath(path, cwd) {
+export function shortPath(path, cwd) {
   const text = String(path ?? '');
   if (!isAbsolute(text) || !cwd) return text;
   const inside = relative(cwd, text);

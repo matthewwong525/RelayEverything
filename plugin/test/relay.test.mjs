@@ -1,0 +1,142 @@
+import assert from 'node:assert/strict';
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
+import { once } from 'node:events';
+import { createServer } from 'node:http';
+import { fileURLToPath } from 'node:url';
+import { test } from 'node:test';
+import { CHAT_KEY, NOT_CONNECTED, parseArgs, relay } from '../bin/relay.mjs';
+import { writeComputer } from '../lib/config.mjs';
+import { reason } from '../lib/server.mjs';
+import { API, computer, relayHome, SECRET } from './fake.mjs';
+
+const RELAY = fileURLToPath(new URL('../bin/relay.mjs', import.meta.url));
+
+/** A web API that answers each call with `{ path, query }`, or with the status and the refusal it is told to, in the
+ *  web API's own shape. */
+function fakeApi(status = 200, why = 'A made-up refusal.') {
+  const calls = [];
+  const fetcher = async (url, init) => {
+    const { pathname, searchParams } = new URL(url);
+    calls.push({ method: init.method, path: pathname, query: Object.fromEntries(searchParams), auth: init.headers.Authorization,
+      body: init.body ? JSON.parse(init.body) : undefined });
+    const json = status < 300 ? { path: pathname } : { error: 'forbidden', error_description: why };
+    return new Response(JSON.stringify(json), { status, headers: { 'content-type': 'application/json' } });
+  };
+  return { calls, fetcher };
+}
+
+const ask = (args, more = {}) => relay(args, { env: relayHome(), zone: 'Europe/London', ...more });
+
+test('each command calls its own route with its query, the key and the time zone', async () => {
+  const cases = [
+    [['me'], '/v1/me', {}],
+    [['notes', '--q', 'battery size'], '/v1/notes', { q: 'battery size', timezone: 'Europe/London' }],
+    [['notes', '--from', '2026-11-03', '--to', '2026-11-04', '--cursor', 'abc', '--limit', '5'], '/v1/notes',
+      { from: '2026-11-03', to: '2026-11-04', cursor: 'abc', limit: '5', timezone: 'Europe/London' }],
+    [['note', 'note one'], '/v1/notes/note%20one', { timezone: 'Europe/London' }],
+    [['day', '2026-11-03', '--timezone', 'Asia/Tokyo'], '/v1/days/2026-11-03', { timezone: 'Asia/Tokyo' }],
+    [['health', 'steps', '--from', '2026-11-01', '--to', '2026-11-08', '--per', 'hour'], '/v1/health',
+      { type: 'steps', from: '2026-11-01', to: '2026-11-08', bucket: 'hour', timezone: 'Europe/London' }],
+    [['nights', '--from', '2026-11-01', '--to', '2026-11-08', '--stages'], '/v1/nights',
+      { from: '2026-11-01', to: '2026-11-08', stages: 'true', timezone: 'Europe/London' }],
+    [['workouts', '--from=2026-11-01', '--to=2026-11-08'], '/v1/workouts', { from: '2026-11-01', to: '2026-11-08', timezone: 'Europe/London' }],
+    [['places', '--from', '2026-11-01', '--to', '2026-11-02'], '/v1/places', { from: '2026-11-01', to: '2026-11-02', timezone: 'Europe/London' }],
+    [['calendar', '--from', '2026-11-01', '--to', '2026-11-02', '--query', 'dentist'], '/v1/calendar',
+      { from: '2026-11-01', to: '2026-11-02', q: 'dentist', timezone: 'Europe/London' }],
+    [['chats', '--q', 'stiffener'], '/v1/chats', { q: 'stiffener', timezone: 'Europe/London' }],
+    [['chat', 'chat-1', '--cursor', '200'], '/v1/chats/chat-1', { cursor: '200', timezone: 'Europe/London' }],
+  ];
+  for (const [args, path, query] of cases) {
+    const api = fakeApi();
+    const done = await ask(args, { fetcher: api.fetcher });
+    assert.deepEqual(done, { code: 0, text: JSON.stringify({ path }) }, args.join(' '));
+    assert.deepEqual(api.calls, [{ method: 'GET', path, query, auth: `Bearer ${SECRET}`, body: undefined }], args.join(' '));
+  }
+});
+
+test('add-note posts the words from stdin once, with a new clientId, and sends it again with the same id after a lost answer', async () => {
+  const api = fakeApi(201);
+  const done = await ask(['add-note', '--at', '2026-11-04T09:00'], { input: '  Buy 0.2 mm steel.\n', fetcher: api.fetcher });
+  assert.equal(done.code, 0);
+  const [call] = api.calls;
+  assert.deepEqual([call.method, call.path], ['POST', '/v1/notes']);
+  assert.deepEqual({ ...call.body, clientId: 'x' }, { clientId: 'x', text: 'Buy 0.2 mm steel.', createdAt: '2026-11-04T09:00', timezone: 'Europe/London' });
+  assert.match(call.body.clientId, /^[A-Za-z0-9-]{8,64}$/);
+  let tries = 0;
+  const ids = [];
+  const flaky = async (url, init) => {
+    ids.push(JSON.parse(init.body).clientId);
+    if (tries++ === 0) throw new TypeError('fetch failed');
+    return api.fetcher(url, init);
+  };
+  assert.equal((await ask(['add-note'], { input: 'Again', fetcher: flaky })).code, 0);
+  assert.equal(ids.length, 2);
+  assert.equal(ids[0], ids[1]);
+  assert.deepEqual(await ask(['add-note'], { input: ' ', fetcher: api.fetcher }), { code: 2, text: 'Give the note on stdin.' });
+});
+
+test('an old chat key is told to connect again, a turned-off key shows the server\'s reason, and other refusals say why', async () => {
+  // The words keyCaller and apiKeyCaller send, in app/worker/apps/relay/caller.ts.
+  assert.deepEqual(await ask(['notes', '--q', 'x'], { fetcher: fakeApi(403, CHAT_KEY).fetcher }), { code: 1, text: CHAT_KEY });
+  assert.equal(CHAT_KEY, "This computer's key only saves chats. Type /relay:connect to connect it again.");
+  assert.deepEqual(await ask(['me'], { fetcher: fakeApi(403, 'This device key is turned off.').fetcher }), { code: 1,
+    text: "Relay Everything refused this computer's key: This device key is turned off. Type /relay:connect to connect again." });
+  assert.match((await ask(['me'], { fetcher: fakeApi(401, 'This key is not one Relay Everything makes.').fetcher })).text,
+    /^Relay Everything refused this computer's key: This key is not one Relay Everything makes\. Type \/relay:connect/);
+  assert.equal((await ask(['notes'], { fetcher: fakeApi(400).fetcher })).text, 'Relay Everything refused the request: A made-up refusal.');
+  const bare = async () => new Response('Bad gateway', { status: 502 });
+  assert.equal((await ask(['notes'], { fetcher: bare })).text, 'Relay Everything refused the request: It answered 502.');
+  const down = async () => { throw new TypeError('fetch failed'); };
+  assert.match((await ask(['me'], { fetcher: down })).text, /could not be reached\. Try again in a minute\.$/);
+  // In a sandbox, the name lookup fails, and the line names the sandbox.
+  const sandbox = async () => { throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'EAI_AGAIN' } }); };
+  assert.match((await ask(['me'], { fetcher: sandbox })).text, /could not be reached\. Try again in a minute\. If this runs in a sandbox/);
+});
+
+test('reason reads the web API\'s refusal and the app routes\' refusal', () => {
+  assert.equal(reason({ error: 'forbidden', error_description: 'This device key is turned off.' }), 'This device key is turned off.');
+  assert.equal(reason({ error: { code: 'forbidden', message: 'A chat key can only send chats.' } }), 'A chat key can only send chats.');
+  for (const json of [null, {}, { error: 'forbidden' }, { error_description: '' }, { error: { message: 7 } }]) assert.equal(reason(json), null);
+});
+
+test('says what to do with no key, no command, or no value', async () => {
+  const api = fakeApi();
+  assert.deepEqual(await relay(['me'], { env: relayHome({ connected: false }), fetcher: api.fetcher }), { code: 1, text: NOT_CONNECTED });
+  assert.match((await ask(['photos'])).text, /^Commands: me, notes/);
+  assert.match((await ask([])).text, /^Commands:/);
+  assert.equal((await ask(['note'])).code, 2);
+  assert.equal((await ask(['health'])).code, 2);
+  assert.equal(api.calls.length, 0);
+  assert.deepEqual(parseArgs(['notes', '--q', '--from', 'x']), { command: 'notes', value: undefined, fields: { q: 'true', from: 'x' } });
+});
+
+test('runs as the skill runs it, against a local server, and reads the note from stdin', async () => {
+  const calls = [];
+  const server = createServer((request, response) => {
+    let body = '';
+    request.on('data', part => { body += part; });
+    request.on('end', () => {
+      calls.push({ url: request.url, auth: request.headers.authorization, body });
+      response.writeHead(request.method === 'POST' ? 201 : 200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ added: true }));
+    });
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const env = relayHome({ connected: false });
+  writeComputer(env, { ...computer(), api: `http://127.0.0.1:${server.address().port}/v1` });
+  try {
+    const { stdout: printed } = await promisify(execFile)(process.execPath, [RELAY, 'notes', '--q', 'steel'], { env: { ...process.env, ...env, TZ: 'Asia/Tokyo' } });
+    assert.equal(printed, '{"added":true}\n');
+    const child = spawn(process.execPath, [RELAY, 'add-note'], { env: { ...process.env, ...env }, stdio: ['pipe', 'pipe', 'inherit'] });
+    child.stdin.end('A note from stdin');
+    assert.equal((await once(child, 'exit'))[0], 0);
+    assert.deepEqual(calls.map(call => [call.url.split('?')[0], call.auth]), [['/v1/notes', `Bearer ${SECRET}`], ['/v1/notes', `Bearer ${SECRET}`]]);
+    assert.match(calls[0].url, /timezone=Asia%2FTokyo/);
+    assert.equal(JSON.parse(calls[1].body).text, 'A note from stdin');
+  } finally {
+    server.close();
+  }
+  assert.ok(API.endsWith('/v1'));
+});

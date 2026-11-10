@@ -30,7 +30,8 @@ it("gives the computer a link and a code, and asks the signed-in person to conne
   expect(page.status).toBe(200);
   const html = await page.text();
   for (const text of ["Connect this computer?", words, "Connect only a computer you just started this on", 'value="Ana&#39;s laptop"',
-    "reads all your Relay Everything data"]) expect(html).toContain(text);
+    "reads all your Relay Everything data", "disconnect it in Connect your AI"]) expect(html).toContain(text);
+  expect(html).not.toContain("Devices");
   const out = await open(null);
   expect(out.headers.get("Location")).toBe(`/?next=${encodeURIComponent(`/apps/relay/sign-in/computer?c=${CHALLENGE}`)}`);
   expect((await open(phone)).status).toBe(403);

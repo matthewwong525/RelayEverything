@@ -197,7 +197,7 @@ export function forget(env = process.env) {
   rmSync(pendingFile(env), { force: true });
   const had = forgetComputer(env);
   return { code: 0, lines: [had
-    ? 'This computer no longer has its Relay Everything key. To turn the key off for good, open Devices on your Relay Everything page and click Turn off.'
+    ? 'This computer no longer has its Relay Everything key. To stop the key for good, open Connect your AI on your Relay Everything page and click Disconnect.'
     : 'This computer had no Relay Everything key.'] };
 }
 

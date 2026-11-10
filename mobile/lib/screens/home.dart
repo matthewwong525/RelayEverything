@@ -5,14 +5,14 @@ import 'package:flutter/material.dart';
 
 import '../brand.dart';
 import '../relay.dart';
-import 'connect.dart' show Scanner;
+import 'connect_ai.dart';
 import 'days.dart';
+import 'email_notes.dart';
 import 'folder.dart';
 import 'hold_to_talk.dart';
 import 'note_editor.dart';
 import 'settings.dart';
 import 'timeline.dart';
-import 'transcripts.dart';
 
 export 'folder.dart' show Opener;
 
@@ -20,12 +20,10 @@ export 'folder.dart' show Opener;
 /// gear, and at the bottom *Search*, which finds notes in every folder, and *New note*. It also holds what each page
 /// needs once: the notices, the recording screen and *Start a voice note* from Shortcuts.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.relay, this.scanner, this.opener, this.picker, this.sharer,
+  const HomeScreen({super.key, required this.relay, this.opener, this.picker, this.sharer,
     this.voiceRequests, this.onOpen, this.onFolder, this.onSettings, this.otherConnections});
 
   final Relay relay;
-  /// The QR scanner the connect screen uses; a test passes its own.
-  final Scanner? scanner;
   /// Opens the Relay Everything page; a test passes its own.
   final Opener? opener;
   /// The paperclip's picker; a test passes its own.
@@ -161,7 +159,7 @@ class _HomeScreenState extends State<HomeScreen> {
           tooltip: 'Settings',
           style: IconButton.styleFrom(backgroundColor: brand.card, foregroundColor: brand.ink),
           icon: const Icon(CupertinoIcons.gear),
-          onPressed: widget.onSettings ?? () => _open(SettingsScreen(relay: relay, scanner: widget.scanner, opener: widget.opener)),
+          onPressed: widget.onSettings ?? () => _open(SettingsScreen(relay: relay, opener: widget.opener)),
         ),
         const SizedBox(width: 8),
       ],
@@ -172,7 +170,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<Widget> _folders() {
     final now = DateTime.now();
-    final scanner = widget.scanner;
     int count(NotesFolder folder) => relay.entries.where((entry) => entryIn(folder, entry)).length;
     return [
       const SizedBox(height: 12),
@@ -186,16 +183,18 @@ class _HomeScreenState extends State<HomeScreen> {
       if (widget.otherConnections case final rows?) ..._section('Other connections', rows)
       else ...[..._section('On this phone', [
         FolderRow(icon: CupertinoIcons.location, title: 'Location', line: locationLine(relay, now),
-          onTap: () => _open(LocationPage(relay: relay, scanner: scanner))),
+          onTap: () => _open(LocationPage(relay: relay))),
         FolderRow(icon: CupertinoIcons.heart, title: 'Health', line: healthLine(relay, now),
-          onTap: () => _open(HealthPage(relay: relay, scanner: scanner))),
+          onTap: () => _open(HealthPage(relay: relay))),
         FolderRow(icon: CupertinoIcons.calendar, title: 'Calendar', line: calendarLine(relay, now),
-          onTap: () => _open(CalendarPage(relay: relay, scanner: scanner))),
+          onTap: () => _open(CalendarPage(relay: relay))),
         FolderRow(icon: CupertinoIcons.photo, title: 'Photos', line: photosLine(relay),
-          onTap: () => _open(PhotosPage(relay: relay, scanner: scanner, opener: widget.opener))),
+          onTap: () => _open(PhotosPage(relay: relay, opener: widget.opener))),
       ]), ..._section('Other connections', [
-        FolderRow(icon: CupertinoIcons.chat_bubble_2, title: 'AI chat transcripts', line: 'Claude Code and Codex',
-          onTap: () => _open(TranscriptsPage(relay: relay, opener: widget.opener))),
+        FolderRow(icon: CupertinoIcons.sparkles, title: 'Connect your AI', line: connectAiLine,
+          onTap: () => _open(ConnectAiPage(relay: relay, opener: widget.opener))),
+        FolderRow(icon: CupertinoIcons.envelope, title: 'Email notes', line: emailNotesLine,
+          onTap: () => _open(EmailNotesPage(relay: relay))),
       ])],
     ];
   }

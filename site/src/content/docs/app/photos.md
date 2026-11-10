@@ -10,7 +10,7 @@ Relay Everything can send the photos you take on your phone to your own space, w
 ## Turn it on
 
 1. On Home, open the **Photos** folder, under **On this phone**.
-2. If you are signed out, tap **Sign in**, and sign in to Relay Everything or tap **Send to my own webhook instead**: [Connect a phone](../../start/connect-a-phone/). Photos work only once you sign in, and the app reads no photo while you are signed out.
+2. If you are signed out, tap **Sign in**. On the **Sign in** screen, tap **Sign in**, or **Don't want an account? Use your own webhook**: [Connect a phone](../../start/connect-a-phone/). Photos work only once you sign in, and the app reads no photo while you are signed out.
 3. Turn on **Photos**.
 4. Allow the app to read your photos. On Android, also allow it to read the place in your photos.
 
@@ -22,7 +22,7 @@ Each photo carries when and where you took it, so a webhook gets photos only whe
 
 - **From your server**, photos go only to a webhook you tick **Photos** for. Tick it only for a database you control. [Your own database](../../connections/your-database/#add-a-webhook)
 - **From the phone**, when it sends to [your own webhook](../../connections/your-database/#send-from-the-phone) with no Relay Everything account, **Photos** sends each new photo straight to that webhook. Nothing goes to Relay Everything, so your AI can't see these photos.
-- **From the phone while your notes sync**, when you pick **Only my own webhook** on the Account page, under **Health, places, calendar and photos**. Photos go straight to your webhook, and Relay Everything never gets them. [Settings](../settings/#health-places-calendar-and-photos-only-to-your-webhook)
+- **From the phone while your notes sync**, when you turn on **Only to my own webhook** in **Webhooks**, under **Advanced** on the **Account** page. Photos go straight to your webhook, and Relay Everything never gets them. [Settings](../settings/#health-places-calendar-and-photos-only-to-your-webhook)
 
 Each photo goes in its own [`photo.created`](../../connections/your-database/#photocreated) message, with the JPEG copy, when and where you took it, and its size. If you move sending, or your photos, between your server and your webhook, the copies that did not go yet go to the new place.
 

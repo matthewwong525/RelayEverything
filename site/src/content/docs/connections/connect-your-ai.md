@@ -5,7 +5,7 @@ description: Let the Claude app, ChatGPT, Claude Code or Codex read your Relay E
 
 Relay Everything's AI connector lets an AI chat app read your Relay Everything data when you ask it a question, and add a note when you ask it to save one. It can't change or delete anything. Each person with a Relay Everything account can connect their own apps, and each app reads only that person's own space.
 
-The connector's address is on the **AI apps** page of Settings, on your Relay Everything page, with a **Copy** button. On the shared server it is `https://mcp.relayeverything.com`. `https://mcp.relayeverything.com/mcp` also works. Your own server's connector has its own address, such as `https://<your-relay-server>`.
+The connector's address is on the **Connect your AI** page, under **Other connections** on the app's Home and in the left bar of your Relay Everything page, with a **Copy** button. On the shared server it is `https://mcp.relayeverything.com`. `https://mcp.relayeverything.com/mcp` also works. Your own server's connector has its own address, such as `https://<your-relay-server>`.
 
 ## Connect an app
 
@@ -47,6 +47,13 @@ When an app uses a tool, the answer goes to that app's company: Anthropic for Cl
 
 An answer never holds a recording, a device key, or a device's or delivery's id. The app gets only what a tool answers for one question, not a copy of your data.
 
+## See what is connected
+
+Open **Connect your AI**: *Let your AI read your notes*. It has two parts:
+
+- **Claude Code and Codex**: each computer with the [plugin](../claude-code/), and when it last saved a chat. Then **Saved chats**, because only the plugin saves your chats, and **Get the plugin**.
+- **Claude, ChatGPT and other AI apps**: the connector's address with **Copy**, and each AI app you connected, with the day it connected.
+
 ## Disconnect an app
 
-On the Relay Everything page, open **Settings**, then **AI apps**. Find the app and click **Disconnect**, then confirm. The page lists only the apps you connected. Its sign-in stops at once: its next question gets a refusal. The notes it added stay. To use it again, connect it again from the app. Removing Relay Everything in the app's own settings does not end the sign-in on Relay Everything's side.
+On the Relay Everything page, click **Connect your AI** in the left bar. Find the app or the computer and click **Disconnect**, then confirm. In the app on your phone, a tap on an app or a computer opens your Relay Everything page to disconnect it. The page lists only the apps you connected. Its sign-in stops at once: its next question gets a refusal. The notes it added stay. To use it again, connect it again from the app. Removing Relay Everything in the app's own settings does not end the sign-in on Relay Everything's side.

@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:relay_app/relay.dart';
 import 'package:relay_app/web/settings_dialog.dart';
 
 import 'web_space_fixture.dart';
 
-// Fixture answers from the React page's tests (Webhooks, AiCard, Inbox, Devices), with made-up names and addresses.
+// Fixture answers from the React page's tests (Webhooks, Devices), with made-up names and addresses.
 final now = DateTime.now().millisecondsSinceEpoch;
 const day = 86400000;
 
@@ -27,35 +26,41 @@ const kinds = [
   {'id': 'calendar', 'label': 'Calendar', 'detail': 'new, changed and removed events', 'always': false, 'sensitive': true},
 ];
 
-const inboxOn = {'on': true, 'address': 'notes-k7q2m9xwab@in.example.com', 'shared': 'notes@in.example.com'};
-const connector = 'https://mcp.example.com';
 const madeKey = 'rek_MadeUpKeyForTestsOnly0000000000000000000';
-const madeQr = '{"relay":1,"server":"https://relay.example.com","key":"$madeKey"}';
 
 void main() {
   late FakeSpace space;
   late TinyRelay relay;
   late List<Map<String, Object?>> devices;
+  late Map<String, Object?> connections;
 
   setUp(() {
     space = FakeSpace();
     relay = TinyRelay();
     devices = [
       {'id': 'd1', 'name': 'iPhone', 'reaches': 'phone', 'createdAt': now, 'revokedAt': null},
-      {'id': 'd2', 'name': 'Laptop', 'reaches': 'chats', 'createdAt': now - 3 * day, 'revokedAt': now - day},
       {'id': 'd4', 'name': 'Work Mac', 'reaches': 'agent', 'createdAt': now, 'revokedAt': null},
-      // A keyless way in that an older server may list: it has no key to turn off.
-      {'id': 'd3', 'name': 'Web', 'reaches': 'inbox', 'createdAt': now, 'revokedAt': null},
+      {'id': 'k1', 'name': 'Backup', 'reaches': 'api', 'createdAt': now, 'revokedAt': null},
+      {'id': 'k2', 'name': 'Old script', 'reaches': 'api', 'createdAt': now - 3 * day, 'revokedAt': now - day},
     ];
+    final year = DateTime.now().year;
+    connections = {
+      'email': 'you@example.com',
+      'devices': [
+        {'id': 'd1', 'name': 'iPhone', 'kind': 'phone', 'since': DateTime(year, 11, 2).millisecondsSinceEpoch},
+        {'id': 'd5', 'name': 'Pixel', 'kind': 'phone', 'since': DateTime(year, 10, 14).millisecondsSinceEpoch},
+        {'id': 'd4', 'name': 'Work Mac', 'kind': 'computer', 'since': now, 'lastChatAt': now},
+      ],
+      'aiApps': [{'name': 'Claude', 'connectedAt': now}],
+      'webhooks': [{'name': 'Database 1'}, {'name': 'Database 2'}],
+      'notesAddress': 'notes-k7q2m9xwab@in.example.com',
+      'sharedAddress': 'notes@in.example.com',
+    };
     space.answers.addAll({
       'GET account': (_) => {'email': 'you@example.com'},
-      'GET inbox': (_) => {'email': inboxOn},
+      'GET connections': (_) => connections,
       'GET devices': (_) => {'devices': devices},
       'GET webhooks': (_) => {'webhooks': [working, failing, paused], 'kinds': kinds},
-      'GET ai-apps': (_) => {'address': connector, 'apps': [
-        {'id': 'grant-chatgpt', 'name': 'ChatGPT', 'connectedAt': now},
-        {'id': 'grant-claude', 'name': 'Claude', 'connectedAt': DateTime.utc(2026, 11, 4, 15).millisecondsSinceEpoch},
-      ]},
     });
   });
 
@@ -76,10 +81,16 @@ void main() {
   Finder onCard(String name, String text) => find.descendant(of: card(name), matching: find.text(text));
   Finder matching(RegExp pattern) => find.byWidgetPredicate((widget) => widget is Text && pattern.hasMatch(widget.data ?? ''));
 
-  testWidgets('lists its pages down the left, opens on Account, and closing leaves the page under it', (tester) async {
+  testWidgets('lists Account and Appearance down the left, as the phone does, opens on Account, and closing leaves the page '
+      'under it', (tester) async {
     await open(tester);
+    expect(SettingsPage.listed, [SettingsPage.account, SettingsPage.appearance]);
     for (final page in SettingsPage.values) {
-      expect(find.byKey(ValueKey('settings-${page.name}')), findsOneWidget, reason: page.title);
+      expect(find.byKey(ValueKey('settings-${page.name}')), SettingsPage.listed.contains(page) ? findsOneWidget : findsNothing,
+        reason: page.title);
+    }
+    for (final gone in ['Devices', 'AI apps', 'Email notes']) {
+      expect(find.text(gone), findsNothing, reason: gone);
     }
     expect(find.text('you@example.com'), findsOneWidget);
     await press(tester, find.byTooltip('Close'));
@@ -88,11 +99,56 @@ void main() {
     expect(relay.calls, isEmpty);
   });
 
-  testWidgets('Sign out closes Settings and signs out', (tester) async {
+  test('an address part opens its page: the old devices opens Account; AI apps and Email notes are no page of Settings', () {
+    expect([for (final part in ['account', 'appearance', 'api-keys', '/webhooks', 'devices'])
+      SettingsPage.ofPart(part)], [SettingsPage.account, SettingsPage.appearance, SettingsPage.apiKeys, SettingsPage.webhooks,
+      SettingsPage.account]);
+    expect([for (final part in ['ai-apps', 'email-notes', 'chats', '']) SettingsPage.ofPart(part)], everyElement(isNull));
+    expect([SettingsPage.apiKeys.inList, SettingsPage.webhooks.inList], [SettingsPage.account, SettingsPage.account]);
+  });
+
+  testWidgets('Account shows the email with Sign out, the phones, Advanced and Delete my account, in that order',
+      (tester) async {
     await open(tester);
-    await press(tester, find.text('Sign out'));
+    final tops = [for (final text in ['you@example.com', 'Phones', 'Advanced', 'Delete my account'])
+      tester.getTopLeft(find.text(text)).dy];
+    expect(tops, orderedEquals([...tops]..sort()));
+    expect(find.descendant(of: find.widgetWithText(ListTile, 'you@example.com'), matching: find.text('Signed in')),
+      findsOneWidget);
+    expect([find.text('iPhone'), find.text('Pixel')], everyElement(findsOneWidget));
+    expect(find.descendant(of: find.widgetWithText(ListTile, 'Pixel'), matching: find.text('Since Oct 14')), findsOneWidget);
+    // Computers show in Connect your AI, and an API key on its own page.
+    expect([find.text('Work Mac'), find.text('Backup')], everyElement(findsNothing));
+    expect([find.text('API keys'), find.text('For your own scripts'), find.text('Webhooks'),
+      find.text('Send a copy to your own server')], everyElement(findsOneWidget));
+    expect(find.descendant(of: find.widgetWithText(ListTile, 'Webhooks'), matching: find.text('2')), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Sign out'), findsNWidgets(3));
+  });
+
+  testWidgets('Sign out beside the email closes Settings and signs out', (tester) async {
+    await open(tester);
+    await press(tester, find.descendant(of: find.widgetWithText(ListTile, 'you@example.com'), matching: find.text('Sign out')));
     expect(find.byType(Dialog), findsNothing);
     expect(relay.calls, ['disconnect']);
+  });
+
+  testWidgets('Sign out beside a phone asks first, then signs out that phone alone', (tester) async {
+    await open(tester);
+    final pixel = find.descendant(of: find.widgetWithText(ListTile, 'Pixel'), matching: find.text('Sign out'));
+    await press(tester, pixel);
+    expect(find.text('Sign out Pixel?'), findsOneWidget);
+    await press(tester, inDialog('Cancel'));
+    expect(space.count('POST devices/off'), 0);
+    space.answers['POST devices/off'] = (body) {
+      connections = {...connections, 'devices': [for (final device in connections['devices']! as List)
+        if ((device as Map)['id'] != 'd5') device]};
+      return {'id': 'd5', 'revokedAt': now};
+    };
+    await press(tester, pixel);
+    await press(tester, find.descendant(of: find.byType(AlertDialog), matching: find.widgetWithText(TextButton, 'Sign out')));
+    expect(space.sent('POST devices/off'), [{'id': 'd5'}]);
+    expect([find.text('Pixel'), find.text('iPhone')], [findsNothing, findsOneWidget]);
+    expect(relay.calls, isEmpty);
   });
 
   testWidgets('Delete my account needs the email typed again, shows a refusal, then deletes and signs out', (tester) async {
@@ -116,102 +172,79 @@ void main() {
     expect(relay.calls, ['disconnect']);
   });
 
-  testWidgets('Devices lists each key with Turn off, and leaves out a keyless device', (tester) async {
-    await open(tester, first: SettingsPage.devices);
-    expect(find.text('iPhone'), findsOneWidget);
-    expect(find.text('Laptop'), findsOneWidget);
-    expect(find.text('Work Mac'), findsOneWidget);
-    expect(find.text('Web'), findsNothing);
-    expect(find.textContaining('Notes, health, places, calendar and photos · added'), findsOneWidget);
-    // A computer's key from /relay:connect, and an older Claude Code key that only saves chats.
-    expect(find.textContaining(RegExp(r'^Claude Code or Codex · added')), findsOneWidget);
-    expect(find.textContaining(RegExp(r'^Claude Code, saves only · added')), findsOneWidget);
-    expect(find.text('Connect a computer from Claude Code or Codex with /relay:connect.'), findsOneWidget);
+  testWidgets('API keys opens from Advanced, lists only API keys with Turn off, and Account goes back', (tester) async {
+    await open(tester);
+    await press(tester, find.text('API keys'));
+    expect(find.text('For your own scripts. One key can serve many scripts.'), findsOneWidget);
+    expect([find.text('Backup'), find.text('Old script')], everyElement(findsOneWidget));
+    expect([find.text('iPhone'), find.text('Work Mac')], everyElement(findsNothing));
+    // The list's row stays on Account.
+    expect(tester.widget<ListTile>(find.byKey(const ValueKey('settings-account'))).selected, isTrue);
     expect(find.text('Off'), findsOneWidget);
-    expect(find.text('Turn off'), findsNWidgets(2));
-    space.answers['POST devices/off'] = (body) {
-      devices = [{...devices[0], 'revokedAt': now}, devices[1], devices[2]];
-      return {'id': 'd1', 'revokedAt': now};
-    };
-    await press(tester, find.text('Turn off').first);
-    expect(find.text('Turn off iPhone?'), findsOneWidget);
-    await press(tester, inDialog('Turn off'));
-    expect(space.sent('POST devices/off'), [{'id': 'd1'}]);
     expect(find.text('Turn off'), findsOneWidget);
-    expect(find.text('Off'), findsNWidgets(2));
+    space.answers['POST devices/off'] = (body) {
+      devices = [for (final device in devices) device['id'] == 'k1' ? {...device, 'revokedAt': now} : device];
+      return {'id': 'k1', 'revokedAt': now};
+    };
+    await press(tester, find.text('Turn off'));
+    expect(find.text('Turn off Backup?'), findsOneWidget);
+    await press(tester, inDialog('Turn off'));
+    expect(space.sent('POST devices/off'), [{'id': 'k1'}]);
+    expect([find.text('Turn off'), find.text('Off')], [findsNothing, findsNWidgets(2)]);
+    await press(tester, find.widgetWithText(TextButton, 'Account'));
+    expect(find.text('you@example.com'), findsOneWidget);
   });
 
-  testWidgets('Add a device makes only a phone or an API key, and says a computer connects with /relay:connect',
+  testWidgets('Add an API key asks only a name, shows the key once with the example call and no QR code, or says why not',
       (tester) async {
-    await open(tester, first: SettingsPage.devices);
-    await press(tester, find.text('Add a device'));
-    final segments = tester.widget<SegmentedButton<Object?>>(find.byWidgetPredicate((widget) => widget is SegmentedButton));
-    expect([for (final segment in segments.segments) (segment.label! as Text).data], ['Phone', 'API key']);
-    expect(inDialog('Claude Code'), findsNothing);
-    expect(inDialog('Connect a computer from Claude Code or Codex with /relay:connect.'), findsOneWidget);
-  });
-
-  testWidgets('Add a device shows the new key once, as a QR code and as text to copy', (tester) async {
     final copied = catchCopies(tester);
-    space.answers['POST devices'] = (body) =>
-      {'id': 'd9', 'name': 'Phone', 'reaches': 'phone', 'key': madeKey, 'qr': madeQr, 'api': null};
-    await open(tester, first: SettingsPage.devices);
-    await press(tester, find.text('Add a device'));
-    expect(find.byType(QrImageView), findsNothing);
+    await open(tester, first: SettingsPage.apiKeys);
+    await press(tester, find.text('Add an API key'));
+    expect(find.byWidgetPredicate((widget) => widget is SegmentedButton), findsNothing);
+    expect(find.byType(TextField), findsOneWidget);
+    await tester.enterText(find.byType(TextField), '  Nightly  ');
+    space.answers['POST devices'] = (_) => refusal(400, 'The name is too long.');
     await press(tester, find.text('Make the key'));
-    expect(space.sent('POST devices'), [{'name': 'Phone', 'reaches': 'phone'}]);
-    expect(find.text('Connect Phone'), findsOneWidget);
-    expect(tester.widget<QrImageView>(find.byType(QrImageView)).semanticsLabel, 'QR code for Phone');
-    expect(find.text(madeQr), findsOneWidget);
-    await press(tester, find.text('Copy the code'));
-    expect(copied, [madeQr]);
-    expect(find.text('Copied'), findsOneWidget);
+    expect(find.text('The name is too long.'), findsOneWidget);
+    space.answers['POST devices'] = (body) => {'id': 'k9', 'name': 'Nightly', 'reaches': 'api', 'key': madeKey,
+      'api': 'https://mcp.example.com/v1'};
+    await press(tester, find.text('Make the key'));
+    expect(space.sent('POST devices').last, {'name': 'Nightly', 'reaches': 'api'});
+    expect(find.text('Use Nightly'), findsOneWidget);
+    expect(find.text(madeKey), findsOneWidget);
+    expect(find.text('curl -H "Authorization: Bearer $madeKey" https://mcp.example.com/v1/me'), findsOneWidget);
+    await press(tester, find.text('Copy the key'));
+    expect(copied, [madeKey]);
     await press(tester, find.text('Done'));
     // The list reads again, and the key is gone for good.
     expect(space.count('GET devices'), 2);
-    expect(find.byType(QrImageView), findsNothing);
     expect(find.textContaining(madeKey), findsNothing);
-    await press(tester, find.text('Add a device'));
-    expect(find.text('Make the key'), findsOneWidget);
-    expect(find.byType(QrImageView), findsNothing);
-    await press(tester, find.text('Cancel'));
-    expect(find.byType(AlertDialog), findsNothing);
   });
 
-  testWidgets('a new device shows in the list even when Escape closes Add a device', (tester) async {
+  testWidgets('Add an API key with no name calls it Script, and the list reads again when Escape closes it',
+      (tester) async {
     space.answers['POST devices'] = (body) {
-      devices = [...devices, {'id': 'd9', 'name': 'Pixel', 'reaches': 'phone', 'createdAt': now, 'revokedAt': null}];
-      return {'id': 'd9', 'name': 'Pixel', 'reaches': 'phone', 'key': madeKey, 'qr': madeQr, 'api': null};
+      devices = [...devices, {'id': 'k9', 'name': 'Script', 'reaches': 'api', 'createdAt': now, 'revokedAt': null}];
+      return {'id': 'k9', 'name': 'Script', 'reaches': 'api', 'key': madeKey, 'api': null};
     };
-    await open(tester, first: SettingsPage.devices);
-    await press(tester, find.text('Add a device'));
-    await tester.enterText(find.byType(TextField), 'Pixel');
+    await open(tester, first: SettingsPage.apiKeys);
+    await press(tester, find.text('Add an API key'));
     await press(tester, find.text('Make the key'));
-    expect(find.text('Connect Pixel'), findsOneWidget);
+    expect(space.sent('POST devices'), [{'name': 'Script', 'reaches': 'api'}]);
+    expect(find.text('curl -H "Authorization: Bearer $madeKey" <your-relay-server>/v1/me'), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsNothing);
     expect(space.count('GET devices'), 2);
-    expect(find.text('Pixel'), findsOneWidget);
+    expect(find.text('Script'), findsOneWidget);
   });
 
-  testWidgets('Add a device makes an API key with its name, the example call and no QR code, or says why not',
-      (tester) async {
-    await open(tester, first: SettingsPage.devices);
-    await press(tester, find.text('Add a device'));
-    await press(tester, find.text('API key'));
-    await tester.enterText(find.byType(TextField), '  Backup  ');
-    space.answers['POST devices'] = (_) => refusal(400, 'The name is too long.');
-    await press(tester, find.text('Make the key'));
-    expect(find.text('The name is too long.'), findsOneWidget);
-    space.answers['POST devices'] = (body) => {'id': 'd9', 'name': 'Backup', 'reaches': 'api', 'key': madeKey,
-      'qr': madeQr, 'api': 'https://mcp.example.com/v1'};
-    await press(tester, find.text('Make the key'));
-    expect(space.sent('POST devices').last, {'name': 'Backup', 'reaches': 'api'});
-    expect(find.text('Connect Backup'), findsOneWidget);
-    expect(find.text(madeKey), findsOneWidget);
-    expect(find.text('curl -H "Authorization: Bearer $madeKey" https://mcp.example.com/v1/me'), findsOneWidget);
-    expect(find.byType(QrImageView), findsNothing);
+  testWidgets('Webhooks opens from Advanced, with Account to go back', (tester) async {
+    await open(tester);
+    await press(tester, find.text('Webhooks'));
+    expect(onCard('Database 1', 'Working'), findsOneWidget);
+    await press(tester, find.widgetWithText(TextButton, 'Account'));
+    expect(find.text('you@example.com'), findsOneWidget);
   });
 
   testWidgets("Webhooks shows each one's state, what it takes, what waits and its last answer", (tester) async {
@@ -312,74 +345,6 @@ void main() {
     expect(space.sent('POST webhooks/remove'), [{'id': '3'}]);
   });
 
-  testWidgets('AI apps shows the address to copy and each app, and disconnects one only after a confirm', (tester) async {
-    final copied = catchCopies(tester);
-    await open(tester, first: SettingsPage.aiApps);
-    expect(find.text(connector), findsOneWidget);
-    expect(find.text('Connected apps · 2 connected'), findsOneWidget);
-    expect(find.text('Connected Nov 4, ${DateTime.utc(2026, 11, 4, 15).toLocal().hour.toString().padLeft(2, '0')}:00'),
-      findsOneWidget);
-    await press(tester, find.text('Copy'));
-    expect(copied, [connector]);
-    final claude = find.descendant(of: find.widgetWithText(ListTile, 'Claude'), matching: find.text('Disconnect'));
-    await press(tester, claude);
-    expect(find.text('Disconnect Claude?'), findsOneWidget);
-    await press(tester, find.text('Cancel'));
-    expect(space.count('POST ai-apps-disconnect'), 0);
-    space.answers['POST ai-apps-disconnect'] = (_) => refusal(502, 'Claude could not be disconnected. Try again.');
-    await press(tester, claude);
-    await press(tester, inDialog('Disconnect'));
-    expect(find.text('Claude could not be disconnected. Try again.'), findsOneWidget);
-    expect(find.text('Claude'), findsOneWidget);
-    space.answers.addAll({
-      'POST ai-apps-disconnect': (_) => {'id': 'grant-claude'},
-      'GET ai-apps': (_) => {'address': connector, 'apps': [{'id': 'grant-chatgpt', 'name': 'ChatGPT', 'connectedAt': now}]},
-    });
-    await press(tester, claude);
-    await press(tester, inDialog('Disconnect'));
-    expect(space.sent('POST ai-apps-disconnect').last, {'id': 'grant-claude'});
-    expect(find.text('Connected apps · 1 connected'), findsOneWidget);
-    expect(find.text('Claude'), findsNothing);
-  });
-
-  testWidgets('AI apps says when the connector is not set up', (tester) async {
-    space.answers['GET ai-apps'] = (_) => refusal(503, 'Not set up.');
-    await open(tester, first: SettingsPage.aiApps);
-    expect(find.text('The AI connector is not set up on this server.'), findsOneWidget);
-  });
-
-  testWidgets('Email notes shows the address, the shared address and the warning, and makes a new address after a confirm',
-      (tester) async {
-    await open(tester, first: SettingsPage.emailNotes);
-    expect(find.text('notes-k7q2m9xwab@in.example.com'), findsOneWidget);
-    expect(find.text('Anything sent here becomes a note.'), findsOneWidget);
-    expect(find.text('You can also write to notes@in.example.com from your sign-in email.'), findsOneWidget);
-    expect(find.text('Email is not sealed on the way. Do not send health or location details this way.'), findsOneWidget);
-    await press(tester, find.text('New address'));
-    await press(tester, find.text('Cancel'));
-    expect(space.count('POST inbox/address'), 0);
-    space.answers.addAll({
-      'POST inbox/address': (_) => {'email': {...inboxOn, 'address': 'notes-zz2233ffgg@in.example.com'}},
-      'GET inbox': (_) => {'email': {...inboxOn, 'address': 'notes-zz2233ffgg@in.example.com'}},
-    });
-    await press(tester, find.text('New address'));
-    await press(tester, inDialog('New address'));
-    expect(space.count('POST inbox/address'), 1);
-    expect(find.text('notes-zz2233ffgg@in.example.com'), findsOneWidget);
-  });
-
-  for (final (name, answer) in [('a 503', (_) => refusal(503, 'No mail here.')), ('email off', (_) => {'email': {'on': false,
-      'address': null, 'shared': null}})]) {
-    testWidgets('$name hides Email notes from the list', (tester) async {
-      space.answers['GET inbox'] = answer;
-      await open(tester, first: SettingsPage.emailNotes);
-      expect(find.byKey(const ValueKey('settings-emailNotes')), findsNothing);
-      expect(find.text('Email notes'), findsNothing);
-      // The page asked for falls back to Account.
-      expect(find.text('you@example.com'), findsOneWidget);
-    });
-  }
-
   testWidgets('Appearance picks System, Light or Dark', (tester) async {
     await open(tester, first: SettingsPage.appearance);
     await press(tester, find.text('Dark'));
@@ -390,20 +355,22 @@ void main() {
   testWidgets('in a narrow window Settings fills it, shows the list first, and goes back to it', (tester) async {
     await open(tester, size: const Size(390, 844));
     expect(find.text('you@example.com'), findsNothing);
-    await pick(tester, SettingsPage.devices);
-    expect(find.text('iPhone'), findsOneWidget);
+    await pick(tester, SettingsPage.appearance);
+    expect(find.text('Dark'), findsOneWidget);
     expect(find.byKey(const ValueKey('settings-account')), findsNothing);
     await press(tester, find.byTooltip('Back'));
     await pick(tester, SettingsPage.account);
     expect(find.text('you@example.com'), findsOneWidget);
+    await press(tester, find.text('API keys'));
+    expect(find.text('Backup'), findsOneWidget);
   });
 
   testWidgets('a page that could not load says why and tries again', (tester) async {
     space.answers['GET devices'] = (_) => refusal(500, 'The server had a problem.');
-    await open(tester, first: SettingsPage.devices);
-    expect(find.text('Devices could not be loaded. The server had a problem.'), findsOneWidget);
+    await open(tester, first: SettingsPage.apiKeys);
+    expect(find.text('API keys could not be loaded. The server had a problem.'), findsOneWidget);
     space.answers['GET devices'] = (_) => {'devices': devices};
     await press(tester, find.text('Try again'));
-    expect(find.text('iPhone'), findsOneWidget);
+    expect(find.text('Backup'), findsOneWidget);
   });
 }

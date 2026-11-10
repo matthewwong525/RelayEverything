@@ -1,6 +1,6 @@
 # Relay Everything's AI chat transcripts
 
-Relay Everything saves Claude Code and Codex chats through the Relay Everything plugin in [`plugin/`](../../plugin/README.md): each chat goes to the Relay Everything server as you talk, shows under **AI chat transcripts** on the Relay Everything page, and the [AI connector](relay-ai-connector.md) searches it. The same plugin lets the AI in the chat read the person's data and add notes, through the web API. It is part of [the Cloudflare stack](README.md). The website's [Save AI chat transcripts](../../site/src/content/docs/connections/claude-code.md) page owns the person's steps; this page owns how it works and how to change it.
+Relay Everything saves Claude Code and Codex chats through the Relay Everything plugin in [`plugin/`](../../plugin/README.md): each chat goes to the Relay Everything server as you talk, shows under **Connect your AI**, **Saved chats**, on the Relay Everything page, and the [AI connector](relay-ai-connector.md) searches it. The same plugin lets the AI in the chat read the person's data and add notes, through the web API. It is part of [the Cloudflare stack](README.md). The website's [Save AI chat transcripts](../../site/src/content/docs/connections/claude-code.md) page owns the person's steps; this page owns how it works and how to change it.
 
 ## How a computer connects
 
@@ -8,7 +8,7 @@ Relay Everything saves Claude Code and Codex chats through the Relay Everything 
 2. The person opens the link, signs in, checks the code and clicks **Connect** ([`sign-in/computer.ts`](../../app/worker/apps/relay/sign-in/computer.ts)). The row in `relay_computer_codes` then names them.
 3. The next ask, with the secret, gets the key once: a device row with `reaches = 'agent'`, made by `makeDevice`. The plugin keeps it in its own key file, mode `0600`, under `RELAY_EVERYTHING_HOME` when set.
 
-The start and the ask need no person: the secret protects them, so they pass a self-hosted server's Access wall (`NO_PERSON` in [`relay-only.ts`](../../app/worker/relay-only.ts)) and the Origin check. The ask has no rate limit: the secret is 256 bits and lives 10 minutes, and a limit of 10 a minute would refuse the waiter. **Add a device** can't make an `agent` or a `chats` key.
+The start and the ask need no person: the secret protects them, so they pass a self-hosted server's Access wall (`NO_PERSON` in [`relay-only.ts`](../../app/worker/relay-only.ts)) and the Origin check. The ask has no rate limit: the secret is 256 bits and lives 10 minutes, and a limit of 10 a minute would refuse the waiter. **Add an API key** makes only an `api` key: never an `agent`, `chats` or phone key.
 
 ## How a chat travels
 
@@ -38,7 +38,7 @@ Never install the plugin in your own setup to try it. Give each app a scratch ho
 1. Make `.scratch/claude`, `.scratch/codex` and `.scratch/relay`. Copy `~/.claude/.credentials.json` into `.scratch/claude` and `~/.codex/auth.json` into `.scratch/codex`, so each app can sign in. Delete the folders when you finish.
 2. Start each app with `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `RELAY_EVERYTHING_HOME` on those folders. Install from this branch: `claude plugin marketplace add <this checkout's path>` and `claude plugin install relay@relay`, or `codex plugin marketplace add <path>` and `codex plugin add relay@relay`.
 3. In Codex, pick **Trust all and continue** for the hooks. Type `/relay:connect https://app-staging.relayeverything.com` (`$relay:connect …` in Codex), open the link signed in to staging, and click **Connect**. With no browser, add a test person and a session to the staging database, as [person spaces](../relay-spaces.md) says, and send the form with `curl`: `c`, `name`, `choice=connect`, the `__Host-relay_session` cookie and `Origin: https://app-staging.relayeverything.com`.
-4. Have a short chat, ask *save this*, and ask about a seeded note. Open **AI chat transcripts** on staging to see the chat with its app.
+4. Have a short chat, ask *save this*, and ask about a seeded note. Open **Connect your AI**, then **Saved chats**, on staging to see the chat with its app.
 5. Delete the chat, then click **Turn off** beside the computer in **Devices**. For a test person, `POST account-delete` with its email deletes the person, the chats and the key.
 
 Run `codex exec` with stdin closed (`</dev/null`) and a time limit: it can wait for input forever. `codex exec` can't ask you to approve a command outside the sandbox, so it can't try the plugin as a person uses it. Start the Codex screen in `tmux new-session -d`, type with `tmux send-keys`, read it with `tmux capture-pane -p`, and press `y` at each *Would you like to run the following command?*.

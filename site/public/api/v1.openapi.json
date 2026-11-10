@@ -3158,7 +3158,7 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "rek_…",
-        "description": "An API key, made on the person's Relay Everything page with *Add a device*: send it as `Authorization: Bearer rek_…`. A phone's or a chat key is refused here."
+        "description": "An API key, made on the person's Relay Everything page with *Add an API key*: send it as `Authorization: Bearer rek_…`. A phone's or a chat key is refused here."
       }
     },
     "schemas": {

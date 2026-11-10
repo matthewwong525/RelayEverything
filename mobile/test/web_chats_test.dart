@@ -80,7 +80,7 @@ void main() {
       testWidgets('lists saved chats, finds them by a word, and says when none match', (tester) async {
         final server = Server();
         await open(tester, server, wide: wide);
-        expect(find.text('AI chat transcripts'), findsOneWidget);
+        expect(find.text('Saved chats'), findsOneWidget);
         expect(find.text('Stiffener plan'), findsOneWidget);
         expect(find.text('Saved by the AI'), findsOneWidget);
         // Each chat names its app in a small tag.

@@ -70,7 +70,7 @@ An app stays connected while you use it. Its access token works for one hour, an
 
 `/v1/` is the connector's tools as plain HTTP with JSON, for a person's own scripts and services. The website owns how to use it: [Connect a service](../../site/src/content/docs/api/connect-a-service.md). Each route parses its tool's own input from `inputs.ts` and answers through `answers.ts`, so a route and its tool can't differ; `openapi.ts` makes the OpenAPI file, served at `/v1/openapi.json` with no sign-in.
 
-- **An API key** (`reaches = 'api'`), made with *Add a device*, or **a computer's key** (`reaches = 'agent'`), made by `/relay:connect`, goes through `apiKeyCaller` in `caller.ts`. A phone key gets `403`; an older chat key gets `403` that says to run `/relay:connect`.
+- **An API key** (`reaches = 'api'`), made with *Add an API key*, or **a computer's key** (`reaches = 'agent'`), made by `/relay:connect`, goes through `apiKeyCaller` in `caller.ts`. A phone key gets `403`; an older chat key gets `403` that says to run `/relay:connect`.
 - **A connected app's token** works too. `index.ts` answers `/v1/` before the provider: it checks the token with the provider's `unwrapToken`, and its audience must name the same resource as `RELAY_MCP_ADDRESS` (`sameResource`, so a slash at the end makes no difference). A service leaves out `resource`, or sends the bare address.
 
 A refusal answers `{ "error", "error_description" }`, and every answer is open to any web page (CORS `*`): it takes a bearer token, never a cookie. After a route change, run `npm run relay:api-doc` in `app/`: it writes the website's OpenAPI file and reference page, which name `<your-relay-server>`.

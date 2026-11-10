@@ -49,7 +49,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('account')));
     await tester.pumpAndSettle();
     expect(materialIcons(), findsNothing, reason: 'the Sign in page');
-    await tester.tap(find.text('Send to my own webhook instead'));
+    await tester.tap(find.text("Don't want an account? Use your own webhook"));
     await tester.pumpAndSettle();
     expect(materialIcons(), findsNothing, reason: 'the Sign in page, My own webhook picked');
     await back();
@@ -63,5 +63,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('account')));
     await tester.pumpAndSettle();
     expect(materialIcons(), findsNothing, reason: 'the Account page');
+    await tester.tap(find.text('Webhooks'));
+    await tester.pumpAndSettle();
+    expect(materialIcons(), findsNothing, reason: 'Webhooks');
   }, variant: const TargetPlatformVariant({TargetPlatform.android, TargetPlatform.iOS}));
 }

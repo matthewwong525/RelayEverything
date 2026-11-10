@@ -81,4 +81,4 @@ The plugin keeps its files in `~/.config/relay-everything/`, or in `$XDG_CONFIG_
 ## Disconnect this computer
 
 1. Ask the AI to *forget the Relay Everything key*. It runs `connect.mjs forget`, which deletes `computer.json`.
-2. To stop the key for all time, open **Devices** on your Relay Everything page, and click **Turn off** for this computer.
+2. To stop the key for all time, open **Connect your AI** on your Relay Everything page, and click **Disconnect** for this computer.

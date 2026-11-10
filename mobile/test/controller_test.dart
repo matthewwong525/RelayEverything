@@ -827,6 +827,7 @@ void main() {
   });
 
   group('the names of what you connected', () {
+    List<String>? apps(Relay relay) => relay.connections?.aiApps.map((app) => app.name).toList();
     List<String> reads() => [for (final request in server.requests) if (request.method == 'GET') request.url.path.split('/').last];
 
     test('are read after a full sync to the server, kept with no signal, and cleared on a new server or with sending off',
@@ -838,15 +839,21 @@ void main() {
       expect(relay.connections, isNull);
       await relay.sync();
       expect(reads(), contains('connections'));
-      expect([relay.connections?.email, relay.connections?.aiApps, relay.connections?.webhooks],
+      expect([relay.connections?.email, apps(relay), relay.connections?.webhooks],
         ['ana@example.com', ['Claude'], ['Home server']]);
+      final read = relay.connections!;
+      expect([read.thisDevice, [for (final phone in read.phones) phone.name], [for (final computer in read.computers) computer.name]],
+        ['d-phone', ['iPhone', 'Pixel'], ['Laptop']]);
+      expect([read.computers.single.lastChat, read.aiApps.single.since, read.notesAddress, read.sharedAddress], [
+        DateTime.fromMillisecondsSinceEpoch(1762128000000), DateTime.fromMillisecondsSinceEpoch(1762041600000),
+        'notes-k7q2m9@in.example.com', 'notes@in.example.com']);
       // No signal: the last answer stays, also for the next start.
       server.answer = (_) => throw const SocketException('none');
       await relay.refreshConnections();
       final again = controller();
       await again.load();
-      expect([relay.connections?.aiApps, again.connections?.webhooks, again.connections?.email],
-        [['Claude'], ['Home server'], 'ana@example.com']);
+      expect([apps(relay), again.connections?.webhooks, again.connections?.email, again.connections?.phones.length,
+        again.connections?.notesAddress], [['Claude'], ['Home server'], 'ana@example.com', 2, 'notes-k7q2m9@in.example.com']);
       // A server from before the route refuses it: no names show.
       server.answer = (_) => FakeServer.json({'error': 'A device key can only send to Relay Everything.'}, 403);
       await relay.refreshConnections();
@@ -879,9 +886,27 @@ void main() {
       expect([reads(), relay.connections], [isEmpty, isNull]);
       await relay.startSending(sendEarlier: false, place: SendPlace.server);
       await relay.settled();
-      expect(relay.connections?.aiApps, ['Claude']);
+      expect(apps(relay), ['Claude']);
       await relay.disconnect();
       expect([relay.connections, await store.get(connectionsKey)], [null, null]);
+      relay.dispose();
+    });
+
+    test('signing out another phone posts its id, reads the names again, and needs a sign-in', () async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', const Settings(sending: true).encode());
+      final relay = controller();
+      await relay.load();
+      expect(await relay.signOutPhone('d-pixel'), isNull);
+      final off = server.requests.where((request) => request.url.path.endsWith('/devices/off')).single;
+      expect([off.method, jsonDecode(off.body)], ['POST', {'id': 'd-pixel'}]);
+      expect(reads(), contains('connections'));
+      server.answer = (_) => FakeServer.json({'code': 'forbidden', 'message': 'Action denied'}, 403);
+      expect(await relay.signOutPhone('d-laptop'), contains('did not sign out'));
+      await relay.stopSending();
+      final asked = server.requests.length;
+      expect(await relay.signOutPhone('d-pixel'), 'Sign in to Relay Everything first.');
+      expect(server.requests, hasLength(asked));
       relay.dispose();
     });
 
@@ -900,10 +925,13 @@ void main() {
       await store.set(connectionsKey, '{"aiApps":[{"name":"Claude"}],"webhooks":[]}');
       final relay = controller();
       await relay.load();
-      expect([relay.connections?.email, relay.connections?.aiApps], [null, ['Claude']]);
+      expect([relay.connections?.email, apps(relay), relay.connections?.devices], [null, ['Claude'], isEmpty]);
       final kept = Connections.decode(const Connections(email: 'ana@example.com', webhooks: ['Home server']).encode())!;
       expect([kept.email, kept.aiApps, kept.webhooks], ['ana@example.com', isEmpty, ['Home server']]);
       expect(Connections.fromJson({'email': '', 'aiApps': []}).email, isNull);
+      expect([Connections.fromJson({'aiApps': []}).addressesKnown,
+        Connections.decode(Connections.fromJson({'notesAddress': null, 'sharedAddress': null}).encode())!.addressesKnown],
+        [false, true]);
       relay.dispose();
     });
   });

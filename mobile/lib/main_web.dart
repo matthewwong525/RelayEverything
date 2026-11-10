@@ -18,9 +18,9 @@ void main() {
   late final WebRelay relay;
   final client = SpaceClient(base: pageOf(Uri.base), onSignedOut: () => relay.signedOut());
   relay = WebRelay(client: client);
-  // The phone's *Webhooks* and *AI apps* rows open `/#webhooks`: Settings opens there once. Its *Read them on the web*
-  // opens `/#chats`: the chats show first, once. Both are read before the app starts, because the app then writes its
-  // own route in the address.
+  // The phone's *Add or change on your Relay Everything page* opens `/#webhooks`: Settings opens there once. Its
+  // *Disconnect on your Relay Everything page* opens `/#ai-apps`, and *Read them on the web* `/#saved-chats`: that page
+  // shows first, once. Both are read before the app starts, because the app then writes its own route in the address.
   SettingsPage? settingsAt = SettingsPage.ofPart(Uri.base.fragment);
   WebPlace? placeAt = placeOfPart(Uri.base.fragment);
   runApp(WebApp(relay: relay, client: client, takeSettingsAt: () {

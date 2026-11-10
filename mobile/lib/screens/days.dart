@@ -4,6 +4,13 @@ import '../relay.dart';
 const _months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October',
   'November', 'December'];
 
+/// A short day, such as *Oct 14*, with the year when it is not [now]'s year.
+String shortDay(DateTime at, DateTime now) {
+  final local = at.toLocal();
+  final day = '${_months[local.month - 1].substring(0, 3)} ${local.day}';
+  return local.year == now.year ? day : '$day, ${local.year}';
+}
+
 /// Whole days from [at]'s date to [now]'s date: 0 today, 1 yesterday. In UTC, so a clock change does not shift a day.
 int daysAgo(DateTime at, DateTime now) =>
   DateTime.utc(now.year, now.month, now.day).difference(DateTime.utc(at.year, at.month, at.day)).inDays;

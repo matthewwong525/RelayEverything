@@ -1,0 +1,63 @@
+# Connect your AI: on a fresh install, Home's Other connections section has the row, and it opens a page with two
+# parts, Claude Code and Codex and Claude, ChatGPT and other AI apps. Saved chats opens the steps to save Claude Code
+# and Codex chats. Signed out, the page shows no link to the chats. Not in the fixed tour: run it by name.
+appId: com.matthewwong525.relayApp
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 60000
+# The section sits below On this phone, so scroll to it. A row's label joins its name and its line. The row counts as
+# seen while the search bar still covers it, so center it and scroll to the list's end: a tap there would open Search.
+- scrollUntilVisible:
+    element:
+      text: 'Connect your AI(.|\n)*'
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- scroll
+- assertVisible: 'Other connections(.|\n)*'
+- assertVisible: 'Connect your AI(.|\n)*Let your AI read your notes(.|\n)*'
+- takeScreenshot: home-other-connections
+- tapOn: 'Connect your AI(.|\n)*'
+- extendedWaitUntil:
+    visible: "Claude Code and Codex"
+    timeout: 30000
+- assertVisible: 'Saved chats(.|\n)*'
+- assertVisible: "Get the plugin"
+# The second part can sit below the fold on a small phone. Its row shows the connector's host, then Add it in your AI
+# app: Settings, Connectors.
+- scrollUntilVisible:
+    element:
+      text: 'mcp\.relayeverything\.com(.|\n)*'
+    direction: DOWN
+    timeout: 20000
+- assertVisible: "Claude, ChatGPT and other AI apps"
+- takeScreenshot: connect-your-ai
+- scrollUntilVisible:
+    element:
+      text: 'Saved chats(.|\n)*'
+    direction: UP
+    timeout: 20000
+- tapOn: 'Saved chats(.|\n)*'
+# Flutter joins the numbered steps into one label, so match each line inside it. Each command is its own text.
+- extendedWaitUntil:
+    visible: '(.|\n)*In Claude Code, type these commands to add the plugin:(.|\n)*'
+    timeout: 30000
+- assertVisible: "Saved chats"
+- assertVisible: '(.|\n)*Or, for Codex, run these commands in a terminal:(.|\n)*'
+- assertVisible: "/plugin install relay@relay"
+- assertVisible: "codex plugin add relay@relay"
+- assertNotVisible: "Read them on the web"
+- takeScreenshot: saved-chats
+# The connect step is lower on the page.
+- scrollUntilVisible:
+    element:
+      text: "/relay:connect"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- assertVisible: '(.|\n)*In Claude Code or Codex, type this command:(.|\n)*Then click Connect\.(.|\n)*'
+- assertNotVisible: "Read them on the web"
+- takeScreenshot: saved-chats-connect

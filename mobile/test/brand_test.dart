@@ -2,8 +2,11 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/brand.dart';
+
+import 'narrow_test.dart' show loadInter;
 
 /// The WCAG contrast ratio of two colors, 1 to 21.
 double contrast(Color a, Color b) {
@@ -147,6 +150,23 @@ void main() {
     final swift = File('ios/ShareExtension/Brand.swift').readAsStringSync()
       .replaceFirst('static let muted = color(light: 0x5E6660', 'static let muted = color(light: 0x9AA39C');
     expect(swiftDrift(swift), ['muted light: Brand.swift has 0x9AA39C, BrandColors 0x5E6660']);
+  });
+
+  testWidgets('a quiet button draws its words in Inter, not in a font the browser may not have', (tester) async {
+    await loadInter();
+    await tester.pumpWidget(MaterialApp(theme: brandTheme(Brightness.light), home: Scaffold(body: Builder(
+      builder: (context) => Column(children: [
+        for (final label in ['Copy', 'Sign out'])
+          TextButton(onPressed: () {}, style: quietButton(context), child: Text(label)),
+      ])))));
+    for (final label in ['Copy', 'Sign out']) {
+      final paragraph = tester.renderObject<RenderParagraph>(find.text(label));
+      expect(paragraph.text.style?.fontFamily, brandFont, reason: label);
+      // The test font draws each letter as a 15 px square; Inter's letters are narrower, so the words are Inter's.
+      final width = paragraph.getMaxIntrinsicWidth(double.infinity);
+      expect(width, greaterThan(0), reason: label);
+      expect(width, lessThan(15.0 * label.length), reason: label);
+    }
   });
 
   testWidgets("Inter's license is on the licenses page", (tester) async {

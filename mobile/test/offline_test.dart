@@ -68,7 +68,7 @@ void main() {
     });
     expect([relay.connected, relay.settings.sending], [true, false]);
     tallScreen(tester);
-    await tester.pumpWidget(RelayApp(relay: relay, scanner: (_) async => null));
+    await tester.pumpWidget(RelayApp(relay: relay));
 
     // Home: no Connections, and Settings' Account row asks to sign in: a kept key with sending off is signed out.
     expect(find.text('Connections'), findsNothing);
@@ -91,17 +91,31 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
     }
-    // AI chat transcripts: the steps show, with no link to the chats, and the page asks nothing of the server.
-    await openFolder(tester, 'AI chat transcripts');
+    // Connect your AI: the AI connector's address and Sign in, no computer or app, and Saved chats has the steps with
+    // no link to the chats. Nothing is asked of the server.
+    await openFolder(tester, 'Connect your AI');
+    expect([find.text('mcp.relayeverything.com'), find.widgetWithText(FilledButton, 'Sign in')], everyElement(findsOneWidget));
+    expect(find.text('Disconnect on your Relay Everything page'), findsNothing);
+    await tester.tap(find.text('Saved chats'));
+    await tester.pumpAndSettle();
     expect(find.text('/relay:connect'), findsOneWidget);
     expect(find.text('Read them on the web'), findsNothing);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    // Email notes: what it does and Sign in, and no address.
+    await openFolder(tester, 'Email notes');
+    expect([find.text('Send or forward an email, and it becomes a note, with its files.'),
+      find.widgetWithText(FilledButton, 'Sign in')], everyElement(findsOneWidget));
+    expect(find.textContaining('@'), findsNothing);
     await tester.pageBack();
     await tester.pumpAndSettle();
     // The Account row, signed out: the sign-in opens, and nothing is asked of the server.
     await openSettings(tester);
     await tester.tap(find.byKey(const ValueKey('account')));
     await tester.pumpAndSettle();
-    expect(find.text('Sign in to connect'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Sign in'), findsNothing);
     expect(find.text('This phone has a key for ${connection.server}.'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
@@ -200,7 +214,7 @@ void main() {
       await store.set(settingsKey, const Settings().encode());
       await relay.load();
     });
-    await tester.pumpWidget(RelayApp(relay: relay, scanner: (_) async => null));
+    await tester.pumpWidget(RelayApp(relay: relay));
     await openFolder(tester, 'Voice notes');
     await holdUntilListening(tester, () => relay.listening != null);
     clock = clock.add(const Duration(seconds: 4));

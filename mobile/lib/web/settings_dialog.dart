@@ -3,34 +3,48 @@ import 'package:flutter/material.dart';
 
 import '../brand.dart';
 import '../relay.dart';
-import '../screens/folder.dart' show Group, Opener;
-import 'ai_apps_page.dart';
+import '../screens/account.dart' show confirmSignOut, sinceLine;
+import '../screens/folder.dart' show FolderRow, Group, Opener;
+import '../screens/settings.dart' show SettingsRow;
 import 'devices_page.dart';
-import 'email_notes_page.dart';
 import 'settings_parts.dart';
 import 'space.dart';
 import 'webhooks_page.dart';
 
-/// The pages of Settings in the browser, in the order its list shows them.
+/// The pages of Settings in the browser. Its list shows those of [SettingsRow], the same rows as the phone's
+/// Settings; *API keys* and *Webhooks* open from *Advanced* on Account.
 enum SettingsPage {
   account('Account', 'account', CupertinoIcons.person_crop_circle),
-  devices('Devices', 'devices', CupertinoIcons.device_phone_portrait),
-  webhooks('Webhooks', 'webhooks', CupertinoIcons.link),
-  aiApps('AI apps', 'ai-apps', CupertinoIcons.sparkles),
-  emailNotes('Email notes', 'email-notes', CupertinoIcons.envelope),
-  appearance('Appearance', 'appearance', CupertinoIcons.circle_lefthalf_fill);
+  appearance('Appearance', 'appearance', CupertinoIcons.circle_lefthalf_fill),
+  apiKeys('API keys', 'api-keys', CupertinoIcons.chevron_left_slash_chevron_right),
+  webhooks('Webhooks', 'webhooks', CupertinoIcons.link);
 
   const SettingsPage(this.title, this.part, this.icon);
 
   final String title;
-  /// The page's part of the address, such as `#webhooks` in `/#webhooks`: the phone's *Webhooks* and
-  /// *AI apps* rows open Settings on that page.
+  /// The page's part of the address, such as `#webhooks` in `/#webhooks`: the phone's *Webhooks* opens Settings on
+  /// that page.
   final String part;
   final IconData icon;
 
-  /// The page an address's part names, such as `webhooks` or `/ai-apps`; null for any other part.
+  /// The pages Settings' list shows, in the order of [SettingsRow].
+  static List<SettingsPage> get listed => [
+    for (final row in SettingsRow.on(web: true)) switch (row) {
+      SettingsRow.account => account,
+      SettingsRow.appearance => appearance,
+      // The browser shows no phone-only row.
+      SettingsRow.notes || SettingsRow.voice || SettingsRow.version => throw StateError('${row.name} is phone-only'),
+    },
+  ];
+
+  /// The list's row a page sits under: *API keys* and *Webhooks* under Account.
+  SettingsPage get inList => this == apiKeys || this == webhooks ? account : this;
+
+  /// The page an address's part names, such as `webhooks` or `/api-keys`; null for any other part. The old page
+  /// `devices` opens Account, which lists the phones.
   static SettingsPage? ofPart(String part) {
     final name = part.startsWith('/') ? part.substring(1) : part;
+    if (name == 'devices') return account;
     return values.where((page) => page.part == name).firstOrNull;
   }
 }
@@ -72,33 +86,6 @@ class SettingsView extends StatefulWidget {
 class _SettingsViewState extends State<SettingsView> {
   /// Null in a narrow window while the list shows.
   late SettingsPage? _page = widget.narrow && widget.first == SettingsPage.account ? null : widget.first;
-  /// Whether the server takes email: *Email notes* shows only when it does. Null until it answers.
-  bool? _email;
-
-  @override
-  void initState() {
-    super.initState();
-    _readEmail();
-  }
-
-  /// A 503, or email off, hides *Email notes*; any other refusal keeps it, and its page says what went wrong.
-  Future<void> _readEmail() async {
-    bool shown;
-    try {
-      final email = (await widget.client.get('inbox'))['email'];
-      shown = email is Map && email['on'] == true;
-    } on SpaceRefused catch (refused) {
-      shown = refused.status != 503;
-    }
-    if (!mounted) return;
-    setState(() {
-      _email = shown;
-      if (!shown && _page == SettingsPage.emailNotes) _page = widget.narrow ? null : SettingsPage.account;
-    });
-  }
-
-  List<SettingsPage> get _pages =>
-    [for (final page in SettingsPage.values) if (page != SettingsPage.emailNotes || _email == true) page];
 
   void _close() => Navigator.of(context).pop();
 
@@ -137,12 +124,12 @@ class _SettingsViewState extends State<SettingsView> {
     return ListView(padding: const EdgeInsets.all(14), children: [
       Padding(padding: const EdgeInsets.fromLTRB(8, 6, 8, 12), child: Text('Settings',
         style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700))),
-      for (final item in _pages) Padding(
+      for (final item in SettingsPage.listed) Padding(
         padding: const EdgeInsets.symmetric(vertical: 1),
         child: ListTile(
           key: ValueKey('settings-${item.name}'),
           dense: true,
-          selected: !widget.narrow && item == (_page ?? SettingsPage.account),
+          selected: !widget.narrow && item == (_page ?? SettingsPage.account).inList,
           selectedTileColor: brand.accentSoft,
           selectedColor: brand.accentText,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -155,44 +142,84 @@ class _SettingsViewState extends State<SettingsView> {
     ]);
   }
 
+  void _account() => setState(() => _page = SettingsPage.account);
+
   Widget _pageOf(SettingsPage page) => KeyedSubtree(key: ValueKey(page), child: switch (page) {
-    SettingsPage.account => _AccountPage(relay: widget.relay, client: widget.client, close: _close),
-    SettingsPage.devices => DevicesPage(client: widget.client, opener: widget.opener),
-    SettingsPage.webhooks => WebhooksPage(client: widget.client),
-    SettingsPage.aiApps => AiAppsPage(client: widget.client, opener: widget.opener),
-    SettingsPage.emailNotes => EmailNotesPage(client: widget.client),
+    SettingsPage.account => _AccountPage(relay: widget.relay, client: widget.client, close: _close,
+      open: (page) => setState(() => _page = page)),
+    SettingsPage.apiKeys => ApiKeysPage(client: widget.client, opener: widget.opener, back: _account),
+    SettingsPage.webhooks => WebhooksPage(client: widget.client, back: _account),
     SettingsPage.appearance => _AppearancePage(relay: widget.relay),
   });
 }
 
 bool _same(String one, String other) => one.trim().toLowerCase() == other.trim().toLowerCase();
 
-/// *Account*: who is signed in, *Sign out*, and *Delete my account*, which needs the email typed again.
+/// *Account*, as on the phone: who is signed in with *Sign out*; *Phones*, each with *Sign out* after a confirm;
+/// *Advanced*, with *API keys* and *Webhooks*; and *Delete my account*, which needs the email typed again. Computers
+/// show in *Connect your AI*.
 class _AccountPage extends StatelessWidget {
-  const _AccountPage({required this.relay, required this.client, required this.close});
+  const _AccountPage({required this.relay, required this.client, required this.close, required this.open});
 
   final Relay relay;
   final SpaceClient client;
   final VoidCallback close;
+  /// Opens a page of *Advanced*.
+  final ValueChanged<SettingsPage> open;
+
+  Future<(String, Connections)> _load() async {
+    final email = '${(await client.get('account'))['email'] ?? ''}';
+    return (email, Connections.fromJson(await client.get('connections')));
+  }
 
   @override
   Widget build(BuildContext context) {
-    final danger = brandOf(context).danger;
-    return SettingsBody(title: 'Account', children: [SpaceView<String>(
-      what: 'Your account', load: () async => '${(await client.get('account'))['email'] ?? ''}',
-      builder: (context, email, _) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Group(children: [ListTile(
-          leading: const RelayMark(size: 32),
-          title: Text(email, style: const TextStyle(fontWeight: FontWeight.w600)),
-          subtitle: const Text('Signed in'),
-          trailing: TextButton(onPressed: _signOut, style: quietButton(context), child: const Text('Sign out')),
-        )]),
-        Group(children: [ListTile(
-          title: Text('Delete my account', style: TextStyle(color: danger)),
-          subtitle: const Text('Removes your notes, recordings, photos, health, places, chats, devices, webhooks and AI apps.'),
-          onTap: () => _delete(context, email),
-        )]),
-      ]))]);
+    final brand = brandOf(context);
+    final danger = brand.danger;
+    final now = DateTime.now();
+    return SettingsBody(title: 'Account', children: [SpaceView<(String, Connections)>(
+      what: 'Your account', load: _load,
+      builder: (context, value, act) {
+        final (email, connections) = value;
+        final webhooks = connections.webhooks.length;
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Group(children: [ListTile(
+            leading: const RelayMark(size: 32),
+            title: Text(email, style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: const Text('Signed in'),
+            trailing: TextButton(onPressed: _signOut, style: quietButton(context), child: const Text('Sign out')),
+          )]),
+          if (connections.phones.isNotEmpty) Group(title: 'Phones', children: [
+            for (final phone in connections.phones) ListTile(
+              leading: Icon(CupertinoIcons.device_phone_portrait, color: brand.accentText),
+              title: Text(phone.name),
+              subtitle: Text(sinceLine(phone.since, now)),
+              trailing: TextButton(onPressed: () => _signOutPhone(context, phone, act), style: quietButton(context),
+                child: const Text('Sign out')),
+            ),
+          ]),
+          Group(title: 'Advanced', children: [
+            FolderRow(icon: SettingsPage.apiKeys.icon, title: 'API keys', line: 'For your own scripts',
+              onTap: () => open(SettingsPage.apiKeys)),
+            FolderRow(icon: SettingsPage.webhooks.icon, title: 'Webhooks', line: 'Send a copy to your own server',
+              count: webhooks == 0 ? null : webhooks, onTap: () => open(SettingsPage.webhooks)),
+          ]),
+          Group(children: [ListTile(
+            title: Text('Delete my account', style: TextStyle(color: danger)),
+            subtitle: const Text('Removes your notes, recordings, photos, health, places, chats, devices, webhooks and AI apps.'),
+            onTap: () => _delete(context, email),
+          )]),
+        ]);
+      })]);
+  }
+
+  /// Asks first, then signs out one phone: it stops at its next request, and the others go on.
+  Future<void> _signOutPhone(BuildContext context, ConnectedDevice phone, Act act) async {
+    if (!await confirmSignOut(context, title: 'Sign out ${phone.name}?',
+      body: 'It stops sending at its next request. Its notes stay on it. Sign in on it again to send from it.')) {
+      return;
+    }
+    await act(() => client.post('devices/off', {'id': phone.id}));
   }
 
   /// Closes Settings first: signing out shows the sign-in in place of the notes.

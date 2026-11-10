@@ -613,6 +613,7 @@ class WebRelay extends Relay {
   @override bool get locationModes => false;
   @override Connections? get connections => null;
   @override Future<void> refreshConnections() async {}
+  @override Future<String?> signOutPhone(String id) async => onlyOnPhone;
   @override Future<String?> connect(String code) async => onlyOnPhone;
   @override Future<String?> signIn(String server) async => onlyOnPhone;
   @override Future<String?> setLocationMode(LocationMode mode) async => onlyOnPhone;

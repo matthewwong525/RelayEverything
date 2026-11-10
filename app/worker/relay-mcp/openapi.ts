@@ -160,7 +160,7 @@ export function openApi(origin: string) {
           "same token works on `/mcp` and here. An app connected before adding notes reads only; connect it again to add.",
         flows: { authorizationCode: { authorizationUrl: `${origin}/authorize`, tokenUrl: `${origin}/token`, refreshUrl: `${origin}/token`, scopes: {} } } },
         apiKey: { type: "http", scheme: "bearer", bearerFormat: "rek_…", description: "An API key, made on the person's Relay Everything page with " +
-          "*Add a device*: send it as `Authorization: Bearer rek_…`. A phone's or a chat key is refused here." },
+          "*Add an API key*: send it as `Authorization: Bearer rek_…`. A phone's or a chat key is refused here." },
       },
       schemas: { Error: { type: "object", required: ["error", "error_description"], additionalProperties: false,
         properties: { error: { type: "string", enum: ["invalid_request", "invalid_token", "forbidden", "not_found", "method_not_allowed"] },

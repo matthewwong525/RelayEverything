@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import '../brand.dart';
+import '../screens/connect_ai.dart' show pluginGuide;
 import '../screens/days.dart' show daysAgo;
 import '../screens/folder.dart' show Opener, openInBrowser;
 import '../screens/transcripts.dart' show TranscriptSteps;
@@ -178,7 +179,7 @@ class _ChatsViewState extends State<ChatsView> {
       return;
     }
     final deleted = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (context) => Scaffold(
-      appBar: AppBar(title: const Text('AI chat transcripts')),
+      appBar: AppBar(title: const Text('Saved chats')),
       body: _ChatPane(key: ValueKey(chat.id), client: widget.client, id: chat.id,
         onDeleted: () => Navigator.of(context).pop(true)),
     )));
@@ -210,7 +211,7 @@ class _ChatsViewState extends State<ChatsView> {
     final text = Theme.of(context).textTheme;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Padding(padding: const EdgeInsets.fromLTRB(20, 14, 12, 6), child: Row(children: [
-        Expanded(child: Semantics(header: true, child: Text('AI chat transcripts',
+        Expanded(child: Semantics(header: true, child: Text('Saved chats',
           style: text.titleLarge?.copyWith(fontWeight: FontWeight.w700)))),
         TextButton(onPressed: () => showDialog<void>(context: context,
           builder: (_) => _ConnectComputer(opener: widget.opener ?? openInBrowser)), child: const Text('Connect a computer')),
@@ -484,7 +485,7 @@ class _ConnectComputer extends StatelessWidget {
 
   final Opener opener;
 
-  static final guide = Uri.parse('https://relayeverything.com/connections/claude-code/');
+  static final guide = Uri.parse(pluginGuide);
 
   @override
   Widget build(BuildContext context) {
@@ -502,8 +503,8 @@ class _ConnectComputer extends StatelessWidget {
           Text('Each chat from then on is saved. Older chats are not sent. To keep the chats of a project out, type '
             '/relay:saving off in that project.', style: muted),
           const SizedBox(height: 8),
-          Text("The computer's key saves your chats and can read all your Relay Everything data. To stop it, turn it off "
-            'in Settings, in Devices.', style: muted),
+          Text("The computer's key saves your chats and can read all your Relay Everything data. To stop it, disconnect "
+            'it in Connect your AI.', style: muted),
           const SizedBox(height: 8),
           Text('To keep chats in your own Cloudflare account, run your own Relay Everything server and connect to it.',
             style: muted),

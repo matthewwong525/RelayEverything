@@ -8,15 +8,19 @@ import '../brand.dart';
 import '../data/client_id.dart';
 import '../relay.dart';
 import '../screens/back_to.dart';
+import '../screens/connect_ai.dart' show connectAiLine;
 import '../screens/days.dart';
+import '../screens/email_notes.dart' show emailNotesLine;
 import '../screens/folder.dart';
 import '../screens/home.dart';
 import '../screens/note_editor.dart';
 import '../screens/round_button.dart';
 import '../screens/timeline.dart';
+import '../screens/transcripts.dart' show savedChatsPart;
 import 'chats.dart';
 import 'connection_page.dart';
 import 'drops.dart';
+import 'other_connections.dart';
 import 'settings_dialog.dart';
 import 'space.dart';
 
@@ -26,7 +30,7 @@ const threePanes = 1000.0;
 /// From this width it shows two panes, with the left bar in a menu; below it, the phone's pages.
 const twoPanes = 700.0;
 
-/// What the left bar has open: a notes folder, one of *Other connections*, or the chats.
+/// What the left bar has open: a notes folder, one of *Other connections*, or the saved chats.
 sealed class WebPlace {
   const WebPlace();
 }
@@ -43,16 +47,30 @@ class ConnectionPlace extends WebPlace {
   final ConnectionKind kind;
 }
 
-class ChatsPlace extends WebPlace {
-  const ChatsPlace();
-
-  /// The page's part of the address that opens the chats: the phone's *Read them on the web* opens `/#chats`.
-  static const part = 'chats';
+/// *Connect your AI*: the computers with the plugin, *Saved chats*, and the AI apps.
+class ConnectAiPlace extends WebPlace {
+  const ConnectAiPlace();
 }
 
-/// The place an address's part names, such as `chats` or the app's own `/chats`; null for any other part.
-WebPlace? placeOfPart(String part) => (part.startsWith('/') ? part.substring(1) : part) == ChatsPlace.part
-  ? const ChatsPlace() : null;
+/// *Email notes*: the two notes addresses.
+class EmailNotesPlace extends WebPlace {
+  const EmailNotesPlace();
+}
+
+/// The saved chats from Claude Code and Codex, opened from *Connect your AI*.
+class ChatsPlace extends WebPlace {
+  const ChatsPlace();
+}
+
+/// The place an address's part names, such as `email-notes` or the app's own `/email-notes`; null for any other part.
+/// The old Settings pages `ai-apps` and `chats` open *Connect your AI*; the phone's *Read them on the web* opens
+/// `/#saved-chats`.
+WebPlace? placeOfPart(String part) => switch (part.startsWith('/') ? part.substring(1) : part) {
+  'ai-apps' || 'chats' => const ConnectAiPlace(),
+  'email-notes' => const EmailNotesPlace(),
+  savedChatsPart => const ChatsPlace(),
+  _ => null,
+};
 
 /// The connections the left bar lists under *Other connections*, with their names and icons.
 const _connections = [
@@ -82,7 +100,7 @@ class WebShell extends StatefulWidget {
   final Stream<List<NewFile>>? drops;
   /// The Settings page the page's address named, such as `#webhooks`: Settings opens on it once the notes show.
   final SettingsPage? settingsAt;
-  /// The place the page's address named, such as `#chats`: the page opens on it in place of the notes.
+  /// The place the page's address named, such as `#email-notes`: the page opens on it in place of the notes.
   final WebPlace? placeAt;
 
   @override
@@ -242,11 +260,16 @@ class WebShellState extends State<WebShell> {
           ],
           ConnectionPlace(:final kind) => [Expanded(child: _withMenu(menu,
             ConnectionPage(kind: kind, client: widget.client, opener: widget.opener)))],
+          ConnectAiPlace() => [Expanded(child: _withMenu(menu, _connectAi()))],
+          EmailNotesPlace() => [Expanded(child: _withMenu(menu, WebEmailNotesPage(client: widget.client)))],
           ChatsPlace() => [Expanded(child: _withMenu(menu, ChatsView(client: widget.client, wide: true, opener: widget.opener)))],
         },
       ]),
     );
   }
+
+  Widget _connectAi() => WebConnectAiPage(client: widget.client, opener: widget.opener,
+    onSavedChats: () => _go(const ChatsPlace()));
 
   String? get _openId => _open ? _editor.currentState?.id ?? _entry?.id : null;
 
@@ -292,8 +315,10 @@ class WebShellState extends State<WebShell> {
         onFolder: (folder) => _go(FolderPlace(folder)), onSettings: _settings, otherConnections: [
           for (final (kind, title, icon) in _connections)
             FolderRow(icon: icon, title: title, onTap: () => _go(ConnectionPlace(kind))),
-          FolderRow(icon: CupertinoIcons.chat_bubble_2, title: 'AI chat transcripts', line: 'Claude Code and Codex',
-            onTap: () => _go(const ChatsPlace())),
+          FolderRow(icon: CupertinoIcons.sparkles, title: 'Connect your AI', line: connectAiLine,
+            onTap: () => _go(const ConnectAiPlace())),
+          FolderRow(icon: CupertinoIcons.envelope, title: 'Email notes', line: emailNotesLine,
+            onTap: () => _go(const EmailNotesPlace())),
         ]);
     }
     return PopScope(
@@ -303,14 +328,18 @@ class WebShellState extends State<WebShell> {
         FolderPlace(:final folder) => TimelineScreen(relay: relay, folder: folder, picker: widget.picker, sharer: widget.sharer,
           opener: widget.opener, onOpen: openNote, onBack: _goHome),
         ConnectionPlace(:final kind) => _page(ConnectionPage(kind: kind, client: widget.client, opener: widget.opener)),
-        ChatsPlace() => _page(ChatsView(client: widget.client, wide: false, opener: widget.opener)),
+        ConnectAiPlace() => _page(_connectAi()),
+        EmailNotesPlace() => _page(WebEmailNotesPage(client: widget.client)),
+        // The saved chats go back to *Connect your AI*, which opened them.
+        ChatsPlace() => _page(ChatsView(client: widget.client, wide: false, opener: widget.opener),
+          back: 'Connect your AI', onBack: () => _go(const ConnectAiPlace())),
       },
     );
   }
 
-  /// A connection or the chats on the phone's pages, under *‹ Home*.
-  Widget _page(Widget body) => Scaffold(
-    appBar: AppBar(leading: BackTo('Home', onPressed: _goHome), leadingWidth: BackTo.widthOf('Home')),
+  /// A connection or the saved chats on the phone's pages, under *‹ Home*, or [back] for the saved chats.
+  Widget _page(Widget body, {String back = 'Home', VoidCallback? onBack}) => Scaffold(
+    appBar: AppBar(leading: BackTo(back, onPressed: onBack ?? _goHome), leadingWidth: BackTo.widthOf(back)),
     body: body,
   );
 }
@@ -332,7 +361,8 @@ class Sidebar extends StatelessWidget {
     bool on(WebPlace other) => switch ((place, other)) {
       (FolderPlace(folder: final a), FolderPlace(folder: final b)) => a == b,
       (ConnectionPlace(kind: final a), ConnectionPlace(kind: final b)) => a == b,
-      (ChatsPlace(), ChatsPlace()) => true,
+      (ConnectAiPlace() || ChatsPlace(), ConnectAiPlace()) => true,
+      (EmailNotesPlace(), EmailNotesPlace()) => true,
       _ => false,
     };
     Widget row(IconData icon, String title, WebPlace? to, {int? count, VoidCallback? onTap}) {
@@ -368,7 +398,8 @@ class Sidebar extends StatelessWidget {
         Padding(padding: const EdgeInsets.fromLTRB(22, 20, 16, 6),
           child: Text('Other connections', style: text.labelLarge?.copyWith(color: brand.muted))),
         for (final (kind, title, icon) in _connections) row(icon, title, ConnectionPlace(kind)),
-        row(CupertinoIcons.chat_bubble_2, 'AI chat transcripts', const ChatsPlace()),
+        row(CupertinoIcons.sparkles, 'Connect your AI', const ConnectAiPlace()),
+        row(CupertinoIcons.envelope, 'Email notes', const EmailNotesPlace()),
       ])),
       Divider(height: 1, color: brand.line),
       const SizedBox(height: 8),

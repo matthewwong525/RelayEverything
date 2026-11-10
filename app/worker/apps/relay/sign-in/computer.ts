@@ -70,7 +70,7 @@ export async function computer(request: Request, env: SignInEnv, identity: Ident
 <p><b>Connect only a computer you just started this on.</b> If someone sent you this link, click Cancel.</p>
 <form method="post"><input type="hidden" name="c" value="${challenge}">
 <label for="name">Name</label><input id="name" name="name" maxlength="60" value="${escape(row.name)}" style="${FIELD}">
-<p>It saves your AI chats from Claude Code and Codex and reads all your Relay Everything data. You can turn it off in Devices.</p>
+<p>It saves your AI chats from Claude Code and Codex and reads all your Relay Everything data. To stop it, disconnect it in Connect your AI on your Relay Everything page.</p>
 <button name="choice" value="connect" style="${BUTTON};background:#3f51b5;color:#fff">Connect</button>
 <button name="choice" value="cancel" style="${BUTTON};background:none;color:#3f51b5">Cancel</button></form>`);
 }

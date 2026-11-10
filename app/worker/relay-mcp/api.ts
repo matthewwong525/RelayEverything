@@ -12,7 +12,7 @@ export type WebTool = Exclude<ToolName, "read_photo">;
 
 export const ROUTES: readonly V1Route[] = [
   { method: "GET", path: "/v1/notes", id: "listNotes", summary: "Search notes, or read a time range", tools: ["search", "timeline"], q: true,
-    description: "With `q`, the notes whose text holds every word, as the `search` tool: `source` picks ring or typed notes, and `limit` is at most " +
+    description: "With `q`, the notes whose text holds every word, as the `search` tool: `source` picks older recorded or typed notes, and `limit` is at most " +
       "50. Without `q`, every note from `from` to `to`, as the `timeline` tool: both are needed, and `limit` is at most 100. Newest first; " +
       "read on with `cursor`." },
   { method: "POST", path: "/v1/notes", id: "addNote", summary: TOOLS.add_note.title, tools: ["add_note"],

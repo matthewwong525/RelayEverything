@@ -23,7 +23,7 @@
       "get": {
         "operationId": "listNotes",
         "summary": "Search notes, or read a time range",
-        "description": "With `q`, the notes whose text holds every word, as the `search` tool: `source` picks ring or typed notes, and `limit` is at most 50. Without `q`, every note from `from` to `to`, as the `timeline` tool: both are needed, and `limit` is at most 100. Newest first; read on with `cursor`.",
+        "description": "With `q`, the notes whose text holds every word, as the `search` tool: `source` picks older recorded or typed notes, and `limit` is at most 50. Without `q`, every note from `from` to `to`, as the `timeline` tool: both are needed, and `limit` is at most 100. Newest first; read on with `cursor`.",
         "parameters": [
           {
             "name": "q",
@@ -60,7 +60,7 @@
             "name": "source",
             "in": "query",
             "required": false,
-            "description": "Only ring notes, or only typed ones.",
+            "description": "Only older recorded notes, or only typed ones.",
             "schema": {
               "type": "string",
               "enum": [

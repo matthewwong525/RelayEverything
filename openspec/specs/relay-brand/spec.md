@@ -45,7 +45,7 @@ Relay Everything SHALL have one logo, a capital R that sends out signal waves, b
 #### Scenario: The website shows the new mark
 
 - **WHEN** a person opens relayeverything.com
-- **THEN** the top bar and the browser tab show the new mark, and no page outside the ring's own pages shows the ring circle as the product's logo
+- **THEN** the top bar and the browser tab show the new mark, and no page shows the ring circle
 
 ### Requirement: The website wears the brand
 

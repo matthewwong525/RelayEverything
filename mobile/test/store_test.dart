@@ -500,6 +500,53 @@ void main() {
     expect(await old.deleteNote('kept'), isTrue);
   });
 
+  group('earlier notes from your own webhook', () {
+    /// Keeps note [id], made at [made], and sends it and its files, as a webhook takes them: sent, with no server id.
+    Future<void> sentToWebhook(String id, DateTime made, {List<Attachment> files = const []}) async {
+      await store.addNote(LocalNote(clientId: id, text: 'Note $id', createdAt: made, attachments: files), send: true);
+      for (final item in await store.outbox()) {
+        await store.done(item.id);
+      }
+      await store.noteSent(id, made);
+      for (final file in files) {
+        await store.attachmentSent(file.id, made);
+      }
+    }
+
+    test('count and queue only with fromWebhook, oldest first, with their files and newest words', () async {
+      const file = Attachment(id: 'f1', name: 'a.pdf', type: 'application/pdf', size: 3, path: 'attachments/f1.pdf');
+      await sentToWebhook('w2', at.add(const Duration(minutes: 1)), files: const [file]);
+      await sentToWebhook('w1', at);
+      // A change that went nowhere yet: the new upload carries it, so it goes.
+      expect(await store.editNote('w1', 'Note w1, changed', send: true, at: later), isTrue);
+      await store.addNote(LocalNote(clientId: 'p1', text: 'Only here', createdAt: later));
+      expect([await store.earlierCount(), await store.earlierCount(fromWebhook: true)], [1, 3]);
+      await store.queueEarlier(fromWebhook: true);
+      expect([for (final item in await store.outbox()) (item.route, item.body['clientId'] ?? item.body['id'])],
+        [('notes', 'w1'), ('notes', 'w2'), ('attachment', 'f1'), ('notes', 'p1')]);
+      expect((await store.outbox()).first.body['text'], 'Note w1, changed');
+      // Waiting to go, they are not asked about again.
+      expect([await store.earlierCount(), await store.earlierCount(fromWebhook: true)], [0, 0]);
+    });
+
+    test('without fromWebhook, a note sent to the webhook is never queued', () async {
+      await sentToWebhook('w1', at);
+      await store.queueEarlier();
+      expect([await store.outbox(), await store.earlierCount(fromWebhook: true)], [isEmpty, 1]);
+    });
+
+    test('a note with a server id, one from elsewhere, or one being deleted never counts', () async {
+      await sentToWebhook('n1', at);
+      await store.applyPulled([pulledNote('s1', clientId: 'n1', mine: true, text: 'Note n1', recordedAt: at)]);
+      await store.applyPulled([pulledNote('s2')]);
+      await sentToWebhook('n2', at);
+      await store.markDeleted('n2', later);
+      expect(await store.earlierCount(fromWebhook: true), 0);
+      await store.queueEarlier(fromWebhook: true);
+      expect(await store.outbox(), isEmpty);
+    });
+  });
+
   group('two destinations', () {
     List<(String, String)> rows(List<OutboxItem> items) => [for (final item in items) (item.route, item.destination)];
 
@@ -513,6 +560,23 @@ void main() {
       expect([await store.destination(), await store.privateDestination()], [relayServer, ownWebhook]);
       expect(rows(await store.outbox()), [('notes', relayServer), ('health', ownWebhook), ('locations', ownWebhook),
         ('calendar', ownWebhook), ('attachment', relayServer)]);
+    });
+
+    test('a route filter lists only the notes\' own uploads, or only the private ones, each oldest first', () async {
+      await store.enqueue('health', {'samples': []});
+      await store.enqueue('notes', {'clientId': 'a'});
+      await store.enqueue('locations', {'points': []});
+      await store.enqueue(staysRoute, {'stays': []});
+      await store.enqueue('calendar', {'events': [], 'removed': []});
+      await store.enqueue(noteUpdate, {'clientId': 'a'});
+      await store.enqueue(noteDelete, {'clientId': 'b'});
+      await store.enqueue('attachment', {'id': 'f1'});
+      List<String> routes(List<OutboxItem> items) => [for (final item in items) item.route];
+      expect(routes(await store.outbox(private: false)), ['notes', noteUpdate, noteDelete, 'attachment']);
+      expect(routes(await store.outbox(private: true)), ['health', 'locations', staysRoute, 'calendar']);
+      expect((await store.outbox()).length, 8);
+      expect(await store.outbox(destination: ownWebhook, private: false), isEmpty);
+      expect(routes(await store.outbox(destination: relayServer, private: false)).first, 'notes');
     });
 
     test('a move of only the private place leaves note rows and drops what the calendar sent', () async {

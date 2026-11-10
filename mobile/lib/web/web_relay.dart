@@ -625,8 +625,8 @@ class WebRelay extends Relay {
   @override Future<void> setCalendarShown(String id, bool on) async {}
   @override Future<String?> setPhotos(bool on) async => onlyOnPhone;
   @override Future<String?> setPhotosOnMobileData(bool on) async => onlyOnPhone;
-  @override Future<int> earlierNotes() async => 0;
-  @override Future<String?> startSending({required bool sendEarlier, SendPlace? place}) async => onlyOnPhone;
+  @override Future<int> earlierNotes({SendPlace? to}) async => 0;
+  @override Future<String?> startSending({required bool sendEarlier, SendPlace? place, SendPlace? privateTo}) async => onlyOnPhone;
   @override String? get webhookAddress => null;
   @override String? get webhookSecret => null;
   @override WebhookProblem? get webhookProblem => null;

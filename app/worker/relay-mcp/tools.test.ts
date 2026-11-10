@@ -238,7 +238,7 @@ it("titles a note with no words, and lets a database fault through as an error, 
   sql.exec(`INSERT INTO relay_notes (id, device_id, source, delivery_id, text, recorded_at, created_at) VALUES
     ('${ID(8)}', 'd0000000-0000-4000-8000-000000000002', 'ring', 'empty-delivery', '', 1793900000000, 0)`);
   client = await connect(SPACES);
-  expect((await ask("fetch", { id: ID(8) })).title).toBe("A ring note with no words");
+  expect((await ask("fetch", { id: ID(8) })).title).toBe("A recorded note with no words");
   client = await connect({ idFromName: () => ({}), get: () => ({ query: async () => { throw new Error("The space is down"); } }) } as never);
   const { content, isError } = await client.callTool({ name: "fetch", arguments: { id: ID(1) } }) as { content: { text: string }[]; isError?: boolean };
   expect([isError, content[0].text]).toEqual([true, expect.stringContaining("The space is down")]);

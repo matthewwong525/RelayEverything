@@ -120,12 +120,19 @@ class FakeRelay extends Relay {
     settings = settings.copyWith(calendarsOff: off);
     notifyListeners();
   }
-  @override Future<int> earlierNotes() async => earlier;
+  /// The place the last [earlierNotes] asked about.
+  SendPlace? earlierTo;
+  @override
+  Future<int> earlierNotes({SendPlace? to}) async {
+    earlierTo = to;
+    return earlier;
+  }
 
   @override
-  Future<String?> startSending({required bool sendEarlier, SendPlace? place}) async {
-    calls.add('start $sendEarlier${place == SendPlace.webhook ? ' webhook' : ''}');
-    settings = settings.copyWith(sending: true, place: place);
+  Future<String?> startSending({required bool sendEarlier, SendPlace? place, SendPlace? privateTo}) async {
+    calls.add('start $sendEarlier${place == SendPlace.webhook ? ' webhook' : ''}'
+      '${privateTo == null ? '' : ' private ${privateTo.name}'}');
+    settings = settings.copyWith(sending: true, place: place, privateTo: privateTo);
     notifyListeners();
     return null;
   }
@@ -2107,23 +2114,105 @@ void main() {
       'webhook https://db.example.com/relay $secret', 'closed webhook']);
   });
 
-  testWidgets('with My own webhook, the Account page says sync is off there, and opens Webhooks on the Relay Everything page',
-      (tester) async {
-    final opened = <Uri>[];
-    tallScreen(tester);
-    relay
-      ..settings = const Settings(sending: true, place: SendPlace.webhook)
-      ..webhookAddress = 'https://db.example.com/relay';
-    await tester.pumpWidget(RelayApp(relay: relay, opener: (address) async {
-      opened.add(address);
-      return true;
-    }));
-    await openAccount(tester);
-    await tester.scrollUntilVisible(find.text('Notes from elsewhere'), 100);
-    expect(find.textContaining('Sync is off while the phone sends to your own webhook.'), findsOneWidget);
-    await tester.tap(find.text('Notes from elsewhere'));
-    await tester.pumpAndSettle();
-    expect(opened, [Uri.parse('https://app.relayeverything.com/apps/relay/#webhooks')]);
+  group('signing in from the webhook Account page', () {
+    const offer = 'Sync your notes with your page, your AI and your other phones. Health, places, calendar and photos still '
+      'go only to your webhook.';
+    const told = 'Signed in. To get your notes at your webhook too, add it under Webhooks on your Relay Everything page.';
+    void webhookOnly() => relay
+      ..server = 'https://relay.example.com'
+      ..settings = const Settings(sending: true, place: SendPlace.webhook, health: true)
+      ..webhookAddress = 'https://db.example.com/relay'
+      ..webhookSecret = 'whsec_kept';
+
+    testWidgets('offers Sign in to Relay Everything as a plain row, with no filled button, above Stop sending in red',
+        (tester) async {
+      tallScreen(tester);
+      webhookOnly();
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openAccount(tester);
+      final signIn = find.widgetWithText(ListTile, 'Sign in to Relay Everything');
+      expect([find.text(offer), find.text('Notes from elsewhere'), find.byType(FilledButton)],
+        [findsOneWidget, findsNothing, findsNothing]);
+      expect(find.descendant(of: signIn, matching: find.byIcon(CupertinoIcons.chevron_forward)), findsOneWidget);
+      final stop = find.widgetWithText(ListTile, 'Stop sending');
+      expect(tester.getTopLeft(signIn).dy, lessThan(tester.getTopLeft(stop).dy));
+      expect(tester.widget<Text>(find.descendant(of: stop, matching: find.text('Stop sending'))).style?.color,
+        Theme.of(tester.element(stop)).colorScheme.error);
+    });
+
+    testWidgets('signs in, asks about the notes sent to the webhook, keeps the webhook for private data, and says how to get '
+        'notes there', (tester) async {
+      tallScreen(tester);
+      webhookOnly();
+      relay.earlier = 12;
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openAccount(tester);
+      final asked = relay.refreshes;
+      await tester.tap(find.text('Sign in to Relay Everything'));
+      await tester.pumpAndSettle();
+      // Only the sign-in: the phone sends to the webhook already.
+      expect([find.text('Sign in to connect'), find.text('Send to my own webhook instead')], [findsOneWidget, findsNothing]);
+      expect(find.textContaining('Health, places, calendar and photos still go only to your webhook.'), findsOneWidget);
+      await tester.tap(find.text('Sign in to connect'));
+      await tester.pumpAndSettle();
+      expect(find.text('Send your 12 earlier notes too?'), findsOneWidget);
+      expect(find.text('They are not on Relay Everything yet. New notes go to your Relay Everything server from now on.'),
+        findsOneWidget);
+      await tester.tap(find.text('Send them'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['sign in https://app.relayeverything.com', 'start true private webhook']);
+      expect(relay.earlierTo, SendPlace.server);
+      expect([relay.settings.place, relay.settings.privateTo, relay.settings.privatePlace],
+        [SendPlace.server, SendPlace.webhook, SendPlace.webhook]);
+      // The signed-in page, with Only my own webhook picked, and the message.
+      expect(tester.widget<RadioGroup<SendPlace>>(find.byType(RadioGroup<SendPlace>)).groupValue, SendPlace.webhook);
+      expect([find.text('Sign out'), find.text('db.example.com'), find.text(told)], [findsOneWidget, findsOneWidget, findsOneWidget]);
+      expect(relay.refreshes, greaterThan(asked));
+    });
+
+    testWidgets('a closed sign-in, or back, changes nothing', (tester) async {
+      tallScreen(tester);
+      webhookOnly();
+      relay
+        ..earlier = 3
+        ..signsIn = false;
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openAccount(tester);
+      await tester.tap(find.text('Sign in to Relay Everything'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Sign in to connect'));
+      await tester.pumpAndSettle();
+      // The person closed the sign-in: the screen stays open, with no key.
+      expect(find.text('Sign in to connect'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['sign in https://app.relayeverything.com']);
+      expect([relay.settings.place, relay.settings.privateTo], [SendPlace.webhook, SendPlace.server]);
+      expect([find.text(offer), find.text(told), find.text('Send your 3 earlier notes too?')],
+        [findsOneWidget, findsNothing, findsNothing]);
+    });
+
+    testWidgets('closing the earlier-notes question changes nothing', (tester) async {
+      tallScreen(tester);
+      webhookOnly();
+      relay
+        ..earlier = 1
+        ..connected = true;
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openAccount(tester);
+      await tester.tap(find.text('Sign in to Relay Everything'));
+      await tester.pumpAndSettle();
+      // A key kept already: one tap, and still no way to the webhook's form.
+      expect(find.text('Send to my own webhook instead'), findsNothing);
+      await tester.tap(find.widgetWithText(FilledButton, 'Send to Relay Everything'));
+      await tester.pumpAndSettle();
+      expect(find.text('It is not on Relay Everything yet. New notes go to your Relay Everything server from now on.'),
+        findsOneWidget);
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+      expect([relay.calls, relay.settings.place], [isEmpty, SendPlace.webhook]);
+      expect([find.text(offer), find.text(told)], [findsOneWidget, findsNothing]);
+    });
   });
 
   testWidgets('a note from elsewhere names where it came from, offers no paperclip, and lists files to download',

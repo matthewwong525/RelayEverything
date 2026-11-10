@@ -7,7 +7,7 @@ Hold **New note** in the Relay Everything app, let go, talk, and tap anywhere to
 
 ## Make a voice note
 
-1. Hold **New note**, the round green button at the bottom of your notes. An amber ring fills round it in half a second. When the ring closes, the phone buzzes.
+1. Hold **New note**, the round green button at the bottom of your notes. An amber circle fills round it in half a second. When the circle closes, the phone buzzes.
 2. Let go. The phone keeps listening on its own full screen: **Listening**, a large clock, and amber bars that move with your voice, so you see that the phone hears you.
 3. Talk.
 4. Tap anywhere on the screen to save. The back gesture saves too. To throw the note away, tap the round **X** at the top right.
@@ -16,7 +16,7 @@ Until your first voice note, a small tip above **New note** says **Hold to talk*
 
 The bars use the sound level only to draw the screen. The app keeps none of it and sends none of it.
 
-A tap shorter than half a second opens the **New note** page to type, and records nothing. If you let go before the ring closes, it empties.
+A tap shorter than half a second opens the **New note** page to type, and records nothing. If you let go before the circle closes, it empties.
 
 When you tap to save, the note opens. It shows **Writing the words…**, then its words fill in. Tap the back button to go to the page you were on. In your notes, the note shows **Voice**.
 
@@ -53,8 +53,6 @@ The app keeps nothing from:
 - A press on **New note** shorter than half a second. It opens the **New note** page, and a bump in your pocket makes no voice note.
 - A note you throw away with the **X**.
 - A recording with no words in it. The note's page closes, and the app says **No speech heard**.
-
-The Relay Everything ring uses the same rule: [How the ring works](../../ring/how-it-works/#against-bumps).
 
 ## Play a note back
 

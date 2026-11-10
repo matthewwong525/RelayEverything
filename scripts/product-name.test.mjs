@@ -1,5 +1,6 @@
 // Run with: node --test scripts/product-name.test.mjs
 // A bare "Relay" in a file people read fails with its file and line; lower-case code names and commands pass.
+// So does the word "ring" outside the wiki: the ring is gone, and only its hidden names stay.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -8,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BARE = /\bRelay\b(?!\s+Everything\b)/g;
+const RING = /\bring\b/gi;
+const QUOTES = `'"\``;
 
 // Phrases that keep a bare "Relay" on purpose, each one a literal.
 const ALLOWED = [];
@@ -195,6 +198,23 @@ export function bareNames(path, text) {
   return found;
 }
 
+/** Each "ring" in a file people read, as `path:line: text`. A quoted value or a hyphenated name passes. */
+export function ringWords(path, text) {
+  const seen = readable(path, text);
+  const lines = text.split('\n');
+  const found = [];
+  for (const match of seen.matchAll(RING)) {
+    // `readable` keeps every position, and blanks a code string's quotes, so read them from the source.
+    const before = text[match.index - 1] ?? '';
+    const after = text[match.index + match[0].length] ?? '';
+    const quoted = match[0] === 'ring' && before === after && QUOTES.includes(before) && before !== '';
+    if (quoted || before === '-' || after === '-') continue;
+    const line = seen.slice(0, match.index).split('\n').length;
+    found.push(`${path}:${line}: ${lines[line - 1].trim()}`);
+  }
+  return found;
+}
+
 test('a bare Relay in a docs page fails, with its file and line', () => {
   const page = '# Start\n\nOpen your Relay page.\n';
   assert.deepEqual(bareNames('site/src/content/docs/start.md', page), ['site/src/content/docs/start.md:3: Open your Relay page.']);
@@ -240,4 +260,26 @@ test('every file people read names the product Relay Everything', () => {
   assert.ok(files.includes('site/astro.config.mjs') && files.includes('mobile/ios/Runner/Info.plist'), 'the file list is empty');
   const found = files.flatMap((path) => bareNames(path, readFileSync(join(ROOT, path), 'utf8')));
   assert.deepEqual(found, [], `Say Relay Everything, not Relay, in:\n${found.join('\n')}`);
+});
+
+test('the ring in text people read fails; quoted values and hyphenated names pass', () => {
+  const page = '# Start\n\n| **The Relay Everything ring** | sends notes |\n';
+  assert.deepEqual(ringWords('site/src/content/docs/start.md', page), [
+    'site/src/content/docs/start.md:3: | **The Relay Everything ring** | sends notes |',
+  ]);
+  assert.equal(ringWords('site/src/content/docs/a.md', "The Ring's models").length, 1);
+  assert.equal(ringWords('app/src/apps/relay/A.tsx', "const label = 'Ring';").length, 1);
+  const passes = [
+    ['site/src/content/docs/a.md', 'Set `source` to `ring`, in the relay-ring folder.'],
+    ['app/worker/relay-mcp/inputs.ts', "const a = 'ring'; const b = \"ring\"; const c = `ring`;"],
+    ['app/src/apps/relay/A.tsx', 'export const A = () => <div className="focus-visible:ring-[3px]" />;'],
+    ['mobile/lib/a.dart', "class HoldRingPainter {} // a ring\nfinal s = 'ring';"],
+  ];
+  for (const [path, text] of passes) assert.deepEqual(ringWords(path, text), [], path);
+});
+
+test('no file people read outside the wiki names the ring', () => {
+  const files = userFacingFiles().filter((path) => !path.startsWith('wiki/'));
+  const found = files.flatMap((path) => ringWords(path, readFileSync(join(ROOT, path), 'utf8')));
+  assert.deepEqual(found, [], `The ring is gone: take it out of text people read, in:\n${found.join('\n')}`);
 });

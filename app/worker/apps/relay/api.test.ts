@@ -37,8 +37,9 @@ it("stores a typed note once per phone, with the place its phone sent", async ()
     ["note-0001", "typed", 43.65, "Home", "phone"], ["note-0002", "typed", null, null, null]]);
 });
 
-it("refuses a note from a person, a revoked key or another machine, and a malformed one", async () => {
-  for (const who of [matthew, lost, checker, null]) expect((await call(who, "POST", "notes", typed("note-0003"))).status).toBe(403);
+it("refuses a note from a revoked key, a chat key or no one, and a malformed one", async () => {
+  // A signed-in person writes from the page as the space's Web device: page-notes.test.ts.
+  for (const [who, status] of [[lost, 403], [laptop, 403], [null, 401]] as const) expect((await call(who, "POST", "notes", typed("note-0003"))).status).toBe(status);
   for (const wrong of [typed("short"), typed("note-0004", { lat: 43.6 }), typed("note-0005", { text: "" }), typed("note-0006", { createdAt: NOW / 1000 })]) {
     expect((await call(phone, "POST", "notes", wrong)).status, JSON.stringify(wrong)).toBe(400);
   }
@@ -231,5 +232,6 @@ it("answers an empty name for a key whose device is no longer in the space", asy
 
 it("answers 503 on a server with no spaces, as a preview has none", async () => {
   expect((await call(phone, "POST", "notes", typed("note-0099"), { SPACES: undefined })).status).toBe(503);
+  expect((await call(phone, "GET", "key", {}, { SPACES: undefined })).status).toBe(503);
   expect((await call(matthew, "GET", "timeline", {}, { SPACES: undefined })).status).toBe(503);
 });

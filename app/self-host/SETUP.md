@@ -21,6 +21,12 @@ In the person's Cloudflare account, each named after the server (`relay` by defa
 
 It costs nothing on Cloudflare's free plan. Tell the person this, and ask before you run `install`.
 
+## The Relay Everything page
+
+The page is the Relay Everything phone app, built for the web. The person does not install Flutter: each Relay Everything release on GitHub holds the page as `relay-web-<commit>.zip`, with its SHA-256 in `relay-web-<commit>.zip.sha256`. `<commit>` is the newest commit that changed `mobile/`. Before `install` or `update` changes anything, it downloads the page for its own copy, checks the SHA-256, and puts the page in `app/public/apps/relay/`. Git ignores that folder.
+
+When no release holds the page for the person's copy, the command stops and changes nothing. Its line names a release, such as `v1.2.0`. Run `git fetch --tags`, then `git checkout <that release>`, then run the same command again. The setup needs a copy made with `git clone`, because it reads the commit from git.
+
 ## Steps
 
 1. **Clone the repository**, if the person has no copy: `git clone https://github.com/matthewwong525/RelayEverything`, then work in that folder. Run `npm ci` in `app/`. It needs Node 22 or newer.
@@ -48,7 +54,9 @@ Email is off until the person asks for it. It needs a domain of theirs on Cloudf
 
 ## Update my Relay Everything
 
-When the person asks to update: `git pull`, then `npm ci` in `app/`, then `node app/self-host/setup.mjs update`. It writes the server's settings again from this repository, applies the new database changes, then puts the new server live. If a database change fails, it stops, and the old server stays live. The data stays.
+When the person asks to update: `git pull`, then `npm ci` in `app/`, then `node app/self-host/setup.mjs update`. It gets [the Relay Everything page](#the-relay-everything-page) for the new copy, writes the server's settings again from this repository, applies the new database changes, then puts the new server live. If there is no page for the copy, or a database change fails, it stops, and the old server stays live. The data stays.
+
+A copy on a release tag has no branch to pull. To update it, run `git fetch --tags`, then `git checkout` the newest `v<x.y.z>` tag, then continue with `npm ci`.
 
 An install made when this guide was in a top-level `self-host/` folder keeps its settings and `.env` there. Each command moves them to `app/self-host/` first, prints a `moved=` line, and removes the old folder when it is empty. The person does nothing.
 
@@ -65,5 +73,7 @@ An install from before spaces gets no move of its old data: the update removes t
 ## If something fails
 
 - `result=refused` from `check` or `install`: fix each `missing` line, then run it again. Nothing was made.
+- `no release holds the Relay Everything page`: use the release the line names, as [the Relay Everything page](#the-relay-everything-page) says. Nothing was made or changed.
+- `does not match its SHA-256`: the download broke. Run the same command again. Nothing was changed.
 - `result=failed`: the line before names the step. Run the same command again: each step that is done is skipped.
 - `install` writes `app/self-host/wrangler.jsonc`, `app/self-host/wrangler.mcp.jsonc` and `app/self-host/wrangler.spaces.jsonc`, which `update` and `status` read. Keep them. Git ignores them.

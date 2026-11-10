@@ -1,8 +1,8 @@
-// POST attachments: a note's file, its raw bytes sent by the phone after the note that lists it, sealed into the
-// person's folder once per file. GET attachment?id=: the file, for its person's page and phones.
+// POST attachments: a note's file, its raw bytes sent by the phone or the page after the note that lists it, sealed
+// into the person's folder once per file. GET attachment?id=: the file, for its person's page and phones.
 import { boundedBytes } from "../../api/body.ts";
 import type { ActionCall } from "../../api/contract.ts";
-import { asDevice, asPersonOrPhone } from "./caller.ts";
+import { asDeviceOrPage, asPersonOrPhone } from "./caller.ts";
 import { CLIENT_ID, MAX_FILE_BYTES } from "./notes.ts";
 import type { PersonSpace } from "./space.ts";
 import { refused, type Env } from "./store.ts";
@@ -14,13 +14,13 @@ type Listed = { id: string; file_key: string | null };
 const notFound = () => Response.json({ error: "Not found" }, { status: 404 });
 
 export const attachmentAdd: (request: Request, env: Env, call: Call) => Promise<Response> =
-  asDevice<Call>("Only a Relay Everything device key can send files", async ({ space, device, request, env }) => {
+  asDeviceOrPage<Call>("Only a phone key or the Relay Everything page can send files.", async ({ space, deviceId, request, env }) => {
     const noteClientId = request.headers.get("X-Note-Client-Id") ?? "";
     const id = request.headers.get("X-Attachment-Id") ?? "";
     if (!CLIENT_ID.test(noteClientId) || !CLIENT_ID.test(id)) return refused(400, "Name the file and its note: X-Note-Client-Id and X-Attachment-Id.");
-    // The file must be listed on a note this device sent: a device adds files only to its own notes.
+    // The file must be listed on a note this device, or the page's Web device, sent: each adds files only to its own.
     const listed = await space.db.prepare(`SELECT a.id, a.file_key FROM relay_attachments a JOIN relay_notes n ON n.id = a.note_id
-      WHERE a.id = ? AND n.device_id = ? AND n.client_id = ?`).bind(id, device.id, noteClientId).first<Listed>();
+      WHERE a.id = ? AND n.device_id = ? AND n.client_id = ?`).bind(id, deviceId, noteClientId).first<Listed>();
     if (!listed) return notFound();
     if (listed.file_key) return Response.json({ ok: true, added: false });
     let bytes: Uint8Array;

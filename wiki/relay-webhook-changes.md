@@ -6,7 +6,7 @@ Each kind of data in a person's space, such as notes, health or the calendar, ha
 
 - The webhook sender, [`webhooks/send.ts`](../app/worker/apps/relay/webhooks/send.ts), builds each message with the `build` of the kind that owns the send log row.
 - [`webhooks/log.ts`](../app/worker/apps/relay/webhooks/log.ts) makes `TAKES` from each kind's `log`.
-- [`webhooks/routes.ts`](../app/worker/apps/relay/webhooks/routes.ts) takes the ticks from the list, and `GET webhooks` answers them in `kinds`. The webhook form and card, [`Webhooks.tsx`](../app/src/apps/relay/Webhooks.tsx), draw the ticks and kind names from that answer, so the web page holds no copy of the list.
+- [`webhooks/routes.ts`](../app/worker/apps/relay/webhooks/routes.ts) takes the ticks from the list, and `GET webhooks` answers them in `kinds`. The webhook form and card, [`webhooks_page.dart`](../mobile/lib/web/webhooks_page.dart), draw the ticks and kind names from that answer, so the web page holds no copy of the list.
 
 ## What the check finds
 

@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "CLOUDFLARE_ENV=local vite",
     "build": "bash ../scripts/cf-build.sh",
-    "build:app": "tsc -b && vite build",
+    "build:app": "node ../scripts/build-relay-web.mjs && tsc -b && vite build",
     "build:relay-only": "vite build --mode relay-only",
     "db:migrate:staging": "wrangler d1 migrations apply relay-everything-db-staging --remote --env staging",
     "db:migrate:prod": "wrangler d1 migrations apply relay-everything-db --remote",
@@ -17,7 +17,7 @@
     "secrets:push": "node ../scripts/cf-secrets.mjs push",
     "secrets:check": "node ../scripts/cf-secrets.mjs check",
     "lint": "oxlint --deny-warnings",
-    "test": "npm run lint && tsc -b && vitest run --coverage && npm run test:runtime && node ../scripts/check-runtime-tests.mjs && knip && jscpd && node ../scripts/check-app-keys.mjs && node ../scripts/check-service-definitions.mjs && node ../scripts/check-skill-actions.mjs && node ../scripts/public-check.mjs --tree && node --test ../scripts/public-check.test.mjs ../scripts/product-name.test.mjs ../scripts/publish-relay-server.test.mjs ../scripts/check-private-access.test.mjs ../scripts/ios-signing-cert.test.mjs ../scripts/app-release.test.mjs ../plugin/test/*.test.mjs ../.agents/skills/schedule/scripts/tidy.test.mjs self-host/*.test.mjs",
+    "test": "npm run lint && tsc -b && vitest run --coverage && npm run test:runtime && node ../scripts/check-runtime-tests.mjs && knip && jscpd && node ../scripts/check-app-keys.mjs && node ../scripts/check-service-definitions.mjs && node ../scripts/check-skill-actions.mjs && node ../scripts/public-check.mjs --tree && node --test ../scripts/public-check.test.mjs ../scripts/product-name.test.mjs ../scripts/publish-relay-server.test.mjs ../scripts/build-relay-web.test.mjs ../scripts/check-private-access.test.mjs ../scripts/ios-signing-cert.test.mjs ../scripts/app-release.test.mjs ../plugin/test/*.test.mjs ../.agents/skills/schedule/scripts/tidy.test.mjs self-host/*.test.mjs",
     "test:checks": "node ../scripts/check-app-checks.mjs",
     "preview": "npm run build && vite preview",
     "deploy": "bash ../scripts/cf-deploy.sh",
@@ -39,7 +39,6 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router": "^8.4.0",
-    "uqr": "^0.1.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {

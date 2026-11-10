@@ -72,7 +72,7 @@ We give your data to no one else, unless a court order or the law makes us. When
 
 You have these rights wherever you live. Canada's privacy law for companies, the [Personal Information Protection and Electronic Documents Act (PIPEDA)](https://www.priv.gc.ca/en/privacy-topics/privacy-laws-in-canada/the-personal-information-protection-and-electronic-documents-act-pipeda/), gives them to people in Canada, and Quebec's [Law 25](https://www.cai.gouv.qc.ca/) adds rules for people in Quebec.
 
-- **See your data:** your Relay Everything page shows it, and your webhooks and API keys get a copy of it. You can also ask us for a copy.
+- **See your data:** your Relay Everything page shows your notes and chats, your AI apps read all of it, and your webhooks and API keys get a copy of it. You can also ask us for a copy.
 - **Correct it:** ask us to correct your account's data.
 - **Delete it:** [delete your whole account](../privacy/#delete-your-account), or ask us to delete a part of your data.
 - **Take back your consent:** turn off a part in its folder on the app's Home ([Health, Calendar, Location and Photos](../app/settings/#health-calendar-location-and-photos)), or **Sign out** on the app's [Account](../app/settings/#account) page. The [Privacy](../privacy/#turn-each-part-off) page shows how.

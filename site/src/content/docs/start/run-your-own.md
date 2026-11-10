@@ -32,7 +32,7 @@ Cloudflare's free plan is enough. Cloudflare asks you to turn on two parts once,
 
 ## Your devices
 
-Sign in on your Relay Everything page with your server's own login, then click **Add a device** for each device. [Connect a phone](../connect-a-phone/) tells the rest. A key adds data, and a phone's key also syncs your notes: [Keys](../../api/keys/#what-a-device-key-reaches).
+Sign in on your Relay Everything page with your server's own login. Open **Settings**, then **Devices**, and click **Add a device** for each device. [Connect a phone](../connect-a-phone/) tells the rest. A key adds data, and a phone's key also syncs your notes: [Keys](../../api/keys/#what-a-device-key-reaches).
 
 ## Who can sign in
 

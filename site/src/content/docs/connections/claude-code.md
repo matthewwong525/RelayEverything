@@ -1,13 +1,13 @@
 ---
 title: Save Claude Code chats
-description: Save each Claude Code chat to your Relay Everything server with the Relay Everything plugin, find it on the Relay Everything page, and let your AI search it.
+description: Save each Claude Code chat to your Relay Everything server with the Relay Everything plugin, find it on your Relay Everything page, and let your AI search it.
 ---
 
 The Relay Everything plugin for Claude Code saves each chat to your Relay Everything server as you talk. You find a chat on the Relay Everything page by a word, and your AI can search it through the [AI connector](../connect-your-ai/). Ask *save this to Relay Everything*, and the AI also writes a title and a summary of what you decided, kept beside the chat.
 
 ## Make a connect code
 
-You make one connect code for each computer, on your Relay Everything page: click **Add a device**, name it, such as `Laptop`, and pick Claude Code as its kind.
+You make one connect code for each computer, on your Relay Everything page: open **Settings**, then **Devices**, click **Add a device**, name it, such as `Laptop`, and pick Claude Code as its kind.
 
 The code shows once. It is a [chat key](../../api/keys/#a-chat-key) that can only add chats to your own space. It can't read, change or delete anything.
 
@@ -41,7 +41,7 @@ A send that fails waits on your computer, and the next start of Claude Code send
 
 ## Read your chats
 
-The **Chats** card on the Relay Everything page lists your chats, newest first. Type words in its search to find the chats that hold all of them. Open a chat to read it: the AI's saved summary shows at the top, marked *Written by the AI*, and each step shows as a grey line.
+On the Relay Everything page, click **Claude Code chats**, under **Other connections** in the left bar. It lists your chats, newest first. Type words in its search to find the chats that hold all of them. Open a chat to read it: the AI's saved summary shows at the top, marked *Written by the AI*, and each step shows as a grey line.
 
 Your AI can search the chats too: the [AI connector](../connect-your-ai/) has the tools `search_chats` and `read_chat`.
 
@@ -49,7 +49,7 @@ Your AI can search the chats too: the [AI connector](../connect-your-ai/) has th
 
 - **In one project:** type `/relay:saving off` in Claude Code. Type `/relay:saving on` to save again, or `/relay:saving` to see which it is and when the project last sent a chat.
 - **For one run:** start Claude Code with `RELAY_SAVE=0 claude`.
-- **On one computer:** click **Turn off** beside its key on your Relay Everything page, or remove the plugin with `/plugin uninstall relay@relay`.
+- **On one computer:** click **Turn off** beside its key, in **Settings**, **Devices** on your Relay Everything page, or remove the plugin with `/plugin uninstall relay@relay`.
 
 ## Delete a chat
 

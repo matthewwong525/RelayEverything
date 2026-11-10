@@ -12,8 +12,9 @@ import { parseEnv } from '../.claude/skills/memory/scripts/lib/store.mjs';
 
 const USAGE = `usage: node scripts/publish-relay-server.mjs [--ref <commit>] [--staging-only] [--dry-run]
 
-Exports the repository at --ref (default origin/main), installs app/, then deploys in order the staging spaces
-Worker, the staging AI connector and the staging shared server, then the live shared server. It stops at the
+Exports the repository at --ref (default origin/main), installs app/, builds the Relay Everything page with Flutter,
+then deploys in order the staging spaces Worker, the staging AI connector and the staging shared server, then the
+live shared server. It stops at the
 first failure, so a staging failure leaves live as it was. --staging-only skips live. --dry-run builds each
 part and deploys nothing. Prints one result= line.`;
 
@@ -80,6 +81,9 @@ export function publish({ root, ref, stagingOnly = false, dryRun = false, run = 
     exportTree(root, sha, work);
     current = 'install';
     run('npm', ['ci', '--no-audit', '--no-fund'], { cwd: app, env });
+    // The page both servers serve: the phone app built for the web, into app/public/apps/relay/.
+    current = 'web';
+    run('node', ['../scripts/build-relay-web.mjs'], { cwd: app, env });
     for (const step of steps) {
       current = step.name;
       runStep(step, { app, env, dryRun, run });

@@ -68,7 +68,7 @@ The server counts each day's totals, as the table in [What it reads](#what-it-re
 
 ## Only to your own webhook
 
-Signed in to Relay Everything, you can send your health data only to your own webhook and still sync your notes. On the Account page, under **Health, places, calendar and photos**, pick **Only my own webhook**. The phone then sends each reading straight to your receiver as `health.samples`, and each night as `health.nights`, and Relay Everything gets none. The **Health** folder then says *Sent to your webhook* and the time. Your AI and your Relay Everything page show no new readings, and the readings already sent stay on your page. [Settings](../settings/#health-places-calendar-and-photos-only-to-your-webhook)
+Signed in to Relay Everything, you can send your health data only to your own webhook and still sync your notes. On the Account page, under **Health, places, calendar and photos**, pick **Only my own webhook**. The phone then sends each reading straight to your receiver as `health.samples`, and each night as `health.nights`, and Relay Everything gets none. The **Health** folder then says *Sent to your webhook* and the time. Your AI shows no new readings, and the readings already sent stay in your space. [Settings](../settings/#health-places-calendar-and-photos-only-to-your-webhook)
 
 ## Turn it off
 

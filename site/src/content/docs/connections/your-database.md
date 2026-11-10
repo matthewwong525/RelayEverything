@@ -14,11 +14,11 @@ To keep your data off Relay Everything completely, [send from the phone](#send-f
 ## Add a webhook
 
 1. Open your Relay Everything page, `https://<your-relay-server>/apps/relay/`, and sign in.
-2. Under **Send to your database**, click **Add a webhook**.
+2. Click **Settings** at the bottom of the left bar, then **Webhooks**, then **Add a webhook**.
 3. Give it a name and its address. The address must start with `https://`. It can't be this computer, a private network, or your Relay Everything server itself.
 4. Tick **Health**, **Calendar**, **Location history** or **Photos** only for a database you control: they are sensitive. Notes always go.
 5. Click **Add**, then copy the secret. Relay Everything shows it once. Your receiver uses it to check each message.
-6. Click **Send a test**. The card shows the answer, such as *Answered 200 in 180 ms*.
+6. Click **Send a test**. The webhook's card shows the answer, such as *Answered 200 in 180 ms*.
 
 A new webhook gets only data stored after you add it. To send earlier data too, click **Send past data** and pick a day.
 
@@ -40,7 +40,7 @@ The first row of Settings then says **My own webhook**, with your receiver's add
 What you give up:
 
 - **Data comes in groups, not live.** The phone sends only while it is on and has signal, and the phone's own limits choose when the app runs in the background.
-- **Your Relay Everything page and your AI can not read it**, because none of it is on the server.
+- **Your AI can not read it**, because none of it is on the server.
 - **A failing receiver holds back the rest.** The phone sends in order, so it keeps each item, and all after it, until your receiver answers `2xx`. The **Account** page in Settings shows the last answer. It never drops an item for a `400`. Only a file your receiver refuses with `413` is dropped, and the **Account** page names it. A photo your receiver refuses with `413` is dropped too. A photo that waits does not hold back your notes.
 
 From the phone, `device.id` is the phone's own id, a UUID the app makes once. A note's `created_at` is the same as its `recorded_at`: the note's own time, which for a voice note is when it was recorded. Its `note.updated` has the same one. The message's `timestamp` is when the phone queued the message. Points are numbered on the phone, so save them by `device.id` and `id` together. A health sample's `id` is made from the phone's id and the sample's `type`, `start`, `end` and `source`, so the same sample sent again has the same `id`. An older version of the app numbered its samples, so a sample it sent can come again with a new `id`: keep one sample for each `device.id`, `type`, `start`, `end` and `source`, as Relay Everything does. A calendar event's `id` is made from the phone's id and the event's `key`, so each change of one event has the same `id`. A stay's or a trip's `id` is made from the phone's id, its `kind` and its `start` in the same way. A removed event from the phone has only its `key`, `id` and `start`. A photo's `id` is the phone's own id for it, a UUID.

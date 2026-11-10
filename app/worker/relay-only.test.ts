@@ -11,7 +11,7 @@ const { default: worker } = await import("./relay-only");
 // A test sends a plain Request, which has no Cloudflare edge properties.
 const fetch = worker.fetch as (request: Request, env: object) => Promise<Response>;
 
-const assets = { fetch: vi.fn(async () => new Response("the Relay Everything page")) };
+const assets = { fetch: vi.fn(async (_request: Request) => new Response("the Relay Everything page")) };
 /** A call as `as`: Access's identity when it is one, else its key or cookie; `more` adds bindings. */
 async function send(as: Who, method: string, path: string, input?: object, more: object = {}) {
   who.current = as && "kind" in as ? as : null;
@@ -38,7 +38,9 @@ it("has no WongStack route, sends / to the Relay Everything page, and serves the
   for (const path of ["/apps/inbox/api/items", "/api/health", "/apps/relay/api", "/apps/relay/api/nothing"]) expect((await send(matthew, "GET", path)).status).toBe(404);
   expect(await send(matthew, "GET", "/")).toMatchObject({ status: 302, location: "https://relay.example.com/apps/relay/" });
   expect((await send(matthew, "GET", "/apps/relay/")).status).toBe(200);
-  expect(assets.fetch).toHaveBeenCalledOnce();
+  expect((await send(matthew, "GET", "/apps/relay/notes")).status).toBe(200);
+  expect((await send(matthew, "GET", "/robots.txt")).status).toBe(200);
+  expect(assets.fetch.mock.calls.map(([request]) => new URL(request.url).pathname)).toEqual(["/apps/relay/", "/apps/relay/", "/robots.txt"]);
 });
 
 it("behind Access, refuses a call with no person and no key, and lets a key and the owner's email through", async () => {

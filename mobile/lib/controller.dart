@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'data/api.dart';
 import 'data/attachments.dart';
+import 'data/client_id.dart';
 import 'data/connection.dart';
 import 'data/note_sync.dart';
 import 'data/outbox.dart';
@@ -29,6 +29,9 @@ import 'sync/stay_round.dart';
 import 'voice/model.dart';
 import 'voice/recorder.dart';
 import 'voice/transcriber.dart';
+
+// The tests and older callers read the id maker from here.
+export 'data/client_id.dart' show newClientId;
 
 // The first versions kept the server's timeline here. A device key reads nothing now, so load deletes it.
 const _oldTimeline = 'timeline';
@@ -70,12 +73,6 @@ class Kept {
 /// How long a voice note's words may take: 2 minutes, or the recording's [length] when it is longer. A 5-minute note
 /// can take near a minute on an older phone.
 Duration wordsLimitOf(Duration length) => length > const Duration(minutes: 2) ? length : const Duration(minutes: 2);
-
-/// A random id for a note, so a resend is stored once.
-String newClientId([Random? random]) {
-  final source = random ?? Random.secure();
-  return List.generate(16, (_) => source.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
-}
 
 /// The app's one Relay: notes in the store, and the key in the vault. Notes stay on this phone; while sending is on,
 /// it syncs on open, on a new note, on pull, and every hour in the background.

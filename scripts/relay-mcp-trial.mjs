@@ -16,8 +16,8 @@ const USAGE = `usage: node scripts/relay-mcp-trial.mjs [--live | --sign-in]
   (none)     the staging connector, with no sign-in: metadata, an app's registration, the consent page, the hand-off
              to the server's sign-in, and each refusal
   --sign-in  the same, then a person signs in once in a browser on this computer; the app's token reads their notes
-             and adds a made-up note, through /mcp and through the web API
-  --live     the live connector: it answers its metadata and refuses /mcp and /v1/ with no token`;
+             and adds a made-up note, through MCP on / and /mcp and through the web API
+  --live     the live connector: it answers its metadata and refuses MCP on / and /mcp, and /v1/, with no token`;
 
 const APP_NAME = 'Relay Everything trial';
 const WAIT = 10 * 60 * 1000;
@@ -70,7 +70,7 @@ export async function trial({ live, signIn, env, request = fetch, log = console.
   const origin = new URL(goal.address).origin;
   let passed = true;
   const check = (name, ok, detail = '') => { passed &&= ok; log(ok ? `ok ${name}` : `failed ${name}${detail && `: ${detail}`}`); };
-  const mcp = (headers = {}, body = { method: 'tools/list' }) => request(`${origin}/mcp`, { method: 'POST',
+  const mcp = (headers = {}, body = { method: 'tools/list' }, path = '/mcp') => request(`${origin}${path}`, { method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', ...headers },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, ...body }) });
   const json = async response => response.ok ? response.json() : {};
@@ -81,6 +81,8 @@ export async function trial({ live, signIn, env, request = fetch, log = console.
   check('answers its OAuth metadata', (await json(metadata)).registration_endpoint === `${origin}/register`, `${metadata.status}`);
   const bare = await mcp();
   check('refuses /mcp with no token', bare.status === 401, `${bare.status}`);
+  const root = await mcp({}, undefined, '/');
+  check('refuses MCP on / with no token', root.status === 401, `${root.status}`);
   const anonymous = await api('me');
   check('refuses the web API with no token', anonymous.status === 401, `${anonymous.status}`);
   if (live) return passed;
@@ -91,8 +93,11 @@ export async function trial({ live, signIn, env, request = fetch, log = console.
   const unknownKey = await api('me', { Authorization: `Bearer rek_${'x'.repeat(43)}` });
   check("refuses an unknown key on the web API", unknownKey.status === 403, `${unknownKey.status}`);
 
-  const resource = await request(`${origin}/.well-known/oauth-protected-resource/mcp`);
-  check('names its /mcp as the resource', (await json(resource)).resource === goal.address, `${resource.status}`);
+  const page = await request(`${origin}/`, { headers: { Accept: 'text/html' } });
+  check('shows a browser a page on its address', page.ok && (await page.text()).includes("AI connector"), `${page.status}`);
+  const path = new URL(goal.address).pathname;
+  const resource = await request(`${origin}/.well-known/oauth-protected-resource${path === '/' ? '' : path}`);
+  check('names its address as the resource', (await json(resource)).resource === goal.address, `${resource.status}`);
   const wrong = await mcp({ Authorization: 'Bearer made-up-person:made-up-grant:made-up-token' });
   check('refuses a wrong token', wrong.status === 401, `${wrong.status}`);
   const checker = env.CF_ACCESS_STAGING_CLIENT_ID && { 'CF-Access-Client-Id': env.CF_ACCESS_STAGING_CLIENT_ID,
@@ -150,6 +155,8 @@ export async function trial({ live, signIn, env, request = fetch, log = console.
     const found = await mcp({ Authorization: `Bearer ${token}` }, { method: 'tools/call', params: { name: 'search', arguments: { query: 'milk' } } });
     check("the token reads the person's notes", !!(await json(found)).result?.content, `${found.status}`);
     const bearer = { Authorization: `Bearer ${token}` };
+    const onRoot = await mcp(bearer, undefined, '/');
+    check('the token lists the tools on / as on /mcp', !!(await json(onRoot)).result?.tools, `${onRoot.status}`);
     const listed = await api('notes?q=milk', bearer);
     check("the token reads the person's notes on the web API", Array.isArray((await json(listed)).notes), `${listed.status}`);
     const note = text => ({ clientId: `trial-${randomUUID()}`, text });

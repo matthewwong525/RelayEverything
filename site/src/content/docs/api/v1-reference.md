@@ -139,7 +139,7 @@ The events from the phone's calendars that overlap one time to another, with eac
 
 `GET /v1/chats` · `searchChats`
 
-Find saved Claude Code chats whose messages or AI summaries hold every word of the query, newest first, with up to 3 matching lines each.
+Find saved AI chats from Claude Code and Codex whose messages or AI summaries hold every word of the query, newest first, with up to 3 matching lines each.
 
 | Field | In | Type | Required | What it holds |
 |---|---|---|---|---|

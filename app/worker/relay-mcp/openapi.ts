@@ -48,7 +48,7 @@ const person = z.strictObject({ name: z.string().optional(), email: z.string().o
 const event = z.strictObject({ id: z.string(), title: z.string(), calendar: z.string().describe("The calendar's name."), start: at, end: at,
   allDay: z.boolean(), location: z.string().nullable(), notes: z.string().nullable(), url: z.string().nullable(), people: z.array(person),
   device: z.string().describe("The name of the phone that sent it.") });
-const chat = { id: z.string(), title: z.string(), project: z.string().describe("The project's folder name."), app: z.literal("claude-code"),
+const chat = { id: z.string(), title: z.string(), project: z.string().describe("The project's folder name."), app: z.enum(["claude-code", "codex"]).describe("The app the chat came from."),
   startedAt: at, lastAt: at, messages: z.number(), savedByAi: z.boolean() };
 const role = z.enum(["you", "ai", "step"]);
 const photo = z.strictObject({ id: z.string(), takenAt: at, lat: z.number().nullable(), lon: z.number().nullable(), width: z.number(), height: z.number() });

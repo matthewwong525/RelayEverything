@@ -1,0 +1,37 @@
+# AI chat transcripts: on a fresh install, Home's Other connections section has the row, and it opens a page with the
+# steps to save Claude Code and Codex chats. Signed out, the page shows no link to the chats. Not in the fixed tour:
+# run it by name.
+appId: com.matthewwong525.relayApp
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 60000
+# The section sits below On this phone, so scroll to it. A row's label joins its name and its line.
+- scrollUntilVisible:
+    element:
+      text: 'AI chat transcripts(.|\n)*'
+    direction: DOWN
+    timeout: 20000
+- assertVisible: 'Other connections(.|\n)*'
+- assertVisible: 'AI chat transcripts(.|\n)*Claude Code and Codex(.|\n)*'
+- takeScreenshot: home-other-connections
+- tapOn: 'AI chat transcripts(.|\n)*'
+- extendedWaitUntil:
+    visible: '(.|\n)*saves your Claude Code and Codex chats word for word(.|\n)*'
+    timeout: 30000
+- assertVisible: 'In Claude Code, type these commands to add the plugin:'
+# A command box is a selectable field, which Maestro may not read by its words: match the plain lines around it.
+- assertVisible: 'Or, for Codex, run these commands in a terminal:'
+- assertNotVisible: "Read them on the web"
+- takeScreenshot: ai-chat-transcripts
+# The connect step is lower on the page.
+- scrollUntilVisible:
+    element:
+      text: 'In Claude Code or Codex, type this command:'
+    direction: DOWN
+    timeout: 20000
+- assertVisible: '(.|\n)*Then click Connect\.'
+- assertNotVisible: "Read them on the web"
+- takeScreenshot: ai-chat-transcripts-connect

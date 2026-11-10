@@ -128,7 +128,7 @@ export const KINDS: DataKind[] = [
   { id: "photos", label: "Photos", detail: "each with the picture, when and where you took it", sensitive: true, alone: true,
     log: ["photo"], messages: ["photo.created"], build: photo, api: [], tools: ["photos", "read_photo"], docs: "app/photos",
     missing: { api: "No /v1/ route reads photos yet: read_photo answers an image, and `near` is no query field." } },
-  { id: "chats", label: "Claude Code chats", detail: "", log: [], messages: [], api: ["/v1/chats", "/v1/chats/{id}"],
+  { id: "chats", label: "AI chat transcripts", detail: "", log: [], messages: [], api: ["/v1/chats", "/v1/chats/{id}"],
     tools: ["search_chats", "read_chat"], docs: "connections/claude-code", missing: { webhook: NO_WEBHOOK } },
 ];
 

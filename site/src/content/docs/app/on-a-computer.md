@@ -36,7 +36,7 @@ When you make the window narrower or wider, the open note stays open, with all t
 ### The left bar
 
 - **Notes**, **Voice notes** and **Shares**: the same folders as on the phone's Home, each with its count. [Notes](../your-notes/#home)
-- **Other connections**: **Location**, **Health**, **Calendar**, **Photos** and **Claude Code chats**. [Other connections](#other-connections)
+- **Other connections**: **Location**, **Health**, **Calendar**, **Photos** and **AI chat transcripts**. [Other connections](#other-connections)
 - **Settings**, at the bottom. [Settings](#settings)
 
 On the phone, the folders under **Notes** are in **On this phone**, because the phone sends that data. On a computer, they are in **Other connections**.
@@ -118,7 +118,7 @@ Your phone sends your location, health, calendar and photos. In the browser, **L
 
 The **Photos** page also shows how many photos your space holds, with **Delete all photos**: [Delete all photos](../photos/#delete-all-photos).
 
-**Claude Code chats** lists the chats that the Relay Everything plugin saved, newest first. Search them, open one to read it, or delete it: [Read your chats](../../connections/claude-code/#read-your-chats).
+**AI chat transcripts** lists the chats that the Relay Everything plugin saved from Claude Code and Codex, newest first, each with its app. Search them, open one to read it, or delete it: [Read your chats](../../connections/claude-code/#read-your-chats).
 
 The browser shows no summary of your day, such as your steps, sleep, heart rate, events and places. Your AI can still read it: [Connect your AI](../../connections/connect-your-ai/#what-the-ai-can-read-and-add).
 

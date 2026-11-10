@@ -9,24 +9,32 @@ import '../screens/folder.dart' show Group, Opener, openInBrowser;
 import 'settings_parts.dart';
 import 'space.dart';
 
-/// What a new device may do: a phone, Claude Code or a script with an API key. [reaches] is the server's word.
+/// What a device may do: a phone, a computer with Claude Code or Codex, an older Claude Code key that only saves chats,
+/// or a script with an API key. [reaches] is the server's word. Only a phone and an API key are made here: a computer
+/// connects itself with `/relay:connect`.
 enum DeviceKind {
-  phone('Phone', 'Phone', 'phone', CupertinoIcons.device_phone_portrait),
-  claude('Claude Code', 'Laptop', 'chats', CupertinoIcons.device_laptop),
-  api('API key', 'Script', 'api', CupertinoIcons.chevron_left_slash_chevron_right);
+  phone('Phone', 'Phone', 'phone', CupertinoIcons.device_phone_portrait, 'Notes, health, places, calendar and photos'),
+  agent('Claude Code or Codex', 'Computer', 'agent', CupertinoIcons.device_laptop, 'Claude Code or Codex', add: false),
+  chats('Claude Code, saves only', 'Laptop', 'chats', CupertinoIcons.device_laptop, 'Claude Code, saves only', add: false),
+  api('API key', 'Script', 'api', CupertinoIcons.chevron_left_slash_chevron_right, 'API: reads and adds notes');
 
-  const DeviceKind(this.label, this.name, this.reaches, this.icon);
+  const DeviceKind(this.label, this.name, this.reaches, this.icon, this.line, {this.add = true});
 
   final String label;
   /// The name a device gets when the person types none.
   final String name;
   final String reaches;
   final IconData icon;
+  /// What the list says the device's key does.
+  final String line;
+  /// True when *Add a device* makes this kind.
+  final bool add;
 
   static DeviceKind? of(Object? reaches) => values.where((kind) => kind.reaches == reaches).firstOrNull;
 }
 
-const _reachLines = {'phone': 'Notes, health, places, calendar and photos', 'chats': 'Chats', 'api': 'API: reads and adds notes'};
+/// How a computer gets its key: from Claude Code or Codex, never from *Add a device*.
+const connectLine = 'Connect a computer from Claude Code or Codex with /relay:connect.';
 
 /// *Devices*: each device's own key, with *Turn off* while it works, and *Add a device*, which shows the new key once.
 /// The server leaves out the keyless ways in, *Email* and the page's own *Web*.
@@ -42,10 +50,10 @@ class DevicesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SettingsBody(title: 'Devices', line: 'Each phone and Claude Code computer sends with its own key.', children: [
+    return SettingsBody(title: 'Devices', line: 'Each phone and computer sends with its own key.', children: [
       SpaceView<List<Map<String, dynamic>>>(what: 'Devices', load: _load, builder: (context, devices, act) => Column(
         crossAxisAlignment: CrossAxisAlignment.start, children: [
-          if (devices.isEmpty) const Note('No devices yet. Add a phone or Claude Code to start sending.')
+          if (devices.isEmpty) const Note('No devices yet. Add a phone to start sending.')
           else Group(children: [for (final device in devices) _DeviceRow(device: device, client: client, act: act)]),
           const SizedBox(height: 16),
           FilledButton.icon(
@@ -53,6 +61,8 @@ class DevicesPage extends StatelessWidget {
             onPressed: () => showDialog<bool>(context: context,
               builder: (_) => AddDeviceDialog(client: client, opener: opener, onMade: act)),
             icon: const Icon(CupertinoIcons.add), label: const Text('Add a device')),
+          const SizedBox(height: 8),
+          const Note(connectLine),
         ])),
     ]);
   }
@@ -71,10 +81,11 @@ class _DeviceRow extends StatelessWidget {
     final name = '${device['name']}';
     final on = device['revokedAt'] == null;
     final added = device['createdAt'] is int ? ' · added ${whenOf(device['createdAt'] as int)}' : '';
+    final kind = DeviceKind.of(device['reaches'])!;
     return ListTile(
-      leading: Icon(DeviceKind.of(device['reaches'])!.icon, color: on ? brand.accentText : brand.muted),
+      leading: Icon(kind.icon, color: on ? brand.accentText : brand.muted),
       title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text('${_reachLines[device['reaches']]}$added'),
+      subtitle: Text('${kind.line}$added'),
       trailing: on
         ? TextButton(onPressed: () => _turnOff(context, name), style: quietButton(context), child: const Text('Turn off'))
         : const BrandTag('Off'),
@@ -149,7 +160,7 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
       'reads notes.'),
     const SizedBox(height: 16),
     SegmentedButton<DeviceKind>(
-      segments: [for (final kind in DeviceKind.values) ButtonSegment(value: kind, label: Text(kind.label))],
+      segments: [for (final kind in DeviceKind.values) if (kind.add) ButtonSegment(value: kind, label: Text(kind.label))],
       selected: {_kind}, showSelectedIcon: false,
       onSelectionChanged: (picked) => setState(() => _kind = picked.single),
     ),
@@ -157,6 +168,7 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
     TextField(controller: _name, maxLength: 60,
       decoration: InputDecoration(labelText: 'Name', hintText: _kind.name, border: const OutlineInputBorder())),
     if (_problem case final problem?) Problem(problem),
+    const Note(connectLine),
   ];
 
   List<Widget> _steps(Map<String, dynamic> made) {
@@ -180,14 +192,6 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
           const Text('3. No camera? Copy the code and paste it in the app:'),
           CopyField(text: qr, label: 'The code', button: 'Copy the code'),
         ],
-        DeviceKind.claude => [
-          const Text('1. Copy the connect code:'),
-          CopyField(text: qr, label: 'The connect code', button: 'Copy the connect code'),
-          const Text('2. In Claude Code, add the plugin:'),
-          const CopyField(text: '/plugin marketplace add matthewwong525/RelayEverything', label: 'Add the marketplace'),
-          const CopyField(text: '/plugin install relay@relay', label: 'Install the plugin'),
-          const Text('3. Paste the connect code when Claude Code asks. The key can only add chats.'),
-        ],
         DeviceKind.api => [
           const Text("1. Copy the key into your script or service's secret store. Never put it in a file you share:"),
           CopyField(text: key, label: 'The key', button: 'Copy the key'),
@@ -197,6 +201,8 @@ class _AddDeviceDialogState extends State<AddDeviceDialog> {
           const Text('3. The key reads and adds notes. It can not change or delete them.'),
           link("Read the web API's routes", apiDocs),
         ],
+        // Only the link from `/relay:connect` makes a computer's key.
+        DeviceKind.agent || DeviceKind.chats => const [Note(connectLine)],
       },
     ];
   }

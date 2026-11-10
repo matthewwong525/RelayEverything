@@ -13,26 +13,26 @@ const CODE_MS = 5 * 60_000;
 /** Where the app waits for the answer: its own address, which only the Relay Everything app opens. */
 const RETURN = "relayeverything://connected";
 /** The SHA-256 of the app's secret, in base64url: 43 letters. */
-const CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
-const VERIFIER = /^[A-Za-z0-9_-]{43,128}$/;
+export const CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
+export const VERIFIER = /^[A-Za-z0-9_-]{43,128}$/;
 const USED = "This sign-in was used already, or is too old. Start again from the Relay Everything app.";
 
-const escape = (text: string) => text.replace(/[&<>"']/g, char => `&#${char.charCodeAt(0)};`);
+export const escape = (text: string) => text.replace(/[&<>"']/g, char => `&#${char.charCodeAt(0)};`);
 const STYLE = "font-family:system-ui;max-width:28rem;margin:3rem auto;padding:0 1rem;line-height:1.5";
-const FIELD = "display:block;width:100%;box-sizing:border-box;padding:.6rem;margin:.5rem 0 1rem;font-size:1rem;border:1px solid #ccc;border-radius:.5rem";
-const BUTTON = "display:block;width:100%;padding:.7rem;margin-top:.5rem;font-size:1rem;border-radius:.5rem;border:1px solid #3f51b5";
+export const FIELD = "display:block;width:100%;box-sizing:border-box;padding:.6rem;margin:.5rem 0 1rem;font-size:1rem;border:1px solid #ccc;border-radius:.5rem";
+export const BUTTON = "display:block;width:100%;padding:.7rem;margin-top:.5rem;font-size:1rem;border-radius:.5rem;border:1px solid #3f51b5";
 
-function page(body: string, status = 200): Response {
+export function page(body: string, status = 200): Response {
   return new Response(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>Relay Everything</title><body style="${STYLE}">${body}</body>`, { status, headers: { "Content-Type": "text/html; charset=utf-8", ...NO_STORE } });
 }
 
 /** The phone's name as the app sent or the person typed it, or `Phone`. */
 const nameOf = (value: unknown) => (typeof value === "string" ? value.trim().slice(0, 60) : "") || "Phone";
-const isPerson = (caller: Caller) => caller.kind === "session" || caller.kind === "access";
+export const isPerson = (caller: Caller) => caller.kind === "session" || caller.kind === "access";
 
 /** The secret's SHA-256 in base64url, as the app makes its challenge. */
-async function challengeOf(verifier: string): Promise<string> {
+export async function challengeOf(verifier: string): Promise<string> {
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
   return btoa(String.fromCharCode(...digest)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }

@@ -92,7 +92,7 @@ test('the install\'s configs carry its own names, IDs and owner, and no secret',
   assert.deepEqual([app.queues.producers[0].queue, app.queues.consumers[0].queue], ['relay-test-webhooks', 'relay-test-webhooks']);
   assert.equal(app.services[0].service, 'relay-test-mcp');
   assert.equal(app.vars.CF_ACCESS_APP_ID, 'app-id');
-  assert.equal(mcp.vars.RELAY_MCP_ADDRESS, 'https://relay-test-mcp.you.workers.dev/mcp');
+  assert.equal(mcp.vars.RELAY_MCP_ADDRESS, 'https://relay-test-mcp.you.workers.dev/');
   assert.equal(mcp.d1_databases[0].database_id, 'db-id');
   assert.deepEqual([app.r2_buckets[0].bucket_name, mcp.r2_buckets[0].bucket_name], ['relay-test-notes', 'relay-test-notes']);
   assert.equal(mcp.queues.producers[0].queue, 'relay-test-webhooks');
@@ -103,7 +103,7 @@ test('the install\'s configs carry its own names, IDs and owner, and no secret',
   for (const config of [app, mcp]) assert.equal(config.durable_objects.bindings[0].script_name, 'relay-test-spaces');
   assert.equal(app.triggers, undefined);
   assert.deepEqual(keysApp('Keys', 'h.example.com').destinations.map(item => item.uri), ['h.example.com/apps/relay/api',
-    'h.example.com/apps/relay/sign-in/phone/key']);
+    'h.example.com/apps/relay/sign-in/phone/key', 'h.example.com/apps/relay/sign-in/computer/start', 'h.example.com/apps/relay/sign-in/computer/key']);
   assert.equal(bypassPolicy.decision, 'bypass');
   assert.deepEqual(accessApp(names('relay-test').app, 'relay-test.you.workers.dev').destinations, [{ type: 'public', uri: 'relay-test.you.workers.dev' }]);
   assert.deepEqual(accessApp(names('relay-test').app, 'relay-test.you.workers.dev', 'w1').destinations[0], { type: 'worker', worker_id: 'w1' });
@@ -122,6 +122,8 @@ function installed() {
 }
 test('update writes each config again, opens the keys\' way past the login, and puts it live in order', async () => {
   const { place, answers } = installed();
+  // An install from before the bare address: its apps connected at /mcp.
+  writeFileSync(place.mcp, JSON.stringify({ vars: { RELAY_MCP_ADDRESS: 'https://relay-mcp.you.workers.dev/mcp' } }));
   const ran = [];
   const lines = [];
   const { request, calls } = fakeCloudflare(answers);
@@ -138,6 +140,7 @@ test('update writes each config again, opens the keys\' way past the login, and 
   assert.ok(calls.includes(`POST /accounts/${ACCOUNT}/access/apps/keys/policies`), 'the keys app gets its bypass policy');
   assert.ok(calls.includes(`DELETE /accounts/${ACCOUNT}/access/apps/sso`), 'the old connector sign-in app goes');
   assert.ok(lines.includes('ok database changes applied, then the newest Relay Everything put live'));
+  assert.ok(lines.includes("The AI connector's address is now https://relay-mcp.you.workers.dev: connect each AI app again there."));
   assert.ok(lines.indexOf(`ok page ${zipName(COMMIT)}`) === 0, 'the page is in place before anything goes live');
   assert.equal(readFileSync(join(page.folder, 'canvaskit/canvaskit.wasm'), 'utf8'), 'wasm');
 });

@@ -12,7 +12,7 @@ const id = z.string().regex(/^[0-9a-f-]{36}$/).describe("The chat's id, from the
 const ERRORS = { not_found: "No chat has this id." };
 const notFound = () => Response.json({ error: { code: "not_found", message: ERRORS.not_found } }, { status: 404 });
 
-const chat = z.strictObject({ id: z.string(), title: z.string(), project: z.string(), app: z.literal("claude-code"),
+const chat = z.strictObject({ id: z.string(), title: z.string(), project: z.string(), app: z.enum(["claude-code", "codex"]).describe("The app the chat came from."),
   startedAt: z.number(), lastAt: z.number(), messages: z.number().describe("How many messages the chat holds."),
   savedByAi: z.boolean().describe("True when the AI saved a title and summary for it.") });
 const save = z.strictObject({ id: z.string(), title: z.string(), text: z.string().describe("The summary, written by the AI."), createdAt: z.number() });
@@ -25,7 +25,7 @@ const owners = (run: (db: Db, input: never) => Promise<Response>): Action["handl
 
 export const chatList = defineAction({
   operationId: "relay.chats", summary: "List the chats",
-  description: "List the saved Claude Code chats, newest first, or only those whose messages or AI summaries hold every word of `q`.",
+  description: "List the saved AI chats from Claude Code and Codex, newest first, or only those whose messages or AI summaries hold every word of `q`.",
   input: z.strictObject({
     q: z.string().trim().max(200).optional().describe("Words to find, in any case."),
     before: time.optional().describe("Only chats last active before this Unix time in milliseconds: the last page's `next`."),

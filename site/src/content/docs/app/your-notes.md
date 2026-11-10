@@ -3,11 +3,11 @@ title: Notes
 description: Home and its folders, read, search and change the notes you write on your phone, as in Apple Notes, with text styles, checklists, photos and files, and open them on a computer.
 ---
 
-The Relay Everything app opens on **Home**, a screen of folders. Your notes are the first folders. The app shows the notes that you type or say into this phone, and keeps them on the phone. Once you sign in to Relay Everything, it also shows the notes from your other phones, email, Claude Code and your AI apps: [Your notes on every phone](#your-notes-on-every-phone).
+The Relay Everything app opens on **Home**, a screen of folders. Your notes are the first folders. The app shows the notes that you type or say into this phone, and keeps them on the phone. Once you sign in to Relay Everything, it also shows the notes from your other phones, email, Claude Code, Codex and your AI apps: [Your notes on every phone](#your-notes-on-every-phone).
 
 ## Home
 
-Home has a large **Home** title, the [sync state](#the-sync-state) under it, and the round [gear button](#the-gear-and-your-relay-everything-page) at the top right. Then two cards of folders. Each row shows a name, its status or its count, and a chevron. Tap a row to open it.
+Home has a large **Home** title, the [sync state](#the-sync-state) under it, and the round [gear button](#the-gear-and-your-relay-everything-page) at the top right. Then three cards of folders. Each row shows a name, its status or its count, and a chevron. Tap a row to open it.
 
 | Card | Folder | What it holds |
 |---|---|---|
@@ -18,7 +18,9 @@ Home has a large **Home** title, the [sync state](#the-sync-state) under it, and
 | | **Health** | *Off*, or when the readings last went and how many wait. [Health](../health/) |
 | | **Calendar** | *Off*, or how many calendars and when the events last went. [Calendar](../calendar/) |
 | | **Photos** | *Off*, or *On* and if photos also go on mobile data. [Photos](../photos/) |
-Tap **On this phone** to fold that card away. Tap it again to open it. The phone remembers which cards you folded.
+| **Other connections** | **AI chat transcripts** | How to save your chats from Claude Code and Codex, and, when you are signed in, a link to read them on the web. [Save AI chat transcripts](../../connections/claude-code/) |
+
+Tap **On this phone** or **Other connections** to fold that card away. Tap it again to open it. The phone remembers which cards you folded.
 
 **Search** and **New note** stay at the bottom of Home, so you still write or talk with one tap.
 
@@ -114,7 +116,7 @@ With sending off, a change stays on this phone, as every note does.
 
 ## Your notes on every phone
 
-Each phone that you sign in on shows all your notes, as in Apple Notes. It gets the notes from your space: notes from your other phones, your Relay Everything page on a computer, email, Claude Code, your AI apps and the web API. A new phone gets all your old notes the first time.
+Each phone that you sign in on shows all your notes, as in Apple Notes. It gets the notes from your space: notes from your other phones, your Relay Everything page on a computer, email, Claude Code, Codex, your AI apps and the web API. A new phone gets all your old notes the first time.
 
 New notes and changes come in when you open the app, when you come back to it, when you pull down the list, and every hour in the background. A note from somewhere else shows where it came from, under its title in the list and at the top of the note.
 

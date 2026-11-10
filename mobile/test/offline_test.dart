@@ -91,6 +91,12 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
     }
+    // AI chat transcripts: the steps show, with no link to the chats, and the page asks nothing of the server.
+    await openFolder(tester, 'AI chat transcripts');
+    expect(find.text('/relay:connect'), findsOneWidget);
+    expect(find.text('Read them on the web'), findsNothing);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     // The Account row, signed out: the sign-in opens, and nothing is asked of the server.
     await openSettings(tester);
     await tester.tap(find.byKey(const ValueKey('account')));

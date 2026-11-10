@@ -946,7 +946,7 @@ It takes no input.
 
 ## Save the AI's summary of a chat
 
-`POST /apps/relay/api/chat-saves` · `relay.chat-saves-add` · writes · called by a Claude Code chat key only
+`POST /apps/relay/api/chat-saves` · `relay.chat-saves-add` · writes · called by a computer's key, or an older chat key, only
 
 Store a title and a summary the AI wrote for a chat this key sent. The chat's messages stay as they are; the newest save's title shows as the chat's title.
 
@@ -956,7 +956,7 @@ Send the input as a JSON body.
 
 | Field | Type | Required | What it holds |
 |---|---|---|---|
-| `sessionId` | string | yes | Claude Code's id for the chat. |
+| `sessionId` | string | yes | The app's own id for the chat. |
 | `title` | string | yes | The AI's title for the chat. |
 | `text` | string | yes | The AI's summary, shown as written by the AI. |
 
@@ -976,7 +976,7 @@ Send the input as a JSON body.
 
 `GET /apps/relay/api/chats` · `relay.chats` · reads · called by a signed-in person only, not a device key
 
-List the saved Claude Code chats, newest first, or only those whose messages or AI summaries hold every word of `q`.
+List the saved AI chats from Claude Code and Codex, newest first, or only those whose messages or AI summaries hold every word of `q`.
 
 ### Input
 
@@ -997,7 +997,7 @@ Send the input as query parameters.
 | `chats[].id` | string | yes |  |
 | `chats[].title` | string | yes |  |
 | `chats[].project` | string | yes |  |
-| `chats[].app` | string | yes |  |
+| `chats[].app` | "claude-code" or "codex" | yes | The app the chat came from. |
 | `chats[].startedAt` | number | yes |  |
 | `chats[].lastAt` | number | yes |  |
 | `chats[].messages` | number | yes | How many messages the chat holds. |
@@ -1029,7 +1029,7 @@ Send the input as query parameters.
 | `chat.id` | string | yes |  |
 | `chat.title` | string | yes |  |
 | `chat.project` | string | yes |  |
-| `chat.app` | string | yes |  |
+| `chat.app` | "claude-code" or "codex" | yes | The app the chat came from. |
 | `chat.startedAt` | number | yes |  |
 | `chat.lastAt` | number | yes |  |
 | `chat.messages` | number | yes | How many messages the chat holds. |
@@ -1095,7 +1095,7 @@ It takes no input.
 | `devices` | array of object | yes |  |
 | `devices[].id` | string | yes |  |
 | `devices[].name` | string | yes |  |
-| `devices[].reaches` | "phone" or "chats" or "api" | yes | phone: notes, files, health, places and photos, from a phone. chats: Claude Code chats. api: the web API, which reads and adds notes. |
+| `devices[].reaches` | "phone" or "chats" or "api" or "agent" | yes | phone: notes, files, health, places and photos, from a phone. chats: an older Claude Code key that only saves chats. api: the web API, which reads and adds notes. agent: a computer's key from Claude Code or Codex, which saves chats and reads through the web API. |
 | `devices[].createdAt` | number | yes |  |
 | `devices[].revokedAt` | number or null | yes |  |
 
@@ -1112,7 +1112,7 @@ Send the input as a JSON body.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `name` | string | yes | A name you know the device by. |
-| `reaches` | "phone" or "chats" or "api" | yes | phone: notes, files, health, places and photos, from a phone. chats: Claude Code chats. api: the web API, which reads and adds notes. |
+| `reaches` | "phone" or "api" | yes | phone: a phone's key. api: an API key for the web API, which reads and adds notes. A computer connects from Claude Code or Codex with /relay:connect instead. |
 
 ### Output
 
@@ -1120,7 +1120,7 @@ Send the input as a JSON body.
 |---|---|---|---|
 | `id` | string | yes |  |
 | `name` | string | yes |  |
-| `reaches` | "phone" or "chats" or "api" | yes | phone: notes, files, health, places and photos, from a phone. chats: Claude Code chats. api: the web API, which reads and adds notes. |
+| `reaches` | "phone" or "chats" or "api" or "agent" | yes | phone: notes, files, health, places and photos, from a phone. chats: an older Claude Code key that only saves chats. api: the web API, which reads and adds notes. agent: a computer's key from Claude Code or Codex, which saves chats and reads through the web API. |
 | `key` | string | yes | Shown this once. |
 | `qr` | string | yes | What the phone scans: the server's address and the key. |
 | `api` | string or null | yes | An API key's web API address, or null when this server has no AI connector. |
@@ -1254,4 +1254,4 @@ Send the input as a JSON body.
 - `POST /apps/relay/api/photos`: [Send a photo from the phone, with a phone key](../../app/photos/#what-the-phone-sends)
 - `GET /apps/relay/api/audio`: [Play a note's recording](../recordings/)
 - `GET /apps/relay/api/attachment`: [Open a note's file](../files/#open-a-file)
-- `POST /apps/relay/api/chats`: [Send a Claude Code chat's new messages, with a chat key](../../connections/claude-code/#what-the-server-receives)
+- `POST /apps/relay/api/chats`: [Send a Claude Code or Codex chat's new messages, with a computer's key](../../connections/claude-code/#what-the-server-receives)

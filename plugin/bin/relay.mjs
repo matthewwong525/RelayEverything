@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-// The `ask` skill's one command: reads the person's Relay Everything through the web API, or adds a note, with this
-// computer's key, and prints the JSON answer.
-// usage: node relay.mjs <command> [value] [--field value ...]   (add-note reads the note from stdin)
+// The `ask` skill's one command: reads the person's Relay Everything through the web API, adds a note or facts, or
+// changes the memory's columns and topics, with this computer's key, and prints the JSON answer.
 import { randomUUID } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -12,9 +11,11 @@ import { api, reason } from '../lib/server.mjs';
 export const CHAT_KEY = "This computer's key only saves chats. Type /relay:connect to connect it again.";
 export const NOT_CONNECTED = 'This computer is not connected to Relay Everything. Type /relay:connect to connect it.';
 const USAGE = 'Commands: me, notes, note <id>, day <YYYY-MM-DD>, health <type>, nights, workouts, places, calendar, chats, '
-  + 'chat <id>, add-note. Give fields as --name value, such as --from 2026-11-03 --to 2026-11-04.';
+  + 'chat <id>, add-note, facts, fact <id>, add-facts, columns, change-columns, tag <fact|note> <id>. Give fields as --name value, '
+  + 'such as --from 2026-11-03 --to 2026-11-04. add-note, add-facts and change-columns read stdin.';
 
-// Each command: its route, and the field its one value fills. `id` and `day` go in the path.
+// Each command: its route, the field its one value fills, and what it sends: `id` and `day` go in the path; `send`
+// reads stdin, and `resend` sends again after a lost answer, as its clientIds store it once.
 const COMMANDS = {
   me: { path: () => '/me', zone: false },
   notes: { path: () => '/notes' },
@@ -27,7 +28,14 @@ const COMMANDS = {
   calendar: { path: () => '/calendar' },
   chats: { path: () => '/chats' },
   chat: { path: value => `/chats/${encodeURIComponent(value)}`, needs: 'the chat id' },
-  'add-note': { path: () => '/notes', add: true },
+  'add-note': { path: () => '/notes', send: 'note', resend: true },
+  facts: { path: () => '/memory' },
+  fact: { path: value => `/memory/${encodeURIComponent(value)}`, needs: 'the fact id' },
+  'add-facts': { path: () => '/memory', send: 'facts', resend: true, zone: false },
+  columns: { path: () => '/memory/columns', zone: false },
+  'change-columns': { path: () => '/memory/columns', send: 'json', zone: false },
+  tag: { path: (value, id) => `/${value === 'note' ? 'notes' : 'memory'}/${encodeURIComponent(id)}/tags`, send: 'tags', zone: false,
+    needs: 'fact or note, then its id', two: ['fact', 'note'] },
 };
 // Other names the skill may use for a field.
 const ALIASES = { per: 'bucket', at: 'createdAt', zone: 'timezone', query: 'q' };
@@ -47,7 +55,32 @@ export function parseArgs(args) {
       else fields[name] = 'true';
     }
   }
-  return { command, value: values[0], fields };
+  return { command, value: values[0], second: values[1], fields };
+}
+
+/** JSON from stdin, or undefined when it is not JSON. */
+function json(input) {
+  try { return JSON.parse(String(input ?? '')); } catch { return undefined; }
+}
+
+/** A comma list from one `--add` or `--remove`, such as `bike/charging,battery`. */
+const list = text => (text ?? '').split(',').map(tag => tag.trim()).filter(Boolean);
+
+/** What a command sends: `{ body }`, or `{ error }`, a line that says what to give. */
+function bodyOf(send, fields, input) {
+  if (send === 'note') {
+    const text = String(input ?? '').trim();
+    if (!text) return { error: 'Give the note on stdin.' };
+    const body = { clientId: randomUUID(), text, ...fields };
+    for (const key of ['lat', 'lon', 'accuracy']) if (key in body) body[key] = Number(body[key]);
+    return { body };
+  }
+  if (send === 'tags') return { body: { add: list(fields.add), remove: list(fields.remove) } };
+  const given = json(input);
+  if (send === 'json') return given && typeof given === 'object' ? { body: given } : { error: 'Give the change as a JSON object on stdin.' };
+  const facts = Array.isArray(given) ? given : given?.facts;
+  if (!Array.isArray(facts) || !facts.every(fact => fact && typeof fact === 'object')) return { error: 'Give the facts as a JSON list on stdin.' };
+  return { body: { facts: facts.map(fact => ({ clientId: randomUUID(), ...fact })) } };
 }
 
 /** This computer's time zone, as an IANA name. */
@@ -55,29 +88,25 @@ export const computerZone = () => Intl.DateTimeFormat().resolvedOptions().timeZo
 
 /** Runs one command and answers `{ code, text }`: the JSON answer, or a line that says what went wrong. */
 export async function relay(args, { env = process.env, input = '', fetcher = fetch, zone = computerZone() } = {}) {
-  const { command, value, fields } = parseArgs(args);
+  const { command, value, second, fields } = parseArgs(args);
   const spec = COMMANDS[command];
   if (!spec) return { code: 2, text: USAGE };
-  if (spec.needs && !value) return { code: 2, text: `Give ${spec.needs}: node relay.mjs ${command} <value>.` };
+  if (spec.needs && (!value || (spec.two && (!spec.two.includes(value) || !second)))) {
+    return { code: 2, text: `Give ${spec.needs}: node relay.mjs ${command} <value>.` };
+  }
   const computer = readComputer(env);
   if (!computer) return { code: 1, text: NOT_CONNECTED };
   if (spec.field) fields[spec.field] = value;
   if (spec.zone !== false && !fields.timezone && zone) fields.timezone = zone;
-  let body;
-  if (spec.add) {
-    const text = String(input ?? '').trim();
-    if (!text) return { code: 2, text: 'Give the note on stdin.' };
-    body = { clientId: randomUUID(), text, ...fields };
-    for (const key of ['lat', 'lon', 'accuracy']) if (key in body) body[key] = Number(body[key]);
-  }
+  const { body, error: missing } = spec.send ? bodyOf(spec.send, fields, input) : {};
+  if (missing) return { code: 2, text: missing };
   let answer;
   for (const last of [false, true]) {
     try {
-      answer = await api(computer, spec.path(value), { query: body ? {} : fields, body, fetcher });
+      answer = await api(computer, spec.path(value, second), { query: body ? {} : fields, body, fetcher });
       break;
     } catch (error) {
-      // A lost answer to add-note is sent again with the same clientId, so the note is stored once.
-      if (last || !spec.add) return { code: 1, text: withSandbox(`Relay Everything at ${computer.api} could not be reached. Try again in a minute.`, error) };
+      if (last || !spec.resend) return { code: 1, text: withSandbox(`Relay Everything at ${computer.api} could not be reached. Try again in a minute.`, error) };
     }
   }
   const { status, json } = answer;
@@ -93,7 +122,7 @@ const self = fileURLToPath(import.meta.url);
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(self)) {
   const args = process.argv.slice(2);
   let input = '';
-  if (args[0] === 'add-note') for await (const part of process.stdin) input += part;
+  if (COMMANDS[args[0]]?.send && COMMANDS[args[0]].send !== 'tags') for await (const part of process.stdin) input += part;
   const { code, text } = await relay(args, { input });
   console.log(text);
   process.exitCode = code;

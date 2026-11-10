@@ -25,6 +25,8 @@ const bindings = config => [
   ...(config.triggers?.crons ?? []).map(cron => `cron ${cron}`), ...(config.assets ? ['assets'] : []),
 ];
 const wongstack = binding => WONGSTACK.test(binding) || WONGSTACK.test(binding.split(' ').at(-1));
+// The knowledge web needs Workers Paid, so an install leaves it out and its server says the web is not set up.
+const PAID_ONLY = ['artifacts KNOWLEDGE'];
 const relayOnly = config => bindings(config).filter(binding => !wongstack(binding));
 
 test('the install has every Relay binding of the full app', () => {
@@ -35,7 +37,7 @@ test('the install has every Relay binding of the full app', () => {
 
 test('the install has no WongStack binding, and its connector matches Relay\'s', () => {
   assert.deepEqual(bindings(install).filter(wongstack), []);
-  assert.deepEqual(bindings(installConnector), bindings(connector));
+  assert.deepEqual(bindings(installConnector), bindings(connector).filter(binding => !PAID_ONLY.includes(binding)));
   assert.equal(installConnector.compatibility_date, connector.compatibility_date);
 });
 

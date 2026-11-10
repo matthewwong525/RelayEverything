@@ -28,6 +28,8 @@ test('no file in plugin/ holds a key shape, a private address or an email', () =
   });
   assert.deepEqual(found, []);
   assert.ok(files(PLUGIN).length > 10);
+  // The knowledge sync holds a pass while it runs: it is scanned like every other file.
+  assert.ok(files(PLUGIN).some(path => path.endsWith(join('bin', 'knowledge.mjs'))));
 });
 
 test('the address check lets the public addresses through and stops any other', () => {

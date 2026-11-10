@@ -46,6 +46,12 @@ test('each command calls its own route with its query, the key and the time zone
       { from: '2026-11-01', to: '2026-11-02', q: 'dentist', timezone: 'Europe/London' }],
     [['chats', '--q', 'stiffener'], '/v1/chats', { q: 'stiffener', timezone: 'Europe/London' }],
     [['chat', 'chat-1', '--cursor', '200'], '/v1/chats/chat-1', { cursor: '200', timezone: 'Europe/London' }],
+    [['notes', '--tag', 'ring/charging'], '/v1/notes', { tag: 'ring/charging', timezone: 'Europe/London' }],
+    [['facts', '--tag', 'battery', '--kind', 'decision', '--all'], '/v1/memory',
+      { tag: 'battery', kind: 'decision', all: 'true', timezone: 'Europe/London' }],
+    [['facts', '--source', 'relay:chat/7f3a'], '/v1/memory', { source: 'relay:chat/7f3a', timezone: 'Europe/London' }],
+    [['fact', 'fc5kk'], '/v1/memory/fc5kk', { timezone: 'Europe/London' }],
+    [['columns', '--changes'], '/v1/memory/columns', { changes: 'true' }],
   ];
   for (const [args, path, query] of cases) {
     const api = fakeApi();
@@ -74,6 +80,49 @@ test('add-note posts the words from stdin once, with a new clientId, and sends i
   assert.equal(ids.length, 2);
   assert.equal(ids[0], ids[1]);
   assert.deepEqual(await ask(['add-note'], { input: ' ', fetcher: api.fetcher }), { code: 2, text: 'Give the note on stdin.' });
+});
+
+test('add-facts posts the JSON list from stdin, gives each fact a clientId it lacks, and sends the same ids after a lost answer', async () => {
+  const api = fakeApi(201);
+  const fact = { tags: ['battery'], sources: ['relay:chat/7f3a#120'], fields: { kind: 'decision', text: 'The battery is 50 mAh.' } };
+  assert.equal((await ask(['add-facts'], { input: JSON.stringify([fact, { ...fact, clientId: 'mine-0001' }]), fetcher: api.fetcher })).code, 0);
+  const [call] = api.calls;
+  assert.deepEqual([call.method, call.path, call.query], ['POST', '/v1/memory', {}]);
+  assert.match(call.body.facts[0].clientId, /^[A-Za-z0-9-]{8,64}$/);
+  assert.deepEqual(call.body.facts.map(({ clientId, ...rest }) => rest), [fact, fact]);
+  assert.equal(call.body.facts[1].clientId, 'mine-0001');
+  const bodies = [];
+  let tries = 0;
+  const flaky = async (url, init) => {
+    bodies.push(init.body);
+    if (tries++ === 0) throw new TypeError('fetch failed');
+    return api.fetcher(url, init);
+  };
+  assert.equal((await ask(['add-facts'], { input: JSON.stringify({ facts: [fact] }), fetcher: flaky })).code, 0);
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[0], bodies[1]);
+  for (const input of ['', 'not json', '{}', '[1]']) {
+    assert.deepEqual(await ask(['add-facts'], { input, fetcher: api.fetcher }), { code: 2, text: 'Give the facts as a JSON list on stdin.' });
+  }
+});
+
+test('change-columns posts the change from stdin once, and tag adds and removes a fact\'s or a note\'s topics', async () => {
+  const api = fakeApi();
+  const change = { add: [{ name: 'mah', type: 'number', note: 'The battery size.' }], remove: ['due'] };
+  assert.equal((await ask(['change-columns'], { input: JSON.stringify(change), fetcher: api.fetcher })).code, 0);
+  assert.equal((await ask(['tag', 'fact', 'fc5kk', '--add', 'ring/charging, battery', '--remove', 'ring'], { fetcher: api.fetcher })).code, 0);
+  assert.equal((await ask(['tag', 'note', 'note one', '--add', 'ring'], { fetcher: api.fetcher })).code, 0);
+  assert.deepEqual(api.calls.map(({ method, path, query, body }) => [method, path, query, body]), [
+    ['POST', '/v1/memory/columns', {}, change],
+    ['POST', '/v1/memory/fc5kk/tags', {}, { add: ['ring/charging', 'battery'], remove: ['ring'] }],
+    ['POST', '/v1/notes/note%20one/tags', {}, { add: ['ring'], remove: [] }],
+  ]);
+  const down = async () => { throw new TypeError('fetch failed'); };
+  assert.equal((await ask(['change-columns'], { input: '{}', fetcher: async (...call) => { api.calls.push(call); return down(); } })).code, 1);
+  assert.equal(api.calls.length, 4);
+  assert.equal((await ask(['change-columns'], { input: 'nope', fetcher: api.fetcher })).text, 'Give the change as a JSON object on stdin.');
+  for (const args of [['tag'], ['tag', 'fc5kk'], ['tag', 'page', 'x'], ['tag', 'fact']]) assert.equal((await ask(args, { fetcher: api.fetcher })).code, 2, args.join(' '));
+  assert.equal(api.calls.length, 4);
 });
 
 test('an old chat key is told to connect again, a turned-off key shows the server\'s reason, and other refusals say why', async () => {
@@ -108,7 +157,7 @@ test('says what to do with no key, no command, or no value', async () => {
   assert.equal((await ask(['note'])).code, 2);
   assert.equal((await ask(['health'])).code, 2);
   assert.equal(api.calls.length, 0);
-  assert.deepEqual(parseArgs(['notes', '--q', '--from', 'x']), { command: 'notes', value: undefined, fields: { q: 'true', from: 'x' } });
+  assert.deepEqual(parseArgs(['notes', '--q', '--from', 'x']), { command: 'notes', value: undefined, second: undefined, fields: { q: 'true', from: 'x' } });
 });
 
 test('runs as the skill runs it, against a local server, and reads the note from stdin', async () => {

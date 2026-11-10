@@ -31,18 +31,25 @@ const COLUMNS = `n.id, n.source, n.text, n.recorded_at, d.name AS device, n.audi
   n.accuracy, n.place, n.place_from, ${FILES}`;
 const NOTE = `SELECT ${COLUMNS} FROM relay_notes n JOIN relay_devices d ON d.id = n.device_id`;
 
-export type NoteFilter = { before?: number; beforeId?: string; after?: number; source?: "ring" | "typed"; words?: string[]; limit: number };
+export type NoteFilter = { before?: number; beforeId?: string; after?: number; source?: "ring" | "typed"; words?: string[]; tag?: string; limit: number };
 
 /** LIKE's own characters, escaped, so a word matches as typed. */
-const like = (word: string) => `%${word.replace(/[\\%_]/g, "\\$&")}%`;
+const escaped = (word: string) => word.replace(/[\\%_]/g, "\\$&");
+const like = (word: string) => `%${escaped(word)}%`;
+
+/** A topic and its parts: `bike` finds `bike` and `bike/charging`, never `biker`. Bind tagValues(tag) after it. */
+export const tagged = (table: "relay_memory_tags" | "relay_note_tags", own: "fact_id" | "note_id", key: string) =>
+  `EXISTS (SELECT 1 FROM ${table} t WHERE t.${own} = ${key} AND (t.tag = ? OR t.tag LIKE ? ESCAPE '\\'))`;
+export const tagValues = (tag: string) => [tag, `${escaped(tag)}/%`];
 
 /** A page of notes, newest first, from `after` up to `before`, holding every word in `words` in any case. */
 export async function notePage(db: Db, filter: NoteFilter) {
-  const { before = Number.MAX_SAFE_INTEGER, beforeId = "", after = 0, source, words = [], limit } = filter;
+  const { before = Number.MAX_SAFE_INTEGER, beforeId = "", after = 0, source, words = [], tag, limit } = filter;
   const where = ["(n.recorded_at < ? OR (n.recorded_at = ? AND n.id < ?))", "n.recorded_at >= ?",
-    ...source ? ["n.source = ?"] : [], ...words.map(() => "n.text LIKE ? ESCAPE '\\'")];
+    ...source ? ["n.source = ?"] : [], ...words.map(() => "n.text LIKE ? ESCAPE '\\'"),
+    ...tag === undefined ? [] : [tagged("relay_note_tags", "note_id", "n.id")]];
   const { results } = await db.prepare(`${NOTE} WHERE ${where.join(" AND ")} ORDER BY n.recorded_at DESC, n.id DESC LIMIT ?`)
-    .bind(before, before, beforeId, after, ...source ? [source] : [], ...words.map(like), limit + 1).all<Row>();
+    .bind(before, before, beforeId, after, ...source ? [source] : [], ...words.map(like), ...tag === undefined ? [] : tagValues(tag), limit + 1).all<Row>();
   const page = results.slice(0, limit);
   // Two notes can share a time, so a page ends at a time and an id: the next page starts just after both.
   const last = results.length > limit ? page.at(-1)! : null;

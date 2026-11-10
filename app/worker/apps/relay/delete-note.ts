@@ -1,20 +1,19 @@
-// DELETE notes: a phone deletes any note in its space, by the server's `id` or its own `clientId`, with its files and
-// recording. Other phones drop it at their next sync, and webhooks get note.deleted.
+// DELETE notes: a phone or the page deletes any note in its space, by the server's `id` or the device's own `clientId`,
+// with its files and recording. Phones drop it at their next sync, and webhooks get note.deleted.
 import { z } from "zod";
 import { defineAction, type ActionCall } from "../../api/contract.ts";
-import { asDevice } from "./caller.ts";
+import { asDeviceOrPage } from "./caller.ts";
 import { CLIENT_ID } from "./notes.ts";
 import type { PersonSpace } from "./space.ts";
-import { refused } from "./store.ts";
 import { wake } from "./webhooks/send.ts";
 
 const deleteInput = z.strictObject({
   id: z.string().max(64).optional().describe("The server's id for the note, as GET notes gives it: any note in your space."),
-  clientId: z.string().regex(CLIENT_ID).optional().describe("Or the phone's own id for a note it sent, as POST notes sent it."),
+  clientId: z.string().regex(CLIENT_ID).optional().describe("Or the device's own id for a note it sent, as POST notes sent it."),
 }).refine(input => (input.id === undefined) !== (input.clientId === undefined), "Give the note's id or its clientId, not both.");
 type Delete = z.infer<typeof deleteInput>;
 
-const REFUSAL = "Only a Relay Everything phone key can delete a note.";
+const REFUSAL = "Only a phone key or the Relay Everything page can delete a note.";
 const ERRORS = { not_found: "Your space has no note with this id, or this device sent no note with this clientId." };
 
 /** Deletes the note, files first, as POST photos/delete does: a step that fails leaves no row without its file. */
@@ -43,8 +42,5 @@ export const noteDelete = defineAction({
     + "Webhooks get it as note.deleted. It can't be undone.",
   input: deleteInput, output: z.strictObject({ id: z.string(), deleted: z.literal(true) }),
   encoding: "query", effect: "write", agentAvailable: false, requiresIdentity: false, errors: ERRORS, examples: [],
-  handler: asDevice<ActionCall>(REFUSAL, async ({ space, device, env, call }) => {
-    if (device.reaches !== "phone") return refused(403, REFUSAL);
-    return deleteNote(env, space, device.id, call.input as Delete);
-  }),
+  handler: asDeviceOrPage<ActionCall>(REFUSAL, async ({ space, deviceId, env, call }) => deleteNote(env, space, deviceId, call.input as Delete)),
 });

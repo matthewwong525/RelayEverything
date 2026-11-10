@@ -1,10 +1,10 @@
 import { createElement, lazy, Suspense, type ComponentType, type ReactElement } from 'react'
 
-// Every mini app, found by folder: app/src/apps/<name>/ holds its page (App.tsx, exporting `App`) and its home card
-// (app.json, with a title and a description). A new app needs no edit here. wiki/stack/mini-apps.md
-export type MiniApp = { name: string; title: string; description: string; href: string }
+// Every mini app, found by folder: app/src/apps/<name>/ holds its page (App.tsx) and its home card (app.json). A static
+// app (`"static": true`) has no App.tsx: the Worker serves its files from public/apps/<name>/. wiki/stack/mini-apps.md
+export type MiniApp = { name: string; title: string; description: string; href: string; static?: true }
 
-type Manifest = { title?: unknown; description?: unknown }
+type Manifest = { title?: unknown; description?: unknown; static?: unknown }
 
 // A folder name is an address: lowercase letters and digits, joined by hyphens.
 const NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/
@@ -21,14 +21,16 @@ export function listApps(manifests: Record<string, unknown>, pages: string[]): M
   return [...names].sort().map((name) => {
     const fail = (problem: string) => new Error(`app/src/apps/${name}: ${problem}`)
     if (!NAME.test(name)) throw fail('name the folder with lowercase letters, digits, and hyphens.')
-    if (!pages.includes(`./${name}/App.tsx`)) throw fail('add App.tsx, exporting the page as `App`.')
     const manifest = manifests[`./${name}/app.json`] as Manifest | undefined
+    const page = pages.includes(`./${name}/App.tsx`)
+    if (manifest?.static === true && page) throw fail('a static app has no App.tsx: remove it, or remove "static" from app.json.')
+    if (manifest?.static !== true && !page) throw fail('add App.tsx, exporting the page as `App`.')
     if (!manifest) throw fail('add app.json with a title and a description.')
     const title = text(manifest.title)
     if (!title) throw fail('app.json needs a title.')
     const description = text(manifest.description)
     if (!description) throw fail('app.json needs a description.')
-    return { name, title, description, href: `/apps/${name}/` }
+    return { name, title, description, href: `/apps/${name}/`, ...(manifest.static === true && { static: true as const }) }
   })
 }
 

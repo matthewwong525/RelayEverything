@@ -94,11 +94,14 @@ it("takes a change by cookie only from the Relay Everything page itself", async 
   const bare = new Request(`${ORIGIN}${path}`, { method: "POST", headers: { Cookie: `${SESSION_COOKIE}=ana-session-token` } });
   const missing = await relayGate(bare, fakeEnv({ DB: db.DB }), null, path);
   expect(missing?.status).toBe(403);
-  // A read by cookie, and a change by Access, carry no risk from another site.
+  // Access's cookie goes from any site too, so its change needs the page's Origin as well.
+  expect(await gate(owner, "POST", path)).toBeNull();
+  expect(await gate(owner, "POST", path, { headers: { Origin: "https://evil.example" } })).toEqual(refusal);
+  expect(await gate(owner, "DELETE", "/apps/relay/api/chat")).toEqual(refusal);
+  // A read by cookie carries no risk from another site.
   for (const method of ["GET", "HEAD", "OPTIONS"]) {
-    expect(await gate(matthew, method, path, { headers: { Origin: "https://evil.example" } }), method).toBeNull();
+    for (const who of [matthew, owner]) expect(await gate(who, method, path, { headers: { Origin: "https://evil.example" } }), method).toBeNull();
   }
-  expect(await gate(owner, "POST", path, { headers: { Origin: "https://evil.example" } })).toBeNull();
 });
 
 it("answers 503 when the directory can't be read, and asks it only once per request", async () => {

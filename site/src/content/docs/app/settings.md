@@ -27,7 +27,7 @@ Signed in, tap the row to open the **Account** page:
 | **AI apps** | The names of the AI apps you connected, such as *Claude*. Tap it to add or remove one on your Relay Everything page. [Connect your AI](../../connections/connect-your-ai/) |
 | **Webhooks** | The names of the webhooks you added, such as *My database*. Tap it to add or remove one on your Relay Everything page. [Your own database](../../connections/your-database/) |
 | **Health, places, calendar and photos** | Where they go: **Relay Everything** (the default), or **Only my own webhook**. [Below](#health-places-calendar-and-photos-only-to-your-webhook) |
-| **Open your Relay Everything page** | Opens `<your-relay-server>/apps/relay/` in the phone's browser, with the notes from all your devices, and their recordings. [Notes](../your-notes/#the-gear-and-your-relay-everything-page) |
+| **Open your Relay Everything page** | Opens `<your-relay-server>/apps/relay/` in the phone's browser, with the notes from all your devices and your account's settings. [On a computer](../on-a-computer/) |
 | **Server** | The server this phone sends to. Change it to try a preview. [Connect a phone](../../start/connect-a-phone/#try-a-preview) |
 | **Sign out** | In red. Asks first, then removes this phone's key and stops sending. Your notes from this phone stay here. Notes from your other devices leave this phone. You sign in again to send again. [Connect a phone](../../start/connect-a-phone/#sign-out) |
 
@@ -53,11 +53,11 @@ Signed in, you can keep your personal data off Relay Everything and still sync y
 - Your notes, their files and a note's pinned place still sync through Relay Everything.
 - With no webhook on the phone, the pick first opens the webhook's form: type its address, copy its secret, **Send a test**, then **Save**. Go back to change nothing. A webhook you added on your Relay Everything page does not count, because the server never gives its secret to a phone.
 - The group then shows the webhook's address, **Send a test**, and its last failure, if any.
-- What already went to Relay Everything stays on your page. Delete it there if you want it gone.
+- What already went to Relay Everything stays in your space. To delete it, [delete your account](../../start/sign-up/#delete-your-account), or [delete all photos](../photos/#delete-all-photos).
 
 A phone that sends everything to your webhook gets here in one step: [sign in and keep your webhook](#sign-in-and-keep-your-webhook).
 
-What you give up: your AI apps and your Relay Everything page show none of your health, places, calendar or photos from then on. Nothing retries for you on a server: when the phone is off or offline, the data waits for the phone's next round. A receiver that is down holds back only this data; your notes still sync, and the other way round.
+What you give up: your AI apps show none of your health, places, calendar or photos from then on. Nothing retries for you on a server: when the phone is off or offline, the data waits for the phone's next round. A receiver that is down holds back only this data; your notes still sync, and the other way round.
 
 If the phone loses the webhook, such as after a restore, the data waits on the phone and never goes to Relay Everything. The group shows **Set your webhook again**. Tap **Relay Everything** to send them there again, with what waits; the calendar sends its whole window. **Sign out** keeps your choice and the webhook.
 
@@ -104,11 +104,4 @@ The key, and your webhook's address and secret, stay in the iPhone Keychain or t
 
 ## Settings on your Relay Everything page
 
-Your account's own settings are on your Relay Everything page, not in the app: the app only shows their names. Sign in there first: [Sign up](../../start/sign-up/).
-
-| Setting | What it does |
-|---|---|
-| **Add a device** | Makes a key for a phone, a Claude Code computer or a script, and shows it once: as a QR code for a phone. [Connect a phone](../../start/connect-a-phone/#make-a-key-with-a-qr-code) |
-| **Delete all photos** | Deletes every photo your phones sent. Your notes, recordings, health and places stay. You can't undo it. [Photos](../photos/#delete-all-photos) |
-| The list of devices, with **Turn off** | Shows each device's key. **Turn off** stops that key at once, and the others go on. [Keys](../../api/keys/#make-list-and-turn-off-keys) |
-| **Delete my account** | Deletes your space, recordings, photos, keys, sign-ins and connected AI apps, after you type your email. You can't undo it. [Privacy](../../privacy/#delete-your-account) |
+Your account's own settings are on your Relay Everything page, not in the app: the app only shows their names. Sign in there, then click **Settings** at the bottom of the left bar. Its pages are **Account**, with **Delete my account**, **Devices**, with **Add a device** and **Turn off**, **Webhooks**, **AI apps**, **Email notes** and **Appearance**. [On a computer](../on-a-computer/#settings) says what each page does.

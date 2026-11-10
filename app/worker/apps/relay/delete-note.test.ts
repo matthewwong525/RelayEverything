@@ -53,12 +53,13 @@ it("refuses a delete with no note named, or with both an id and a clientId", asy
   expect(rows("relay_notes")).toHaveLength(2);
 });
 
-it("lets no other person's phone, chat key, API key, session or turned-off key delete a note", async () => {
+it("lets no other person's phone, chat key, API key, checker or turned-off key delete a note", async () => {
   emailed();
   // Ben's phone reaches only Ben's space, which has no such note.
   expect((await call(benPhone, "DELETE", "notes", { id: "n-mail" })).status).toBe(404);
   const { json: made } = await call(matthew, "POST", "devices", { name: "Backup script", reaches: "api" });
-  for (const who of [laptop, { bearer: String(made.key) }, matthew, lost, checker, null]) {
+  // The page deletes as the space's Web device: page-notes.test.ts.
+  for (const who of [laptop, { bearer: String(made.key) }, lost, checker, null]) {
     const { status } = await call(who, "DELETE", "notes", { id: "n-mail" });
     expect(status === 401 || status === 403, `${JSON.stringify(who)}: ${status}`).toBe(true);
   }

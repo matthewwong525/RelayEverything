@@ -28,7 +28,7 @@ const ASSET_PATHS = ["/", "/index.html", "/assets/main.js", "/assets/index.css",
 describe("private Worker routing", () => {
   let signing: CryptoKeyPair;
   let publicKey: JsonWebKey;
-  const assets = { fetch: vi.fn(async () => new Response("asset")) };
+  const assets = { fetch: vi.fn(async (_request: Request) => new Response("asset")) };
   const env = { ASSETS: assets, CF_ACCESS_TEAM_DOMAIN: TEAM, CF_ACCESS_AUD: AUD };
   // The one service token, beside Relay Everything's device keys, that the site lets through.
   const checked = { ...env, RELAY_CHECKER_SHA256: "d6a52a0ed3c19d4124a9a4874fda18b08a533d0fea7d4d989587c074f5ac5fd9" };
@@ -97,6 +97,11 @@ describe("private Worker routing", () => {
     expect((await call("/_memory/unknown", {}, { ...open, MEMORY_DB: {} })).status).toBe(401);
     for (const path of ["/api/actions", "/api/openapi.json"]) expect((await call(path, {}, open)).status).toBe(401);
     expect(assets.fetch).toHaveBeenCalledTimes(ASSET_PATHS.length);
+  });
+  it("serves Relay Everything's built page, its index.html for an address in it that names no file", async () => {
+    const open = { ASSETS: assets, WORKSPACE_LOGIN: "off" };
+    for (const path of ["/apps/relay/main.dart.js", "/apps/relay/notes"]) expect((await call(path, {}, open)).status, path).toBe(200);
+    expect(assets.fetch.mock.calls.map(([request]) => new URL(request.url).pathname)).toEqual(["/apps/relay/main.dart.js", "/apps/relay/"]);
   });
   it("ignores a stale open switch once Access identifiers are set", async () => {
     const stale = { ...env, WORKSPACE_LOGIN: "off" };

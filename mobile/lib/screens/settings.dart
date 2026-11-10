@@ -33,7 +33,8 @@ class SettingsScreen extends StatelessWidget {
           SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 32), sliver: SliverList.list(children: [
             _AccountRow(relay: relay, scanner: scanner, opener: opener),
             Group(title: 'Appearance', children: [_AppearanceRow(relay: relay)]),
-            Group(title: 'Notes', children: [
+            // The browser keeps no place and hears no voice.
+            if (!relay.web) Group(title: 'Notes', children: [
               SwitchListTile(
                 title: const Text('Pin notes to where I am'),
                 subtitle: const Text('Each typed note keeps where you were.'),
@@ -41,7 +42,7 @@ class SettingsScreen extends StatelessWidget {
                 onChanged: (on) => apply(context, relay.setPinNotes(on)),
               ),
             ]),
-            Group(title: 'Voice notes', children: [_VoiceRow(relay: relay)]),
+            if (!relay.web) Group(title: 'Voice notes', children: [_VoiceRow(relay: relay)]),
             const _Version(),
           ])),
         ]),

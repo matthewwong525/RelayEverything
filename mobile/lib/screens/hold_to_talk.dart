@@ -62,19 +62,21 @@ class _NewNoteButtonState extends State<NewNoteButton> with SingleTickerProvider
   Widget build(BuildContext context) {
     final brand = brandOf(context);
     final live = _starting || _relay.listening != null;
+    // The browser records no voice: a click only writes.
+    final talks = !_relay.web;
     return Stack(clipBehavior: Clip.none, children: [
       Semantics(
         label: 'New note',
         button: true,
         onTap: widget.onWrite,
-        customSemanticsActions: {const CustomSemanticsAction(label: 'Record a voice note'): _talk},
+        customSemanticsActions: talks ? {const CustomSemanticsAction(label: 'Record a voice note'): _talk} : null,
         excludeSemantics: true,
         // A tap fires on a lift before [holdToTalk]; the long press at it, so lifting after a hold does nothing.
         child: GestureDetector(
           onTap: widget.onWrite,
-          onLongPressDown: (_) => _hold.forward(from: 0),
-          onLongPressCancel: _hold.reset,
-          onLongPress: _talk,
+          onLongPressDown: talks ? (_) => _hold.forward(from: 0) : null,
+          onLongPressCancel: talks ? _hold.reset : null,
+          onLongPress: talks ? _talk : null,
           child: AccentGlow(child: Material(
             color: live ? brand.spark : brand.accent,
             shape: const CircleBorder(),
@@ -86,7 +88,7 @@ class _NewNoteButtonState extends State<NewNoteButton> with SingleTickerProvider
       ),
       Positioned(left: -6, top: -6, right: -6, bottom: -6, child: IgnorePointer(
         child: CustomPaint(painter: HoldRingPainter(progress: _hold, color: brand.spark)))),
-      if (!_relay.holdTipSeen) const Positioned(right: 0, bottom: 64, child: _HoldTip()),
+      if (talks && !_relay.holdTipSeen) const Positioned(right: 0, bottom: 64, child: _HoldTip()),
     ]);
   }
 }

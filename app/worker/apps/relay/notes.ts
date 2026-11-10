@@ -1,9 +1,9 @@
-// POST notes: a note typed on a phone, with its place and its files' names; each file's bytes come after, by POST
-// attachments. A phone that sends it again, after losing its answer, gets the same note back: add-note.ts.
+// POST notes: a note typed on a phone or the page, with its place and its files' names; their bytes come after, by POST
+// attachments. A device that sends it again, after losing its answer, gets the same note back: add-note.ts.
 import { z } from "zod";
 import { defineAction, type ActionCall } from "../../api/contract.ts";
 import { addNote } from "./add-note.ts";
-import { asDevice } from "./caller.ts";
+import { asDeviceOrPage } from "./caller.ts";
 import { accuracy, latitude, longitude, placeName, time } from "./store.ts";
 
 /** A note holds up to 10 files, each up to 25 MB. */
@@ -44,11 +44,12 @@ const noteInput = z.strictObject({
   .refine(hasWords, "Give the note words or a file.");
 
 export const notes = defineAction({
-  operationId: "relay.notes-add", summary: "Store a typed note", description: "Store a note typed on a Relay Everything phone, once per phone and clientId.",
+  operationId: "relay.notes-add", summary: "Store a typed note",
+  description: "Store a note typed on a Relay Everything phone or page, once per device and clientId. A note from the page is named by your space's Web device.",
   input: noteInput, output: z.strictObject({ id: z.string(), added: z.boolean() }),
   encoding: "json", effect: "write", agentAvailable: false, requiresIdentity: false, errors: {}, examples: [],
-  handler: asDevice<ActionCall>("Only a Relay Everything device key can send notes", async ({ space, device, env, call }) => {
+  handler: asDeviceOrPage<ActionCall>("Only a phone key or the Relay Everything page can send notes.", async ({ space, deviceId, env, call }) => {
     const note = call.input as z.infer<typeof noteInput>;
-    return Response.json(await addNote(env, space, device.id, { ...note, attachments: withTypes(note.attachments) }));
+    return Response.json(await addNote(env, space, deviceId, { ...note, attachments: withTypes(note.attachments) }));
   }),
 });

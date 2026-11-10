@@ -5,7 +5,7 @@ description: Let your own script or service read your Relay Everything notes, he
 
 The web API lets your own script or service read your Relay Everything data and add notes. It answers the same questions as the [AI connector](../../connections/connect-your-ai/), as plain HTTP with JSON. It reads, and it adds notes. It can't change or delete anything.
 
-The web API is on your AI connector's address, under `/v1/`. When the connector is at `https://<your-relay-server>/mcp`, the API is at `https://<your-relay-server>/v1/`. The **AI apps** card on your Relay Everything page shows the connector's address.
+The web API is on your AI connector's address, under `/v1/`. When the connector is at `https://<your-relay-server>/mcp`, the API is at `https://<your-relay-server>/v1/`. The **AI apps** page of Settings, on your Relay Everything page, shows the connector's address.
 
 Each caller reaches only the space of the person who made its key or connected it. There are two ways in.
 
@@ -13,7 +13,7 @@ Each caller reaches only the space of the person who made its key or connected i
 
 An API key is for a script or a service that runs on its own, such as a backup job.
 
-1. On your Relay Everything page, click **Add a device** and pick **API key**.
+1. On your Relay Everything page, open **Settings**, then **Devices**. Click **Add a device** and pick **API key**.
 2. Give it a name you know it by, then click **Make the key**. The page shows the key once, with a `curl` example.
 3. Keep the key in your script's secret store. Never put it in a file you share.
 
@@ -36,7 +36,7 @@ An app that has its own users signs each person in with OAuth, as the Claude app
 2. Send the person to `/authorize` with PKCE (S256). They click **Connect**, then sign in to Relay Everything.
 3. Trade the code at `/token` for an access token and a refresh token.
 
-Leave out `resource`, or send `https://<your-relay-server>/mcp` as it. The same token then works on `/mcp` and on `/v1/`. An access token lasts one hour; refresh it at `/token`. The app shows on the person's **AI apps** card, and **Disconnect** stops it at once. An app connected before the API could add notes only reads: connect it again to add.
+Leave out `resource`, or send `https://<your-relay-server>/mcp` as it. The same token then works on `/mcp` and on `/v1/`. An access token lasts one hour; refresh it at `/token`. The app shows on the person's **AI apps** page in Settings, and **Disconnect** stops it at once. An app connected before the API could add notes only reads: connect it again to add.
 
 The [OpenAPI file](/api/v1.openapi.json) names each step's address. Load it into Swagger, Postman or a code generator to make a client.
 

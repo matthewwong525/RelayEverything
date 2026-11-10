@@ -26,3 +26,6 @@ app/self-host/wrangler.spaces.jsonc
 # An install made before the tool moved into app/ keeps them here until its next run of setup.mjs moves them.
 /self-host/
 app/dist-relay/
+# The Relay Everything page, the phone app built for the web: scripts/build-relay-web.mjs or a self-host's setup.mjs
+# puts it here.
+app/public/apps/relay/

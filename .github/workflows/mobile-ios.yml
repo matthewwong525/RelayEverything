@@ -1,4 +1,5 @@
-# The iPhone app: built on a Mac and signed with the saved certificate on every run; with upload, sent to TestFlight.
+# The iPhone app, with its watch app inside: built on a Mac and signed with the saved certificate on every run; with
+# upload, sent to TestFlight. Job watch-tests runs the watch app's tests on a watch simulator.
 # mobile-ci.yml sets upload for main and a release only. Until the App Store Connect key and the certificate are in
 # this repository's secrets, it ends with a notice, but a release or a release check fails.
 name: Mobile iOS
@@ -100,3 +101,31 @@ jobs:
         if: steps.key.outputs.ready == 'true' && inputs.upload && steps.newest.outputs.send != 'false'
         working-directory: mobile/ios
         run: bundle exec fastlane beta
+
+  # The watch app's own tests on an Apple Watch simulator, beside the signed build. They need no secret.
+  watch-tests:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      OUT: ${{ github.workspace }}/out
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: mobile/pubspec.yaml
+          cache: true
+      - name: Watch tests
+        run: |
+          flutter pub get
+          flutter build ios --config-only --debug --no-codesign
+          bash device-check/watch-tests.sh
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: watch-tests
+          path: out/
+          if-no-files-found: warn
+          retention-days: 14

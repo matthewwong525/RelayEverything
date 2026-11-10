@@ -280,6 +280,36 @@ void main() {
       expect(Directory('${folder.path}/shortcuts-inbox').listSync(), isEmpty);
     });
 
+    test('from the Apple Watch while the app runs, a resume and inboxChanged keep it once, at its time, with no place',
+      () async {
+      // The JSON ios/Runner/ShortcutsInbox.swift writes for a watch recording; RunnerTests checks Swift against it.
+      final fixture = File('test/fixtures/watch-note.json').readAsStringSync();
+      final id = (jsonDecode(fixture) as Map)['id'] as String;
+      await store.set(settingsKey, const Settings(pinNotes: true).encode());
+      places.pin = Pin(at: now, lat: 1, lon: 1, accuracy: 1);
+      final relay = app();
+      await relay.load();
+      void handOver() {
+        recorded(id);
+        File('${folder.path}/$inboxFolder/$id.json').writeAsStringSync(fixture);
+      }
+      handOver();
+      await Future.wait([relay.resume(), ShortcutsBridge(relay).handle(const MethodCall('inboxChanged'))]);
+      await relay.wordsWritten();
+      final entry = relay.entries.single;
+      expect([entry.voice, entry.text, entry.at, entry.place, entry.length],
+        [true, 'Call the plumber about the kitchen tap', DateTime.fromMillisecondsSinceEpoch(1793790000000), null,
+          const Duration(milliseconds: 4200)]);
+      // The watch hands the same note again when its kept answer was lost: the phone keeps no second one.
+      handOver();
+      await relay.resume();
+      await relay.wordsWritten();
+      expect(await store.notes(), hasLength(1));
+      expect([transcriber.heard, recordings()], [['$id.wav'], ['$id.wav']]);
+      expect(Directory('${folder.path}/$inboxFolder').listSync(), isEmpty);
+      expect(server.requests, isEmpty);
+    });
+
     test('kept while the app sweeps for stray recordings, its recording is not deleted as stray', () async {
       final id = 'a7' * 16;
       late RelayController relay;

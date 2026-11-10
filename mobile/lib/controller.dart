@@ -229,25 +229,47 @@ class RelayController extends Relay {
       }
     }
     _root = (await folder?.call())?.path;
-    // A shortcut that ran while the app could not answer left its note in the inbox.
-    final root = _root;
-    if (root != null) {
-      await drainInbox(Directory(root), (request) async {
-        final recording = request.recording;
-        if (recording == null) {
-          await keepNote(request.text, files: request.files, clientId: request.id, createdAt: request.createdAt, pin: false);
-        } else {
-          await keepRecording(request.text, recording: recording.path, durationMs: recording.durationMs, clientId: request.id,
-            createdAt: request.createdAt, pin: false);
-        }
-      });
-    }
+    // A shortcut that ran while the app could not answer, or the Apple Watch, left its note in the inbox.
+    await drainShortcutsInbox();
     await _drainShare(refresh: false);
     await voice?.model.load();
     if (_settings.calendar) await _readCalendars();
     await _refreshLocal();
     // A voice note whose words the app's close cut short gets them now, from its kept recording.
     _track(_writePending(dropStray: true));
+  }
+
+  /// Keeps each note in the shortcuts inbox, from Shortcuts or the Apple Watch, with no place: at load, each return to
+  /// the app, and each `inboxChanged` from Swift. One drain runs at a time; a call during one makes it look again after.
+  Future<void> drainShortcutsInbox() {
+    final running = _inboxRun;
+    if (running != null) {
+      _inboxAgain = true;
+      return running;
+    }
+    return _inboxRun = _drainShortcuts().whenComplete(() => _inboxRun = null);
+  }
+
+  Future<void>? _inboxRun;
+  bool _inboxAgain = false;
+
+  Future<void> _drainShortcuts() async {
+    final root = _root;
+    if (root == null) return;
+    do {
+      _inboxAgain = false;
+      await drainInbox(Directory(root), _keepInboxRequest);
+    } while (_inboxAgain);
+  }
+
+  Future<void> _keepInboxRequest(InboxRequest request) async {
+    final recording = request.recording;
+    if (recording == null) {
+      await keepNote(request.text, files: request.files, clientId: request.id, createdAt: request.createdAt, pin: false);
+    } else {
+      await keepRecording(request.text, recording: recording.path, durationMs: recording.durationMs, clientId: request.id,
+        createdAt: request.createdAt, pin: false);
+    }
   }
 
   /// Keeps each note the iPhone's share card left, with no place. Load, each return to the app, and the hourly round
@@ -266,9 +288,10 @@ class RelayController extends Relay {
     }
   }
 
-  /// Each return to the app: keeps what the share card left, shows what another engine added to the store, such as
+  /// Each return to the app: keeps what the inbox and the share card hold, shows what another engine added to the store, such as
   /// Android's share window, then sends what waits.
   Future<void> resume() async {
+    await drainShortcutsInbox();
     await _drainShare(refresh: false);
     await _refreshLocal();
     await pullNotes();

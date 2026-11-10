@@ -153,7 +153,7 @@ async function collect(run, { platform, ref }) {
   const swift = swiftOutcome(swiftJob?.conclusion, readResult(join(folder, 'swift'), 'swift-tests.txt'));
   const result = resultOf({ timedOut: false, cancelled, verdict, swift });
   const reason = result === 'cancelled' ? cancelReason(listRuns(ref), run)
-    : result === 'broken' && verdict !== 'broken' ? "the share card's Swift tests fail: swift/swift-tests.log"
+    : result === 'broken' && verdict !== 'broken' ? 'the Swift tests fail: swift/swift-tests.log and swift/watch-tests.log'
       : readResult(folder, 'reason.txt');
   return { result, folder, ...(reason && { reason }) };
 }

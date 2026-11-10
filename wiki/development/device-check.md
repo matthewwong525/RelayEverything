@@ -20,14 +20,14 @@ flowchart LR
 
 1. **Checks the commit.** A run started by hand stops if the branch is not at the saved commit, so a later push is never checked in its place.
 2. **Starts an iPhone** on the newest iOS the Mac has ([`iphone-boot.sh`](../../mobile/device-check/iphone-boot.sh)). It boots while the app builds.
-3. **Builds the app for the simulator.** The build needs no signing key. A failed build ends the run as *broken*, with the end of the build log.
+3. **Builds the app for the simulator.** The build needs no signing key. It names the booted iPhone, because Flutter refuses a simulator build of an app with a watch app when no device is named. A failed build ends the run as *broken*, with the end of the build log.
 4. **Opens the app on the iPhone.** [`iphone-open.sh`](../../mobile/device-check/iphone-open.sh) waits for the boot, installs the app, starts a video and opens the app.
 5. **Runs the fixed tour.** [Maestro](https://maestro.mobile.dev) flows in [`mobile/device-check/flows/`](../../mobile/device-check/flows/) open the notes list, write, save and search a note, style a line with *Aa*, and open Settings, with a screenshot of each. [`tour.sh`](../../mobile/device-check/tour.sh) runs them in one Maestro run, and `tour.json` comes from its JUnit file. The tour uses no AI, so it costs nothing and gives the same pictures each run. If the timeline does not open, the run ends as *broken* and Claude does not start.
 6. **Claude tries the change.** Claude runs on the same Mac, with [the brief](../../mobile/device-check/brief.md) and the scenarios to check. It writes its report first, with each scenario *not yet checked*, and updates it after each scenario, so a stop keeps what it found. It runs each tap flow through [`flow.sh`](../../mobile/device-check/flow.sh), which stops a flow after 90 seconds and tries it once more.
 7. **Writes Claude's step log.** [`steps.mjs`](../../mobile/device-check/steps.mjs) reads the action's log, or Claude Code's session file when Claude ran out of time, and writes `claude/steps.md`: each command Claude ran, each one that was refused, and how Claude ended.
 8. **Keeps the results** as the run's file `device-check-iphone`: `report.md`, `verdict.txt`, `tour/`, `claude/`, `run.mp4` and the logs. `phone.log` holds the iPhone's system log for the app, Shortcuts and App Intents, and `crashes/` the app's crash reports: read them when a step fails with no words on the screen.
 
-Job `swift-tests` runs the share card's Swift tests (`RunnerTests`) on a second Mac and keeps `swift-tests.log` as the file `device-check-swift`. A failed Swift test fails the run. Job `report` waits for both and puts `report.md` and the Swift tests' result on the pull request.
+Job `swift-tests` runs the Swift tests on a second Mac: `RunnerTests` for the share card and the inbox, then `RelayWatchTests` for the watch app on the newest watch simulator ([`watch-tests.sh`](../../mobile/device-check/watch-tests.sh)). It keeps `swift-tests.log` and `watch-tests.log` as the file `device-check-swift`. A failed Swift test fails the run. Job `report` waits for both and puts `report.md` and the Swift tests' result on the pull request.
 
 **A newer check of a branch stops the older one**, so only the newest commit is checked. The stopped run shows *cancelled* and posts nothing. A release's tour is never stopped.
 

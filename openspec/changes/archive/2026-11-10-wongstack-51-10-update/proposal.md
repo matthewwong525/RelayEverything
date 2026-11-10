@@ -84,3 +84,5 @@ None: this update changes WongStack's shared tools, not a Relay Everything behav
 - **2026-11-10** — Assumed: show WongStack's own before and after pictures of a review page, because they are the closest real result and this repo's plan pages use the same kit.
 - **2026-11-10** — Assumed: inside `/ship`, the post-merge steps (republish the site and server, fast-forward `/root/relay-ring`, restart the helper) run after `finish` as the design's Migration Plan says, not as tasks, because `/ship` archives only a change with every task ticked.
 - **2026-11-10** — Built inside `/ship`: 19 files copied, 2 merged, install record at 51.10.0. Merge check clean, preflight `current`, local checks pass, second look found nothing. No scheduled chat is open. Saving for task 3.2.
+- **2026-11-10** — Task 3.2 passed: PR #97 checks SUCCESS at 7e75e1d.
+- **2026-11-10** — Archived for publish: task 3.2 passed (PR #97 checks SUCCESS at 7e75e1d).

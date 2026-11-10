@@ -16,4 +16,4 @@
 ## 3. Record and publish
 
 - [x] 3.1 Set `version` to `51.10.0` and `commit` to `16a0af7ed5b6a02c1f629e2bc0b06e1c58e9fb21` in `.claude/.wong-stack.json`, keeping every other key. Verify: the preflight run again reports `status: current`.
-- [ ] 3.2 `/save`, then wait for CI on the pull request. Verify: every check passes.
+- [x] 3.2 `/save`, then wait for CI on the pull request. Verify: every check passes.

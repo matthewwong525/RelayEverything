@@ -55,10 +55,7 @@ Non-goals: no typed or dictated notes on the watch, no list of notes on the watc
 ## What the build needs
 
 - **Apple's App Store Connect key and signing certificate**: Ready, in `.env` and the repository secrets. The build uses them to register the watch app with Apple and get its profile.
-- **An Apple Watch paired to your iPhone**: Needs you, only to try it. This computer builds and tests the watch app on a watch simulator in CI; the real check is a TestFlight build on your watch.
-  ```form
-  text: Your Apple Watch model and watchOS version (or none)
-  ```
+- **An Apple Watch paired to your iPhone**: Ready: the build needs none. CI builds and tests the watch app on a watch simulator; you try it on your own watch with the TestFlight build after publish.
 
 ## Capabilities
 
@@ -104,3 +101,4 @@ Non-goals: no typed or dictated notes on the watch, no list of notes on the watc
 - **2026-11-10** — Assumed: the release guide asks for Apple Watch screenshots before the first release, because App Store Connect needs them for an app with a watch app; the submit lane still uploads none.
 - **2026-11-10** — Review fix: the watch sends again, at each launch, every note with no transfer in flight, and the iPhone remembers the last 500 watch note ids it took and answers `kept` with no second note for a repeat, because a transfer the system drops gives no callback and the note waited forever; a deleted note still does not come back. A failed transfer goes at the next saved note or launch, not at once, so an error that repeats does not loop.
 - **2026-11-10** — Archive checkpoint: the second look's fixes (no resend of a kept note, no note waiting forever, split inbox tests, the Apple Watch screenshot step) are in; Flutter analyze and 706 tests pass here; this save's Mac CI is the first build of the fixed Swift.
+- **2026-11-10** — Assumed: the watch question leaves the review page as a plain line, because WongStack 51.10 (merged from `main`) puts questions in the chat, and the build never needed the answer.

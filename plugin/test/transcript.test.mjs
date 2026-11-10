@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { cut, MESSAGE_CHARACTERS, projectName, projectRoot, readChat, stepLine, transcriptText } from '../lib/transcript.mjs';
+import { cut, gitTop, MESSAGE_CHARACTERS, projectName, projectRoot, readChat, stepLine, transcriptText } from '../lib/transcript.mjs';
+import { repoWithWorktree } from './fake.mjs';
 
 const fixture = readFileSync(new URL('fixtures/chat.jsonl', import.meta.url), 'utf8');
 const CWD = '/home/sam/relay-ring';
@@ -100,4 +101,27 @@ test('names the project by its git top folder, else the folder it ran in', () =>
   assert.equal(projectName('/'), 'a project');
   assert.equal(transcriptText(join(loose, 'none.jsonl')), null);
   assert.equal(transcriptText(loose), null);
+});
+
+test('a git worktree counts as its main repository, and a broken link as the worktree itself', () => {
+  const { home, main, copy } = repoWithWorktree();
+  mkdirSync(join(copy, 'app'));
+  assert.equal(projectRoot(main), main);
+  assert.equal(projectRoot(join(copy, 'app')), main);
+  assert.equal(gitTop(join(copy, 'app')), copy);
+  assert.equal(projectName(projectRoot(copy)), 'WongOS');
+  // A link to a gitdir that is gone, a .git file with no gitdir line, and a submodule's gitdir with no commondir.
+  const broken = join(home, 'broken');
+  mkdirSync(broken);
+  writeFileSync(join(broken, '.git'), `gitdir: ${join(home, 'gone', '.git', 'worktrees', 'broken')}\n`);
+  assert.equal(projectRoot(broken), broken);
+  const blank = join(home, 'blank');
+  mkdirSync(blank);
+  writeFileSync(join(blank, '.git'), 'not a link\n');
+  assert.equal(projectRoot(blank), blank);
+  const sub = join(home, 'sub');
+  mkdirSync(join(home, 'modules', 'sub'), { recursive: true });
+  mkdirSync(sub);
+  writeFileSync(join(sub, '.git'), 'gitdir: ../modules/sub\n');
+  assert.equal(projectRoot(sub), sub);
 });

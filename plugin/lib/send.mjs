@@ -6,7 +6,7 @@ import { readComputer } from './config.mjs';
 import { hider } from './hide.mjs';
 import { post } from './server.mjs';
 import { SESSION } from './state.mjs';
-import { readChat, transcriptText } from './transcript.mjs';
+import { readChat, savingOff, transcriptText } from './transcript.mjs';
 
 export const BATCH_MESSAGES = 499;
 export const BATCH_BYTES = 3_900_000;
@@ -64,7 +64,7 @@ async function lockFor(store, id, wait) {
 export async function sendSession(id, { env, store, fetcher = fetch, wait = 0, now = Date.now }) {
   const session = store.sessions()[id];
   if (!SESSION.test(id) || !session) return 'unknown';
-  if (env.RELAY_SAVE === '0' || store.isOff(session.root)) return 'off';
+  if (env.RELAY_SAVE === '0' || savingOff(store, session.root, session.top)) return 'off';
   const computer = readComputer(env);
   if (!computer) {
     store.log(`${id} not connected`);

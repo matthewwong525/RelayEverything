@@ -1,8 +1,11 @@
 {
-  "description": "Records each Claude Code or Codex session and sends its chat to Relay Everything after each answer and at the end. Each hook ends at once and the send runs on its own, so the app never waits.",
+  "description": "Records each Claude Code or Codex session and sends its chat to Relay Everything after each answer and at the end. A start adds your topics from this computer's copy of your knowledge web, and each message adds the topics it names. Each hook ends at once and the send runs on its own, so the app never waits.",
   "hooks": {
     "SessionStart": [
       { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/hook.mjs\" session-start", "timeout": 10 }] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/hook.mjs\" prompt", "timeout": 5 }] }
     ],
     "Stop": [
       { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/bin/hook.mjs\" stop", "timeout": 10 }] }

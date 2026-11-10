@@ -1,6 +1,6 @@
 ---
 name: ask
-description: Read the person's Relay Everything (notes, health, sleep, workouts, places, calendar and saved AI chats), or add a note. Use when the person asks about their notes, their day, how they slept, their steps or workouts, where they went, their calendar, or a saved chat, or asks to note something in Relay Everything.
+description: Read the person's Relay Everything (topics, facts, notes, health, sleep, workouts, places and routes, calendar and saved AI chats), or add a note. Use when the person asks about their notes, their day, how they slept, their steps or workouts, where they went, a trip or a stay, their calendar, or a saved chat; asks what was I doing when…, where was I…, what did I decide about…, or remind me what I decided about…; names one of their Relay Everything topics; or asks to note something in Relay Everything.
 allowed-tools: Bash(node:*)
 ---
 
@@ -16,13 +16,37 @@ Each command prints JSON:
 node "${CLAUDE_PLUGIN_ROOT}/bin/relay.mjs" <command> [value] [--field value ...]
 ```
 
-- `notes --q "words"` finds notes; `notes --from <time> --to <time>` reads a time range. `note <id>` reads one.
+## Start from your topics
+
+1. A chat starts with the person's topics, one line each, from this computer's copy of their knowledge web. A message that names a topic gets a line with that topic's summary. Use these first.
+2. `topic <name>` pulls a topic in one step: its page, the topics it links and those that link it, its newest facts, its notes, and the chats its facts came from.
+3. A fact's `sources` lead on: `relay:note/<id>` → `note <id>`, `relay:chat/<id>` → `chat <id>`, `relay:day/<day>` → `day <day>`.
+4. Read raw data only to dig in, by the time of a source.
+
+## Follow the threads
+
+| From | Read next |
+| --- | --- |
+| A topic | `topic <name>`, then a fact's source |
+| A fact | its source; `fact <id>` for what it replaced |
+| A note | `around <id>` and `chats --q` with the note's key words: always both |
+| A day | `day <day>`, then `nights`, `workouts`, `places`, `calendar` |
+| A stay or a trip | `points <id>` for its route |
+| A saved chat | the notes and days it names, by their time |
+
+For a question about a note, read both before you answer: a chat can hold the why. Follow a thread only while it helps to answer. Read at most one more step without a reason, and stop when the question is answered. Say where each fact came from: the note, the day, the place, the event or the chat.
+
+## Commands
+
+- `topic <name>` pulls a topic, as above.
+- `around <note id>` reads all around a note: the note, its day, and the notes, places, calendar events and hourly steps and heart rate from 2 hours before to 2 hours after. `around --at <time>` does the same for a time. `--hours <n>` sets the window, 1 to 12 each way. A part that failed is under `errors`.
+- `notes --q "words"` finds notes; `notes --from <time> --to <time>` reads a time range; `notes --tag <topic>` finds the notes on a topic. `note <id>` reads one.
 - `day <YYYY-MM-DD>` sums up one day: notes, health, sleep, workouts, places and events.
 - `health <type> --from <time> --to <time> [--per hour|day]`. Types: steps, heart_rate, sleep, workout, weight, resting_heart_rate, hrv_sdnn, hrv_rmssd, blood_oxygen, blood_pressure_systolic, blood_pressure_diastolic, cycle_flow, mindful, water.
 - `nights`, `workouts`, `places`, `calendar [--q "words"]`: each with `--from <time> --to <time>`. Add `--stages` to `nights` for each night's stage timeline.
+- `points <id>` reads the route of a stay or a trip, by its id from `places` or `day`; `points --from <time> --to <time>` reads by time, at most 7 days.
 - `chats --q "words"` finds saved AI chats; `chat <id>` reads one.
 - `facts --q "words"` searches the memory of facts; `--tag <topic>` finds a topic and its parts, `--source relay:chat/<id>` the facts from one record, and `--<column> <value>`, such as `--kind decision`, one column's value. Add `--all` for replaced facts too. `fact <id>` reads one, with what it replaced.
-- `notes --tag <topic>` finds the notes on a topic.
 - `columns` lists the memory's columns.
 - `me` says which device this is.
 - `add-note` adds a note with the text from stdin, only when the person asks: `node … add-note <<'NOTE'` … `NOTE`.

@@ -8,7 +8,7 @@ import { hider } from '../lib/hide.mjs';
 import { withSandbox } from '../lib/sandbox.mjs';
 import { post } from '../lib/server.mjs';
 import { sendSession } from '../lib/send.mjs';
-import { projectRoot } from '../lib/transcript.mjs';
+import { gitTop } from '../lib/transcript.mjs';
 
 const TITLE_CHARACTERS = 200;
 const SUMMARY_CHARACTERS = 20_000;
@@ -24,16 +24,18 @@ export function parseSave(text) {
 
 /**
  * This chat's session. Claude Code gives the skill its session id, and Codex gives each command `CODEX_THREAD_ID`.
- * The first of those this computer recorded, and not cleared, wins; else the newest session in the same project. A
- * cleared session is never this chat: after /clear, Claude Code may still give the old id.
+ * The first of those this computer recorded, and not cleared, wins; else the newest session in the same git top
+ * folder, a worktree's own, not its main repository, so another worktree's chat is never this one. A cleared session
+ * is never this chat: after /clear, Claude Code may still give the old id.
  */
 export function findSession(store, { session, env, cwd }) {
   const sessions = store.sessions();
   for (const id of [session, env.CODEX_THREAD_ID, env.CLAUDE_CODE_SESSION_ID]) {
     if (id && sessions[id] && !sessions[id].cleared) return id;
   }
-  const root = projectRoot(cwd);
-  return Object.entries(sessions).filter(([, item]) => item.root === root && !item.cleared)
+  // A session recorded before `top` was stored has its git top folder as its `root`.
+  const top = gitTop(cwd);
+  return Object.entries(sessions).filter(([, item]) => (item.top ?? item.root) === top && !item.cleared)
     .sort(([, a], [, b]) => (b.seen ?? 0) - (a.seen ?? 0))[0]?.[0] ?? null;
 }
 

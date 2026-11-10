@@ -5,10 +5,10 @@ import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { CHAT_KEY, NOT_CONNECTED, parseArgs, relay } from '../bin/relay.mjs';
-import { writeComputer } from '../lib/config.mjs';
+import { CHAT_KEY, dayIn, NOT_CONNECTED, parseArgs, relay, shiftTime } from '../bin/relay.mjs';
+import { copyOf, writeComputer } from '../lib/config.mjs';
 import { reason } from '../lib/server.mjs';
-import { API, computer, relayHome, SECRET } from './fake.mjs';
+import { API, computer, copy, page, relayHome, SECRET } from './fake.mjs';
 
 const RELAY = fileURLToPath(new URL('../bin/relay.mjs', import.meta.url));
 
@@ -42,6 +42,9 @@ test('each command calls its own route with its query, the key and the time zone
       { from: '2026-11-01', to: '2026-11-08', stages: 'true', timezone: 'Europe/London' }],
     [['workouts', '--from=2026-11-01', '--to=2026-11-08'], '/v1/workouts', { from: '2026-11-01', to: '2026-11-08', timezone: 'Europe/London' }],
     [['places', '--from', '2026-11-01', '--to', '2026-11-02'], '/v1/places', { from: '2026-11-01', to: '2026-11-02', timezone: 'Europe/London' }],
+    [['points', '42'], '/v1/points', { id: '42', timezone: 'Europe/London' }],
+    [['points', '--from', '2026-11-04T08:00', '--to', '2026-11-04T09:00'], '/v1/points',
+      { from: '2026-11-04T08:00', to: '2026-11-04T09:00', timezone: 'Europe/London' }],
     [['calendar', '--from', '2026-11-01', '--to', '2026-11-02', '--query', 'dentist'], '/v1/calendar',
       { from: '2026-11-01', to: '2026-11-02', q: 'dentist', timezone: 'Europe/London' }],
     [['chats', '--q', 'stiffener'], '/v1/chats', { q: 'stiffener', timezone: 'Europe/London' }],
@@ -154,6 +157,9 @@ test('says what to do with no key, no command, or no value', async () => {
   assert.deepEqual(await relay(['me'], { env: relayHome({ connected: false }), fetcher: api.fetcher }), { code: 1, text: NOT_CONNECTED });
   assert.match((await ask(['photos'])).text, /^Commands: me, notes/);
   assert.match((await ask([])).text, /^Commands:/);
+  for (const name of ['points <id>', 'around <note id> or --at <time>', 'topic <name>']) assert.ok((await ask([])).text.includes(name), name);
+  assert.equal((await ask(['topic'])).code, 2);
+  assert.equal((await ask(['around'])).code, 2);
   assert.equal((await ask(['note'])).code, 2);
   assert.equal((await ask(['health'])).code, 2);
   assert.equal(api.calls.length, 0);
@@ -178,6 +184,9 @@ test('runs as the skill runs it, against a local server, and reads the note from
   try {
     const { stdout: printed } = await promisify(execFile)(process.execPath, [RELAY, 'notes', '--q', 'steel'], { env: { ...process.env, ...env, TZ: 'Asia/Tokyo' } });
     assert.equal(printed, '{"added":true}\n');
+    const usage = await promisify(execFile)(process.execPath, [RELAY], { env: { ...process.env, ...env } }).catch(error => error);
+    assert.equal(usage.code, 2);
+    assert.match(usage.stdout, /^Commands: .*points <id>.*around <note id>.*topic <name>/);
     const child = spawn(process.execPath, [RELAY, 'add-note'], { env: { ...process.env, ...env }, stdio: ['pipe', 'pipe', 'inherit'] });
     child.stdin.end('A note from stdin');
     assert.equal((await once(child, 'exit'))[0], 0);
@@ -188,4 +197,170 @@ test('runs as the skill runs it, against a local server, and reads the note from
     server.close();
   }
   assert.ok(API.endsWith('/v1'));
+});
+
+/** A web API that answers each route from `routes`, by its path after /v1, with `{ status, json }`; 404 for others. */
+function routedApi(routes) {
+  const calls = [];
+  const fetcher = async (url, init) => {
+    const { pathname, searchParams } = new URL(url);
+    const query = Object.fromEntries(searchParams);
+    calls.push({ method: init.method, path: pathname, query });
+    const route = pathname.replace(/^\/v1/, '');
+    const key = Object.keys(routes).find(name => name === `${route} ${query.type ?? ''}`.trim() || name === route);
+    const { status = 200, json } = key ? routes[key](query) : { status: 404, json: { error: 'not_found', error_description: 'No such thing.' } };
+    if (status === 'down') throw new TypeError('fetch failed');
+    return new Response(JSON.stringify(json), { status, headers: { 'content-type': 'application/json' } });
+  };
+  return { calls, fetcher };
+}
+
+const AROUND = {
+  '/notes/n1': () => ({ json: { id: 'n1', text: 'The battery stays 40 mAh.', recordedAt: '2026-11-04T14:20:00-05:00' } }),
+  '/days/2026-11-04': () => ({ json: { day: '2026-11-04', steps: 6100 } }),
+  '/notes': query => ({ json: { notes: [{ id: 'n0', from: query.from }], nextCursor: null } }),
+  '/places': () => ({ json: { visits: [{ id: 7, place: 'Workshop' }], trips: [], next: null } }),
+  '/calendar': () => ({ json: { events: [{ title: 'Ring sync' }], nextCursor: null } }),
+  '/health steps': () => ({ json: { type: 'steps', bucket: 'hour', values: [{ value: 900 }] } }),
+  '/health heart_rate': () => ({ json: { type: 'heart_rate', bucket: 'hour', values: [{ value: 71 }] } }),
+};
+
+test('around a note reads the note, then its day, notes, places, calendar and hourly health from 2 hours before to 2 after', async () => {
+  const api = routedApi(AROUND);
+  const done = await ask(['around', 'n1', '--timezone', 'America/Toronto'], { fetcher: api.fetcher });
+  assert.equal(done.code, 0);
+  const answer = JSON.parse(done.text);
+  assert.deepEqual({ ...answer, note: answer.note.id }, {
+    at: '2026-11-04T14:20:00-05:00', from: '2026-11-04T12:20:00-05:00', to: '2026-11-04T16:20:00-05:00', timezone: 'America/Toronto',
+    hours: 2, note: 'n1', day: { day: '2026-11-04', steps: 6100 },
+    notes: { notes: [{ id: 'n0', from: '2026-11-04T12:20:00-05:00' }], nextCursor: null },
+    places: { visits: [{ id: 7, place: 'Workshop' }], trips: [], next: null },
+    calendar: { events: [{ title: 'Ring sync' }], nextCursor: null },
+    health: { steps: { type: 'steps', bucket: 'hour', values: [{ value: 900 }] },
+      heart_rate: { type: 'heart_rate', bucket: 'hour', values: [{ value: 71 }] } } });
+  assert.deepEqual(api.calls[0], { method: 'GET', path: '/v1/notes/n1', query: { timezone: 'America/Toronto' } });
+  const span = { from: '2026-11-04T12:20:00-05:00', to: '2026-11-04T16:20:00-05:00', timezone: 'America/Toronto' };
+  assert.deepEqual(api.calls.slice(1).map(({ path, query }) => [path, query]), [
+    ['/v1/days/2026-11-04', { timezone: 'America/Toronto' }], ['/v1/notes', span], ['/v1/places', span], ['/v1/calendar', span],
+    ['/v1/health', { type: 'steps', bucket: 'hour', ...span }], ['/v1/health', { type: 'heart_rate', bucket: 'hour', ...span }]]);
+});
+
+test('around a time: one with no offset moves as clock time in the zone, one with an offset keeps it, and --hours sets the window', async () => {
+  const api = routedApi(AROUND);
+  const plain = JSON.parse((await ask(['around', '--at', '2026-11-04T23:30', '--hours', '1'], { fetcher: api.fetcher })).text);
+  assert.deepEqual([plain.from, plain.to, plain.timezone, plain.note], ['2026-11-04T22:30:00', '2026-11-05T00:30:00', 'Europe/London', undefined]);
+  assert.equal(api.calls.find(call => call.path.startsWith('/v1/days/')).path, '/v1/days/2026-11-04');
+  const offset = JSON.parse((await ask(['around', '--at', '2026-11-04T23:30:00Z', '--hours', '12', '--timezone', 'Asia/Tokyo'],
+    { fetcher: api.fetcher })).text);
+  assert.deepEqual([offset.from, offset.to], ['2026-11-04T11:30:00Z', '2026-11-05T11:30:00Z']);
+  // In Tokyo, 23:30 UTC is the next morning.
+  assert.equal(api.calls.filter(call => call.path.startsWith('/v1/days/')).at(-1).path, '/v1/days/2026-11-05');
+  assert.equal(shiftTime('2026-11-04T00:30+0530', -1), '2026-11-03T23:30:00+05:30');
+  assert.equal(dayIn('2026-11-04T23:30:00-05:00', 'Europe/London'), '2026-11-05');
+});
+
+test('around refuses a window over 12 hours, and a time it can not read, with no call', async () => {
+  const api = routedApi(AROUND);
+  for (const hours of ['20', '0', 'many']) {
+    assert.deepEqual(await ask(['around', 'n1', '--hours', hours], { fetcher: api.fetcher }),
+      { code: 2, text: 'Give --hours from 1 to 12: the window is at most 12 hours each way.' });
+  }
+  assert.equal((await ask(['around', '--at', 'yesterday'], { fetcher: api.fetcher })).code, 2);
+  assert.equal(api.calls.length, 0);
+});
+
+test('around shows the parts it read when one fails, and stops at a missing note or a refused key', async () => {
+  const failing = routedApi({ ...AROUND, '/calendar': () => ({ status: 503, json: { error: 'try_again', error_description: 'Busy.' } }),
+    '/health heart_rate': () => ({ status: 'down' }) });
+  const answer = JSON.parse((await ask(['around', 'n1'], { fetcher: failing.fetcher })).text);
+  assert.equal(answer.calendar, undefined);
+  assert.deepEqual(answer.places.visits, [{ id: 7, place: 'Workshop' }]);
+  assert.equal(answer.health.heart_rate, undefined);
+  assert.deepEqual(Object.keys(answer.errors), ['calendar', 'health.heart_rate']);
+  assert.equal(answer.errors.calendar, 'Relay Everything refused the request: Busy.');
+  assert.match(answer.errors['health.heart_rate'], /could not be reached/);
+  assert.deepEqual(await ask(['around', 'gone'], { fetcher: failing.fetcher }), { code: 1, text: 'Relay Everything refused the request: No such thing.' });
+  const refused = routedApi({ '/notes/n1': () => ({ status: 403, json: { error: 'forbidden', error_description: CHAT_KEY } }) });
+  assert.deepEqual(await ask(['around', 'n1'], { fetcher: refused.fetcher }), { code: 1, text: CHAT_KEY });
+  const down = async () => { throw new TypeError('fetch failed'); };
+  assert.match((await ask(['around', '--at', '2026-11-04T14:00'], { fetcher: down })).text, /could not be reached/);
+});
+
+test('around keeps the note it read when every later read gets no answer', async () => {
+  const lost = () => ({ status: 'down' });
+  const api = routedApi({ '/notes/n1': AROUND['/notes/n1'], '/days/2026-11-04': lost, '/notes': lost, '/places': lost, '/calendar': lost,
+    '/health steps': lost, '/health heart_rate': lost });
+  const done = await ask(['around', 'n1', '--timezone', 'America/Toronto'], { fetcher: api.fetcher });
+  assert.equal(done.code, 0);
+  const answer = JSON.parse(done.text);
+  assert.equal(answer.note.id, 'n1');
+  assert.deepEqual(Object.keys(answer.errors), ['day', 'notes', 'places', 'calendar', 'health.steps', 'health.heart_rate']);
+  assert.ok(Object.values(answer.errors).every(line => /could not be reached/.test(line)));
+});
+
+const FACTS = [
+  { id: 'fa1', tags: ['battery'], sources: ['relay:chat/c1#12', 'relay:note/n1'], fields: { kind: 'decision', text: '40 mAh.' } },
+  { id: 'fa2', tags: ['battery'], sources: ['relay:chat/c2', 'relay:chat/c1#40'], fields: { kind: 'open', text: 'Cable.' } },
+  { id: 'fa3', tags: ['battery'], sources: ['relay:chat/c3', 'relay:chat/c4'], fields: { kind: 'fact', text: 'Dock.' } },
+];
+const TOPIC = {
+  '/memory': () => ({ json: { facts: FACTS, columns: [], nextCursor: null } }),
+  '/notes': () => ({ json: { notes: [{ id: 'n1', tags: ['battery'] }], nextCursor: null } }),
+  '/chats/c1': () => ({ json: { id: 'c1', title: 'Battery size', project: 'relay-ring', app: 'claude-code', startedAt: 'a', lastAt: 'b',
+    // Newest first, as the server sends a chat's saves.
+    saves: [{ title: 'Battery size', text: 'Chose 40 mAh.' }, { title: 'Old', text: 'Old summary' }], messages: [{ text: 'long' }] } }),
+  '/chats/c2': () => ({ json: { id: 'c2', title: 'Cable', project: 'relay-ring', app: 'codex', startedAt: 'c', lastAt: 'd', saves: [], messages: [] } }),
+  '/chats/c3': () => ({ status: 503, json: { error: 'try_again', error_description: 'Busy.' } }),
+};
+
+test('topic pulls the page, its links both ways, its facts and notes, and up to 3 chats its facts name, in one answer', async () => {
+  const env = relayHome();
+  copy({
+    'topics/battery.md': page('Battery', 'Stays 40 mAh', 'Part of the [ring](ring/README.md).'),
+    'topics/ring/README.md': page('Ring', 'The ring'),
+    'topics/ring/charging.md': page('Charging', 'The dock', 'Charges the [battery](../battery.md).'),
+  }, copyOf(env));
+  const api = routedApi(TOPIC);
+  const done = await relay(['topic', 'battery'], { env, zone: 'Europe/London', fetcher: api.fetcher });
+  assert.equal(done.code, 0);
+  const answer = JSON.parse(done.text);
+  assert.equal(answer.topic, 'battery');
+  assert.equal(answer.summary, 'Stays 40 mAh');
+  assert.match(answer.page, /^---\ntitle: Battery\n[\s\S]*Part of the \[ring\]/);
+  assert.deepEqual(answer.linked, { out: ['ring'], in: ['ring/charging'] });
+  assert.deepEqual(answer.facts, FACTS);
+  assert.deepEqual(answer.notes, [{ id: 'n1', tags: ['battery'] }]);
+  assert.deepEqual(answer.chats, [
+    { id: 'c1', title: 'Battery size', project: 'relay-ring', app: 'claude-code', startedAt: 'a', lastAt: 'b', summary: 'Chose 40 mAh.' },
+    { id: 'c2', title: 'Cable', project: 'relay-ring', app: 'codex', startedAt: 'c', lastAt: 'd', summary: null }]);
+  assert.deepEqual(answer.errors, { 'chat c3': 'Relay Everything refused the request: Busy.' });
+  assert.deepEqual(api.calls.slice(0, 2).map(({ path, query }) => [path, query]), [
+    ['/v1/memory', { tag: 'battery', limit: '10', timezone: 'Europe/London' }], ['/v1/notes', { tag: 'battery', limit: '5', timezone: 'Europe/London' }]]);
+  // One step out, no further: c4 is a fourth chat, and no linked topic is read.
+  assert.deepEqual(api.calls.slice(2).map(call => call.path).sort(), ['/v1/chats/c1', '/v1/chats/c2', '/v1/chats/c3']);
+});
+
+test('topic answers with page null when only facts carry it, says which part failed, and stops at a refused key', async () => {
+  const api = routedApi({ ...TOPIC, '/notes': () => ({ status: 503, json: { error: 'try_again', error_description: 'Busy.' } }),
+    '/memory': () => ({ json: { facts: [FACTS[0]], columns: [], nextCursor: null } }) });
+  const answer = JSON.parse((await ask(['topic', '#Battery'], { fetcher: api.fetcher })).text);
+  assert.deepEqual([answer.topic, answer.page, answer.summary, answer.linked], ['battery', null, null, { out: [], in: [] }]);
+  assert.equal(answer.facts.length, 1);
+  assert.deepEqual(answer.notes, []);
+  assert.deepEqual(answer.chats.map(chat => chat.id), ['c1']);
+  assert.deepEqual(answer.errors, { notes: 'Relay Everything refused the request: Busy.' });
+  const refused = routedApi({ '/memory': () => ({ status: 403, json: { error: 'forbidden', error_description: 'This device key is turned off.' } }),
+    '/notes': TOPIC['/notes'] });
+  assert.match((await ask(['topic', 'battery'], { fetcher: refused.fetcher })).text, /^Relay Everything refused this computer's key: This device key is turned off\./);
+  assert.equal((await ask(['topic', 'Not a topic!'], { fetcher: api.fetcher })).code, 2);
+  // The only chat read gets no answer: the facts and notes already read still show.
+  const lost = routedApi({ ...TOPIC, '/memory': () => ({ json: { facts: [FACTS[0]], columns: [], nextCursor: null } }),
+    '/chats/c1': () => ({ status: 'down' }) });
+  const kept = await ask(['topic', 'battery'], { fetcher: lost.fetcher });
+  assert.equal(kept.code, 0);
+  const shown = JSON.parse(kept.text);
+  assert.deepEqual([shown.facts.length, shown.notes.length, shown.chats], [1, 1, []]);
+  assert.deepEqual(Object.keys(shown.errors), ['chat c1']);
+  assert.match(shown.errors['chat c1'], /could not be reached/);
+  assert.deepEqual(await relay(['topic', 'battery'], { env: relayHome({ connected: false }), fetcher: api.fetcher }), { code: 1, text: NOT_CONNECTED });
 });

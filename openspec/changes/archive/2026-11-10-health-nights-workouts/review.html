@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · health-nights-workouts</title>
+<title>Review · 2026-11-10-health-nights-workouts</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -451,11 +451,11 @@
 })();
 </script>
 </head>
-<body data-change="health-nights-workouts" data-own-back>
+<body data-change="2026-11-10-health-nights-workouts" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>health-nights-workouts</h1>
+  <h1>2026-11-10-health-nights-workouts</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Tap a picture to see it full screen.</span></p>
@@ -522,6 +522,8 @@
 <li class="decision card" id="decision-27" data-note="decision-27" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-09</p>Assumed (build): the plan's test gates between parts moved to the end of the build, with their checks kept.</li>
 <li class="decision card" id="decision-28" data-note="decision-28" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-10</p>Assumed: a health sample's id comes from its type, start, end and source, and the example receiver keeps a sample once by those fields, because the 90-day redo would otherwise double sleep and workouts in a person's own database; the reviewer's recommendation, plus the receiver rule for samples sent before with older ids.</li>
 <li class="decision card" id="decision-29" data-note="decision-29" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-10</p>Checkpoint: built and reviewed twice (the redo doubling samples in a person's own database fixed; the example Postgres table keeps a sample once by its fields); the local checks pass, with 585 phone tests. Left: the staging check (6.2).</li>
+<li class="decision card" id="decision-30" data-note="decision-30" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-10</p>Assumed: the final check (6.2) ran on this computer against the branch's own server and AI connector, not on staging, because staging's preview has no person spaces and its shared space must not take made-up health rows; the places change checked the same way. Seen: a night sent twice stored once, an old workout gained its kind when sent again with details, <i>nights</i> (with and without <code>stages</code>), <i>workouts</i> and the day read gave each once, the outbox held one <code>night</code> row that only the Health-ticked webhook waited on, and both keys answered 403 after <i>Turn off</i>.</li>
+<li class="decision card" id="decision-31" data-note="decision-31" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-10</p>Archive checkpoint: every task done, the final check passed on this computer; archived for publishing.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

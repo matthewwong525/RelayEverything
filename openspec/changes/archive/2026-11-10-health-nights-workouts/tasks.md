@@ -29,4 +29,4 @@
 ## 6. Checks
 
 - [x] 6.1 Run the app tests, `flutter test` and `flutter analyze` in `mobile/`, `node scripts/product-name.test.mjs` and `node scripts/public-check.mjs`
-- [ ] 6.2 `/save`, then on staging: send a made-up night and a full workout with a phone key, resend both, and see that the AI's *nights* (with and without `stages`), *workouts* and *day_summary* give them once, an old workout gains its kind, and a webhook ticked for Health gets `health.nights`; turn the key off. A real iPhone with a watch is needed to see a real night: the simulator has no health data
+- [x] 6.2 `/save`, then on staging: send a made-up night and a full workout with a phone key, resend both, and see that the AI's *nights* (with and without `stages`), *workouts* and *day_summary* give them once, an old workout gains its kind, and a webhook ticked for Health gets `health.nights`; turn the key off. A real iPhone with a watch is needed to see a real night: the simulator has no health data

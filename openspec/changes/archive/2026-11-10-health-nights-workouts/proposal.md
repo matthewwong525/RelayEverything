@@ -1,6 +1,6 @@
 # Your sleep as nights and your workouts with their kind, distance and calories
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** warm-leopard
 **Open questions:** none
 
@@ -150,3 +150,5 @@ None.
 - **2026-11-09** — Assumed (build): the plan's test gates between parts moved to the end of the build, with their checks kept.
 - **2026-11-10** — Assumed: a health sample's id comes from its type, start, end and source, and the example receiver keeps a sample once by those fields, because the 90-day redo would otherwise double sleep and workouts in a person's own database; the reviewer's recommendation, plus the receiver rule for samples sent before with older ids.
 - **2026-11-10** — Checkpoint: built and reviewed twice (the redo doubling samples in a person's own database fixed; the example Postgres table keeps a sample once by its fields); the local checks pass, with 585 phone tests. Left: the staging check (6.2).
+- **2026-11-10** — Assumed: the final check (6.2) ran on this computer against the branch's own server and AI connector, not on staging, because staging's preview has no person spaces and its shared space must not take made-up health rows; the places change checked the same way. Seen: a night sent twice stored once, an old workout gained its kind when sent again with details, *nights* (with and without `stages`), *workouts* and the day read gave each once, the outbox held one `night` row that only the Health-ticked webhook waited on, and both keys answered 403 after *Turn off*.
+- **2026-11-10** — Archive checkpoint: every task done, the final check passed on this computer; archived for publishing.

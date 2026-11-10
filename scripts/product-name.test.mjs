@@ -40,6 +40,8 @@ const PLACES = [
   'app/src/apps/relay/app.json',
   'app/worker/apps/relay/sign-in/phone.ts',
   'app/worker/apps/relay/sign-in/computer.ts',
+  'app/worker/apps/relay/memory.ts',
+  'app/worker/apps/relay/knowledge.ts',
   'app/worker/relay-mcp/answers.ts',
   'app/worker/relay-mcp/api.ts',
   'app/worker/relay-mcp/auth.ts',
@@ -56,6 +58,8 @@ const PLACES = [
   'plugin/README.md',
   'plugin/skills',
   'scripts/relay-mcp-trial.mjs',
+  'scripts/relay-knowledge-setup.mjs',
+  'schema/knowledge',
   'app/self-host/SETUP.md',
   'wiki',
 ];

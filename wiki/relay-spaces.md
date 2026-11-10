@@ -59,7 +59,7 @@ Three Workers serve Relay Everything, and each deploy goes in this order, becaus
 2. The AI connector, [`app/wrangler.relay-mcp.jsonc`](../app/wrangler.relay-mcp.jsonc), which binds `SPACES`.
 3. The shared server, [`app/wrangler.relay.jsonc`](../app/wrangler.relay.jsonc), and the company app, [`app/wrangler.jsonc`](../app/wrangler.jsonc), which both bind `SPACES` and the connector.
 
-A publish deploys the live spaces Worker, the connector and the company app ([`scripts/cf-deploy.sh`](../scripts/cf-deploy.sh)), but not the shared server or any staging Worker. So after each publish, run [`scripts/publish-relay-server.mjs`](../scripts/publish-relay-server.mjs). It exports the published commit to a new folder, runs `npm ci` in its `app/`, and deploys in this order: the staging spaces Worker, the staging connector, the staging shared server, then the live shared server. Before each deploy it checks the Worker name, so a build that missed its environment never lands on live. It stops at the first failure, so a staging failure leaves live as it was.
+A publish deploys the live spaces Worker, the connector and the company app ([`scripts/cf-deploy.sh`](../scripts/cf-deploy.sh)), but not the shared server or any staging Worker. So after each publish, run [`scripts/publish-relay-server.mjs`](../scripts/publish-relay-server.mjs). It exports the published commit to a new folder, runs `npm ci` in its `app/`, and deploys in this order: the staging knowledge web's start, the staging spaces Worker, the staging connector, the staging shared server, then the live start and the live shared server ([the knowledge web](stack/relay-knowledge-web.md#the-knowledge-web)). Before each deploy it checks the Worker name, so a build that missed its environment never lands on live. It stops at the first failure, so a staging failure leaves live as it was.
 
 | When | Run |
 |---|---|
@@ -79,5 +79,6 @@ The page is the Flutter app drawn on one canvas, so a headless browser such as [
 
 - [Relay Everything's AI connector](stack/relay-ai-connector.md): each grant carries its person id and reads that space.
 - [Relay Everything's AI chat transcripts](stack/relay-chats.md): a computer's key adds chats to its own person's space.
+- [Relay Everything's memory and knowledge web](stack/relay-knowledge-web.md): a computer's key adds facts to its space, and opens its person's web.
 - [How the phone sends health and the calendar](relay-phone-sync.md): what a phone key sends to a space, and when.
 - [The Relay Everything website](relay-website.md): a change here updates its pages in the same change.

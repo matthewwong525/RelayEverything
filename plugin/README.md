@@ -77,6 +77,7 @@ The plugin keeps its files in `~/.config/relay-everything/`, or in `$XDG_CONFIG_
 
 - `computer.json` holds the server address, the key and the name of this computer. Only you can read it. Never copy the key into a chat or a file.
 - The `state/` folder holds the path of each chat file, its project, how many messages were sent, the projects with saving off, and `send.log`. `send.log` holds the last 200 sends, with only session IDs, counts and statuses. A send that fails waits there, and the next start of the app sends it.
+- The `knowledge/` folder is this computer's copy of your knowledge web: a git folder of topic pages. `knowledge.mjs sync` gets the newest pages and sends your changes, at most once every 15 minutes unless the copy has changes or you add `--now`. `knowledge.json` holds the time of the last sync. The one-hour pass for each sync goes to git only in its environment: it is never written to a file. The knowledge web needs git, and a server whose Cloudflare account has Artifacts.
 
 ## Disconnect this computer
 

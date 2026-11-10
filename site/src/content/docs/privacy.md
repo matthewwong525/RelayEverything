@@ -52,7 +52,7 @@ Each recording, each file on a note and each photo is in your own folder of the 
 
 ## Delete your account
 
-On your Relay Everything page, open **Settings**, then **Account**, click **Delete my account**, and type your email to confirm. It deletes your space, your recordings, the files on your notes, your photos, your keys, your notes address, your sign-ins and your connected AI apps. You can't undo it. Your notes stay on your phone.
+On your Relay Everything page, open **Settings**, then **Account**, click **Delete my account**, and type your email to confirm. It deletes your space with your memory, your knowledge web, your recordings, the files on your notes, your photos, your keys, your notes address, your sign-ins and your connected AI apps. You can't undo it. Your notes stay on your phone.
 
 ## What is not kept
 

@@ -4,8 +4,8 @@ import { spaceOf, vouch, type Caller, type SpaceEnv } from "../apps/relay/space.
 import type { Asker } from "./answers.ts";
 import type { GrantProps, McpEnv } from "./env.ts";
 
-/** The spaces, the file store and the webhooks' queue. */
-export type Bindings = SpaceEnv & Pick<McpEnv, "RELAY_WEBHOOKS">;
+/** The spaces, the file store, the webhooks' queue and the knowledge webs. */
+export type Bindings = SpaceEnv & Pick<McpEnv, "RELAY_WEBHOOKS" | "KNOWLEDGE">;
 
 // The file store is there for read_photo, which opens one photo by its row: no answer reads a recording.
 const open = (env: Bindings, caller: Caller) => spaceOf(env, caller);
@@ -19,9 +19,9 @@ export function grantAsker(env: Bindings, props: GrantProps | undefined): Asker 
     adder: adds && deviceId && name ? { deviceId, name, kind: "app" } : null };
 }
 
-/** An API key's person, from the caller caller.ts vouched for: it adds as its own device. */
+/** An API key's or a computer key's person, from the caller caller.ts vouched for: it adds as its own device. */
 export const keyAsker = (env: Bindings, caller: Caller & { device: { id: string } }): Asker =>
-  ({ space: open(env, caller), env, adder: { deviceId: caller.device.id, name: "", kind: "api" } });
+  ({ space: open(env, caller), env, adder: { deviceId: caller.device.id, name: "", kind: caller.device.reaches === "agent" ? "agent" : "api" } });
 
 export const APP_DEVICE_OFF = "UPDATE relay_devices SET revoked_at = coalesce(revoked_at, ?) WHERE id = ? AND reaches = 'app'";
 

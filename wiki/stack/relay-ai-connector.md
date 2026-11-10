@@ -27,9 +27,11 @@ Then ask, for example: *What did I note on 4 November?*, *How many steps did I w
 
 ## What the app can read and add
 
-The connector has fifteen tools: fourteen read, and `add_note` adds. Each answer has a limit, so one question can't copy all of Relay Everything.
+The connector has seventeen tools: sixteen read, and `add_note` adds. Each answer has a limit, so one question can't copy all of Relay Everything.
 
-- **search**: notes that hold every word you give, newest first.
+- **memory**: the facts in the person's memory, newest first, each with its columns, tags and sources, and the memory's columns. It finds facts by words in the text columns, a `tag` and its parts, a `source` link, a time, or a column's value in `where`. Only live facts unless `all`; a replaced fact names its replacement in `replacedBy`. The server instructions tell the AI to search the memory first for what the person decided, likes or plans ([Relay Everything's memory and knowledge web](relay-knowledge-web.md)).
+- **read_fact**: one fact by its id, with the facts it replaced and the fact that replaced it.
+- **search**: notes that hold every word you give, or that carry a `tag`, newest first. Give `query`, `tag` or both.
 - **fetch**: one note, the places you stayed near it in time, and its day's health totals.
 - **timeline**: every note from one time to another, a page at a time.
 - **day_summary**: one day's notes count, health totals, the `nights` that ended that day (no stage timeline), each workout in `workouts.items`, places, trips and events (title, start, end and people's names). `places` has one row per stay (`id`, `name`, `lat`, `lon`, `from`, `to`, and `address`, `event` and `ongoing` when it has them); `trips` has each trip's `id`, `mode`, `km`, `minutes`, and the names of the stays it went `from` and `to`. A health type with no readings that day is left out.

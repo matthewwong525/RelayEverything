@@ -36,16 +36,18 @@ function fakeRunner({ fail, built = env => (env === 'staging' ? 'relay-everythin
 
 const go = (runner, opts = {}) => publish({ root: ROOT, ref: 'HEAD', run: runner.run, exportTree, env: { CLOUDFLARE_ENV: 'stray' }, ...opts });
 
-test('staging spaces, connector and server deploy in order, then the live server', () => {
+test('the staging start, then staging spaces, connector and server deploy in order, then the live start and server', () => {
   const runner = fakeRunner();
   assert.equal(go(runner), `result=deployed ref=${SHA} workers=${ALL}`);
   assert.deepEqual(runner.calls.map(call => call.line), [
     'npm ci --no-audit --no-fund',
     'node ../scripts/build-relay-web.mjs',
+    'node ../scripts/relay-knowledge-setup.mjs --staging',
     'npx wrangler deploy -c wrangler.spaces.jsonc --env staging',
     'npx wrangler deploy -c wrangler.relay-mcp.jsonc --env staging',
     'npm run build:relay-only',
     'npx wrangler deploy',
+    'node ../scripts/relay-knowledge-setup.mjs',
     'npm run build:relay-only',
     'npx wrangler deploy',
   ]);
@@ -76,6 +78,15 @@ test('--dry-run builds each part and deploys nothing', () => {
   const deploys = runner.calls.filter(call => call.line.includes('wrangler deploy'));
   assert.equal(deploys.length, 4);
   assert.ok(deploys.every(call => call.line.includes('--dry-run')));
+  const starts = runner.calls.filter(call => call.line.includes('relay-knowledge-setup'));
+  assert.deepEqual(starts.map(call => call.line), ['node ../scripts/relay-knowledge-setup.mjs --staging --dry-run',
+    'node ../scripts/relay-knowledge-setup.mjs --dry-run']);
+});
+
+test('a failed knowledge start stops before that environment\'s deploys', () => {
+  const runner = fakeRunner({ fail: (_cmd, args) => args.includes('--staging') && args[0].includes('relay-knowledge-setup') });
+  assert.equal(go(runner), `result=failed step=staging-knowledge ref=${SHA}`);
+  assert.ok(!runner.calls.some(call => call.line.includes('wrangler deploy')));
 });
 
 test('--staging-only leaves live alone, and an install failure names its step', () => {

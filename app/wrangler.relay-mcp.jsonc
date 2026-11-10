@@ -24,6 +24,8 @@
   "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks" }] },
   // No id: the first deploy, which the setup script runs, makes the store, and later deploys keep it.
   "kv_namespaces": [{ "binding": "OAUTH_KV" }],
+  // Each person's knowledge web, one repo each: POST /v1/knowledge/access. scripts/relay-knowledge-setup.mjs makes it.
+  "artifacts": [{ "binding": "KNOWLEDGE", "namespace": "relay-everything-knowledge" }],
   "env": {
     "staging": {
       "name": "relay-everything-mcp-staging",
@@ -36,7 +38,8 @@
       "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces-staging" }] },
       "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes-staging" }],
       "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-server-webhooks-staging" }] },
-      "kv_namespaces": [{ "binding": "OAUTH_KV" }]
+      "kv_namespaces": [{ "binding": "OAUTH_KV" }],
+      "artifacts": [{ "binding": "KNOWLEDGE", "namespace": "relay-everything-knowledge-staging" }]
     }
   }
 }

@@ -2,11 +2,11 @@ import { readFileSync } from "node:fs";
 import { beforeEach, expect, it } from "vitest";
 import { z } from "zod";
 import { ANA, BEN, bucket, fakeSpaces, queue } from "../../tests/relay";
-import { answer, RECONNECT, type Asker } from "./answers";
+import { answer, COMPUTER_ONLY, RECONNECT, type Asker } from "./answers";
 import { v1, type WebTool } from "./api";
 import { vouch } from "../apps/relay/space";
 import { grantAsker, keyAsker } from "./asker";
-import { TOOLS } from "./inputs";
+import { INPUTS } from "./inputs";
 import { ANSWERS } from "./openapi";
 
 // The web API over Ana's made-up day: each route answers what its tool answers, for the caller's own space only.
@@ -56,12 +56,19 @@ const SAME: [string, WebTool, Record<string, unknown>][] = [
   ["health?type=weight&from=2026-11-04&to=2026-11-05", "health", { type: "weight", from: "2026-11-04", to: "2026-11-05" }],
   ["chats?q=stiffener", "search_chats", { query: "stiffener" }],
   [`chats/${CHAT(1)}`, "read_chat", { id: CHAT(1) }],
+  ["notes?tag=ring", "search", { tag: "ring" }],
+  ["memory?q=battery", "memory", { query: "battery" }],
+  ["memory?tag=%23battery&all=true&limit=5", "memory", { tag: "#battery", all: true, limit: 5 }],
+  ["memory?kind=decision&timezone=Europe%2FLondon", "memory", { where: { kind: "decision" }, timezone: "Europe/London" }],
+  ["memory/fc5kk", "read_fact", { id: "fc5kk" }],
+  ["memory/columns", "columns", {}],
+  ["memory/columns?changes=true", "columns", { changes: true }],
 ];
 
 it("answers each route as its tool answers the same input, in the shape the OpenAPI file gives", async () => {
   for (const [path, name, input] of SAME) {
     const { status, json } = await call(path);
-    expect([status, json], path).toEqual([200, await answer(name, script, z.object(TOOLS[name].input).parse(input) as never)]);
+    expect([status, json], path).toEqual([200, await answer(name, script, z.object(INPUTS[name].input).parse(input) as never)]);
     expect(ANSWERS[name].safeParse(json).error, path).toBeUndefined();
   }
 });
@@ -115,7 +122,7 @@ it("adds a note as the key's own device, once, and refuses a body it can't read"
   expect(await post(note)).toEqual({ status: 200, json: { id: added.json.id, added: false }, allow: null });
   expect(spaces.sql(ANA).prepare("SELECT device_id, recorded_at FROM relay_notes WHERE id = ?").get(added.json.id as string))
     .toEqual({ device_id: "d-api", recorded_at: Date.UTC(2026, 10, 4, 23) });
-  for (const bad of ["{", "[1]", "null", '"text"']) expect((await post(bad)).json.error_description, bad).toBe("Send the note as a JSON object.");
+  for (const bad of ["{", "[1]", "null", '"text"']) expect((await post(bad)).json.error_description, bad).toBe("Send a JSON object.");
   expect((await post(JSON.stringify({ clientId: "script-note-0002", text: "Hi", device: "x" }))).status).toBe(400);
   const old = grantAsker(env(spaces.SPACES), { personId: ANA })!;
   expect(await post(JSON.stringify({ clientId: "app-note-0001", text: "Hi" }), old)).toMatchObject({ status: 403, json: { error: "forbidden", error_description: RECONNECT } });
@@ -134,4 +141,59 @@ it("tells the caller who it is, and reads no data to do it", async () => {
 it("lets a database fault through as an error, not as an answer", async () => {
   const broken = { ...script, space: { ...script.space, db: { prepare: () => { throw new Error("The space is down"); } } } } as unknown as Asker;
   await expect(call(`notes/${ID(1)}`, broken)).rejects.toThrow("The space is down");
+});
+
+const LAPTOP = "d0000000-0000-4000-8000-000000000004";
+const facts = (answer: Record<string, unknown>) => (answer.facts as { id: string }[]).map(fact => fact.id);
+const decision = (clientId: string, more: Record<string, unknown> = {}) => ({ clientId, tags: ["battery"],
+  sources: [`relay:chat/${CHAT(2)}#4`], fields: { kind: "decision", text: "The battery is now 60 mAh." }, ...more });
+
+it("adds facts as the computer, once, marks the fact a new one replaces, and changes or deletes no fact", async () => {
+  const laptop = keyAsker(env(spaces.SPACES), vouch("key", ANA, { device: { id: LAPTOP, reaches: "agent" } }) as never);
+  const add = (body: unknown, asker = laptop) => call("memory", asker, { method: "POST", body: JSON.stringify(body) });
+  const added = await add({ facts: [decision("fact-60mah-0001", { replaces: ["fc5kk"] })] });
+  expect(added).toMatchObject({ status: 201, json: { facts: [{ clientId: "fact-60mah-0001", id: expect.stringMatching(/^f[a-z2-7]{4}$/), added: true }] } });
+  expect(ANSWERS.add_facts.safeParse(added.json).error).toBeUndefined();
+  const [{ id }] = added.json.facts as { id: string }[];
+  expect((await add({ facts: [decision("fact-60mah-0001", { replaces: ["fc5kk"] })] })).json)
+    .toEqual({ facts: [{ clientId: "fact-60mah-0001", id, added: false }] });
+  expect(facts((await call("memory?tag=battery")).json)).toEqual([id]);
+  expect(facts((await call("memory?tag=battery&all=true")).json)).toEqual([id, "fc5kk", "fb4tt"]);
+  expect((await call("memory/fc5kk")).json).toMatchObject({ replacedBy: id, replacedByFact: { id, device: "Laptop" }, replacedFacts: [{ id: "fb4tt" }] });
+  expect((await add({ facts: [decision("fact-again-0001", { replaces: ["fc5kk"] })] })).json.error_description)
+    .toBe(`The fact \`fc5kk\` was replaced already, by \`${id}\`: replace that one.`);
+  const stored = spaces.sql(ANA).prepare("SELECT * FROM relay_memory ORDER BY id").all();
+  for (const bad of [{ facts: [decision("fact-notag-0001", { tags: [] })] }, { facts: [decision("fact-nosrc-0001", { sources: [] })] },
+    { facts: [decision("fact-badsrc-001", { sources: ["https://example.com"] })] }, { facts: [decision("fact-nofact-001", { replaces: ["fzzzz"] })] },
+    { facts: [] }]) {
+    expect((await add(bad)).status, JSON.stringify(bad)).toBe(400);
+  }
+  expect((await add({ facts: [decision("fact-script-0001")] }, script)).json).toEqual({ error: "forbidden", error_description: COMPUTER_ONLY });
+  for (const method of ["DELETE", "PUT", "PATCH"]) expect((await call("memory/fc5kk", laptop, { method })).status).toBe(405);
+  expect(spaces.sql(ANA).prepare("SELECT * FROM relay_memory ORDER BY id").all()).toEqual(stored);
+});
+
+it("searches facts by words, tag, source, column and time, newest first, a page at a time", async () => {
+  expect(facts((await call("memory?q=BATTERY")).json)).toEqual(["fc5kk"]);
+  expect(facts((await call("memory?q=battery%2040&all=true")).json)).toEqual(["fb4tt"]);
+  expect(facts((await call(`memory?source=relay:chat/${CHAT(1)}&all=true`)).json)).toEqual(["fb4tt"]);
+  expect(facts((await call(`memory?source=relay:note/${ID(2)}`)).json)).toEqual(["fd7mm"]);
+  expect(facts((await call("memory?kind=fact")).json)).toEqual(["fd7mm"]);
+  expect(facts((await call("memory?from=2026-11-04T17:00:00Z&to=2026-11-04T18:00:00Z")).json)).toEqual(["fd7mm"]);
+  const first = await call("memory?limit=1");
+  expect([facts(first.json), first.json.nextCursor]).toEqual([["fc5kk"], "1793816200000.fc5kk"]);
+  expect(facts((await call(`memory?cursor=${first.json.nextCursor}`)).json)).toEqual(["fd7mm"]);
+  expect((await call("memory?cursor=1793816200000.x")).json.error_description).toBe("That cursor is not one this connector gave.");
+  // A cursor past the range's end reads from the end.
+  expect(facts((await call("memory?to=2026-11-04T17:10:00Z&cursor=1793816200000.fc5kk")).json)).toEqual(["fd7mm"]);
+  expect((await call("memory?limit=51")).status).toBe(400);
+  expect((await call("memory?colour=red")).json.error_description).toMatch(/^No live column is named `colour`/);
+  expect((await call("memory/columns")).json.columns).toHaveLength(2);
+});
+
+it("reads only the caller's own memory: Ben finds none of Ana's facts", async () => {
+  const ben = grantAsker(env(spaces.SPACES), { personId: BEN })!;
+  expect((await call("memory?q=battery", ben)).json.facts).toEqual([]);
+  expect(await call("memory/fc5kk", ben)).toMatchObject({ status: 404, json: { error_description: "No fact has this id." } });
+  expect((await call("memory/columns", ben)).json.columns).toHaveLength(2);
 });

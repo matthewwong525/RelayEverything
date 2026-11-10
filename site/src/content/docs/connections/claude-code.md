@@ -48,6 +48,8 @@ If you added the AI connector to Claude Code or Codex before, the connect step n
 
 Ask in plain words, such as *what did I note about the charger?* or *how did I sleep last week?* The AI reads your Relay Everything data through the plugin. Ask *note that the charger needs a new cable*, and it adds a note.
 
+The AI also reads and adds to your memory of facts, and keeps a copy of your knowledge web on the computer, in `knowledge/` in the plugin's folder: [Memory and knowledge web](../../api/knowledge-web/).
+
 ## Save a summary
 
 Type `/relay:save` in Claude Code or `$relay:save` in Codex, or ask *save this to Relay Everything*. The AI writes a title and a summary of what you decided, and keeps it beside the chat.

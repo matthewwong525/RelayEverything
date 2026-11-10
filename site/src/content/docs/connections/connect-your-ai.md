@@ -19,9 +19,11 @@ Then ask, for example: *What did I note on 4 November?*, *What is on my day?*, *
 
 ## What the AI can read and add
 
-The connector has fifteen tools. Fourteen only read, and one adds a note. Each tool reaches only the space of the person who connected the app. Each answer has a limit, so one question can't copy all of your space.
+The connector has seventeen tools. Sixteen only read, and one adds a note. Each tool reaches only the space of the person who connected the app. Each answer has a limit, so one question can't copy all of your space.
 
-- **search**: notes that hold every word you give, newest first.
+- **memory**: the facts in your [memory](../../api/knowledge-web/), newest first, each with its columns, topics and sources. It finds facts by words, a topic, a source, a time, or a column's value. Ask it first for *what did I decide?*
+- **read_fact**: one fact, with the facts it replaced and the fact that replaced it.
+- **search**: notes that hold every word you give, or the notes on a topic, newest first.
 - **fetch**: one note, the places you stayed near it in time, and its day's health totals.
 - **timeline**: every note from one time to another, a page at a time.
 - **day_summary**: one day's notes count, health totals, nights of sleep, workouts, places, trips and events. Each place is a stay with its name and times; each trip has its mode, km and minutes; each event has its title, times and people. Each stay and trip has an id for **points**.

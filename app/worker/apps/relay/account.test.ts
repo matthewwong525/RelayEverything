@@ -3,7 +3,7 @@ import { ANA, BEN, ben, benPhone, bucket, call, checker, directoryDb, env, matth
 import { handleApp } from "../index";
 import { hashToken } from "./people";
 
-const PEOPLE_TABLES = ["relay_keys", "relay_sessions", "relay_logins", "relay_connect_codes"];
+const PEOPLE_TABLES = ["relay_keys", "relay_sessions", "relay_logins", "relay_connect_codes", "relay_computer_codes"];
 
 /** The AI connector's grants: one each for Ana and Ben, gone once revoked. */
 function connector() {
@@ -29,6 +29,8 @@ beforeEach(() => {
   for (const [person, subject] of [[ANA, "apple-ana"], [BEN, "apple-ben"]]) {
     directoryDb.sql.prepare("INSERT INTO relay_logins (provider, subject, person_id, created_at) VALUES ('apple', ?, ?, ?)").run(subject, person, NOW);
     directoryDb.sql.prepare("INSERT INTO relay_connect_codes (code_sha256, person_id, expires_at) VALUES (?, ?, ?)").run(`code-${person}`, person, NOW + 1);
+    directoryDb.sql.prepare("INSERT INTO relay_computer_codes (challenge, words, name, person_id, expires_at) VALUES (?, 'KITE-0001', 'Laptop', ?, ?)")
+      .run(`challenge-${person}`, person, NOW + 1);
   }
   for (const email of ["ana@example.com", "ben@example.com"]) {
     directoryDb.sql.prepare("INSERT INTO relay_sign_in_codes (email, code_sha256, expires_at) VALUES (?, 'x', ?)").run(email, NOW + 1);
@@ -57,7 +59,7 @@ it("deletes nothing unless the typed email is the account's own", async () => {
   expect((await call(checker, "POST", "account-delete", { email: "" }, checked)).status).toBe(400);
   expect((await call(phone, "POST", "account-delete", { email: "ana@example.com" }, { RELAY_MCP: grants })).status).toBe(403);
   expect(grants.list).not.toHaveBeenCalled();
-  expect(counts(ANA)).toEqual([4, 1, 1, 1]);
+  expect(counts(ANA)).toEqual([4, 1, 1, 1, 1]);
   expect(bucket.objects.size).toBe(4);
   expect(rows("relay_notes")).toHaveLength(1);
 });
@@ -78,12 +80,12 @@ it("deletes Ana's account whole, and leaves Ben's data, key and session as they 
   // Her recordings, her space and her rows in the directory are gone.
   expect([...bucket.objects.keys()]).toEqual([`people/${BEN}/d`]);
   expect(spaces.objects.has(ANA)).toBe(false);
-  expect(counts(ANA)).toEqual([0, 0, 0, 0]);
+  expect(counts(ANA)).toEqual([0, 0, 0, 0, 0]);
   expect(directoryDb.sql.prepare("SELECT email FROM relay_people").all()).toEqual([{ email: "ben@example.com" }]);
   expect(directoryDb.sql.prepare("SELECT email FROM relay_sign_in_codes").all()).toEqual([{ email: "ben@example.com" }]);
   expect(directoryDb.sql.prepare("SELECT person_id FROM relay_inbox_links").all()).toEqual([{ person_id: BEN }]);
   // Ben is untouched.
-  expect(counts(BEN)).toEqual([1, 1, 1, 1]);
+  expect(counts(BEN)).toEqual([1, 1, 1, 1, 1]);
   expect(rows("relay_notes", BEN)).toEqual([expect.objectContaining({ id: "note-ben" })]);
   expect(await call(benPhone, "GET", "key")).toEqual({ status: 200, json: { device: "Ben's phone" } });
   expect(await call(ben, "GET", "account")).toEqual({ status: 200, json: { email: "ben@example.com" } });
@@ -93,9 +95,9 @@ it("deletes Ana's account whole, and leaves Ben's data, key and session as they 
 it("deletes an account with no recordings, on a server with no AI connector", async () => {
   bucket.objects.delete(`people/${BEN}/d`);
   expect(await call(ben, "POST", "account-delete", { email: "ben@example.com" })).toEqual({ status: 200, json: { deleted: true } });
-  expect(counts(BEN)).toEqual([0, 0, 0, 0]);
+  expect(counts(BEN)).toEqual([0, 0, 0, 0, 0]);
   expect([...bucket.objects.keys()].every(name => name.startsWith(`people/${ANA}/`))).toBe(true);
-  expect(counts(ANA)).toEqual([4, 1, 1, 1]);
+  expect(counts(ANA)).toEqual([4, 1, 1, 1, 1]);
 });
 
 it("leaves no way in when a step fails partway, and a second try finishes the deletion", async () => {
@@ -104,7 +106,7 @@ it("leaves no way in when a step fails partway, and a second try finishes the de
   const failed = await call(matthew, "POST", "account-delete", { email: "ana@example.com" }, { RELAY_MCP: grants }).catch(() => null);
   expect(failed?.status ?? 500).toBe(500);
   // Her keys, sessions, logins and AI app are gone, though her notes are still there.
-  expect(counts(ANA)).toEqual([0, 0, 0, 0]);
+  expect(counts(ANA)).toEqual([0, 0, 0, 0, 0]);
   expect((await call(phone, "GET", "key")).status).toBe(403);
   expect((await call(matthew, "GET", "account")).status).toBe(401);
   expect(await grants.list(ANA)).toEqual({ apps: [] });

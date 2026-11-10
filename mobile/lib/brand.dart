@@ -187,23 +187,27 @@ class AccentGlow extends StatelessWidget {
 }
 
 /// A small pill with a word: *Voice* and *Listening* in the spark color, a small live moment; *Typed* in accent text on
-/// accent soft. [large] is the size on a note's page.
+/// accent soft. [large] is the size on a note's page. [outlined] is a quiet fact, such as a chat's app: muted words in a
+/// thin line, with no fill.
 class BrandTag extends StatelessWidget {
-  const BrandTag(this.label, {super.key, this.spark = false, this.large = false});
+  const BrandTag(this.label, {super.key, this.spark = false, this.large = false, this.outlined = false});
 
   final String label;
   final bool spark;
   final bool large;
+  final bool outlined;
 
   @override
   Widget build(BuildContext context) {
     final brand = brandOf(context);
     return DecoratedBox(
-      decoration: ShapeDecoration(color: spark ? brand.spark : brand.accentSoft, shape: const StadiumBorder()),
+      decoration: outlined
+        ? ShapeDecoration(shape: StadiumBorder(side: BorderSide(color: brand.line)))
+        : ShapeDecoration(color: spark ? brand.spark : brand.accentSoft, shape: const StadiumBorder()),
       child: Padding(
         padding: large ? const EdgeInsets.symmetric(horizontal: 10, vertical: 4) : const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         child: Text(label, style: TextStyle(fontSize: large ? 13 : 11, fontWeight: _semi,
-          color: spark ? brand.onSpark : brand.accentText)),
+          color: outlined ? brand.muted : spark ? brand.onSpark : brand.accentText)),
       ),
     );
   }

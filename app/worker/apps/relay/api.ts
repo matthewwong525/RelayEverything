@@ -1,5 +1,5 @@
 // Relay Everything's server: notes, health, location, calendar and photos from the phones, all but photos sent on to
-// webhooks, and Claude Code chats, each in the caller's own space. A device key only adds data: caller.ts.
+// webhooks, and AI chats, each in the caller's own space. A device key only adds data: caller.ts.
 import type { Route } from "../../api/contract.ts";
 import { account, accountDelete } from "./account.ts";
 import { aiAppDisconnect, aiApps } from "./ai-apps.ts";

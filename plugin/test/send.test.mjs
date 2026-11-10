@@ -6,10 +6,12 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { END_WAIT, record, run } from '../bin/hook.mjs';
 import { BATCH_BYTES, BATCH_MESSAGES, ROUNDS, batch, sendPending, sendSession } from '../lib/send.mjs';
-import { dataDir, state } from '../lib/state.mjs';
-import { fakeServer, project, said, SECRET, SESSION } from './fake.mjs';
+import { forgetComputer } from '../lib/config.mjs';
+import { state } from '../lib/state.mjs';
+import { fakeServer, inline, project, said, SECRET, SESSION } from './fake.mjs';
 
-const stop = (place, server, env = place.env) => run('stop', place.input, { env, fetcher: server.fetch });
+const stop = (place, server, env = place.env) => run('stop', place.input, { env, start: inline(server.fetch) });
+const begin = (place, server, input) => run('session-start', input, { env: place.env, start: inline(server.fetch) });
 const texts = (server, id = SESSION) => (server.chats.get(id) ?? []).map(message => `${message.role}: ${message.text}`);
 
 test('sends a chat after each answer, only its new messages, and nothing when none are new', async () => {
@@ -18,7 +20,7 @@ test('sends a chat after each answer, only its new messages, and nothing when no
   await stop(place, server);
   assert.deepEqual(texts(server), ['you: Hello', 'ai: Hi']);
   assert.deepEqual(server.calls[0].body, {
-    sessionId: SESSION, project: 'relay-ring', startedAt: Date.parse('2026-11-04T14:00:00.000Z'), title: 'Hello',
+    sessionId: SESSION, app: 'claude-code', project: 'relay-ring', startedAt: Date.parse('2026-11-04T14:00:00.000Z'), title: 'Hello',
     messages: server.chats.get(SESSION),
   });
   place.add(said('you', 'And the battery?', 60), said('ai', '15 mAh.', 61));
@@ -60,8 +62,7 @@ test('a failed send waits as pending, and the next start sends it', async () => 
   await stop(place, server);
   assert.equal(place.store.sessions()[SESSION].pending, true);
   server.down = false;
-  await run('session-start', { ...place.input, session_id: 'next-session-0001', hook_event_name: 'SessionStart' },
-    { env: place.env, fetcher: server.fetch });
+  await begin(place, server, { ...place.input, session_id: 'next-session-0001', hook_event_name: 'SessionStart' });
   assert.deepEqual(texts(server), ['you: Hello', 'ai: Hi']);
   assert.equal(place.store.sessions()[SESSION].pending, false);
   // A refusal it can't recover from waits too.
@@ -122,7 +123,7 @@ test('a send that holds the lock reads the chat again for a send that found it b
   // The last round's busy message waits as pending, and the next start sends it.
   assert.equal(server.chats.get(SESSION).length, 4 + ROUNDS - 1);
   assert.equal(place.store.sessions()[SESSION].pending, true);
-  await run('session-start', { ...place.input, session_id: 'next-session-0001' }, { env: place.env, fetcher: server.fetch });
+  await begin(place, server, { ...place.input, session_id: 'next-session-0001' });
   assert.equal(server.chats.get(SESSION).length, 4 + ROUNDS);
   assert.equal(place.store.sessions()[SESSION].pending, false);
 });
@@ -136,7 +137,7 @@ test('a data folder that can\'t be written fails at once, and a held file lock s
   const started = Date.now();
   assert.throws(() => place.store.update(SESSION, { pending: true }), { code: 'ENOTDIR' });
   assert.throws(() => place.store.lock(SESSION), { code: 'ENOTDIR' });
-  await assert.rejects(run('stop', place.input, { env: place.env, fetcher: fakeServer().fetch }));
+  await assert.rejects(run('stop', place.input, { env: place.env, start: inline(fakeServer().fetch) }));
   const hook = spawn(process.execPath, [new URL('../bin/hook.mjs', import.meta.url).pathname, 'stop'],
     { env: { ...process.env, ...place.env }, stdio: ['pipe', 'ignore', 'ignore'] });
   hook.stdin.end(JSON.stringify(place.input));
@@ -158,14 +159,14 @@ test('the send a session\'s end starts waits for a Stop send of the same chat, a
   assert.equal(END_WAIT, 60_000);
   const release = place.store.lock(SESSION);
   setTimeout(release, 300);
-  await run('send', SESSION, { env: place.env, fetcher: server.fetch });
+  await run('send', SESSION, { env: place.env, fetcher: server.fetch, wait: END_WAIT });
   assert.deepEqual(texts(server), ['you: Hello', 'ai: Hi']);
   place.add(said('you', 'Last words', 60));
   const stuck = place.store.lock(SESSION);
-  await run('send', SESSION, { env: place.env, fetcher: server.fetch, endWait: 300 });
+  await run('send', SESSION, { env: place.env, fetcher: server.fetch, wait: 300 });
   assert.equal(place.store.sessions()[SESSION].pending, true);
   stuck();
-  await run('session-start', { ...place.input, session_id: 'next-session-0001' }, { env: place.env, fetcher: server.fetch });
+  await begin(place, server, { ...place.input, session_id: 'next-session-0001' });
   assert.deepEqual(texts(server), ['you: Hello', 'ai: Hi', 'you: Last words']);
 });
 
@@ -197,7 +198,10 @@ test('sends nothing for a project with saving off, with RELAY_SAVE=0, or with no
   assert.equal(await sendSession(SESSION, { env: quiet.env, store: quiet.store, fetcher: server.fetch }), 'nothing');
   assert.equal(await sendSession('unknown-session', { env: quiet.env, store: quiet.store }), 'unknown');
   assert.equal(await sendSession('../../etc', { env: quiet.env, store: quiet.store }), 'unknown');
-  assert.equal(await sendSession(SESSION, { env: { ...quiet.env, CLAUDE_PLUGIN_OPTION_CONNECT_CODE: 'wrong' }, store: quiet.store }), 'no-code');
+  const unconnected = project();
+  record(unconnected.store, unconnected.input);
+  forgetComputer(unconnected.env);
+  assert.equal(await sendSession(SESSION, { env: unconnected.env, store: unconnected.store }), 'no-key');
   writeFileSync(quiet.transcript, '');
   quiet.store.update(SESSION, { transcript: join(quiet.home, 'gone.jsonl'), pending: true });
   assert.equal(await sendSession(SESSION, { env: quiet.env, store: quiet.store }), 'gone');
@@ -235,17 +239,15 @@ test('keeps only the last 200 log lines, and forgets sessions after 30 days', ()
 test('a session\'s end starts a send that outlives Claude Code, and records the session first', async () => {
   const place = project();
   const started = [];
-  await run('session-end', place.input, { env: place.env, start: (id, env) => started.push([id, env.CLAUDE_PLUGIN_DATA]) });
-  assert.deepEqual(started, [[SESSION, place.data]]);
+  await run('session-end', place.input, { env: place.env, start: (args, env) => started.push([args, env.RELAY_EVERYTHING_HOME]) });
+  assert.deepEqual(started, [[['send', SESSION, String(END_WAIT)], place.env.RELAY_EVERYTHING_HOME]]);
   assert.equal(place.store.sessions()[SESSION].project, 'relay-ring');
   const server = fakeServer();
   await run('send', SESSION, { env: place.env, fetcher: server.fetch });
   assert.deepEqual(texts(server), ['you: Hello', 'ai: Hi']);
   // A hook with no session or with RELAY_SAVE=0 records nothing.
-  await run('stop', { cwd: place.root }, { env: place.env, fetcher: server.fetch });
+  await run('stop', { cwd: place.root }, { env: place.env, start: inline(server.fetch) });
   await run('stop', { ...place.input, session_id: 'other-session-1' }, { env: { ...place.env, RELAY_SAVE: '0' } });
   assert.deepEqual(Object.keys(place.store.sessions()), [SESSION]);
-  assert.throws(() => dataDir({}), /no data folder/);
-  assert.equal(dataDir({}, ['--data', place.data]), place.data);
   await sendPending({ env: place.env, store: place.store, fetcher: server.fetch });
 });

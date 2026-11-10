@@ -6,15 +6,19 @@ import { asPerson, CHECKER_PERSON } from "./caller.ts";
 import { directory, hashToken, randomToken, type DirectoryEnv } from "./people.ts";
 import type { Caller, PersonSpace, Reach } from "./space.ts";
 
-const reaches = z.enum(["phone", "chats", "api"])
-  .describe("phone: notes, files, health, places and photos, from a phone. chats: Claude Code chats. api: the web API, which reads and adds notes.");
+const reaches = z.enum(["phone", "chats", "api", "agent"])
+  .describe("phone: notes, files, health, places and photos, from a phone. chats: an older Claude Code key that only saves chats. " +
+    "api: the web API, which reads and adds notes. agent: a computer's key from Claude Code or Codex, which saves chats and reads through the web API.");
 type Reaches = z.infer<typeof reaches>;
+// A computer's key comes only from its sign-in link, and a chat-only key no longer from anywhere.
+const addable = z.enum(["phone", "api"]).describe("phone: a phone's key. api: an API key for the web API, which reads and adds notes. " +
+  "A computer connects from Claude Code or Codex with /relay:connect instead.");
 const device = z.strictObject({ id: z.string(), name: z.string(), reaches, createdAt: z.number(), revokedAt: z.number().nullable() });
 const ERRORS = { not_found: "You have no device with this id." };
 type Row = { id: string; name: string; reaches: Reaches; created_at: number; revoked_at: number | null };
 
 /** The web API on this server's AI connector: the origin of the connector's sign-in callback, then `/v1`. */
-function apiAddress(env: object): string | null {
+export function apiAddress(env: object): string | null {
   const callback = (env as { RELAY_MCP_CALLBACK?: string }).RELAY_MCP_CALLBACK;
   return callback ? `${new URL(callback).origin}/v1` : null;
 }
@@ -35,7 +39,7 @@ export const deviceAdd = defineAction({
   operationId: "relay.devices-add", summary: "Add a device",
   description: "Make a key for a new device. The answer holds the key and its QR code text: both show only this once. An API key's " +
     "answer names the web API's address.",
-  input: z.strictObject({ name: z.string().trim().min(1).max(60).describe("A name you know the device by."), reaches }),
+  input: z.strictObject({ name: z.string().trim().min(1).max(60).describe("A name you know the device by."), reaches: addable }),
   output: z.strictObject({ id: z.string(), name: z.string(), reaches, key: z.string().describe("Shown this once."),
     qr: z.string().describe("What the phone scans: the server's address and the key."),
     api: z.string().nullable().describe("An API key's web API address, or null when this server has no AI connector.") }),
@@ -48,8 +52,8 @@ export const deviceAdd = defineAction({
   }),
 });
 
-/** Makes a device in the person's space and its key in the directory: *Add a device* and a phone's sign-in share it.
- *  The answer holds the key, which only the caller's answer may show. */
+/** Makes a device in the person's space and its key in the directory, for *Add a device* and the phone's and computer's
+ *  sign-ins. The answer holds the key, which only the caller's answer may show. */
 export async function makeDevice(space: PersonSpace, env: Pick<DirectoryEnv, "DB">, caller: Caller, name: string, reach: Reach) {
   const [id, key, now] = [crypto.randomUUID(), `rek_${randomToken()}`, Date.now()];
   await space.db.prepare(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at, reaches)

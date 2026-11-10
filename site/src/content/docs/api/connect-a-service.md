@@ -5,7 +5,7 @@ description: Let your own script or service read your Relay Everything notes, he
 
 The web API lets your own script or service read your Relay Everything data and add notes. It answers the same questions as the [AI connector](../../connections/connect-your-ai/), as plain HTTP with JSON. It reads, and it adds notes. It can't change or delete anything.
 
-The web API is on your AI connector's address, under `/v1/`. When the connector is at `https://<your-relay-server>/mcp`, the API is at `https://<your-relay-server>/v1/`. The **AI apps** page of Settings, on your Relay Everything page, shows the connector's address.
+The web API is on your AI connector's address, under `/v1/`. When the connector is at `https://mcp.relayeverything.com`, the API is at `https://mcp.relayeverything.com/v1/`. Your own server's connector works the same way: `https://<your-relay-server>/v1/`. The **AI apps** page of Settings, on your Relay Everything page, shows the connector's address.
 
 Each caller reaches only the space of the person who made its key or connected it. There are two ways in.
 
@@ -26,7 +26,7 @@ curl https://<your-relay-server>/v1/me \
 
 `GET /v1/me` answers the key's name and whether it may add notes. It reads no data, so it is a safe first call.
 
-An API key works only on the web API. On the Relay Everything server it reaches only `GET key`. A phone's key or a chat key can't open the web API: make an API key for it. To stop a key, click **Turn off** beside it in your list of devices. [Keys](../keys/) tells more.
+An API key works only on the web API. On the Relay Everything server it reaches only `GET key`. A computer's key from the [Relay Everything plugin](../../connections/claude-code/) opens the web API too. A phone's key or an older chat key can't: make an API key for it. To stop a key, click **Turn off** beside it in your list of devices. [Keys](../keys/) tells more.
 
 ## With your own sign-in
 
@@ -36,7 +36,7 @@ An app that has its own users signs each person in with OAuth, as the Claude app
 2. Send the person to `/authorize` with PKCE (S256). They click **Connect**, then sign in to Relay Everything.
 3. Trade the code at `/token` for an access token and a refresh token.
 
-Leave out `resource`, or send `https://<your-relay-server>/mcp` as it. The same token then works on `/mcp` and on `/v1/`. An access token lasts one hour; refresh it at `/token`. The app shows on the person's **AI apps** page in Settings, and **Disconnect** stops it at once. An app connected before the API could add notes only reads: connect it again to add.
+Leave out `resource`, or send the connector's address, such as `https://<your-relay-server>`, as it. The same token then works on `/`, `/mcp` and `/v1/`. An access token lasts one hour; refresh it at `/token`. The app shows on the person's **AI apps** page in Settings, and **Disconnect** stops it at once. An app connected before the API could add notes only reads: connect it again to add.
 
 The [OpenAPI file](/api/v1.openapi.json) names each step's address. Load it into Swagger, Postman or a code generator to make a client.
 
@@ -56,7 +56,7 @@ curl "https://<your-relay-server>/v1/notes?q=milk&limit=5" \
 - `GET /v1/places?from=…&to=…`: each stay at a place, and each trip, each with its `id`.
 - `GET /v1/points?id=…`: the points of one stay or trip, at most 500. Or give `from` and `to`, up to 7 days, for every phone's points in that time.
 - `GET /v1/calendar?from=…&to=…`: calendar events by start, with title, times, place, notes and people. Add `q` for events that hold every word, newest first: [Calendar](../../app/calendar/).
-- `GET /v1/chats?q=…` and `GET /v1/chats/{id}`: saved Claude Code chats.
+- `GET /v1/chats?q=…` and `GET /v1/chats/{id}`: saved AI chats from Claude Code and Codex, each with its app.
 
 Times are a day, such as `2026-11-04`, or an ISO time. Add `timezone`, such as `Europe/London`, to read days and times in your zone. A long answer gives `nextCursor`: send it as `cursor` to read the next page.
 
@@ -83,7 +83,7 @@ A refused call answers with a status and an error:
 |---|---|---|
 | `400` | `invalid_request` | A field is missing or wrong. `error_description` names it. |
 | `401` | `invalid_token` | No token, an expired token, or a disconnected app. |
-| `403` | `forbidden` | An unknown key, a phone or chat key, a turned-off key, or an app that must connect again to add. |
+| `403` | `forbidden` | An unknown key, a phone's key, an older chat key, a turned-off key, or an app that must connect again to add. |
 | `404` | `not_found` | No such note, chat or route in your own space. |
 | `405` | `method_not_allowed` | The route doesn't take this method: the API never changes or deletes. |
 

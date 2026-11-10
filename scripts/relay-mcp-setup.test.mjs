@@ -20,10 +20,10 @@ test('the check names each missing permission and passes a token that holds both
 test('each environment gets its own Worker, callback and sign-in server', () => {
   const live = target(config, false);
   const staging = target(config, true);
-  assert.deepEqual(live, { worker: 'relay-everything-mcp', address: 'https://relay-everything-mcp.matthewwong525.workers.dev/mcp',
-    callback: 'https://relay-everything-mcp.matthewwong525.workers.dev/callback', server: 'https://app.relayeverything.com' });
+  assert.deepEqual(live, { worker: 'relay-everything-mcp', address: 'https://mcp.relayeverything.com/',
+    callback: 'https://mcp.relayeverything.com/callback', server: 'https://app.relayeverything.com' });
   assert.deepEqual([staging.worker, staging.callback, staging.server], ['relay-everything-mcp-staging',
-    'https://relay-everything-mcp-staging.matthewwong525.workers.dev/callback', 'https://app-staging.relayeverything.com']);
+    'https://mcp-staging.relayeverything.com/callback', 'https://app-staging.relayeverything.com']);
   assert.equal(reportLine('worker relay-everything-mcp', ''), 'ok worker relay-everything-mcp');
 });
 
@@ -64,7 +64,8 @@ test('a setup run deploys the Worker once, puts no secret and prints no token; a
   const first = await run();
   assert.deepEqual(cloudflare.calls, [['deploy', '--env', 'staging']]);
   assert.match(first, /ok worker relay-everything-mcp-staging \(deployed\)/);
-  assert.match(first, /^Sign-in: https:\/\/app-staging\.relayeverything\.com, back to https:\/\/relay-everything-mcp-staging\.matthewwong525\.workers\.dev\/callback$/m);
+  assert.match(first, /^Sign-in: https:\/\/app-staging\.relayeverything\.com, back to https:\/\/mcp-staging\.relayeverything\.com\/callback$/m);
+  assert.match(first, /^Connect address: https:\/\/mcp-staging\.relayeverything\.com$/m);
   assert.ok(!first.includes('cf-user-token-value'));
 
   const second = await run();

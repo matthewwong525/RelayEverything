@@ -1,11 +1,11 @@
 ---
 title: Connect your AI
-description: Let the Claude app, ChatGPT or Claude Code read your Relay Everything notes, health, sleep, workouts, calendar, places, chats and photos, and add notes, with one connector address and your own sign-in.
+description: Let the Claude app, ChatGPT, Claude Code or Codex read your Relay Everything notes, health, sleep, workouts, calendar, places, chats and photos, and add notes, with one connector address and your own sign-in.
 ---
 
 Relay Everything's AI connector lets an AI chat app read your Relay Everything data when you ask it a question, and add a note when you ask it to save one. It can't change or delete anything. Each person with a Relay Everything account can connect their own apps, and each app reads only that person's own space.
 
-The connector's address is on the **AI apps** page of Settings, on your Relay Everything page, with a **Copy** button. It looks like `https://<your-relay-server>/mcp`.
+The connector's address is on the **AI apps** page of Settings, on your Relay Everything page, with a **Copy** button. On the shared server it is `https://mcp.relayeverything.com`. `https://mcp.relayeverything.com/mcp` also works. Your own server's connector has its own address, such as `https://<your-relay-server>`.
 
 ## Connect an app
 
@@ -13,7 +13,7 @@ You connect each app one time. Each app opens a sign-in page: click **Connect**,
 
 - **The Claude app** (web, desktop or phone): open **Settings → Connectors → Add custom connector**. Type `Relay Everything` as the name and paste the address. Click **Connect**, then sign in. On a new chat, turn Relay Everything on in the tools menu.
 - **ChatGPT**: open **Settings → Apps & Connectors → Advanced settings** and turn on **Developer mode**. Then click **Create**, type `Relay Everything`, paste the address and pick **OAuth** for the sign-in. Click **Create**, then sign in. In a chat, pick Relay Everything from the developer-mode tools.
-- **Claude Code**: run `claude mcp add --transport http relay <address>`, then type `/mcp` in Claude Code and pick `relay` to sign in. With the [Relay Everything plugin](../claude-code/), type `/relay:connect-ai <address>` instead.
+- **Claude Code and Codex**: use the [Relay Everything plugin](../claude-code/) instead of the connector. It reads the same data, adds notes and saves your chats, with one `/relay:connect`. If you added the connector before, remove it, so the AI does not see each tool two times.
 
 Then ask, for example: *What did I note on 4 November?*, *What is on my day?*, *When did I last meet Sam?* or *Show me the photos from the trip to Lisbon.*
 
@@ -31,7 +31,7 @@ The connector has fifteen tools. Fourteen only read, and one adds a note. Each t
 - **calendar**: the events from one time to another, with title, times, place, notes and people. Give words to find events that hold them, newest first, such as a person's name. [Calendar](../../app/calendar/)
 - **places**: each stay at a place, with its name, street, and when you arrived and left, and each trip between two stays: walking, running, cycling, driving or flying, with its km and minutes. So *Where did I go on Saturday?* gets one short answer. Days from before your phone made stays give each street, as before. Each stay and trip has an id for **points**. [Location](../../app/location/)
 - **points**: the points of one stay or trip, by its id: for a trip, its route. It gives only the points of the phone that made that stay or trip, and a stay you are still in reads to now. Or it gives every phone's points from one time to another, up to 7 days. Each point has its time, where it was, how sure the phone was, and its street. It gives at most 500 points, spread evenly with the first and the last, and says how many there were in all. With **Only stays and trips**, there are no points to give.
-- **search_chats**: [saved Claude Code chats](../claude-code/) that hold every word you give, with the lines that match.
+- **search_chats**: [saved AI chats from Claude Code and Codex](../claude-code/) that hold every word you give, with the lines that match.
 - **read_chat**: one saved chat, a part at a time, with the AI's saved summary.
 - **photos**: the [photos your phones sent](../../app/photos/) from one time to another, newest first, with when and where you took each one. It can show only the photos near a place, up to 500 km. It lists at most 50 photos a page.
 - **read_photo**: one photo, as an image the AI can look at, with when and where you took it.

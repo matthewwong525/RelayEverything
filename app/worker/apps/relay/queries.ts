@@ -366,9 +366,9 @@ export async function placeVisits(db: Db, from: number, to: number, limit: numbe
   return { visits: visits.slice(0, limit), trips: found.trips.filter(trip => next === null || trip.left < next), next };
 }
 
-// Chats: each one's title is the newest save's, else the title of its first send. Neither the device nor Claude Code's
+// Chats: each one's title is the newest save's, else the title of its first send. Neither the device nor the app's
 // session id leaves here.
-type ChatRow = { id: string; title: string; project: string; app: "claude-code"; started_at: number; last_at: number; messages: number; saves: number };
+type ChatRow = { id: string; title: string; project: string; app: "claude-code" | "codex"; started_at: number; last_at: number; messages: number; saves: number };
 
 const chatShaped = (row: ChatRow) => ({ id: row.id, title: row.title, project: row.project, app: row.app, startedAt: row.started_at,
   lastAt: row.last_at, messages: row.messages, savedByAi: row.saves > 0 });

@@ -166,11 +166,26 @@ it("shows a new key once, keeps only its SHA-256, and the key works at once", as
   expect(JSON.stringify((await call(matthew, "GET", "devices")).json)).not.toContain(made.key);
 });
 
-it("lets a chats key send only chats", async () => {
-  const { json } = await call(matthew, "POST", "devices", { name: "Work laptop", reaches: "chats" });
-  expect(Object.keys(json).sort()).toEqual(["api", "id", "key", "name", "qr", "reaches"]);
-  expect(await gate({ bearer: String(json.key) }, "POST", CHATS)).toBeNull();
-  expect(await gate({ bearer: String(json.key) }, "POST", ROUTES[1])).toEqual([403, "A chat key can only send chats."]);
+it("adds only a phone or an API key: a computer's key comes only from the computer's own sign-in", async () => {
+  for (const kind of ["chats", "agent"]) {
+    expect((await call(matthew, "POST", "devices", { name: "Work laptop", reaches: kind })).status, kind).toBe(400);
+  }
+  expect(rows("relay_devices").map(row => row.name)).not.toContain("Work laptop");
+});
+
+it("lets a computer's key send chats and saves here, read the web API, and do nothing else on this server", async () => {
+  const key = makeKey("computer");
+  directoryDb.sql.prepare("INSERT INTO relay_keys (key_sha256, person_id, device_id, reaches, created_at) VALUES (?, ?, 'd-computer', 'agent', 0)")
+    .run(await hashToken(key), ANA);
+  for (const path of [CHATS, SAVES]) expect(await gate({ bearer: key }, "POST", path), path).toBeNull();
+  expect(await gate({ bearer: key }, "GET", KEY)).toBeNull();
+  const ONLY = [403, "A computer's key sends chats here, and reads through the web API under /v1/."];
+  for (const [method, path] of [["GET", CHATS], ["DELETE", "/apps/relay/api/chat"], ["GET", NOTES], ["PATCH", NOTES], ["DELETE", NOTES],
+    ["GET", "/apps/relay/api/timeline"], ["GET", "/apps/relay/api/devices"], ["GET", "/apps/relay/"], ...ROUTES.map(route => ["POST", route])]) {
+    expect(await gate({ bearer: key }, method, path), `${method} ${path}`).toEqual(ONLY);
+  }
+  expect(reaches("agent", "PUT", CHATS)).toBe(false);
+  expect(await apiKeyCaller({ DB: db.DB }, key)).toMatchObject({ kind: "key", personId: ANA, device: { id: "d-computer", reaches: "agent" } });
 });
 
 it("gives an API key the web API's address, and lets it reach only that and its own name on this server", async () => {
@@ -183,11 +198,11 @@ it("gives an API key the web API's address, and lets it reach only that and its 
   for (const path of ["/apps/relay/api/timeline", CONNECTIONS, NOTES]) expect(await gate({ bearer: key }, "GET", path), path).toEqual(API_ONLY);
   expect(await call({ bearer: key }, "GET", "key")).toEqual({ status: 200, json: { device: "Backup script" } });
   expect(await apiKeyCaller({ DB: db.DB }, key)).toMatchObject({ kind: "key", personId: ANA, device: { id: json.id, reaches: "api" } });
-  // A phone or chat key is refused by the web API's door, and a turned-off API key too.
-  for (const sent of [phone, laptop]) {
+  // A phone or an older chat key is refused by the web API's door, and a turned-off API key too.
+  for (const [sent, message] of [[phone, "A phone key only sends. Make an API key on your Relay Everything page."],
+    [laptop, "This computer's key only saves chats. Type /relay:connect to connect it again."]] as const) {
     const refused = await apiKeyCaller({ DB: db.DB }, (sent as { bearer: string }).bearer) as Response;
-    expect([refused.status, (await body(refused)).error.message])
-      .toEqual([403, "A phone or chat key only sends. Make an API key on your Relay Everything page."]);
+    expect([refused.status, (await body(refused)).error.message]).toEqual([403, message]);
   }
   await call(matthew, "POST", "devices/off", { id: json.id });
   expect(await body(await apiKeyCaller({ DB: db.DB }, key) as Response)).toMatchObject({ error: { message: "This device key is turned off." } });

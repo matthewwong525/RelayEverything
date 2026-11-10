@@ -31,9 +31,13 @@ A device key reaches only the space of the person who made it. It adds data ther
 
 Any other address or method answers `403` to a device key. A phone's key can't read your health, calendar, places, chats or photos, or delete anything: `GET timeline`, `GET summary`, `GET photos` and `POST photos/delete` need a signed-in person, and each answers only from that person's own space. A phone's key reads your notes until you turn it off, so turn off a lost phone's key at once. [Routes](../reference/) shows who can call each route.
 
+## A computer's key
+
+A computer's key is for the [Relay Everything plugin for Claude Code and Codex](../../connections/claude-code/). You don't make it with **Add a device**: type `/relay:connect` on the computer, then click **Connect** on the page it opens. On the Relay Everything server it reaches only `POST chats`, `POST chat-saves` and `GET key`: it adds chats, but it can't list, read, change or delete them here, or reach a phone's routes. It reads your data and adds notes through the [web API](../connect-a-service/), as an API key does. The Devices page lists it as *Claude Code or Codex*.
+
 ## A chat key
 
-A chat key is for the [Relay Everything plugin for Claude Code](../../connections/claude-code/). It reaches only `POST chats`, `POST chat-saves` and `GET key`: it can add chats, but it can't list, read, change or delete them, or reach a phone's routes. A phone's key can't reach the chat routes.
+A chat key is the older key of the plugin for Claude Code, made before the computer's key. It reaches only `POST chats`, `POST chat-saves` and `GET key`, and it can't open the web API. The Devices page lists it as *Claude Code, saves only*. To read your data from the chat too, type `/relay:connect` on that computer, then turn the old key off. A phone's key can't reach the chat routes.
 
 ## An API key
 
@@ -45,7 +49,7 @@ You make and turn off your keys on your Relay Everything page, signed in: open *
 
 | On the Devices page | What it does |
 |---|---|
-| **Add a device** | Makes a key for a phone, a Claude Code computer or a script. It shows once: as a QR code and as text to copy for a phone, or with a `curl` example for an API key. |
+| **Add a device** | Makes a key for a phone or a script. It shows once: as a QR code and as text to copy for a phone, or with a `curl` example for an API key. |
 | The list of devices | Shows each key: its name, its kind, when it was made, and whether it is off. It also shows **Web**, the device of the notes you write on the page, which has no key. |
 | **Turn off** | Turns the key off at once. The other keys go on. |
 

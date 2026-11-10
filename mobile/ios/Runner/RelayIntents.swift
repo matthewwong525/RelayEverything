@@ -342,14 +342,19 @@ enum RelayAudio {
 
 /// Add a note: words, files, or both. It runs without opening the app, and gives the new note back. A recording given
 /// as its only file becomes a voice note: the app writes its words after the typed ones.
+///
+/// Siri reads the description and the words' title and description: the new Siri (iOS 27 with Apple Intelligence)
+/// fills the words from *take a note in Relay, buy milk*, and other iPhones ask *What's the note?* in `perform`.
 @available(iOS 16, *)
 struct AddNoteIntent: AppIntent {
   static var title: LocalizedStringResource = "Add a note"
   static var description = IntentDescription(
-    "Keeps a note in Relay Everything, with words, files, or both. With sending on, it goes to your space too.")
+    "Takes a note in Relay Everything from what you say or give it: words, files, or both. With sending on, it goes to your space too.")
   static var openAppWhenRun = false
 
-  @Parameter(title: "Words")
+  @Parameter(
+    title: "Note", description: "The words of the note, as the person says them",
+    requestValueDialog: IntentDialog("What's the note?"))
   var text: String?
 
   @Parameter(title: "Files")
@@ -364,6 +369,9 @@ struct AddNoteIntent: AppIntent {
     let plain = name.replacingOccurrences(of: "/", with: "-").trimmingCharacters(in: CharacterSet(charactersIn: ". "))
     return "\(index + 1)-\(plain.isEmpty ? "file" : plain)"
   }
+
+  /// The app's words for a note with nothing in it.
+  static let nothing = "Give the note words or a file."
 
   /// The same limit as the app's: 25 MB a file.
   static let maxFileBytes = 25 * 1024 * 1024
@@ -408,10 +416,22 @@ struct AddNoteIntent: AppIntent {
 
   @MainActor
   func perform() async throws -> some IntentResult & ReturnsValue<RelayNoteEntity> & ProvidesDialog {
-    let words = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    var words = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     let given = files ?? []
-    // Run with nothing, such as from Siri or the app's tile in Shortcuts, it asks for the words.
-    if words.isEmpty && given.isEmpty { throw $text.needsValueError("What do you want to keep?") }
+    // Run with nothing, such as from Siri or the app's tile in Shortcuts, it asks for the words. An automation has no
+    // one to answer: the question throws, and the action fails and keeps nothing.
+    if words.isEmpty && given.isEmpty {
+      let asked: String?
+      do {
+        asked = try await $text.requestValue()
+      } catch let cancel as CancellationError {
+        throw cancel  // A person who says cancel gets Siri's own cancel, not a failure.
+      } catch {
+        throw RelayIntentError.message(Self.nothing)
+      }
+      words = (asked ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+      if words.isEmpty { throw RelayIntentError.message(Self.nothing) }
+    }
     let id = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
     let createdAt = Date()
     let folder = ShortcutsInbox.folder(id)
@@ -454,8 +474,9 @@ struct AddNoteIntent: AppIntent {
         throw RelayIntentError.noAnswer
       }
       try? FileManager.default.removeItem(at: folder)
-      let message = note["message"] as? String ?? "Saved to Relay Everything."
-      return .result(value: entity, dialog: IntentDialog(stringLiteral: tooBigMessage(tooBig) + message))
+      // Siri says it: short, as speech suits. A file the app left out is named first.
+      let leftOut = (note["message"] as? String).map { "\($0) " } ?? ""
+      return .result(value: entity, dialog: IntentDialog(stringLiteral: tooBigMessage(tooBig) + leftOut + "Saved."))
     } catch RelayIntentError.message(let text) {
       try? FileManager.default.removeItem(at: folder)
       throw RelayIntentError.message(tooBigMessage(tooBig) + text)
@@ -529,6 +550,8 @@ struct RelayShortcuts: AppShortcutsProvider {
     AppShortcut(intent: AddNoteIntent(), phrases: [
       "Add a note to \(.applicationName)",
       "Keep a note in \(.applicationName)",
+      "Take a note in \(.applicationName)",
+      "Note in \(.applicationName)",
     ])
     AppShortcut(intent: GetNotesIntent(), phrases: ["Get notes from \(.applicationName)"])
     AppShortcut(intent: StartVoiceNoteIntent(), phrases: ["Start a voice note in \(.applicationName)"])

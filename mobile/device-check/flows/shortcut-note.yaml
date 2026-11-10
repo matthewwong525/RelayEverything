@@ -1,4 +1,4 @@
-# Add a note from Apple Shortcuts: the app's own tile in the Shortcuts app asks for words, and the note is in the
+# Add a note from Apple Shortcuts: the app's own tile in the Shortcuts app asks "What's the note?", and the note is in the
 # notes list. Not in the fixed tour: the Shortcuts app's screens change with each iOS, so run it by name.
 appId: com.matthewwong525.relayApp
 ---
@@ -16,7 +16,7 @@ appId: com.matthewwong525.relayApp
 - tapOn: "Relay Everything"
 - tapOn: "Add a note to Relay Everything"
 - extendedWaitUntil:
-    visible: "What do you want to keep?"
+    visible: 'What.s the note\?'
     timeout: 20000
 - inputText: "Shortcut check note"
 - tapOn: "Done"

@@ -19,6 +19,7 @@ const REACH: Record<Reach, { routes: RegExp; refusal: string }> = {
   phone: { routes: /^\/apps\/relay\/api\/(?:notes|attachments|health|nights|locations|stays|calendar|photos)$/, refusal: "A device key can only send to Relay Everything." },
   chats: { routes: /^\/apps\/relay\/api\/(?:chats|chat-saves)$/, refusal: "A chat key can only send chats." },
   api: { routes: /^$/, refusal: "An API key works only on the web API, at your AI connector's address under /v1/." },
+  agent: { routes: /^\/apps\/relay\/api\/(?:chats|chat-saves)$/, refusal: "A computer's key sends chats here, and reads through the web API under /v1/." },
 };
 const KEY_CHECK = "/apps/relay/api/key";
 const NOTES = "/apps/relay/api/notes";
@@ -42,11 +43,12 @@ async function keyCaller(env: Pick<CallerEnv, "DB">, key: string): Promise<Calle
   return vouch("key", row.person_id, { email: row.email, device: { id: row.device_id, reaches: row.reaches } });
 }
 
-/** The web API's caller from its `rek_` key: only a live API key, never a phone's or a chat's. */
+/** The web API's caller from its `rek_` key: only a live API key or computer's key, never a phone's or a chat's. */
 export async function apiKeyCaller(env: Pick<CallerEnv, "DB">, key: string): Promise<Caller | Response> {
   const caller = await keyCaller(env, key);
-  if (caller instanceof Response || caller.device?.reaches === "api") return caller;
-  return refused(403, "A phone or chat key only sends. Make an API key on your Relay Everything page.");
+  if (caller instanceof Response || caller.device?.reaches === "api" || caller.device?.reaches === "agent") return caller;
+  if (caller.device?.reaches === "chats") return refused(403, "This computer's key only saves chats. Type /relay:connect to connect it again.");
+  return refused(403, "A phone key only sends. Make an API key on your Relay Everything page.");
 }
 
 /** A cookie's value from the request, or null. */

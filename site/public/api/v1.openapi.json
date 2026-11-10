@@ -2645,7 +2645,7 @@
       "get": {
         "operationId": "searchChats",
         "summary": "Search saved chats",
-        "description": "Find saved Claude Code chats whose messages or AI summaries hold every word of the query, newest first, with up to 3 matching lines each.",
+        "description": "Find saved AI chats from Claude Code and Codex whose messages or AI summaries hold every word of the query, newest first, with up to 3 matching lines each.",
         "parameters": [
           {
             "name": "q",
@@ -2735,7 +2735,11 @@
                           },
                           "app": {
                             "type": "string",
-                            "const": "claude-code"
+                            "enum": [
+                              "claude-code",
+                              "codex"
+                            ],
+                            "description": "The app the chat came from."
                           },
                           "startedAt": {
                             "type": "string",
@@ -2910,7 +2914,11 @@
                     },
                     "app": {
                       "type": "string",
-                      "const": "claude-code"
+                      "enum": [
+                        "claude-code",
+                        "codex"
+                      ],
+                      "description": "The app the chat came from."
                     },
                     "startedAt": {
                       "type": "string",

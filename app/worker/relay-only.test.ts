@@ -60,6 +60,12 @@ it("behind Access, refuses a call with no person and no key, and lets a key and 
   const trade = await send(null, "POST", "/apps/relay/sign-in/phone/key", { code: "c", verifier: "v".repeat(43) }, behindAccess);
   expect([trade.status, trade.json.error.code]).toEqual([400, "invalid_input"]);
   expect((await send(null, "GET", "/apps/relay/sign-in/phone/key", undefined, behindAccess)).status).toBe(401);
+  // A computer starts its sign-in and asks for its key the same way; the person's Connect page stays behind Access.
+  for (const [path, input] of [["computer/start", { challenge: "short" }], ["computer/key", { verifier: "v".repeat(43) }]] as const) {
+    const sent = await send(null, "POST", `/apps/relay/sign-in/${path}`, input, behindAccess);
+    expect([sent.status, sent.json.error.code], path).toEqual([400, "invalid_input"]);
+  }
+  expect((await send(null, "GET", "/apps/relay/sign-in/computer?c=x", undefined, behindAccess)).status).toBe(401);
 });
 
 it("answers its own sign-in without Access", async () => {

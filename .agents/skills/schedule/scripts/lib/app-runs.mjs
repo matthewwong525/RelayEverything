@@ -1,5 +1,5 @@
 // The helper's schedule rounds: start the runs the app hands this computer, and mirror Paseo's schedules to the page.
-// A run starts only on a version approved here; the app's text never reaches the prompt. wiki/stack/live-line.md
+// A run starts only on a version approved here; only that approved text reaches the prompt. wiki/stack/live-line.md
 import { spawn as spawnChild } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -9,12 +9,15 @@ import { SCHEDULE_LABEL } from '../../../daily/scripts/chats.mjs';
 import { approvedVersion, signedInAs } from './approvals.mjs';
 import { appCall, appTiming, heldDefinition, readSchedule, runnableFolder } from './app.mjs';
 import { listRecords } from './records.mjs';
-import { paseoAdapter, startupPrompt } from './hosts.mjs';
+import { firstMessage, paseoAdapter } from './hosts.mjs';
+import { appProgress } from './progress.mjs';
 import { scheduleVersion } from './version.mjs';
-import { EXIT, PaseoError, findPaseo, paseo, runPaseo } from './paseo.mjs';
-import { MODES, childEnv, flooredThinking, workspaceTitle } from '../workspace.mjs';
+import { EXIT, PaseoError, findPaseo, git, paseo, runPaseo } from './paseo.mjs';
+import { MODES, childEnv, defaultBranch, flooredThinking, freshBase, nameWorkspace, parseCreated, workspaceTitle } from '../workspace.mjs';
 
 const KEY = /^[a-z0-9][a-z0-9-]{0,63}$/, VERSION = /^[a-f0-9]{64}$/;
+/** How long a chat run's fetch of the default branch may take before the run starts from the last fetched copy. */
+export const FETCH_TIMEOUT_MS = 60_000;
 /** The least gap between two starts of one schedule when it sets no `authority.minIntervalMs`. */
 export const RUN_FLOOR_MS = 10 * 60_000;
 const KEEP_MS = 30 * 86_400_000;
@@ -45,23 +48,42 @@ export async function checkRun(run, { client, env = process.env, email = signedI
   return { schedule, origin, email: who };
 }
 
-/** Opens a chat run's workspace through Paseo, in its folder, with the fixed startup prompt. */
-export async function openSession({ schedule, run, title, env = process.env }) {
+/** Where a chat run's workspace opens: a fresh worktree from the fetched default branch in a git project, so the
+ *  run never works on the main copy; else the folder itself, since a worktree needs git. Returns any warning. */
+async function workspacePlace(cwd) {
+  let inGit = false;
+  try { inGit = git(cwd, 'rev-parse', '--is-inside-work-tree') === 'true'; } catch { /* not a git project */ }
+  if (!inGit) return { args: ['--new-workspace', 'local'], warning: null };
+  try {
+    const { base, warning } = await freshBase(cwd, await defaultBranch(cwd), { fetch: true, timeout: FETCH_TIMEOUT_MS });
+    return { args: ['--new-workspace', 'worktree', '--worktree-mode', 'branch-off', '--base', base], warning };
+  } catch (error) {
+    // The run must still start: with no default branch to copy, it opens in its folder.
+    return { args: ['--new-workspace', 'local'], warning: `The run opened in its folder, not a fresh copy: ${error.message}` };
+  }
+}
+
+/** Opens a chat run's own workspace through Paseo, with the approved instructions, then names the workspace after
+ *  the schedule; a fetch or rename problem comes back as `warning`, and the run still starts. */
+export async function openSession({ schedule, run, title, progress = null, env = process.env }) {
   const settings = schedule.run;
   const bin = findPaseo(env, 'WONG_PASEO_BIN');
   // Paseo refuses a run with no provider; a schedule that names none runs on Claude.
   const named = settings.provider || 'claude';
+  const place = await workspacePlace(settings.cwd);
   // The label lets the Inbox keep a schedule's chat off the list while it runs.
-  const args = ['run', '-d', '--cwd', settings.cwd, '--title', title, '--provider', named, '--label', `${SCHEDULE_LABEL}=${schedule.key}`];
+  const args = ['run', '-d', ...place.args, '--cwd', settings.cwd, '--title', title, '--provider', named, '--label', `${SCHEDULE_LABEL}=${schedule.key}`];
   const [provider, model = null] = named.split('/');
   const thinking = await flooredThinking(more => paseo(bin, more, { env: childEnv(env) }), { provider, model, thinking: settings.thinking ?? null });
   if (thinking) args.push('--thinking', thinking);
   // No one is there to allow a step, so an unattended run takes the provider's full mode unless the schedule sets one.
   const mode = settings.mode || MODES[provider];
   if (mode) args.push('--mode', mode);
-  const prompt = startupPrompt({ key: schedule.key, run: run.id, version: schedule.version });
-  const { data } = await runPaseo(bin, [...args, '--', prompt], { env: childEnv(env) });
-  return { agentId: data?.agentId ?? null, chatTitle: data?.title ?? title };
+  const { data, stderr } = await runPaseo(bin, [...args, '--', firstMessage({ schedule, run, progress })], { env: childEnv(env) });
+  // Without a rename, Paseo names the workspace after its git branch, so every run shows as `main`.
+  const renamed = await nameWorkspace(bin, parseCreated(stderr), title, env);
+  const warning = [place.warning, renamed.warning].filter(Boolean).join('\n');
+  return { agentId: data?.agentId ?? null, chatTitle: data?.title ?? title, ...(warning ? { warning } : {}) };
 }
 
 /** Hands a background run to the worker in its checkout: one event file, then `D ensure`. The worker reports the
@@ -120,10 +142,20 @@ async function startRun(run, { client, open, hand, env, ledger, now, email }) {
   const refused = admit(run, found.schedule, { ledger, now: now() });
   if (refused) return { state: 'blocked', reason: refused };
   if (found.schedule.kind === 'background') return hand({ ...found, run }, { env });
+  const held = appProgress(client, run.key);
+  let progress, claimed = false;
   try {
-    const { agentId, chatTitle } = await open({ schedule: found.schedule, run, title: titleOf(found.schedule), env });
-    return { state: 'started', agentId: agentId ?? undefined, chatTitle: chatTitle ?? undefined };
+    if (!(claimed = await held.claim(run.id))) return { state: 'blocked', reason: 'already_running' };
+    ({ progress } = await held.read());
+  } catch {
+    if (claimed) await held.release(run.id).catch(() => {});
+    return { state: 'blocked', reason: 'no_app' };
+  }
+  try {
+    const { agentId, chatTitle, warning } = await open({ schedule: found.schedule, run, title: titleOf(found.schedule), progress, env });
+    return { state: 'started', agentId: agentId ?? undefined, chatTitle: chatTitle ?? undefined, warning: warning || undefined };
   } catch (error) {
+    await held.release(run.id).catch(() => {});
     return { state: 'failed', reason: error instanceof PaseoError && error.code === EXIT.noPaseo ? 'no_opener' : 'open_failed' };
   }
 }
@@ -133,10 +165,11 @@ export async function runRound(client, { computer, log = () => {}, open = openSe
   ledger = helperFiles(env).runs, now = Date.now, email = signedInAs }) {
   const runs = (await ask(client, 'claim', 'POST', { computer }))?.runs ?? [];
   for (const run of runs) {
-    const result = await startRun(run, { client, open, hand, env, ledger, now, email });
+    // The warning stays in this computer's log; the app records only the outcome.
+    const { warning, ...result } = await startRun(run, { client, open, hand, env, ledger, now, email });
     // A handed run's worker reports it.
     if (result.state !== 'handed') await ask(client, 'run-result', 'POST', { id: run.id, ...result });
-    log({ event: 'run', key: run.key, run: run.id, outcome: result.state, reason: result.reason, chat: result.chatTitle });
+    log({ event: 'run', key: run.key, run: run.id, outcome: result.state, reason: result.reason, chat: result.chatTitle, warning });
   }
   return runs.length;
 }

@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-// `/relay:saving [on|off]`: turns saving to Relay on or off for this project, or says which it is and when it last sent.
-// usage: node saving.mjs --data <plugin data folder> [on|off]
+// `/relay:saving [on|off]`: turns saving to Relay Everything on or off for this project, in Claude Code and Codex alike,
+// or says which it is and when it last sent.
+// usage: node saving.mjs [on|off]
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dataDir, state } from '../lib/state.mjs';
+import { home, openState, readComputer, readState } from '../lib/config.mjs';
+import { withSandbox } from '../lib/sandbox.mjs';
 import { projectName, projectRoot } from '../lib/transcript.mjs';
 
 const MINUTE = 60_000;
@@ -18,7 +20,7 @@ export function ago(at, now) {
   return count(Math.floor(minutes / (24 * 60)), 'day');
 }
 
-/** When a chat in the project at `root` last went to Relay, as a line to print. */
+/** When a chat in the project at `root` last went to Relay Everything, as a line to print. */
 function lastSent(store, root, now) {
   const at = Math.max(0, ...Object.values(store.sessions()).filter(item => item.root === root).map(item => item.sentAt ?? 0));
   return at ? `This project last sent a chat to Relay Everything ${ago(at, now)}.` : 'No chat from this project has gone to Relay Everything yet.';
@@ -32,14 +34,27 @@ export function saving(store, cwd, choice, env = {}, now = Date.now()) {
   else if (choice) return [`Type /relay:saving on, /relay:saving off, or /relay:saving to see which it is.`];
   const lines = store.isOff(root)
     ? [`Saving to Relay Everything is off for ${name}.`, 'Chats in this project stay on this computer. Type /relay:saving on to save them again.']
-    : [`Saving to Relay Everything is on for ${name}.`, 'Each chat here goes to your Relay Everything server as you talk. Type /relay:saving off to stop.'];
+    : [`Saving to Relay Everything is on for ${name}.`, 'Each chat here goes to your Relay Everything server as you talk, from Claude Code or Codex. Type /relay:saving off to stop.'];
   lines.push(lastSent(store, root, now));
-  return env.RELAY_SAVE === '0' ? [...lines, 'RELAY_SAVE is 0 where Claude Code started, so no chat is saved now.'] : lines;
+  if (!readComputer(env)) lines.push('This computer is not connected, so no chat is saved now. Type /relay:connect to connect it.');
+  return env.RELAY_SAVE === '0' ? [...lines, 'RELAY_SAVE is 0 where this app started, so no chat is saved now.'] : lines;
+}
+
+/** The lines to print when run as the skill runs it. Only `on` or `off` must write; a look reads what it can. */
+export function run(choice, { env = process.env, cwd = process.cwd() } = {}) {
+  let store;
+  try {
+    store = openState(env);
+  } catch (error) {
+    if (choice === 'on' || choice === 'off') return { code: 1, lines: [withSandbox(`The folder ${home(env)} could not be written, so saving did not change.`, error)] };
+    store = readState(env);
+  }
+  return { code: 0, lines: saving(store, cwd, choice, env) };
 }
 
 const self = fileURLToPath(import.meta.url);
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(self)) {
-  const args = process.argv.slice(2);
-  const choice = args.filter((arg, at) => arg !== '--data' && args[at - 1] !== '--data')[0];
-  console.log(saving(state(dataDir(process.env, args)), process.cwd(), choice, process.env).join('\n'));
+  const { code, lines } = run(process.argv[2]);
+  console.log(lines.join('\n'));
+  process.exitCode = code;
 }

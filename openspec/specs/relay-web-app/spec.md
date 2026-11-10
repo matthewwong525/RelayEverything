@@ -6,18 +6,6 @@ Relay Everything's web page is the Flutter phone app, built for the browser and 
 
 ## Requirements
 
-### Requirement: The web page is the Flutter app
-
-Relay Everything's web page SHALL be the same Flutter app as the phone app, built for the browser, at the same address as before. It SHALL be the page on the shared server, on a self-hosted server and in the company app. No part of the earlier page SHALL stay as a separate page.
-
-#### Scenario: An old link opens the app
-- **WHEN** a person opens a saved link to `/apps/relay/` or to the AI connector's sign-in return on it
-- **THEN** the Flutter app opens and goes on where the link leads
-
-#### Scenario: Each server serves it
-- **WHEN** a person opens the page on the shared server, a self-hosted server or the company app
-- **THEN** each shows the same Flutter app, reading that server's space
-
 ### Requirement: The layout fits the window
 
 In a window at least 1,000 px wide the app SHALL show three panes: folders, the open folder's notes, and the open note. Between 700 and 1,000 px it SHALL show the notes and the open note, with the folders in a menu. Under 700 px it SHALL show the phone layout, one page at a time. A change of window size SHALL keep the open note and any words not yet saved. In the two wide layouts, one bar SHALL run along the top with the new-note button, the text tools, Share and search at its right end, and nothing SHALL sit at the bottom of the window.
@@ -81,3 +69,15 @@ In the browser the app SHALL take keyboard shortcuts for a new note, search, bol
 #### Scenario: Drop a file on a note
 - **WHEN** a person drags a PDF from their computer onto the open note
 - **THEN** the file is added to the note, as with the paperclip
+
+### Requirement: The web page is the Flutter app, at the server's top address
+
+Relay Everything's web page SHALL be the same Flutter app as the phone app, built for the browser. On the shared server and on a self-hosted server it SHALL open at the server's top address, `/`, with no login but the server's own sign-in. A sign-in with Apple or Google, a phone's connect and an AI app's connect SHALL come back to the app at that address. The company app SHALL NOT serve the page; its *Relay Everything* card SHALL link to the shared server. No part of the earlier page SHALL stay as a separate page.
+
+#### Scenario: The top address opens the app
+- **WHEN** a person with no sign-in opens `https://app.relayeverything.com/`
+- **THEN** the app's own sign-in shows at that address, with no company login and no move to another path
+
+#### Scenario: A sign-in comes back to the top address
+- **WHEN** a person signs in with Google from `https://app.relayeverything.com/`
+- **THEN** the browser comes back to `https://app.relayeverything.com/` signed in, with their notes

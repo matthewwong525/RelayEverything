@@ -1,6 +1,6 @@
 # Relay Everything opens at app.relayeverything.com, for everyone, with no company login
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** hesitant-rhino
 **Open questions:** none
 
@@ -91,3 +91,10 @@ None.
 **2026-11-10** — Assumed: the live check (`app.relayeverything.com/` with no company login, the admin card, a phone sync) runs right after the merge, with the two publish commands, not as a task, because a task must be done before the merge.
 
 **2026-11-10** — Built: every task but the staging check. The review found nothing to fix. Local checks and `flutter test` (685) pass.
+
+**2026-11-10** — Checked on staging (`e96a18f`, headless Chrome; the assistant's own browser draws no Flutter page, live or staging): `/` answers `200` and shows the sign-in; `/?signIn=failed` shows the failure; *Sign in with Google* goes to `sign-in/google?next=%2F`, then to Google; phone connect and AI-app connect, signed out, answer `302` to `/?next=…`; `/apps/relay/` and its files still answer `200`.
+
+**2026-11-10** — Assumed: no full sign-in or phone sync on staging before the merge, because an email code needs the owner's inbox, and the change touches no route a signed-in page or phone calls. The live check after the merge covers a signed-in phone.
+
+
+**2026-11-10** — Archived for shipping.

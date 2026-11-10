@@ -19,5 +19,5 @@
 
 ## 4. Checks
 
-- [ ] 4.1 `npm test` in `app/` and `flutter test` in `mobile/` pass; `/save`, and CI passes.
-- [ ] 4.2 After `node scripts/publish-relay-server.mjs --staging-only`, on `app-staging.relayeverything.com`: `/` shows the sign-in with no `Location`; an email-code sign-in returns to `/`; a phone's connect and the AI connector's staging sign-in come back to the app and finish; a note written on the page reaches a phone sync.
+- [x] 4.1 `npm test` in `app/` and `flutter test` in `mobile/` pass; `/save`, and CI passes.
+- [x] 4.2 After `node scripts/publish-relay-server.mjs --staging-only`, on `app-staging.relayeverything.com`: `/` shows the sign-in with no `Location`; `/?signIn=failed` shows the failure; *Sign in with Google* asks Google to come back to `/`; a phone's connect and the AI connector's sign-in, signed out, send to `/?next=…`.

@@ -41,12 +41,12 @@ An API key is for your own script or service. It reads your notes, health, place
 
 ## Make, list and turn off keys
 
-You make and turn off your keys on your Relay Everything page, signed in:
+You make and turn off your keys on your Relay Everything page, signed in: open **Settings**, then **Devices**.
 
-| On the page | What it does |
+| On the Devices page | What it does |
 |---|---|
-| **Add a device** | Makes a key for a phone, a Claude Code computer or a script. It shows once: as a QR code for a phone, or with a `curl` example for an API key. |
-| The list of devices | Shows each key: its name, its kind, when it was made, and whether it is off. |
+| **Add a device** | Makes a key for a phone, a Claude Code computer or a script. It shows once: as a QR code and as text to copy for a phone, or with a `curl` example for an API key. |
+| The list of devices | Shows each key: its name, its kind, when it was made, and whether it is off. It also shows **Web**, the device of the notes you write on the page, which has no key. |
 | **Turn off** | Turns the key off at once. The other keys go on. |
 
 A phone can also get its key with no QR code: in the Relay Everything app, open Settings, tap **Sign in to Relay Everything**, then **Sign in to connect**. The app opens your sign-in, the page asks **Connect this phone?**, and **Connect** makes the phone's key. The key goes straight to the phone and never shows. It works like a key from **Add a device**, and the phone shows in your list of devices.

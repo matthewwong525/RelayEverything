@@ -2,14 +2,14 @@
 // its newest change, and a new phone gets every note. A signed-in person or a phone key reads it. wiki/relay-spaces.md
 import { z } from "zod";
 import { defineAction, type ActionCall } from "../../api/contract.ts";
-import { asPersonOrPhone } from "./caller.ts";
+import { asPersonOrPhone, webDevice } from "./caller.ts";
 import { noteChanges } from "./queries.ts";
 import { file, place } from "./timeline.ts";
 
 const PAGE = 100;
 
 const syncedNote = z.strictObject({ id: z.string(), clientId: z.string().nullable().describe("The sending device's own id for the note."),
-  mine: z.boolean().describe("True when the calling phone sent the note."), source: z.enum(["ring", "typed"]), text: z.string(),
+  mine: z.boolean().describe("True when the calling phone sent the note, or, for the page, your space's Web device did."), source: z.enum(["ring", "typed"]), text: z.string(),
   recordedAt: z.number(), editedAt: z.number().nullable().describe("When the note last changed, in Unix ms; null when never."),
   device: z.string().describe("The name of the device or way in that sent it, such as `Email`."), audio: z.boolean(),
   place: place.nullable(), attachments: z.array(file).describe("The note's files, oldest first.") });
@@ -31,6 +31,8 @@ export const noteSync = defineAction({
   encoding: "query", effect: "read", agentAvailable: false, requiresIdentity: false, errors: {}, examples: [],
   handler: asPersonOrPhone<ActionCall>(async ({ space, caller, call }) => {
     const { since = 0, limit = PAGE, deleted = 0 } = call.input as { since?: number; limit?: number; deleted?: number };
-    return Response.json(await noteChanges(space.db, since, limit, caller.device?.id ?? null, deleted === 1));
+    // The page's own notes are its Web device's: it may add files only to those. A read never makes the device.
+    const deviceId = caller.device?.id ?? await webDevice(space, false);
+    return Response.json(await noteChanges(space.db, since, limit, deviceId, deleted === 1));
   }),
 });

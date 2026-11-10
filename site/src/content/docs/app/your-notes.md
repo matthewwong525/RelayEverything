@@ -1,6 +1,6 @@
 ---
 title: Notes
-description: Home and its folders, read, search and change the notes you write on your phone, as in Apple Notes, with text styles, checklists, photos and files, and open your Relay Everything page for ring notes.
+description: Home and its folders, read, search and change the notes you write on your phone, as in Apple Notes, with text styles, checklists, photos and files, and open them on a computer.
 ---
 
 The Relay Everything app opens on **Home**, a screen of folders. Your notes are the first folders. The app shows the notes that you type or say into this phone, and keeps them on the phone. Once you sign in to Relay Everything, it also shows the notes from your other phones, email, Claude Code and your AI apps: [Your notes on every phone](#your-notes-on-every-phone).
@@ -114,7 +114,7 @@ With sending off, a change stays on this phone, as every note does.
 
 ## Your notes on every phone
 
-Each phone that you sign in on shows all your notes, as in Apple Notes. It gets the notes from your space: notes from your other phones, email, Claude Code, your AI apps and the web API. A new phone gets all your old notes the first time.
+Each phone that you sign in on shows all your notes, as in Apple Notes. It gets the notes from your space: notes from your other phones, your Relay Everything page on a computer, email, Claude Code, your AI apps and the web API. A new phone gets all your old notes the first time.
 
 New notes and changes come in when you open the app, when you come back to it, when you pull down the list, and every hour in the background. A note from somewhere else shows where it came from, under its title in the list and at the top of the note.
 
@@ -139,7 +139,9 @@ Search reads only the notes on this phone, so it works with no signal and sends 
 
 Tap the round gear button at the top right of Home to open [Settings](../settings/).
 
-To open your Relay Everything page, open Settings, tap the first row with your email, then tap **Open your Relay Everything page**. It shows while the phone sends to your Relay Everything server. It opens `<your-relay-server>/apps/relay/` in the phone's browser. Sign in with your email. Your ring notes, their recordings, and the notes from all your devices are there. [Account](../settings/#account)
+To open your Relay Everything page, open Settings, tap the first row with your email, then tap **Open your Relay Everything page**. It shows while the phone sends to your Relay Everything server. It opens `<your-relay-server>/apps/relay/` in the phone's browser. Sign in with your email. The notes from all your devices are there. [Account](../settings/#account)
+
+On a computer, open the same address. The page is the same app as on your phone, sized for a computer: you read, write, change and delete your notes there. [On a computer](../on-a-computer/)
 
 ## Write a note
 
@@ -168,7 +170,7 @@ Where the files go:
 
 - **On this phone**, always. iPhone backups keep them, because a file you added may be nowhere else. Android cloud backup leaves them out, because it holds at most 25 MB for an app.
 - **In your space**, only with sending on. Each file goes after its note, sealed with your space's own key. When you turn sending on, [**Send them**](../../start/connect-a-phone/) sends the files of earlier notes too. [Privacy](../../privacy/)
-- **On your Relay Everything page**, a picture shows in its note, and another file is a link that downloads it. A file that has not arrived yet shows *Waiting for the file*.
+- **On your Relay Everything page**, a picture shows in its note, and another file shows as a row with its name and size: click it to download it. [On a computer](../on-a-computer/#add-photos-and-files)
 - **To your webhooks**, each file after its note, with its bytes: [Your own database](../../connections/your-database/#notefile). A receiver that refuses a file as too large skips it, and the file stays in your space.
 
 [Shortcuts](../shortcuts/) can also add a note with files, with no tap in the app.

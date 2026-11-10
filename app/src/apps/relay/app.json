@@ -1,4 +1,5 @@
 {
   "title": "Relay Everything",
-  "description": "Your ring and phone notes, today's health and the places you've been."
+  "description": "Your notes, health and places, and the AI apps and webhooks they go to.",
+  "static": true
 }

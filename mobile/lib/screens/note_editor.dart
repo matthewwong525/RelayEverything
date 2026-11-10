@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
@@ -9,7 +10,7 @@ import 'package:flutter_quill/quill_delta.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../brand.dart';
-import '../controller.dart' show newClientId;
+import '../data/client_id.dart';
 import '../editor/markdown.dart';
 import '../relay.dart';
 import 'back_to.dart';
@@ -24,14 +25,19 @@ import 'timeline.dart' show showDeleted;
 /// Picks photos ([photos] true) or files from the phone. The app's is `file_picker`; a test passes its own.
 typedef FilesPicker = Future<List<NewFile>> Function({required bool photos});
 
-/// The phone's own picker: Photos for pictures and videos, Files for any file.
+/// The phone's own picker: Photos for pictures and videos, Files for any file. The browser's gives each file's bytes.
 Future<List<NewFile>> pickWithPhone({required bool photos}) async {
   final picked = await FilePicker.pickFiles(type: photos ? FileType.media : FileType.any);
+  if (kIsWeb) {
+    return [for (final file in picked) _withBytes(file.name, await file.readAsBytes())];
+  }
   return [
     for (final file in picked)
       if (file.path != null) NewFile(path: file.path!, name: file.name, size: await file.length() ?? 0),
   ];
 }
+
+NewFile _withBytes(String name, List<int> bytes) => NewFile(name: name, size: bytes.length, bytes: bytes);
 
 /// Gives a note's words to the phone's share sheet. The app's is `share_plus`; a test passes its own.
 typedef Sharer = Future<void> Function(String text);
@@ -41,10 +47,26 @@ Future<void> shareWithPhone(String text) => SharePlus.instance.share(ShareParams
 /// How long typing pauses before the change is kept: under the two seconds the person may wait.
 const savePause = Duration(milliseconds: 1500);
 
+/// A key the browser's page takes, not the editor: new note, search and delete.
+class PageKeyIntent extends Intent {
+  const PageKeyIntent();
+}
+
+/// The page's keys, with Ctrl or ⌘. No action takes [PageKeyIntent], so each passes up to the page: Ctrl+F does not
+/// open the editor's own find box, and Ctrl+Shift+Backspace deletes the note, not a word.
+final pageKeys = <ShortcutActivator, Intent>{
+  for (final mac in [false, true]) ...{
+    SingleActivator(LogicalKeyboardKey.keyN, control: !mac, meta: mac, alt: true): const PageKeyIntent(),
+    SingleActivator(LogicalKeyboardKey.keyF, control: !mac, meta: mac): const PageKeyIntent(),
+    SingleActivator(LogicalKeyboardKey.backspace, control: !mac, meta: mac, shift: true): const PageKeyIntent(),
+  },
+};
+
 /// One note's page, as Apple Notes has it: the note to read, and a tap in its words edits it in place. A new note
 /// opens with the keyboard up and a Title first line. Each change is kept on a pause and on leave, with no *Save*.
 class NoteEditor extends StatefulWidget {
-  const NoteEditor({super.key, required this.relay, this.entry, this.picker, this.sharer, this.opener, this.back = 'Notes'});
+  const NoteEditor({super.key, required this.relay, this.entry, this.picker, this.sharer, this.opener, this.back = 'Notes',
+    this.pane = false, this.onClose, this.onCompose, this.search});
 
   final Relay relay;
   /// The note to open, or null for a new one.
@@ -55,12 +77,20 @@ class NoteEditor extends StatefulWidget {
   final Opener? opener;
   /// The page it opened from, *Home* or a folder, which its back button names.
   final String back;
+  /// In the browser's wide layout: one bar of tools along the top, [search] at its right, and nothing at the bottom.
+  final bool pane;
+  /// Closes the note where the browser's layout holds it, in place of going back a page.
+  final VoidCallback? onClose;
+  /// Opens a new note where the browser's layout holds it, in place of a new page.
+  final VoidCallback? onCompose;
+  /// The search field at the right of the wide layout's top bar.
+  final Widget? search;
 
   @override
-  State<NoteEditor> createState() => _NoteEditorState();
+  State<NoteEditor> createState() => NoteEditorState();
 }
 
-class _NoteEditorState extends State<NoteEditor> {
+class NoteEditorState extends State<NoteEditor> {
   late final String _id = widget.entry?.id ?? newClientId();
   /// The phone keeps the note: set only once an add kept it, so a save after an add that kept nothing adds again.
   late bool _stored = widget.entry != null;
@@ -92,6 +122,8 @@ class _NoteEditorState extends State<NoteEditor> {
   String? _heldBefore;
 
   Relay get relay => widget.relay;
+  /// The note's own id, made here for a new note.
+  String get id => _id;
 
   static bool _wordsMissing(Entry? entry) => entry != null && (entry.writing || entry.failed);
 
@@ -120,8 +152,10 @@ class _NoteEditorState extends State<NoteEditor> {
     _listen();
     _focus.addListener(_focusChanged);
     relay.addListener(_relayChanged);
-    _heldBefore = relay.openNote;
+    // The browser's layout holds one note at a time: the note before has closed, so nothing gets the hold back.
+    _heldBefore = widget.onClose == null ? relay.openNote : null;
     relay.openNote = _id;
+    relay.editorWords = _words;
     if (_stored && _live == null) _gone();
   }
 
@@ -148,10 +182,19 @@ class _NoteEditorState extends State<NoteEditor> {
     if (_focus.hasFocus && inset > 100) _keyboard = inset;
   }
 
+  /// The words as they are now: the same as kept, or new ones not yet kept.
+  ({String id, String text})? _words() {
+    if (_deleted) return null;
+    final delta = _controller.document.toDelta();
+    final text = delta == _saved ? _savedText : deltaToMarkdown(delta);
+    return (id: _id, text: plainText(text).trim().isEmpty ? '' : text);
+  }
+
   @override
   void dispose() {
     _save(sendNow: true, leaving: true);
     if (relay.openNote == _id) relay.openNote = _heldBefore;
+    if (relay.editorWords == _words) relay.editorWords = null;
     relay.removeListener(_relayChanged);
     _changes?.cancel();
     _pause?.cancel();
@@ -189,6 +232,7 @@ class _NoteEditorState extends State<NoteEditor> {
     _deleted = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      if (widget.onClose case final close?) return close();
       final route = ModalRoute.of(context);
       if (route == null || !route.isActive) return;
       if (route.isCurrent) {
@@ -309,7 +353,8 @@ class _NoteEditorState extends State<NoteEditor> {
   }
 
   Future<void> _attach() async {
-    final photos = await showModalBottomSheet<bool>(context: context, builder: (context) => SafeArea(
+    // The browser has one picker for every kind of file.
+    final photos = relay.web ? false : await showModalBottomSheet<bool>(context: context, builder: (context) => SafeArea(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         ListTile(leading: const Icon(CupertinoIcons.photo), title: const Text('Photos'), onTap: () => Navigator.pop(context, true)),
         ListTile(leading: const Icon(CupertinoIcons.doc), title: const Text('Files'), onTap: () => Navigator.pop(context, false)),
@@ -320,7 +365,7 @@ class _NoteEditorState extends State<NoteEditor> {
     try {
       picked = await (widget.picker ?? pickWithPhone)(photos: photos);
     } on Exception {
-      return _say('The phone did not give the file. Try again.');
+      return _say(relay.web ? 'The browser did not give the file. Try again.' : 'The phone did not give the file. Try again.');
     }
     if (mounted && picked.isNotEmpty) _save(sendNow: !_focus.hasFocus, files: picked);
   }
@@ -345,13 +390,29 @@ class _NoteEditorState extends State<NoteEditor> {
       await relay.deleteNote(_id);
       showDeleted(messenger, relay, _id);
     });
+    _leave();
+  }
+
+  /// ⋯ → *Delete*, or the browser's delete key: the note goes, with *Undo*.
+  void delete() => _delete();
+
+  void _leave() {
+    if (widget.onClose case final close?) return close();
     Navigator.of(context).maybePop();
+  }
+
+  /// Files dropped on the note in the browser: they join it as the paperclip's do. A note from elsewhere takes none.
+  void addFiles(List<NewFile> files) {
+    if (files.isEmpty) return;
+    if (_attachOrNull == null) return _say('You can add files only to a note you wrote here or on your phone.');
+    _save(sendNow: true, files: files);
   }
 
   /// The new page takes this one's place, so this page gives the hold back first: the new page then gives it, on
   /// leave, to the note under both, not to this closed one.
   void _compose() {
     if (relay.openNote == _id) relay.openNote = _heldBefore;
+    if (widget.onCompose case final compose?) return compose();
     Navigator.of(context).pushReplacement(MaterialPageRoute<void>(
       builder: (_) => NoteEditor(relay: relay, picker: widget.picker, sharer: widget.sharer, opener: widget.opener,
         back: widget.back)));
@@ -389,26 +450,24 @@ class _NoteEditorState extends State<NoteEditor> {
     final editing = _focus.hasFocus || _formatting;
     _measureKeyboard(MediaQuery.viewInsetsOf(context).bottom);
     return Scaffold(
-      appBar: AppBar(leading: BackTo(widget.back), leadingWidth: BackTo.widthOf(widget.back), actions: [
+      appBar: widget.pane ? _paneBar(brand) : AppBar(leading: BackTo(widget.back, onPressed: widget.onClose),
+        leadingWidth: BackTo.widthOf(widget.back), actions: [
         ButtonPill(children: [
           PillIconButton(icon: CupertinoIcons.square_arrow_up, tooltip: 'Share', onPressed: _share),
-          MoreMenu(
-            items: [
-              ('Copy', CupertinoIcons.doc_on_doc, _copy),
-              if (_current?.recording case final recording?) ('Play', CupertinoIcons.play_fill, () => relay.play(recording)),
-            ],
-            destructive: ('Delete', CupertinoIcons.trash, _delete),
-            builder: (context, toggle) => PillIconButton(icon: CupertinoIcons.ellipsis, tooltip: 'More', onPressed: toggle),
-          ),
+          _more(),
         ]),
         if (editing) Padding(padding: const EdgeInsets.only(left: 8),
           child: RoundIconButton(icon: CupertinoIcons.checkmark_alt, tooltip: 'Done', onPressed: _done, accent: true)),
         const SizedBox(width: 12),
       ]),
       body: Column(children: [
+        if (widget.pane && _formatting) FormatSheet(controller: _controller, height: 200, onClose: _closePaneStyles),
         Expanded(child: Stack(children: [
-          Positioned.fill(child: ListenableBuilder(listenable: relay, builder: (context, _) => _page(context, brand))),
-          if (!_waiting && !_formatting) Positioned(left: 16, right: 16, bottom: editing ? 8 : 0, child: SafeArea(
+          Positioned.fill(child: ListenableBuilder(listenable: relay, builder: (context, _) => widget.pane
+            ? Align(alignment: Alignment.topCenter,
+                child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 760), child: _page(context, brand)))
+            : _page(context, brand))),
+          if (!widget.pane && !_waiting && !_formatting) Positioned(left: 16, right: 16, bottom: editing ? 8 : 0, child: SafeArea(
             top: false,
             minimum: const EdgeInsets.only(bottom: 12),
             child: editing
@@ -416,10 +475,51 @@ class _NoteEditorState extends State<NoteEditor> {
               : ReadingBar(onChecklist: _checklist, onAttach: _attachOrNull, onCompose: _compose),
           )),
         ])),
-        if (_formatting) FormatSheet(controller: _controller, height: _keyboard, onClose: _closeStyles),
+        if (!widget.pane && _formatting) FormatSheet(controller: _controller, height: _keyboard, onClose: _closeStyles),
       ]),
     );
   }
+
+  /// *Aa* in the wide layout: the styles open under the top bar, and the cursor stays in the words.
+  void _paneStyles() => setState(() => _formatting = !_formatting);
+
+  void _closePaneStyles() {
+    setState(() => _formatting = false);
+    _focus.requestFocus();
+  }
+
+  /// The wide layout's one bar: *New note*, then *Aa*, *Checklist* and *Attach*, then *Share* and ⋯, then search.
+  PreferredSizeWidget _paneBar(BrandColors brand) => PreferredSize(
+    preferredSize: const Size.fromHeight(64),
+    child: SafeArea(bottom: false, child: Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Row(spacing: 10, children: [
+        ButtonPill(children: [PillIconButton(icon: CupertinoIcons.square_pencil, tooltip: 'New note', onPressed: _compose)]),
+        ButtonPill(children: [
+          PillIconButton(icon: CupertinoIcons.textformat, tooltip: 'Text styles', onPressed: _waiting ? null : _paneStyles),
+          PillIconButton(icon: CupertinoIcons.checkmark_circle, tooltip: 'Checklist', onPressed: _waiting ? null : _checklist),
+          PillIconButton(icon: CupertinoIcons.paperclip, tooltip: 'Attach', onPressed: _attachOrNull),
+        ]),
+        // Search gives up width first, so a narrow pane keeps every tool.
+        Expanded(child: Row(mainAxisAlignment: MainAxisAlignment.end, spacing: 10, children: [
+          ButtonPill(children: [
+            PillIconButton(icon: CupertinoIcons.square_arrow_up, tooltip: 'Share', onPressed: _share),
+            _more(),
+          ]),
+          if (widget.search case final search?) Flexible(child: search),
+        ])),
+      ]),
+    )),
+  );
+
+  Widget _more() => MoreMenu(
+    items: [
+      ('Copy', CupertinoIcons.doc_on_doc, _copy),
+      if (_current?.recording case final recording?) ('Play', CupertinoIcons.play_fill, () => relay.play(recording)),
+    ],
+    destructive: ('Delete', CupertinoIcons.trash, _delete),
+    builder: (context, toggle) => PillIconButton(icon: CupertinoIcons.ellipsis, tooltip: 'More', onPressed: toggle),
+  );
 
   Widget _page(BuildContext context, BrandColors brand) {
     final note = _current;
@@ -456,6 +556,7 @@ class _NoteEditorState extends State<NoteEditor> {
               autoFocus: widget.entry == null,
               placeholder: recording != null ? 'No words, only the recording.' : 'What do you want to keep?',
               customStyles: noteStyles(context),
+              customShortcuts: relay.web ? pageKeys : null,
               onTapUp: _tapUp,
               // A long press on a link offers Open; it goes to the same browser.
               onLaunchUrl: _openLink,
@@ -466,7 +567,7 @@ class _NoteEditorState extends State<NoteEditor> {
           ),
         for (final file in note?.files ?? const <EntryFile>[])
           Padding(padding: const EdgeInsets.only(top: 14),
-            child: file.picture && file.onPhone ? NotePicture(file: file, relay: relay) : NoteFileRow(file: file, relay: relay)),
+            child: file.picture && file.ready ? NotePicture(file: file, relay: relay) : NoteFileRow(file: file, relay: relay)),
         if (recording != null) Padding(padding: const EdgeInsets.only(top: 14),
           child: PlayRow(length: note?.length, onPlay: () => relay.play(recording))),
         if (note != null) Padding(padding: const EdgeInsets.only(top: 14), child: Row(spacing: 8, children: [

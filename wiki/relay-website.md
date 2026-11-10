@@ -21,6 +21,8 @@ A page's folder can't be named `notes/`: [the public check](open-source.md#the-p
 
 The ring pictures in `site/src/assets/ring/` are finished pictures, not renders: the ring's models left the repository, so a new model brings its own pictures.
 
+The pictures of the Relay Everything page in `site/src/assets/web/` are screenshots of the Flutter app in a browser, with sample notes and no real person's data. [On a computer](../site/src/content/docs/app/on-a-computer.md) owns how the page works. Keep each file name when you take a new screenshot, so no page needs an edit. A change to the page's look or layout takes new screenshots in the same change.
+
 ## Legal pages and the contact address
 
 The terms and policies for the shared server are pages in `site/src/content/docs/`. A page whose text is not in force yet opens with a `:::caution[Draft: not in force]` box and marks each gap, such as the company's name, as `[LEGAL-TODO: …]`. `site/tests/site.test.mjs` fails when a page in the menu, or a page the home page links to, holds a gap, and when a page with a gap has no draft box. So fill every gap before you add a legal page to the menu. The rules are in [the legal pages spec](../openspec/specs/relay-legal-pages/spec.md).

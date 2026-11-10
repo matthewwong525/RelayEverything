@@ -20,6 +20,11 @@ import { SETUP_PATH } from "./employee-access/prompt.ts";
 import { refreshOnSchedule } from "./employee-access/pushers.ts";
 import { handleAccess } from "./employee-access/router.ts";
 import { setupFile } from "./employee-access/setup-file.ts";
+import { staticPage } from "./static-page.ts";
+
+// The mini apps whose page is built files, not React (app.json "static": true): wiki/stack/mini-apps.md
+const STATIC_APPS = Object.entries(import.meta.glob<{ static?: unknown }>("../src/apps/*/app.json", { eager: true, import: "default" }))
+  .filter(([, manifest]) => manifest.static === true).map(([path]) => path.split("/")[3]);
 
 function signInRefused(env: AccessEnv, url: URL): Response {
   const configured = env.CF_ACCESS_TEAM_DOMAIN && env.CF_ACCESS_AUD;
@@ -101,7 +106,7 @@ export default {
     }
     const denied = await appPageDenied(request, env, identity);
     if (denied) return denied;
-    return env.ASSETS.fetch(request);
+    return staticPage(request, env.ASSETS, STATIC_APPS) ?? env.ASSETS.fetch(request);
   },
 
   // Every 15 minutes on the live app alone: who can push on GitHub joins the previews' sign-in list, then each mini

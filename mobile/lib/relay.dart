@@ -3,14 +3,14 @@ import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'dart:convert';
 
-import 'data/attachments.dart';
+import 'data/files.dart';
+import 'data/phone_calendar.dart';
 import 'data/settings.dart';
-import 'sync/calendar.dart';
 import 'voice/model.dart';
 
-export 'data/attachments.dart' show NewFile, sizeLabel;
+export 'data/files.dart' show NewFile, sizeLabel;
+export 'data/phone_calendar.dart' show PhoneCalendar;
 export 'data/settings.dart' show Appearance, LocationMode, LocationSend, SendPlace, Settings;
-export 'sync/calendar.dart' show PhoneCalendar;
 export 'voice/model.dart' show ModelState, ModelProblem;
 
 /// How long *Undo* shows after a note is deleted. The delete runs when its bar closes.
@@ -57,9 +57,10 @@ class Entry {
   final String? from;
 }
 
-/// One file on a note: kept on this phone, or, for a note from elsewhere, in the person's space until opened.
+/// One file on a note: kept on this phone, or, for a note from elsewhere, in the person's space until opened. In the
+/// browser, each file stays in the person's space and [url] reads it.
 class EntryFile {
-  const EntryFile({this.id = '', required this.name, required this.type, required this.size, required this.path});
+  const EntryFile({this.id = '', required this.name, required this.type, required this.size, this.path = '', this.url});
 
   /// The file's id, which a download takes.
   final String id;
@@ -71,11 +72,21 @@ class EntryFile {
 
   bool get onPhone => path.isNotEmpty;
 
+  /// The server's address for the file, which the browser reads; null on the phone, and while the file is on its way.
+  final String? url;
+
+  /// The file can show now: on this phone, or in the person's space for the browser.
+  bool get ready => onPhone || url != null;
+
   /// A picture shows small in the note; any other file shows as a row with its name and size.
   bool get picture => type.startsWith('image/');
 }
 
 enum SyncStatus { idle, syncing, synced, offline, refused }
+
+/// Where the app runs: the phone app, or the browser at the person's Relay Everything page. The browser shows no part
+/// that only a phone can do, such as health, places, voice notes or the speech model.
+enum RelayPlatform { phone, web }
 
 /// When one kind of data, health, places or the calendar, last reached the server, and how many of it wait to send.
 class SendState {
@@ -124,6 +135,10 @@ class Connections {
 
 /// What the screens read and do. The app's controller is one; a test's fake is another.
 abstract class Relay extends ChangeNotifier {
+  /// The phone app, or the browser. A screen hides each phone-only part on the web.
+  RelayPlatform get platform => RelayPlatform.phone;
+  bool get web => platform == RelayPlatform.web;
+
   bool get connected;
   String? get server;
   List<Entry> get entries;
@@ -210,6 +225,8 @@ abstract class Relay extends ChangeNotifier {
   Future<void> pullNotes();
   /// The note open in the editor, which a pull leaves as it is.
   String? openNote;
+  /// The open editor's words now, saved or not, so a closing browser page can still send them.
+  ({String id, String text})? Function()? editorWords;
   /// Keeps a note with words, files, or both, as [id] when given. Returns the words to show for files left out, such
   /// as one over 25 MB, or for a note with nothing in it; null when all of it was kept. With [sendNow] false it waits
   /// for the next sync, as the editor saves while the person types.
@@ -263,7 +280,7 @@ abstract class Relay extends ChangeNotifier {
   Future<void> cancelVoiceNote();
   /// *Try again* on a note whose words failed: writes the words of each such note again, from its kept recording.
   Future<void> writeWordsAgain();
-  /// Plays a voice note's recording, from this phone.
+  /// Plays a voice note's recording: from this phone, or in the browser from the person's space.
   Future<void> play(String recording);
 
   final _notices = StreamController<String>.broadcast();

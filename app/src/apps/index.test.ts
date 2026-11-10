@@ -12,8 +12,17 @@ it("lists every app folder in this build, each with a page, a title, a descripti
     expect(app.title.trim(), app.name).not.toBe("");
     expect(app.description.trim(), app.name).not.toBe("");
     expect(app.href).toBe(`/apps/${app.name}/`);
-    expect(appPage(app.name), app.name).not.toBeNull();
+    // A static app's page is the Worker's files, not a React page.
+    expect(appPage(app.name) === null, app.name).toBe(!!app.static);
   }
+});
+
+it("lists a static app with no React page, and refuses one that has both", () => {
+  const manifest = { ...card, static: true };
+  expect(listApps({ "./runs/app.json": manifest }, [])).toEqual([{ name: "runs", ...card, href: "/apps/runs/", static: true }]);
+  expect(() => listApps({ "./runs/app.json": manifest }, ["./runs/App.tsx"])).toThrow(
+    'app/src/apps/runs: a static app has no App.tsx: remove it, or remove "static" from app.json.',
+  );
 });
 
 it("finds no page for a folder that does not exist", () => {

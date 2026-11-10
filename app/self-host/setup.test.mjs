@@ -4,6 +4,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { sha256, zipName } from '../../scripts/build-relay-web.mjs';
+import { zip } from '../../scripts/lib-zip.mjs';
 import { accessApp, bypassPolicy, carryOver, configs, keysApp, names, PARTS, parseCommand, settingsOf, setup } from './setup.mjs';
 
 const TOKEN = 'test-token-never-printed-0123456789';
@@ -15,10 +17,31 @@ const files = () => {
     env: join(dir, '.env') };
 };
 
-/** Cloudflare's API as a test answers it: `answers` maps "METHOD path" to a result, or to a status to fail with. */
-function fakeCloudflare(answers) {
+/** GitHub's releases as a test answers them: the page built from COMMIT, in a pre-release, and a full release that
+ *  holds an older page. `hash` stands in for the SHA-256 the release lists. */
+const COMMIT = 'c'.repeat(40);
+const PAGE_ZIP = zip([['index.html', Buffer.from('<title>Relay Everything</title>')], ['canvaskit/canvaskit.wasm', Buffer.from('wasm')]]);
+const RELEASES = 'https://api.github.com/repos/matthewwong525/RelayEverything/releases?per_page=100&page=1';
+const DOWNLOAD = 'https://github.com/matthewwong525/RelayEverything/releases/download';
+function github({ found = true, hash = sha256(PAGE_ZIP) } = {}) {
+  const name = zipName(COMMIT);
+  const older = { tag_name: 'v1.2.0', prerelease: false, draft: false, assets: [{ name: zipName('b'.repeat(40)) }] };
+  const beta = { tag_name: 'mobile-v1.2.1+90', prerelease: true, draft: false, assets: found
+    ? [{ name, browser_download_url: `${DOWNLOAD}/beta/${name}` }, { name: `${name}.sha256`, browser_download_url: `${DOWNLOAD}/beta/${name}.sha256` }]
+    : [] };
+  return { [RELEASES]: JSON.stringify([beta, older]), [`${DOWNLOAD}/beta/${name}`]: PAGE_ZIP, [`${DOWNLOAD}/beta/${name}.sha256`]: `${hash}  ${name}\n` };
+}
+const web = () => ({ commit: () => COMMIT, folder: mkdtempSync(join(tmpdir(), 'relay-page-')) });
+
+/** Cloudflare's API as a test answers it: `answers` maps "METHOD path" to a result, or to a status to fail with. Any
+ *  other address is GitHub's, answered from `pages`. */
+function fakeCloudflare(answers, pages = github()) {
   const calls = [];
   const request = async (url, init) => {
+    if (!url.startsWith('https://api.cloudflare.com/')) {
+      calls.push(`GET ${url}`);
+      return pages[url] === undefined ? new Response('Not Found', { status: 404 }) : new Response(pages[url]);
+    }
     const key = `${init.method} ${new URL(url).pathname.replace(/^\/client\/v4/, '')}`;
     calls.push(key);
     const answer = answers[key] ?? 404;
@@ -31,9 +54,9 @@ function fakeCloudflare(answers) {
 const run = async (args, answers, more = {}) => {
   const lines = [];
   const wrangler = more.wrangler ?? (() => {});
-  const { request, calls } = fakeCloudflare(answers);
+  const { request, calls } = fakeCloudflare(answers, more.pages);
   const result = await setup({ args, env: { CLOUDFLARE_API_TOKEN: TOKEN, CLOUDFLARE_ACCOUNT_ID: ACCOUNT }, request, wrangler,
-    build: () => lines.push('built'), log: line => lines.push(line), files: more.files ?? files() });
+    build: () => lines.push('built'), log: line => lines.push(line), files: more.files ?? files(), web: more.web ?? web() });
   return { result, lines, calls, output: lines.join('\n') };
 };
 const everyPart = Object.fromEntries(PARTS.map(([, path]) => [`GET /accounts/${ACCOUNT}${path}`, path.includes('organizations') ? { auth_domain: 'you.cloudflareaccess.com' } : []]));
@@ -102,8 +125,9 @@ test('update writes each config again, opens the keys\' way past the login, and 
   const ran = [];
   const lines = [];
   const { request, calls } = fakeCloudflare(answers);
+  const page = web();
   const result = await setup({ args: ['update'], env: { CLOUDFLARE_API_TOKEN: TOKEN, CLOUDFLARE_ACCOUNT_ID: ACCOUNT }, request,
-    wrangler: args => ran.push(args.join(' ')), build: () => ran.push('build'), log: line => lines.push(line), files: place });
+    wrangler: args => ran.push(args.join(' ')), build: () => ran.push('build'), log: line => lines.push(line), files: place, web: page });
   assert.equal(result, 'ok');
   assert.deepEqual(ran.map(line => line.replace(place.config.replace(/wrangler\.jsonc$/, ''), '')), ['d1 migrations apply relay-db --remote -c wrangler.jsonc',
     'deploy -c wrangler.spaces.jsonc', 'deploy -c wrangler.mcp.jsonc', 'build', ran.at(-1)]);
@@ -114,6 +138,35 @@ test('update writes each config again, opens the keys\' way past the login, and 
   assert.ok(calls.includes(`POST /accounts/${ACCOUNT}/access/apps/keys/policies`), 'the keys app gets its bypass policy');
   assert.ok(calls.includes(`DELETE /accounts/${ACCOUNT}/access/apps/sso`), 'the old connector sign-in app goes');
   assert.ok(lines.includes('ok database changes applied, then the newest Relay Everything put live'));
+  assert.ok(lines.indexOf(`ok page ${zipName(COMMIT)}`) === 0, 'the page is in place before anything goes live');
+  assert.equal(readFileSync(join(page.folder, 'canvaskit/canvaskit.wasm'), 'utf8'), 'wasm');
+});
+
+test('an install from a commit no release holds a page for stops before it makes anything, and names the release', async () => {
+  const ran = [];
+  const { request, calls } = fakeCloudflare(everyPart, github({ found: false }));
+  const missing = setup({ args: ['install', '--email', 'you@example.com'], env: { CLOUDFLARE_API_TOKEN: TOKEN, CLOUDFLARE_ACCOUNT_ID: ACCOUNT },
+    request, wrangler: args => ran.push(args), build: () => ran.push('build'), log: () => {}, files: files(), web: web() });
+  await assert.rejects(missing, new RegExp(`no release holds the Relay Everything page for commit ${COMMIT.slice(0, 7)}.*git checkout v1\\.2\\.0`));
+  assert.deepEqual(ran, [], 'nothing built or deployed');
+  assert.ok(calls.every(call => call.startsWith('GET ')), 'nothing made in Cloudflare');
+});
+
+test('an update whose page does not match its SHA-256 stops before anything goes live, and keeps the page there', async () => {
+  const { place, answers } = installed();
+  const page = web();
+  writeFileSync(join(page.folder, 'index.html'), 'the page now live');
+  const ran = [];
+  await assert.rejects(run(['update'], answers, { files: place, web: page, pages: github({ hash: 'f'.repeat(64) }), wrangler: args => ran.push(args) }),
+    /does not match its SHA-256/);
+  assert.deepEqual(ran, []);
+  assert.equal(readFileSync(join(page.folder, 'index.html'), 'utf8'), 'the page now live');
+});
+
+test('a folder that is no git clone stops with what to do', async () => {
+  const { place, answers } = installed();
+  const commit = () => { throw new Error('not a git repository'); };
+  await assert.rejects(run(['update'], answers, { files: place, web: { commit, folder: web().folder } }), /not a git clone/);
 });
 
 test('update keeps the sign-up and contact settings the owner set, and adds neither when unset', () => {

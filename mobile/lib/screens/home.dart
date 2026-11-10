@@ -20,7 +20,7 @@ export 'folder.dart' show Opener;
 /// the notices, the recording screen and *Start a voice note* from Shortcuts.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.relay, this.scanner, this.opener, this.picker, this.sharer,
-    this.voiceRequests});
+    this.voiceRequests, this.onOpen, this.onFolder, this.onSettings, this.otherConnections});
 
   final Relay relay;
   /// The QR scanner the connect screen uses; a test passes its own.
@@ -33,6 +33,12 @@ class HomeScreen extends StatefulWidget {
   final Sharer? sharer;
   /// *Start a voice note* from Shortcuts: each event starts one on the recording screen.
   final Stream<void>? voiceRequests;
+  /// In the browser, the layout holds what opens: a note, or a new one for null, a folder, and Settings.
+  final NoteOpener? onOpen;
+  final ValueChanged<NotesFolder>? onFolder;
+  final VoidCallback? onSettings;
+  /// In the browser: the rows of *Other connections*, in place of *On this phone*.
+  final List<Widget>? otherConnections;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -128,15 +134,15 @@ class _HomeScreenState extends State<HomeScreen> {
               if (modelShows(relay)) modelSliver(relay),
               if (_search.text.trim().isNotEmpty)
                 noteSliver(context, relay, relay.entries, _search.text, back: 'Home', picker: widget.picker, sharer: widget.sharer,
-                  opener: widget.opener)
+                  opener: widget.opener, onOpen: widget.onOpen)
               else
                 SliverPadding(padding: const EdgeInsets.symmetric(horizontal: 16), sliver: SliverList.list(children: _folders())),
               const SliverPadding(padding: EdgeInsets.only(bottom: 110)),
             ]),
           ),
           NotesDock(relay: relay, search: _search, focus: _searchFocus,
-            onWrite: () => _open(NoteEditor(relay: relay, picker: widget.picker, sharer: widget.sharer, opener: widget.opener,
-              back: 'Home'))),
+            onWrite: () => widget.onOpen != null ? widget.onOpen!(null) : _open(NoteEditor(relay: relay, picker: widget.picker,
+              sharer: widget.sharer, opener: widget.opener, back: 'Home'))),
         ]),
       ),
     );
@@ -153,7 +159,7 @@ class _HomeScreenState extends State<HomeScreen> {
           tooltip: 'Settings',
           style: IconButton.styleFrom(backgroundColor: brand.card, foregroundColor: brand.ink),
           icon: const Icon(CupertinoIcons.gear),
-          onPressed: () => _open(SettingsScreen(relay: relay, scanner: widget.scanner, opener: widget.opener)),
+          onPressed: widget.onSettings ?? () => _open(SettingsScreen(relay: relay, scanner: widget.scanner, opener: widget.opener)),
         ),
         const SizedBox(width: 8),
       ],
@@ -172,10 +178,11 @@ class _HomeScreenState extends State<HomeScreen> {
         for (final (folder, icon) in const [(NotesFolder.all, CupertinoIcons.doc_text), (NotesFolder.voice, CupertinoIcons.mic),
           (NotesFolder.shares, CupertinoIcons.paperclip)])
           FolderRow(icon: icon, title: folder.title, count: count(folder),
-            onTap: () => _open(TimelineScreen(relay: relay, folder: folder, picker: widget.picker, sharer: widget.sharer,
-              opener: widget.opener))),
+            onTap: () => widget.onFolder != null ? widget.onFolder!(folder) : _open(TimelineScreen(relay: relay, folder: folder,
+              picker: widget.picker, sharer: widget.sharer, opener: widget.opener))),
       ]),
-      ..._section('On this phone', [
+      if (widget.otherConnections case final rows?) ..._section('Other connections', rows)
+      else ..._section('On this phone', [
         FolderRow(icon: CupertinoIcons.location, title: 'Location', line: locationLine(relay, now),
           onTap: () => _open(LocationPage(relay: relay, scanner: scanner))),
         FolderRow(icon: CupertinoIcons.heart, title: 'Health', line: healthLine(relay, now),

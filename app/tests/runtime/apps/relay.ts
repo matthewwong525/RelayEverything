@@ -62,7 +62,7 @@ export const relay: AppTests = context => {
     expect(await error(await relay("GET", "key", { token: fay, key: PHONE_KEY }))).toEqual([403, "This device key is turned off."]);
   });
 
-  it("makes a person only for one who may join, and a session's change only from the page", async () => {
+  it("makes a person only for one who may join, and a change by session or Access email only from the page", async () => {
     const { eli, owner } = context().signed;
     // Sign-up is closed, so Eli's company sign-in gets no Relay Everything person and no space.
     expect(await error(await relay("GET", "timeline", { token: eli }))).toEqual([403, "This email has no Relay Everything account on this server."]);
@@ -72,6 +72,9 @@ export const relay: AppTests = context => {
     const joined = await db().prepare("SELECT id FROM relay_people WHERE email = ?").bind(site.owner).first<{ id: string }>();
     expect(joined?.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(joined?.id).not.toBe(CHECKER);
+    // Access's cookie goes from any site too, so a change by Access email also needs the page's own Origin.
+    expect(await error(await relay("POST", "notes", { token: owner, body: { clientId: "runtime-web-01", text: "Hi", createdAt: Date.now() }, origin: false })))
+      .toEqual([403, "This change must come from the Relay Everything page."]);
     // A session cookie names its person from relay_sessions; a change by cookie needs the page's own Origin.
     const { fay } = context().signed;
     expect(await error(await relay("POST", "webhooks", { token: fay, session: SESSION, body: {}, origin: false })))

@@ -24,6 +24,8 @@ const PLACES = [
   'mobile/ios/ShareExtension/Info.plist',
   'mobile/ios/ShareExtension/ShareViewController.swift',
   'mobile/android/app/src/main/AndroidManifest.xml',
+  'mobile/web/index.html',
+  'mobile/web/manifest.json',
   'app/src/apps/relay/app.json',
   'app/worker/apps/relay/sign-in/phone.ts',
   'app/worker/relay-mcp/answers.ts',

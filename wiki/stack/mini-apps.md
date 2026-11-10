@@ -49,6 +49,15 @@ export const routes = new Map<string, Route>([["GET lookup", lookup]]);
 - **A folder with no screen and a route that lists no key fails `npm test`**, before a publish. The error names the `api.ts` and the two fixes: give the folder a screen, or list a key. So does a main route [mapped to a name](company-api.md#map-business-routes-before-employee-policy) nobody built.
 - **A skill reaches it through the helper**: [build a skill on actions](company-api.md#build-a-skill-on-actions).
 
+### A static app
+
+A static app's page is built files, not React: [Relay Everything's page](../relay-spaces.md) is the phone app in `mobile/`, built with Flutter for the web. Its `app/src/apps/<name>/` holds only `app.json`, with `"static": true` beside the title and description, and no `App.tsx`. A static app with an `App.tsx` fails `npm test`.
+
+- **The build puts its files in `app/public/apps/<name>/`**, which git ignores. For Relay Everything, `build:app` in `app/package.json` runs [`scripts/build-relay-web.mjs`](../../scripts/build-relay-web.mjs) first, so the app's build and CI need Flutter.
+- **The Worker serves the files as they are**, after the same app permission as any app. An address in the app that names no file gets the app's `index.html`, so a link into the page opens it: [`static-page.ts`](../../app/worker/static-page.ts).
+- **The home card opens it with a full page load**, as every card does, never inside the main app's frame.
+- **Its server side is an ordinary `app/worker/apps/<name>/`**, with its routes in `api.ts`.
+
 ## Build, preview, publish
 
 A mini app goes through [the change loop](../development/the-change-loop.md) like any change.

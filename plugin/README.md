@@ -53,6 +53,18 @@ Ask in your own words, for example *how did I sleep last night?*, *find my notes
 
 To add a note, ask *note in Relay Everything that …*.
 
+## Your web builds itself
+
+Once a day, your own AI builds your memory and your knowledge web. The first chat of the day on a connected computer starts `build.mjs run` in the background, and the chat does not wait. The build runs in the app the chat started in, Claude Code or Codex, on your own plan and allowance. It stops after 30 minutes.
+
+- Helpers read the newest unread chats and notes first: at most 20 chats and 100 notes a day. A chat is read when it has been quiet for an hour. A chat that grew is read again from where the last read stopped.
+- Each helper checks the facts you have before it adds one: new, changed (it replaces the old one), or the same (it adds nothing). It gives each note its topics, and never changes the note's words.
+- A last helper writes the topic pages side by side, links the topics that connect, and keeps `README.md` current.
+- The web's `.relay/` folder records what was read and which computer built each day. With two computers, only the first to claim the day builds.
+- The build's AI can run only `build.mjs`, which has no health, place, calendar or photo command. Its hooks are off, so its own chat is not saved.
+
+Type `/relay:build` (`$relay:build` in Codex) to see the last build and what is still to read. `/relay:build off` stops the daily build on this computer, `/relay:build on` starts it again, and `/relay:build now` starts one at once. Set `RELAY_BUILD_MODEL` to use another model for the build, such as `RELAY_BUILD_MODEL=haiku`.
+
 ## Save a chat
 
 Type `/relay:save` in Claude Code, or `$relay:save` in Codex, or ask *save this to Relay Everything*. The AI writes a title and a summary of what you decided and why. Relay Everything keeps them beside the chat.
@@ -84,6 +96,8 @@ The plugin keeps its files in `~/.config/relay-everything/`, or in `$XDG_CONFIG_
 - `computer.json` holds the server address, the key and the name of this computer. Only you can read it. Never copy the key into a chat or a file.
 - The `state/` folder holds the path of each chat file, its project, how many messages were sent, the projects with saving off, and `send.log`. `send.log` holds the last 200 sends, with only session IDs, counts and statuses. A send that fails waits there, and the next start of the app sends it.
 - The `knowledge/` folder is this computer's copy of your knowledge web: a git folder of topic pages. `knowledge.mjs sync` gets the newest pages and sends your changes, at most once every 15 minutes unless the copy has changes or you add `--now`. `knowledge.json` holds the time of the last sync. The one-hour pass for each sync goes to git only in its environment: it is never written to a file. The knowledge web needs git, and a server whose Cloudflare account has Artifacts.
+
+- `build.json` holds the daily build's settings for this computer: off or on, the day of the last try, a random id for this computer, what is still to read, and the last error. The `build/` folder holds a lock while a build runs, and the run's counts, ids and topic names, which the next build clears.
 
 ## Disconnect this computer
 

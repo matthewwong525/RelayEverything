@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { record } from '../bin/hook.mjs';
+import { codexPrompt, helpers, USAGE } from '../bin/build.mjs';
 import { ago, run, saving } from '../bin/saving.mjs';
 import { forgetComputer, openState, readState } from '../lib/config.mjs';
 import { sendSession } from '../lib/send.mjs';
@@ -95,7 +96,7 @@ test('/relay:saving says when the project last sent a chat: the newest send of i
 });
 
 test('each skill names itself and runs its own script from the plugin\'s folder', () => {
-  for (const [skill, script] of [['connect', 'connect.mjs'], ['ask', 'relay.mjs'], ['save', 'save.mjs'], ['saving', 'saving.mjs']]) {
+  for (const [skill, script] of [['connect', 'connect.mjs'], ['ask', 'relay.mjs'], ['save', 'save.mjs'], ['saving', 'saving.mjs'], ['build', 'build.mjs']]) {
     const text = read(`skills/${skill}/SKILL.md`);
     assert.match(text, new RegExp(`^---\\nname: ${skill}\\ndescription: .*Relay Everything`), skill);
     assert.ok(text.includes(`node "\${CLAUDE_PLUGIN_ROOT}/bin/${script}"`), skill);
@@ -128,8 +129,35 @@ test('the hooks run in Claude Code and Codex: no async hook, a short end, and th
   }
   assert.equal(hooks.SessionEnd[0].hooks[0].timeout, 3);
   const manifest = JSON.parse(read('.claude-plugin/plugin.json'));
-  assert.equal(manifest.version, '0.4.0');
+  assert.equal(manifest.version, '0.5.0');
   assert.equal(manifest.userConfig, undefined);
   assert.match(manifest.description, /Claude Code/);
   assert.match(manifest.description, /Codex/);
+});
+
+test('/relay:build maps off, on, now and nothing to its commands', () => {
+  const text = read('skills/build/SKILL.md');
+  for (const command of ['status', 'off', 'on', 'now']) assert.ok(text.includes(`bin/build.mjs" ${command}\n`), command);
+  assert.match(text, /^argument-hint: "\[off\|on\|now\]"$/m);
+});
+
+test('the build\'s prompts name only build.mjs commands that exist, stay short, and become the helpers and Codex\'s prompt', () => {
+  const commands = new Set([...USAGE.matchAll(/(?:^Commands: |, )([a-z-]+)/g)].map(found => found[1]));
+  for (const name of ['PROMPT.md', 'reader.md', 'gardener.md', 'CODEX.md']) {
+    const text = read(`build/${name}`);
+    assert.ok(text.length < 6000, `${name} stays under 6000 characters`);
+    const named = [...text.matchAll(/\{\{build\}\} ([a-z-]+)/g)].map(found => found[1]);
+    for (const command of named) assert.ok(commands.has(command), `${name} names ${command}`);
+    // Claude Code's narrow grant refuses a heredoc or `<` that holds JSON, so the facts go as one argument.
+    assert.doesNotMatch(text, /\{\{build\}\} [^`\n]*<</, `${name} sends no heredoc`);
+    // relay.mjs shows only to say that FORMAT.md's commands go through build.mjs.
+    assert.doesNotMatch(text.replaceAll('Where it names `relay.mjs`', ''), /relay\.mjs/, name);
+  }
+  const shape = helpers('node /plugin/bin/build.mjs');
+  assert.deepEqual(Object.keys(shape), ['reader', 'gardener']);
+  assert.deepEqual(shape.reader.tools, ['Read', 'Grep', 'Glob', 'Bash']);
+  assert.ok(shape.gardener.tools.includes('Write'));
+  assert.ok(shape.reader.prompt.includes('node /plugin/bin/build.mjs check-facts') && !shape.reader.prompt.includes('{{build}}'));
+  const codex = codexPrompt('node /plugin/bin/build.mjs');
+  for (const part of ['node /plugin/bin/build.mjs work', '# Read chats and notes into facts', '# Write and tidy the topic pages']) assert.ok(codex.includes(part), part);
 });

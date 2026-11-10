@@ -53,6 +53,7 @@ const PLACES = [
   '.claude-plugin/marketplace.json',
   'plugin/.claude-plugin/plugin.json',
   'plugin/bin',
+  'plugin/build',
   'plugin/hooks/hooks.json',
   'plugin/lib',
   'plugin/README.md',

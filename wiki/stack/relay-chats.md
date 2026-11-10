@@ -24,7 +24,7 @@ The start and the ask need no person: the secret protects them, so they pass a s
 
 The `ask` skill runs `bin/relay.mjs`, which maps each command to one `/v1/` route with the computer's key. Two commands join reads into one answer, and a part that fails goes under `errors` by name: `around` reads a note, then its day, notes, places, calendar and hourly steps and heart rate in a window of 2 to 12 hours each way; `topic` reads a page and its links from the copy of the knowledge web, then the topic's facts, notes and up to 3 chats its facts name. A refused key stops the whole answer.
 
-[`lib/topics.mjs`](../../plugin/lib/topics.mjs) reads the copy as plain files. At `SessionStart` the hook prints the top-level topics, at most 40, and starts `knowledge.mjs sync` detached; at `UserPromptSubmit` it adds at most 3 topics the message names. Both only read the copy, so they run with saving off or `RELAY_SAVE=0`, but not on a computer that is not connected.
+[`lib/topics.mjs`](../../plugin/lib/topics.mjs) reads the copy as plain files. At `SessionStart` the hook prints the top-level topics, at most 40, and starts `knowledge.mjs sync` detached; at `UserPromptSubmit` it adds at most 3 topics the message names. Both only read the copy, so they run with saving off or `RELAY_SAVE=0`, but not on a computer that is not connected. The first `SessionStart` of the day also starts the daily build: [how the web is built](relay-knowledge-web.md#how-the-web-is-built).
 
 ## Change the plugin
 

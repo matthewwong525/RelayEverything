@@ -137,7 +137,8 @@ test('the start hook says once, as a notice, that this computer is not connected
   await run('stop', place.input, { env: place.env, start: inline(down.fetch) });
   assert.equal(place.store.sessions()[SESSION].pending, true);
   await run('session-start', place.input, { env: place.env, start });
-  assert.deepEqual(starts, [['pending'], ['sync']]);
+  // The first connected start of the day starts the build, which syncs the copy first.
+  assert.deepEqual(starts, [['pending'], ['build', 'claude']]);
   assert.equal(await run('stop', place.input, { env: { ...place.env, RELAY_SAVE: '0' }, start }), '');
   assert.equal(starts.length, 2);
 });

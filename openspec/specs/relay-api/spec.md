@@ -7,7 +7,7 @@ Let a person's own scripts and other services read their Relay Everything data a
 
 ### Requirement: Other services read and add through one web API
 
-Relay Everything SHALL offer a web API that answers the same questions as the AI connector: search notes, read one note, read notes in a time range, sum up a day, read health over time, read places, read calendar events, search saved chats, read one chat, search the memory table, read one fact, read the memory table's columns and find notes by topic. It SHALL also add a typed note, and, for a computer's key, add facts, change the memory table's columns, and add or remove the topics of facts and notes. Besides these, it SHALL NOT change or delete any data, and SHALL NOT return a recording, a key, or a device's id. Each answer SHALL have the same size limits as the AI connector, with a way to read the next page.
+Relay Everything SHALL offer a web API that answers the same questions as the AI connector: search notes, read one note, read notes in a time range, sum up a day, read health over time, read places, read calendar events, search saved chats or list those active in a time, read one chat, search the memory table, read one fact, read the memory table's columns and find notes by topic. It SHALL also add a typed note, and, for a computer's key, add facts, change the memory table's columns, and add or remove the topics of facts and notes. Besides these, it SHALL NOT change or delete any data, and SHALL NOT return a recording, a key, or a device's id. Each answer SHALL have the same size limits as the AI connector, with a way to read the next page.
 
 #### Scenario: A script reads yesterday's notes
 - **WHEN** a script with a person's API key asks for the notes from yesterday
@@ -20,6 +20,10 @@ Relay Everything SHALL offer a web API that answers the same questions as the AI
 #### Scenario: A script searches the memory
 - **WHEN** a script with a person's API key searches the memory for facts tagged `battery`
 - **THEN** it gets that person's live facts on that tag, at most one page, and can add no fact and change no column
+
+#### Scenario: A computer lists the chats of a week
+- **WHEN** a computer's key lists the saved chats active in the last 7 days, with no search words
+- **THEN** it gets those chats, newest first, each with its message count and last time, at most one page, with a way to read the next
 
 ### Requirement: Two ways in, each to one person's space
 

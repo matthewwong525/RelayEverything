@@ -203,3 +203,5 @@ The AI connector has a long, hard-to-type address. The Claude Code plugin saves 
 **2026-11-10** — Staging trials: the connector trial passed on `/` and `/mcp`, and the plugin trial passed in Claude Code and in Codex with its sandbox on. The first iPhone check failed at the new step: the *AI chat transcripts* row lay under the search bar, so the tap opened Search. The flow now centers the row first.
 
 **2026-11-10** — Archived for publishing: every task done; the third iPhone check passed with the new step.
+
+**2026-11-10** — Merged the newest main: its new `points` tool joins the connector's list, so the connector has 15 tools, and the chat lines keep *Claude Code and Codex*.

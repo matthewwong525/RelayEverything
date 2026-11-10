@@ -255,7 +255,7 @@ it("takes MCP on its bare address as on /mcp, with one token, and shows a browse
   for (const path of ["/", "/mcp"]) {
     const answer = await mcp({ method: "tools/list" }, token, {}, path);
     expect([path, answer.status]).toEqual([path, 200]);
-    expect((await answer.json() as { result: { tools: unknown[] } }).result.tools).toHaveLength(14);
+    expect((await answer.json() as { result: { tools: unknown[] } }).result.tools).toHaveLength(15);
   }
   const refused = await mcp({ method: "tools/list" }, undefined, {}, "/");
   expect([refused.status, refused.headers.get("WWW-Authenticate")])

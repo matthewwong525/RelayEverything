@@ -1,7 +1,7 @@
 # Keep a voice note from your Apple Watch
 
 **Status:** in-progress
-**Branch:** legit-puma
+**Branch:** apple-watch-app
 **Open questions:** none
 
 ## Why
@@ -98,3 +98,4 @@ Non-goals: no typed or dictated notes on the watch, no list of notes on the watc
 - **2026-11-10** — Check: `.github/workflows/mobile-device-check.yml` builds the simulator app with `-d` and runs `RelayWatchTests` after `RunnerTests` in job `swift-tests`, because the watch app needs both; nothing is loosened, and a failed watch test fails the job.
 - **2026-11-10** — Check: `.github/workflows/mobile-ios.yml` gains job `watch-tests`, because the watch app's tests need a watch simulator; nothing is loosened.
 - **2026-11-10** — Checkpoint: the watch app, the iPhone receiver, the Fastfile and CI steps, and the docs are written; Flutter analyze and 567 tests pass. The Swift, the Xcode project and the Fastfile were written on Linux and never compiled; this save's Mac CI is their first build.
+- **2026-11-10** — Checkpoint: the first Mac CI built and signed the iPhone app with the watch app, and the watch tests passed. One Flutter test, *Try again writes only the failed notes*, failed once on CI and passed five times here with `main` merged in, so it is treated as a timing fluke; `main` is merged and all 705 tests pass.

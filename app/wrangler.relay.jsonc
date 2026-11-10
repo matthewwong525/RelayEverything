@@ -20,7 +20,7 @@
     "RELAY_APPLE_SERVICES_ID": "com.matthewwong525.relayeverything.signin",
     "RELAY_GOOGLE_CLIENT_ID": "20665982462-kf2e6v2vd3jofia52g0d9p5vn1gt4hfu.apps.googleusercontent.com",
     "RELAY_MCP_CALLBACK": "https://mcp.relayeverything.com/callback",
-    "RELAY_INBOX_MAIL_DOMAIN": "in.relayeverything.com"
+    "RELAY_INBOX_MAIL_DOMAIN": "relayeverything.com"
   },
   // Relay Everything's own address; the company app answers at admin.relayeverything.com: wiki/relay-spaces.md
   "routes": [{ "pattern": "app.relayeverything.com", "custom_domain": true }],

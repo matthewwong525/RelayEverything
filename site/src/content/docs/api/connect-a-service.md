@@ -53,7 +53,8 @@ curl "https://<your-relay-server>/v1/notes?q=milk&limit=5" \
 - `GET /v1/health?type=steps&from=…&to=…`: health values, one per hour or per day. `type` is any type in [Health](../../app/health/#what-it-reads), such as `weight` or `blood_pressure_systolic`.
 - `GET /v1/nights?from=…&to=…`: each night of sleep, newest first, with its stage minutes. Add `stages=true` for each night's stage timeline.
 - `GET /v1/workouts?from=…&to=…`: each workout, newest first, with its kind, minutes, km and calories.
-- `GET /v1/places?from=…&to=…`: each stay at a place.
+- `GET /v1/places?from=…&to=…`: each stay at a place, and each trip, each with its `id`.
+- `GET /v1/points?id=…`: the points of one stay or trip, at most 500. Or give `from` and `to`, up to 7 days, for every phone's points in that time.
 - `GET /v1/calendar?from=…&to=…`: calendar events by start, with title, times, place, notes and people. Add `q` for events that hold every word, newest first: [Calendar](../../app/calendar/).
 - `GET /v1/chats?q=…` and `GET /v1/chats/{id}`: saved AI chats from Claude Code and Codex, each with its app.
 

@@ -161,8 +161,8 @@ async function dayPlaces(db: Db, from: number, to: number) {
   const [{ results }, found] = await Promise.all([db.prepare(`${COVERS} SELECT ${NAME} AS name, AVG(lat) AS lat, AVG(lon) AS lon,
     MIN(at) AS "from", MAX(at) AS "to" FROM relay_locations l WHERE at >= ?1 AND at < ?2 AND NOT ${COVERED} GROUP BY 1 ORDER BY 4`)
     .bind(from, to).all<{ name: string; lat: number; lon: number; from: number; to: number }>(), staysIn(db, from, to, DAY_PLACES)]);
-  const stays = found.visits.map(({ name, lat, lon, arrived, left, address, event, ongoing }) =>
-    ({ name, lat, lon, from: arrived, to: left, ...address && { address }, ...event && { event }, ...ongoing && { ongoing } }));
+  const stays = found.visits.map(({ id, name, lat, lon, arrived, left, address, event, ongoing }) =>
+    ({ id, name, lat, lon, from: arrived, to: left, ...address && { address }, ...event && { event }, ...ongoing && { ongoing } }));
   return { places: [...results, ...stays].sort((a, b) => a.from - b.from), trips: found.trips };
 }
 
@@ -293,11 +293,12 @@ export async function eventPage(db: Db, filter: EventFilter) {
 }
 
 type Run = { name: string; lat: number; lon: number; arrived: number; left: number };
-/** A stay: a time in one place. `address` and `event` only when set; `ongoing` only while the person is there. */
-type Visit = Run & { minutes: number; address?: string; event?: string; ongoing?: true };
+/** A stay: a time in one place. `id` only for a phone's stay; `address` and `event` only when set; `ongoing` only while
+ *  the person is there. */
+type Visit = { id?: number } & Run & { minutes: number; address?: string; event?: string; ongoing?: true };
 /** A trip between two stays, with the names of the stays at each end when they are known. */
-type Trip = { left: number; arrived: number; mode: string; km: number; minutes: number; from: string | null; to: string | null };
-type StayRow = { kind: "stay" | "trip"; start_at: number; end_at: number; ongoing: number; updated_at: number; lat: number | null;
+type Trip = { id: number; left: number; arrived: number; mode: string; km: number; minutes: number; from: string | null; to: string | null };
+export type StayRow = { id: number; kind: "stay" | "trip"; start_at: number; end_at: number; ongoing: number; updated_at: number; lat: number | null;
   lon: number | null; name: string | null; address: string | null; event: string | null; mode: string | null; km: number | null };
 
 const minutesOf = (from: number, to: number) => Math.round((to - from) / MINUTE);
@@ -328,9 +329,9 @@ function longest(rows: StayRow[]): StayRow[] {
 }
 
 /** Still going on: sent as ongoing within the last 6 hours. */
-const going = (row: StayRow) => row.ongoing === 1 && Date.now() - Math.max(row.end_at, row.updated_at) < STALE;
+export const going = (row: Pick<StayRow, "ongoing" | "end_at" | "updated_at">) => row.ongoing === 1 && Date.now() - Math.max(row.end_at, row.updated_at) < STALE;
 
-const visitOf = (row: StayRow): Visit => ({ name: row.name!, lat: row.lat!, lon: row.lon!, arrived: row.start_at, left: row.end_at,
+const visitOf = (row: StayRow): Visit => ({ id: row.id, name: row.name!, lat: row.lat!, lon: row.lon!, arrived: row.start_at, left: row.end_at,
   minutes: minutesOf(row.start_at, row.end_at), ...row.address !== null && { address: row.address },
   ...row.event !== null && { event: row.event }, ...going(row) && { ongoing: true as const } });
 
@@ -342,7 +343,7 @@ async function staysIn(db: Db, from: number, to: number, want: number) {
   let rows: StayRow[] = [];
   // One stay more than wanted, as a row read later can still replace the last stay kept.
   for (let more = true; more && rows.filter(row => row.kind === "stay").length <= want;) {
-    const { results } = await db.prepare(`SELECT kind, start_at, end_at, ongoing, updated_at, lat, lon, name, address, event, mode,
+    const { results } = await db.prepare(`SELECT id, kind, start_at, end_at, ongoing, updated_at, lat, lon, name, address, event, mode,
       km FROM relay_stays WHERE start_at < ? AND (end_at > ? OR start_at >= ?) ORDER BY start_at, kind, id LIMIT ? OFFSET ?`)
       .bind(to, from, from, PAGE, read.length).all<StayRow>();
     read.push(...results);
@@ -350,7 +351,7 @@ async function staysIn(db: Db, from: number, to: number, want: number) {
     rows = longest(read);
   }
   const stays = rows.filter(row => row.kind === "stay");
-  const trips = rows.filter(row => row.kind === "trip").map((row): Trip => ({ left: row.start_at, arrived: row.end_at, mode: row.mode!,
+  const trips = rows.filter(row => row.kind === "trip").map((row): Trip => ({ id: row.id, left: row.start_at, arrived: row.end_at, mode: row.mode!,
     km: row.km!, minutes: minutesOf(row.start_at, row.end_at),
     from: stays.findLast(stay => stay.end_at <= row.start_at)?.name ?? null, to: stays.find(stay => stay.start_at >= row.end_at)?.name ?? null }));
   return { visits: stays.slice(0, want).map(visitOf), trips };

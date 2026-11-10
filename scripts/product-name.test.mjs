@@ -12,8 +12,14 @@ const BARE = /\bRelay\b(?!\s+Everything\b)/g;
 const RING = /\bring\b/gi;
 const QUOTES = `'"\``;
 
-// Phrases that keep a bare "Relay" on purpose, each one a literal.
-const ALLOWED = [];
+// Phrases that keep a bare "Relay" on purpose, each one a literal: the short name Siri hears, in the app's Info.plist,
+// and the words the website tells you to say to Siri.
+const ALLOWED = [
+  '<key>INAlternativeAppName</key>\n\t\t\t<string>Relay</string>',
+  'take a note in Relay',
+  'add a note to Relay',
+  'note in Relay',
+];
 
 // The files people read. A folder takes every file under it; `*.md` in a folder takes only that kind.
 const PLACES = [
@@ -221,6 +227,16 @@ test('a bare Relay in a docs page fails, with its file and line', () => {
   const page = '# Start\n\nOpen your Relay page.\n';
   assert.deepEqual(bareNames('site/src/content/docs/start.md', page), ['site/src/content/docs/start.md:3: Open your Relay page.']);
   assert.equal(bareNames('wiki/a.md', "Relay's page").length, 1);
+});
+
+test('only the Siri short name and its spoken phrases keep a bare Relay', () => {
+  const plist = '<dict>\n\t<key>INAlternativeAppNames</key>\n\t<array>\n\t\t<dict>\n\t\t\t<key>INAlternativeAppName</key>'
+    + '\n\t\t\t<string>Relay</string>\n\t\t</dict>\n\t</array>\n</dict>\n';
+  assert.deepEqual(bareNames('mobile/ios/Runner/Info.plist', plist), []);
+  assert.equal(bareNames('mobile/ios/Runner/Info.plist', '<key>CFBundleName</key>\n\t<string>Relay</string>\n').length, 1);
+  const page = 'Say *Hey Siri, take a note in Relay, buy milk*, *add a note to Relay* or *note in Relay*.\n';
+  assert.deepEqual(bareNames('site/src/content/docs/app/shortcuts.md', page), []);
+  assert.equal(bareNames('site/src/content/docs/app/shortcuts.md', 'Siri knows the app as Relay.\n').length, 1);
 });
 
 test('Relay Everything, commands, variables and paths pass', () => {

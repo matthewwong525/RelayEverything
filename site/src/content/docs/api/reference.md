@@ -466,6 +466,7 @@ Send the input as query parameters.
 | `events[].allDay` | boolean | yes |  |
 | `events[].people` | array of string | yes |  |
 | `places` | array of object | yes |  |
+| `places[].id` | number | no |  |
 | `places[].name` | string | yes |  |
 | `places[].lat` | number | yes |  |
 | `places[].lon` | number | yes |  |
@@ -475,6 +476,7 @@ Send the input as query parameters.
 | `places[].event` | string | no |  |
 | `places[].ongoing` | boolean | no |  |
 | `trips` | array of object | yes |  |
+| `trips[].id` | number | yes |  |
 | `trips[].left` | number | yes |  |
 | `trips[].arrived` | number | yes |  |
 | `trips[].mode` | string | yes |  |

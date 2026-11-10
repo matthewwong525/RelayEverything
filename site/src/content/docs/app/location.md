@@ -37,6 +37,8 @@ The phone keeps only the stay or trip you are in now. When it ends, the phone se
 
 Each trip tells how you went, how far, and how long. The distance adds each step between the points, so it is never longer than the real trip.
 
+Your AI can look at the points of one stay or trip, such as the road you took on a drive: [Connect your AI](../../connections/connect-your-ai/). It gets at most 500 points of one stay or trip, spread evenly.
+
 | The phone knows | Mode |
 |---|---|
 | Motion: walking, running, cycling, in a vehicle | Walking, running, cycling, driving |
@@ -62,7 +64,7 @@ A stay named from your calendar or Apple Maps also has its street. Android has n
 Under **What to send** in the **Location** folder, choose:
 
 - **Stays, trips and points** (the default): where you stayed, how you moved, and each point on the way.
-- **Only stays and trips**: where you stayed and how you moved. No point on the way leaves the phone. The phone uses the points to find the stays and trips, then deletes them. When you pick it, the points that wait on the phone are deleted.
+- **Only stays and trips**: where you stayed and how you moved. No point on the way leaves the phone. The phone uses the points to find the stays and trips, then deletes them. When you pick it, the points that wait on the phone are deleted. Your AI then sees your stays and trips, but no points in them.
 - **Only points**: each point, with its street, as before. The phone makes no stay or trip, and asks for no motion.
 
 Your choice applies on both phones, to your Relay Everything server and to [your own webhook](../../connections/your-database/#send-from-the-phone). Stays and trips go to the same place as the points: your server, and from there to each webhook you tick for **Location history**.

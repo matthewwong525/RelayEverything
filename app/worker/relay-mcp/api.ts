@@ -24,6 +24,7 @@ export const ROUTES: readonly V1Route[] = [
   { method: "GET", path: "/v1/nights", id: "listNights", summary: TOOLS.nights.title, tools: ["nights"], description: TOOLS.nights.description },
   { method: "GET", path: "/v1/workouts", id: "listWorkouts", summary: TOOLS.workouts.title, tools: ["workouts"], description: TOOLS.workouts.description },
   { method: "GET", path: "/v1/places", id: "listPlaces", summary: TOOLS.places.title, tools: ["places"], description: TOOLS.places.description },
+  { method: "GET", path: "/v1/points", id: "listPoints", summary: TOOLS.points.title, tools: ["points"], description: TOOLS.points.description },
   { method: "GET", path: "/v1/calendar", id: "listEvents", summary: TOOLS.calendar.title, tools: ["calendar"], q: true,
     description: TOOLS.calendar.description.replace("`query`", "`q`") },
   { method: "GET", path: "/v1/chats", id: "searchChats", summary: TOOLS.search_chats.title, tools: ["search_chats"], q: true,

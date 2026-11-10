@@ -298,7 +298,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat or route in the caller's own space.",
+            "description": "No such note, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -455,7 +455,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat or route in the caller's own space.",
+            "description": "No such note, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -623,6 +623,12 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "id": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991,
+                            "description": "The stay's or trip's id: give it to `GET /v1/points` for its points."
+                          },
                           "name": {
                             "type": "string",
                             "description": "The best name the phone found: a calendar event's place, a place on the map, the street, or the coordinates."
@@ -785,7 +791,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat or route in the caller's own space.",
+            "description": "No such note, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -801,7 +807,7 @@
       "get": {
         "operationId": "getDay",
         "summary": "Sum up a day",
-        "description": "One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, the nights or naps that ended that day with their stage minutes, each workout with its kind, km and calories, each stay with its name and times, each trip with its mode, km and minutes, and the calendar's events with the people in each.",
+        "description": "One day: how many notes, steps, sleep minutes, heart rate, workouts, the other health values it has, the nights or naps that ended that day with their stage minutes, each workout with its kind, km and calories, each stay with its name and times, each trip with its mode, km and minutes, and the calendar's events with the people in each. Each stay and trip from the phone has an `id`: give it to points for its route.",
         "parameters": [
           {
             "name": "day",
@@ -1125,6 +1131,12 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "id": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991,
+                            "description": "The stay's or trip's id: give it to `GET /v1/points` for its points."
+                          },
                           "name": {
                             "type": "string"
                           },
@@ -1169,6 +1181,12 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "id": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991,
+                            "description": "The stay's or trip's id: give it to `GET /v1/points` for its points."
+                          },
                           "left": {
                             "type": "string",
                             "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
@@ -1211,6 +1229,7 @@
                           }
                         },
                         "required": [
+                          "id",
                           "left",
                           "arrived",
                           "mode",
@@ -1312,7 +1331,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat or route in the caller's own space.",
+            "description": "No such note, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1494,7 +1513,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat or route in the caller's own space.",
+            "description": "No such note, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1751,7 +1770,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat or route in the caller's own space.",
+            "description": "No such note, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1951,7 +1970,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat or route in the caller's own space.",
+            "description": "No such note, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1967,7 +1986,7 @@
       "get": {
         "operationId": "listPlaces",
         "summary": "Read places visited",
-        "description": "The stays and trips from one time to another, oldest first: each stay's name, street, where it is, and when you arrived and left; each trip's mode (walking, running, cycling, driving, flying or unknown), km, minutes, and the stays it went between.",
+        "description": "The stays and trips from one time to another, oldest first: each stay's name, street, where it is, and when you arrived and left; each trip's mode (walking, running, cycling, driving, flying or unknown), km, minutes, and the stays it went between. Each stay and trip from the phone has an `id`: give it to points for its route.",
         "parameters": [
           {
             "name": "from",
@@ -2024,6 +2043,12 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "id": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991,
+                            "description": "The stay's or trip's id: give it to `GET /v1/points` for its points."
+                          },
                           "name": {
                             "type": "string",
                             "description": "The best name the phone found: a calendar event's place, a place on the map, the street, or the coordinates."
@@ -2077,6 +2102,12 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "id": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991,
+                            "description": "The stay's or trip's id: give it to `GET /v1/points` for its points."
+                          },
                           "left": {
                             "type": "string",
                             "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
@@ -2119,6 +2150,7 @@
                           }
                         },
                         "required": [
+                          "id",
                           "left",
                           "arrived",
                           "mode",
@@ -2186,7 +2218,182 @@
             }
           },
           "404": {
-            "description": "No such note, chat or route in the caller's own space.",
+            "description": "No such note, chat, stay, trip or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/points": {
+      "get": {
+        "operationId": "listPoints",
+        "summary": "Read location points",
+        "description": "The location points of one stay or trip, by its `id` from places or day_summary, from the phone that made it; or every phone's points from `from` to `to`, at most 7 days. Each point has its time, lat, lon, accuracy (m) and street. Oldest first, at most 500, spread evenly with the first and the last; `total` says how many there were. No points means the person keeps only stays and trips, or the phone sent none: do not ask again.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "description": "The id of a stay or trip, from places or day_summary.",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "The first time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset.",
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "The time to stop before: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset.",
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "required": false,
+            "description": "An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "The stay's or trip's id, when asked by id.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "stay",
+                        "trip"
+                      ]
+                    },
+                    "from": {
+                      "type": "string",
+                      "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                    },
+                    "to": {
+                      "type": "string",
+                      "description": "A stay or trip still going on reads to now."
+                    },
+                    "timezone": {
+                      "type": "string"
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "How many points there were in all: more than `points` holds when they were thinned."
+                    },
+                    "points": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "at": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          },
+                          "lat": {
+                            "type": "number"
+                          },
+                          "lon": {
+                            "type": "number"
+                          },
+                          "accuracy": {
+                            "type": "number",
+                            "description": "How sure the phone was, in meters."
+                          },
+                          "place": {
+                            "description": "The street, when the phone named one.",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "at",
+                          "lat",
+                          "lon",
+                          "accuracy"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "Oldest first, at most 500, spread evenly with the first and the last."
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "to",
+                    "timezone",
+                    "total",
+                    "points"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2422,7 +2629,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat or route in the caller's own space.",
+            "description": "No such note, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2639,7 +2846,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat or route in the caller's own space.",
+            "description": "No such note, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2845,7 +3052,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat or route in the caller's own space.",
+            "description": "No such note, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2920,7 +3127,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat or route in the caller's own space.",
+            "description": "No such note, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {

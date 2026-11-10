@@ -1,11 +1,13 @@
 // Each connector question's answer, shared by the MCP tools and the web API so one input answers the same through
 // either. Reads are capped; a note is added only through add-note.ts. No answer holds a key, file name or device id.
 import { addNote, type TypedNote } from "../apps/relay/add-note.ts";
-import { chatById, chatLines, chatMessages, chatPage, daySummary, eventPage, healthBuckets, nightPage, noteById, notePage, photoById, photoPage,
-  placeVisits, workoutPage, type CalendarEvent, type Chat, type HealthType, type Note, type Photo, type Span } from "../apps/relay/queries.ts";
+import { chatById, chatLines, chatMessages, chatPage, daySummary, eventPage, healthBuckets, nightPage, noteById, notePage, photoById,
+  photoPage, placeVisits, workoutPage, type CalendarEvent, type Chat, type HealthType, type Note, type Photo,
+  type Span } from "../apps/relay/queries.ts";
+import { rangePoints, stayPoints } from "../apps/relay/points.ts";
 import type { Db, PersonSpace } from "../apps/relay/space.ts";
 import type { McpEnv } from "./env.ts";
-import { LINES, MAX_BUCKETS, PART, type Input, type ToolName } from "./inputs.ts";
+import { LINES, MAX_BUCKETS, PART, POINTS_DAYS, type Input, type ToolName } from "./inputs.ts";
 import { dayOf, HOUR, instant, local, nextDay, startOfDay, ZONE } from "./time.ts";
 
 const NEAR = HOUR / 2;
@@ -105,6 +107,28 @@ async function visits(db: Db, from: number, to: number, limit: number, timezone:
   const found = await placeVisits(db, from, to, limit);
   return { visits: found.visits.map(visit => spanShown(visit, timezone)), trips: found.trips.map(trip => spanShown(trip, timezone)),
     next: found.next === null ? null : local(found.next, timezone) };
+}
+
+/** A range's longest: an hour more than the days, for a week with a clock change. */
+const POINTS_SPAN = POINTS_DAYS * 24 * HOUR + HOUR;
+
+const pointsShown = ({ total, points }: Awaited<ReturnType<typeof rangePoints>>, timezone: string) =>
+  ({ total, points: points.map(point => ({ ...point, at: local(point.at, timezone) })) });
+
+/** One stay's or trip's points by its id, or every phone's points in a range: one or the other. */
+async function points(db: Db, { id, from, to, timezone = ZONE }: Input<"points">) {
+  if (id !== undefined && from === undefined && to === undefined) {
+    const found = await stayPoints(db, id);
+    if (!found) throw new Refusal("No stay or trip has this id.", 404);
+    const { kind, start, end, ...rest } = found;
+    return { id, kind, from: local(start, timezone), to: local(end, timezone), timezone, ...pointsShown(rest, timezone) };
+  }
+  if (id !== undefined || from === undefined || to === undefined) {
+    throw new Refusal("Give the `id` of a stay or trip, or `from` and `to`: one or the other.");
+  }
+  const [start, end] = range(from, to, timezone);
+  if (end - start > POINTS_SPAN) throw new Refusal(`That is more than ${POINTS_DAYS} days: ask for a shorter range.`);
+  return { from: local(start, timezone), to: local(end, timezone), timezone, ...pointsShown(await rangePoints(db, start, end), timezone) };
 }
 
 /** A chat as the caller reads it: its times in the zone. */
@@ -210,6 +234,7 @@ const READS = {
       nextCursor: found.next === null ? null : String(found.next) };
   },
   places: async (db, { from, to, limit, timezone = ZONE }) => visits(db, ...range(from, to, timezone), limit, timezone),
+  points,
   calendar: async (db, { from, to, query, limit, cursor: text, timezone = ZONE }) => {
     const [start, end] = range(from, to, timezone);
     const found = await eventPage(db, { from: start, to: end, words: query?.split(/\s+/).slice(0, 10), limit, after: eventAfter(text) });

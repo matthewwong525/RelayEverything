@@ -8,12 +8,15 @@ appId: com.matthewwong525.relayApp
 - extendedWaitUntil:
     visible: "Home"
     timeout: 60000
-# The section sits below On this phone, so scroll to it. A row's label joins its name and its line.
+# The section sits below On this phone, so scroll to it. A row's label joins its name and its line. The row counts as
+# seen while the search bar still covers it, so center it and scroll to the list's end: a tap there would open Search.
 - scrollUntilVisible:
     element:
       text: 'AI chat transcripts(.|\n)*'
     direction: DOWN
     timeout: 20000
+    centerElement: true
+- scroll
 - assertVisible: 'Other connections(.|\n)*'
 - assertVisible: 'AI chat transcripts(.|\n)*Claude Code and Codex(.|\n)*'
 - takeScreenshot: home-other-connections

@@ -199,3 +199,5 @@ The AI connector has a long, hard-to-type address. The Claude Code plugin saves 
 **2026-11-10** — Saved for the final checks: built, reviewed twice (four fixes: Codex's sandbox, a turned-off key's words, a link whose waiter died, `connect.mjs` in a folder it can't write), local checks pass. Left: CI, the staging trial in Claude Code and Codex, the connector trial on `mcp-staging`, and the iPhone check.
 
 **2026-11-10** — Assumed: this save leaves the main specs as they are, and the archive in `/ship` applies the deltas, because only the archive's own sync deletes the retired `relay-claude-plugin` spec, and a hand sync first would leave the archive nothing to retire.
+
+**2026-11-10** — Staging trials: the connector trial passed on `/` and `/mcp`, and the plugin trial passed in Claude Code and in Codex with its sandbox on. The first iPhone check failed at the new step: the *AI chat transcripts* row lay under the search bar, so the tap opened Search. The flow now centers the row first.

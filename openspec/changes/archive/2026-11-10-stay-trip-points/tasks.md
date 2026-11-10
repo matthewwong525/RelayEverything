@@ -19,5 +19,5 @@
 
 ## 4. Checks
 
-- [ ] 4.1 Run `npm test` in `app/` and `node scripts/public-check.mjs`; fix what fails.
-- [ ] 4.2 After `/save`, on staging, deploy the connector from `app/` with `npx wrangler deploy -c wrangler.relay-mcp.jsonc --env staging`, then with an API key call `GET /v1/places` for a day with stays, and `GET /v1/points?id=<a trip's id>`: the points run from the trip's start to its end, and `total` matches the count.
+- [x] 4.1 Run `npm test` in `app/` and `node scripts/public-check.mjs`; fix what fails.
+- [x] 4.2 After `/save`, run the whole stack on this computer, as `wiki/stack/relay-ai-connector.md#on-this-computer` says (shared staging can't make test keys without a person's sign-in): make a phone key and an API key, send a made-up stay, trip and 30 points, then call `GET /v1/places` and `GET /v1/points?id=<the trip's id>`: the points run from the trip's start to its end, and `total` matches the count. Turn both keys off after.

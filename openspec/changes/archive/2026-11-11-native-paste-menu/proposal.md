@@ -1,6 +1,6 @@
 # Paste in a note feels like the iPhone's own
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** grumpy-rabbit
 **Open questions:** none
 
@@ -109,3 +109,4 @@ None.
 - **2026-11-11** — Second iPhone check: the tour passed, with *Select All*, *Copy* and *Paste* on the iPhone; Claude's own check hung and gave no verdict. Its pictures showed *Cut* and *Copy* after a hold with no words selected, because the editor offers them even then; the menu now leaves them out. Asked Matthew: fix this, then check again.
 - **2026-11-11** — Third iPhone check: the paste step passed again; the Settings step failed on a tap on the gear, which this change does not touch, and Claude did not start. Caught up with main, which published the other part of the request (one notes list, a voice player, quieter sync status) in the same editor file, so one more check covers both.
 - **2026-11-11** — Fourth iPhone check, on the version caught up with main: works. The tour passed, with Select All, Copy and Paste; Claude saw the iPhone's own menu with Paste and Select All on a hold, a paste of words put on the simulator's clipboard with no *Allow Paste?* question, and a tap on the cursor that opens and closes the menu (the iPhone put it below the cursor). The magnifier could not be checked on the simulator, because a flow can't take a picture during a drag; the phone tests cover it. Task 3.2 ticked; a paste from Safari on Matthew's iPhone after TestFlight is still to try.
+- **2026-11-11** — Archived for publishing, after the fourth iPhone check passed. The spec was already brought up to date on main's version, so the archive keeps it as it is.

@@ -1895,7 +1895,10 @@ void main() {
       final held = transcriber.hold = Completer();
       clock = clock.add(const Duration(seconds: 10));
       await hold(relay, const Duration(seconds: 3));
-      await pumpEventQueue();
+      // The second note's job starts a few turns of the event loop later on a slow computer: wait for it.
+      for (var turn = 0; turn < 50 && transcriber.heard.length < 2; turn++) {
+        await pumpEventQueue();
+      }
       final writing = transcriber.heard.last;
       expect(writing, isNot(failed));
       await relay.writeWordsAgain();

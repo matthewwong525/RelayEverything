@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · watch-notes-save-on-every-watch</title>
+<title>Review · 2026-11-11-watch-notes-save-on-every-watch</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -442,11 +442,11 @@
 })();
 </script>
 </head>
-<body data-change="watch-notes-save-on-every-watch" data-own-back>
+<body data-change="2026-11-11-watch-notes-save-on-every-watch" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>watch-notes-save-on-every-watch</h1>
+  <h1>2026-11-11-watch-notes-save-on-every-watch</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Tap a picture to see it full screen.</span></p>
@@ -487,6 +487,8 @@
 <li class="decision card" id="decision-9" data-note="decision-9" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-11</p>Assumed: the wake test checks the one shared helper, <code>WatchSender.wakeIfNear</code>, that <code>WatchModel</code> calls at record start and at <code>.inactive</code>, because <code>WatchModel</code> needs a microphone and is not in the test target.</li>
 <li class="decision card" id="decision-10" data-note="decision-10" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-11</p>Assumed: the 32-bit compile uses <code>build-for-testing</code> with no automatic fall back to <code>build</code>, because a silent fall back could hide a test that does not compile; if CI shows the unsigned test bundle can not build, change it to <code>build</code> then.</li>
 <li class="decision card" id="decision-11" data-note="decision-11" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-11</p>Built: the watch time is an <code>Int64</code>, the app opens on the recording look (<code>.starting</code>), a wake goes at record start and at <code>.inactive</code> while recording, <code>watch-tests.sh</code> compiles for <code>arm64_32</code> first, and the wiki says why. The review found one gap, the wiki not naming every watch on watchOS 10 or 11 as 32-bit; fixed. The Swift is first compiled by CI.</li>
+<li class="decision card" id="decision-12" data-note="decision-12" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-11</p>Checked in CI (run 43052399917): the watch app and its tests compiled for <code>arm64_32-apple-watchos10.0</code> (TEST BUILD SUCCEEDED), the 19 watch tests passed on the simulator, and the signed iPhone build with the watch app exported its ipa.</li>
+<li class="decision card" id="decision-13" data-note="decision-13" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-11</p>Archived for publish: CI compiled the watch app for 32-bit watches, the watch tests passed, and the signed iPhone build with the watch app passed.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

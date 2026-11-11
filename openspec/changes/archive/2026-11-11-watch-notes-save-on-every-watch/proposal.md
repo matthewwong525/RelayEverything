@@ -1,6 +1,6 @@
 # Watch notes save on every Apple Watch, and the app opens on the recording screen
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** fix-watch-phone-connection
 **Open questions:** none
 
@@ -83,3 +83,5 @@ None.
 - **2026-11-11** — Assumed: the wake test checks the one shared helper, `WatchSender.wakeIfNear`, that `WatchModel` calls at record start and at `.inactive`, because `WatchModel` needs a microphone and is not in the test target.
 - **2026-11-11** — Assumed: the 32-bit compile uses `build-for-testing` with no automatic fall back to `build`, because a silent fall back could hide a test that does not compile; if CI shows the unsigned test bundle can not build, change it to `build` then.
 - **2026-11-11** — Built: the watch time is an `Int64`, the app opens on the recording look (`.starting`), a wake goes at record start and at `.inactive` while recording, `watch-tests.sh` compiles for `arm64_32` first, and the wiki says why. The review found one gap, the wiki not naming every watch on watchOS 10 or 11 as 32-bit; fixed. The Swift is first compiled by CI.
+- **2026-11-11** — Checked in CI (run 43052399917): the watch app and its tests compiled for `arm64_32-apple-watchos10.0` (TEST BUILD SUCCEEDED), the 19 watch tests passed on the simulator, and the signed iPhone build with the watch app exported its ipa.
+- **2026-11-11** — Archived for publish: CI compiled the watch app for 32-bit watches, the watch tests passed, and the signed iPhone build with the watch app passed.

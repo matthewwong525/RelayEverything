@@ -2,7 +2,8 @@ import Foundation
 import XCTest
 
 // The watch's queue, length and screen rules, on a watch simulator. RelayWatch/WatchNotes.swift is built into this
-// target.
+// target. The simulator is 64-bit, so a number too large for a 32-bit Int never fails here at run time: write each
+// large literal as Int64, so the arm64_32 compile in device-check/watch-tests.sh accepts it.
 
 /// The iPhone link as a fake: it remembers each send and wake, and a transfer stays on its way until [finish]. With
 /// [ready] false it sends nothing, as before the session is ready; with [reachable] false the iPhone is away.
@@ -175,7 +176,19 @@ class RelayWatchTests: XCTestCase {
   func testMetadataIsWhatTheIPhoneReads() throws {
     let note = WatchNote(id: String(repeating: "a", count: 32), createdAt: 1_793_790_000_000, durationMs: 4200)
     XCTAssertEqual(note.metadata as NSDictionary,
-      ["id": String(repeating: "a", count: 32), "createdAt": 1_793_790_000_000, "durationMs": 4200] as NSDictionary)
+      ["id": String(repeating: "a", count: 32), "createdAt": Int64(1_793_790_000_000), "durationMs": 4200]
+        as NSDictionary)
+    // The iPhone's ShortcutsInbox reads the time as an NSNumber.
+    XCTAssertEqual((note.metadata["createdAt"] as? NSNumber)?.int64Value, note.createdAt)
+  }
+
+  func testTheTimeIs64BitOnEveryWatch() throws {
+    // On a Series 8 and older Int is 32 bits, and a time in milliseconds since 1970 is too large for it: a save there
+    // stopped the app. The time is an Int64 whatever the watch.
+    let note = try WatchQueue(folder: folder).add(try recording(), at: Date(), durationMs: 2000)
+    XCTAssertEqual(MemoryLayout.size(ofValue: note.createdAt), 8)
+    XCTAssertGreaterThan(note.createdAt, Int64(Int32.max))
+    XCTAssertEqual((note.metadata["createdAt"] as? NSNumber)?.int64Value, note.createdAt)
   }
 
   func testASendWakesTheIPhoneOnlyWhenItIsNear() throws {
@@ -205,6 +218,31 @@ class RelayWatchTests: XCTestCase {
     XCTAssertEqual([inFlight.sent.count, inFlight.wakes], [0, 1])
   }
 
+  func testTheAppOpensOnTheRecordingLook() {
+    XCTAssertEqual(WatchRules.atOpen(allowed: true), .starting)
+    // The system asks for the microphone over the recording look.
+    XCTAssertEqual(WatchRules.atOpen(allowed: nil), .starting)
+    XCTAssertEqual(WatchRules.atOpen(allowed: false), .microphoneRefused)
+  }
+
+  func testAfterALeaveTheNextOpenShowsTheRecordingLook() {
+    for screen: WatchScreen in [.starting, .idle, .recording, .saved, .notSaved] {
+      XCTAssertEqual(WatchRules.afterLeave(screen), .starting, "\(screen)")
+    }
+    XCTAssertEqual(WatchRules.afterLeave(.microphoneRefused), .microphoneRefused)
+  }
+
+  func testARecordStartWakesTheIPhoneOnlyWhenItIsNear() {
+    // WatchModel wakes the iPhone this way as a recording starts and as the person starts to leave.
+    let near = FakeSender()
+    near.wakeIfNear()
+    XCTAssertEqual(near.wakes, 1)
+    let away = FakeSender()
+    away.reachable = false
+    away.wakeIfNear()
+    XCTAssertEqual(away.wakes, 0)
+  }
+
   func testTheScreenAfterASaveOrTheX() {
     XCTAssertEqual(WatchRules.afterSave(kept: true, seconds: 4), .saved)
     // A recording that could not be kept says so; a quick open and close is not an error.
@@ -229,14 +267,14 @@ class RelayWatchTests: XCTestCase {
 
   func testTheAppRecordsAsItOpensAndSavesAsItIsLeft() {
     var rule = PhaseRule()
-    // Launch: inactive, then active, records once.
+    // Launch: inactive, then active, records once. Inactive before the app is open wakes nothing.
     XCTAssertEqual(rule.enter(.inactive), .nothing)
     XCTAssertEqual(rule.enter(.active), .record)
-    // The wrist down for a moment, and up again: it keeps recording.
-    XCTAssertEqual(rule.enter(.inactive), .nothing)
+    // The wrist down for a moment, and up again: it wakes the iPhone and keeps recording.
+    XCTAssertEqual(rule.enter(.inactive), .wake)
     XCTAssertEqual(rule.enter(.active), .nothing)
-    // The Digital Crown: it saves; coming back records a new note.
-    XCTAssertEqual(rule.enter(.inactive), .nothing)
+    // The Digital Crown: the start of the leave wakes the iPhone, then it saves; coming back records a new note.
+    XCTAssertEqual(rule.enter(.inactive), .wake)
     XCTAssertEqual(rule.enter(.background), .save)
     XCTAssertEqual(rule.enter(.inactive), .nothing)
     XCTAssertEqual(rule.enter(.active), .record)

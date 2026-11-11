@@ -7,7 +7,8 @@ import WatchKit
 final class WatchModel: ObservableObject {
   static let shared = WatchModel()
 
-  @Published private(set) var screen = WatchScreen.idle
+  /// The recording look from the first frame, before the microphone is on.
+  @Published private(set) var screen = WatchRules.atOpen(allowed: WatchRecorder.allowed)
   /// The ids of the notes that wait for the iPhone, oldest first.
   @Published private(set) var waiting: [String] = []
   /// The id of the note saved last, so the Saved screen says whether the iPhone has it.
@@ -42,11 +43,15 @@ final class WatchModel: ObservableObject {
   /// The sound level for the bars, from 0 to 1.
   func level() -> Double { recorder.level() }
 
-  /// The app opened, came back, or was left: it records or saves by PhaseRule.
+  /// The app opened, came back, or was left: it records, wakes the iPhone or saves by PhaseRule. After a leave the
+  /// screen goes back to the recording look, so the next open shows no *Saved* first.
   func phase(_ phase: AppPhase) {
     switch phases.enter(phase) {
     case .record: talk()
-    case .save: save()
+    case .wake: if screen == .recording { link.wakeIfNear() }
+    case .save:
+      save()
+      screen = WatchRules.afterLeave(screen)
     case .nothing: break
     }
   }
@@ -71,6 +76,8 @@ final class WatchModel: ObservableObject {
       try recorder.start()
       started = Date()
       screen = .recording
+      // The iPhone app is awake when the save sends its file, even a save on leave, when the app is off screen.
+      link.wakeIfNear()
     } catch {
       screen = .notSaved
     }

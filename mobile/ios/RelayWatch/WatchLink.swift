@@ -2,7 +2,8 @@ import Foundation
 import WatchConnectivity
 
 // The watch's only way out: WatchConnectivity to the paired iPhone, which queues each file, survives a restart and
-// sends when the phone is near. The iPhone answers `kept` with transferUserInfo (Runner/RelayWatchReceiver.swift).
+// sends when the phone is near. The iPhone answers `kept` with transferUserInfo (Runner/RelayWatchReceiver.swift), and
+// a `wake` message starts the iPhone app when it is near.
 
 final class WatchLink: NSObject, WCSessionDelegate, WatchSender {
   /// Runs on the main thread with the id of each note the iPhone kept.
@@ -26,6 +27,14 @@ final class WatchLink: NSObject, WCSessionDelegate, WatchSender {
     guard WCSession.default.activationState == .activated else { return false }
     WCSession.default.transferFile(file, metadata: metadata)
     return true
+  }
+
+  var reachable: Bool { WCSession.default.activationState == .activated && WCSession.default.isReachable }
+
+  /// A message from the watch starts the iPhone app in the background; its session then takes the waiting files at once.
+  /// The message holds no note: the files go by transferFile, which keeps them until the iPhone has them.
+  func wake() {
+    WCSession.default.sendMessage(["wake": true], replyHandler: nil, errorHandler: nil)
   }
 
   func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {

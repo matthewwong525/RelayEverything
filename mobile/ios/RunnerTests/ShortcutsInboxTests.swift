@@ -35,15 +35,20 @@ class ShortcutsInboxTests: XCTestCase {
       with: Data(contentsOf: inbox.appendingPathComponent("\(id).json"))) as? NSDictionary
     let expected = try JSONSerialization.jsonObject(with: Data(contentsOf: fixture)) as? NSDictionary
     XCTAssertEqual(written, expected)
+    XCTAssertEqual(written?["from"] as? String, "watch")
     let wav = inbox.appendingPathComponent("\(id)/voice.wav")
     XCTAssertEqual(try Data(contentsOf: wav), Data([82, 73, 70, 70]))
     XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
   }
 
-  func testAddANoteWritesTheSameShapeForAVoiceNote() throws {
+  func testAddANoteWritesTheSameShapeForAVoiceNoteWithNoWatchMark() throws {
     let request = ShortcutsInbox.request(id: id, text: "", createdAt: 1_793_790_000_000, files: [], durationMs: 4200)
     let expected = try JSONSerialization.jsonObject(with: Data(contentsOf: fixture)) as? NSDictionary
-    XCTAssertEqual(request as NSDictionary, expected)
+    let unmarked = expected?.mutableCopy() as? NSMutableDictionary
+    unmarked?.removeObject(forKey: "from")
+    XCTAssertEqual(request as NSDictionary, unmarked)
+    XCTAssertEqual(ShortcutsInbox.request(id: id, text: "", createdAt: 1_793_790_000_000, files: [], durationMs: 4200,
+      from: "watch") as NSDictionary, expected)
   }
 
   func testTheSameNoteHandedTwiceLeavesOneNote() throws {

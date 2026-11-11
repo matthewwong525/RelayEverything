@@ -2,26 +2,30 @@ import Foundation
 import WatchKit
 
 // The watch app's one state: what shows, the recording, and the notes that wait for the iPhone. Main thread only.
+// The rules that need no microphone are in WatchNotes.swift, where RelayWatchTests checks them.
 
 final class WatchModel: ObservableObject {
-  enum Screen: Equatable { case main, recording, saved, microphoneRefused }
-
   static let shared = WatchModel()
 
-  @Published private(set) var screen = Screen.main
-  @Published private(set) var waiting = 0
+  @Published private(set) var screen = WatchScreen.idle
+  /// The ids of the notes that wait for the iPhone, oldest first.
+  @Published private(set) var waiting: [String] = []
+  /// The id of the note saved last, so the Saved screen says whether the iPhone has it.
+  @Published private(set) var lastSaved: String?
   @Published private(set) var started = Date()
 
   private let recorder = WatchRecorder()
   private let queue = WatchQueue.onWatch()
   private let link = WatchLink()
+  private var phases = PhaseRule()
 
   private init() {
-    waiting = queue.notes.count
+    waiting = queue.notes.map(\.id)
     recorder.onLongest = { [weak self] in self?.save() }
     link.onKept = { [weak self] id in
-      self?.queue.kept(id)
-      self?.waiting = self?.queue.notes.count ?? 0
+      guard let self else { return }
+      self.queue.kept(id)
+      self.waiting = self.queue.notes.map(\.id)
     }
     // A delivered note waits for kept. A failed one goes at the next saved note or launch, not at once: the system
     // already waits for the iPhone, so an error here comes again at once, and sending at once would loop.
@@ -38,7 +42,17 @@ final class WatchModel: ObservableObject {
   /// The sound level for the bars, from 0 to 1.
   func level() -> Double { recorder.level() }
 
-  /// Talk, a watch face button or the Action button: asks for the microphone on the first tap only, then records.
+  /// The app opened, came back, or was left: it records or saves by PhaseRule.
+  func phase(_ phase: AppPhase) {
+    switch phases.enter(phase) {
+    case .record: talk()
+    case .save: save()
+    case .nothing: break
+    }
+  }
+
+  /// Opening the app, a tap on a screen that is not recording, a watch face button or the Action button: asks for the
+  /// microphone the first time only, then records. A call while it records changes nothing.
   func talk() {
     guard screen != .recording else { return }
     switch WatchRecorder.allowed {
@@ -52,37 +66,35 @@ final class WatchModel: ObservableObject {
   }
 
   private func record() {
+    guard screen != .recording else { return }
     do {
       try recorder.start()
       started = Date()
       screen = .recording
     } catch {
-      screen = .main
+      screen = .notSaved
     }
   }
 
-  /// A tap anywhere while it records, or the longest time: keeps the note and hands it to the iPhone.
+  /// A tap anywhere while it records, leaving the app, or the longest time: keeps the note and hands it to the iPhone.
   func save() {
     guard screen == .recording else { return }
-    guard let recording = recorder.stop(), (try? queue.add(recording.0, at: Date(), durationMs: recording.1)) != nil
-    else {
-      screen = .main
+    let seconds = Date().timeIntervalSince(started)
+    let note = recorder.stop().flatMap { try? queue.add($0.0, at: Date(), durationMs: $0.1) }
+    screen = WatchRules.afterSave(kept: note != nil, seconds: seconds)
+    guard let note else {
+      if screen == .notSaved { WKInterfaceDevice.current().play(.failure) }
       return
     }
+    lastSaved = note.id
     queue.sendWaiting(link)
-    waiting = queue.notes.count
+    waiting = queue.notes.map(\.id)
     WKInterfaceDevice.current().play(.success)
-    screen = .saved
-    DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-      if self?.screen == .saved { self?.screen = .main }
-    }
   }
 
   /// The X: stops and keeps nothing.
   func cancel() {
     recorder.cancel()
-    screen = .main
+    screen = WatchRules.afterCancel
   }
-
-  func back() { screen = .main }
 }

@@ -1,14 +1,19 @@
 import Foundation
 import XCTest
 
-// The watch's queue and length rules, on a watch simulator. RelayWatch/WatchNotes.swift is built into this target.
+// The watch's queue, length and screen rules, on a watch simulator. RelayWatch/WatchNotes.swift is built into this
+// target.
 
-/// The iPhone link as a fake: it remembers each send, and a transfer stays on its way until [finish]. With [ready]
-/// false it sends nothing, as before the session is ready.
+/// The iPhone link as a fake: it remembers each send and wake, and a transfer stays on its way until [finish]. With
+/// [ready] false it sends nothing, as before the session is ready; with [reachable] false the iPhone is away.
 final class FakeSender: WatchSender {
   var sent: [String] = []
   var sending: Set<String> = []
   var ready = true
+  var reachable = true
+  var wakes = 0
+
+  func wake() { wakes += 1 }
 
   func send(_ file: URL, metadata: [String: Any]) -> Bool {
     guard ready else { return false }
@@ -171,6 +176,70 @@ class RelayWatchTests: XCTestCase {
     let note = WatchNote(id: String(repeating: "a", count: 32), createdAt: 1_793_790_000_000, durationMs: 4200)
     XCTAssertEqual(note.metadata as NSDictionary,
       ["id": String(repeating: "a", count: 32), "createdAt": 1_793_790_000_000, "durationMs": 4200] as NSDictionary)
+  }
+
+  func testASendWakesTheIPhoneOnlyWhenItIsNear() throws {
+    let queue = WatchQueue(folder: folder)
+    _ = try queue.add(try recording(), at: Date(), durationMs: 2000)
+    let near = FakeSender()
+    queue.sendWaiting(near)
+    XCTAssertEqual(near.wakes, 1)
+    // Nothing new to send: no wake.
+    queue.sendWaiting(near)
+    XCTAssertEqual(near.wakes, 1)
+    let away = FakeSender()
+    away.reachable = false
+    _ = try queue.add(try recording(), at: Date(), durationMs: 2000)
+    queue.sendWaiting(away)
+    XCTAssertEqual([away.sent.count, away.wakes], [1, 0])
+  }
+
+  func testAtLaunchAWaitingNoteWakesTheIPhoneEvenWhenItIsInFlight() throws {
+    let empty = FakeSender()
+    WatchQueue(folder: folder).sendAllWaiting(empty)
+    XCTAssertEqual(empty.wakes, 0)
+    let note = try WatchQueue(folder: folder).add(try recording(), at: Date(), durationMs: 2000)
+    let inFlight = FakeSender()
+    inFlight.sending = [note.id]
+    WatchQueue(folder: folder).sendAllWaiting(inFlight)
+    XCTAssertEqual([inFlight.sent.count, inFlight.wakes], [0, 1])
+  }
+
+  func testTheScreenAfterASaveOrTheX() {
+    XCTAssertEqual(WatchRules.afterSave(kept: true, seconds: 4), .saved)
+    // A recording that could not be kept says so; a quick open and close is not an error.
+    XCTAssertEqual(WatchRules.afterSave(kept: false, seconds: 4), .notSaved)
+    XCTAssertEqual(WatchRules.afterSave(kept: false, seconds: 1), .notSaved)
+    XCTAssertEqual(WatchRules.afterSave(kept: false, seconds: 0.4), .idle)
+    XCTAssertEqual(WatchRules.afterCancel, .idle)
+  }
+
+  func testTheSavedScreenSaysWhetherTheIPhoneHasTheNote() {
+    let sending = WatchRules.iPhoneWords(saved: "a", wait: ["b", "a"])
+    XCTAssertEqual(sending.iPhone, "Sending to your iPhone")
+    XCTAssertEqual(sending.others, "1 note waits for your iPhone")
+    let kept = WatchRules.iPhoneWords(saved: "a", wait: ["b", "c"])
+    XCTAssertEqual(kept.iPhone, "On your iPhone")
+    XCTAssertEqual(kept.others, "2 notes wait for your iPhone")
+    let alone = WatchRules.iPhoneWords(saved: "a", wait: [])
+    XCTAssertEqual(alone.iPhone, "On your iPhone")
+    XCTAssertNil(alone.others)
+    XCTAssertNil(waitingWords(0))
+  }
+
+  func testTheAppRecordsAsItOpensAndSavesAsItIsLeft() {
+    var rule = PhaseRule()
+    // Launch: inactive, then active, records once.
+    XCTAssertEqual(rule.enter(.inactive), .nothing)
+    XCTAssertEqual(rule.enter(.active), .record)
+    // The wrist down for a moment, and up again: it keeps recording.
+    XCTAssertEqual(rule.enter(.inactive), .nothing)
+    XCTAssertEqual(rule.enter(.active), .nothing)
+    // The Digital Crown: it saves; coming back records a new note.
+    XCTAssertEqual(rule.enter(.inactive), .nothing)
+    XCTAssertEqual(rule.enter(.background), .save)
+    XCTAssertEqual(rule.enter(.inactive), .nothing)
+    XCTAssertEqual(rule.enter(.active), .record)
   }
 
   func testRecordingLengthRules() {

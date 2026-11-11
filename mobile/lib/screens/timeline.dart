@@ -398,8 +398,8 @@ void showDeleted(ScaffoldMessengerState? messenger, Relay relay, String id) {
 }
 
 /// One note in its day's card: the first line in bold; the time, where a note from elsewhere came from, and the rest of
-/// the words; then its kind, length, place and send state. A first picture shows small at the right. A tap opens it;
-/// a swipe to the left, or a screen reader's *Delete*, deletes it with *Undo*.
+/// the words; then its kind, *No words heard* for a watch note with none, length, place and send state. A first picture
+/// shows small at the right. A tap opens it; a swipe to the left, or a screen reader's *Delete*, deletes it with *Undo*.
 class _NoteRow extends StatelessWidget {
   const _NoteRow({required this.entry, required this.relay, required this.onTap, this.selected = false});
 
@@ -413,7 +413,8 @@ class _NoteRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final brand = brandOf(context);
     final muted = TextStyle(fontSize: 13, color: brand.muted);
-    final meta = [if (entry.length != null) clockOf(entry.length!), sendState(entry)].whereType<String>();
+    final meta = [if (entry.noWords) 'No words heard', if (entry.length != null) clockOf(entry.length!), sendState(entry)]
+      .whereType<String>();
     final picture = entry.files.where((file) => file.picture && file.ready).firstOrNull;
     final row = Material(color: selected ? brand.accentSoft : Colors.transparent, child: InkWell(
       onTap: onTap,

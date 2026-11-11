@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -345,6 +346,28 @@ void main() {
       expect([transcriber.heard, recordings()], [['$id.wav'], ['$id.wav']]);
       expect(Directory('${folder.path}/$inboxFolder').listSync(), isEmpty);
       expect(server.requests, isEmpty);
+    });
+
+    test('from the Apple Watch, the note is marked from the watch, also when the app opens again; Add a note is not',
+      () async {
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+      addTearDown(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = false);
+      await store.close();
+      final file = File('${tempFolder().path}/relay.db');
+      store = Store(NativeDatabase(file), folder: () async => folder);
+      final relay = app();
+      await relay.load();
+      final id = handOverWatchNote();
+      await ShortcutsBridge(relay).handle(const MethodCall('inboxChanged'));
+      await relay.wordsWritten();
+      final held = 'a8' * 16;
+      await ShortcutsBridge(relay, wait: const Duration(seconds: 1)).handle(MethodCall('add', {
+        'id': held, 'text': '', 'recording': {'path': recorded(held), 'durationMs': 2000}}));
+      await relay.wordsWritten();
+      relay.dispose();
+      await store.close();
+      store = Store(NativeDatabase(file), folder: () async => folder);
+      expect({for (final note in await store.notes()) note.clientId: note.fromWatch}, {id: true, held: false});
     });
 
     test('inboxChanged during a drain makes it look again, and a note that came meanwhile is kept', () async {

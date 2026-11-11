@@ -23,6 +23,9 @@ final class RelayWatchReceiver: NSObject, WCSessionDelegate {
     session.activate()
   }
 
+  /// The watch's wake: it only starts this app, so the session takes the waiting files at once. It needs no answer.
+  func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {}
+
   func session(_ session: WCSession, didReceive file: WCSessionFile) {
     // The system deletes the file when this returns, so it moves now, on this thread. The watch sends a note again
     // until it gets kept, so an id taken before writes nothing and gets kept again.

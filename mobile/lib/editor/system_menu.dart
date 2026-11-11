@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart' show CupertinoLocalizations;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_quill/flutter_quill.dart';
@@ -18,14 +19,17 @@ class QuillSystemMenu extends StatefulWidget {
 
   final QuillRawEditorState editor;
 
-  /// The system items for the editor's own buttons, as `SystemContextMenu.getDefaultItems` maps them.
-  static List<IOSSystemContextMenuItem> itemsOf(QuillRawEditorState editor) => [
+  /// The system items for the editor's own buttons, as `SystemContextMenu.getDefaultItems` maps them, but Cut, Copy and
+  /// Select All run the editor's own actions on its own selection. The phone's own Cut, Copy and Select All work on the
+  /// phone's copy of the words, and on an iPhone their Select All selected nothing. Paste stays the phone's own, so the
+  /// phone asks no *Allow Paste?* question for words from another app.
+  static List<IOSSystemContextMenuItem> itemsOf(QuillRawEditorState editor, CupertinoLocalizations words) => [
     for (final button in editor.contextMenuButtonItems)
       ?switch (button.kind) {
-        ContextMenuButtonKind.copy => const IOSSystemContextMenuItemCopy(),
-        ContextMenuButtonKind.cut => const IOSSystemContextMenuItemCut(),
+        ContextMenuButtonKind.cut => _own(words.cutButtonLabel, button),
+        ContextMenuButtonKind.copy => _own(words.copyButtonLabel, button),
         ContextMenuButtonKind.paste => const IOSSystemContextMenuItemPaste(),
-        ContextMenuButtonKind.selectAll => const IOSSystemContextMenuItemSelectAll(),
+        ContextMenuButtonKind.selectAll => _own(words.selectAllButtonLabel, button, () => _reopenAfterClose(editor)),
         ContextMenuButtonKind.lookUp => const IOSSystemContextMenuItemLookUp(),
         ContextMenuButtonKind.searchWeb => const IOSSystemContextMenuItemSearchWeb(),
         ContextMenuButtonKind.share => const IOSSystemContextMenuItemShare(),
@@ -33,6 +37,38 @@ class QuillSystemMenu extends StatefulWidget {
         _ => null,
       },
   ];
+
+  /// An item with the system's look that runs [button]'s own action, after [before].
+  static IOSSystemContextMenuItem? _own(String title, ContextMenuButtonItem button, [void Function()? before]) =>
+    switch (button.onPressed) {
+      final pressed? => IOSSystemContextMenuItemCustom(title: title, onPressed: () {
+        before?.call();
+        pressed();
+      }),
+      null => null,
+    };
+
+  /// For each editor, whether the menu opens again once the system has closed it.
+  static final _reopen = Expando<bool>();
+
+  /// After Select All the menu opens again, as in Apple Notes, so Cut and Copy are one tap away. The system closes its
+  /// menu after each item, and that news can come before or after the item's action.
+  static void _reopenAfterClose(QuillRawEditorState editor) {
+    if (closedJustNow(editor)) {
+      _reopenSoon(editor);
+    } else {
+      _reopen[editor] = true;
+    }
+  }
+
+  /// Opens [editor]'s menu after the frame, when the editor has drawn the new selection the menu points at.
+  static void _reopenSoon(QuillRawEditorState editor) {
+    _reopen[editor] = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (editor.mounted && !editor.textEditingValue.selection.isCollapsed) editor.showToolbar();
+    });
+    WidgetsBinding.instance.scheduleFrame();
+  }
 
   /// The selection's box on the screen, which the menu points at. The endpoints come first to last, so the line
   /// heights do too: a selection made backwards from the words up into the title still clears the title's letters.
@@ -64,6 +100,7 @@ class _QuillSystemMenuState extends State<QuillSystemMenu> {
     QuillSystemMenu._closedBySystem[editor]?.cancel();
     QuillSystemMenu._closedBySystem[editor] = Timer(QuillSystemMenu.closeWindow, () {});
     editor.hideToolbar(false);
+    if (QuillSystemMenu._reopen[editor] ?? false) QuillSystemMenu._reopenSoon(editor);
   });
 
   @override
@@ -74,7 +111,8 @@ class _QuillSystemMenuState extends State<QuillSystemMenu> {
 
   @override
   Widget build(BuildContext context) {
-    final items = QuillSystemMenu.itemsOf(widget.editor);
+    // The iPhone's own words for the app's items, such as *Select All*, not Flutter's shared *Select all*.
+    final items = QuillSystemMenu.itemsOf(widget.editor, CupertinoLocalizations.of(context));
     if (items.isNotEmpty) {
       final words = WidgetsLocalizations.of(context);
       _menu.showWithItems(QuillSystemMenu.anchorOf(widget.editor), [for (final item in items) item.getData(words)]);

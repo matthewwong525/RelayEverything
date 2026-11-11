@@ -26,9 +26,25 @@ List<MethodCall> menuCalls(WidgetTester tester) {
 
 List<String> methods(List<MethodCall> calls) => [for (final call in calls) call.method.replaceFirst('ContextMenu.', '')];
 
-/// The kinds of item a show message asks for, such as `paste`.
-List<String> itemsOf(MethodCall call) =>
-  [for (final item in (call.arguments as Map)['items'] as List) (item as Map)['type'] as String];
+/// The items a show message asks for: the kind of each of the phone's own, such as `paste`, and the title of each the
+/// app runs, such as `Copy`.
+List<String> itemsOf(MethodCall call) => [
+  for (final item in (call.arguments as Map)['items'] as List)
+    if ((item as Map)['type'] == 'custom') item['title'] as String else item['type'] as String,
+];
+
+/// The phone tells the app it ran the item titled [title] of the last menu, then that it closed the menu, in the
+/// order the phone sends them.
+Future<void> pressItem(WidgetTester tester, List<MethodCall> calls, String title) async {
+  final items = (calls.lastWhere((call) => call.method == 'ContextMenu.showSystemContextMenu').arguments as Map)['items'];
+  final id = (items as List).cast<Map>().firstWhere((item) => item['title'] == title)['id'];
+  for (final call in [MethodCall('ContextMenu.onPerformCustomAction', [0, id]),
+      const MethodCall('ContextMenu.onDismissSystemContextMenu')]) {
+    await tester.binding.defaultBinaryMessenger.handlePlatformMessage(SystemChannels.platform.name,
+      SystemChannels.platform.codec.encodeMethodCall(call), (_) {});
+  }
+  await tester.pumpAndSettle();
+}
 
 QuillRawEditorState rawEditor(WidgetTester tester) => tester.state<QuillRawEditorState>(find.byType(QuillRawEditor));
 
@@ -92,7 +108,7 @@ void main() {
       rawEditor(tester).showToolbar();
       await tester.pumpAndSettle();
       expect(methods(calls), ['showSystemContextMenu']);
-      expect(itemsOf(calls.last), containsAll(['cut', 'copy', 'paste', 'selectAll']));
+      expect(itemsOf(calls.last), ['Cut', 'Copy', 'paste', 'Select All']);
       await tester.pageBack();
       await tester.pumpAndSettle();
       expect(find.byType(NoteEditor), findsNothing);
@@ -169,6 +185,28 @@ void main() {
       final link = words.indexOf('https://');
       expect(opened, isEmpty);
       expect(quill(tester).selection.baseOffset, inInclusiveRange(link, link + 'https://example.com/list'.length));
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+    testWidgets('Select All selects every word and opens the menu again with Copy, which copies them', (tester) async {
+      final calls = menuCalls(tester);
+      await editNote(tester);
+      await tester.longPressAt(onLine(tester, 'Buy milk and eggs', 30));
+      await tester.pumpAndSettle();
+      expect(itemsOf(calls.last), contains('Select All'));
+      await pressItem(tester, calls, 'Select All');
+      final all = rawEditor(tester).textEditingValue;
+      expect(all.selection, TextSelection(baseOffset: 0, extentOffset: all.text.length - 1));
+      expect(methods(calls).last, 'showSystemContextMenu');
+      expect(itemsOf(calls.last), containsAll(['Cut', 'Copy']));
+      final copied = <Object?>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') copied.add((call.arguments as Map)['text']);
+        if (call.method.startsWith('ContextMenu.')) calls.add(call);
+        return null;
+      });
+      await pressItem(tester, calls, 'Copy');
+      expect(copied.last, words);
+      await tester.pump(QuillSystemMenu.closeWindow);
     }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
     testWidgets('words the system pastes come in as plain text at the cursor', (tester) async {

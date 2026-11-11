@@ -1,12 +1,12 @@
 {
   "name": "relay",
   "owner": { "name": "Matthew Wong" },
-  "metadata": { "description": "Relay Everything's Claude Code plugin: save your chats to your own Relay Everything server." },
+  "metadata": { "description": "Relay Everything's plugin for Claude Code and Codex: save your AI chats to your Relay Everything, and ask about your data." },
   "plugins": [
     {
       "name": "relay",
       "source": "./plugin",
-      "description": "Saves each Claude Code chat to your Relay Everything server, with a tool to save the AI's summary beside it."
+      "description": "Connects Claude Code or Codex to your Relay Everything by a sign-in link, saves each chat, and reads your notes, health, places, calendar and saved chats through skills."
     }
   ]
 }

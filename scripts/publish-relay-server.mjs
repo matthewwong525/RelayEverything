@@ -13,22 +13,25 @@ import { parseEnv } from '../.claude/skills/memory/scripts/lib/store.mjs';
 const USAGE = `usage: node scripts/publish-relay-server.mjs [--ref <commit>] [--staging-only] [--dry-run]
 
 Exports the repository at --ref (default origin/main), installs app/, builds the Relay Everything page with Flutter,
-then deploys in order the staging spaces Worker, the staging AI connector and the staging shared server, then the
-live shared server. It stops at the
-first failure, so a staging failure leaves live as it was. --staging-only skips live. --dry-run builds each
+then sets up the staging knowledge web's start and deploys in order the staging spaces Worker, the staging AI
+connector and the staging shared server, then sets up the live start and deploys the live shared server. It stops at
+the first failure, so a staging failure leaves live as it was. --staging-only skips live. --dry-run builds each
 part and deploys nothing. Prints one result= line.`;
 
 const SERVER = 'wrangler.relay.jsonc';
 const LIVE_SERVER = 'relay-everything-server';
 
-/** The steps in order: a `-c` deploy names its Worker from its config, a server build from its redirect. */
+/** The steps in order: a `-c` deploy names its Worker from its config, a server build from its redirect. The
+ *  knowledge web's start goes first, as a server whose start repo is missing can't make a person's web. */
 export function plan({ stagingOnly }) {
   const staging = [
+    { name: 'staging-knowledge', knowledge: 'staging' },
     { name: 'staging-spaces', config: 'wrangler.spaces.jsonc', worker: 'relay-everything-spaces-staging' },
     { name: 'staging-connector', config: 'wrangler.relay-mcp.jsonc', worker: 'relay-everything-mcp-staging' },
     { name: 'staging-server', build: 'staging', worker: 'relay-everything-server-staging' },
   ];
-  return stagingOnly ? staging : [...staging, { name: 'live-server', build: 'live', worker: LIVE_SERVER }];
+  return stagingOnly ? staging
+    : [...staging, { name: 'live-knowledge', knowledge: 'live' }, { name: 'live-server', build: 'live', worker: LIVE_SERVER }];
 }
 
 const defaultRun = (cmd, args, opts) => execFileSync(cmd, args, { stdio: ['ignore', 2, 2], ...opts });
@@ -36,7 +39,7 @@ const defaultExport = (root, sha, work) =>
   execFileSync('tar', ['-x', '-C', work], { input: execFileSync('git', ['-C', root, 'archive', sha], { maxBuffer: 1 << 30 }) });
 
 /** Cloudflare's key from the primary worktree's .env, as publish-relay-site.mjs reads it, else the shell's. */
-function cloudflareEnv(root) {
+export function cloudflareEnv(root) {
   const file = join(primaryRoot(root).primary, '.env');
   const values = existsSync(file) ? parseEnv(readFileSync(file, 'utf8')) : {};
   const keys = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID'].filter(key => values[key]);
@@ -49,6 +52,11 @@ function expectWorker(name, expected) {
 }
 
 function runStep(step, { app, env, dryRun, run }) {
+  if (step.knowledge) {
+    const flags = [...(step.knowledge === 'staging' ? ['--staging'] : []), ...(dryRun ? ['--dry-run'] : [])];
+    run('node', ['../scripts/relay-knowledge-setup.mjs', ...flags], { cwd: app, env });
+    return;
+  }
   const deploy = ['wrangler', 'deploy', ...(dryRun ? ['--dry-run'] : [])];
   if (step.config) {
     expectWorker(workerName(parseConfig(join(app, step.config)), 'staging'), step.worker);
@@ -88,7 +96,7 @@ export function publish({ root, ref, stagingOnly = false, dryRun = false, run = 
       current = step.name;
       runStep(step, { app, env, dryRun, run });
     }
-    return `result=${dryRun ? 'dry-run' : 'deployed'} ${tag} workers=${steps.map(step => step.worker).join(',')}`;
+    return `result=${dryRun ? 'dry-run' : 'deployed'} ${tag} workers=${steps.flatMap(step => step.worker ?? []).join(',')}`;
   } catch (error) {
     process.stderr.write(`publish-relay-server: ${current}: ${error.message}\n`);
     return `result=failed step=${current} ${tag}`;

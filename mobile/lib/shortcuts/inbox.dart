@@ -3,13 +3,14 @@ import 'dart:io';
 
 import '../data/attachments.dart';
 
-/// The folder, in the app's support folder, where *Add a note* leaves a note when the app does not answer in time.
-/// `ios/Runner/RelayIntents.swift` writes it: `<id>.json` for each note, and `<id>/` for its files.
+/// The folder, in the app's support folder, where *Add a note* leaves a note the app did not answer in time, and the
+/// Apple Watch each voice note. `ios/Runner/ShortcutsInbox.swift` writes `<id>.json` for each, `<id>/` for its files.
 const inboxFolder = 'shortcuts-inbox';
 
 /// One note a shortcut left in the inbox.
 class InboxRequest {
-  const InboxRequest({required this.id, required this.text, required this.createdAt, required this.files, this.recording});
+  const InboxRequest({required this.id, required this.text, required this.createdAt, required this.files, this.recording,
+    this.fromWatch = false});
 
   /// The note's id, the same one the shortcut gave the app: a note the app kept already is not kept twice.
   final String? id;
@@ -19,6 +20,9 @@ class InboxRequest {
 
   /// A lone recording Swift made into a voice note's WAV, or null.
   final ShortcutRecording? recording;
+
+  /// True for a voice note the Apple Watch handed over: Swift writes `"from": "watch"`.
+  final bool fromWatch;
 }
 
 /// A recording a shortcut gave as its only file: Swift writes it as a 16 kHz mono WAV at
@@ -105,5 +109,5 @@ InboxRequest? _requestOf(String text, String root) {
   final id = body['id'], words = body['text'], at = body['createdAt'];
   return InboxRequest(id: id is String && noteId.hasMatch(id) ? id : null, text: words is String ? words : '',
     createdAt: at is int ? DateTime.fromMillisecondsSinceEpoch(at) : DateTime.now(), files: shortcutFiles(body['files'], root),
-    recording: shortcutRecording(body['recording'], body['files']));
+    recording: shortcutRecording(body['recording'], body['files']), fromWatch: body['from'] == 'watch');
 }

@@ -87,7 +87,7 @@ export function configs(templates, { name, email, account, database, subdomain, 
   app.queues.producers[0].queue = app.queues.consumers[0].queue = part.queue;
   app.services[0].service = part.mcp;
   Object.assign(mcp, { name: part.mcp, account_id: account });
-  Object.assign(mcp.vars, { RELAY_MCP_ADDRESS: `${connector}/mcp`, RELAY_SERVER_URL: server });
+  Object.assign(mcp.vars, { RELAY_MCP_ADDRESS: `${connector}/`, RELAY_SERVER_URL: server });
   Object.assign(mcp.d1_databases[0], { database_name: part.database, database_id: database });
   mcp.r2_buckets[0].bucket_name = part.bucket;
   Object.assign(spaces, { name: part.spaces, account_id: account });
@@ -114,10 +114,11 @@ export const accessApp = (app, host, workerId) => ({ name: app, type: 'self_host
 /** The login's one policy: the owner's email and no one else. */
 export const ownerPolicy = owner => ({ name: 'Relay owner', decision: 'allow', include: [{ email: { email: owner } }], precedence: 1 });
 
-/** Device keys, and a phone's trade of its sign-in code for its key, skip the login: the server checks each itself. A
- *  browser still sends its login cookie on these addresses, which the server checks too. */
+/** Device keys, and a phone's or computer's sign-in calls, skip the login: the server checks each itself. A browser
+ *  still sends its login cookie on these addresses, which the server checks too. */
 export const keysApp = (app, host) => ({ name: app, type: 'self_hosted', domain: `${host}/apps/relay/api`,
-  destinations: [{ type: 'public', uri: `${host}/apps/relay/api` }, { type: 'public', uri: `${host}/apps/relay/sign-in/phone/key` }],
+  destinations: ['api', 'sign-in/phone/key', 'sign-in/computer/start', 'sign-in/computer/key']
+    .map(path => ({ type: 'public', uri: `${host}/apps/relay/${path}` })),
   session_duration: '24h', app_launcher_visible: false });
 export const bypassPolicy = { name: 'Relay Everything keys check themselves', decision: 'bypass', include: [{ everyone: {} }], precedence: 1 };
 
@@ -233,7 +234,7 @@ async function install(io, cf, root, { name, email, account }) {
   io.log('ok server, spaces and AI connector live');
 
   io.log(`server=https://${host}`);
-  io.log(`connector=${written.mcp.vars.RELAY_MCP_ADDRESS}`);
+  io.log(`connector=${written.mcp.vars.RELAY_MCP_ADDRESS.replace(/\/$/, "")}`);
 }
 
 /** Update: each config written again from the templates, the keys' way past the login, then the newest code live. */
@@ -246,9 +247,14 @@ async function update(io, cf, root, installed) {
   // The AI connector now signs in through the server: its own Access sign-in app guards nothing.
   const old = apps.find(item => item.name === part.mcpApp);
   if (old) await cf(`${root}/access/apps/${old.id}`, 'DELETE');
-  writeConfigs(io.files, configs(templates(), settingsOf(installed, subdomain)));
+  const before = existsSync(io.files.mcp) && JSON.parse(readFileSync(io.files.mcp, 'utf8')).vars?.RELAY_MCP_ADDRESS;
+  const written = configs(templates(), settingsOf(installed, subdomain));
+  writeConfigs(io.files, written);
   deploy(io, part.database);
   io.log('ok database changes applied, then the newest Relay Everything put live');
+  // A connected app's sign-in belongs to the address it added, so a moved address needs each app to connect again.
+  const after = written.mcp.vars.RELAY_MCP_ADDRESS;
+  if (before && before !== after) io.log(`The AI connector's address is now ${after.replace(/\/$/, '')}: connect each AI app again there.`);
 }
 
 async function status(io, cf, root, name, request) {

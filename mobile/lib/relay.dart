@@ -26,18 +26,18 @@ enum Emptied { kept, dropped, deleting }
 
 /// One row of the timeline: a note typed or said on this phone, or one from elsewhere that a pull brought.
 class Entry {
-  const Entry({this.id = '', required this.text, required this.at, this.place, this.sent = false, this.waiting = false, this.voice = false,
-    this.writing = false, this.failed = false, this.recording, this.length, this.files = const [], this.from});
+  const Entry({this.id = '', required this.text, required this.at, this.sent = false, this.waiting = false, this.voice = false,
+    this.writing = false, this.failed = false, this.noWords = false, this.recording, this.length, this.files = const [],
+    this.from});
 
   /// The phone's own id for the note: [Relay.editNote] takes it.
   final String id;
   /// The words, with their styles as Markdown marks: `plainText` gives them bare.
   final String text;
   final DateTime at;
-  final String? place;
   /// The server took it.
   final bool sent;
-  /// It has an upload in the outbox, or waits for its pin, while sending is on.
+  /// It has an upload in the outbox while sending is on.
   final bool waiting;
 
   /// Said into this phone, by a hold on *New note* or from Shortcuts.
@@ -46,6 +46,8 @@ class Entry {
   final bool writing;
   /// True when its words failed or took too long: the recording is kept, and *Try again* writes them again.
   final bool failed;
+  /// True for a watch note in which the phone found no words: it keeps its recording to play, and is not sent.
+  final bool noWords;
   /// The recording on this phone, to play: [Relay.play] takes it.
   final String? recording;
   final Duration? length;
@@ -131,30 +133,83 @@ class WebhookProblem {
   final String? file;
 }
 
-/// The account's email and the names of what the person connected on their Relay Everything page, as the server last
-/// answered. No address, secret or send state.
+/// One of the person's phones or computers, as `GET connections` names it: no key. [since] is when it connected, and
+/// [lastChat] when a computer last saved a chat.
+class ConnectedDevice {
+  const ConnectedDevice({required this.id, required this.name, this.computer = false, this.since, this.lastChat});
+
+  final String id;
+  final String name;
+  /// A computer with the plugin, in place of a phone.
+  final bool computer;
+  final DateTime? since;
+  final DateTime? lastChat;
+
+  static ConnectedDevice? fromJson(Object? json) {
+    if (json is! Map || json['id'] is! String || json['name'] is! String) return null;
+    DateTime? at(Object? ms) => ms is int ? DateTime.fromMillisecondsSinceEpoch(ms) : null;
+    return ConnectedDevice(id: json['id'] as String, name: json['name'] as String, computer: json['kind'] == 'computer',
+      since: at(json['since']), lastChat: at(json['lastChatAt']));
+  }
+
+  Map<String, Object> toJson() => {'id': id, 'name': name, 'kind': computer ? 'computer' : 'phone',
+    if (since case final since?) 'since': since.millisecondsSinceEpoch,
+    if (lastChat case final lastChat?) 'lastChatAt': lastChat.millisecondsSinceEpoch};
+}
+
+/// A connected AI app: its name, and the day it connected when the server says.
+typedef AiApp = ({String name, DateTime? since});
+
+/// The account's email and what the person connected, as the server last answered: their phones and computers, AI
+/// apps and webhooks by name, and their two notes addresses. No key, webhook address, secret or send state.
 class Connections {
-  const Connections({this.email, this.aiApps = const [], this.webhooks = const []});
+  const Connections({this.email, this.aiApps = const [], this.webhooks = const [], this.devices = const [], this.thisDevice,
+    this.notesAddress, this.sharedAddress, this.addressesKnown = false});
 
   /// The email of the account this phone's key belongs to; null from a server older than this field, and in a copy
   /// kept before it.
   final String? email;
-  final List<String> aiApps;
+  final List<AiApp> aiApps;
   final List<String> webhooks;
+  /// The person's phones and computers that can still send, oldest first.
+  final List<ConnectedDevice> devices;
+  /// This phone's own id among [devices]; null from an older server.
+  final String? thisDevice;
+  /// The private address that takes mail from anyone, and `notes@`, which takes mail only from the sign-in email. Null
+  /// when the server takes no email, and from an older server.
+  final String? notesAddress;
+  final String? sharedAddress;
+  /// Whether the answer said anything about the two addresses. False in a copy kept by an older build of the app, and
+  /// from a server older than these fields: then the phone can't tell that the server takes no email.
+  final bool addressesKnown;
+
+  List<ConnectedDevice> get phones => [for (final device in devices) if (!device.computer) device];
+  List<ConnectedDevice> get computers => [for (final device in devices) if (device.computer) device];
 
   /// Reads `GET connections`' answer, or its copy kept on this phone. A name that is not text is left out.
   factory Connections.fromJson(Map<String, dynamic> json) {
     List<String> names(Object? list) =>
       [for (final item in list is List ? list : const []) if (item is Map && item['name'] is String) item['name'] as String];
-    final email = json['email'];
-    return Connections(email: email is String && email.isNotEmpty ? email : null, aiApps: names(json['aiApps']),
-      webhooks: names(json['webhooks']));
+    String? text(Object? value) => value is String && value.isNotEmpty ? value : null;
+    final apps = json['aiApps'];
+    return Connections(email: text(json['email']), webhooks: names(json['webhooks']),
+      aiApps: [for (final app in apps is List ? apps : const []) if (app is Map && app['name'] is String)
+        (name: app['name'] as String, since: app['connectedAt'] is int ? DateTime.fromMillisecondsSinceEpoch(app['connectedAt'] as int) : null)],
+      devices: [for (final device in json['devices'] is List ? json['devices'] as List : const [])
+        ?ConnectedDevice.fromJson(device)],
+      thisDevice: text(json['thisDevice']), notesAddress: text(json['notesAddress']), sharedAddress: text(json['sharedAddress']),
+      addressesKnown: json.containsKey('notesAddress') || json.containsKey('sharedAddress'));
   }
 
   static Connections? decode(String? saved) => saved == null ? null : Connections.fromJson(jsonDecode(saved) as Map<String, dynamic>);
 
-  String encode() => jsonEncode({if (email != null) 'email': email, 'aiApps': [for (final name in aiApps) {'name': name}],
-    'webhooks': [for (final name in webhooks) {'name': name}]});
+  String encode() => jsonEncode({if (email != null) 'email': email,
+    'aiApps': [for (final app in aiApps) {'name': app.name, if (app.since case final since?) 'connectedAt': since.millisecondsSinceEpoch}],
+    'webhooks': [for (final name in webhooks) {'name': name}],
+    'devices': [for (final device in devices) device.toJson()],
+    if (thisDevice != null) 'thisDevice': thisDevice,
+    if (addressesKnown || notesAddress != null) 'notesAddress': notesAddress,
+    if (addressesKnown || sharedAddress != null) 'sharedAddress': sharedAddress});
 }
 
 /// What the screens read and do. The app's controller is one; a test's fake is another.
@@ -180,18 +235,21 @@ abstract class Relay extends ChangeNotifier {
   /// True on iPhone, where *Location history* has two ways to keep places.
   bool get locationModes;
 
-  /// The account's email and the names of the person's AI apps and webhooks, as their Relay Everything server last
-  /// answered; null before an answer, and after sending stops.
+  /// The account's email, the person's phones and computers, AI apps, webhooks and notes addresses, as their Relay
+  /// Everything server last answered; null before an answer, and after sending stops.
   Connections? get connections;
   /// Asks the server for [connections], only while sending to a Relay Everything server; else it makes no request.
   Future<void> refreshConnections();
+  /// *Sign out* beside another of the person's phones: its key stops at its next request. Returns the words to show
+  /// when it could not, else null, and reads [connections] again.
+  Future<String?> signOutPhone(String id);
   /// The Home headers the person folded, such as *On this phone*. The phone keeps them.
   Set<String> get folded;
   Future<void> setFolded(String header, bool folded);
 
   /// Each returns null on success, or the words to show when it failed.
   Future<String?> connect(String code);
-  /// *Sign in to connect*: the person signs in on [server] inside the app and confirms, and this phone gets its own
+  /// *Sign in*: the person signs in on [server] inside the app and confirms, and this phone gets its own
   /// key. Null also when the person closed the sign-in: then [connected] stays false.
   Future<String?> signIn(String server);
   Future<String?> setLocationMode(LocationMode mode);
@@ -199,7 +257,6 @@ abstract class Relay extends ChangeNotifier {
   /// still waiting on this phone, and says so; *Only points* makes no stay or trip and asks for no motion.
   Future<String?> setLocationSend(LocationSend send);
   Future<String?> setServer(String server);
-  Future<String?> setPinNotes(bool on);
   /// *System*, *Light* or *Dark*: the app's look, which the phone keeps.
   Future<void> setAppearance(Appearance appearance);
   Future<String?> setHistory(bool on);

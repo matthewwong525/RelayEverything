@@ -42,10 +42,9 @@ it("gives each note's sync fields, with mine true only for the calling phone's o
   const [ownId, otherId] = rows("relay_notes").map(row => row.id);
   expect(json.notes).toEqual([
     { id: ownId, clientId: "note-sync-01", mine: true, source: "typed", text: "Note 1", recordedAt: NOW - MINUTE, editedAt: null,
-      device: "Android phone", audio: false, place: { lat: 38.7, lon: -9.1, accuracy: null, name: "Lisbon", from: "phone" },
-      attachments: [{ ...PDF, ready: false }] },
+      device: "Android phone", audio: false, attachments: [{ ...PDF, ready: false }] },
     { id: otherId, clientId: "note-sync-02", mine: false, source: "typed", text: "Changed", recordedAt: NOW - 2 * MINUTE,
-      editedAt: NOW - MINUTE, device: "iPad", audio: false, place: null, attachments: [] },
+      editedAt: NOW - MINUTE, device: "iPad", audio: false, attachments: [] },
   ]);
   expect((await page(ipad)).notes.map(note => note.mine)).toEqual([false, true]);
   // The page reads the same feed, and owns none of it.

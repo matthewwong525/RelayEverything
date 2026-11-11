@@ -475,9 +475,9 @@ void showDeleted(ScaffoldMessengerState? messenger, Relay relay, String id) {
 }
 
 /// One note in its day's card: the first line in bold; then the time, a microphone and the length for a voice note, where
-/// a note from elsewhere came from, and the rest of the words. No tag: only a note that waits says so, *Waiting to send*.
-/// A first picture shows small at the right. A tap opens it; a swipe to the left, or a screen reader's *Delete*, deletes
-/// it with *Undo*.
+/// a note from elsewhere came from, and the rest of the words, or *No words heard* for a watch note with none. No tag:
+/// only a note that waits says so, *Waiting to send*. A first picture shows small at the right. A tap opens it; a swipe
+/// to the left, or a screen reader's *Delete*, deletes it with *Undo*.
 class _NoteRow extends StatelessWidget {
   const _NoteRow({required this.entry, required this.relay, required this.onTap, this.selected = false});
 
@@ -510,7 +510,7 @@ class _NoteRow extends StatelessWidget {
                 if (entry.length case final length?) TextSpan(text: ' ${clockOf(length)}'),
               ],
               if (entry.from != null) TextSpan(text: ' · ${entry.from}'),
-              TextSpan(text: '  ${_preview(entry)}'),
+              TextSpan(text: '  ${entry.noWords ? 'No words heard' : _preview(entry)}'),
             ]), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, color: brand.muted)),
             if (entry.writing) const Padding(padding: EdgeInsets.symmetric(vertical: 4), child: LinearProgressIndicator()),
             if (send != null) Text(send, style: muted),

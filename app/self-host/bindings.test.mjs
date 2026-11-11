@@ -25,6 +25,8 @@ const bindings = config => [
   ...(config.triggers?.crons ?? []).map(cron => `cron ${cron}`), ...(config.assets ? ['assets'] : []),
 ];
 const wongstack = binding => WONGSTACK.test(binding) || WONGSTACK.test(binding.split(' ').at(-1));
+// The knowledge web needs Workers Paid, so an install leaves it out and its server says the web is not set up.
+const PAID_ONLY = ['artifacts KNOWLEDGE'];
 const relayOnly = config => bindings(config).filter(binding => !wongstack(binding));
 
 test('the install has every Relay binding of the full app', () => {
@@ -35,14 +37,16 @@ test('the install has every Relay binding of the full app', () => {
 
 test('the install has no WongStack binding, and its connector matches Relay\'s', () => {
   assert.deepEqual(bindings(install).filter(wongstack), []);
-  assert.deepEqual(bindings(installConnector), bindings(connector));
+  assert.deepEqual(bindings(installConnector), bindings(connector).filter(binding => !PAID_ONLY.includes(binding)));
   assert.equal(installConnector.compatibility_date, connector.compatibility_date);
 });
 
 test('the server and the connector reach the install\'s own spaces Worker, as the full app reaches its own', () => {
-  const spacesOf = config => config.durable_objects?.bindings?.find(item => item.name === 'SPACES');
-  for (const config of [app, connector]) assert.deepEqual(spacesOf(config), { name: 'SPACES', class_name: 'Space', script_name: spaces.name });
-  for (const config of [install, installConnector]) assert.deepEqual(spacesOf(config), { name: 'SPACES', class_name: 'Space', script_name: installSpaces.name });
+  for (const [name, class_name] of [['SPACES', 'Space'], ['WORKBENCHES', 'Workbench']]) {
+    const bound = config => config.durable_objects?.bindings?.find(item => item.name === name);
+    for (const config of [app, connector]) assert.deepEqual(bound(config), { name, class_name, script_name: spaces.name });
+    for (const config of [install, installConnector]) assert.deepEqual(bound(config), { name, class_name, script_name: installSpaces.name });
+  }
   for (const part of ['main', 'compatibility_date', 'compatibility_flags', 'rules', 'durable_objects', 'migrations']) {
     assert.deepEqual(installSpaces[part], part === 'main' ? '../worker/spaces-worker.ts' : spaces[part], part);
   }

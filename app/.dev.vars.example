@@ -79,9 +79,10 @@ RELAY_GOOGLE_SIGN_IN_SECRET=
 # holds it as APPLE_TEAM_ID, so the public-repo check keeps it out of committed files: set it here as a secret.
 RELAY_APPLE_TEAM_ID=
 
-# Email notes: the server's mail domain, such as in.example.com, whose mail Cloudflare Email Routing sends to the
-# Worker's email() handler. Blank, the server takes no email. It is not secret: the shared servers set it in
-# app/wrangler.relay.jsonc's vars. A local run sets it here; a self-host sets it as a secret, which an update keeps.
+# Email notes: the server's mail domain, such as example.com, or in.example.com when example.com gets mail elsewhere,
+# whose mail Cloudflare Email Routing sends to the Worker's email() handler. Blank, the server takes no email. It is
+# not secret: the shared servers set it in app/wrangler.relay.jsonc's vars. A local run sets it here; a self-host
+# sets it as a secret, which an update keeps.
 RELAY_INBOX_MAIL_DOMAIN=
 
 # Email notes: the key for the HMAC of each notes address and sender, and for sealing kept mail. With no key, the

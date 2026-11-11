@@ -53,7 +53,7 @@ class Sender {
   /// *Send a test* to a webhook. Only the person's tap calls it.
   WebhookClient tryWebhook(Webhook webhook, String installId) => _webhookFor(webhook, installId);
 
-  /// Trades a sign-in's code for this phone's key. Only the connect screen's *Sign in to connect* calls it.
+  /// Trades a sign-in's code for this phone's key. Only the sign-in screen's *Sign in* calls it.
   Future<Connection> trade(String server, String code, String verifier) =>
     RelayApi.trade(_clientFor(), server, code, verifier);
 }

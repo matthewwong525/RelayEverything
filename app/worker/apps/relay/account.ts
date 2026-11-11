@@ -1,8 +1,9 @@
 // GET account and POST account-delete: who is signed in, and *Delete my account*, which removes the person's keys,
-// sign-ins and AI apps, then recordings, photos and space, then their row. It can't be undone.
+// sign-ins and AI apps, then recordings, photos, space and knowledge web, then their row. It can't be undone.
 import { z } from "zod";
 import { defineAction, type ActionCall } from "../../api/contract.ts";
 import { asPerson } from "./caller.ts";
+import { deleteKnowledge } from "./knowledge.ts";
 import { directory, normalEmail } from "./people.ts";
 import { refused, type Env } from "./store.ts";
 
@@ -25,7 +26,8 @@ async function endGrants(env: Env, personId: string) {
 
 export const accountDelete = defineAction({
   operationId: "relay.account-delete", summary: "Delete my account",
-  description: "Delete your account: your notes, recordings, photos, health, places, chats, devices, webhooks and AI apps. It can't be undone.",
+  description: "Delete your account: your notes, recordings, photos, health, places, chats, memory, knowledge web, devices, webhooks and AI apps. " +
+    "It can't be undone.",
   input: z.strictObject({ email: z.string().max(320).describe("Your account's email, typed to confirm.") }),
   output: z.strictObject({ deleted: z.literal(true) }),
   encoding: "json", effect: "write", agentAvailable: false, requiresIdentity: false, errors: { invalid_input: CONFIRM }, examples: [],
@@ -36,11 +38,13 @@ export const accountDelete = defineAction({
     // The ways in go first and the space last: a step that fails leaves no way into a half-deleted account, and the
     // person row stays, so signing in again and deleting again finishes it.
     const db = directory(env);
-    await db.batch(["relay_keys", "relay_sessions", "relay_logins", "relay_connect_codes", "relay_phone_codes", "relay_inbox_links"]
+    await db.batch(["relay_keys", "relay_sessions", "relay_logins", "relay_connect_codes", "relay_phone_codes", "relay_computer_codes",
+      "relay_inbox_links"]
       .map(table => db.prepare(`DELETE FROM ${table} WHERE person_id = ?`).bind(caller.personId)));
     await endGrants(env, caller.personId);
     await space.files.removeAll();
     await space.deleteEverything();
+    await deleteKnowledge((env as Env & { KNOWLEDGE?: Artifacts }).KNOWLEDGE, caller.personId);
     await db.batch([db.prepare("DELETE FROM relay_sign_in_codes WHERE email = ?").bind(caller.email),
       db.prepare("DELETE FROM relay_people WHERE id = ?").bind(caller.personId)]);
     return Response.json({ deleted: true });

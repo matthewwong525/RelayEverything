@@ -78,6 +78,7 @@ None.
 - `relay-shortcuts`: a recorded note has the player, not *Play*.
 - `relay-note-sync`: no *Sync now* button starts a round; a pull still does; waiting notes send when the connection comes back while the app is open.
 - `relay-web-app`: the left bar has one *Notes* row and the list has the same filters.
+- `relay-voice-notes`: a note from the Apple Watch shows in the one *Notes* list and its *Voice* filter, and one with no words has the row and the player of any voice note.
 
 ## Impact
 
@@ -120,3 +121,5 @@ None.
 - **2026-11-11** — Assumed: *Offline* shows no line when no note waits, only *N waiting* when notes wait, because a state shows only when the person has something that can't go (the second look found the plan listed both).
 - **2026-11-11** — Assumed (build): in the browser, before a recording first plays, no time shows, because the server gives no length; a tap on the line plays it and then goes to that place once the player knows the length.
 - **2026-11-11** — Built: the screens, the player, the quiet sync state and the network send are written with their tests (721 pass); the second look's six findings are fixed; the built screens match the plan's After pictures. Left: the iPhone device check with the new *notes-filters* tour step.
+- **2026-11-11** — Assumed (merge with main): a watch note with no words shows *No words heard* in place of its words on the row, after the microphone and its length, with no tag, because main added such notes and this change takes the tags off every row.
+- **2026-11-11** — Assumed (merge with main): Home and the browser's left bar keep main's *Other connections* (*Connect your AI*, *Email notes*) under the one *Notes* row, and a row and a note's page show no place, as main took the place off notes.

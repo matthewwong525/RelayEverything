@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// The shared Relay Everything server, where *Sign in to connect* goes unless the person names their own.
+/// The shared Relay Everything server, where *Sign in* goes. A phone that kept a key for another server still sends there.
 const defaultServer = 'https://app.relayeverything.com';
 
 /// Where this phone sends, and its own device key. A key comes in one of two forms: a key the Relay Everything page
@@ -15,7 +15,7 @@ class Connection {
   /// An older Access service token, from before the page made keys.
   const Connection({required this.server, required String this.clientId, required String this.clientSecret}) : key = null;
 
-  /// A key from *Add a device* on the Relay Everything page.
+  /// A key the phone gets by signing in, or an older one from the Relay Everything page.
   const Connection.bearer({required this.server, required String this.key}) : clientId = null, clientSecret = null;
 
   final String server;

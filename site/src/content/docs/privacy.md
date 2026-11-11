@@ -9,8 +9,8 @@ Relay Everything keeps your notes on your phone. When you turn on sending, it ke
 
 | What | Where | Sent when |
 |---|---|---|
-| Typed notes, with their pin | The phone's own storage, always | Never, while sending is off |
-| Typed notes, with their place | Your space on your Relay Everything server | With sending on: each time you save a note. Notes from before go only if you tap **Send them**. |
+| Typed notes | The phone's own storage, always | Never, while sending is off |
+| Typed notes | Your space on your Relay Everything server | With sending on: each time you save a note. Notes from before go only if you tap **Send them**. |
 | Files on a note: photos, PDFs and other files | The phone's own storage, always. iPhone backups keep them; Android cloud backup leaves them out. With sending on, also your space's folder of the file store, sealed. | With sending on: after their note. Files of earlier notes go only if you tap **Send them**. |
 | Notes you share from another app, with their files | The phone's own storage, always, with no place | With sending on: when you tap **Save** on the share card, or the next time the app opens |
 | Voice notes from the app: the recording | The phone's own storage, only. iCloud and Google backups leave it out. | Never |
@@ -28,8 +28,8 @@ Relay Everything keeps your notes on your phone. When you turn on sending, it ke
 | Your email | The server's list of accounts, to sign you in | When you sign up |
 | Your sign-in | A cookie in your browser, for 30 days. The browser keeps no copy of your notes, so signing out leaves none on the computer: [On a computer](../app/on-a-computer/#what-the-browser-keeps) | With each visit to your Relay Everything page |
 | A copy of what your server stores | [Your own database](../connections/your-database/), through a webhook you add | Notes always, with each file's name, type and size but not the file; health, calendar, location and photos only if you tick them for that webhook. Each photo goes with its picture, when and where you took it |
-| Everything the phone sends, when you pick **Send to my own webhook instead** | Only [your own database](../connections/your-database/#send-from-the-phone), straight from the phone; nothing on your Relay Everything server | With sending on, the same as above: notes, then each file with its bytes; health, calendar, location and photos only with their switches on. Each photo goes with its picture, when and where you took it |
-| Health, calendar, location and photos, when you pick **Only my own webhook** on the Account page | Only [your own database](../connections/your-database/#send-from-the-phone), straight from the phone; nothing new on your Relay Everything server. What went there before stays until you delete it. | With sending on and each switch on. Your notes still sync through Relay Everything: [Settings](../app/settings/#health-places-calendar-and-photos-only-to-your-webhook) |
+| Everything the phone sends, when you pick **Don't want an account? Use your own webhook** | Only [your own database](../connections/your-database/#send-from-the-phone), straight from the phone; nothing on your Relay Everything server | With sending on, the same as above: notes, then each file with its bytes; health, calendar, location and photos only with their switches on. Each photo goes with its picture, when and where you took it |
+| Health, calendar, location and photos, when you turn on **Only to my own webhook** in **Webhooks**, on the Account page | Only [your own database](../connections/your-database/#send-from-the-phone), straight from the phone; nothing new on your Relay Everything server. What went there before stays until you delete it. | With sending on and each switch on. Your notes still sync through Relay Everything: [Settings](../app/settings/#health-places-calendar-and-photos-only-to-your-webhook) |
 | Your webhook's address and secret | The iPhone Keychain or the Android Keystore | Never sent: the secret signs each message |
 
 With sending off, the app makes no network call, reads no health data, no calendar and no photos, and keeps no location history. The one exception is the speech model for voice notes, and only after you tap **Get it**. The same is true when a shortcut adds a note: [Shortcuts](../app/shortcuts/#what-is-sent) follow your sending setting, and **Get notes** reads only the phone. The share card also follows it: with sending off it makes no network call: [Share from any app](../app/share/#what-is-sent).
@@ -39,7 +39,7 @@ With sending off, the app makes no network call, reads no health data, no calend
 Each person's data is in their own space: a separate store that holds only that person's notes, health, calendar events, places, photos, chats, devices and webhooks. One shared list holds only who has an account, how they sign in, and a fingerprint of each key.
 
 - **You** see your own space on your Relay Everything page, after you sign in.
-- **Your devices** add data to your space. A phone's key also reads your notes and their files, and changes or deletes any note, so each signed-in phone shows all your notes. It can't read your health, calendar, places or photos, and can only add photos, not count or delete them. A chat key reads nothing. If you lose a phone, turn off its key on your Relay Everything page at once: [Keys](../api/keys/#make-list-and-turn-off-keys).
+- **Your devices** add data to your space. A phone's key also reads your notes and their files, and changes or deletes any note, so each signed-in phone shows all your notes. It also reads the names of your phones, computers, AI apps and webhooks, and your two notes addresses, and it can sign out another of your phones. It can't read your health, calendar, places or photos, and can only add photos, not count or delete them. A computer's key from the [Relay Everything plugin](../connections/claude-code/) adds your AI chats, and reads your space and adds notes through the web API, as an API key does. An older chat key reads nothing. If you lose a phone, sign it out at once from **Phones** on the **Account** page: [Sign out a lost phone](../start/connect-a-phone/#sign-out-a-lost-phone).
 - **Your other phones** get your notes only while they are signed in with sending on and Relay Everything picked. A phone that sends to your own webhook gets none.
 - **Your AI apps** read only your space, and add notes to it, only after you connect them: [Connect your AI](../connections/connect-your-ai/). Only your page and your AI apps can open a photo.
 - **Your own scripts and services** read your space and add notes through the web API, only with an API key you made or after you connect them: [Connect a service](../api/connect-a-service/).
@@ -52,12 +52,12 @@ Each recording, each file on a note and each photo is in your own folder of the 
 
 ## Delete your account
 
-On your Relay Everything page, open **Settings**, then **Account**, click **Delete my account**, and type your email to confirm. It deletes your space, your recordings, the files on your notes, your photos, your keys, your notes address, your sign-ins and your connected AI apps. You can't undo it. Your notes stay on your phone.
+On your Relay Everything page, open **Settings**, then **Account**, click **Delete my account**, and type your email to confirm. It deletes your space with your memory, your knowledge web, your recordings, the files on your notes, your photos, your keys, your notes address, your sign-ins and your connected AI apps. You can't undo it. Your notes stay on your phone.
 
 ## What is not kept
 
 - The Relay Everything app has no ads and no analytics. It sends your notes, their files, health, calendar events, places and photos only to the places you pick, and only with sending on. Your notes go to your Relay Everything server or your own webhook. Your health, calendar events, places and photos go where your notes go, or only to your own webhook: [Settings](../app/settings/#health-places-calendar-and-photos-only-to-your-webhook). Your server sends them on only to your webhooks, and sends a note's file's name, type and size, never the file.
-- To name a place, such as a street, the phone uses its own address lookup from Apple or Google, only with sending on. That lookup gets the place's coordinates, not the note. With sending off, a pinned note shows **Pinned**.
+- To name a place, such as a street, the phone uses its own address lookup from Apple or Google, only with sending on. That lookup gets the place's coordinates, not the note. A note keeps no place: with **Location history** on, where you made it is a point in your location history.
 - To name a stay, the phone reads your calendar on the phone, then asks Apple Maps (on an iPhone) and the address lookup one time for that stay, only with sending on. They get the stay's coordinates, not your history. A calendar event's place goes to the address lookup too, to find where it is.
 - The phone reads motion, such as walking or driving, only to tell how you moved on a trip. Motion stays on the phone: only the trip's mode is sent. The app reads no steps from motion: steps come only from **Health**.
 - The phone writes a voice note's words itself. No speech service on a network hears your voice.
@@ -71,13 +71,12 @@ On your Relay Everything page, open **Settings**, then **Account**, click **Dele
 | Everything sent | Tap **Sign out**, or **Stop sending** for your own webhook, on the app's [Account](../app/settings/#account) page. Health, the calendar, location and photos stop, and what of them did not go yet is deleted. |
 | A note | [Delete it](../app/your-notes/#delete-a-note) with a swipe or **⋯** → **Delete**. With sending on, your server deletes the note, its files and its recording too, and each webhook gets `note.deleted`. A copy your webhook already saved stays in your own database until your receiver deletes it. |
 | Voice notes | Do not tap **Get it**, or tap **Remove** in Settings to delete the speech model. Delete a recording by deleting its note, or by removing the app. |
-| Pins on typed notes | Turn off **Pin notes to where I am** in Settings. |
 | Location history | Turn off **Location history** in the app's **Location** folder. |
 | Photos | Turn off **Photos** in the app's **Photos** folder: the copies that did not go yet are deleted. To delete the photos already sent, click **Delete all photos** on your Relay Everything page: [Photos](../app/photos/#delete-all-photos). |
 | Health | Turn off **Health** in the app's **Health** folder, and take back the permission in Apple Health or Health Connect. To keep one type back, such as cycle, turn off only that type there. |
 | Calendar | Turn off **Calendar** in the app's **Calendar** folder, or one calendar under it, and take back the permission in the phone's settings. A calendar you turn off is removed from your space at the next send. |
-| One phone | Tap **Sign out** on the app's **Account** page, or click **Turn off** beside it on your Relay Everything page: [Keys](../api/keys/#make-list-and-turn-off-keys). |
-| Email notes | Don't give out your notes address. If it leaks, click **New address** on the **Email notes** page in Settings on your Relay Everything page: [Email notes](../app/email/#replace-your-address). |
+| One phone | Tap **Sign out** beside your email on the app's **Account** page. For a lost phone, tap or click **Sign out** beside it under **Phones**, on the **Account** page of another phone or of your Relay Everything page: [Sign out a lost phone](../start/connect-a-phone/#sign-out-a-lost-phone). |
+| Email notes | Don't give out your notes address. If it leaks, click **New address** on the **Email notes** page of your Relay Everything page: [Email notes](../app/email/#replace-your-address). |
 | A webhook to your database | **Pause** or **Remove** it on the Relay Everything page: [Your own database](../connections/your-database/). |
 
 Turning a part off stops new data. Data already in your space stays there until you [delete your account](#delete-your-account), or, for photos, click **Delete all photos**. Your notes stay on your phone.

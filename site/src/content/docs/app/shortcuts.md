@@ -1,6 +1,6 @@
 ---
 title: Shortcuts
-description: Add notes and files, get your notes, and start a voice note from Apple Shortcuts, Siri, automations and the Action button.
+description: Add notes and files, take a note with Siri, get your notes, and start a voice note from Apple Shortcuts, automations and the Action button.
 ---
 
 The Relay Everything app gives Apple Shortcuts three actions: **Add a note**, **Get notes** and **Start a voice note**. Use them in a shortcut, with Siri, in Spotlight, on the Action button, and in automations that run on their own, such as *when I get to work*.
@@ -13,18 +13,18 @@ The actions need the Relay Everything app on an iPhone with iOS 16 or later. On 
 2. Make a new shortcut, or open one, and tap **Add Action**.
 3. Tap **Apps**, then **Relay Everything**.
 
-You can also say *Add a note to Relay Everything* to Siri.
+You can also tell Siri. [Take a note with Siri](#take-a-note-with-siri)
 
 ## Add a note
 
 **Add a note** keeps a note with words, files, or both. Give it typed words, a photo, a screenshot, a PDF, a link, the clipboard, or the output of the step before. It runs without opening the app.
 
-- The note is kept on the phone at once. With **Pin notes to where I am** on, it keeps where you are, the same as a note you type.
+- The note is kept on the phone at once. With **Location history** on, it adds one point to your location history at its time, the same as a note you type. [Location](../location/#where-you-made-a-note)
 - A note holds up to 10 files, each up to 25 MB. The action refuses a file over 25 MB, or an eleventh file, with a message, and keeps the rest. [Notes](../your-notes/#add-photos-and-files)
-- With no words and no files, the action stops with a message and keeps nothing.
+- With no words and no files, the action asks *What's the note?* and keeps your answer. In an automation that runs on its own, no one can answer, so the action stops with a message and keeps nothing.
 - The action gives the new note back, so the next step can use it.
 
-The action's line reads *Add Words with Files to Relay Everything*. Tap **Files** to give it a file from a step before.
+The action's line reads *Add Note with Files to Relay Everything*. Tap **Note** to type its words, and **Files** to give it a file from a step before. A shortcut you made when the line said *Words* keeps its words.
 
 ### A recording becomes a voice note
 
@@ -38,6 +38,15 @@ Give **Add a note** one recording, such as the **Recorded Audio** from **Record 
 With sending on, the voice note goes to your space once its words are written. The recording stays on the phone.
 
 If the app takes more than 20 seconds to answer, the action says *Saved. It shows when you open Relay Everything.* The note is safe. It shows in your notes, and goes on to your server, the next time you open the app.
+
+### Take a note with Siri
+
+Say the note to Siri, and Siri keeps it as a typed note. Siri knows a short name, so you can say *take a note in Relay*. The full name, Relay Everything, works too, and the app's name on your Home Screen stays Relay Everything.
+
+- **On an iPhone with the new Siri** (iOS 27 with Apple Intelligence), say the note in one sentence: *Hey Siri, take a note in Relay, buy milk on the way home*. Siri asks nothing and says *Saved*.
+- **On other iPhones**, say *Hey Siri, take a note in Relay*. Siri asks *What's the note?*. Say the note, and Siri says *Saved*.
+
+*Hey Siri, add a note to Relay* and *Hey Siri, note in Relay* work too. If another app on your phone has the same short name, Siri asks which app. With sending on, the note goes to your space at once, as a typed note does.
 
 ## Get notes
 
@@ -114,7 +123,7 @@ The email holds each note from today. No server is asked: the notes come from th
 2. Add **Record audio**. Set **Start Recording** to **Immediately** if you like.
 3. Add **Add a note** from Relay Everything.
 4. Tap **Files**, and pick the **Recorded Audio** from the step before.
-5. Tap **Words**, and type a label, such as *Note @*, then add the **Current Date**. Leave **Words** empty if you want only the written words.
+5. Tap **Note**, and type a label, such as *Note @*, then add the **Current Date**. Leave **Note** empty if you want only the written words.
 
 Run the shortcut, talk, and tap **Done**. The note shows as a voice note that starts with your label, and its words follow when the app is open.
 

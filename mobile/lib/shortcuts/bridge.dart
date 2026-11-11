@@ -14,8 +14,8 @@ const shortcutsChannel = MethodChannel('relay/shortcuts');
 const sendWait = Duration(seconds: 12);
 
 /// Answers the Shortcuts actions with the app's own controller, so a shortcut's note is saved, pinned and sent as a
-/// typed note is: `add` keeps a note, `get` reads notes from this phone and sends nothing, and `startVoiceNote` opens
-/// the recording sheet in the app's own engine.
+/// typed note is: `add` keeps a note, `get` reads notes from this phone and sends nothing, `inboxChanged` keeps what
+/// waits in the inbox, and `startVoiceNote` opens the recording sheet in the app's own engine.
 class ShortcutsBridge {
   ShortcutsBridge(this.relay, {this.onVoice, this.wait = sendWait});
 
@@ -31,6 +31,10 @@ class ShortcutsBridge {
         return add(arguments);
       case 'get':
         return get(arguments);
+      case 'inboxChanged':
+        // The Apple Watch left a voice note in the inbox while the app runs (ios/Runner/RelayWatchReceiver.swift).
+        await relay.drainShortcutsInbox();
+        return null;
       case 'startVoiceNote':
         final open = onVoice;
         if (open == null) throw MissingPluginException();
@@ -80,7 +84,6 @@ class ShortcutsBridge {
     'id': note.clientId,
     'text': note.text,
     'createdAt': note.createdAt.millisecondsSinceEpoch,
-    'place': note.pin?.place,
     'kind': note.kind.name,
     'files': [
       for (final file in note.attachments) {'path': relay.fullPath(file.path), 'name': file.name, 'type': file.type},

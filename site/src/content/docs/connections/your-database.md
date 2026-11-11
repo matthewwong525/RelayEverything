@@ -14,7 +14,7 @@ To keep your data off Relay Everything completely, [send from the phone](#send-f
 ## Add a webhook
 
 1. Open your Relay Everything page, `https://<your-relay-server>/`, and sign in.
-2. Click **Settings** at the bottom of the left bar, then **Webhooks**, then **Add a webhook**.
+2. Click **Settings** at the bottom of the left bar, then **Account**. Under **Advanced**, click **Webhooks**, then **Add a webhook**.
 3. Give it a name and its address. The address must start with `https://`. It can't be this computer, a private network, or your Relay Everything server itself.
 4. Tick **Health**, **Calendar**, **Location history** or **Photos** only for a database you control: they are sensitive. Notes always go.
 5. Click **Add**, then copy the secret. Relay Everything shows it once. Your receiver uses it to check each message.
@@ -29,19 +29,20 @@ Each card shows the webhook's state: **Working**, **Paused**, **Failing** or **S
 The phone app can send to your own webhook itself, with no Relay Everything account, sign-in or key. Your receiver gets the same messages, signed the same way, so one receiver works for both. The phone sends everything to your server or everything to your webhook. Or, signed in, it sends your notes to your server and your health, places, calendar and photos only to your webhook: [Settings](../../app/settings/#health-places-calendar-and-photos-only-to-your-webhook).
 
 1. Start your receiver at an `https://` address. A home address, such as your own computer on your Wi-Fi, is allowed. The phone does not take a self-made certificate.
-2. In the app, open Settings and tap **Sign in to Relay Everything**, the first row.
-3. Tap **Send to my own webhook instead**, and type your receiver's address.
-4. Click **Copy**, and give the secret to your receiver. You can also paste your receiver's own `whsec_` secret.
-5. Click **Send a test**. The app shows your receiver's answer, such as *Your receiver answered 204. It works.*
-6. Click **Save**. The app asks if your earlier notes go too.
+2. In the app, open Settings and tap **Sign in to Relay Everything**, the account card at the top.
+3. Tap **Don't want an account? Use your own webhook**. The setup has four numbered steps.
+4. **Your webhook's address**: type your receiver's address. It must start with `https://`.
+5. **Copy this secret to your receiver**: tap **Copy**, and give the secret to your receiver. You can also paste your receiver's own `whsec_` secret.
+6. **Check that it works**: tap **Send a test**. The app shows your receiver's answer, such as *Your receiver answered 204. It works.*
+7. Tap **Save**. The app asks if your earlier notes go too.
 
-The first row of Settings then says **My own webhook**, with your receiver's address. Turn on **Health**, **Calendar**, **Location history** or **Photos** to send them too. The phone sends each new note, then each of its files in a [`note.file`](#notefile) message. With **Photos** on, it sends each new photo in a [`photo.created`](#photocreated) message, after the notes: [Photos](../../app/photos/).
+The account card in Settings then says **My own webhook**, with your receiver's host. Turn on **Health**, **Calendar**, **Location history** or **Photos** to send them too. The phone sends each new note, then each of its files in a [`note.file`](#notefile) message. With **Photos** on, it sends each new photo in a [`photo.created`](#photocreated) message, after the notes: [Photos](../../app/photos/).
 
 What you give up:
 
 - **Data comes in groups, not live.** The phone sends only while it is on and has signal, and the phone's own limits choose when the app runs in the background.
 - **Your AI can not read it**, because none of it is on the server.
-- **A failing receiver holds back the rest.** The phone sends in order, so it keeps each item, and all after it, until your receiver answers `2xx`. The **Account** page in Settings shows the last answer. It never drops an item for a `400`. Only a file your receiver refuses with `413` is dropped, and the **Account** page names it. A photo your receiver refuses with `413` is dropped too. A photo that waits does not hold back your notes.
+- **A failing receiver holds back the rest.** The phone sends in order, so it keeps each item, and all after it, until your receiver answers `2xx`. The **Account** page in Settings shows the last answer. It never drops an item for a `400`. Only a file your receiver refuses with `413` is dropped, and the **Account** page names it. Signed in with **Only to my own webhook**, **Webhooks** on the **Account** page shows them. A photo your receiver refuses with `413` is dropped too. A photo that waits does not hold back your notes.
 
 From the phone, `device.id` is the phone's own id, a UUID the app makes once. A note's `created_at` is the same as its `recorded_at`: the note's own time, which for a voice note is when it was recorded. Its `note.updated` has the same one. The message's `timestamp` is when the phone queued the message. Points are numbered on the phone, so save them by `device.id` and `id` together. A health sample's `id` is made from the phone's id and the sample's `type`, `start`, `end` and `source`, so the same sample sent again has the same `id`. An older version of the app numbered its samples, so a sample it sent can come again with a new `id`: keep one sample for each `device.id`, `type`, `start`, `end` and `source`, as Relay Everything does. A calendar event's `id` is made from the phone's id and the event's `key`, so each change of one event has the same `id`. A stay's or a trip's `id` is made from the phone's id, its `kind` and its `start` in the same way. A removed event from the phone has only its `key`, `id` and `start`. A photo's `id` is the phone's own id for it, a UUID.
 
@@ -62,7 +63,7 @@ Every message is a `POST` with a JSON body in one envelope:
 
 | `type` | When | `data` holds |
 |---|---|---|
-| `note.created` | A note reaches your server. | `note`, with its words, time, place, device, recording, and the names of its files |
+| `note.created` | A note reaches your server. | `note`, with its words, time, device, recording, and the names of its files |
 | `note.updated` | A phone changes a note, from any device or way in. Always after the note's `note.created`. | `note`, with its latest words, without `audio` |
 | `note.deleted` | A phone deletes a note, from any device or way in. Always after the note's `note.created`. | `note`: its `id` and `deleted_at` |
 | `health.samples` | A phone sends health samples. | `samples`: up to 500 |
@@ -89,14 +90,13 @@ Every message is a `POST` with a JSON body in one envelope:
       "recorded_at": "2026-11-04T14:01:00.000Z",
       "created_at": "2026-11-04T14:01:02.000Z",
       "device": { "id": "d0000000-0000-4000-8000-000000000001", "name": "Android phone" },
-      "place": { "lat": 43.6629, "lon": -79.3957, "accuracy": 15, "name": "Harbord St", "from": "history" },
       "audio": { "content_type": "audio/mp4", "base64": "AAAAGGZ0eXA..." }
     }
   }
 }
 ```
 
-`source` is `ring` or `typed`. `place` is null when the note has none. `from` says where the place came from: `phone` for a typed note's own place, `history` for an older recorded note's place, taken from the location history. Relay Everything gives no note a place this way now. `audio` is an older recorded note's recording in base64, or null.
+`source` is `ring` or `typed`. A note has no place. Where you made it is a [`location.points`](#locationpoints) point at the note's `recorded_at`, sent to a webhook that takes location. `audio` is an older recorded note's recording in base64, or null.
 
 ### A note's files
 
@@ -492,7 +492,7 @@ CREATE TABLE relay_location_points (
 );
 ```
 
-Save a note with `INSERT ... ON CONFLICT (id) DO UPDATE`, and keep the stored `audio` when a `note.updated` has none. On a `note.deleted`, delete the note's rows in `relay_note_files` and `relay_note_attachments` by `note_id`, then its row in `relay_notes` by `id`. Save each of a note's `attachments` by its `id` too, and a `note.file` in `relay_note_files`. A file listed in `attachments` that has no row in `relay_note_files` did not come, such as one your receiver skipped.
+A note has no place, so `lat`, `lon` and `place` in `relay_notes` stay empty. They stay in the table for a database that saved notes with a place before. Save a note with `INSERT ... ON CONFLICT (id) DO UPDATE`, and keep the stored `audio` when a `note.updated` has none. On a `note.deleted`, delete the note's rows in `relay_note_files` and `relay_note_attachments` by `note_id`, then its row in `relay_notes` by `id`. Save each of a note's `attachments` by its `id` too, and a `note.file` in `relay_note_files`. A file listed in `attachments` that has no row in `relay_note_files` did not come, such as one your receiver skipped.
 
 ## An example receiver
 

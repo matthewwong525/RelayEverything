@@ -1,6 +1,6 @@
 -- Made-up rows for one person's space, which worker/relay-mcp/tools.test.ts reads. No real person, key or address.
 -- Relay: a made-up phone and iPad key with no real token behind either, one turned-off phone, and a day in
--- Toronto (Wednesday 4 November 2026): ring and typed notes, health samples, and the location history that placed them.
+-- Toronto (Wednesday 4 November 2026): ring and typed notes, health samples, and the location history: a note has no place.
 INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at) VALUES
   ('d0000000-0000-4000-8000-000000000001', 'Android phone', 'seed-phone.access', 'seed-token-phone', 1793700000000, NULL),
   ('d0000000-0000-4000-8000-000000000002', 'iPad', 'seed-ipad.access', 'seed-token-ipad', 1793700000000, NULL),
@@ -14,9 +14,9 @@ INSERT INTO relay_notes
   (id, device_id, source, delivery_id, client_id, text, audio_key, recorded_at, lat, lon, accuracy, place, place_from, created_at)
 VALUES
   ('a0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000002', 'ring', 'seed-delivery-0001', NULL,
-   'Call the PCB fab about the second batch.', NULL, 1793797260000, 43.6629, -79.3957, 15, 'Harbord St', 'history', 1793797262000),
+   'Call the PCB fab about the second batch.', NULL, 1793797260000, NULL, NULL, NULL, NULL, NULL, 1793797262000),
   ('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', 'typed', NULL, 'seed-note-0001',
-   'Lunch idea: test the ring on the streetcar.', NULL, 1793811700000, 43.6487, -79.3817, 12, 'King St W', 'phone', 1793811705000),
+   'Lunch idea: test the ring on the streetcar.', NULL, 1793811700000, NULL, NULL, NULL, NULL, NULL, 1793811705000),
   ('a0000000-0000-4000-8000-000000000003', 'd0000000-0000-4000-8000-000000000002', 'ring', 'seed-delivery-0002', NULL,
    'Buy milk and batteries.', NULL, 1793829500000, NULL, NULL, NULL, NULL, NULL, 1793829502000);
 -- The typed lunch note's photo, stored: its bytes went to every webhook as note.file.
@@ -32,14 +32,16 @@ INSERT INTO relay_health (device_id, type, start_at, end_at, value, unit, source
   ('d0000000-0000-4000-8000-000000000001', 'workout', 1793815200000, 1793817600000, 40, 'min', 'com.google.android.apps.fitness', 1793833200000,
    'running', 5100, 410);
 
--- Relay chats: a made-up Claude Code chat key and two chats from Wednesday 4 November 2026, one with the AI's summary.
+-- Relay chats: a made-up computer key, two Claude Code chats and one Codex chat from Wednesday 4 November 2026, one with the AI's summary.
 INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at, reaches) VALUES
-  ('d0000000-0000-4000-8000-000000000004', 'Laptop', 'seed-laptop.access', 'seed-token-laptop', 1793700000000, NULL, 'chats');
+  ('d0000000-0000-4000-8000-000000000004', 'Laptop', 'seed-laptop.access', 'seed-token-laptop', 1793700000000, NULL, 'agent');
 INSERT INTO relay_chats (id, device_id, session_id, app, project, title, started_at, last_at, message_count, created_at) VALUES
   ('c0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000004', 'seed-session-0001', 'claude-code', 'relay-ring',
    'How thick should the stiffener be?', 1793800800000, 1793801400000, 4, 1793800810000),
   ('c0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000004', 'seed-session-0002', 'claude-code', 'relay-ring',
-   'Fix the webhook signature', 1793815200000, 1793816100000, 3, 1793815210000);
+   'Fix the webhook signature', 1793815200000, 1793816100000, 3, 1793815210000),
+  ('c0000000-0000-4000-8000-000000000003', 'd0000000-0000-4000-8000-000000000004', 'seed-session-0003', 'codex', 'relay-ring',
+   'Add a dark mode switch', 1793790000000, 1793790600000, 2, 1793790010000);
 INSERT INTO relay_chat_messages (chat_id, seq, role, text, at) VALUES
   ('c0000000-0000-4000-8000-000000000001', 0, 'you', 'How thick should the stiffener be?', 1793800800000),
   ('c0000000-0000-4000-8000-000000000001', 1, 'step', 'Read pcb/relay.kicad_pcb', 1793800860000),
@@ -47,7 +49,9 @@ INSERT INTO relay_chat_messages (chat_id, seq, role, text, at) VALUES
   ('c0000000-0000-4000-8000-000000000001', 3, 'you', 'Save the plan for the stiffener to Relay', 1793801400000),
   ('c0000000-0000-4000-8000-000000000002', 0, 'you', 'Fix the webhook signature', 1793815200000),
   ('c0000000-0000-4000-8000-000000000002', 1, 'step', 'Ran: npm test', 1793815800000),
-  ('c0000000-0000-4000-8000-000000000002', 2, 'ai', 'The signature now uses the raw body. The tests pass.', 1793816100000);
+  ('c0000000-0000-4000-8000-000000000002', 2, 'ai', 'The signature now uses the raw body. The tests pass.', 1793816100000),
+  ('c0000000-0000-4000-8000-000000000003', 0, 'you', 'Add a dark mode switch', 1793790000000),
+  ('c0000000-0000-4000-8000-000000000003', 1, 'ai', 'Dark mode now follows your phone''s setting.', 1793790600000);
 INSERT INTO relay_chat_saves (id, chat_id, title, text, created_at) VALUES
   ('e0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', 'Stiffener plan',
    'Use a 0.2 mm steel stiffener under the battery, glued, not soldered.', 1793801460000);
@@ -125,3 +129,17 @@ INSERT INTO relay_nights (device_id, source, start_at, end_at, asleep_at, woke_a
 -- The Saturday's walk, from before the phone sent a workout's details.
 INSERT INTO relay_health (device_id, type, start_at, end_at, value, unit, source, created_at) VALUES
   ('d0000000-0000-4000-8000-000000000001', 'workout', 1794064800000, 1794066000000, 20, 'min', 'com.google.android.apps.fitness', 1794066000000);
+-- The memory, from the laptop's chats that Wednesday: the battery decision and the newer one that replaced it, and a
+-- fact about Sam from the lunch note. Two notes carry topics, as the person's own Claude gave them.
+INSERT INTO relay_memory (id, fields, sources, replaces, replaced_by, device_id, client_id, created_at) VALUES
+  ('fd7mm', '{"kind":"fact","text":"Sam makes the shell of the ring."}', '["relay:note/a0000000-0000-4000-8000-000000000002"]', '[]', NULL,
+   'd0000000-0000-4000-8000-000000000004', 'seed-fact-0003', 1793812000000),
+  ('fb4tt', '{"kind":"decision","text":"The battery stays 40 mAh."}', '["relay:chat/c0000000-0000-4000-8000-000000000001#2"]', '[]', NULL,
+   'd0000000-0000-4000-8000-000000000004', 'seed-fact-0001', 1793801500000),
+  ('fc5kk', '{"kind":"decision","text":"The battery is now 50 mAh, for a full day."}', '["relay:chat/c0000000-0000-4000-8000-000000000002#2"]',
+   '["fb4tt"]', NULL, 'd0000000-0000-4000-8000-000000000004', 'seed-fact-0002', 1793816200000);
+UPDATE relay_memory SET replaced_by = 'fc5kk' WHERE id = 'fb4tt';
+INSERT INTO relay_memory_tags (fact_id, tag) VALUES ('fd7mm', 'sam'), ('fd7mm', 'ring'), ('fb4tt', 'battery'), ('fc5kk', 'battery'),
+  ('fc5kk', 'ring/charging');
+INSERT INTO relay_note_tags (note_id, tag) VALUES ('a0000000-0000-4000-8000-000000000001', 'ring'),
+  ('a0000000-0000-4000-8000-000000000003', 'ring/charging'), ('a0000000-0000-4000-8000-000000000003', 'errands');

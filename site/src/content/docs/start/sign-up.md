@@ -21,15 +21,15 @@ On [your own server](../run-your-own/), you sign in with your server's own login
 
 ## Add your first device
 
-1. On the Relay Everything page, click **Settings** at the bottom of the left bar, then **Devices**.
-2. Click **Add a device**, and give it a name, such as `Android phone`.
-3. The page shows the device's key once, as a QR code. Scan it with the Relay Everything app: [Connect a phone](../connect-a-phone/).
+1. [Install the app](../install/) on your phone.
+2. In the app, open **Settings**, tap **Sign in to Relay Everything**, then **Sign in**: [Connect a phone](../connect-a-phone/).
+3. On a computer with Claude Code or Codex, add the [Relay Everything plugin](../../connections/claude-code/), and type `/relay:connect`.
 
-Each phone and each Claude Code computer gets its own key. A key adds data to your space, and a phone's key also syncs your notes: [Keys](../../api/keys/).
+Each phone and each Claude Code computer gets its own key when it signs in. The key never shows. A key adds data to your space, and a phone's key also syncs your notes: [Keys](../../api/keys/).
 
 ## Delete your account
 
-On the Relay Everything page, open **Settings**, then **Account**, and click **Delete my account**. Type your email to confirm. Relay Everything deletes your space, your recordings, your device keys, your sign-ins and your connected AI apps. You can't undo it. The notes on your phone stay on your phone.
+On the Relay Everything page, open **Settings**, then **Account**, and click **Delete my account**. In the app, **Delete my account** at the bottom of the **Account** page opens this page. Type your email to confirm. Relay Everything deletes your space with your memory, your knowledge web, your recordings, your device keys, your sign-ins and your connected AI apps. You can't undo it. The notes on your phone stay on your phone.
 
 ## Questions and privacy requests
 

@@ -44,7 +44,6 @@ dependencies:
   geolocator: ^14.1.2
   geocoding: ^5.0.1
   workmanager: ^0.10.10
-  mobile_scanner: ^7.5.0
   # Voice notes: whisper.cpp writes the words on the phone, record keeps the sound, just_audio plays it back.
   whisper_cpp_flutter_plus: ^0.5.1
   record: ^7.1.2
@@ -69,9 +68,7 @@ dependencies:
   share_plus: ^13.3.1
   # The version and build at the bottom of Settings.
   package_info_plus: ^10.2.2
-  # The browser page: *Add a device* shows its key as a QR code, and a file dropped on a note is read with the
-  # browser's own file API.
-  qr_flutter: ^4.1.0
+  # The browser page: a file dropped on a note is read with the browser's own file API.
   web: ^1.1.2
 
 dev_dependencies:

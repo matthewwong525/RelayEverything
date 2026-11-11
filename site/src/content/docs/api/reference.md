@@ -24,10 +24,10 @@ Send the input as a JSON body.
 | `clientId` | string | yes | The phone's own id for the note, so a resend is stored once. |
 | `text` | string | yes | What the note says. It can be empty only when the note has files. |
 | `createdAt` | integer | yes | When it was written, in Unix milliseconds. |
-| `lat` | number | no | Where it was written: latitude. Send it with lon. |
+| `lat` | number | no | Where it was written: latitude. Send it with lon. The place becomes one point of location history at the note's time, not part of the note. |
 | `lon` | number | no | Where it was written: longitude. Send it with lat. |
 | `accuracy` | number | no | How sure the phone was of the place, in meters. |
-| `place` | string | no | The place's name from the phone's address lookup. |
+| `place` | string | no | The place's name from the phone's address lookup, kept on its location point. |
 | `attachments` | array of object | no | The note's files, up to 10: only their names, types and sizes. Send each file's bytes after, with POST attachments. |
 | `attachments[].id` | string | yes | The phone's own id for the file: its upload names it. |
 | `attachments[].name` | string | yes | The file's name, such as `warranty.pdf`. |
@@ -136,12 +136,6 @@ Send the input as query parameters.
 | `notes[].editedAt` | number or null | yes | When the note last changed, in Unix ms; null when never. |
 | `notes[].device` | string | yes | The name of the device or way in that sent it, such as `Email`. |
 | `notes[].audio` | boolean | yes |  |
-| `notes[].place` | object or null | yes |  |
-| `notes[].place.lat` | number | yes |  |
-| `notes[].place.lon` | number | yes |  |
-| `notes[].place.accuracy` | number or null | yes |  |
-| `notes[].place.name` | string or null | yes |  |
-| `notes[].place.from` | "phone" or "history" | yes |  |
 | `notes[].attachments` | array of object | yes | The note's files, oldest first. |
 | `notes[].attachments[].id` | string | yes |  |
 | `notes[].attachments[].name` | string | yes |  |
@@ -185,7 +179,7 @@ Send the input as a JSON body.
 
 `POST /apps/relay/api/locations` · `relay.points-add` · writes · called by a phone key
 
-Store the phone's location history, once per time. A note keeps the place it came with: a point gives no note a place.
+Store the phone's location history, once per time. A note keeps no place: a place sent with a note becomes one point at the note's time.
 
 ### Input
 
@@ -355,7 +349,7 @@ It takes no input.
 
 `GET /apps/relay/api/timeline` · `relay.timeline` · reads · called by a signed-in person only, not a device key
 
-Read Relay Everything's notes, newest first, with each one's place.
+Read Relay Everything's notes, newest first. A note has no place: read places by its time.
 
 ### Input
 
@@ -378,12 +372,6 @@ Send the input as query parameters.
 | `notes[].recordedAt` | number | yes |  |
 | `notes[].device` | string | yes |  |
 | `notes[].audio` | boolean | yes |  |
-| `notes[].place` | object or null | yes |  |
-| `notes[].place.lat` | number | yes |  |
-| `notes[].place.lon` | number | yes |  |
-| `notes[].place.accuracy` | number or null | yes |  |
-| `notes[].place.name` | string or null | yes |  |
-| `notes[].place.from` | "phone" or "history" | yes |  |
 | `notes[].attachments` | array of object | yes | The note's files, oldest first. |
 | `notes[].attachments[].id` | string | yes |  |
 | `notes[].attachments[].name` | string | yes |  |
@@ -926,11 +914,11 @@ Send the input as a JSON body.
 | `unavailable` | The AI connector is not set up here. |
 | `not_found` | You have no connected AI app with this id. |
 
-## List what you connected, by name
+## List what you connected
 
 `GET /apps/relay/api/connections` · `relay.connections` · reads · called by a signed-in person or a phone key
 
-Your account's email and the names of your connected AI apps and of your webhooks, for the phone's Account page. It holds no address, secret or send state. Where the AI connector is not set up, the AI apps list is empty.
+Your account's email, your phones and computers, the names of your connected AI apps and of your webhooks, and your two notes addresses, for the Account and connection pages. It holds no key, and no webhook address, secret or send state. Where the AI connector is not set up, the AI apps list is empty; where email is off, both addresses are null.
 
 ### Input
 
@@ -941,14 +929,24 @@ It takes no input.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `email` | string | yes | The email of the account the key or sign-in belongs to. |
+| `thisDevice` | string or null | yes | The calling device's id, or null for a sign-in. |
+| `devices` | array of object | yes | Each phone and computer that is not signed out, oldest first. No API key. |
+| `devices[].id` | string | yes |  |
+| `devices[].name` | string | yes |  |
+| `devices[].kind` | "phone" or "computer" | yes | phone: a phone's key. computer: Claude Code or Codex. |
+| `devices[].since` | number | yes | When the device connected, in ms. |
+| `devices[].lastChatAt` | number or null | yes | When the device last saved a chat, in ms, or null. |
 | `aiApps` | array of object | yes | Each connected AI app. |
 | `aiApps[].name` | string | yes |  |
+| `aiApps[].connectedAt` | number or null | yes |  |
 | `webhooks` | array of object | yes | Each webhook, paused ones too. |
 | `webhooks[].name` | string | yes |  |
+| `notesAddress` | string or null | yes | Your secret notes address, made on first read, or null when email is off. |
+| `sharedAddress` | string or null | yes | The shared notes address for your sign-in email, or null when email is off. |
 
 ## Save the AI's summary of a chat
 
-`POST /apps/relay/api/chat-saves` · `relay.chat-saves-add` · writes · called by a Claude Code chat key only
+`POST /apps/relay/api/chat-saves` · `relay.chat-saves-add` · writes · called by a computer's key, or an older chat key, only
 
 Store a title and a summary the AI wrote for a chat this key sent. The chat's messages stay as they are; the newest save's title shows as the chat's title.
 
@@ -958,7 +956,7 @@ Send the input as a JSON body.
 
 | Field | Type | Required | What it holds |
 |---|---|---|---|
-| `sessionId` | string | yes | Claude Code's id for the chat. |
+| `sessionId` | string | yes | The app's own id for the chat. |
 | `title` | string | yes | The AI's title for the chat. |
 | `text` | string | yes | The AI's summary, shown as written by the AI. |
 
@@ -978,7 +976,7 @@ Send the input as a JSON body.
 
 `GET /apps/relay/api/chats` · `relay.chats` · reads · called by a signed-in person only, not a device key
 
-List the saved Claude Code chats, newest first, or only those whose messages or AI summaries hold every word of `q`.
+List the saved AI chats from Claude Code and Codex, newest first, or only those whose messages or AI summaries hold every word of `q`.
 
 ### Input
 
@@ -999,7 +997,7 @@ Send the input as query parameters.
 | `chats[].id` | string | yes |  |
 | `chats[].title` | string | yes |  |
 | `chats[].project` | string | yes |  |
-| `chats[].app` | string | yes |  |
+| `chats[].app` | "claude-code" or "codex" | yes | The app the chat came from. |
 | `chats[].startedAt` | number | yes |  |
 | `chats[].lastAt` | number | yes |  |
 | `chats[].messages` | number | yes | How many messages the chat holds. |
@@ -1031,7 +1029,7 @@ Send the input as query parameters.
 | `chat.id` | string | yes |  |
 | `chat.title` | string | yes |  |
 | `chat.project` | string | yes |  |
-| `chat.app` | string | yes |  |
+| `chat.app` | "claude-code" or "codex" | yes | The app the chat came from. |
 | `chat.startedAt` | number | yes |  |
 | `chat.lastAt` | number | yes |  |
 | `chat.messages` | number | yes | How many messages the chat holds. |
@@ -1097,15 +1095,15 @@ It takes no input.
 | `devices` | array of object | yes |  |
 | `devices[].id` | string | yes |  |
 | `devices[].name` | string | yes |  |
-| `devices[].reaches` | "phone" or "chats" or "api" | yes | phone: notes, files, health, places and photos, from a phone. chats: Claude Code chats. api: the web API, which reads and adds notes. |
+| `devices[].reaches` | "phone" or "chats" or "api" or "agent" | yes | phone: notes, files, health, places and photos, from a phone. chats: an older Claude Code key that only saves chats. api: the web API, which reads and adds notes. agent: a computer's key from Claude Code or Codex, which saves chats and reads through the web API. |
 | `devices[].createdAt` | number | yes |  |
 | `devices[].revokedAt` | number or null | yes |  |
 
-## Add a device
+## Add an API key
 
 `POST /apps/relay/api/devices` · `relay.devices-add` · writes · called by a signed-in person only, not a device key
 
-Make a key for a new device. The answer holds the key and its QR code text: both show only this once. An API key's answer names the web API's address.
+Make an API key for the web API. The answer holds the key, which shows only this once, and names the web API's address. A phone or a computer gets its key by signing in instead.
 
 ### Input
 
@@ -1114,7 +1112,7 @@ Send the input as a JSON body.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `name` | string | yes | A name you know the device by. |
-| `reaches` | "phone" or "chats" or "api" | yes | phone: notes, files, health, places and photos, from a phone. chats: Claude Code chats. api: the web API, which reads and adds notes. |
+| `reaches` | "api" | yes | api: an API key for the web API, which reads and adds notes. A phone signs in from the Relay Everything app, and a computer from Claude Code or Codex with /relay:connect. |
 
 ### Output
 
@@ -1122,16 +1120,15 @@ Send the input as a JSON body.
 |---|---|---|---|
 | `id` | string | yes |  |
 | `name` | string | yes |  |
-| `reaches` | "phone" or "chats" or "api" | yes | phone: notes, files, health, places and photos, from a phone. chats: Claude Code chats. api: the web API, which reads and adds notes. |
+| `reaches` | "phone" or "chats" or "api" or "agent" | yes | phone: notes, files, health, places and photos, from a phone. chats: an older Claude Code key that only saves chats. api: the web API, which reads and adds notes. agent: a computer's key from Claude Code or Codex, which saves chats and reads through the web API. |
 | `key` | string | yes | Shown this once. |
-| `qr` | string | yes | What the phone scans: the server's address and the key. |
 | `api` | string or null | yes | An API key's web API address, or null when this server has no AI connector. |
 
-## Turn off a device
+## Sign out a device
 
-`POST /apps/relay/api/devices/off` · `relay.devices-off` · writes · called by a signed-in person only, not a device key
+`POST /apps/relay/api/devices/off` · `relay.devices-off` · writes · called by a signed-in person or a phone key
 
-Turn off a device's key: it stops at once. The device's notes stay.
+Turn off a device's key: it stops at once. The device's notes stay. A phone's key may sign out only your phones.
 
 ### Input
 
@@ -1228,7 +1225,7 @@ It takes no input.
 
 `POST /apps/relay/api/account-delete` · `relay.account-delete` · writes · called by a signed-in person only, not a device key
 
-Delete your account: your notes, recordings, photos, health, places, chats, devices, webhooks and AI apps. It can't be undone.
+Delete your account: your notes, recordings, photos, health, places, chats, memory, knowledge web, devices, webhooks and AI apps. It can't be undone.
 
 ### Input
 
@@ -1256,4 +1253,4 @@ Send the input as a JSON body.
 - `POST /apps/relay/api/photos`: [Send a photo from the phone, with a phone key](../../app/photos/#what-the-phone-sends)
 - `GET /apps/relay/api/audio`: [Play a note's recording](../recordings/)
 - `GET /apps/relay/api/attachment`: [Open a note's file](../files/#open-a-file)
-- `POST /apps/relay/api/chats`: [Send a Claude Code chat's new messages, with a chat key](../../connections/claude-code/#what-the-server-receives)
+- `POST /apps/relay/api/chats`: [Send a Claude Code or Codex chat's new messages, with a computer's key](../../connections/claude-code/#what-the-server-receives)

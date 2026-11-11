@@ -1,5 +1,5 @@
-// The plugin's own files in its data folder: the sessions it knows, the projects with saving off, one lock per send,
-// and a short log that holds only session ids, counts and statuses.
+// The hooks' files in the shared state folder (lib/config.mjs): the sessions they know, the projects with saving off,
+// one lock per send, one-time notices, and a short log that holds only session ids, counts and statuses.
 import { appendFileSync, mkdirSync, openSync, closeSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -13,17 +13,9 @@ const FILE_LOCK_WAIT = 15_000;
 const pause = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 const FORGET = 30 * 24 * 60 * 60_000;
 
-/** The data folder: `--data <dir>` from a skill, else the folder Claude Code gives a hook or the save tool. */
-export function dataDir(env, argv = []) {
-  const at = argv.indexOf('--data');
-  const dir = at >= 0 ? argv[at + 1] : env.CLAUDE_PLUGIN_DATA;
-  if (!dir) throw new Error('Claude Code gave no data folder for the Relay Everything plugin.');
-  return dir;
-}
-
-/** The plugin's files in `dir`; `fileLockWait` is for tests. */
-export function state(dir, now = Date.now, { fileLockWait = FILE_LOCK_WAIT } = {}) {
-  mkdirSync(join(dir, 'locks'), { recursive: true });
+/** The hooks' files in `dir`; `fileLockWait` is for tests. With `make` false, it makes no folder, only to read. */
+export function state(dir, now = Date.now, { fileLockWait = FILE_LOCK_WAIT, make = true } = {}) {
+  if (make) mkdirSync(join(dir, 'locks'), { recursive: true, mode: 0o700 });
   const file = name => join(dir, name);
   const read = (name, empty) => {
     try {
@@ -80,6 +72,14 @@ export function state(dir, now = Date.now, { fileLockWait = FILE_LOCK_WAIT } = {
       locked('off.json', () => {
         const others = read('off.json', []).filter(item => item !== root);
         write('off.json', off ? [...others, root] : others);
+      });
+    },
+    /** True once `name` was marked: a notice that shows only once. */
+    marked: name => read('marks.json', []).includes(name),
+    mark(name) {
+      locked('marks.json', () => {
+        const marks = read('marks.json', []);
+        if (!marks.includes(name)) write('marks.json', [...marks, name]);
       });
     },
     /** Takes the session's lock, or answers null while another send holds it; call the answer to let go. */

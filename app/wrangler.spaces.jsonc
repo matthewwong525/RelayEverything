@@ -10,20 +10,20 @@
   "preview_urls": false,
   // Each space runs schema/space-migrations/*.sql, which the Worker takes in as text.
   "rules": [{ "type": "Text", "globs": ["**/*.sql"], "fallthrough": true }],
-  "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Space"] }],
+  "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space" }, { "name": "WORKBENCHES", "class_name": "Workbench" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Space"] }, { "tag": "v2", "new_sqlite_classes": ["Workbench"] }],
   "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks" }] },
   "env": {
     "staging": {
       "name": "relay-everything-spaces-staging",
-      "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space" }] },
+      "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space" }, { "name": "WORKBENCHES", "class_name": "Workbench" }] },
       // The staging shared server's queue: the company app's staging Worker has no SPACES, so it can't send a
       // space's catch-up. worker/queue-pairing.test.ts checks each environment's pairing.
       "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-server-webhooks-staging" }] }
     },
     "local": {
       "name": "relay-everything-spaces-local",
-      "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space" }] },
+      "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space" }, { "name": "WORKBENCHES", "class_name": "Workbench" }] },
       "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks-local" }] }
     }
   }

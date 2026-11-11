@@ -253,7 +253,6 @@ it("sends health and location only to a webhook that takes them, in groups of on
   await call(phone, "POST", "health", { samples: [sample, { ...sample, start: NOW - 30 * MINUTE, end: NOW - 10 * MINUTE }] });
   await call(phone, "POST", "locations", { points: [{ at: NOW - 2 * MINUTE, lat: 43.65, lon: -79.38, accuracy: 10 }] });
   await call(phone, "POST", "health", { samples: [{ ...sample, type: "heart_rate", unit: "bpm", value: 70 }] });
-  // The point near the ring note gives it no place, so the notes-only webhook is not woken for it.
   expect(queue.sent).toEqual([wakeUp("all"), wakeUp("all"), wakeUp("all")]);
   await deliver(wakeUp("all"));
   expect(types()).toEqual(["note.created", "health.samples", "location.points", "health.samples"]);
@@ -266,17 +265,22 @@ it("sends health and location only to a webhook that takes them, in groups of on
   expect(rows("relay_outbox").map(row => row.kind)).not.toContain("note.updated");
 });
 
-it("still sends a note.updated row already waiting from before the server stopped placing ring notes", async () => {
+it("still sends a note.updated row already waiting from before the server stopped placing ring notes, with no place", async () => {
   hook();
   ringNote("aaaaaaaa-0000-4000-8000-000000000001");
-  db.sql.prepare(`UPDATE relay_notes SET lat = 43.65, lon = -79.38, accuracy = 10, place_from = 'history'
-    WHERE id = 'aaaaaaaa-0000-4000-8000-000000000001'`).run();
   db.sql.prepare("INSERT INTO relay_outbox (kind, ref, at, logged_at) VALUES ('note.updated', 'aaaaaaaa-0000-4000-8000-000000000001', ?, ?)")
     .run(NOW - 2 * MINUTE, NOW);
   await deliver(wakeUp("hook-1"));
   expect(types()).toEqual(["note.created", "note.updated"]);
-  expect(bodies()[1].data.note).toMatchObject({ source: "ring", place: { lat: 43.65, from: "history" } });
+  expect([bodies()[1].data.note.source, "place" in bodies()[1].data.note]).toEqual(["ring", false]);
   expect(webhook()).toMatchObject({ sent_seq: 2 });
+});
+
+it("sends a note's place as a location point to a webhook ticked for location, and the note with no place", async () => {
+  hook("all", { kinds: '["notes","locations"]' });
+  await call(phone, "POST", "notes", { clientId: "note-0001", text: "Milk", createdAt: NOW, lat: 43.65, lon: -79.38, place: "Queen St W" });
+  await deliver(wakeUp("all"));
+  expect([types(), bodies()[0].data.points[0].place, "place" in bodies()[1].data.note]).toEqual([["location.points", "note.created"], "Queen St W", false]);
 });
 
 it("sends a note changed on its phone as note.updated, after its note.created, with its latest words and files", async () => {

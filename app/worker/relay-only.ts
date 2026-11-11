@@ -12,7 +12,8 @@ import { signIn, type SignInEnv } from "./apps/relay/sign-in/index.ts";
 import { staticPage } from "./static-page.ts";
 
 const PAGE = "/apps/relay/";
-const PHONE_KEY = "/apps/relay/sign-in/phone/key";
+/** The sign-in calls made with no person: a phone's and a computer's key trades, and a computer's start. */
+const NO_PERSON = new Set(["/apps/relay/sign-in/phone/key", "/apps/relay/sign-in/computer/start", "/apps/relay/sign-in/computer/key"]);
 const RELAY_API = /^\/apps\/relay\/api(?:\/(.*))?$/;
 
 /** `access` on a self-host, which keeps Cloudflare Access for its owner; the shared server signs people in itself. */
@@ -35,8 +36,8 @@ export default {
     const url = new URL(request.url);
     const access = env.RELAY_SIGN_IN === "access";
     const identity = access ? await getAccessIdentity(request, env) : null;
-    // Behind Access, only a key's own calls, and a phone's trade of its sign-in code, pass the wall without a person.
-    if (access && !identity && !request.headers.has("Authorization") && !(request.method === "POST" && url.pathname === PHONE_KEY)) {
+    // Behind Access, only a key's own calls, and a phone's or computer's sign-in calls, pass the wall without a person.
+    if (access && !identity && !request.headers.has("Authorization") && !(request.method === "POST" && NO_PERSON.has(url.pathname))) {
       return new Response("Unauthorized", { status: 401, headers: { "Cache-Control": "no-store" } });
     }
     const signedIn = await signIn(request, env, identity, ctx && (work => ctx.waitUntil(work)));

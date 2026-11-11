@@ -13,23 +13,26 @@ export const SESSION_COOKIE = "__Host-relay_session";
 /** A browser keeps a `__Host-` cookie only from https, so a local run on http uses the plain name. */
 export const sessionCookie = (url: URL) => url.protocol === "https:" ? SESSION_COOKIE : "relay_session";
 
-/** A key's reach: POST and `GET key` (its own name); a phone also reads `GET connections` (email and names) and its
- *  person's notes and files, and changes or deletes any note. `GET chats` and a send share an address. */
+/** A key's reach: POST and `GET key` (its own name); a phone also reads `GET connections` (names and addresses) and its
+ *  notes and files, changes or deletes any note, and signs out a phone. `GET chats` and a send share an address. */
 const REACH: Record<Reach, { routes: RegExp; refusal: string }> = {
   phone: { routes: /^\/apps\/relay\/api\/(?:notes|attachments|health|nights|locations|stays|calendar|photos)$/, refusal: "A device key can only send to Relay Everything." },
   chats: { routes: /^\/apps\/relay\/api\/(?:chats|chat-saves)$/, refusal: "A chat key can only send chats." },
   api: { routes: /^$/, refusal: "An API key works only on the web API, at your AI connector's address under /v1/." },
+  agent: { routes: /^\/apps\/relay\/api\/(?:chats|chat-saves)$/, refusal: "A computer's key sends chats here, and reads through the web API under /v1/." },
 };
 const KEY_CHECK = "/apps/relay/api/key";
 const NOTES = "/apps/relay/api/notes";
-/** A phone's reads: its account's email, AI app and webhook names, notes, files and old ring recordings. */
+/** A phone's reads: its account's email, names and notes addresses, and its notes, files and old ring recordings. */
 const PHONE_READS = /^\/apps\/relay\/api\/(?:connections|notes|attachment|audio)$/;
+/** A phone signs out a lost phone; the route refuses a computer or an API key. */
+const SIGN_OUT = "/apps/relay/api/devices/off";
 
 /** True when a key of this reach may call the method on the address. */
 export function reaches(reach: Reach, method: string, pathname: string): boolean {
   if (method === "GET") return pathname === KEY_CHECK || (reach === "phone" && PHONE_READS.test(pathname));
   if (method === "PATCH" || method === "DELETE") return reach === "phone" && pathname === NOTES;
-  return method === "POST" && REACH[reach].routes.test(pathname);
+  return method === "POST" && (REACH[reach].routes.test(pathname) || (reach === "phone" && pathname === SIGN_OUT));
 }
 
 type KeyRow = { person_id: string; email: string; device_id: string; reaches: Reach; revoked_at: number | null };
@@ -42,11 +45,12 @@ async function keyCaller(env: Pick<CallerEnv, "DB">, key: string): Promise<Calle
   return vouch("key", row.person_id, { email: row.email, device: { id: row.device_id, reaches: row.reaches } });
 }
 
-/** The web API's caller from its `rek_` key: only a live API key, never a phone's or a chat's. */
+/** The web API's caller from its `rek_` key: only a live API key or computer's key, never a phone's or a chat's. */
 export async function apiKeyCaller(env: Pick<CallerEnv, "DB">, key: string): Promise<Caller | Response> {
   const caller = await keyCaller(env, key);
-  if (caller instanceof Response || caller.device?.reaches === "api") return caller;
-  return refused(403, "A phone or chat key only sends. Make an API key on your Relay Everything page.");
+  if (caller instanceof Response || caller.device?.reaches === "api" || caller.device?.reaches === "agent") return caller;
+  if (caller.device?.reaches === "chats") return refused(403, "This computer's key only saves chats. Type /relay:connect to connect it again.");
+  return refused(403, "A phone key only sends. Make an API key on your Relay Everything page.");
 }
 
 /** A cookie's value from the request, or null. */
@@ -137,7 +141,8 @@ const asSignedIn = <C extends Call>(phone: boolean, run: Run<C>) =>
 /** A route for a signed-in person: their session, Access email or the checker. A device key reads nothing. */
 export const asPerson = <C extends Call>(run: Run<C>) => asSignedIn(false, run);
 
-/** A route a phone key reads too, as the gate lets it only for names and notes: never health, places or photos. */
+/** A route a phone key reaches too, as the gate lets it only for names, notes and signing out a phone: never health,
+ *  places or photos. */
 export const asPersonOrPhone = <C extends Call>(run: Run<C>) => asSignedIn(true, run);
 
 /** A route for a device key: it adds data to its own person's space, named by its own device. */

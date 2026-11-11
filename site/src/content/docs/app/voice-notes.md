@@ -26,6 +26,26 @@ A recording you give to **Add a note** in Apple Shortcuts becomes a voice note t
 
 The first time you hold **New note**, the phone asks for the microphone. If you said no, allow the microphone for Relay Everything in the phone's settings.
 
+## From your Apple Watch
+
+The Relay Everything watch app comes with the iPhone app, on watchOS 10 and later. Open it on your watch, or add its button to your watch face.
+
+1. Open the app. It starts to record at once. The first time, the watch asks for the microphone.
+2. Talk. The watch shows a clock and amber bars that move with your voice.
+3. Tap anywhere on the screen to save. The watch taps your wrist and says **Saved**. To keep nothing, tap the **X**.
+
+To save, you can also leave the app: press the Digital Crown. If you lower your wrist for a moment, the watch keeps recording. Each time you come back to the app, it records a new note. On **Saved**, tap for a new note.
+
+The **Start a voice note** shortcut opens the app and records too: put it on the Action button of an Apple Watch Ultra.
+
+Under **Saved**, the watch shows **Sending to your iPhone**, then **On your iPhone** when the iPhone has the note. When your iPhone is near, the watch also starts the Relay Everything app on the iPhone, so the note gets there in a few seconds. You do not need to open the iPhone app. The note shows in **Notes**, also under the **Voice** filter, at once if the iPhone app is open, or the next time you open it, and the iPhone writes its words, as for a voice note made on the phone.
+
+When your iPhone is not near, the note waits on the watch. The watch shows how many notes wait, such as **1 note waits for your iPhone**. The watch deletes its copy only after the iPhone keeps the note, so a note is never kept twice. If the watch can not save a recording, it says **Not saved**.
+
+If the iPhone finds no words in a watch recording, it keeps the note: it shows **Voice note** with **No words heard**, and you can play it. Such a note stays on the phone and is not sent. If you write words in it, it is sent as any other note.
+
+The same rules apply: a recording shorter than 1 second keeps nothing, and a note saves by itself after 5 minutes. A watch note keeps no place. The watch sends nothing to a server: only the iPhone does, with sending on.
+
 ## When the words do not come
 
 If the phone can not write the words, or they take longer than 2 minutes (or the recording's length, if it is longer), the note shows **The words did not come** in your notes. Open it, and it says **The words did not come. Your recording is safe.** The app tells you once. The note keeps its recording, and its player still works.
@@ -52,7 +72,7 @@ The app keeps nothing from:
 
 - A press on **New note** shorter than half a second. It opens the **New note** page, and a bump in your pocket makes no voice note.
 - A note you throw away with the **X**.
-- A recording with no words in it. The note's page closes, and the app says **No speech heard**.
+- A recording with no words in it. The note's page closes, and the app says **No speech heard**. A watch note with no words stays: see [From your Apple Watch](#from-your-apple-watch).
 
 ## Play a note back
 
@@ -71,7 +91,7 @@ The phone does not back up recordings to iCloud or Google. When you move to a ne
 
 | What | Where |
 |---|---|
-| The recording | This phone only. It is never sent, and phone backups leave it out. |
+| The recording | This phone only. It is never sent, and phone backups leave it out. A watch recording goes only to your paired iPhone. |
 | The words | This phone. With sending on, they go to your Relay Everything server, the same as a typed note. |
 
 On your server and in other places that read it, a voice note shows as a typed note. A note goes to your server only when it has its words. [Privacy](../../privacy/)

@@ -1,4 +1,4 @@
-// Relay Everything's AI connector: its own Worker on its own workers.dev address. AI apps sign in through the server's
+// Relay Everything's AI connector: its own Worker at mcp.relayeverything.com. AI apps sign in through the server's
 // own sign-in, each grant reads one person's space and its photos and adds notes to it, /v1/ is the web API, and OAUTH_KV keeps grants. wiki/stack/relay-ai-connector.md
 {
   "$schema": "node_modules/wrangler/config-schema.json",
@@ -6,33 +6,42 @@
   "main": "worker/relay-mcp/index.ts",
   "compatibility_date": "2026-07-28",
   "compatibility_flags": ["nodejs_compat", "disallow_importable_env"],
-  "workers_dev": true,
+  // The old workers.dev address stops: each sign-in belongs to the one address an app added, so none carries over.
+  "workers_dev": false,
   "preview_urls": false,
+  "routes": [{ "pattern": "mcp.relayeverything.com", "custom_domain": true }],
   // The connector has no secret: a person signs in on RELAY_SERVER_URL, which sends a one-time code to /callback.
   "vars": {
-    "RELAY_MCP_ADDRESS": "https://relay-everything-mcp.matthewwong525.workers.dev/mcp",
+    // The bare address is the one resource every token is bound to; MCP answers on / and on /mcp.
+    "RELAY_MCP_ADDRESS": "https://mcp.relayeverything.com/",
     "RELAY_SERVER_URL": "https://app.relayeverything.com"
   },
   "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db", "database_id": "9f8aa624-0d1c-4abf-902a-7b9430286378" }],
-  "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces" }] },
+  "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces" },
+      { "name": "WORKBENCHES", "class_name": "Workbench", "script_name": "relay-everything-spaces" }] },
   // The server's own file store, for read_photo: each photo opens only with its space's file key. Recordings never go out.
   "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes" }],
   // A note an app or API key adds wakes the person's webhooks, as a phone's note does.
   "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-webhooks" }] },
   // No id: the first deploy, which the setup script runs, makes the store, and later deploys keep it.
   "kv_namespaces": [{ "binding": "OAUTH_KV" }],
+  // Each person's knowledge web, one repo each: POST /v1/knowledge/access. scripts/relay-knowledge-setup.mjs makes it.
+  "artifacts": [{ "binding": "KNOWLEDGE", "namespace": "relay-everything-knowledge" }],
   "env": {
     "staging": {
       "name": "relay-everything-mcp-staging",
+      "routes": [{ "pattern": "mcp-staging.relayeverything.com", "custom_domain": true }],
       "vars": {
-        "RELAY_MCP_ADDRESS": "https://relay-everything-mcp-staging.matthewwong525.workers.dev/mcp",
+        "RELAY_MCP_ADDRESS": "https://mcp-staging.relayeverything.com/",
         "RELAY_SERVER_URL": "https://app-staging.relayeverything.com"
       },
       "d1_databases": [{ "binding": "DB", "database_name": "relay-everything-db-staging", "database_id": "4f8edf18-ad51-4325-bb98-ec3ca6cc80b0" }],
-      "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces-staging" }] },
+      "durable_objects": { "bindings": [{ "name": "SPACES", "class_name": "Space", "script_name": "relay-everything-spaces-staging" },
+      { "name": "WORKBENCHES", "class_name": "Workbench", "script_name": "relay-everything-spaces-staging" }] },
       "r2_buckets": [{ "binding": "RELAY_BUCKET", "bucket_name": "relay-everything-notes-staging" }],
       "queues": { "producers": [{ "binding": "RELAY_WEBHOOKS", "queue": "relay-everything-server-webhooks-staging" }] },
-      "kv_namespaces": [{ "binding": "OAUTH_KV" }]
+      "kv_namespaces": [{ "binding": "OAUTH_KV" }],
+      "artifacts": [{ "binding": "KNOWLEDGE", "namespace": "relay-everything-knowledge-staging" }]
     }
   }
 }

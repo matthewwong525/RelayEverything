@@ -87,10 +87,11 @@ class RelayController extends Relay {
     voice?.model.addListener(notifyListeners);
     // A recording at its longest ends as if the person let go.
     voice?.recorder.onLongest = (recording) {
+      final fix = _takeVoiceFix();
       _listening = null;
       notifyListeners();
       if (recording == null) return notice(_stopFailed);
-      unawaited(_keepVoice(recording).then((problem) => problem == null ? null : notice(problem)));
+      unawaited(_keepVoice(recording, fix).then((problem) => problem == null ? null : notice(problem)));
     };
   }
 
@@ -155,7 +156,10 @@ class RelayController extends Relay {
   final _writing = <Future<void>>{};
   // Voice notes whose words failed in this run of the app. The next open, or *Try again*, writes them again.
   final _wordsFailed = <String>{};
-  final _pinning = <Future<void>>{};
+  // Each new note's location point, while its fix is taken: [settled] waits on them.
+  final _pointing = <Future<void>>{};
+  // The fix an in-app voice note took as it started; it becomes a point only if the note is kept.
+  Future<Pin?>? _voiceFix;
   String? _root;
 
   @override bool get connected => _connection != null;
@@ -219,8 +223,6 @@ class RelayController extends Relay {
     if (watch && _settings.history) _startHistory();
     if (watch) await _watchMotion();
     if (watch) _watchNetwork();
-    // Nothing waits for a fix yet at start, so a note still waiting lost its wait when the app closed.
-    await store.settleWaiting(send: _settings.sending);
     // A close during a delete's Undo time left its mark: the delete runs when that time ends, and goes at the next send.
     // A mark from another window, such as the share card's, still in its time is left to that window's timer too.
     for (final (id, at) in await store.marked()) {
@@ -232,19 +234,8 @@ class RelayController extends Relay {
       }
     }
     _root = (await folder?.call())?.path;
-    // A shortcut that ran while the app could not answer left its note in the inbox.
-    final root = _root;
-    if (root != null) {
-      await drainInbox(Directory(root), (request) async {
-        final recording = request.recording;
-        if (recording == null) {
-          await keepNote(request.text, files: request.files, clientId: request.id, createdAt: request.createdAt, pin: false);
-        } else {
-          await keepRecording(request.text, recording: recording.path, durationMs: recording.durationMs, clientId: request.id,
-            createdAt: request.createdAt, pin: false);
-        }
-      });
-    }
+    // A shortcut that ran while the app could not answer, or the Apple Watch, left its note in the inbox.
+    await drainShortcutsInbox();
     await _drainShare(refresh: false);
     await voice?.model.load();
     if (_settings.calendar) await _readCalendars();
@@ -253,7 +244,40 @@ class RelayController extends Relay {
     _track(_writePending(dropStray: true));
   }
 
-  /// Keeps each note the iPhone's share card left, with no place. Load, each return to the app, and the hourly round
+  /// Keeps each note in the shortcuts inbox, from Shortcuts or the Apple Watch, with no point: at load, each return to
+  /// the app, and each `inboxChanged` from Swift. One drain runs at a time; a call during one makes it look again after.
+  Future<void> drainShortcutsInbox() {
+    final running = _inboxRun;
+    if (running != null) {
+      _inboxAgain = true;
+      return running;
+    }
+    return _inboxRun = _drainShortcuts().whenComplete(() => _inboxRun = null);
+  }
+
+  Future<void>? _inboxRun;
+  bool _inboxAgain = false;
+
+  Future<void> _drainShortcuts() async {
+    final root = _root;
+    if (root == null) return;
+    do {
+      _inboxAgain = false;
+      await drainInbox(Directory(root), _keepInboxRequest);
+    } while (_inboxAgain);
+  }
+
+  Future<void> _keepInboxRequest(InboxRequest request) async {
+    final recording = request.recording;
+    if (recording == null) {
+      await keepNote(request.text, files: request.files, clientId: request.id, createdAt: request.createdAt, point: false);
+    } else {
+      await keepRecording(request.text, recording: recording.path, durationMs: recording.durationMs, clientId: request.id,
+        createdAt: request.createdAt, point: false, fromWatch: request.fromWatch);
+    }
+  }
+
+  /// Keeps each note the iPhone's share card left, with no point. Load, each return to the app, and the hourly round
   /// run it before they send.
   Future<void> _drainShare({bool refresh = true}) async {
     final root = _root, group = share;
@@ -269,20 +293,19 @@ class RelayController extends Relay {
     }
   }
 
-  /// Each return to the app: keeps what the share card left, shows what another engine added to the store, such as
+  /// Each return to the app: keeps what the inbox and the share card hold, shows what another engine added to the store, such as
   /// Android's share window, then sends what waits.
   Future<void> resume() async {
+    await drainShortcutsInbox();
     await _drainShare(refresh: false);
     await _refreshLocal();
     await pullNotes();
   }
 
   Entry _entryOfLocal(LocalNote note) => Entry(id: note.clientId, text: note.text, at: note.createdAt,
-    // With sending off the phone looks up no place name, so a pin with no name reads as Pinned.
-    place: note.pin == null ? null : note.pin!.place ?? 'Pinned',
-    sent: note.mine && note.sentAt != null, waiting: _settings.sending && note.sentAt == null && (note.queued || note.pinning),
+    sent: note.mine && note.sentAt != null, waiting: _settings.sending && note.sentAt == null && note.queued,
     voice: note.kind == NoteKind.voice, writing: note.wordsPending && !_wordsFailed.contains(note.clientId),
-    failed: note.wordsPending && _wordsFailed.contains(note.clientId), recording: note.audioPath,
+    failed: note.wordsPending && _wordsFailed.contains(note.clientId), noWords: note.noWords, recording: note.audioPath,
     length: note.durationMs == null ? null : Duration(milliseconds: note.durationMs!),
     files: [for (final file in note.attachments) EntryFile(id: file.id, name: file.name, type: file.type, size: file.size,
       path: file.path.isEmpty ? '' : fullPath(file.path))],
@@ -517,6 +540,22 @@ class RelayController extends Relay {
     if (_sender.reader(_settings, connection: _connection) != null) await _keepConnections(found);
   }
 
+  @override
+  Future<String?> signOutPhone(String id) async {
+    final reader = _sender.reader(_settings, connection: _connection);
+    if (reader == null) return 'Sign in to Relay Everything first.';
+    try {
+      await reader.post('devices/off', {'id': id});
+    } on ApiException catch (error) {
+      return switch (error.failure) {
+        Failure.offline => 'Relay Everything did not answer. Check your connection and try again.',
+        _ => 'Relay Everything did not sign out this phone. Sign it out on your Relay Everything page.',
+      };
+    }
+    await refreshConnections();
+    return null;
+  }
+
   Future<void> _keepConnections(Connections? value) async {
     _connections = value;
     value == null ? await store.remove(connectionsKey) : await store.set(connectionsKey, value.encode());
@@ -550,15 +589,7 @@ class RelayController extends Relay {
     }
   }
 
-  static const _noLocation = 'Relay Everything may not read your location. Allow it in the phone\'s settings.';
   static const _sendFirst = 'Sign in first, in Settings.';
-
-  @override
-  Future<String?> setPinNotes(bool on) async {
-    if (on && !await places.allow(always: false)) return _noLocation;
-    await _saveSettings(_settings.copyWith(pinNotes: on));
-    return null;
-  }
 
   @override
   Future<void> setAppearance(Appearance appearance) => _saveSettings(_settings.copyWith(appearance: appearance));
@@ -777,8 +808,8 @@ class RelayController extends Relay {
 
   static const _nothing = 'Give the note words or a file.';
 
-  /// Keeps and shows the note at once; Save never waits for a fix. With pins on, the note settles only when the phone
-  /// has a fix or gives up (up to 10 s), so a sync meanwhile sends the rest and leaves this note waiting.
+  /// Keeps, shows and queues the note at once; Save never waits for a fix. With location history on, its point follows
+  /// when the phone has a fix or gives up (up to 10 s).
   @override
   Future<String?> addNote(String text, {List<NewFile> files = const [], String? id, bool sendNow = true}) async =>
     (await keepNote(text, files: files, clientId: id, sendNow: sendNow)).problem;
@@ -865,9 +896,10 @@ class RelayController extends Relay {
 
   /// Keeps a note with words, files, or both, as the paperclip and Shortcuts make it. Files past the limits are left out
   /// with a message. A note with nothing in it is kept not at all. A [clientId] this phone already keeps gives back that
-  /// note, so a shortcut that ran twice keeps one. [pin] false keeps no place, for a note made earlier than now.
+  /// note, so a shortcut that ran twice keeps one. While location history is on, the note adds one location point at
+  /// its time; [point] false adds none, for a note made earlier than now.
   Future<Kept> keepNote(String text, {List<NewFile> files = const [], String? clientId, DateTime? createdAt,
-    bool pin = true, bool sendNow = true}) async {
+    bool point = true, bool sendNow = true}) async {
     final id = clientId ?? newClientId();
     if (await store.hasNote(id)) {
       return Kept((await store.notes()).firstWhere((note) => note.clientId == id), null);
@@ -877,37 +909,31 @@ class RelayController extends Relay {
     final words = text.trim();
     if (words.isEmpty && attachments.isEmpty) return Kept(null, [...problems, _nothing].join(' '));
     final note = LocalNote(clientId: id, text: words, createdAt: createdAt ?? _clock(), attachments: attachments);
-    final pinned = pin && _settings.pinNotes;
-    await store.addNote(note, waitForPin: pinned, send: _settings.sending);
+    await store.addNote(note, send: _settings.sending);
     await _refreshLocal();
-    if (pinned) {
-      final job = _pinThenSync(id);
-      _pinning.add(job);
-      job.whenComplete(() => _pinning.remove(job));
-    } else if (sendNow) {
-      unawaited(sync());
-    }
+    if (sendNow) unawaited(sync());
+    if (point) _pointAt(note.createdAt);
     return Kept(note, problems.isEmpty ? null : problems.join(' '));
   }
 
   /// Keeps a shortcut's recording, a WAV Swift left at [recording] from the support folder, as a voice note that waits
   /// for its words, with [text], the words typed with it, first. The note is kept before its recording moves to
-  /// `voice/<id>.wav`, so the sweep for stray recordings never takes it. It pins as [keepNote] does, and a [clientId]
+  /// `voice/<id>.wav`, so the sweep for stray recordings never takes it. It adds a point as [keepNote] does, and a [clientId]
   /// already kept gives back that note. The words are written now when this engine has the voice parts, else at the
-  /// app's next open. A recording that is not there keeps the typed words alone, or nothing.
+  /// app's next open. A recording that is not there keeps the typed words alone, or nothing. [fromWatch] marks a note the
+  /// Apple Watch handed over: it is never deleted for having no words.
   Future<Kept> keepRecording(String text, {required String recording, required int durationMs, String? clientId,
-    DateTime? createdAt, bool pin = true}) async {
+    DateTime? createdAt, bool point = true, bool fromWatch = false}) async {
     final id = clientId ?? newClientId();
     if (await store.hasNote(id)) {
       return Kept((await store.notes()).firstWhere((note) => note.clientId == id), null);
     }
     final root = _root ?? (await folder?.call())?.path;
     final source = File('$root/$recording');
-    if (root == null || !await source.exists()) return keepNote(text, clientId: id, createdAt: createdAt, pin: pin);
+    if (root == null || !await source.exists()) return keepNote(text, clientId: id, createdAt: createdAt, point: point);
     final note = LocalNote(clientId: id, text: text.trim(), createdAt: createdAt ?? _clock(), kind: NoteKind.voice,
-      audioPath: VoiceRecorder.pathOf(id), durationMs: durationMs, wordsPending: true);
-    final pinned = pin && _settings.pinNotes;
-    await store.addVoiceNote(note, waitForPin: pinned);
+      audioPath: VoiceRecorder.pathOf(id), durationMs: durationMs, wordsPending: true, fromWatch: fromWatch);
+    await store.addVoiceNote(note);
     try {
       final target = File('$root/${note.audioPath}');
       await target.parent.create(recursive: true);
@@ -917,11 +943,7 @@ class RelayController extends Relay {
       rethrow;
     }
     await _refreshLocal();
-    if (pinned) {
-      final job = _pinThenSync(id);
-      _pinning.add(job);
-      job.whenComplete(() => _pinning.remove(job));
-    }
+    if (point) _pointAt(note.createdAt);
     if (voice != null) _track(_write(note));
     return Kept(note, null);
   }
@@ -933,11 +955,11 @@ class RelayController extends Relay {
     return keepFile(root, file, newClientId());
   }
 
-  /// Ends when each new note has its pin, and the sync after it is done. Shortcuts waits on it, so a note goes before the
-  /// phone puts the app away.
+  /// Ends when each new note's point is kept, and the sync after it is done. Shortcuts waits on it, so a note goes
+  /// before the phone puts the app away.
   Future<void> settled() async {
-    while (_pinning.isNotEmpty) {
-      await Future.wait(List.of(_pinning));
+    while (_pointing.isNotEmpty) {
+      await Future.wait(List.of(_pointing));
     }
     await _syncing;
   }
@@ -981,14 +1003,39 @@ class RelayController extends Relay {
     return null;
   }
 
-  Future<void> _pinThenSync(String clientId) async {
-    Pin? pin;
+  /// While location history is on, takes one fix and keeps it as a location point at a new note's time [at], then
+  /// sends. Off, it reads no place.
+  void _pointAt(DateTime at) {
+    if (_settings.history) _point(at, _here());
+  }
+
+  /// One fix of where the phone is now; null when there is none.
+  Future<Pin?> _here() async {
     try {
-      pin = await places.here(name: _settings.sending);
+      return await places.here(name: _settings.sending);
     } on Exception {
-      // No fix: the note is kept without a place.
+      return null;
     }
-    await store.settlePin(clientId, pin, send: _settings.sending);
+  }
+
+  /// Keeps [fix] as the point at [at], and [settled] waits for it.
+  void _point(DateTime at, Future<Pin?> fix) {
+    final job = _pointThenSync(at, fix);
+    _pointing.add(job);
+    job.whenComplete(() => _pointing.remove(job));
+  }
+
+  Future<void> _pointThenSync(DateTime at, Future<Pin?> here) async {
+    try {
+      final fix = await here;
+      // History may have turned off while the fix was taken.
+      if (fix == null || !_settings.history) return;
+      await store.addPoint(Pin(at: at, lat: fix.lat, lon: fix.lon, accuracy: fix.accuracy, place: fix.place),
+        send: _settings.locationSend);
+    } on Exception {
+      // No fix: no point is kept.
+      return;
+    }
     await _refreshLocal();
     await sync();
   }
@@ -1194,6 +1241,8 @@ class RelayController extends Relay {
       _starting = null;
     }
     if (!allowed) return _noMicrophone;
+    // A recording can last 5 minutes: the fix at its start is where the note was made.
+    _voiceFix = _settings.history ? _here() : null;
     if (!_holdTipSeen) {
       _holdTipSeen = true;
       try {
@@ -1224,6 +1273,7 @@ class RelayController extends Relay {
     final parts = voice;
     if (parts == null) return null;
     await _started();
+    final fix = _takeVoiceFix();
     if (!parts.recorder.recording) return null;
     final Recording? recording;
     try {
@@ -1236,7 +1286,14 @@ class RelayController extends Relay {
       notifyListeners();
     }
     if (recording == null) return _tooShort;
-    return _keepVoice(recording);
+    return _keepVoice(recording, fix);
+  }
+
+  /// The fix the voice note took as it started, now that it ends; a note that is not kept drops it.
+  Future<Pin?>? _takeVoiceFix() {
+    final fix = _voiceFix;
+    _voiceFix = null;
+    return fix;
   }
 
   @override
@@ -1244,6 +1301,7 @@ class RelayController extends Relay {
     final parts = voice;
     if (parts == null) return;
     await _started();
+    _voiceFix = null;
     try {
       await parts.recorder.cancel();
     } catch (_) {
@@ -1286,8 +1344,9 @@ class RelayController extends Relay {
   }
 
   /// Shows the note at once, with no words yet, and writes them in the background. Returns the words to show when the
-  /// phone could not keep it, such as a full disk; then its recording is deleted too.
-  Future<String?> _keepVoice(Recording recording) async {
+  /// phone could not keep it, such as a full disk; then its recording is deleted too. A kept note adds [fix], the fix
+  /// taken as it started, as its point.
+  Future<String?> _keepVoice(Recording recording, Future<Pin?>? fix) async {
     final note = LocalNote(clientId: recording.clientId, text: '', createdAt: recording.startedAt, kind: NoteKind.voice,
       audioPath: recording.audioPath, durationMs: recording.length.inMilliseconds, wordsPending: true);
     try {
@@ -1303,6 +1362,7 @@ class RelayController extends Relay {
     }
     await _refreshLocal();
     _track(_write(note));
+    if (fix != null) _point(note.createdAt, fix);
     return null;
   }
 
@@ -1354,15 +1414,17 @@ class RelayController extends Relay {
   }
 
   /// Writes one voice note's words, after the words typed with it. No words: a note with typed words keeps them and its
-  /// recording; one without goes with its recording, and the app says it heard no speech. It waits while the model is
-  /// away; failed words, or words past the time limit, show *Try again* on the note.
+  /// recording; a watch note keeps its recording and shows *No words heard*; any other goes with its recording, and the
+  /// app says it heard no speech. It waits while the model is away; failed words, or words past the time limit, show
+  /// *Try again* on the note.
   Future<void> _write(LocalNote note) async {
     final parts = voice;
     if (parts == null) return;
     final file = await parts.recorder.fileOf(note.audioPath ?? VoiceRecorder.pathOf(note.clientId));
     if (!await file.exists()) {
-      // Typed words stay, with no recording to write.
+      // Typed words stay, with no recording to write. The phone never deletes a watch note on its own.
       if (note.text.trim().isNotEmpty) return _keepTyped(note);
+      if (note.fromWatch) return _keepNoWords(note);
       await store.dropNote(note.clientId);
       await _refreshLocal();
       return;
@@ -1383,6 +1445,7 @@ class RelayController extends Relay {
     }
     if (words.isEmpty) {
       if (note.text.trim().isNotEmpty) return _keepTyped(note);
+      if (note.fromWatch) return _keepNoWords(note);
       await store.dropNote(note.clientId);
       await _deleteRecording(file);
       await _refreshLocal();
@@ -1402,6 +1465,11 @@ class RelayController extends Relay {
     } on PathNotFoundException {
       // Gone already.
     }
+  }
+
+  /// A watch note with no words stays, with its recording to play, and is not sent: there are no words to send.
+  Future<void> _keepNoWords(LocalNote note) async {
+    if (await store.setWords(note.clientId, '', send: false)) await _refreshLocal();
   }
 
   /// Ends a voice note's wait with only the words typed with it, such as a shortcut's label over a silent recording.

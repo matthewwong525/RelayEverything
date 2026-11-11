@@ -187,33 +187,38 @@ class AccentGlow extends StatelessWidget {
 }
 
 /// A small pill with a word: *Listening* in the spark color, a small live moment; a quiet word, such as *Off*, in accent
-/// text on accent soft. [large] is a larger size.
+/// text on accent soft. [large] is a larger size. [outlined] is a quiet fact, such as a chat's app: muted words in a thin
+/// line, with no fill.
 class BrandTag extends StatelessWidget {
-  const BrandTag(this.label, {super.key, this.spark = false, this.large = false});
+  const BrandTag(this.label, {super.key, this.spark = false, this.large = false, this.outlined = false});
 
   final String label;
   final bool spark;
   final bool large;
+  final bool outlined;
 
   @override
   Widget build(BuildContext context) {
     final brand = brandOf(context);
     return DecoratedBox(
-      decoration: ShapeDecoration(color: spark ? brand.spark : brand.accentSoft, shape: const StadiumBorder()),
+      decoration: outlined
+        ? ShapeDecoration(shape: StadiumBorder(side: BorderSide(color: brand.line)))
+        : ShapeDecoration(color: spark ? brand.spark : brand.accentSoft, shape: const StadiumBorder()),
       child: Padding(
         padding: large ? const EdgeInsets.symmetric(horizontal: 10, vertical: 4) : const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         child: Text(label, style: TextStyle(fontSize: large ? 13 : 11, fontWeight: _semi,
-          color: spark ? brand.onSpark : brand.accentText)),
+          color: outlined ? brand.muted : spark ? brand.onSpark : brand.accentText)),
       ),
     );
   }
 }
 
-/// A quiet button: ink on [BrandColors.paper], for a second action inside a card, such as *Remove* or *Cancel*.
+/// A quiet button: ink on [BrandColors.paper], for a second action inside a card, such as *Remove* or *Cancel*. Its
+/// words name the app's own font: a text style with no family draws boxes in a browser that loaded no system font.
 ButtonStyle quietButton(BuildContext context) {
   final brand = brandOf(context);
   return TextButton.styleFrom(backgroundColor: brand.paper, foregroundColor: brand.ink,
-    textStyle: const TextStyle(fontSize: 15, fontWeight: _semi));
+    textStyle: const TextStyle(fontFamily: brandFont, fontSize: 15, fontWeight: _semi));
 }
 
 /// The *Signal R* mark from `brand/mark.svg`: a capital R on a 48 grid in round 4-unit strokes, its bowl sending two

@@ -6,7 +6,7 @@ Relay's server keeps the owner's AI chats beside their notes: it takes chats fro
 ## Requirements
 
 ### Requirement: A chat key reaches only the chat routes
-Relay SHALL accept saved chats only from an unrevoked device key made for chats. A chat key SHALL be send-only: it SHALL reach only the routes that add chat messages and saves, and SHALL NOT list, read, change or delete notes, health, places, recordings or chats. A phone key SHALL NOT add chats.
+Relay SHALL accept saved chats only from an unrevoked chat key or computer key. A chat key SHALL be send-only: it SHALL reach only the routes that add chat messages and saves, and SHALL NOT list, read, change or delete notes, health, places, recordings or chats. A computer key SHALL reach the same chat routes, and SHALL NOT change or delete a chat. A phone key SHALL NOT add chats.
 
 #### Scenario: A chat key sends a chat
 - **WHEN** an unrevoked chat key sends new messages for a chat
@@ -59,3 +59,10 @@ The owner's AI connector SHALL offer two read-only tools: one that searches chat
 #### Scenario: A long chat is read in parts
 - **WHEN** the AI reads a chat longer than one part
 - **THEN** it gets the first part and a cursor that returns the next part
+
+### Requirement: A chat names the app it came from
+Each saved chat SHALL keep the app it came from, Claude Code or Codex, as its first send named it. A chat sent with no app SHALL count as from Claude Code. The page, the web API and the AI connector SHALL show the app with each chat.
+
+#### Scenario: A Codex chat
+- **WHEN** a computer sends a chat named as from Codex
+- **THEN** the page's list shows that chat as from Codex

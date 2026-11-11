@@ -1,7 +1,7 @@
-# Settings: open it from the gear on Home. Signed out, its first row is the Account row, Sign in to Relay Everything,
-# then the Appearance, Notes and Voice notes groups. A tap on the Account row opens the Sign in screen. Then the flow
-# saves a webhook, which checks only the address's form, with no network, and the webhook Account page offers Sign in
-# to Relay Everything.
+# Settings: open it from the gear on Home. Signed out, its first row is the account card, Sign in to Relay Everything,
+# then the Appearance, Notes and Voice notes groups. A tap on the card opens the Sign in screen. Then the flow saves a
+# webhook with no account, which checks only the address's form, with no network, and the webhook Account page offers
+# Sign in to Relay Everything and Stop sending.
 appId: com.matthewwong525.relayApp
 ---
 - launchApp:
@@ -18,34 +18,43 @@ appId: com.matthewwong525.relayApp
 - assertVisible: "System"
 - assertVisible: "Dark"
 - assertVisible: "Voice notes"
-# Flutter joins a row's title and subtitle into one label, so match its start.
-- assertVisible: 'Pin notes to where I am(.|\n)*'
-# The Account row joins its title and its line, Your notes stay on this phone until you sign in.
+- assertNotVisible: 'Pin notes to where I am(.|\n)*'
+# The account card joins its title and its line, Your notes stay on this phone until you sign in.
 - assertVisible: 'Sign in to Relay Everything(.|\n)*'
 - assertNotVisible: 'Send my notes(.|\n)*'
 - takeScreenshot: settings
-# The Account row opens the Sign in screen, with Sign in to connect first and the quiet ways below it.
+# The account card opens the Sign in screen: one Sign in button and one quiet link to a webhook with no account. The
+# link's ? is escaped, because Maestro reads the text as a regular expression.
 - tapOn: 'Sign in to Relay Everything(.|\n)*'
 - extendedWaitUntil:
-    visible: "Sign in to connect"
+    visible: 'Don''t want an account\? Use your own webhook'
     timeout: 30000
-- assertVisible: "Scan a key"
-- assertVisible: "Send to my own webhook instead"
+- assertVisible: "Sign in"
+- assertNotVisible: "Scan a key"
+- assertNotVisible: "Use another server"
 - takeScreenshot: sign-in
-# Send to my own webhook instead: the address starts as https://, so type the rest, then Save. Save stays above the
-# keyboard, and Flutter's keyboard has no dismiss action Maestro's hideKeyboard can use, so tap Save at once.
-- tapOn: "Send to my own webhook instead"
+# The webhook setup has four numbered steps. The address field keeps the label Address and starts as https://, so
+# type the rest, then Save. Save, step 4, sits under the keyboard, and Flutter's keyboard has no dismiss action
+# Maestro's hideKeyboard can use, so scroll the page up to it first.
+- tapOn: 'Don''t want an account\? Use your own webhook'
 - extendedWaitUntil:
     visible: "My own webhook"
     timeout: 30000
+- assertVisible: "1. Your webhook's address"
 - tapOn: "Address"
 - inputText: "example.com/hook"
+- scrollUntilVisible:
+    element:
+      text: "Save"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
 - tapOn: "Save"
 # A new install has no notes, so the earlier-notes question shows only if a note was kept.
 - tapOn:
     text: "Only new notes"
     optional: true
-# Back in Settings, the Account row joins My own webhook and the webhook's host.
+# Back in Settings, the account card joins My own webhook and the webhook's host, and opens Account.
 - extendedWaitUntil:
     visible: "Appearance"
     timeout: 30000

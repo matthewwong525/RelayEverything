@@ -132,7 +132,7 @@ void main() {
       final entry = leave(group, id, files: {'a.jpg': [1, 2]}, sentNote: true, sentFiles: ['1' * 32]);
       expect(await drainShareInbox(group, root.path, store, send: true), 1);
       final note = (await store.notes()).single;
-      expect([note.text, note.pin, note.sentAt, note.attachments.single.sentAt], ['read later', null, isNotNull, isNotNull]);
+      expect([note.text, note.sentAt, note.attachments.single.sentAt], ['read later', isNotNull, isNotNull]);
       expect(File('${root.path}/${note.attachments.single.path}').readAsBytesSync(), [1, 2]);
       expect([await routes(), entry.existsSync()], [isEmpty, false]);
     });
@@ -148,7 +148,7 @@ void main() {
       leave(group, id, files: {'a.jpg': [1]});
       await drainShareInbox(group, root.path, store, send: false);
       final note = (await store.notes()).single;
-      expect([note.sentAt, note.queued, note.pin, await routes()], [null, false, null, isEmpty]);
+      expect([note.sentAt, note.queued, await routes()], [null, false, isEmpty]);
       expect(await store.earlierCount(), 1);
     });
 
@@ -271,13 +271,16 @@ void main() {
       await relay.settled();
     });
 
-    test('a shared note gets no place, even with Pin notes on', () async {
+    test('a shared note adds no location point, even with location history on', () async {
+      await KeyVault(storage).save(connection);
+      await store.set(settingsKey, const Settings(sending: true, history: true).encode());
       final relay = controller();
       await relay.load();
-      await relay.setPinNotes(true);
-      await relay.keepNote('from the share card', pin: false);
+      expect(relay.settings.history, isTrue);
+      places.pin = Pin(at: now, lat: 43.65, lon: -79.38, accuracy: 10);
+      await relay.keepNote('from the share card', point: false);
       await relay.settled();
-      expect([places.named, relay.entries.single.place], [isEmpty, null]);
+      expect([places.named, await store.waitingPoints()], [isEmpty, 0]);
     });
 
     test('keeps what the card left on load and on each return to the app', () async {
@@ -300,7 +303,7 @@ void main() {
       final window = RelayController(store: store, vault: KeyVault(storage), places: places, health: FakeHealth(),
         apiFor: server.api, clock: () => now, folder: () async => root);
       await window.load(watch: false);
-      await window.keepNote('from the share window', pin: false);
+      await window.keepNote('from the share window', point: false);
       await window.settled();
       expect(relay.entries, isEmpty);
       await relay.resume();

@@ -28,13 +28,28 @@ it("has no Pebble address: a live phone key posting a signed ring note there get
   expect(rows("relay_outbox")).toEqual([]);
 });
 
-it("stores a typed note once per phone, with the place its phone sent", async () => {
-  const first = await call(phone, "POST", "notes", typed("note-0001", { lat: 43.65, lon: -79.38, accuracy: 8, place: "Home" }));
+it("stores a typed note once per phone, with no place, and keeps the place it came with as one location point", async () => {
+  const webhook = db.sql.prepare(`INSERT INTO relay_webhooks (id, name, url, secret, kinds, sent_seq, created_at)
+    VALUES (?, 'Example database', 'https://db.example.com/relay', 'whsec_AAAA', ?, 0, ?)`);
+  webhook.run("notes", '["notes"]', NOW);
+  webhook.run("places", '["notes","locations"]', NOW);
+  const place = { lat: 43.65, lon: -79.38, accuracy: 8, place: "Home" };
+  const first = await call(phone, "POST", "notes", typed("note-0001", place));
   expect(first).toEqual({ status: 200, json: { id: expect.any(String), added: true } });
-  expect(await call(phone, "POST", "notes", typed("note-0001"))).toEqual({ status: 200, json: { id: first.json.id, added: false } });
-  expect((await call(phone, "POST", "notes", typed("note-0002"))).json.added).toBe(true);
-  expect(rows("relay_notes").map(row => [row.client_id, row.source, row.lat, row.place, row.place_from])).toEqual([
-    ["note-0001", "typed", 43.65, "Home", "phone"], ["note-0002", "typed", null, null, null]]);
+  // The same note again, even with another place, adds no second point.
+  expect(await call(phone, "POST", "notes", typed("note-0001", { ...place, lat: 10 }))).toEqual({ status: 200, json: { id: first.json.id, added: false } });
+  expect((await call(phone, "POST", "notes", typed("note-0002", { createdAt: NOW - MINUTE }))).json.added).toBe(true);
+  expect(rows("relay_notes").map(row => [row.client_id, row.source, row.lat, row.lon, row.accuracy, row.place, row.place_from])).toEqual([
+    ["note-0001", "typed", null, null, null, null, null], ["note-0002", "typed", null, null, null, null, null]]);
+  expect(rows("relay_locations").map(row => [row.device_id, row.at, row.lat, row.lon, row.accuracy, row.place])).toEqual([
+    ["d-phone", NOW - 5 * MINUTE, 43.65, -79.38, 8, "Home"]]);
+  expect(rows("relay_outbox").map(row => row.kind)).toEqual(["location", "note.created", "note.created"]);
+  expect(queue.sent).toEqual([{ webhook: "notes", person: ANA }, { webhook: "places", person: ANA },
+    { webhook: "notes", person: ANA }, { webhook: "places", person: ANA }]);
+  // A note with no accuracy gives its point 0, and a point already at that time stays as it was.
+  await call(phone, "POST", "notes", typed("note-0003", { createdAt: NOW - 3 * MINUTE, lat: 1, lon: 2 }));
+  await call(phone, "POST", "notes", typed("note-0004", { createdAt: NOW - 3 * MINUTE, lat: 3, lon: 4, place: "Later" }));
+  expect(rows("relay_locations").slice(1).map(row => [row.at, row.lat, row.accuracy, row.place])).toEqual([[NOW - 3 * MINUTE, 1, 0, null]]);
 });
 
 it("refuses a note from a revoked key, a chat key or no one, and a malformed one", async () => {
@@ -86,10 +101,8 @@ it("reads the timeline newest first, a page at a time, for the site page, and re
   await call(phone, "POST", "notes", typed("note-0002", { createdAt: NOW - MINUTE }));
   const all = await call(matthew, "GET", "timeline");
   expect(all.status).toBe(200);
-  expect(all.json.notes.map(note => [note.source, note.device, note.audio, note.place])).toEqual([
-    ["typed", "Android phone", false, null],
-    ["typed", "Android phone", false, { lat: 43.65, lon: -79.38, accuracy: null, name: null, from: "phone" }],
-    ["ring", "iPad", true, null]]);
+  expect(all.json.notes.map(note => [note.source, note.device, note.audio, "place" in note])).toEqual([
+    ["typed", "Android phone", false, false], ["typed", "Android phone", false, false], ["ring", "iPad", true, false]]);
   expect(all.json.next).toBeNull();
   const first = await call(matthew, "GET", "timeline", { limit: 2 });
   expect([first.json.notes.length, first.json.next, first.json.nextId]).toEqual([2, NOW - 2 * MINUTE, first.json.notes[1].id]);

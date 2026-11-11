@@ -4,7 +4,7 @@ import { z } from "zod";
 import { defineAction, type ActionCall } from "../../api/contract.ts";
 import { asPersonOrPhone, webDevice } from "./caller.ts";
 import { noteChanges } from "./queries.ts";
-import { file, place } from "./timeline.ts";
+import { file } from "./timeline.ts";
 
 const PAGE = 100;
 
@@ -12,7 +12,7 @@ const syncedNote = z.strictObject({ id: z.string(), clientId: z.string().nullabl
   mine: z.boolean().describe("True when the calling phone sent the note, or, for the page, your space's Web device did."), source: z.enum(["ring", "typed"]), text: z.string(),
   recordedAt: z.number(), editedAt: z.number().nullable().describe("When the note last changed, in Unix ms; null when never."),
   device: z.string().describe("The name of the device or way in that sent it, such as `Email`."), audio: z.boolean(),
-  place: place.nullable(), attachments: z.array(file).describe("The note's files, oldest first.") });
+  attachments: z.array(file).describe("The note's files, oldest first.") });
 const deletedNote = z.strictObject({ id: z.string(), clientId: z.string().nullable().describe("The sending phone's own id for it."),
   deleted: z.literal(true).describe("The note was deleted: drop it.") });
 

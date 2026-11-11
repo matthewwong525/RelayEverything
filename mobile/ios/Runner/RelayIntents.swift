@@ -12,17 +12,6 @@ import UniformTypeIdentifiers
 // starts on `shortcutsMain` and stays warm while the process lives. When neither answers in 20 seconds, Add a note
 // leaves its note in `shortcuts-inbox/`, and the app keeps it the next time it opens.
 
-/// The app's support folder, the same one Dart's getApplicationSupportDirectory gives.
-enum RelayFolders {
-  static var support: URL { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0] }
-  static var inbox: URL { support.appendingPathComponent("shortcuts-inbox", isDirectory: true) }
-
-  /// A path from Dart, full or from the support folder, as a file URL.
-  static func url(_ path: String) -> URL {
-    path.hasPrefix("/") ? URL(fileURLWithPath: path) : support.appendingPathComponent(path)
-  }
-}
-
 @available(iOS 16, *)
 enum RelayIntentError: Error, CustomLocalizedStringResourceConvertible {
   /// The app's own words, such as a note with nothing in it.
@@ -74,6 +63,7 @@ final class ShortcutsEngine {
   private var appChannel: FlutterMethodChannel?
   private var appReady = false
   private var pendingVoice = false
+  private var pendingInbox = false
   private var engine: FlutterEngine?
   private var engineChannel: FlutterMethodChannel?
   private var engineReady = false
@@ -96,6 +86,10 @@ final class ShortcutsEngine {
 
   private func appIsReady() {
     appReady = true
+    if pendingInbox {
+      pendingInbox = false
+      appChannel?.invokeMethod("inboxChanged", arguments: nil)
+    }
     if pendingVoice {
       pendingVoice = false
       appChannel?.invokeMethod("startVoiceNote", arguments: nil)
@@ -108,6 +102,16 @@ final class ShortcutsEngine {
       channel.invokeMethod("startVoiceNote", arguments: nil)
     } else {
       pendingVoice = true
+    }
+  }
+
+  /// Tells the app's engine a note waits in the inbox, now or once it is ready. With no app engine, the next open keeps
+  /// it, so no background engine starts for it.
+  func inboxChanged() {
+    if appReady, let channel = appChannel {
+      channel.invokeMethod("inboxChanged", arguments: nil)
+    } else if appChannel != nil {
+      pendingInbox = true
     }
   }
 
@@ -205,9 +209,6 @@ struct RelayNoteEntity: AppEntity {
   @Property(title: "Time")
   var createdAt: Date
 
-  @Property(title: "Place")
-  var place: String?
-
   @Property(title: "Kind")
   var kind: String
 
@@ -218,11 +219,10 @@ struct RelayNoteEntity: AppEntity {
     DisplayRepresentation(title: "\(text.isEmpty ? "\(files.count) files" : text)")
   }
 
-  init(id: String, text: String, createdAt: Date, place: String?, kind: String, files: [IntentFile]) {
+  init(id: String, text: String, createdAt: Date, kind: String, files: [IntentFile]) {
     self.id = id
     self.text = text
     self.createdAt = createdAt
-    self.place = place
     self.kind = kind
     self.files = files
   }
@@ -238,7 +238,7 @@ struct RelayNoteEntity: AppEntity {
       return IntentFile(fileURL: url, filename: file["name"] as? String ?? url.lastPathComponent, type: type)
     }
     self.init(id: id, text: note["text"] as? String ?? "", createdAt: Date(timeIntervalSince1970: milliseconds / 1000),
-      place: note["place"] as? String, kind: note["kind"] as? String == "voice" ? "Voice" : "Typed", files: files)
+      kind: note["kind"] as? String == "voice" ? "Voice" : "Typed", files: files)
   }
 }
 
@@ -338,14 +338,19 @@ enum RelayAudio {
 
 /// Add a note: words, files, or both. It runs without opening the app, and gives the new note back. A recording given
 /// as its only file becomes a voice note: the app writes its words after the typed ones.
+///
+/// Siri reads the description and the words' title and description: the new Siri (iOS 27 with Apple Intelligence)
+/// fills the words from *take a note in Relay, buy milk*, and other iPhones ask *What's the note?* in `perform`.
 @available(iOS 16, *)
 struct AddNoteIntent: AppIntent {
   static var title: LocalizedStringResource = "Add a note"
   static var description = IntentDescription(
-    "Keeps a note in Relay Everything, with words, files, or both. With sending on, it goes to your space too.")
+    "Takes a note in Relay Everything from what you say or give it: words, files, or both. With sending on, it goes to your space too.")
   static var openAppWhenRun = false
 
-  @Parameter(title: "Words")
+  @Parameter(
+    title: "Note", description: "The words of the note, as the person says them",
+    requestValueDialog: IntentDialog("What's the note?"))
   var text: String?
 
   @Parameter(title: "Files")
@@ -360,6 +365,9 @@ struct AddNoteIntent: AppIntent {
     let plain = name.replacingOccurrences(of: "/", with: "-").trimmingCharacters(in: CharacterSet(charactersIn: ". "))
     return "\(index + 1)-\(plain.isEmpty ? "file" : plain)"
   }
+
+  /// The app's words for a note with nothing in it.
+  static let nothing = "Give the note words or a file."
 
   /// The same limit as the app's: 25 MB a file.
   static let maxFileBytes = 25 * 1024 * 1024
@@ -404,13 +412,25 @@ struct AddNoteIntent: AppIntent {
 
   @MainActor
   func perform() async throws -> some IntentResult & ReturnsValue<RelayNoteEntity> & ProvidesDialog {
-    let words = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    var words = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     let given = files ?? []
-    // Run with nothing, such as from Siri or the app's tile in Shortcuts, it asks for the words.
-    if words.isEmpty && given.isEmpty { throw $text.needsValueError("What do you want to keep?") }
+    // Run with nothing, such as from Siri or the app's tile in Shortcuts, it asks for the words. An automation has no
+    // one to answer: the question throws, and the action fails and keeps nothing.
+    if words.isEmpty && given.isEmpty {
+      let asked: String?
+      do {
+        asked = try await $text.requestValue()
+      } catch let cancel as CancellationError {
+        throw cancel  // A person who says cancel gets Siri's own cancel, not a failure.
+      } catch {
+        throw RelayIntentError.message(Self.nothing)
+      }
+      words = (asked ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+      if words.isEmpty { throw RelayIntentError.message(Self.nothing) }
+    }
     let id = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
     let createdAt = Date()
-    let folder = RelayFolders.inbox.appendingPathComponent(id, isDirectory: true)
+    let folder = ShortcutsInbox.folder(id)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     // Shortcuts deletes its own copy of each file once this returns, so the app keeps one first. A file over the limit
     // is never read: the size comes from its URL, and the copy goes by URL too.
@@ -442,30 +462,26 @@ struct AddNoteIntent: AppIntent {
         "type": file.type?.preferredMIMEType ?? "",
       ])
     }
-    var request: [String: Any] = [
-      "id": id, "text": words, "createdAt": Int(createdAt.timeIntervalSince1970 * 1000), "files": list,
-    ]
-    if let durationMs {
-      request["recording"] = ["path": "shortcuts-inbox/\(id)/voice.wav", "durationMs": durationMs] as [String: Any]
-    }
+    let request = ShortcutsInbox.request(
+      id: id, text: words, createdAt: Int(createdAt.timeIntervalSince1970 * 1000), files: list, durationMs: durationMs)
     do {
       let answer = try await ShortcutsEngine.shared.call("add", request)
       guard let note = answer as? [String: Any], let entity = RelayNoteEntity(note) else {
         throw RelayIntentError.noAnswer
       }
       try? FileManager.default.removeItem(at: folder)
-      let message = note["message"] as? String ?? "Saved to Relay Everything."
-      return .result(value: entity, dialog: IntentDialog(stringLiteral: tooBigMessage(tooBig) + message))
+      // Siri says it: short, as speech suits. A file the app left out is named first.
+      let leftOut = (note["message"] as? String).map { "\($0) " } ?? ""
+      return .result(value: entity, dialog: IntentDialog(stringLiteral: tooBigMessage(tooBig) + leftOut + "Saved."))
     } catch RelayIntentError.message(let text) {
       try? FileManager.default.removeItem(at: folder)
       throw RelayIntentError.message(tooBigMessage(tooBig) + text)
     } catch {
       // No engine answered: the note waits in the inbox, and the app keeps it on its next open. The same id keeps a
       // note the engine saved late from being kept twice.
-      let data = try JSONSerialization.data(withJSONObject: request)
-      try data.write(to: RelayFolders.inbox.appendingPathComponent("\(id).json"), options: .atomic)
+      try ShortcutsInbox.leave(request, id: id)
       let entity = RelayNoteEntity(
-        id: id, text: words, createdAt: createdAt, place: nil, kind: durationMs == nil ? "Typed" : "Voice",
+        id: id, text: words, createdAt: createdAt, kind: durationMs == nil ? "Typed" : "Voice",
         files: list.compactMap { file in
           (file["path"] as? String).map { IntentFile(fileURL: RelayFolders.url($0), filename: file["name"] as? String) }
         })
@@ -480,7 +496,7 @@ struct AddNoteIntent: AppIntent {
 struct GetNotesIntent: AppIntent {
   static var title: LocalizedStringResource = "Get notes"
   static var description = IntentDescription(
-    "Gives the notes on this phone to the next step, newest first: their words, time, place and files. It sends nothing.")
+    "Gives the notes on this phone to the next step, newest first: their words, time and files. It sends nothing.")
   static var openAppWhenRun = false
 
   @Parameter(title: "How many", default: 10)
@@ -530,6 +546,8 @@ struct RelayShortcuts: AppShortcutsProvider {
     AppShortcut(intent: AddNoteIntent(), phrases: [
       "Add a note to \(.applicationName)",
       "Keep a note in \(.applicationName)",
+      "Take a note in \(.applicationName)",
+      "Note in \(.applicationName)",
     ])
     AppShortcut(intent: GetNotesIntent(), phrases: ["Get notes from \(.applicationName)"])
     AppShortcut(intent: StartVoiceNoteIntent(), phrases: ["Start a voice note in \(.applicationName)"])

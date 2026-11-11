@@ -99,14 +99,19 @@ A web address in a note's words SHALL show as a link in the accent color, also w
 - **WHEN** the person is editing and taps the address
 - **THEN** the cursor goes into the address and no browser opens
 
-### Requirement: Tap Waiting to send to send now
+### Requirement: A note's page says nothing about sending
 
-While a note waits to send, its *Waiting to send* line on the note's page SHALL be a button that sends what waits now, and SHALL say *Sending…* while it goes.
+A note's page SHALL show only its date at the top. It SHALL show no *Sent*, no *Waiting to send*, no *Send now* and no *Voice* or *Typed* tag, and its ⋯ menu SHALL have no item to send or sync.
 
-#### Scenario: Send a waiting note
+#### Scenario: A waiting note
 
-- **WHEN** a note says *Waiting to send*, the phone has a connection, and the person taps it
-- **THEN** the phone sends what waits, the line says *Sending…*, then *Sent*
+- **WHEN** the person opens a note that waits to send
+- **THEN** the top of the page shows only the date, and ⋯ has no *Send now*
+
+#### Scenario: A sent note
+
+- **WHEN** the person opens a note that is sent
+- **THEN** the top of the page shows only the date, and the page has no *Sent* line and no tag
 
 ### Requirement: The text menu is the iPhone's own
 

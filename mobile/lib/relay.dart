@@ -27,7 +27,8 @@ enum Emptied { kept, dropped, deleting }
 /// One row of the timeline: a note typed or said on this phone, or one from elsewhere that a pull brought.
 class Entry {
   const Entry({this.id = '', required this.text, required this.at, this.sent = false, this.waiting = false, this.voice = false,
-    this.writing = false, this.failed = false, this.recording, this.length, this.files = const [], this.from});
+    this.writing = false, this.failed = false, this.noWords = false, this.recording, this.length, this.files = const [],
+    this.from});
 
   /// The phone's own id for the note: [Relay.editNote] takes it.
   final String id;
@@ -45,6 +46,8 @@ class Entry {
   final bool writing;
   /// True when its words failed or took too long: the recording is kept, and *Try again* writes them again.
   final bool failed;
+  /// True for a watch note in which the phone found no words: it keeps its recording to play, and is not sent.
+  final bool noWords;
   /// The recording on this phone, to play: [Relay.play] takes it.
   final String? recording;
   final Duration? length;
@@ -80,6 +83,30 @@ class EntryFile {
   /// A picture shows small in the note; any other file shows as a row with its name and size.
   bool get picture => type.startsWith('image/');
 }
+
+/// The recording that plays or is paused now: which one, how far it is, whether it plays, and its length when known.
+@immutable
+class Playback {
+  const Playback({required this.recording, required this.at, required this.playing, this.length});
+
+  /// The note's recording, as [Entry.recording] names it.
+  final String recording;
+  final Duration at;
+  final bool playing;
+  /// The recording's length as the player reads it, null until it knows. The browser gets no length with a note, so its
+  /// player uses this one.
+  final Duration? length;
+
+  @override
+  bool operator ==(Object other) => other is Playback && other.recording == recording && other.at == at &&
+    other.playing == playing && other.length == length;
+
+  @override
+  int get hashCode => Object.hash(recording, at, playing, length);
+}
+
+/// No recording plays: the [Relay.playback] of a relay that plays none.
+final ValueListenable<Playback?> noPlayback = ValueNotifier<Playback?>(null);
 
 enum SyncStatus { idle, syncing, synced, offline, refused }
 
@@ -338,8 +365,19 @@ abstract class Relay extends ChangeNotifier {
   Future<void> cancelVoiceNote();
   /// *Try again* on a note whose words failed: writes the words of each such note again, from its kept recording.
   Future<void> writeWordsAgain();
-  /// Plays a voice note's recording: from this phone, or in the browser from the person's space.
+  /// Plays a voice note's recording: from this phone, or in the browser from the person's space. The recording that is
+  /// paused plays on from where it stopped; another one stops it.
   Future<void> play(String recording);
+  /// The recording that plays or is paused now, and how far it is; null when none. It changes many times a second while
+  /// a recording plays, so only the player listens to it, not the whole page.
+  ValueListenable<Playback?> get playback => noPlayback;
+  /// Pauses the recording that plays, where it is.
+  Future<void> pause() async {}
+  /// Moves the recording that plays or is paused to [at].
+  Future<void> seek(Duration at) async {}
+  /// The recording's loudness from 0 to 1, in [bars] parts, read from its file on this phone and kept by no one. Empty
+  /// when it can not be read, such as in the browser or for a file that is not a WAV.
+  Future<List<double>> waveOf(String recording, {int bars = 48}) async => const [];
 
   final _notices = StreamController<String>.broadcast();
   /// Short messages that come later than the act, such as *No speech heard*.

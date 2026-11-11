@@ -4,7 +4,7 @@ The Relay Everything phone app reads health, places and calendar events only whi
 
 ## The round
 
-`backgroundRound` in [`background.dart`](../mobile/lib/sync/background.dart) runs for Android's hourly task and for each iPhone wake. The app's own round, `_rounds` in [`controller.dart`](../mobile/lib/controller.dart), runs at open, on return, on pull-down and on **Sync now**. Both have the same two parts, in this order:
+`backgroundRound` in [`background.dart`](../mobile/lib/sync/background.dart) runs for Android's hourly task and for each iPhone wake. The app's own round, `_rounds` in [`controller.dart`](../mobile/lib/controller.dart), runs at open, on return, on pull-down, and when the connection comes back while notes wait. Both have the same two parts, in this order:
 
 1. **Notes first.** Flush the note routes (`flush(private: false)`), then pull the notes changed elsewhere, only after that flush emptied. `pullNotes` returns here, and Home's sync state comes from this part alone.
 2. **Then the rest.** Drain the iPhone's places, read health, read the calendar, step the [stays and trips](#places-stays-and-trips), queue the uploads, flush the `privateRoutes`, and send photos. A failure here waits for a later round and never stops the notes; only a refused key also shows on Home, as it refuses the notes too.

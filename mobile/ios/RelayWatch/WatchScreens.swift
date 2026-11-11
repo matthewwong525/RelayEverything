@@ -1,7 +1,8 @@
 import SwiftUI
 
-// The watch's four screens: Talk, recording, Saved and the microphone refused. They mirror the phone's full-screen
-// voice-note recording in lib/voice/.
+// The watch's screens: recording, Tap to record, Saved, Not saved and the microphone refused. The app records as it
+// opens: it shows the recording screen at 0:00 from the first frame, and Tap to record only after the X. They mirror
+// the phone's full-screen voice-note recording in lib/voice/.
 
 struct WatchRoot: View {
   @ObservedObject var model: WatchModel
@@ -9,56 +10,59 @@ struct WatchRoot: View {
   var body: some View {
     Group {
       switch model.screen {
-      case .main: MainScreen(model: model)
-      case .recording: RecordingScreen(model: model)
-      case .saved: SavedScreen()
-      case .microphoneRefused: MicrophoneScreen(model: model)
+      case .starting, .recording: RecordingScreen(model: model)
+      case .idle: IdleScreen(model: model)
+      case .saved: SavedScreen(model: model)
+      case .notSaved: NotSavedScreen(model: model)
+      case .microphoneRefused: MicrophoneScreen()
       }
     }
     .foregroundColor(WatchBrand.ink)
   }
 }
 
-/// The words for the notes that wait: nil when none does.
-func waitingWords(_ count: Int) -> String? {
-  switch count {
-  case 0: return nil
-  case 1: return "1 note waits for your iPhone"
-  default: return "\(count) notes wait for your iPhone"
+/// Small grey words, centered, such as how many notes wait.
+struct SmallLine: View {
+  let words: String
+
+  var body: some View {
+    Text(words).font(WatchBrand.small).foregroundColor(WatchBrand.muted).multilineTextAlignment(.center)
   }
 }
 
-struct MainScreen: View {
+/// A screen that is not recording: a tap anywhere records a new note.
+private extension View {
+  func tapRecords(_ model: WatchModel) -> some View {
+    frame(maxWidth: .infinity, maxHeight: .infinity)
+      .contentShape(Rectangle())
+      .onTapGesture(perform: model.talk)
+  }
+}
+
+struct IdleScreen: View {
   @ObservedObject var model: WatchModel
 
   var body: some View {
     VStack(spacing: 8) {
-      Button(action: model.talk) {
-        VStack(spacing: 2) {
-          Image(systemName: "mic.fill").font(.system(size: 30, weight: .semibold))
-          Text("Talk").font(WatchBrand.title)
-        }
-        .foregroundColor(WatchBrand.onSpark)
-        .frame(width: 104, height: 104)
-        .background(WatchBrand.spark, in: Circle())
-      }
-      .buttonStyle(.plain)
-      if let words = waitingWords(model.waiting) {
-        Text(words).font(WatchBrand.small).foregroundColor(WatchBrand.muted).multilineTextAlignment(.center)
-      }
+      Image(systemName: "mic.fill").font(.system(size: 30, weight: .semibold)).foregroundColor(WatchBrand.spark)
+      Text("Tap to record").font(WatchBrand.title)
+      if let words = waitingWords(model.waiting.count) { SmallLine(words: words) }
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .tapRecords(model)
   }
 }
 
+/// The recording, and its look before the microphone is on (starting): the clock at 0:00 and the bars at rest.
 struct RecordingScreen: View {
   @ObservedObject var model: WatchModel
 
   var body: some View {
+    let recording = model.screen == .recording
     TimelineView(.periodic(from: .now, by: 0.1)) { context in
       VStack(spacing: 8) {
         HStack {
-          Text(clock(context.date.timeIntervalSince(model.started))).font(WatchBrand.title).monospacedDigit()
+          Text(clock(recording ? context.date.timeIntervalSince(model.started) : 0)).font(WatchBrand.title)
+            .monospacedDigit()
           Spacer()
           Button(action: model.cancel) {
             Image(systemName: "xmark").font(.system(size: 14, weight: .bold))
@@ -69,16 +73,17 @@ struct RecordingScreen: View {
           .accessibilityLabel("Cancel")
         }
         Spacer()
-        SoundBars(level: model.level())
+        SoundBars(level: recording ? model.level() : 0)
         Spacer()
-        Text("Tap to save").font(WatchBrand.small).foregroundColor(WatchBrand.muted)
+        SmallLine(words: "Tap to save")
+        if let words = waitingWords(model.waiting.count) { SmallLine(words: words) }
       }
     }
     .padding(.horizontal, 4)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    // The whole screen saves; the X above takes its own tap first.
+    // The whole screen saves, or before the microphone is on, records; the X above takes its own tap first.
     .contentShape(Rectangle())
-    .onTapGesture(perform: model.save)
+    .onTapGesture { if recording { model.save() } else { model.talk() } }
   }
 
   private func clock(_ seconds: TimeInterval) -> String {
@@ -106,25 +111,46 @@ struct SoundBars: View {
   }
 }
 
+/// After a save: whether the iPhone has the note yet, and how many others wait. It stays until a tap records again,
+/// as watchOS lets no app close itself.
 struct SavedScreen: View {
+  @ObservedObject var model: WatchModel
+
   var body: some View {
-    VStack(spacing: 6) {
-      Image(systemName: "checkmark.circle.fill").font(.system(size: 40)).foregroundColor(WatchBrand.spark)
+    let words = WatchRules.iPhoneWords(saved: model.lastSaved, wait: model.waiting)
+    VStack(spacing: 4) {
+      Image(systemName: "checkmark.circle.fill").font(.system(size: 36)).foregroundColor(WatchBrand.spark)
       Text("Saved").font(WatchBrand.title)
-      Text("Sending to your iPhone").font(WatchBrand.small).foregroundColor(WatchBrand.muted)
+      SmallLine(words: words.iPhone)
+      if let others = words.others { SmallLine(words: others) }
+      Text("Tap for a new note").font(WatchBrand.smallest)
+        .foregroundColor(WatchBrand.muted).padding(.top, 4)
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .tapRecords(model)
   }
 }
 
-struct MicrophoneScreen: View {
+/// The recording could not be kept, such as on a full watch.
+struct NotSavedScreen: View {
   @ObservedObject var model: WatchModel
 
+  var body: some View {
+    VStack(spacing: 6) {
+      Image(systemName: "exclamationmark.circle.fill").font(.system(size: 36)).foregroundColor(WatchBrand.muted)
+      Text("Not saved").font(WatchBrand.title)
+      SmallLine(words: "Tap to record again")
+      if let words = waitingWords(model.waiting.count) { SmallLine(words: words) }
+    }
+    .tapRecords(model)
+  }
+}
+
+/// The person refused the microphone: it stays until they allow it and come back to the app, which then asks again.
+struct MicrophoneScreen: View {
   var body: some View {
     VStack(spacing: 10) {
       Image(systemName: "mic.slash.fill").font(.system(size: 28)).foregroundColor(WatchBrand.muted)
       Text("Allow the microphone in Settings › Privacy").font(WatchBrand.body).multilineTextAlignment(.center)
-      Button("OK", action: model.back)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }

@@ -16,9 +16,10 @@ import 'timeline.dart';
 
 export 'folder.dart' show Opener;
 
-/// The first screen, as Apple Notes' *Folders*: the notes folders, *On this phone*, *Other connections*, the Settings
-/// gear, and at the bottom *Search*, which finds notes in every folder, and *New note*. It also holds what each page
-/// needs once: the notices, the recording screen and *Start a voice note* from Shortcuts.
+/// The first screen, as Apple Notes' *Folders*: one *Notes* row, *On this phone*, *Other connections*, the Settings
+/// gear, and at the bottom *Search*, which finds every note, and *New note*. Under the title it shows the sync state only
+/// when notes wait or can't go. It also holds what each page needs once: the notices, the recording screen and *Start a
+/// voice note* from Shortcuts.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.relay, this.opener, this.picker, this.sharer,
     this.voiceRequests, this.onOpen, this.onFolder, this.onSettings, this.otherConnections});
@@ -32,7 +33,7 @@ class HomeScreen extends StatefulWidget {
   final Sharer? sharer;
   /// *Start a voice note* from Shortcuts: each event starts one on the recording screen.
   final Stream<void>? voiceRequests;
-  /// In the browser, the layout holds what opens: a note, or a new one for null, a folder, and Settings.
+  /// In the browser, the layout holds what opens: a note, or a new one for null, the notes list, and Settings.
   final NoteOpener? onOpen;
   final ValueChanged<NotesFolder>? onFolder;
   final VoidCallback? onSettings;
@@ -116,8 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _open(Widget page) => openPage(context, page);
 
-  /// What pulling Home down does, and *Sync now* too.
-  /// Pull to refresh and *Sync now* do the same: send what waits and take notes from the person's other devices.
+  /// Pulling Home down: sends what waits and takes notes from the person's other devices. No button does it.
   Future<void> _refresh() => relay.pullNotes();
 
   @override
@@ -150,10 +150,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _bar() {
     final brand = brandOf(context);
-    return SliverAppBar.large(
+    return TitleBar(
+      title: 'Home',
+      relay: relay,
       leading: const Center(child: RelayMark(size: 24)),
-      title: const Text('Home'),
-      expandedHeight: 140,
       actions: [
         IconButton(
           tooltip: 'Settings',
@@ -163,22 +163,17 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         const SizedBox(width: 8),
       ],
-      bottom: PreferredSize(preferredSize: const Size.fromHeight(SyncLine.height),
-        child: SyncLine(relay: relay, onSync: _refresh)),
     );
   }
 
   List<Widget> _folders() {
     final now = DateTime.now();
-    int count(NotesFolder folder) => relay.entries.where((entry) => entryIn(folder, entry)).length;
     return [
       const SizedBox(height: 12),
       _Card(rows: [
-        for (final (folder, icon) in const [(NotesFolder.all, CupertinoIcons.doc_text), (NotesFolder.voice, CupertinoIcons.mic),
-          (NotesFolder.shares, CupertinoIcons.paperclip)])
-          FolderRow(icon: icon, title: folder.title, count: count(folder),
-            onTap: () => widget.onFolder != null ? widget.onFolder!(folder) : _open(TimelineScreen(relay: relay, folder: folder,
-              picker: widget.picker, sharer: widget.sharer, opener: widget.opener))),
+        FolderRow(icon: CupertinoIcons.doc_text, title: 'Notes', count: relay.entries.length,
+          onTap: () => widget.onFolder != null ? widget.onFolder!(NotesFolder.all) : _open(TimelineScreen(relay: relay,
+            picker: widget.picker, sharer: widget.sharer, opener: widget.opener))),
       ]),
       if (widget.otherConnections case final rows?) ..._section('Other connections', rows)
       else ...[..._section('On this phone', [

@@ -599,6 +599,46 @@ void main() {
         ['key', 'connections']);
     });
 
+    test('a waiting note sends with no tap when the network comes back after none', () async {
+      final network = FakeNetwork();
+      final relay = controller(network: network);
+      await relay.load();
+      expect(await relay.connect(pageCode), isNull);
+      await relay.startSending(sendEarlier: false);
+      await pumpEventQueue();
+      await relay.addNote('Lunch idea', id: 'n1', sendNow: false);
+      expect(relay.waiting, 1);
+      network.linkChanges.add(Link.none);
+      await pumpEventQueue();
+      expect(sentNotes(), isEmpty);
+      network.linkChanges.add(Link.wifi);
+      await pumpEventQueue();
+      await relay.settled();
+      expect([for (final note in sentNotes()) note['clientId']], ['n1']);
+      expect([relay.waiting, relay.entries.single.sent], [0, true]);
+      // A change from one network to another while all is sent starts nothing.
+      final before = server.requests.length;
+      network.linkChanges.add(Link.mobile);
+      await pumpEventQueue();
+      expect(server.requests, hasLength(before));
+      relay.dispose();
+    });
+
+    test('with sending off, nothing leaves when the network comes back', () async {
+      final network = FakeNetwork();
+      final relay = controller(network: network);
+      await relay.load();
+      expect(await relay.connect(pageCode), isNull);
+      await relay.addNote('Lunch idea', id: 'n1', sendNow: false);
+      final before = server.requests.length;
+      network
+        ..linkChanges.add(Link.none)
+        ..linkChanges.add(Link.wifi);
+      await pumpEventQueue();
+      expect([server.requests.length, sentNotes()], [before, isEmpty]);
+      relay.dispose();
+    });
+
     test('a note emptied while its first upload waits is deleted everywhere, with Undo, as the upload may be on its way',
         () async {
       final relay = controller();
@@ -1368,9 +1408,11 @@ void main() {
       await placeModel(folder);
     });
 
-    RelayController voiceController() {
+    /// With [files], the app's support folder is [folder], as on a phone, so a shortcut's or the watch's recording is
+    /// found.
+    RelayController voiceController({bool files = false}) {
       final relay = RelayController(store: store, vault: KeyVault(storage), places: places, health: health, apiFor: server.api,
-        clock: () => clock, schedule: (on) async => scheduled.add(on),
+        clock: () => clock, schedule: (on) async => scheduled.add(on), folder: files ? () async => folder : null,
         voice: fakeVoice(folder, models, clock: () => clock, microphone: microphone, transcriber: transcriber, player: player));
       relay.notices.listen(notices.add);
       return relay;
@@ -1410,6 +1452,40 @@ void main() {
       expect(player.played, ['${folder.path}/voice/${transcriber.heard.single}']);
     });
 
+    test('reads a recording\'s sound waves from its WAV, none from an m4a, and flat ones from silence', () async {
+      // Kept beside the voice folder, so the sweep for stray recordings leaves them be.
+      Directory('${folder.path}/waves').createSync(recursive: true);
+      final relay = voiceController();
+      await relay.load();
+      await relay.wordsWritten();
+      File('${folder.path}/waves/loud.wav').writeAsBytesSync(wavOf([for (var i = 0; i < 4800; i++) i < 2400 ? 500 : 20000]));
+      File('${folder.path}/waves/quiet.wav').writeAsBytesSync(wavOf(List.filled(4800, 0)));
+      File('${folder.path}/waves/shortcut.m4a').writeAsBytesSync([0, 0, 0, 0x20, ...'ftypM4A '.codeUnits]);
+      final loud = await relay.waveOf('waves/loud.wav');
+      expect([loud.length, loud.first, loud.last], [48, closeTo(0.025, 0.001), 1.0]);
+      expect(await relay.waveOf('waves/quiet.wav'), List.filled(48, 0.0));
+      expect([await relay.waveOf('waves/shortcut.m4a'), await relay.waveOf('waves/gone.wav')], everyElement(isEmpty));
+      expect(server.requests, isEmpty);
+      relay.dispose();
+    });
+
+    test('plays, pauses and seeks one recording through the shared player', () async {
+      // Kept beside the voice folder, so the sweep for stray recordings leaves them be.
+      Directory('${folder.path}/waves').createSync(recursive: true);
+      final relay = voiceController();
+      await relay.load();
+      await relay.wordsWritten();
+      File('${folder.path}/waves/a.wav').writeAsBytesSync(wavOf(List.filled(160, 0)));
+      expect(relay.playback.value, isNull);
+      await relay.play('waves/a.wav');
+      expect(relay.playback.value, const Playback(recording: 'waves/a.wav', at: Duration.zero, playing: true));
+      await relay.seek(const Duration(seconds: 3));
+      await relay.pause();
+      expect(relay.playback.value, const Playback(recording: 'waves/a.wav', at: Duration(seconds: 3), playing: false));
+      expect(player.calls, ['play', 'seek 3000', 'pause']);
+      relay.dispose();
+    });
+
     test('the app closes before the words are written: the next open writes them from the kept recording', () async {
       final relay = voiceController();
       await relay.load();
@@ -1440,6 +1516,26 @@ void main() {
       await reopened.load();
       await reopened.wordsWritten();
       expect([reopened.entries, await store.notes()], [isEmpty, isEmpty]);
+    });
+
+    test('a watch note whose recording is gone stays as No words heard, with no notice', () async {
+      final relay = voiceController(files: true);
+      await relay.load();
+      transcriber.hold = Completer();
+      final id = 'c2' * 16;
+      File('${folder.path}/shortcuts-inbox/$id/voice.wav')
+        ..createSync(recursive: true)
+        ..writeAsBytesSync([82, 73, 70, 70]);
+      await relay.keepRecording('', recording: 'shortcuts-inbox/$id/voice.wav', durationMs: 6000, clientId: id, point: false,
+        fromWatch: true);
+      relay.dispose();
+      Directory('${folder.path}/voice').deleteSync(recursive: true);
+      transcriber = FakeTranscriber();
+      final reopened = voiceController(files: true);
+      await reopened.load();
+      await reopened.wordsWritten();
+      expect([for (final entry in reopened.entries) (entry.id, entry.noWords, entry.writing)], [(id, true, false)]);
+      expect(notices, isEmpty);
     });
 
     test('Hold to talk: the tip shows until a first voice note starts, also after a restart; a failed start keeps it', () async {
@@ -1561,6 +1657,40 @@ void main() {
       await relay.wordsWritten();
       expect([relay.entries, await store.notes(), recordings()], [isEmpty, isEmpty, isEmpty]);
       expect(notices, ['No speech heard. Nothing was saved.']);
+    });
+
+    test('a watch recording with no words stays, with its recording, unsent and with no notice; words typed in send it',
+      () async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', jsonEncode({'sending': true, 'history': false}));
+      final relay = voiceController(files: true);
+      await relay.load();
+      await relay.settled();
+      server.requests.clear();
+      transcriber.answer = '';
+      final id = 'c1' * 16;
+      File('${folder.path}/shortcuts-inbox/$id/voice.wav')
+        ..createSync(recursive: true)
+        ..writeAsBytesSync([82, 73, 70, 70]);
+      await relay.keepRecording('', recording: 'shortcuts-inbox/$id/voice.wav', durationMs: 6000, clientId: id, point: false,
+        fromWatch: true);
+      await relay.wordsWritten();
+      await relay.settled();
+      final entry = relay.entries.single;
+      expect([entry.voice, entry.noWords, entry.writing, entry.failed, entry.text, entry.recording, entry.waiting],
+        [true, true, false, false, '', 'voice/$id.wav', false]);
+      expect([recordings(), notices, await store.outbox(), sentNotes(), await store.earlierCount()],
+        [['$id.wav'], isEmpty, isEmpty, isEmpty, 0]);
+      // The next open does not write it again.
+      relay.dispose();
+      final reopened = voiceController(files: true);
+      await reopened.load();
+      await reopened.wordsWritten();
+      expect([transcriber.heard, reopened.entries.single.noWords], [['$id.wav'], true]);
+      await reopened.editNote(id, 'Buy flour');
+      await reopened.settled();
+      expect([for (final note in sentNotes()) (note['clientId'], note['text'])], [(id, 'Buy flour')]);
+      expect(reopened.entries.single.noWords, isFalse);
     });
 
     test('a microphone that does not stop says so, closes the card and keeps nothing; Cancel then does no harm', () async {
@@ -1765,7 +1895,10 @@ void main() {
       final held = transcriber.hold = Completer();
       clock = clock.add(const Duration(seconds: 10));
       await hold(relay, const Duration(seconds: 3));
-      await pumpEventQueue();
+      // The second note's job starts a few turns of the event loop later on a slow computer: wait for it.
+      for (var turn = 0; turn < 50 && transcriber.heard.length < 2; turn++) {
+        await pumpEventQueue();
+      }
       final writing = transcriber.heard.last;
       expect(writing, isNot(failed));
       await relay.writeWordsAgain();

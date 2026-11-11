@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show CustomSemanticsAction;
+import 'package:flutter/rendering.dart' show CustomSemanticsAction, SemanticsAction;
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart' show Attribute, ChangeSource, QuillEditor;
 import 'package:flutter_test/flutter_test.dart';
@@ -22,6 +22,7 @@ import 'package:relay_app/web/settings_dialog.dart';
 import 'package:relay_app/web/shell.dart';
 import 'package:relay_app/web/web_relay.dart';
 
+import 'fakes.dart' show FakePlayer;
 import 'screens_test.dart' show FakeRelay, quill, type;
 import 'web_space_fixture.dart';
 
@@ -100,12 +101,11 @@ void main() {
   NoteEditorState editor(WidgetTester tester) => tester.state<NoteEditorState>(find.byType(NoteEditor));
 
   group('three panes from 1000 px', () {
-    testWidgets('the left bar has the folders with counts, Other connections, and Settings at the bottom', (tester) async {
+    testWidgets('the left bar has one Notes row with its count, Other connections, and Settings at the bottom', (tester) async {
       await show(tester, wide);
       expect(inSidebar('Relay Everything'), findsOneWidget);
       expect(sidebarCount('Notes', 3), findsOneWidget);
-      expect(sidebarCount('Voice notes', 1), findsOneWidget);
-      expect(sidebarCount('Shares', 1), findsOneWidget);
+      expect([inSidebar('Voice notes'), inSidebar('Shares')], everyElement(findsNothing));
       final rows = ['Other connections', 'Location', 'Health', 'Calendar', 'Photos', 'Connect your AI', 'Email notes'];
       for (final title in rows) {
         expect(inSidebar(title), findsOneWidget, reason: title);
@@ -136,15 +136,39 @@ void main() {
       await finish(tester);
     });
 
-    testWidgets('a click on a note opens it, and a folder shows only its notes', (tester) async {
+    testWidgets('a click on a note opens it, and a filter above the list shows only its notes', (tester) async {
       await show(tester, wide);
       await tester.tap(inList('Call the dentist at 3'));
       await tester.pumpAndSettle();
       expect(editor(tester).id, 'voice');
-      await tester.tap(inSidebar('Shares'));
+      Finder chip(String label) => find.descendant(of: find.byType(NotesPane), matching: find.widgetWithText(ChoiceChip, label));
+      expect([chip('All 3'), chip('Voice 1'), chip('Photos and files 0')], everyElement(findsOneWidget));
+      await tester.tap(chip('Voice 1'));
       await tester.pumpAndSettle();
-      expect(inList('Read https://example.com/post'), findsOneWidget);
-      expect(inList('Groceries'), findsNothing);
+      expect(inList('Call the dentist at 3'), findsOneWidget);
+      expect([inList('Groceries'), inList('Read https://example.com/post')], everyElement(findsNothing));
+      // A link alone is not a file.
+      await tester.tap(chip('Photos and files 0'));
+      await tester.pumpAndSettle();
+      expect(inList('Read https://example.com/post'), findsNothing);
+      await tester.tap(chip('All 3'));
+      await tester.pumpAndSettle();
+      expect(inList('Groceries'), findsOneWidget);
+      await finish(tester);
+    });
+
+    testWidgets('a voice note with its recording shows the player, a plain line in the browser, and plays it', (tester) async {
+      relay.entries = [Entry(id: 'voice', text: 'Call the dentist at 3', at: now, sent: true, voice: true, from: 'iPhone',
+        recording: 'https://relay.example.com/v1/notes/voice/recording', length: const Duration(seconds: 8))];
+      await show(tester, wide);
+      expect(editor(tester).id, 'voice');
+      final waves = find.descendant(of: find.byKey(const ValueKey('waves')), matching: find.byType(CustomPaint));
+      expect((tester.widget<CustomPaint>(waves).painter! as WavePainter).levels, isEmpty);
+      expect(find.descendant(of: find.byType(VoicePlayer), matching: find.text('0:08')), findsOneWidget);
+      await tester.tap(find.descendant(of: find.byType(VoicePlayer), matching: find.byTooltip('Play')));
+      await tester.pump();
+      expect(relay.calls, contains('play https://relay.example.com/v1/notes/voice/recording'));
+      expect(find.descendant(of: find.byType(VoicePlayer), matching: find.byTooltip('Pause')), findsOneWidget);
       await finish(tester);
     });
 
@@ -167,7 +191,7 @@ void main() {
       expect(inList('No notes yet'), findsOneWidget);
       expect(inList('Click New note to write one.'), findsOneWidget);
       expect(find.textContaining('No notes with'), findsNothing);
-      await tester.tap(inSidebar('Voice notes'));
+      await tester.tap(find.descendant(of: find.byType(NotesPane), matching: find.widgetWithText(ChoiceChip, 'Voice 0')));
       await tester.pumpAndSettle();
       expect(inList('No voice notes yet'), findsOneWidget);
       await finish(tester);
@@ -276,28 +300,36 @@ void main() {
     await tester.tap(find.byTooltip('Folders'));
     await tester.pumpAndSettle();
     expect(inSidebar('Other connections'), findsOneWidget);
-    await tester.tap(inSidebar('Voice notes'));
+    await tester.tap(inSidebar('Notes'));
     await tester.pumpAndSettle();
     expect(find.byType(Sidebar), findsNothing, reason: 'the menu closes');
-    expect(inList('Groceries'), findsNothing);
+    expect(inList('Groceries'), findsOneWidget);
     await finish(tester);
   });
 
   group('the phone pages below 700 px', () {
-    testWidgets('Home shows the folders and Other connections in place of On this phone', (tester) async {
+    testWidgets('Home shows one Notes row and Other connections in place of On this phone', (tester) async {
       await show(tester, narrow);
       expect(find.byType(HomeScreen), findsOneWidget);
       expect(find.text('Other connections'), findsOneWidget);
       expect(find.text('On this phone'), findsNothing);
       expect([find.text('Connect your AI'), find.text('Email notes')], everyElement(findsOneWidget));
-      expect(find.text('AI chat transcripts'), findsNothing);
-      await tester.tap(find.text('Voice notes').first);
+      expect([find.text('AI chat transcripts'), find.text('Voice notes'), find.text('Shares')], everyElement(findsNothing));
+      await tester.tap(find.text('Notes').first);
       await tester.pumpAndSettle();
       expect(find.byType(TimelineScreen), findsOneWidget);
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Voice 1'));
+      await tester.pumpAndSettle();
+      expect(find.text('Groceries'), findsNothing);
       await tester.tap(find.text('Call the dentist at 3'));
       await tester.pumpAndSettle();
       expect(editor(tester).id, 'voice');
-      expect(find.text('Voice notes'), findsOneWidget, reason: 'the note goes back to its folder');
+      expect(find.descendant(of: find.byTooltip('Back'), matching: find.text('Notes')), findsOneWidget,
+        reason: 'the note goes back to the list');
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Voice 1')).selected, isTrue,
+        reason: 'the list keeps its filter');
       await finish(tester);
     });
 
@@ -373,6 +405,75 @@ void main() {
     await tester.pumpAndSettle();
     expect(web.entries.firstWhere((entry) => entry.id == 'a').text, 'Alpha, changed on the phone');
     await finish(tester);
+  });
+
+  testWidgets("a browser voice note, which comes with no length, takes the player's length to show the time and seek",
+      (tester) async {
+    final at = now.millisecondsSinceEpoch;
+    space.answers['GET account'] = (_) => {'email': 'ana@example.com'};
+    space.answers['GET notes'] = (_) => {'notes': [{'id': 'v', 'clientId': null, 'mine': false, 'source': 'ring',
+      'text': 'Call the dentist at 3', 'recordedAt': at, 'editedAt': null, 'device': 'Ring', 'audio': true, 'place': null,
+      'attachments': <Object>[]}], 'next': 1, 'more': false};
+    final player = FakePlayer()..length = const Duration(seconds: 8);
+    addTearDown(player.dispose);
+    final web = WebRelay(client: space.client, player: player, lastSend: (_, _, [_]) {});
+    await web.start();
+    expect(web.entries.single.length, isNull, reason: 'the server sends no length');
+    tester.view
+      ..physicalSize = wide
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(theme: brandTheme(Brightness.light),
+      home: WebShell(relay: web, client: space.client, drops: drops.stream, opener: (_) async => true)));
+    await tester.pumpAndSettle();
+    Finder inPlayer(Finder finder) => find.descendant(of: find.byType(VoicePlayer), matching: finder);
+    expect(inPlayer(find.text('0:00')), findsNothing, reason: 'no time shows before the player knows the length');
+    await tester.tap(inPlayer(find.byTooltip('Play')));
+    await tester.pump();
+    expect(inPlayer(find.text('0:00 / 0:08')), findsOneWidget);
+    final waves = find.byKey(const ValueKey('waves'));
+    await tester.tapAt(tester.getCenter(waves));
+    await tester.pump();
+    expect(player.calls, contains('seek 4000'));
+    expect(inPlayer(find.text('0:04 / 0:08')), findsOneWidget);
+    final painter = tester.widget<CustomPaint>(find.descendant(of: waves, matching: find.byType(CustomPaint))).painter!
+      as WavePainter;
+    expect(painter.done, closeTo(0.5, 0.01), reason: 'the line fills as it plays');
+    final slider = tester.getSemantics(find.descendant(of: find.byType(VoicePlayer),
+      matching: find.bySemanticsLabel('Recording')).first);
+    expect(slider.getSemanticsData().hasAction(SemanticsAction.increase), isTrue);
+    await tester.tap(inPlayer(find.byTooltip('Pause')));
+    await tester.pump();
+    expect(inPlayer(find.text('0:04 / 0:08')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 11));
+  });
+
+  testWidgets('a tap on the line of a browser voice note before its first play plays it, then goes to that place',
+      (tester) async {
+    final at = now.millisecondsSinceEpoch;
+    space.answers['GET account'] = (_) => {'email': 'ana@example.com'};
+    space.answers['GET notes'] = (_) => {'notes': [{'id': 'v', 'clientId': null, 'mine': false, 'source': 'ring',
+      'text': 'Call the dentist at 3', 'recordedAt': at, 'editedAt': null, 'device': 'Ring', 'audio': true, 'place': null,
+      'attachments': <Object>[]}], 'next': 1, 'more': false};
+    final player = FakePlayer()..length = const Duration(seconds: 8);
+    addTearDown(player.dispose);
+    final web = WebRelay(client: space.client, player: player, lastSend: (_, _, [_]) {});
+    await web.start();
+    expect(web.entries.single.length, isNull, reason: 'the server sends no length');
+    tester.view
+      ..physicalSize = wide
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(theme: brandTheme(Brightness.light),
+      home: WebShell(relay: web, client: space.client, drops: drops.stream, opener: (_) async => true)));
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getCenter(find.byKey(const ValueKey('waves'))));
+    await tester.pump();
+    expect(player.calls, ['play', 'seek 4000']);
+    expect(find.descendant(of: find.byType(VoicePlayer), matching: find.text('0:04 / 0:08')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 11));
   });
 
   testWidgets('the open note gives its words to the page before the pause saves them, for a closing page', (tester) async {

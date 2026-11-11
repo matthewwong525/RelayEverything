@@ -27,6 +27,7 @@ import 'sync/native.dart';
 import 'sync/photos.dart';
 import 'sync/stay_round.dart';
 import 'voice/model.dart';
+import 'voice/playback.dart';
 import 'voice/recorder.dart';
 import 'voice/transcriber.dart';
 
@@ -55,7 +56,7 @@ class VoiceParts {
   final SpeechModel model;
   final VoiceRecorder recorder;
   final Transcriber transcriber;
-  final VoicePlayer player;
+  final SoundPlayer player;
 }
 
 /// Opens a file in an app on the phone; false when no app could.
@@ -132,6 +133,9 @@ class RelayController extends Relay {
   int _waiting = 0;
   Settings _settings = const Settings();
   StreamSubscription<Pin>? _history;
+  StreamSubscription<Link>? _links;
+  /// The phone's network as it last changed; null until it does.
+  Link? _link;
   Timer? _drainTimer;
   /// Each deleted note's *Undo* time, by note id: when it ends, the delete runs.
   final _deletes = <String, Timer>{};
@@ -218,6 +222,7 @@ class RelayController extends Relay {
     await _tellShare();
     if (watch && _settings.history) _startHistory();
     if (watch) await _watchMotion();
+    if (watch) _watchNetwork();
     // A close during a delete's Undo time left its mark: the delete runs when that time ends, and goes at the next send.
     // A mark from another window, such as the share card's, still in its time is left to that window's timer too.
     for (final (id, at) in await store.marked()) {
@@ -268,7 +273,7 @@ class RelayController extends Relay {
       await keepNote(request.text, files: request.files, clientId: request.id, createdAt: request.createdAt, point: false);
     } else {
       await keepRecording(request.text, recording: recording.path, durationMs: recording.durationMs, clientId: request.id,
-        createdAt: request.createdAt, point: false);
+        createdAt: request.createdAt, point: false, fromWatch: request.fromWatch);
     }
   }
 
@@ -300,7 +305,7 @@ class RelayController extends Relay {
   Entry _entryOfLocal(LocalNote note) => Entry(id: note.clientId, text: note.text, at: note.createdAt,
     sent: note.mine && note.sentAt != null, waiting: _settings.sending && note.sentAt == null && note.queued,
     voice: note.kind == NoteKind.voice, writing: note.wordsPending && !_wordsFailed.contains(note.clientId),
-    failed: note.wordsPending && _wordsFailed.contains(note.clientId), recording: note.audioPath,
+    failed: note.wordsPending && _wordsFailed.contains(note.clientId), noWords: note.noWords, recording: note.audioPath,
     length: note.durationMs == null ? null : Duration(milliseconds: note.durationMs!),
     files: [for (final file in note.attachments) EntryFile(id: file.id, name: file.name, type: file.type, size: file.size,
       path: file.path.isEmpty ? '' : fullPath(file.path))],
@@ -640,6 +645,18 @@ class RelayController extends Relay {
     }
   }
 
+  /// While the app is open, notes that wait send as soon as the connection comes back, with no tap: from no network, or
+  /// after a round that found the phone offline. With sending off, or nothing waiting, nothing leaves.
+  void _watchNetwork() {
+    final kind = network;
+    if (kind == null || _links != null) return;
+    _links = kind.changes().listen((link) {
+      final back = link != Link.none && (_link == Link.none || _status == SyncStatus.offline);
+      _link = link;
+      if (back && _settings.sending && _waiting > 0) unawaited(sync());
+    }, onError: (_) {});
+  }
+
   /// Tells Android to keep motion changes only while location history makes stays and trips.
   Future<void> _watchMotion() async {
     try {
@@ -903,9 +920,10 @@ class RelayController extends Relay {
   /// for its words, with [text], the words typed with it, first. The note is kept before its recording moves to
   /// `voice/<id>.wav`, so the sweep for stray recordings never takes it. It adds a point as [keepNote] does, and a [clientId]
   /// already kept gives back that note. The words are written now when this engine has the voice parts, else at the
-  /// app's next open. A recording that is not there keeps the typed words alone, or nothing.
+  /// app's next open. A recording that is not there keeps the typed words alone, or nothing. [fromWatch] marks a note the
+  /// Apple Watch handed over: it is never deleted for having no words.
   Future<Kept> keepRecording(String text, {required String recording, required int durationMs, String? clientId,
-    DateTime? createdAt, bool point = true}) async {
+    DateTime? createdAt, bool point = true, bool fromWatch = false}) async {
     final id = clientId ?? newClientId();
     if (await store.hasNote(id)) {
       return Kept((await store.notes()).firstWhere((note) => note.clientId == id), null);
@@ -914,7 +932,7 @@ class RelayController extends Relay {
     final source = File('$root/$recording');
     if (root == null || !await source.exists()) return keepNote(text, clientId: id, createdAt: createdAt, point: point);
     final note = LocalNote(clientId: id, text: text.trim(), createdAt: createdAt ?? _clock(), kind: NoteKind.voice,
-      audioPath: VoiceRecorder.pathOf(id), durationMs: durationMs, wordsPending: true);
+      audioPath: VoiceRecorder.pathOf(id), durationMs: durationMs, wordsPending: true, fromWatch: fromWatch);
     await store.addVoiceNote(note);
     try {
       final target = File('$root/${note.audioPath}');
@@ -1301,7 +1319,28 @@ class RelayController extends Relay {
     final file = await parts.recorder.fileOf(recording);
     // Phone backups leave recordings out, so a note restored to a new phone has its words but no recording.
     if (!await file.exists()) return notice(_noRecording);
-    await parts.player.play(file);
+    await parts.player.play(recording, file.uri);
+  }
+
+  @override
+  ValueListenable<Playback?> get playback => voice?.player ?? noPlayback;
+
+  @override
+  Future<void> pause() async => voice?.player.pause();
+
+  @override
+  Future<void> seek(Duration at) async => voice?.player.seek(at);
+
+  /// Reads the recording's waves away from the page, so a 5-minute recording does not stall it.
+  @override
+  Future<List<double>> waveOf(String recording, {int bars = 48}) async {
+    final parts = voice;
+    if (parts == null) return const [];
+    try {
+      return await compute(readWave, ((await parts.recorder.fileOf(recording)).path, bars));
+    } on Exception {
+      return const [];
+    }
   }
 
   /// Shows the note at once, with no words yet, and writes them in the background. Returns the words to show when the
@@ -1375,15 +1414,17 @@ class RelayController extends Relay {
   }
 
   /// Writes one voice note's words, after the words typed with it. No words: a note with typed words keeps them and its
-  /// recording; one without goes with its recording, and the app says it heard no speech. It waits while the model is
-  /// away; failed words, or words past the time limit, show *Try again* on the note.
+  /// recording; a watch note keeps its recording and shows *No words heard*; any other goes with its recording, and the
+  /// app says it heard no speech. It waits while the model is away; failed words, or words past the time limit, show
+  /// *Try again* on the note.
   Future<void> _write(LocalNote note) async {
     final parts = voice;
     if (parts == null) return;
     final file = await parts.recorder.fileOf(note.audioPath ?? VoiceRecorder.pathOf(note.clientId));
     if (!await file.exists()) {
-      // Typed words stay, with no recording to write.
+      // Typed words stay, with no recording to write. The phone never deletes a watch note on its own.
       if (note.text.trim().isNotEmpty) return _keepTyped(note);
+      if (note.fromWatch) return _keepNoWords(note);
       await store.dropNote(note.clientId);
       await _refreshLocal();
       return;
@@ -1404,6 +1445,7 @@ class RelayController extends Relay {
     }
     if (words.isEmpty) {
       if (note.text.trim().isNotEmpty) return _keepTyped(note);
+      if (note.fromWatch) return _keepNoWords(note);
       await store.dropNote(note.clientId);
       await _deleteRecording(file);
       await _refreshLocal();
@@ -1423,6 +1465,11 @@ class RelayController extends Relay {
     } on PathNotFoundException {
       // Gone already.
     }
+  }
+
+  /// A watch note with no words stays, with its recording to play, and is not sent: there are no words to send.
+  Future<void> _keepNoWords(LocalNote note) async {
+    if (await store.setWords(note.clientId, '', send: false)) await _refreshLocal();
   }
 
   /// Ends a voice note's wait with only the words typed with it, such as a shortcut's label over a silent recording.
@@ -1445,6 +1492,7 @@ class RelayController extends Relay {
   void dispose() {
     _disposed = true;
     _history?.cancel();
+    _links?.cancel();
     _drainTimer?.cancel();
     // A delete still in its Undo time keeps its mark: the next start runs it.
     for (final timer in _deletes.values) {

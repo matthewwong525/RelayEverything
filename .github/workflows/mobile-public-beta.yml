@@ -1,0 +1,57 @@
+# The public beta: adds one iPhone build from main to the TestFlight group "Public beta" and sends it to beta review
+# (mobile/README.md#public-beta). mobile-ci.yml's public-beta job starts it after main's build goes to TestFlight. It
+# waits for Apple's processing here, in its own group, so main's next Mobile CI run does not wait behind it.
+name: Mobile public beta
+on:
+  # GitHub starts this by hand only once the file is on the default branch.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version name, such as 1.1.0, from scripts/app-release.mjs version.
+        required: true
+        type: string
+      build:
+        description: The build number that went to TestFlight.
+        required: true
+        type: string
+      sha:
+        description: The commit on main that made the build. Its title is the build's What to Test.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# One build at a time. A running build is never stopped; GitHub keeps only the newest waiting run, the build that counts.
+concurrency:
+  group: mobile-public-beta
+  cancel-in-progress: false
+
+jobs:
+  # Ubuntu, as a Mac minute costs about ten. The Fastfile's PROCESSING_WAIT (75 minutes) and the setup fit in 90.
+  public-beta:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+          working-directory: mobile/ios
+      - name: Public beta
+        working-directory: mobile/ios
+        env:
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          VERSION: ${{ inputs.version }}
+          BUILD: ${{ inputs.build }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          # What to Test is the change's title, without its pull request number.
+          git log -1 --format=%s "$SHA" | sed -E 's/ *\(#[0-9]+\)$//' > "$RUNNER_TEMP/what-to-test.txt"
+          cat "$RUNNER_TEMP/what-to-test.txt"
+          bundle exec fastlane public_beta version:"$VERSION" build:"$BUILD" notes:"$RUNNER_TEMP/what-to-test.txt"

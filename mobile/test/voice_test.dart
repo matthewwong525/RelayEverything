@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/voice/model.dart';
 import 'package:relay_app/voice/recorder.dart';
 import 'package:relay_app/voice/transcriber.dart';
+import 'package:relay_app/voice/wave.dart';
 import 'package:whisper_cpp_flutter_plus/whisper_cpp_flutter_plus.dart' show WhisperBackend, WhisperConfig;
 
 import 'fakes.dart';
@@ -17,6 +18,38 @@ void main() {
     expect(whisperConfig(executable: simulator).backend, WhisperBackend.cpu);
     expect(whisperConfig(executable: '/private/var/containers/Bundle/Application/0A8D/Runner.app/Runner').backend,
       const WhisperConfig().backend);
+  });
+
+  group('the sound waves', () {
+    test('a 16-bit WAV gives 48 levels, the loudest part at 1 and a quiet part low', () {
+      // Quiet, then loud, then quiet: each a third of the recording.
+      final samples = [
+        for (var i = 0; i < 1600; i++) i.isEven ? 300 : -300,
+        for (var i = 0; i < 1600; i++) i.isEven ? 30000 : -30000,
+        for (var i = 0; i < 1600; i++) i.isEven ? 300 : -300,
+      ];
+      for (final extra in [false, true]) {
+        final levels = levelsOfWav(wavOf(samples, extra: extra));
+        expect(levels, hasLength(48), reason: 'extra $extra');
+        expect([levels.first, levels[24], levels.last], [closeTo(0.01, 0.001), 1.0, closeTo(0.01, 0.001)]);
+      }
+      expect(levelsOfWav(wavOf(samples), bars: 3), [closeTo(0.01, 0.001), 1.0, closeTo(0.01, 0.001)]);
+    });
+
+    test('an m4a, or any file that is not a WAV, gives no levels, and a silent WAV gives 48 zeros', () {
+      final m4a = Uint8List.fromList([0, 0, 0, 0x20, ...'ftypM4A '.codeUnits, ...List.filled(64, 7)]);
+      expect([levelsOfWav(m4a), levelsOfWav(Uint8List(0)), levelsOfWav(Uint8List.fromList('RIFF'.codeUnits))],
+        everyElement(isEmpty));
+      expect(levelsOfWav(wavOf(List.filled(3200, 0))), List.filled(48, 0.0));
+    });
+
+    test('a WAV whose data size the recorder did not write reads to the end', () {
+      final bytes = wavOf([for (var i = 0; i < 960; i++) i < 480 ? 1000 : 4000]);
+      // The data chunk's size is the last 4 bytes before the samples.
+      ByteData.sublistView(bytes).setUint32(bytes.length - 960 * 2 - 4, 0, Endian.little);
+      final levels = levelsOfWav(bytes, bars: 2);
+      expect(levels, [closeTo(0.25, 0.001), 1.0]);
+    });
   });
 
   group('the words', () {

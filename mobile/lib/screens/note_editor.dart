@@ -355,15 +355,8 @@ class NoteEditorState extends State<NoteEditor> {
     _controller.formatSelection(list == 'checked' || list == 'unchecked' ? Attribute.clone(Attribute.list, null) : Attribute.unchecked);
   }
 
-  Future<void> _attach() async {
-    // The browser has one picker for every kind of file.
-    final photos = relay.web ? false : await showModalBottomSheet<bool>(context: context, builder: (context) => SafeArea(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        ListTile(leading: const Icon(CupertinoIcons.photo), title: const Text('Photos'), onTap: () => Navigator.pop(context, true)),
-        ListTile(leading: const Icon(CupertinoIcons.doc), title: const Text('Files'), onTap: () => Navigator.pop(context, false)),
-      ]),
-    ));
-    if (photos == null) return;
+  /// *Attach* → *Photos* or *Files*. The browser has one picker for every kind of file.
+  Future<void> _attach({required bool photos}) async {
     final List<NewFile> picked;
     try {
       picked = await (widget.picker ?? pickWithPhone)(photos: photos);
@@ -460,7 +453,7 @@ class NoteEditorState extends State<NoteEditor> {
   }
 
   /// The server takes new files only from the phone that made the note, so a note from elsewhere offers none.
-  VoidCallback? get _attachOrNull => _current?.from == null ? _attach : null;
+  AttachPick? get _attachOrNull => _current?.from == null ? _attach : null;
 
   @override
   Widget build(BuildContext context) {
@@ -489,8 +482,9 @@ class NoteEditorState extends State<NoteEditor> {
             top: false,
             minimum: const EdgeInsets.only(bottom: 12),
             child: editing
-              ? Center(child: FloatingToolBar(onStyles: _styles, onChecklist: _checklist, onAttach: _attachOrNull))
-              : ReadingBar(onChecklist: _checklist, onAttach: _attachOrNull, onCompose: _compose),
+              ? Center(child: FloatingToolBar(onStyles: _styles, onChecklist: _checklist, onAttach: _attachOrNull,
+                  attachMenu: !relay.web))
+              : ReadingBar(onChecklist: _checklist, onAttach: _attachOrNull, onCompose: _compose, attachMenu: !relay.web),
           )),
         ])),
         if (!widget.pane && _formatting) FormatSheet(controller: _controller, height: _keyboard, onClose: _closeStyles),
@@ -516,7 +510,7 @@ class NoteEditorState extends State<NoteEditor> {
         ButtonPill(children: [
           PillIconButton(icon: CupertinoIcons.textformat, tooltip: 'Text styles', onPressed: _waiting ? null : _paneStyles),
           PillIconButton(icon: CupertinoIcons.checkmark_circle, tooltip: 'Checklist', onPressed: _waiting ? null : _checklist),
-          PillIconButton(icon: CupertinoIcons.paperclip, tooltip: 'Attach', onPressed: _attachOrNull),
+          AttachButton(onPick: _attachOrNull, menu: false),
         ]),
         // Search gives up width first, so a narrow pane keeps every tool.
         Expanded(child: Row(mainAxisAlignment: MainAxisAlignment.end, spacing: 10, children: [
@@ -533,7 +527,6 @@ class NoteEditorState extends State<NoteEditor> {
   Widget _more() => MoreMenu(
     items: [
       ('Copy', CupertinoIcons.doc_on_doc, _copy),
-      if (_current?.recording case final recording?) ('Play', CupertinoIcons.play_fill, () => relay.play(recording)),
     ],
     destructive: ('Delete', CupertinoIcons.trash, _delete),
     builder: (context, toggle) => PillIconButton(icon: CupertinoIcons.ellipsis, tooltip: 'More', onPressed: toggle),
@@ -543,13 +536,15 @@ class NoteEditorState extends State<NoteEditor> {
     final note = _current;
     final muted = TextStyle(fontSize: 13, color: brand.muted);
     final recording = note?.recording;
-    final state = note == null ? null : sendState(note);
     return SingleChildScrollView(
       controller: _scroll,
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 120),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        // The date alone: nothing about sending, and no tag.
         Text(_when(context, note?.at ?? DateTime.now(), note?.from), style: muted, textAlign: TextAlign.center),
         const SizedBox(height: 14),
+        if (recording != null) Padding(padding: const EdgeInsets.only(bottom: 14),
+          child: VoicePlayer(relay: relay, recording: recording, length: note?.length)),
         // Words typed with a recording, such as a shortcut's label, show while its own words are written.
         if (note != null && note.text.isNotEmpty && (note.writing || note.failed)) ...[
           Text(plainText(note.text), style: const TextStyle(fontFamily: brandFont, fontSize: 17, height: 1.5)),
@@ -589,15 +584,6 @@ class NoteEditorState extends State<NoteEditor> {
         for (final file in note?.files ?? const <EntryFile>[])
           Padding(padding: const EdgeInsets.only(top: 14),
             child: file.picture && file.ready ? NotePicture(file: file, relay: relay) : NoteFileRow(file: file, relay: relay)),
-        if (recording != null) Padding(padding: const EdgeInsets.only(top: 14),
-          child: PlayRow(length: note?.length, onPlay: () => relay.play(recording))),
-        if (note != null) Padding(padding: const EdgeInsets.only(top: 14), child: Row(spacing: 8, children: [
-          BrandTag(note.voice ? 'Voice' : 'Typed', spark: note.voice, large: true),
-          if (note.waiting && !note.sent)
-            _SendNow(relay: relay)
-          else if (state != null)
-            Text(state, style: muted),
-        ])),
       ]),
     );
   }
@@ -676,23 +662,3 @@ String? linkAt(Document document, int offset) => offset < 0 || offset >= documen
 /// does not.
 String? linkAtPosition(Document document, TextPosition position) =>
   linkAt(document, position.affinity == TextAffinity.upstream ? position.offset - 1 : position.offset);
-
-/// *Waiting to send · Send now* on a note's page: a tap sends what waits, and it says *Sending…* while it goes.
-class _SendNow extends StatelessWidget {
-  const _SendNow({required this.relay});
-
-  final Relay relay;
-
-  @override
-  Widget build(BuildContext context) {
-    final sending = relay.status == SyncStatus.syncing;
-    return TextButton(
-      onPressed: sending ? null : relay.sync,
-      style: quietButton(context).copyWith(
-        textStyle: const WidgetStatePropertyAll(TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-        visualDensity: VisualDensity.compact,
-      ),
-      child: Text(sending ? 'Sending…' : 'Waiting to send · Send now'),
-    );
-  }
-}

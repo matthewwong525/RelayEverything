@@ -814,7 +814,9 @@ void main() {
         await made.get('x');
         await made.close();
         final old = Store(NativeDatabase(file, setup: (db) {
-          if (db.userVersion != 12) return;
+          if (db.userVersion != 13) return;
+          // Version 13 added the source column.
+          db.execute('ALTER TABLE notes DROP COLUMN source');
           db.execute('INSERT INTO state VALUES (?, ?)',
             [settingsKey, jsonEncode({'sending': true, 'history': history, 'locationSend': 'points'})]);
           db.execute('INSERT INTO notes (client_id, body, created_at, sent_at, queued, pinning) VALUES '
@@ -849,6 +851,30 @@ void main() {
           [('pinning', true), ('unsent', true), ('sent', true)]);
         expect([await old.waiting(), await old.earlierCount()], [2, 0]);
       });
+    });
+
+    test('upgrades a phone from version 12: its notes are not from the watch, and a watch note keeps its mark', () async {
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+      addTearDown(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = false);
+      final file = File('${tempFolder().path}/relay.db');
+      final made = Store(NativeDatabase(file));
+      await made.get('x');
+      await made.close();
+      final old = Store(NativeDatabase(file, setup: (db) {
+        if (db.userVersion != 13) return;
+        db.execute('ALTER TABLE notes DROP COLUMN source');
+        db.execute("INSERT INTO notes (client_id, body, created_at, kind, audio_path, duration_ms) VALUES (?, ?, 1, 'voice', ?, 3000)",
+          ['old', jsonEncode(note('old').toJson()), 'voice/old.wav']);
+        db.execute('PRAGMA user_version = 12');
+      }));
+      addTearDown(old.close);
+      expect([for (final kept in await old.notes()) (kept.clientId, kept.fromWatch)], [('old', false)]);
+      await old.addVoiceNote(LocalNote(clientId: 'w', text: '', createdAt: at, kind: NoteKind.voice, audioPath: 'voice/w.wav',
+        durationMs: 2000, fromWatch: true));
+      expect(await old.setWords('w', '', send: false), isTrue);
+      final watch = (await old.notes()).firstWhere((kept) => kept.clientId == 'w');
+      expect([watch.fromWatch, watch.noWords, watch.queued, await old.earlierCount(), await old.earlierCount(fromWebhook: true)],
+        [true, true, false, 1, 1]);
     });
 
     test('keeps small values by name', () async {

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:drift/native.dart';
 import 'package:flutter/services.dart';
@@ -23,7 +24,9 @@ import 'package:relay_app/sync/motion.dart';
 import 'package:relay_app/sync/native.dart';
 import 'package:relay_app/sync/photos.dart';
 import 'package:relay_app/sync/stays.dart';
+import 'package:relay_app/relay.dart' show Playback;
 import 'package:relay_app/voice/model.dart';
+import 'package:relay_app/voice/playback.dart';
 import 'package:relay_app/voice/recorder.dart';
 import 'package:relay_app/voice/transcriber.dart';
 
@@ -358,9 +361,14 @@ class FakePhotos implements PhotoSource {
 /// The network the phone is on; Wi-Fi unless a test says otherwise.
 class FakeNetwork implements Network {
   Link current = Link.wifi;
+  /// A test adds a change here, as the phone's network does when it comes back.
+  final linkChanges = StreamController<Link>.broadcast();
 
   @override
   Future<Link> link() async => current;
+
+  @override
+  Stream<Link> changes() => linkChanges.stream;
 }
 
 /// The start of a JPEG of [width] by [height]: enough for its frame header to be read.
@@ -553,11 +561,32 @@ class FakeTranscriber extends Transcriber {
   Future<void> close() async => closed++;
 }
 
-class FakePlayer implements VoicePlayer {
+/// Plays nothing: it keeps each source asked for, a file's path or an address, and shows it as playing.
+class FakePlayer extends SoundPlayer {
   final played = <String>[];
+  final calls = <String>[];
+  /// The length the player reads from each recording it plays, as `just_audio` does; null reads none.
+  Duration? length;
 
   @override
-  Future<void> play(File file) async => played.add(file.path);
+  Future<void> play(String recording, Uri source) async {
+    played.add(source.isScheme('file') ? source.toFilePath() : source.toString());
+    calls.add('play');
+    value = Playback(recording: recording, at: value?.recording == recording ? value!.at : Duration.zero, playing: true,
+      length: length);
+  }
+
+  @override
+  Future<void> pause() async {
+    calls.add('pause');
+    if (value case final now?) value = Playback(recording: now.recording, at: now.at, playing: false, length: now.length);
+  }
+
+  @override
+  Future<void> seek(Duration at) async {
+    calls.add('seek ${at.inMilliseconds}');
+    if (value case final now?) value = Playback(recording: now.recording, at: at, playing: now.playing, length: now.length);
+  }
 }
 
 /// Voice notes on a fake microphone, words and player, with the model from [server] in [folder].
@@ -568,3 +597,35 @@ VoiceParts fakeVoice(Directory folder, ModelServer server, {required DateTime Fu
   transcriber: transcriber ?? FakeTranscriber(),
   player: player ?? FakePlayer(),
 );
+
+/// A 16-bit PCM WAV of [samples] at 16 kHz, mono, as the recorder writes it; [extra] adds a chunk before `data`, as
+/// some recorders do.
+Uint8List wavOf(List<int> samples, {bool extra = false}) {
+  final data = ByteData(samples.length * 2);
+  for (final (index, sample) in samples.indexed) {
+    data.setInt16(index * 2, sample, Endian.little);
+  }
+  final fmt = ByteData(16)
+    ..setUint16(0, 1, Endian.little) // PCM
+    ..setUint16(2, 1, Endian.little) // mono
+    ..setUint32(4, 16000, Endian.little)
+    ..setUint32(8, 32000, Endian.little)
+    ..setUint16(12, 2, Endian.little)
+    ..setUint16(14, 16, Endian.little);
+  final builder = BytesBuilder()..add(ascii.encode('RIFF'));
+  final chunks = BytesBuilder()
+    ..add(ascii.encode('WAVE'))
+    ..add(_chunk('fmt ', fmt.buffer.asUint8List()));
+  if (extra) chunks.add(_chunk('LIST', ascii.encode('INFOxxxx')));
+  chunks.add(_chunk('data', data.buffer.asUint8List()));
+  final body = chunks.toBytes();
+  builder
+    ..add((ByteData(4)..setUint32(0, body.length, Endian.little)).buffer.asUint8List())
+    ..add(body);
+  return builder.toBytes();
+}
+
+Uint8List _chunk(String id, List<int> bytes) => (BytesBuilder()
+  ..add(ascii.encode(id))
+  ..add((ByteData(4)..setUint32(0, bytes.length, Endian.little)).buffer.asUint8List())
+  ..add(bytes)).toBytes();

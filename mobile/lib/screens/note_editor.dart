@@ -433,11 +433,11 @@ class NoteEditorState extends State<NoteEditor> {
     if (address == null || !await (widget.opener ?? openInBrowser)(address)) _say('The browser did not open. Try again.');
   }
 
-  /// *Yesterday at 18:05 · Home*, and *From Email* for a note from elsewhere.
-  String _when(BuildContext context, DateTime at, String? place, String? from) {
+  /// *Yesterday at 18:05*, and *From Email* for a note from elsewhere.
+  String _when(BuildContext context, DateTime at, String? from) {
     final days = daysAgo(at, DateTime.now());
     final day = days <= 0 ? 'Today' : days == 1 ? 'Yesterday' : MaterialLocalizations.of(context).formatMediumDate(at);
-    return ['$day at ${TimeOfDay.fromDateTime(at).format(context)}', place, if (from != null) 'From $from']
+    return ['$day at ${TimeOfDay.fromDateTime(at).format(context)}', if (from != null) 'From $from']
       .whereType<String>().join(' · ');
   }
 
@@ -530,7 +530,7 @@ class NoteEditorState extends State<NoteEditor> {
       controller: _scroll,
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 120),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text(_when(context, note?.at ?? DateTime.now(), note?.place, note?.from), style: muted, textAlign: TextAlign.center),
+        Text(_when(context, note?.at ?? DateTime.now(), note?.from), style: muted, textAlign: TextAlign.center),
         const SizedBox(height: 14),
         // Words typed with a recording, such as a shortcut's label, show while its own words are written.
         if (note != null && note.text.isNotEmpty && (note.writing || note.failed)) ...[

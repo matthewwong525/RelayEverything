@@ -11,10 +11,8 @@ const schemaFile = new URL("../../../../../site/public/webhooks/v1.schema.json",
 const AT = Date.UTC(2026, 10, 4, 14, 1, 2);
 const device = { device_id: "d0000000-0000-4000-8000-000000000002", device_name: "iPad" };
 const ring: NoteRow = { id: "a0000000-0000-4000-8000-000000000001", source: "ring", text: "Call the PCB fab about the second batch.",
-  recorded_at: Date.UTC(2026, 10, 4, 14, 1), created_at: AT, ...device, lat: 43.6629, lon: -79.3957, accuracy: 15, place: "Harbord St",
-  place_from: "history", audio_key: "notes/a0000000-0000-4000-8000-000000000001.m4a" };
-const typed: NoteRow = { ...ring, id: "a0000000-0000-4000-8000-000000000002", source: "typed", lat: null, lon: null, accuracy: null,
-  place: null, place_from: null, audio_key: null };
+  recorded_at: Date.UTC(2026, 10, 4, 14, 1), created_at: AT, ...device, audio_key: "notes/a0000000-0000-4000-8000-000000000001.m4a" };
+const typed: NoteRow = { ...ring, id: "a0000000-0000-4000-8000-000000000002", source: "typed", audio_key: null };
 
 it("builds each type in the published format, with times in ISO 8601 and a recording in base64", () => {
   const built = [
@@ -32,9 +30,10 @@ it("builds each type in the published format, with times in ISO 8601 and a recor
   for (const item of built) expect(message.parse(item), item.type).toEqual(item);
   expect(built[0]).toEqual({ version: 1, type: "note.created", timestamp: "2026-11-04T14:01:02.000Z", data: { note: {
     id: ring.id, source: "ring", text: ring.text, recorded_at: "2026-11-04T14:01:00.000Z", created_at: "2026-11-04T14:01:02.000Z",
-    device: { id: device.device_id, name: "iPad" }, place: { lat: 43.6629, lon: -79.3957, accuracy: 15, name: "Harbord St", from: "history" },
+    device: { id: device.device_id, name: "iPad" },
     audio: { content_type: "audio/mp4", base64: "AAAAGA==" } } } });
-  expect(built[1].data).toMatchObject({ note: { place: null, audio: null } });
+  expect(built[1].data).toMatchObject({ note: { audio: null } });
+  expect(built[1].data).not.toHaveProperty("note.place");
   expect(built[2].data).not.toHaveProperty("note.audio");
   expect(built[3].data).toEqual({ samples: [{ id: 2, device: { id: device.device_id, name: "iPad" }, type: "steps",
     start: "2026-11-04T14:01:02.000Z", end: "2026-11-04T14:01:03.000Z", value: 5210, unit: "count", source: "fitness" }] });

@@ -44,6 +44,10 @@ void main() {
   List<Map<String, dynamic>> sentNotes() => [
     for (final request in server.requests) if (request.url.path.endsWith('notes')) jsonDecode(request.body) as Map<String, dynamic>,
   ];
+  List<Map<String, dynamic>> sentPoints() => [
+    for (final request in server.requests) if (request.url.path.endsWith('locations'))
+      for (final point in jsonDecode(request.body)['points'] as List) point as Map<String, dynamic>,
+  ];
 
   setUp(() {
     store = memoryStore();
@@ -59,27 +63,25 @@ void main() {
   tearDown(() => store.close());
 
   group('with sending off', () {
-    test('a new install keeps notes and pins on this phone, and calls no server and no place lookup', () async {
+    test('a new install keeps notes on this phone, and calls no server and reads no place', () async {
       server = noNetwork();
       places.pin = Pin(at: now, lat: 43.64871, lon: -79.38171, accuracy: 12);
       final relay = controller();
       await relay.load();
-      expect([relay.connected, relay.settings.sending, relay.settings.pinNotes], [false, false, false]);
+      expect([relay.connected, relay.settings.sending, relay.settings.history], [false, false, false]);
       await relay.addNote('Bare');
-      expect(await relay.setPinNotes(true), isNull);
       clock = now.add(const Duration(minutes: 1));
-      await relay.addNote('Pinned one');
+      await relay.addNote('Second');
       await pumpEventQueue();
-      expect([for (final entry in relay.entries) (entry.text, entry.place, entry.waiting)],
-        [('Pinned one', 'Pinned', false), ('Bare', null, false)]);
-      expect(places.named, [false]);
+      expect([for (final entry in relay.entries) (entry.text, entry.waiting)], [('Second', false), ('Bare', false)]);
+      expect([places.named, await store.waitingPoints()], [isEmpty, 0]);
       await relay.sync();
       expect([relay.status, relay.waiting], [SyncStatus.idle, 0]);
       expect(await store.outbox(), isEmpty);
       expect(await relay.earlierNotes(), 2);
       expect(await relay.setHealth(true), contains('Sign in'));
       expect(await relay.setHistory(true), contains('Sign in'));
-      expect([places.asked, health.reads, scheduled], [[false], isEmpty, [false]]);
+      expect([places.asked, health.reads, scheduled], [isEmpty, isEmpty, isEmpty]);
       expect(server.requests, isEmpty);
     });
 
@@ -129,18 +131,6 @@ void main() {
       expect([for (final note in sentNotes()) note['text']], ['New', 'One', 'Two', 'Three', 'Off again']);
       expect(await relay.earlierNotes(), 0);
       expect(storage.values.values, contains('secret-value'));
-    });
-
-    test('a pinned note written while on gets its place name from the phone, as in the first version', () async {
-      final relay = await offlineWithNotes([]);
-      await relay.setPinNotes(true);
-      await relay.startSending(sendEarlier: false);
-      await pumpEventQueue();
-      places.pin = Pin(at: now, lat: 43.65, lon: -79.4, accuracy: 8, place: 'Ossington Ave');
-      await relay.addNote('Named');
-      await pumpEventQueue();
-      expect(places.named, [true]);
-      expect(sentNotes().single['place'], 'Ossington Ave');
     });
 
     test('the list shows only the notes made on this phone, each sent or not, and reads nothing from the server', () async {
@@ -286,7 +276,6 @@ void main() {
       await relay.sync();
       places.points.add(Pin(at: now, lat: 43.6, lon: -79.3, accuracy: 9));
       await pumpEventQueue();
-      await relay.setPinNotes(false);
       await relay.addNote('Waits');
       await pumpEventQueue();
       expect(places.points.hasListener, isTrue);
@@ -313,7 +302,6 @@ void main() {
       await KeyVault(storage).save(connection);
       final relay = controller();
       await relay.load();
-      await relay.setPinNotes(false);
       expect(await relay.setHistory(true), isNull);
       expect(await relay.setHealth(true), isNull);
       await pumpEventQueue();
@@ -342,7 +330,6 @@ void main() {
       await KeyVault(storage).save(connection);
       final relay = controller();
       await relay.load();
-      await relay.setPinNotes(false);
       await relay.settled();
       server.requests.clear();
       server.hold = Completer();
@@ -461,11 +448,11 @@ void main() {
   group('settings', () {
     test('start off on a new install; sending off forces health and history off', () {
       const fresh = Settings();
-      expect([fresh.sending, fresh.pinNotes, fresh.history, fresh.health], [false, false, false, false]);
+      expect([fresh.sending, fresh.history, fresh.health], [false, false, false]);
       expect([const Settings(history: true, health: true).history, const Settings(history: true, health: true).health], [false, false]);
       const on = Settings(sending: true, history: true, health: true);
       expect([on.copyWith(sending: false).history, on.copyWith(sending: false).health], [false, false]);
-      expect(jsonDecode(on.encode()), {'sending': true, 'pinNotes': false, 'history': true, 'health': true, 'calendar': false,
+      expect(jsonDecode(on.encode()), {'sending': true, 'history': true, 'health': true, 'calendar': false,
         'calendarsOff': [], 'mode': 'battery', 'place': 'server', 'privateTo': 'server',
         'photos': false, 'photosOnMobileData': false, 'appearance': 'system',
         'locationSend': 'all'});
@@ -542,10 +529,10 @@ void main() {
 
     test('an upgrade from the first version keeps sending on for a phone with a key', () {
       final kept = Settings.decode(null, hasKey: true);
-      expect([kept.sending, kept.pinNotes, kept.history], [true, true, false]);
+      expect([kept.sending, kept.history], [true, false]);
       final saved = jsonEncode({'pinNotes': false, 'history': true, 'health': true});
       final upgraded = Settings.decode(saved, hasKey: true);
-      expect([upgraded.sending, upgraded.pinNotes, upgraded.history, upgraded.health], [true, false, true, true]);
+      expect([upgraded.sending, upgraded.history, upgraded.health], [true, true, true]);
       final noKey = Settings.decode(saved, hasKey: false);
       expect([noKey.sending, noKey.history, noKey.health], [false, false, false]);
       expect(Settings.decode(null, hasKey: false).sending, isFalse);
@@ -555,8 +542,9 @@ void main() {
       await store.set('settings', jsonEncode({'sending': true, 'pinNotes': true, 'history': true, 'health': false}));
       final relay = controller();
       await relay.load();
-      expect([relay.settings.sending, relay.settings.pinNotes], [false, true]);
-      expect(jsonDecode((await store.get('settings'))!), {'sending': false, 'pinNotes': true, 'history': false, 'health': false,
+      // A setting from before, such as the pin switch, is left out.
+      expect(relay.settings.sending, isFalse);
+      expect(jsonDecode((await store.get('settings'))!), {'sending': false, 'history': false, 'health': false,
         'calendar': false, 'calendarsOff': [], 'mode': 'battery', 'place': 'server', 'privateTo': 'server',
         'photos': false, 'photosOnMobileData': false, 'appearance': 'system',
         'locationSend': 'all'});
@@ -569,7 +557,6 @@ void main() {
       await relay.load();
       places.allowed = false;
       health.allowed = false;
-      expect(await relay.setPinNotes(true), contains('location'));
       expect(await relay.startSending(sendEarlier: false), isNull);
       expect(await relay.setHistory(true), contains('all the time'));
       expect(await relay.setHealth(true), contains('health'));
@@ -579,13 +566,12 @@ void main() {
       expect(await relay.setHistory(true), isNull);
       expect(await relay.setHealth(true), isNull);
       expect(await relay.setHistory(false), isNull);
-      expect(await relay.setPinNotes(true), isNull);
-      expect(scheduled, [false, true, true, true, true]);
-      expect(jsonDecode((await store.get('settings'))!), {'sending': true, 'pinNotes': true, 'history': false, 'health': true,
+      expect(scheduled, [false, true, true, true]);
+      expect(jsonDecode((await store.get('settings'))!), {'sending': true, 'history': false, 'health': true,
         'calendar': false, 'calendarsOff': [], 'mode': 'battery', 'place': 'server', 'privateTo': 'server',
         'photos': false, 'photosOnMobileData': false, 'appearance': 'system',
         'locationSend': 'all'});
-      expect(places.asked, [false, true, true, false]);
+      expect(places.asked, [true, true]);
       // Each change started a sync; the last round ends before the store closes.
       await relay.settled();
     });
@@ -678,16 +664,15 @@ void main() {
       expect([relay.connected, relay.status], [true, SyncStatus.offline]);
     });
 
-    test('shows a note at once as waiting, with its pin, and sent after the next sync', () async {
+    test('shows a note at once as waiting, and sent after the next sync', () async {
       await KeyVault(storage).save(connection);
-      places.pin = Pin(at: now, lat: 43.64871, lon: -79.38171, accuracy: 12);
       server.answer = (_) => FakeServer.json({}, 503);
       final relay = controller();
       await relay.load();
       await relay.addNote('  Lunch idea  ');
       await pumpEventQueue();
       await relay.sync();
-      expect([relay.entries.single.text, relay.entries.single.waiting, relay.entries.single.place], ['Lunch idea', true, 'Pinned']);
+      expect([relay.entries.single.text, relay.entries.single.waiting], ['Lunch idea', true]);
       expect([relay.status, relay.waiting], [SyncStatus.offline, 1]);
       server.answer = FakeServer.ok;
       await relay.sync();
@@ -699,60 +684,56 @@ void main() {
       expect(sent['clientId'], matches(RegExp(r'^[0-9a-f]{32}$')));
     });
 
-    test('keeps a note at once, and adds its pin when the phone has a fix', () async {
+    test('with location history on, a note goes at once, and one point follows at its time with the fix\'s name', () async {
       await KeyVault(storage).save(connection);
-      server.answer = (_) => FakeServer.json({}, 503);
+      await store.set('settings', jsonEncode({'sending': true, 'history': true, 'locationSend': 'points'}));
       places.fix = Completer();
       final relay = controller();
       await relay.load();
+      await relay.settled();
+      clock = now.add(const Duration(minutes: 3));
       await relay.addNote('Bench idea');
-      expect([relay.entries.single.text, relay.entries.single.place, relay.waiting], ['Bench idea', null, 1]);
+      await pumpEventQueue();
+      expect([sentNotes().single['text'], sentNotes().single.containsKey('lat'), relay.waiting], ['Bench idea', false, 0]);
+      expect([places.named, sentPoints()], [[true], isEmpty]);
       places.fix!.complete(Pin(at: now, lat: 43.64871, lon: -79.38171, accuracy: 12, place: 'Queen St W'));
-      await pumpEventQueue();
-      expect(relay.entries.single.place, 'Queen St W');
-      final sent = sentNotes().single;
-      expect([sent['text'], sent['lat'], sent['place']], ['Bench idea', 43.64871, 'Queen St W']);
-      // A note not waiting, such as one settled already, keeps no late pin.
-      expect(await store.settlePin('gone', Pin(at: now, lat: 1, lon: 1, accuracy: 1), send: true), isFalse);
+      await relay.settled();
+      final point = sentPoints().single;
+      expect([point['at'], point['lat'], point['lon'], point['accuracy'], point['place']],
+        [clock.millisecondsSinceEpoch, 43.64871, -79.38171, 12, 'Queen St W']);
+      expect(await store.track(), isEmpty);
     });
 
-    test('a second note syncs while the first waits for its pin, and the first goes later with its place', () async {
+    test('with Only stays and trips, a note\'s point joins the stay or trip, and no point goes', () async {
       await KeyVault(storage).save(connection);
-      final first = Completer<Pin?>();
-      places.fix = first;
+      await store.set('settings', jsonEncode({'sending': true, 'history': true, 'locationSend': 'stays'}));
+      server.hold = Completer();
       final relay = controller();
       await relay.load();
-      await relay.addNote('First');
+      places.pin = Pin(at: now, lat: 43.65, lon: -79.4, accuracy: 8, place: 'Ossington Ave');
+      await relay.addNote('Stay note');
       await pumpEventQueue();
-      places
-        ..fix = null
-        ..pin = Pin(at: now, lat: 43.65, lon: -79.40, accuracy: 8, place: 'Ossington Ave');
-      await relay.addNote('Second');
-      await pumpEventQueue();
-      await relay.sync(); // pull to refresh, the sync chip or the app's return
-      expect([for (final note in sentNotes()) note['text']], ['Second']);
-      expect(sentNotes().single['place'], 'Ossington Ave');
-      expect([relay.waiting, for (final entry in relay.entries) if (entry.waiting) entry.text], [1, 'First']);
-      first.complete(Pin(at: now, lat: 43.64871, lon: -79.38171, accuracy: 12, place: 'Queen St W'));
-      await pumpEventQueue();
-      await relay.sync();
-      expect([for (final note in sentNotes()) note['text']], ['Second', 'First']);
-      expect([sentNotes().last['lat'], sentNotes().last['place']], [43.64871, 'Queen St W']);
-      expect(relay.waiting, 0);
+      expect([for (final pin in await store.track()) (pin.at, pin.place)], [(now, 'Ossington Ave')]);
+      expect(await store.waitingPoints(), 0);
+      server.hold!.complete();
+      await relay.settled();
+      expect(sentPoints(), isEmpty);
     });
 
-    test('a note goes without a place when the phone gives up, or when the app closed while it waited', () async {
+    test('with location history off, or with no fix, a note adds no point', () async {
       await KeyVault(storage).save(connection);
+      await store.set('settings', jsonEncode({'sending': true, 'history': false}));
+      places.pin = Pin(at: now, lat: 43.65, lon: -79.4, accuracy: 8, place: 'Ossington Ave');
       final relay = controller();
       await relay.load();
+      await relay.addNote('History off');
+      await relay.settled();
+      expect([places.named, sentNotes().single.containsKey('place'), sentPoints()], [isEmpty, false, isEmpty]);
+      expect(await relay.setHistory(true), isNull);
+      places.pin = null;
       await relay.addNote('No fix');
-      await pumpEventQueue();
-      await relay.sync();
-      expect(sentNotes().single, isNot(contains('lat')));
-      await store.addNote(LocalNote(clientId: 'closed', text: 'Cut short', createdAt: now), waitForPin: true, send: true);
-      expect([(await store.outbox()).length, await store.waiting()], [0, 1]);
-      await controller().load();
-      expect((await store.outbox()).single.body, {'clientId': 'closed', 'text': 'Cut short', 'createdAt': now.millisecondsSinceEpoch});
+      await relay.settled();
+      expect([places.named, await store.waitingPoints(), sentPoints()], [[true], 0, isEmpty]);
     });
 
     test('opens with its notes and settings, with no network, and deletes the timeline the first versions kept', () async {
@@ -762,15 +743,15 @@ void main() {
       final relay = controller();
       await relay.load();
       expect([relay.entries, await store.get('timeline')], [isEmpty, isNull]);
-      expect([relay.settings.sending, relay.settings.pinNotes, relay.settings.history, relay.settings.health], [true, false, true, true]);
+      expect([relay.settings.sending, relay.settings.history, relay.settings.health], [true, true, true]);
       places.points.add(Pin(at: now, lat: 43.6, lon: -79.3, accuracy: 9));
       await pumpEventQueue();
-      await relay.addNote('No pin');
+      await relay.addNote('No fix');
       await relay.sync();
       expect(server.routes, containsAll(['notes', 'locations']));
       expect(server.routes, isNot(contains('timeline')));
       expect(sentNotes().single, isNot(contains('lat')));
-      expect(relay.entries.single.text, 'No pin');
+      expect(relay.entries.single.text, 'No fix');
       relay.dispose();
     });
 
@@ -1519,6 +1500,59 @@ void main() {
       expect([relay.listening, relay.entries, recordings(), transcriber.heard], [null, isEmpty, isEmpty, isEmpty]);
     });
 
+    group('with location history on', () {
+      final start = Pin(at: now, lat: 43.64871, lon: -79.38171, accuracy: 12, place: 'Queen St W');
+      final later = Pin(at: now, lat: 43.65, lon: -79.4, accuracy: 8, place: 'Ossington Ave');
+
+      Future<RelayController> historyOn() async {
+        await KeyVault(storage).save(connection);
+        await store.set('settings', jsonEncode({'sending': true, 'history': true, 'locationSend': 'points'}));
+        final relay = voiceController();
+        await relay.load();
+        await relay.settled();
+        return relay;
+      }
+
+      test('a kept voice note adds one point at its start, from the fix taken as it started', () async {
+        final relay = await historyOn();
+        places.pin = start;
+        expect(await relay.startVoiceNote(), isNull);
+        expect(places.named, [true]);
+        // The person walks on while the note records: a fix taken now would be here.
+        places.pin = later;
+        clock = clock.add(const Duration(minutes: 4));
+        expect(await relay.endVoiceNote(), isNull);
+        await relay.wordsWritten();
+        await relay.settled();
+        final point = sentPoints().single;
+        expect([point['at'], point['lat'], point['lon'], point['place']], [now.millisecondsSinceEpoch, 43.64871, -79.38171, 'Queen St W']);
+        expect(places.named, [true]);
+      });
+
+      test('a recording slid off, or too short, adds no point', () async {
+        final relay = await historyOn();
+        places.pin = start;
+        await relay.startVoiceNote();
+        clock = clock.add(const Duration(seconds: 3));
+        await relay.cancelVoiceNote();
+        expect(await hold(relay, const Duration(milliseconds: 300)), 'Too short to keep. Nothing was saved.');
+        await relay.settled();
+        expect([places.named, await store.waitingPoints(), sentPoints()], [[true, true], 0, isEmpty]);
+      });
+    });
+
+    test('with location history off, a voice note asks for no fix and adds no point', () async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', jsonEncode({'sending': true, 'history': false}));
+      places.pin = Pin(at: now, lat: 43.65, lon: -79.4, accuracy: 8);
+      final relay = voiceController();
+      await relay.load();
+      expect(await hold(relay, const Duration(seconds: 4)), isNull);
+      await relay.wordsWritten();
+      await relay.settled();
+      expect([places.named, sentPoints()], [isEmpty, isEmpty]);
+    });
+
     test('a silent recording: the app says it heard no speech, and keeps no note and no recording', () async {
       final relay = voiceController();
       await relay.load();
@@ -2265,14 +2299,13 @@ void main() {
     Future<void> queueHealth(int value) => store.queueSamples([
       {'type': 'steps', 'start': 1, 'end': 2, 'value': value, 'unit': 'count', 'source': 'Health'}]);
 
-    /// Signed in to Relay Everything, with pins off, and the server giving one note from elsewhere to each pull.
+    /// Signed in to Relay Everything, and the server giving one note from elsewhere to each pull.
     Future<RelayController> signedIn() async {
       await KeyVault(storage).save(connection);
       await store.set('settings', const Settings(sending: true).encode());
       server.answer = (request) => isPull(request) ? notesPage([pulledNote('s1')], next: 1) : FakeServer.ok(request);
       final relay = controller();
       await relay.load();
-      await relay.setPinNotes(false);
       await relay.settled();
       server.requests.clear();
       return relay;
@@ -2371,7 +2404,6 @@ void main() {
       final photos = FakePhotos();
       final relay = controller(photos: photos, network: FakeNetwork());
       await relay.load();
-      await relay.setPinNotes(false);
       await relay.settled();
       server.requests.clear();
       clock = now.add(const Duration(minutes: 5));
@@ -2455,5 +2487,5 @@ class _FullStore extends Store {
   _FullStore() : super(NativeDatabase.memory());
 
   @override
-  Future<void> addVoiceNote(LocalNote note, {bool waitForPin = false}) => throw Exception('disk full');
+  Future<void> addVoiceNote(LocalNote note) => throw Exception('disk full');
 }

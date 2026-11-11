@@ -1,13 +1,17 @@
 ---
 title: Location
-description: Pin each note to a place, and keep a history of where you went, as stays and trips.
+description: Keep a history of where you went, as stays and trips, with a point for each note you make.
 ---
 
-Relay Everything uses your location two ways: it pins each typed note to where you are, and, with sending on, it keeps a history of where you went, as stays at named places and trips between them.
+With sending on, Relay Everything keeps a history of where you went, as stays at named places and trips between them. A note keeps no place: where you made it is a point in this history.
 
-## Pin notes to where I am
+## Where you made a note
 
-**Pin notes to where I am** is off until you turn it on in [Settings](../settings/#notes). The app then asks for your location while you use it. Each typed note keeps where you were, with no signal too. With sending on, the phone names the place itself, such as a street. With sending off, it looks up no name, and the note shows **Pinned**.
+While **Location history** is on, each note you make on the phone adds one point to your location history, at the note's time. This is true for a typed note, a voice note, and a note from Shortcuts or Siri. The point has the street's name when the phone finds one. The note goes at once, and does not wait for the point. The point goes where your other points go: with **Only stays and trips**, it is part of the stay or trip, and no point goes. There is no setting for it.
+
+A note you share from another app adds no point, and a note that waited, such as on the Apple Watch, adds none either: the phone's place now is not where you made it. With **Location history** off, the phone reads no place for a note. Your AI finds where you were when you made a note by the note's time.
+
+A note from before this change kept its place. Its place is now a point in your location history at the note's time, and the note keeps no place.
 
 ## Location history
 
@@ -75,8 +79,8 @@ The **Location** folder shows when the points last went, and how many wait, such
 
 ## Only to your own webhook
 
-Signed in to Relay Everything, you can send your location history only to your own webhook and still sync your notes. On the **Account** page, under **Advanced**, open **Webhooks** and turn on **Only to my own webhook**. The phone then sends each point straight to your receiver as `location.points`, and each stay and trip as `location.stays`, and Relay Everything gets none of them. The **Location** folder then says *Sent to your webhook* and the time. A note's pinned place is part of the note, so it still syncs with the note: turn off **Pin notes to where I am** to keep it off too. The points already sent stay in your space. [Settings](../settings/#health-places-calendar-and-photos-only-to-your-webhook)
+Signed in to Relay Everything, you can send your location history only to your own webhook and still sync your notes. On the **Account** page, under **Advanced**, open **Webhooks** and turn on **Only to my own webhook**. The phone then sends each point straight to your receiver as `location.points`, and each stay and trip as `location.stays`, and Relay Everything gets none of them. The **Location** folder then says *Sent to your webhook* and the time. A note keeps no place, so where you made it goes only with your location history. The points already sent stay in your space. [Settings](../settings/#health-places-calendar-and-photos-only-to-your-webhook)
 
 ## Turn it off
 
-Turn off **Pin notes to where I am** in Settings, or **Location history** in the **Location** folder. The phone stops at once. Signing out also stops the history, and deletes the points, stays and trips that did not go yet. [Privacy](../../privacy/) says what the server keeps.
+Turn off **Location history** in the **Location** folder. The phone stops at once. Signing out also stops the history, and deletes the points, stays and trips that did not go yet. [Privacy](../../privacy/) says what the server keeps.

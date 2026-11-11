@@ -18,7 +18,8 @@ test("the page shows each Relay route, and who can call it", () => {
   expect(reference).toContain("`POST /apps/relay/api/locations` · `relay.points-add` · writes · called by a phone key");
   expect(reference).toContain("`GET /apps/relay/api/key` · `relay.key` · reads · called by any device key");
   expect(reference).toContain("`GET /apps/relay/api/summary` · `relay.summary` · reads · called by a signed-in person only");
-  expect(reference).toContain("| `notes[].place.name` | string or null | yes |");
+  expect(reference).toContain("| `notes[].attachments[].ready` | boolean | yes |");
+  expect(reference).not.toContain("`notes[].place");
   expect(reference).toContain("- `GET /apps/relay/api/audio`: [Play a note's recording](../recordings/)");
   expect(reference.toLowerCase()).not.toContain("pebble");
 });

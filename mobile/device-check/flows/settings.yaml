@@ -18,8 +18,7 @@ appId: com.matthewwong525.relayApp
 - assertVisible: "System"
 - assertVisible: "Dark"
 - assertVisible: "Voice notes"
-# Flutter joins a row's title and subtitle into one label, so match its start.
-- assertVisible: 'Pin notes to where I am(.|\n)*'
+- assertNotVisible: 'Pin notes to where I am(.|\n)*'
 # The account card joins its title and its line, Your notes stay on this phone until you sign in.
 - assertVisible: 'Sign in to Relay Everything(.|\n)*'
 - assertNotVisible: 'Send my notes(.|\n)*'

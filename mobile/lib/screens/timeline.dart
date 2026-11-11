@@ -413,7 +413,7 @@ class _NoteRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final brand = brandOf(context);
     final muted = TextStyle(fontSize: 13, color: brand.muted);
-    final meta = [if (entry.length != null) clockOf(entry.length!), entry.place, sendState(entry)].whereType<String>();
+    final meta = [if (entry.length != null) clockOf(entry.length!), sendState(entry)].whereType<String>();
     final picture = entry.files.where((file) => file.picture && file.ready).firstOrNull;
     final row = Material(color: selected ? brand.accentSoft : Colors.transparent, child: InkWell(
       onTap: onTap,

@@ -96,7 +96,7 @@ Map<String, dynamic> pulledNote(String id, {String? clientId, bool mine = false,
   List<Map<String, dynamic>> files = const []}) => {
   'id': id, 'clientId': clientId, 'mine': mine, 'source': source, 'text': text,
   'recordedAt': (recordedAt ?? DateTime(2026, 11, 5, 8, 2)).millisecondsSinceEpoch,
-  'editedAt': editedAt?.millisecondsSinceEpoch, 'device': device, 'audio': audio, 'place': null, 'attachments': files,
+  'editedAt': editedAt?.millisecondsSinceEpoch, 'device': device, 'audio': audio, 'attachments': files,
 };
 
 /// A page of `GET notes`.

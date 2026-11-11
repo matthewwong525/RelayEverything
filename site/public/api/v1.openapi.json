@@ -154,60 +154,6 @@
                             "type": "boolean",
                             "description": "Whether it has a recording."
                           },
-                          "place": {
-                            "anyOf": [
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "lat": {
-                                    "type": "number"
-                                  },
-                                  "lon": {
-                                    "type": "number"
-                                  },
-                                  "accuracy": {
-                                    "anyOf": [
-                                      {
-                                        "type": "number"
-                                      },
-                                      {
-                                        "type": "null"
-                                      }
-                                    ]
-                                  },
-                                  "name": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "null"
-                                      }
-                                    ]
-                                  },
-                                  "from": {
-                                    "type": "string",
-                                    "enum": [
-                                      "phone",
-                                      "history"
-                                    ],
-                                    "description": "phone: the phone's place at the time; history: matched from the location history."
-                                  }
-                                },
-                                "required": [
-                                  "lat",
-                                  "lon",
-                                  "accuracy",
-                                  "name",
-                                  "from"
-                                ],
-                                "additionalProperties": false
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
                           "attachments": {
                             "type": "array",
                             "items": {
@@ -251,7 +197,6 @@
                           "recordedAt",
                           "device",
                           "audio",
-                          "place",
                           "attachments"
                         ],
                         "additionalProperties": false
@@ -349,7 +294,7 @@
                     "description": "When it was written; now when left out: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset."
                   },
                   "lat": {
-                    "description": "Where it was written: latitude. Send it with lon.",
+                    "description": "Where it was written: latitude. Send it with lon. The place becomes one point of location history at the note's time, not part of the note.",
                     "type": "number",
                     "minimum": -90,
                     "maximum": 90
@@ -367,7 +312,7 @@
                     "maximum": 100000
                   },
                   "place": {
-                    "description": "The place's name, such as a street.",
+                    "description": "The place's name, such as a street, kept on its location point.",
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 200
@@ -542,60 +487,6 @@
                       "type": "boolean",
                       "description": "Whether it has a recording."
                     },
-                    "place": {
-                      "anyOf": [
-                        {
-                          "type": "object",
-                          "properties": {
-                            "lat": {
-                              "type": "number"
-                            },
-                            "lon": {
-                              "type": "number"
-                            },
-                            "accuracy": {
-                              "anyOf": [
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "name": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "from": {
-                              "type": "string",
-                              "enum": [
-                                "phone",
-                                "history"
-                              ],
-                              "description": "phone: the phone's place at the time; history: matched from the location history."
-                            }
-                          },
-                          "required": [
-                            "lat",
-                            "lon",
-                            "accuracy",
-                            "name",
-                            "from"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
                     "attachments": {
                       "type": "array",
                       "items": {
@@ -762,7 +653,6 @@
                     "recordedAt",
                     "device",
                     "audio",
-                    "place",
                     "attachments",
                     "placesNearby",
                     "day"

@@ -24,10 +24,10 @@ Send the input as a JSON body.
 | `clientId` | string | yes | The phone's own id for the note, so a resend is stored once. |
 | `text` | string | yes | What the note says. It can be empty only when the note has files. |
 | `createdAt` | integer | yes | When it was written, in Unix milliseconds. |
-| `lat` | number | no | Where it was written: latitude. Send it with lon. |
+| `lat` | number | no | Where it was written: latitude. Send it with lon. The place becomes one point of location history at the note's time, not part of the note. |
 | `lon` | number | no | Where it was written: longitude. Send it with lat. |
 | `accuracy` | number | no | How sure the phone was of the place, in meters. |
-| `place` | string | no | The place's name from the phone's address lookup. |
+| `place` | string | no | The place's name from the phone's address lookup, kept on its location point. |
 | `attachments` | array of object | no | The note's files, up to 10: only their names, types and sizes. Send each file's bytes after, with POST attachments. |
 | `attachments[].id` | string | yes | The phone's own id for the file: its upload names it. |
 | `attachments[].name` | string | yes | The file's name, such as `warranty.pdf`. |
@@ -136,12 +136,6 @@ Send the input as query parameters.
 | `notes[].editedAt` | number or null | yes | When the note last changed, in Unix ms; null when never. |
 | `notes[].device` | string | yes | The name of the device or way in that sent it, such as `Email`. |
 | `notes[].audio` | boolean | yes |  |
-| `notes[].place` | object or null | yes |  |
-| `notes[].place.lat` | number | yes |  |
-| `notes[].place.lon` | number | yes |  |
-| `notes[].place.accuracy` | number or null | yes |  |
-| `notes[].place.name` | string or null | yes |  |
-| `notes[].place.from` | "phone" or "history" | yes |  |
 | `notes[].attachments` | array of object | yes | The note's files, oldest first. |
 | `notes[].attachments[].id` | string | yes |  |
 | `notes[].attachments[].name` | string | yes |  |
@@ -185,7 +179,7 @@ Send the input as a JSON body.
 
 `POST /apps/relay/api/locations` · `relay.points-add` · writes · called by a phone key
 
-Store the phone's location history, once per time. A note keeps the place it came with: a point gives no note a place.
+Store the phone's location history, once per time. A note keeps no place: a place sent with a note becomes one point at the note's time.
 
 ### Input
 
@@ -355,7 +349,7 @@ It takes no input.
 
 `GET /apps/relay/api/timeline` · `relay.timeline` · reads · called by a signed-in person only, not a device key
 
-Read Relay Everything's notes, newest first, with each one's place.
+Read Relay Everything's notes, newest first. A note has no place: read places by its time.
 
 ### Input
 
@@ -378,12 +372,6 @@ Send the input as query parameters.
 | `notes[].recordedAt` | number | yes |  |
 | `notes[].device` | string | yes |  |
 | `notes[].audio` | boolean | yes |  |
-| `notes[].place` | object or null | yes |  |
-| `notes[].place.lat` | number | yes |  |
-| `notes[].place.lon` | number | yes |  |
-| `notes[].place.accuracy` | number or null | yes |  |
-| `notes[].place.name` | string or null | yes |  |
-| `notes[].place.from` | "phone" or "history" | yes |  |
 | `notes[].attachments` | array of object | yes | The note's files, oldest first. |
 | `notes[].attachments[].id` | string | yes |  |
 | `notes[].attachments[].name` | string | yes |  |

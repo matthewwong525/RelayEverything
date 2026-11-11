@@ -63,7 +63,7 @@ Every message is a `POST` with a JSON body in one envelope:
 
 | `type` | When | `data` holds |
 |---|---|---|
-| `note.created` | A note reaches your server. | `note`, with its words, time, place, device, recording, and the names of its files |
+| `note.created` | A note reaches your server. | `note`, with its words, time, device, recording, and the names of its files |
 | `note.updated` | A phone changes a note, from any device or way in. Always after the note's `note.created`. | `note`, with its latest words, without `audio` |
 | `note.deleted` | A phone deletes a note, from any device or way in. Always after the note's `note.created`. | `note`: its `id` and `deleted_at` |
 | `health.samples` | A phone sends health samples. | `samples`: up to 500 |
@@ -90,14 +90,13 @@ Every message is a `POST` with a JSON body in one envelope:
       "recorded_at": "2026-11-04T14:01:00.000Z",
       "created_at": "2026-11-04T14:01:02.000Z",
       "device": { "id": "d0000000-0000-4000-8000-000000000001", "name": "Android phone" },
-      "place": { "lat": 43.6629, "lon": -79.3957, "accuracy": 15, "name": "Harbord St", "from": "history" },
       "audio": { "content_type": "audio/mp4", "base64": "AAAAGGZ0eXA..." }
     }
   }
 }
 ```
 
-`source` is `ring` or `typed`. `place` is null when the note has none. `from` says where the place came from: `phone` for a typed note's own place, `history` for an older recorded note's place, taken from the location history. Relay Everything gives no note a place this way now. `audio` is an older recorded note's recording in base64, or null.
+`source` is `ring` or `typed`. A note has no place. Where you made it is a [`location.points`](#locationpoints) point at the note's `recorded_at`, sent to a webhook that takes location. `audio` is an older recorded note's recording in base64, or null.
 
 ### A note's files
 
@@ -493,7 +492,7 @@ CREATE TABLE relay_location_points (
 );
 ```
 
-Save a note with `INSERT ... ON CONFLICT (id) DO UPDATE`, and keep the stored `audio` when a `note.updated` has none. On a `note.deleted`, delete the note's rows in `relay_note_files` and `relay_note_attachments` by `note_id`, then its row in `relay_notes` by `id`. Save each of a note's `attachments` by its `id` too, and a `note.file` in `relay_note_files`. A file listed in `attachments` that has no row in `relay_note_files` did not come, such as one your receiver skipped.
+A note has no place, so `lat`, `lon` and `place` in `relay_notes` stay empty. They stay in the table for a database that saved notes with a place before. Save a note with `INSERT ... ON CONFLICT (id) DO UPDATE`, and keep the stored `audio` when a `note.updated` has none. On a `note.deleted`, delete the note's rows in `relay_note_files` and `relay_note_attachments` by `note_id`, then its row in `relay_notes` by `id`. Save each of a note's `attachments` by its `id` too, and a `note.file` in `relay_note_files`. A file listed in `attachments` that has no row in `relay_note_files` did not come, such as one your receiver skipped.
 
 ## An example receiver
 

@@ -1,6 +1,6 @@
 -- Made-up rows for one person's space, which worker/relay-mcp/tools.test.ts reads. No real person, key or address.
 -- Relay: a made-up phone and iPad key with no real token behind either, one turned-off phone, and a day in
--- Toronto (Wednesday 4 November 2026): ring and typed notes, health samples, and the location history that placed them.
+-- Toronto (Wednesday 4 November 2026): ring and typed notes, health samples, and the location history: a note has no place.
 INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at) VALUES
   ('d0000000-0000-4000-8000-000000000001', 'Android phone', 'seed-phone.access', 'seed-token-phone', 1793700000000, NULL),
   ('d0000000-0000-4000-8000-000000000002', 'iPad', 'seed-ipad.access', 'seed-token-ipad', 1793700000000, NULL),
@@ -14,9 +14,9 @@ INSERT INTO relay_notes
   (id, device_id, source, delivery_id, client_id, text, audio_key, recorded_at, lat, lon, accuracy, place, place_from, created_at)
 VALUES
   ('a0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000002', 'ring', 'seed-delivery-0001', NULL,
-   'Call the PCB fab about the second batch.', NULL, 1793797260000, 43.6629, -79.3957, 15, 'Harbord St', 'history', 1793797262000),
+   'Call the PCB fab about the second batch.', NULL, 1793797260000, NULL, NULL, NULL, NULL, NULL, 1793797262000),
   ('a0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000001', 'typed', NULL, 'seed-note-0001',
-   'Lunch idea: test the ring on the streetcar.', NULL, 1793811700000, 43.6487, -79.3817, 12, 'King St W', 'phone', 1793811705000),
+   'Lunch idea: test the ring on the streetcar.', NULL, 1793811700000, NULL, NULL, NULL, NULL, NULL, 1793811705000),
   ('a0000000-0000-4000-8000-000000000003', 'd0000000-0000-4000-8000-000000000002', 'ring', 'seed-delivery-0002', NULL,
    'Buy milk and batteries.', NULL, 1793829500000, NULL, NULL, NULL, NULL, NULL, 1793829502000);
 -- The typed lunch note's photo, stored: its bytes went to every webhook as note.file.

@@ -84,7 +84,6 @@ class ShortcutsBridge {
     'id': note.clientId,
     'text': note.text,
     'createdAt': note.createdAt.millisecondsSinceEpoch,
-    'place': note.pin?.place,
     'kind': note.kind.name,
     'files': [
       for (final file in note.attachments) {'path': relay.fullPath(file.path), 'name': file.name, 'type': file.type},

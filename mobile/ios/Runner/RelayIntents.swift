@@ -209,9 +209,6 @@ struct RelayNoteEntity: AppEntity {
   @Property(title: "Time")
   var createdAt: Date
 
-  @Property(title: "Place")
-  var place: String?
-
   @Property(title: "Kind")
   var kind: String
 
@@ -222,11 +219,10 @@ struct RelayNoteEntity: AppEntity {
     DisplayRepresentation(title: "\(text.isEmpty ? "\(files.count) files" : text)")
   }
 
-  init(id: String, text: String, createdAt: Date, place: String?, kind: String, files: [IntentFile]) {
+  init(id: String, text: String, createdAt: Date, kind: String, files: [IntentFile]) {
     self.id = id
     self.text = text
     self.createdAt = createdAt
-    self.place = place
     self.kind = kind
     self.files = files
   }
@@ -242,7 +238,7 @@ struct RelayNoteEntity: AppEntity {
       return IntentFile(fileURL: url, filename: file["name"] as? String ?? url.lastPathComponent, type: type)
     }
     self.init(id: id, text: note["text"] as? String ?? "", createdAt: Date(timeIntervalSince1970: milliseconds / 1000),
-      place: note["place"] as? String, kind: note["kind"] as? String == "voice" ? "Voice" : "Typed", files: files)
+      kind: note["kind"] as? String == "voice" ? "Voice" : "Typed", files: files)
   }
 }
 
@@ -485,7 +481,7 @@ struct AddNoteIntent: AppIntent {
       // note the engine saved late from being kept twice.
       try ShortcutsInbox.leave(request, id: id)
       let entity = RelayNoteEntity(
-        id: id, text: words, createdAt: createdAt, place: nil, kind: durationMs == nil ? "Typed" : "Voice",
+        id: id, text: words, createdAt: createdAt, kind: durationMs == nil ? "Typed" : "Voice",
         files: list.compactMap { file in
           (file["path"] as? String).map { IntentFile(fileURL: RelayFolders.url($0), filename: file["name"] as? String) }
         })
@@ -500,7 +496,7 @@ struct AddNoteIntent: AppIntent {
 struct GetNotesIntent: AppIntent {
   static var title: LocalizedStringResource = "Get notes"
   static var description = IntentDescription(
-    "Gives the notes on this phone to the next step, newest first: their words, time, place and files. It sends nothing.")
+    "Gives the notes on this phone to the next step, newest first: their words, time and files. It sends nothing.")
   static var openAppWhenRun = false
 
   @Parameter(title: "How many", default: 10)

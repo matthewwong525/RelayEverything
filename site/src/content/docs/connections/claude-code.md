@@ -83,7 +83,7 @@ Once a day, your own AI builds your memory and your knowledge web on this comput
 - **A helper writes your topic pages, side by side.** It sums up each topic's facts, splits a big topic into smaller linked pages, links topics that share a fact, a note or a chat, and keeps `README.md` current. When it makes a new topic, it looks back for older facts and notes that fit.
 - **Your past fills in a part each day.** Each build reads the newest unread chats and notes first: at most 20 chats and 100 notes. A record of what was read stays in your web, in `.relay/`, so nothing is read twice, on any of your computers.
 - **One computer builds each day.** With two computers, the first to claim the day in your web builds, and the other stops.
-- **Health and places stay where they are.** The build has no command that reads your health, places, calendar or photos. A note's place does not reach it. A page links the day, and the AI reads that day only when you ask.
+- **Health and places stay where they are.** The build has no command that reads your health, places, calendar or photos. A note keeps no place. A page links the day, and the AI reads that day only when you ask.
 
 The build runs in the app the chat started in, Claude Code or Codex, on your own plan: it uses your allowance, as a chat does. It stops after 30 minutes, and the next day goes on from what it read. To use a smaller model for it, set `RELAY_BUILD_MODEL`, such as `RELAY_BUILD_MODEL=haiku`. The build's own chat is not saved.
 

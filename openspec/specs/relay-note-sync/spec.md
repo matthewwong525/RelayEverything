@@ -15,7 +15,7 @@ While sending is on and Relay Everything is picked, the phone app SHALL get ever
 
 #### Scenario: A new phone
 - **WHEN** a person signs in on a new phone that has 300 notes in its space
-- **THEN** the phone lists all 300 notes, with the words, place and file list of each
+- **THEN** the phone lists all 300 notes, with the words and file list of each
 
 ### Requirement: Any note changes on any phone, and the newer change wins
 

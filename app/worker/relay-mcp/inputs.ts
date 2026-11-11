@@ -31,7 +31,7 @@ export const TOOLS = {
   search: {
     title: "Search notes",
     description: "Find notes whose text holds every word of the query, in any case, or that carry a topic, newest first, with each " +
-      "note's time and place. Give `query`, `tag` or both.",
+      "note's time. A note has no place: read places by its time. Give `query`, `tag` or both.",
     input: { query: query.optional(), tag: tag.optional(), from: when("Only notes from this time").optional(), to: when("Only notes before this time").optional(),
       source: z.enum(["ring", "typed"]).optional().describe("Only older recorded notes, or only typed ones."),
       limit: z.number().int().min(1).max(50).default(20).describe("How many notes, at most 50."), cursor, timezone: zone },
@@ -43,7 +43,7 @@ export const TOOLS = {
   },
   timeline: {
     title: "Read notes in a time range",
-    description: "Read every note from one time to another, newest first, a page at a time, with each note's time and place.",
+    description: "Read every note from one time to another, newest first, a page at a time, with each note's time. A note has no place: read places by its time.",
     input: { from: when("The first time"), to: when("The time to stop before"),
       limit: z.number().int().min(1).max(100).default(50).describe("How many notes, at most 100."), cursor, timezone: zone },
   },
@@ -160,10 +160,10 @@ export const TOOLS = {
     input: { clientId: z.string().regex(/^[A-Za-z0-9-]{8,64}$/)
       .describe("Your own id for this note, 8 to 64 letters, digits or dashes, such as a new UUID, so a resend is stored once."),
     text: z.string().min(1).max(20_000).describe("What the note says."), createdAt: when("When it was written; now when left out").optional(),
-    lat: latitude.optional().describe("Where it was written: latitude. Send it with lon."),
+    lat: latitude.optional().describe("Where it was written: latitude. Send it with lon. The place becomes one point of location history at the note's time, not part of the note."),
     lon: longitude.optional().describe("Where it was written: longitude. Send it with lat."),
     accuracy: accuracy.optional().describe("How sure you are of the place, in meters."),
-    place: placeName.optional().describe("The place's name, such as a street."), timezone: zone },
+    place: placeName.optional().describe("The place's name, such as a street, kept on its location point."), timezone: zone },
   },
 } satisfies Record<string, { title: string; description: string; input: z.ZodRawShape }>;
 

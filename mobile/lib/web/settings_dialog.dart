@@ -33,7 +33,7 @@ enum SettingsPage {
       SettingsRow.account => account,
       SettingsRow.appearance => appearance,
       // The browser shows no phone-only row.
-      SettingsRow.notes || SettingsRow.voice || SettingsRow.version => throw StateError('${row.name} is phone-only'),
+      SettingsRow.voice || SettingsRow.version => throw StateError('${row.name} is phone-only'),
     },
   ];
 

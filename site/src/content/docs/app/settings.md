@@ -5,7 +5,7 @@ description: Each setting in the Relay Everything app, and what it does.
 
 Open **Settings** with the round gear button at the top right of Home. Tap **Home** at the top left to go back. Each switch acts at once, and asks for its permission only when you turn it on. On a new phone, you are signed out and every switch is off: your notes stay on the phone, and the app sends nothing.
 
-Settings starts with the [Account](#account) card, as the Apple Account row on an iPhone. Then it has three groups: **Appearance**, **Notes** and **Voice notes**. At the bottom, it shows the [version](#version) of the app. Settings on your Relay Everything page has the same account card and **Appearance**: [Settings on your Relay Everything page](#settings-on-your-relay-everything-page). Each kind of phone data has its own folder on Home: [Health, Calendar, Location and Photos](#health-calendar-location-and-photos). The website's pages, linked below, give the details.
+Settings starts with the [Account](#account) card, as the Apple Account row on an iPhone. Then it has two groups: **Appearance** and **Voice notes**. At the bottom, it shows the [version](#version) of the app. Settings on your Relay Everything page has the same account card and **Appearance**: [Settings on your Relay Everything page](#settings-on-your-relay-everything-page). Each kind of phone data has its own folder on Home: [Health, Calendar, Location and Photos](#health-calendar-location-and-photos). The website's pages, linked below, give the details.
 
 ## Account
 
@@ -57,7 +57,7 @@ Everything else goes to Relay Everything.
 Signed in, you can keep your personal data off Relay Everything and still sync your notes. On the **Account** page, under **Advanced**, open **Webhooks** and turn on **Only to my own webhook**:
 
 - The phone sends health samples, location points, calendar events and new photos straight to [your own webhook](../../connections/your-database/#send-from-the-phone). Relay Everything never gets them.
-- Your notes, their files and a note's pinned place still sync through Relay Everything.
+- Your notes and their files still sync through Relay Everything. A note keeps no place: where you made it is a location point, and goes to your webhook.
 - With no webhook on the phone, the switch first opens the webhook's setup: [the four steps](../../connections/your-database/#send-from-the-phone). Go back to change nothing. A webhook you added on your Relay Everything page does not count, because the server never gives its secret to a phone.
 - **Webhooks** then shows the webhook's address, **Send a test**, and its last failure, if any.
 - What already went to Relay Everything stays in your space. To delete it, [delete your account](../../start/sign-up/#delete-your-account), or [delete all photos](../photos/#delete-all-photos).
@@ -79,12 +79,6 @@ Pick how the app looks:
 | **Dark** | Keeps the app dark, also when the phone is in light mode. |
 
 The phone remembers your choice. The share card from other apps follows the phone's own setting.
-
-## Notes
-
-| Setting | What it does |
-|---|---|
-| **Pin notes to where I am** | Each typed note keeps where you were. It works with no signal. [Location](../location/#pin-notes-to-where-i-am) |
 
 ## Voice notes
 

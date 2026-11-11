@@ -23,7 +23,8 @@ appId: com.matthewwong525.relayApp
     visible: 'No notes yet(.|\n)*'
     timeout: 30000
 # With sending off, the line under the title gives the count alone: no state, and no Sync now.
-- assertVisible: "No notes"
+# The title and its line read as one label: "Notes", then "No notes".
+- assertVisible: 'Notes\nNo notes'
 - assertNotVisible: '(.|\n)*On this phone(.|\n)*'
 - assertNotVisible: "Sync now"
 - assertVisible: "New note"

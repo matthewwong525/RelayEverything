@@ -28,7 +28,7 @@
 
 - [x] 5.1 Add one sentence for the scrolled row to the *Notes* bullet of `mobile/README.md`. Update `site/src/content/docs/app/your-notes.md`, `voice-notes.md`, `on-a-computer.md`, `shortcuts.md` and `settings.md` for one list with filters, the player, the quiet status, and notes that send by themselves with no *Sync now* or *Send now*; check with `node scripts/product-name.test.mjs`
 - [x] 5.2 Update `wiki/brand.md`: the *One bright thing* rule without the *Voice* and *Typed* tags (a voice row's microphone is accent text), and the *Words with every color* rule with no *Synced* or *On this phone*; update `brand_test.dart` if it reads the tag colors
-- [ ] 5.3 Write `mobile/device-check/flows/notes-filters.yaml`: open *Notes*, tap *Voice* and *Photos and files* and back to *All*, write a note, and see its row; run it in the simulator if Maestro is here, else name it with `--flows notes-filters` in the device check
+- [x] 5.3 Write `mobile/device-check/flows/notes-filters.yaml`: open *Notes*, tap *Voice* and *Photos and files* and back to *All*, write a note, and see its row; run it in the simulator if Maestro is here, else name it with `--flows notes-filters` in the device check
 
 ## 6. Checks
 

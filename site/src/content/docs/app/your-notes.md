@@ -33,7 +33,7 @@ Tap **Notes**, **Voice notes** or **Shares** on Home. The folder shows its notes
 
 - The note's first line, in bold, without its style marks. A voice note shows **Writing the words…** until the phone writes them. [Voice notes](../voice-notes/)
 - The time, then the rest of the words. Today and yesterday show the time, this week the day, and older notes the date. A note from somewhere else also shows where it came from, such as *8:02 · Email*.
-- **Voice** or **Typed**: how you made the note. Then the length of a voice note, and where you were. With sending off, a pinned note shows **Pinned**: the phone does not look up the place's name.
+- **Voice** or **Typed**: how you made the note. Then the length of a voice note. A note keeps no place: with **Location history** on, where you made it is a point in your [location history](../location/#where-you-made-a-note).
 - With sending on, **Sent** or **Waiting to send**. **Sent** means your server has the note. **Waiting to send** means the note goes on the next sync.
 - The first picture, small, at the right. [Add photos and files](#add-photos-and-files)
 
@@ -154,7 +154,7 @@ On a computer, open the same address. The page is the same app as on your phone,
 2. Type the note. The keyboard opens at once. The first line is the note's title.
 3. Tap **‹** to go back. The phone keeps the note as you type, so you do not save it.
 
-The note shows at once, with or without a signal. With **Pin notes to where I am** on, it keeps where you are; the pin follows when the phone has a fix. With sending on, the note also goes to your server. If the phone sends a note two times, for example after it lost the server's answer, your server keeps it one time.
+The note shows at once, with or without a signal. With **Location history** on, the phone adds one point to your location history at the note's time, when it has a fix: [Where you made a note](../location/#where-you-made-a-note). With sending on, the note also goes to your server. If the phone sends a note two times, for example after it lost the server's answer, your server keeps it one time.
 
 ## Add photos and files
 

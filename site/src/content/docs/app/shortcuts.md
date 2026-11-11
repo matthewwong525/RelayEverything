@@ -19,7 +19,7 @@ You can also tell Siri. [Take a note with Siri](#take-a-note-with-siri)
 
 **Add a note** keeps a note with words, files, or both. Give it typed words, a photo, a screenshot, a PDF, a link, the clipboard, or the output of the step before. It runs without opening the app.
 
-- The note is kept on the phone at once. With **Pin notes to where I am** on, it keeps where you are, the same as a note you type.
+- The note is kept on the phone at once. With **Location history** on, it adds one point to your location history at its time, the same as a note you type. [Location](../location/#where-you-made-a-note)
 - A note holds up to 10 files, each up to 25 MB. The action refuses a file over 25 MB, or an eleventh file, with a message, and keeps the rest. [Notes](../your-notes/#add-photos-and-files)
 - With no words and no files, the action asks *What's the note?* and keeps your answer. In an automation that runs on its own, no one can answer, so the action stops with a message and keeps nothing.
 - The action gives the new note back, so the next step can use it.

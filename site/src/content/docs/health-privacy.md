@@ -17,7 +17,7 @@ Only the types you allow, and only while you are signed in and the part's own sw
 
 - **Health:** steps, heart rate, sleep, workouts, weight, resting heart rate, heart rate variability, blood oxygen, blood pressure, cycle, mindful minutes and water. [Health](../app/health/#what-it-reads) says what the app reads.
 - **Location history:** a point each 100 m you move. [Location](../app/location/#location-history) says how it works.
-- **A note's place:** where you were when you saved a note, if you turn on **Pin notes to where I am**.
+- **Where you made a note:** while **Location history** is on, each note you make adds one point to the history at its time. A note keeps no place of its own. [Location](../app/location/#where-you-made-a-note)
 
 Health notes that you type yourself are notes, and the [Privacy policy](../privacy-policy/) covers them.
 

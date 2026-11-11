@@ -34,7 +34,7 @@ Open the app once after you install it or update it, before the first share.
 
 A photo you share becomes a file on its note, and goes where your notes go. To send each new photo you take, with no note, so your AI can see it, turn on **Photos** instead: [Photos](../photos/).
 
-A shared note has no place, even with **Pin notes to where I am** on: you shared it, you did not make it there. It shows **Typed** in your notes.
+A shared note adds no point to your location history, even with **Location history** on: you shared it, you did not make it there. It shows **Typed** in your notes.
 
 ## The limits
 

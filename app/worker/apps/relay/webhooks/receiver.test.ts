@@ -33,15 +33,15 @@ afterAll(() => {
 
 const device = { device_id: "d0000000-0000-4000-8000-000000000002", device_name: "iPad" };
 const ring: NoteRow = { id: "a0000000-0000-4000-8000-000000000001", source: "ring", text: "Call the PCB fab about the second batch.",
-  recorded_at: Date.UTC(2026, 10, 4, 14, 1), created_at: Date.UTC(2026, 10, 4, 14, 1, 2), ...device, lat: null, lon: null, accuracy: null,
-  place: null, place_from: null, audio_key: "notes/a0000000-0000-4000-8000-000000000001.m4a" };
+  recorded_at: Date.UTC(2026, 10, 4, 14, 1), created_at: Date.UTC(2026, 10, 4, 14, 1, 2), ...device,
+  audio_key: "notes/a0000000-0000-4000-8000-000000000001.m4a" };
 const send = (body: object, key = secret) => post(`${address}/`, key, `msg_${Math.random()}`, JSON.stringify(body));
 
 it("saves what Relay sends, once each, and refuses a message signed with another secret", async () => {
-  const placed = { ...ring, lat: 43.6629, lon: -79.3957, accuracy: 15, place: "Harbord St", place_from: "history" as const };
+  const changed = { ...ring, text: "Call the PCB fab about the third batch." };
   const at = Date.now();
   const messages = [noteCreated(ring, base64(new Uint8Array([0, 0, 0, 24])), at), noteCreated(ring, base64(new Uint8Array([0, 0, 0, 24])), at),
-    noteUpdated(placed, at), webhookTest({ id: "hook", name: "Mine" }, at),
+    noteUpdated(changed, at), webhookTest({ id: "hook", name: "Mine" }, at),
     healthSamples([{ id: 2, ...device, type: "steps", start_at: at, end_at: at + 1000, value: 5210, unit: "count", source: "fitness" },
       { id: 4, ...device, type: "workout", start_at: at, end_at: at + 1_920_000, value: 32, unit: "min", source: "watch", kind: "running",
         distance: 5100, calories: 410 }], at),
@@ -60,8 +60,9 @@ it("saves what Relay sends, once each, and refuses a message signed with another
   expect((await send(messages[0], newSecret())).status).toBe(401);
   expect((await fetch(address)).status).toBe(401);
   const saved = new DatabaseSync(database, { readOnly: true });
-  expect(saved.prepare("SELECT id, place, lat, hex(audio) AS audio FROM notes").all().map(row => ({ ...row }))).toEqual([
-    { id: ring.id, place: "Harbord St", lat: 43.6629, audio: "00000018" }]);
+  // A note has no place: the receiver keeps its place columns, written null, so a database made before still opens.
+  expect(saved.prepare("SELECT id, text, place, lat, hex(audio) AS audio FROM notes").all().map(row => ({ ...row }))).toEqual([
+    { id: ring.id, text: changed.text, place: null, lat: null, audio: "00000018" }]);
   expect(saved.prepare("SELECT id, type, value FROM health_samples").all().map(row => ({ ...row }))).toEqual([{ id: 2, type: "steps", value: 5210 },
     { id: 4, type: "workout", value: 32 }]);
   expect(saved.prepare("SELECT id, kind, distance, calories FROM workouts").all().map(row => ({ ...row }))).toEqual([

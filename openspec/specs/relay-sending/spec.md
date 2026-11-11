@@ -42,8 +42,8 @@ A newly installed Relay phone app SHALL let the person write and read notes with
 - **THEN** the note is saved and shown in the timeline, and the app asks for no key
 
 #### Scenario: A week of notes with sending off
-- **WHEN** the person writes notes, pins them, and opens Settings with sending off
-- **THEN** the app sends nothing to any server and looks up no place names
+- **WHEN** the person writes notes and opens Settings with sending off
+- **THEN** the app sends nothing to any server, reads no place and looks up no place names
 
 #### Scenario: Voice notes with sending off
 - **WHEN** sending is off and the person agrees to get the speech model, then makes voice notes

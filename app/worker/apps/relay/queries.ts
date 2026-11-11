@@ -9,26 +9,22 @@ export type HealthType = (typeof HEALTH_TYPES)[number];
 /** A span from its first millisecond to the first one after it. */
 export type Span = [number, number];
 
-// lat, lon and place_from are set together: notes.ts takes lat and lon as a pair. A stored ring note may hold a place
-// from location history, from before that was removed.
-type Row = { id: string; source: "ring" | "typed"; text: string; recorded_at: number; device: string; audio: number;
-  lat: number | null; lon: number | null; accuracy: number | null; place: string | null; place_from: "phone" | "history" | null;
-  files: string };
+// A note has no place: relay_notes keeps its place columns empty (0017_note_places.sql); a reader finds places by time.
+type Row = { id: string; source: "ring" | "typed"; text: string; recorded_at: number; device: string; audio: number; files: string };
 
 /** A note's file: `ready` once the phone has sent its bytes, which GET attachment then opens. */
 export type NoteFile = { id: string; name: string; type: string; size: number; ready: boolean };
 
 const shaped = (row: Row) => ({ id: row.id, source: row.source, text: row.text, recordedAt: row.recorded_at, device: row.device,
-  audio: row.audio === 1, place: row.lat === null ? null :
-    { lat: row.lat, lon: row.lon!, accuracy: row.accuracy, name: row.place, from: row.place_from! },
+  audio: row.audio === 1,
   attachments: (JSON.parse(row.files) as (Omit<NoteFile, "ready"> & { ready: number })[]).map(file => ({ ...file, ready: file.ready === 1 })) });
 
 export type Note = ReturnType<typeof shaped>;
 
 const FILES = `(SELECT json_group_array(json_object('id', a.id, 'name', a.name, 'type', a.content_type, 'size', a.size,
   'ready', a.file_key IS NOT NULL)) FROM (SELECT * FROM relay_attachments WHERE note_id = n.id ORDER BY rowid) a) AS files`;
-const COLUMNS = `n.id, n.source, n.text, n.recorded_at, d.name AS device, n.audio_key IS NOT NULL AS audio, n.lat, n.lon,
-  n.accuracy, n.place, n.place_from, ${FILES}`;
+const COLUMNS = `n.id, n.source, n.text, n.recorded_at, d.name AS device, n.audio_key IS NOT NULL AS audio,
+  ${FILES}`;
 const NOTE = `SELECT ${COLUMNS} FROM relay_notes n JOIN relay_devices d ON d.id = n.device_id`;
 
 export type NoteFilter = { before?: number; beforeId?: string; after?: number; source?: "ring" | "typed"; words?: string[]; tag?: string; limit: number };

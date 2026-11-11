@@ -9,8 +9,8 @@ Relay Everything keeps your notes on your phone. When you turn on sending, it ke
 
 | What | Where | Sent when |
 |---|---|---|
-| Typed notes, with their pin | The phone's own storage, always | Never, while sending is off |
-| Typed notes, with their place | Your space on your Relay Everything server | With sending on: each time you save a note. Notes from before go only if you tap **Send them**. |
+| Typed notes | The phone's own storage, always | Never, while sending is off |
+| Typed notes | Your space on your Relay Everything server | With sending on: each time you save a note. Notes from before go only if you tap **Send them**. |
 | Files on a note: photos, PDFs and other files | The phone's own storage, always. iPhone backups keep them; Android cloud backup leaves them out. With sending on, also your space's folder of the file store, sealed. | With sending on: after their note. Files of earlier notes go only if you tap **Send them**. |
 | Notes you share from another app, with their files | The phone's own storage, always, with no place | With sending on: when you tap **Save** on the share card, or the next time the app opens |
 | Voice notes from the app: the recording | The phone's own storage, only. iCloud and Google backups leave it out. | Never |
@@ -57,7 +57,7 @@ On your Relay Everything page, open **Settings**, then **Account**, click **Dele
 ## What is not kept
 
 - The Relay Everything app has no ads and no analytics. It sends your notes, their files, health, calendar events, places and photos only to the places you pick, and only with sending on. Your notes go to your Relay Everything server or your own webhook. Your health, calendar events, places and photos go where your notes go, or only to your own webhook: [Settings](../app/settings/#health-places-calendar-and-photos-only-to-your-webhook). Your server sends them on only to your webhooks, and sends a note's file's name, type and size, never the file.
-- To name a place, such as a street, the phone uses its own address lookup from Apple or Google, only with sending on. That lookup gets the place's coordinates, not the note. With sending off, a pinned note shows **Pinned**.
+- To name a place, such as a street, the phone uses its own address lookup from Apple or Google, only with sending on. That lookup gets the place's coordinates, not the note. A note keeps no place: with **Location history** on, where you made it is a point in your location history.
 - To name a stay, the phone reads your calendar on the phone, then asks Apple Maps (on an iPhone) and the address lookup one time for that stay, only with sending on. They get the stay's coordinates, not your history. A calendar event's place goes to the address lookup too, to find where it is.
 - The phone reads motion, such as walking or driving, only to tell how you moved on a trip. Motion stays on the phone: only the trip's mode is sent. The app reads no steps from motion: steps come only from **Health**.
 - The phone writes a voice note's words itself. No speech service on a network hears your voice.
@@ -71,7 +71,6 @@ On your Relay Everything page, open **Settings**, then **Account**, click **Dele
 | Everything sent | Tap **Sign out**, or **Stop sending** for your own webhook, on the app's [Account](../app/settings/#account) page. Health, the calendar, location and photos stop, and what of them did not go yet is deleted. |
 | A note | [Delete it](../app/your-notes/#delete-a-note) with a swipe or **⋯** → **Delete**. With sending on, your server deletes the note, its files and its recording too, and each webhook gets `note.deleted`. A copy your webhook already saved stays in your own database until your receiver deletes it. |
 | Voice notes | Do not tap **Get it**, or tap **Remove** in Settings to delete the speech model. Delete a recording by deleting its note, or by removing the app. |
-| Pins on typed notes | Turn off **Pin notes to where I am** in Settings. |
 | Location history | Turn off **Location history** in the app's **Location** folder. |
 | Photos | Turn off **Photos** in the app's **Photos** folder: the copies that did not go yet are deleted. To delete the photos already sent, click **Delete all photos** on your Relay Everything page: [Photos](../app/photos/#delete-all-photos). |
 | Health | Turn off **Health** in the app's **Health** folder, and take back the permission in Apple Health or Health Connect. To keep one type back, such as cycle, turn off only that type there. |

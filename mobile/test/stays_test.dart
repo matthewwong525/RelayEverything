@@ -499,6 +499,8 @@ void main() {
         for (final statement in [
           "CREATE TABLE outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, destination TEXT NOT NULL DEFAULT 'relay-server', "
             'route TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL)',
+          'CREATE TABLE notes (client_id TEXT PRIMARY KEY, body TEXT NOT NULL, words_pending INTEGER NOT NULL DEFAULT 0, '
+            'pinning INTEGER NOT NULL DEFAULT 0, sent_at INTEGER, queued INTEGER NOT NULL DEFAULT 0)',
           'CREATE TABLE points (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
           'CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
         ]) {

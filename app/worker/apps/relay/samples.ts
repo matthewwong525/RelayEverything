@@ -66,7 +66,7 @@ export const health = batch("samples", "health", z.array(sample).min(1).max(BATC
   saveSamples);
 
 export const locations = batch("points", "locations", z.array(point).min(1).max(BATCH),
-  "Store the phone's location history, once per time. A note keeps the place it came with: a point gives no note a place.",
+  "Store the phone's location history, once per time. A note keeps no place: a place sent with a note becomes one point at the note's time.",
   async (db, device, rows) => counted(await insertNew(db, `INSERT INTO relay_locations (device_id, at, lat, lon, accuracy, place, created_at)
     SELECT ?, ${["at", "lat", "lon", "accuracy", "place"].map(field).join(", ")}, ? FROM json_each(?) WHERE true
     ON CONFLICT (device_id, at) DO NOTHING RETURNING id`, device, Date.now(), JSON.stringify(rows))));

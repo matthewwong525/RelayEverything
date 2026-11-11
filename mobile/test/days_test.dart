@@ -27,14 +27,13 @@ void main() {
       ['Today 2', 'Yesterday 1', 'Previous 7 days 1']);
   });
 
-  test('search finds words, the place and file names, in any case', () {
-    final note = Entry(text: 'Paint colours for the hall', at: now, place: 'Home',
+  test('search finds words and file names, in any case, and never a place', () {
+    final note = Entry(text: 'Paint colours for the hall', at: now,
       files: const [EntryFile(name: 'Swatches.pdf', type: 'application/pdf', size: 1, path: '/nowhere/Swatches.pdf')]);
-    for (final words in ['PAINT', 'hall', 'home', 'swatches', '  colours  ', '']) {
+    for (final words in ['PAINT', 'hall', 'swatches', '  colours  ', '']) {
       expect(entryMatches(note, words), isTrue, reason: words);
     }
-    expect(entryMatches(note, 'dentist'), isFalse);
-    expect(entryMatches(Entry(text: 'No place', at: now), 'home'), isFalse);
+    expect([entryMatches(note, 'dentist'), entryMatches(note, 'home')], [false, false]);
   });
 
   test('says Sent, Waiting to send, or nothing', () {

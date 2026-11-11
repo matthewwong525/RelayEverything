@@ -91,7 +91,7 @@ it("answers what the person decided from the live facts, reads a replaced one, a
 it("finds notes holding every word, in any case, with a title and the time in the zone", async () => {
   expect(await ask("search", { query: "milk" })).toEqual({ nextCursor: null, notes: [{ id: ID(3), source: "ring",
     text: "Buy milk and batteries.", title: "Buy milk and batteries.", recordedAt: "2026-11-04T16:58:20-05:00", device: "iPad",
-    audio: false, place: null, attachments: [] }] });
+    audio: false, attachments: [] }] });
   expect(ids(await ask("search", { query: "the" }))).toEqual([ID(2), ID(1)]);
   expect(ids(await ask("search", { query: "THE ring" }))).toEqual([ID(2)]);
   expect(ids(await ask("search", { query: "the", source: "ring" }))).toEqual([ID(1)]);
@@ -123,9 +123,11 @@ it("never reads past `to`, even with a cursor from a later page", async () => {
   expect(ids(await ask("search", { query: "the", to: "2026-11-04T12:00", cursor: later }))).toEqual([ID(1)]);
 });
 
-it("reads one note with the places near it and its day's health", async () => {
-  expect(await ask("fetch", { id: ID(1) })).toMatchObject({ id: ID(1), title: "Call the PCB fab about the second batch.",
-    place: { name: "Harbord St", from: "history" }, placesNearby: [harbord], day: { day: "2026-11-04", ...day } });
+it("reads one note with no place of its own, the places near it by time and its day's health", async () => {
+  const note = await ask("fetch", { id: ID(1) });
+  expect(note).toMatchObject({ id: ID(1), title: "Call the PCB fab about the second batch.", placesNearby: [harbord],
+    day: { day: "2026-11-04", ...day } });
+  expect(note).not.toHaveProperty("place");
   expect(await ask("fetch", { id: ID(9) })).toEqual({ refused: "No note has this id." });
 });
 
@@ -363,9 +365,14 @@ it("adds a note as the app's own device, once on a resend, and wakes the webhook
   expect(sql.prepare("SELECT name, token_client_id, reaches, created_at, revoked_at FROM relay_devices WHERE id = ?").get(GRANT.deviceId!))
     .toEqual({ name: "Claude", token_client_id: `app:${GRANT.deviceId}`, reaches: "app", created_at: NOW, revoked_at: null });
   expect(await ask("fetch", { id: first.id })).toMatchObject({ text: "Order the second PCB batch.", source: "typed", device: "Claude",
-    recordedAt: "2026-11-04T18:00:00-05:00", place: null });
+    recordedAt: "2026-11-04T18:00:00-05:00" });
+  // A place sent with a note becomes one point of the app's device at the note's time, which fetch finds by time.
   const placed = await ask("add_note", { clientId: "claude-note-0002", text: "At the fab.", lat: 43.65, lon: -79.38, place: "King St W" });
-  expect(await ask("fetch", { id: placed.id })).toMatchObject({ recordedAt: "2026-11-05T09:00:00-05:00", place: { name: "King St W", from: "phone" } });
+  const fetched = await ask("fetch", { id: placed.id });
+  expect(fetched).toMatchObject({ recordedAt: "2026-11-05T09:00:00-05:00", placesNearby: [{ name: "King St W", lat: 43.65, lon: -79.38 }] });
+  expect(fetched).not.toHaveProperty("place");
+  expect(sql.prepare("SELECT device_id, at, accuracy, place FROM relay_locations WHERE place = 'King St W' AND at = ?").all(NOW))
+    .toEqual([{ device_id: GRANT.deviceId, at: NOW, accuracy: 0, place: "King St W" }]);
   expect(await ask("add_note", { clientId: "claude-note-0003", text: "Where?", lat: 43.65 })).toEqual({ refused: "Send lat and lon together." });
   expect(await ask("add_note", { clientId: "claude-note-0003", text: "When?", createdAt: "yesterday" }))
     .toEqual({ refused: "Give `createdAt` as a day or an ISO time." });

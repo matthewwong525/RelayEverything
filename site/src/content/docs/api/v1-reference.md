@@ -37,10 +37,10 @@ Add a typed note, with this key's or app's name as its device, and send it on to
 | `clientId` | body | string | yes | Your own id for this note, 8 to 64 letters, digits or dashes, such as a new UUID, so a resend is stored once. |
 | `text` | body | string | yes | What the note says. |
 | `createdAt` | body | string | no | When it was written; now when left out: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset. |
-| `lat` | body | number | no | Where it was written: latitude. Send it with lon. |
+| `lat` | body | number | no | Where it was written: latitude. Send it with lon. The place becomes one point of location history at the note's time, not part of the note. |
 | `lon` | body | number | no | Where it was written: longitude. Send it with lat. |
 | `accuracy` | body | number | no | How sure you are of the place, in meters. |
-| `place` | body | string | no | The place's name, such as a street. |
+| `place` | body | string | no | The place's name, such as a street, kept on its location point. |
 | `timezone` | body | string | no | An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out. |
 
 ## Read one note

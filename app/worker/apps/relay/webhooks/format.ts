@@ -11,16 +11,11 @@ const device = z.strictObject({
   id: z.string().describe("The device key's id in Relay Everything, or the phone's own install id when the phone sends to its own webhook."),
   name: z.string() })
   .describe("The phone or other device that sent the item.");
-const place = z.strictObject({
-  lat: z.number(), lon: z.number(), accuracy: z.number().nullable().describe("In meters."),
-  name: z.string().nullable().describe("The place's name from the phone's address lookup, such as a street."),
-  from: z.enum(["phone", "history"]).describe("phone: where a typed note was written. history: the location point nearest an older recorded note."),
-});
 const note = z.strictObject({
   id: z.string().describe("The note's id, the same in every message about this note: a UUID, or the phone's own note id when the phone sends to its own webhook."),
   source: z.enum(["ring", "typed"]), text: z.string().describe("The words: a typed note, or an older recorded note's transcription."),
-  recorded_at: iso, created_at: iso.describe("When Relay Everything stored it."), device, place: place.nullable(),
-});
+  recorded_at: iso, created_at: iso.describe("When Relay Everything stored it."), device,
+}).describe("A note has no place: a webhook ticked for location gets where you were as location points, found by the note's time.");
 const audio = z.strictObject({ content_type: z.literal("audio/mp4"), base64: z.string() }).nullable()
   .describe("An older recorded note's recording, or null for a typed note or an older recorded note with words only.");
 const attachment = z.strictObject({
@@ -116,8 +111,7 @@ type Message = z.infer<typeof message>;
 
 /** Each row as Relay's tables hold it, with its device's name. */
 export type NoteRow = { id: string; source: "ring" | "typed"; text: string; recorded_at: number; created_at: number; device_id: string;
-  device_name: string; lat: number | null; lon: number | null; accuracy: number | null; place: string | null;
-  place_from: "phone" | "history" | null; audio_key: string | null; edited_at?: number | null };
+  device_name: string; audio_key: string | null; edited_at?: number | null };
 export type AttachmentRow = { id: string; name: string; content_type: string; size: number };
 export type HealthRow = { id: number; device_id: string; device_name: string; type: HealthType;
   start_at: number; end_at: number; value: number; unit: string; source: string;
@@ -139,10 +133,8 @@ export type PhotoRow = { id: string; device_id: string; device_name: string; tak
 const isoOf = (ms: number) => new Date(ms).toISOString();
 const deviceOf = (row: { device_id: string; device_name: string }) => ({ id: row.device_id, name: row.device_name });
 
-// lat, lon and place_from are stored together: the first version's migration checks it.
 const noteOf = (row: NoteRow) => ({ id: row.id, source: row.source, text: row.text, recorded_at: isoOf(row.recorded_at),
-  created_at: isoOf(row.created_at), device: deviceOf(row), place: row.lat === null ? null :
-    { lat: row.lat, lon: row.lon!, accuracy: row.accuracy, name: row.place, from: row.place_from! } });
+  created_at: isoOf(row.created_at), device: deviceOf(row) });
 
 const wrap = <Built extends Message>(type: Built["type"], data: Built["data"], at: number) =>
   ({ version: 1, type, timestamp: isoOf(at), data }) as Built;

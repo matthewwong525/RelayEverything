@@ -221,14 +221,12 @@ class WebRelay extends Relay {
   /// The screens' row for a note from `GET notes`, with the routes that read its files and recording.
   Entry entryOf(Map<String, dynamic> json, String id) {
     final serverId = json['id'] as String;
-    final place = json['place'];
     final ring = json['source'] == 'ring';
     final audio = json['audio'] == true;
     return Entry(
       id: id,
       text: json['text'] as String? ?? '',
       at: DateTime.fromMillisecondsSinceEpoch(json['recordedAt'] as int),
-      place: place is Map ? place['name'] as String? : null,
       sent: true,
       voice: ring || audio,
       recording: audio ? client.api('audio', {'id': serverId}).toString() : null,
@@ -453,7 +451,7 @@ class WebRelay extends Relay {
   }
 
   static Entry _copy(Entry entry, {String? text, List<EntryFile>? files, bool? waiting}) => Entry(id: entry.id,
-    text: text ?? entry.text, at: entry.at, place: entry.place, sent: entry.sent, waiting: waiting ?? entry.waiting,
+    text: text ?? entry.text, at: entry.at, sent: entry.sent, waiting: waiting ?? entry.waiting,
     voice: entry.voice, recording: entry.recording, length: entry.length, files: files ?? entry.files, from: entry.from);
 
   @override
@@ -619,7 +617,6 @@ class WebRelay extends Relay {
   @override Future<String?> setLocationMode(LocationMode mode) async => onlyOnPhone;
   @override Future<String?> setLocationSend(LocationSend send) async => onlyOnPhone;
   @override Future<String?> setServer(String server) async => onlyOnPhone;
-  @override Future<String?> setPinNotes(bool on) async => onlyOnPhone;
   @override Future<String?> setHistory(bool on) async => onlyOnPhone;
   @override Future<String?> setHealth(bool on) async => onlyOnPhone;
   @override Future<String?> setCalendar(bool on) async => onlyOnPhone;

@@ -7,7 +7,7 @@ Let a person add notes with words and files, get notes, and start a voice note f
 
 ### Requirement: Shortcuts can add a note with text and files
 
-On an iPhone with iOS 16 or later, the Relay Everything app SHALL give Apple Shortcuts and Siri an *Add a note* action that takes words, files, or both, and runs without opening the app. The note SHALL be kept on the phone and handled as a note made in the app: pinned when *Pin notes* is on, and sent with its files only while sending is on. The action SHALL give the new note back. An action with no words and no files SHALL ask for the words when the person can answer, as with Siri, and otherwise SHALL fail with a message and keep nothing.
+On an iPhone with iOS 16 or later, the Relay Everything app SHALL give Apple Shortcuts and Siri an *Add a note* action that takes words, files, or both, and runs without opening the app. The note SHALL be kept on the phone and handled as a note made in the app: it adds a location point while location history is on, and is sent with its files only while sending is on. The action SHALL give the new note back, with no place. An action with no words and no files SHALL ask for the words when the person can answer, as with Siri, and otherwise SHALL fail with a message and keep nothing.
 
 #### Scenario: A screenshot automation with sending on
 - **WHEN** an automation passes a new screenshot and the words *bug in checkout* to *Add a note*, and sending is on

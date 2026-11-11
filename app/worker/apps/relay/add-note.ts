@@ -15,21 +15,30 @@ export const addFiles = (db: Db, deviceId: string, clientId: string, files: Note
         json_extract(f.value, '$.size'), ? FROM json_each(?) f, relay_notes n WHERE n.device_id = ? AND n.client_id = ?
       ON CONFLICT (id) DO NOTHING`).bind(Date.now(), JSON.stringify(files), deviceId, clientId)] : [];
 
-/** Stores the note and its files' names once per device and `clientId`: `added` is false when sent before. */
+/** The statement that keeps a new note's place as one location point of its device at the note's time, none for no
+ *  place. It runs before the note's insert, so a resent note adds no second point; a point already there stays. */
+const addPoint = (db: Db, deviceId: string, note: TypedNote) => note.lat === undefined || note.lon === undefined ? [] : [
+  db.prepare(`INSERT INTO relay_locations (device_id, at, lat, lon, accuracy, place, created_at) SELECT ?, ?, ?, ?, ?, ?, ?
+    WHERE NOT EXISTS (SELECT 1 FROM relay_notes WHERE device_id = ? AND client_id = ?) ON CONFLICT (device_id, at) DO NOTHING RETURNING id`)
+    .bind(deviceId, note.createdAt, note.lat, note.lon, note.accuracy ?? 0, note.place ?? null, Date.now(), deviceId, note.clientId)];
+
+/** Stores the note, with no place, and its files' names once per device and `clientId`: `added` is false when sent
+ *  before. A place sent with it becomes one location point. */
 export async function addNote(env: Parameters<typeof wake>[0], space: PersonSpace, deviceId: string, note: TypedNote) {
   const { db } = space;
-  const where = note.lat === undefined ? null : "phone";
   const files = note.attachments ?? [];
-  // One transaction: the note, then its files, which name the note by the caller's id. A resend adds neither again.
-  const [inserted] = await db.batch([
-    db.prepare(`INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, lat, lon, accuracy,
-      place, place_from, created_at) VALUES (?, ?, 'typed', ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (device_id, client_id) DO NOTHING RETURNING id`)
-      .bind(crypto.randomUUID(), deviceId, note.clientId, note.text, note.createdAt, note.lat ?? null, note.lon ?? null,
-        note.accuracy ?? null, note.place ?? null, where, Date.now()),
+  const point = addPoint(db, deviceId, note);
+  // One transaction: the point, the note, then its files, named by the caller's id. A resend adds none of them again.
+  const results = await db.batch([
+    ...point,
+    db.prepare(`INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at)
+      VALUES (?, ?, 'typed', ?, ?, ?, ?) ON CONFLICT (device_id, client_id) DO NOTHING RETURNING id`)
+      .bind(crypto.randomUUID(), deviceId, note.clientId, note.text, note.createdAt, Date.now()),
     ...addFiles(db, deviceId, note.clientId, files),
   ]) as { id: string }[][];
+  const inserted = results[point.length];
   if (inserted.length) {
-    await wake(env, space, ["notes"]);
+    await wake(env, space, point.length && results[0].length ? ["notes", "locations"] : ["notes"]);
     return { id: inserted[0].id, added: true };
   }
   const kept = await db.prepare("SELECT id FROM relay_notes WHERE device_id = ? AND client_id = ?").bind(deviceId, note.clientId).first<{ id: string }>();

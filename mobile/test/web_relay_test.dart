@@ -12,7 +12,7 @@ final base = Uri.parse('https://relay.example.com/apps/relay/');
 Map<String, dynamic> note(String id, {String? clientId, bool mine = false, String text = 'Words', int at = 1000,
   String device = 'iPhone', bool audio = false, String source = 'typed', List<Map<String, Object>> files = const []}) => {
   'id': id, 'clientId': clientId, 'mine': mine, 'source': source, 'text': text, 'recordedAt': at, 'editedAt': null,
-  'device': device, 'audio': audio, 'place': {'lat': 1.0, 'lon': 2.0, 'accuracy': null, 'name': 'Home', 'from': 'phone'},
+  'device': device, 'audio': audio,
   'attachments': files,
 };
 
@@ -87,7 +87,6 @@ void main() {
     final ring = relay.entries.first;
     expect(ring.voice, isTrue);
     expect(ring.from, 'Email');
-    expect(ring.place, 'Home');
     expect(ring.recording, 'https://relay.example.com/apps/relay/api/audio?id=n3');
     expect(ring.files.first.url, 'https://relay.example.com/apps/relay/api/attachment?id=file-0001');
     expect(ring.files.first.ready, isTrue);

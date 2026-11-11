@@ -888,9 +888,8 @@ void main() {
     });
   });
 
-  test('a note\'s body carries its pin when it has one', () {
-    final pin = Pin(at: start, lat: 1, lon: 2, accuracy: 3);
-    expect(LocalNote(clientId: 'note-0001', text: 'x', createdAt: start, pin: pin).toJson(),
-      {'clientId': 'note-0001', 'text': 'x', 'createdAt': 1793797200000, 'lat': 1.0, 'lon': 2.0, 'accuracy': 3.0});
+  test('a note\'s body carries no place', () {
+    expect(LocalNote(clientId: 'note-0001', text: 'x', createdAt: start).toJson(),
+      {'clientId': 'note-0001', 'text': 'x', 'createdAt': 1793797200000});
   });
 }

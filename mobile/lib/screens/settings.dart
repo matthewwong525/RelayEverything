@@ -7,15 +7,14 @@ import '../relay.dart';
 import '../voice/model.dart' show megabytes;
 import 'account.dart';
 import 'back_to.dart';
-import 'folder.dart' show Group, Opener, apply, choosePlace, hostOf;
+import 'folder.dart' show Group, Opener, choosePlace, hostOf;
 import 'timeline.dart' show openPage;
 
 /// The rows of Settings, in order, on the phone and in the browser: one list, so a row added later shows on both, or is
-/// marked phone-only on purpose. The browser keeps no place and hears no voice, and has no version to show.
+/// marked phone-only on purpose. The browser hears no voice and has no version to show.
 enum SettingsRow {
   account('Account'),
   appearance('Appearance'),
-  notes('Notes', phoneOnly: true),
   voice('Voice notes', phoneOnly: true),
   version('Version', phoneOnly: true);
 
@@ -29,7 +28,7 @@ enum SettingsRow {
 }
 
 /// The account card first, as the Apple Account card in iPhone Settings, then *Appearance*, and what is about this
-/// phone alone: *Pin notes to where I am*, the speech model, and at the bottom the app's version and build, as
+/// phone alone: the speech model, and at the bottom the app's version and build, as
 /// [SettingsRow] lists them. Each kind of phone data has its own folder on Home.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.relay, this.opener});
@@ -49,14 +48,6 @@ class SettingsScreen extends StatelessWidget {
             for (final row in SettingsRow.on(web: relay.web)) switch (row) {
               SettingsRow.account => AccountCard(relay: relay, opener: opener),
               SettingsRow.appearance => Group(title: row.title, children: [_AppearanceRow(relay: relay)]),
-              SettingsRow.notes => Group(title: row.title, children: [
-                SwitchListTile(
-                  title: const Text('Pin notes to where I am'),
-                  subtitle: const Text('Each typed note keeps where you were.'),
-                  value: relay.settings.pinNotes,
-                  onChanged: (on) => apply(context, relay.setPinNotes(on)),
-                ),
-              ]),
               SettingsRow.voice => Group(title: row.title, children: [_VoiceRow(relay: relay)]),
               SettingsRow.version => const _Version(),
             },

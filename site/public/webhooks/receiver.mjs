@@ -41,9 +41,10 @@ function signed(headers, body) {
   });
 }
 
-// Upserts: a retry can send a message again, and the same id updates the same row.
-const note = db.prepare(`INSERT INTO notes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET text = excluded.text,
-  lat = excluded.lat, lon = excluded.lon, place = excluded.place, audio = coalesce(excluded.audio, notes.audio)`);
+// Upserts: a retry can send a message again, and the same id updates the same row. A note has no place: its place
+// columns stay, written null, so a database made before still opens; where you were comes as location.points.
+const note = db.prepare(`INSERT INTO notes VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?) ON CONFLICT (id) DO UPDATE SET
+  text = excluded.text, audio = coalesce(excluded.audio, notes.audio)`);
 const sample = db.prepare('INSERT OR REPLACE INTO health_samples VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
 // One sample per device, type, start, end and source, as on the server: an older phone numbered its samples, so a
 // sample can come again with a new id. These drop the row, and its workout row, kept under another id.
@@ -66,9 +67,8 @@ const dropNote = db.prepare('DELETE FROM notes WHERE id = ?');
 // The same webhook-id again is a retry: it keeps the first row.
 const other = db.prepare('INSERT OR IGNORE INTO other_messages VALUES (?, ?, ?, ?)');
 
-function saveNote({ note: { id, source, text, recorded_at, created_at, device, place, audio, attachments = [] } }) {
-  note.run(id, source, text, recorded_at, created_at, device.id, device.name, place?.lat ?? null, place?.lon ?? null,
-    place?.name ?? null, audio ? Buffer.from(audio.base64, 'base64') : null);
+function saveNote({ note: { id, source, text, recorded_at, created_at, device, audio, attachments = [] } }) {
+  note.run(id, source, text, recorded_at, created_at, device.id, device.name, audio ? Buffer.from(audio.base64, 'base64') : null);
   attachments.forEach(f => listed.run(f.id, id, f.name, f.content_type, f.size));
 }
 

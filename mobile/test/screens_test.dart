@@ -101,7 +101,6 @@ class FakeRelay extends Relay {
   }
 
   @override Future<String?> setServer(String server) async { calls.add('server $server'); return problem; }
-  @override Future<String?> setPinNotes(bool on) async { calls.add('pin $on'); return problem; }
 
   @override
   Future<void> setAppearance(Appearance appearance) async {
@@ -530,10 +529,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(relay.calls, ['note # Buy milk']);
     relay
-      ..entries = [Entry(text: 'Buy milk', at: now, place: 'Pinned')]
+      ..entries = [Entry(text: 'Buy milk', at: now)]
       ..changed();
     await tester.pump();
-    expect(find.textContaining('Pinned'), findsOneWidget);
+    expect(find.text('Buy milk'), findsOneWidget);
     expect(find.textContaining('Waiting to send'), findsNothing);
     expect(find.text('Today'), findsOneWidget);
   });
@@ -633,21 +632,21 @@ void main() {
     expect(find.byType(SettingsScreen), findsOneWidget);
   });
 
-  testWidgets('shows each note with its kind, its place, and Sent or Waiting to send', (tester) async {
+  testWidgets('shows each note with its kind, and Sent or Waiting to send', (tester) async {
     relay
       ..connected = true
       ..server = 'https://relay.example.com'
       ..settings = const Settings(sending: true)
       ..waiting = 1
       ..entries = [
-        Entry(text: 'Lunch idea', at: now, place: 'King St W', waiting: true),
-        Entry(text: 'Buy 0.2 mm steel for the stiffener', at: DateTime(2026, 1, 2, 9), place: 'Harbord St', sent: true),
+        Entry(text: 'Lunch idea', at: now, waiting: true),
+        Entry(text: 'Buy 0.2 mm steel for the stiffener', at: DateTime(2026, 1, 2, 9), sent: true),
       ];
     await tester.pumpWidget(RelayApp(relay: relay));
     await openFolder(tester, 'Notes');
     expect(find.text('Typed'), findsNWidgets(2));
-    expect(find.textContaining('King St W · Waiting to send'), findsOneWidget);
-    expect(find.textContaining('Harbord St · Sent'), findsOneWidget);
+    expect(find.textContaining('Waiting to send'), findsOneWidget);
+    expect(find.textContaining('Sent'), findsOneWidget);
     expect(find.textContaining('Jan 2'), findsOneWidget);
     expect(find.text('2 notes ·'), findsOneWidget);
     expect(find.text('1 waiting'), findsOneWidget);
@@ -1091,7 +1090,7 @@ void main() {
       (tester) async {
     relay.entries = [
       Entry(text: 'Dentist moved to Thursday 3 pm', at: now),
-      Entry(text: 'Paint colours for the hall', at: now, place: 'Home', files: const [
+      Entry(text: 'Paint colours for the hall', at: now, files: const [
         EntryFile(name: 'swatches.pdf', type: 'application/pdf', size: 245760, path: '/nowhere/swatches.pdf')]),
       Entry(text: 'Gift ideas', at: now),
     ];
@@ -1105,11 +1104,9 @@ void main() {
     await tester.pump();
     expect([find.text('Dentist moved to Thursday 3 pm'), find.text('Paint colours for the hall'), find.text('Gift ideas')],
       [findsOneWidget, findsNothing, findsNothing]);
-    for (final words in ['home', 'Swatches']) {
-      await tester.enterText(find.byType(TextField), words);
-      await tester.pump();
-      expect([find.text('Dentist moved to Thursday 3 pm'), find.text('Paint colours for the hall')], [findsNothing, findsOneWidget]);
-    }
+    await tester.enterText(find.byType(TextField), 'Swatches');
+    await tester.pump();
+    expect([find.text('Dentist moved to Thursday 3 pm'), find.text('Paint colours for the hall')], [findsNothing, findsOneWidget]);
     await tester.enterText(find.byType(TextField), 'zzz');
     await tester.pump();
     expect(find.text('No notes with "zzz"'), findsOneWidget);
@@ -1836,13 +1833,8 @@ void main() {
     relay
       ..connected = true
       ..server = 'https://relay.example.com'
-      ..settings = const Settings(sending: true, pinNotes: true);
+      ..settings = const Settings(sending: true);
     await tester.pumpWidget(RelayApp(relay: relay));
-    await openSettings(tester);
-    await tester.tap(find.text('Pin notes to where I am'));
-    await tester.pumpAndSettle();
-    await tester.pageBack();
-    await tester.pumpAndSettle();
     await openFolder(tester, 'Location');
     await tester.tap(find.text('Location history'));
     await tester.pumpAndSettle();
@@ -1853,7 +1845,7 @@ void main() {
     await tester.tap(find.widgetWithText(SwitchListTile, 'Health'));
     await tester.pump();
     expect(find.text('Relay Everything may not read your health data.'), findsOneWidget);
-    expect(relay.calls, ['pin false', 'history true', 'health true']);
+    expect(relay.calls, ['history true', 'health true']);
   });
 
   group('photos', () {
@@ -2297,16 +2289,18 @@ void main() {
     expect(accountLines(tester).first, 'Sign in to Relay Everything');
   });
 
-  testWidgets('Settings shows the Account row, then the Appearance, Notes and Voice notes groups, with no lines, and the version',
+  testWidgets('Settings shows the Account row, then the Appearance and Voice notes groups, with no lines, no pin, and the version',
       (tester) async {
     tallScreen(tester);
     await tester.pumpWidget(RelayApp(relay: relay));
     await openSettings(tester);
     final groups = find.descendant(of: find.byType(SettingsScreen), matching: find.byType(SliverList));
-    for (final heading in ['Appearance', 'Notes', 'Voice notes']) {
+    for (final heading in ['Appearance', 'Voice notes']) {
       expect(find.descendant(of: groups, matching: find.text(heading)), findsOneWidget, reason: heading);
     }
-    expect(tester.getTopLeft(find.text('Appearance')).dy, lessThan(tester.getTopLeft(find.text('Notes').last).dy));
+    expect(tester.getTopLeft(find.text('Appearance')).dy, lessThan(tester.getTopLeft(find.text('Voice notes').last).dy));
+    expect(find.descendant(of: groups, matching: find.text('Notes')), findsNothing);
+    expect(find.text('Pin notes to where I am'), findsNothing);
     for (final segment in ['System', 'Light', 'Dark']) {
       expect(find.text(segment), findsOneWidget, reason: segment);
     }
@@ -2319,7 +2313,7 @@ void main() {
     expect(tester.getTopLeft(accountRow).dy, lessThan(tester.getTopLeft(find.text('Appearance')).dy));
     // The web's Settings lists the same rows, in the same order, less those for the phone alone.
     expect(SettingsRow.on(web: false),
-      [SettingsRow.account, SettingsRow.appearance, SettingsRow.notes, SettingsRow.voice, SettingsRow.version]);
+      [SettingsRow.account, SettingsRow.appearance, SettingsRow.voice, SettingsRow.version]);
     expect(SettingsRow.on(web: true), [SettingsRow.account, SettingsRow.appearance]);
   });
 

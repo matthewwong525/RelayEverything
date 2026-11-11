@@ -344,7 +344,7 @@ void main() {
   testWidgets('a note opened after another holds only itself: once it closes, a phone edit to the first one shows',
       (tester) async {
     Map<String, Object?> phoneNote(String id, String text, int at) => {'id': id, 'clientId': null, 'mine': false,
-      'source': 'typed', 'text': text, 'recordedAt': at, 'editedAt': null, 'device': 'iPhone', 'audio': false, 'place': null,
+      'source': 'typed', 'text': text, 'recordedAt': at, 'editedAt': null, 'device': 'iPhone', 'audio': false,
       'attachments': <Object>[]};
     final at = now.millisecondsSinceEpoch;
     space.answers['GET account'] = (_) => {'email': 'ana@example.com'};
@@ -491,9 +491,9 @@ void main() {
       expect(find.text('Appearance'), findsOneWidget);
     });
 
-    testWidgets('the phone keeps them', (tester) async {
+    testWidgets('the phone keeps the speech model, and has no pin either', (tester) async {
       await settings(tester, RelayPlatform.phone);
-      expect(find.text('Pin notes to where I am'), findsOneWidget);
+      expect(find.text('Pin notes to where I am'), findsNothing);
       expect(find.text('Speech model'), findsOneWidget);
     });
 

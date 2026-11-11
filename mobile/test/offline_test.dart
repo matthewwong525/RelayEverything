@@ -72,12 +72,10 @@ void main() {
 
     // Home: no Connections, and Settings' Account row asks to sign in: a kept key with sending off is signed out.
     expect(find.text('Connections'), findsNothing);
-    // Settings: pins on (a phone-only fix).
+    // Settings: no switch reads a place.
     await openSettings(tester);
     expect(find.text('Sign in to Relay Everything'), findsOneWidget);
-    await tester.tap(find.text('Pin notes to where I am'));
-    await tester.runAsync(pumpEventQueue);
-    await tester.pumpAndSettle();
+    expect(find.text('Pin notes to where I am'), findsNothing);
     await tester.pageBack();
     await tester.pumpAndSettle();
     // Each data folder: its switch can not turn on.
@@ -122,7 +120,7 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    // A note, pinned.
+    // A note: with sending off, it reads no place.
     await openFolder(tester, 'Notes');
     await tester.tap(newNote);
     await tester.pumpAndSettle();
@@ -132,7 +130,6 @@ void main() {
     await tester.runAsync(relay.settled);
     await tester.pumpAndSettle();
     expect(find.text('Call the PCB fab about the flex stiffener'), findsOneWidget);
-    expect(find.textContaining('Pinned'), findsOneWidget);
     expect(find.text('On this phone'), findsOneWidget);
     expect(find.text('Open your Relay Everything page'), findsNothing);
 
@@ -191,12 +188,12 @@ void main() {
     expect(server.requests, isEmpty);
     expect([webAuth.opened, swift.drains, places.lookups], [isEmpty, 0, isEmpty]);
     expect(swift.flags.every((flag) => !flag.health && !flag.history), isTrue);
-    expect(places.named, [false]);
-    expect(places.asked, [false]);
+    expect(places.named, isEmpty);
+    expect(places.asked, isEmpty);
     expect(health.reads, isEmpty);
     expect([photos.asked, photos.finds, photos.copied], [0, isEmpty, isEmpty]);
     expect([calendar.asked, calendar.listed, calendar.reads], [0, 0, isEmpty]);
-    expect(scheduled, [false]);
+    expect(scheduled, isEmpty);
     await tester.runAsync(store.close);
   });
   testWidgets('with sending off and the model on the phone, a voice note makes no request at all', (tester) async {

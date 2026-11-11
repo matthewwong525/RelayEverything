@@ -26,7 +26,7 @@ enum Emptied { kept, dropped, deleting }
 
 /// One row of the timeline: a note typed or said on this phone, or one from elsewhere that a pull brought.
 class Entry {
-  const Entry({this.id = '', required this.text, required this.at, this.place, this.sent = false, this.waiting = false, this.voice = false,
+  const Entry({this.id = '', required this.text, required this.at, this.sent = false, this.waiting = false, this.voice = false,
     this.writing = false, this.failed = false, this.recording, this.length, this.files = const [], this.from});
 
   /// The phone's own id for the note: [Relay.editNote] takes it.
@@ -34,10 +34,9 @@ class Entry {
   /// The words, with their styles as Markdown marks: `plainText` gives them bare.
   final String text;
   final DateTime at;
-  final String? place;
   /// The server took it.
   final bool sent;
-  /// It has an upload in the outbox, or waits for its pin, while sending is on.
+  /// It has an upload in the outbox while sending is on.
   final bool waiting;
 
   /// Said into this phone, by a hold on *New note* or from Shortcuts.
@@ -231,7 +230,6 @@ abstract class Relay extends ChangeNotifier {
   /// still waiting on this phone, and says so; *Only points* makes no stay or trip and asks for no motion.
   Future<String?> setLocationSend(LocationSend send);
   Future<String?> setServer(String server);
-  Future<String?> setPinNotes(bool on);
   /// *System*, *Light* or *Dark*: the app's look, which the phone keeps.
   Future<void> setAppearance(Appearance appearance);
   Future<String?> setHistory(bool on);

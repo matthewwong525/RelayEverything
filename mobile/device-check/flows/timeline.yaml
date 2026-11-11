@@ -23,9 +23,9 @@ appId: com.matthewwong525.relayApp
     visible: 'No notes yet(.|\n)*'
     timeout: 30000
 # With sending off, the line under the title gives the count alone: no state, and no Sync now.
-# The title and its line read as one label: "Notes", then "No notes".
+# The title and its line read as one label: "Notes", then "No notes". The match is the whole label, so no state word
+# such as "On this phone" is in it; the empty list's hint says "on this phone" by design.
 - assertVisible: 'Notes\nNo notes'
-- assertNotVisible: '(.|\n)*On this phone(.|\n)*'
 - assertNotVisible: "Sync now"
 - assertVisible: "New note"
 - takeScreenshot: timeline

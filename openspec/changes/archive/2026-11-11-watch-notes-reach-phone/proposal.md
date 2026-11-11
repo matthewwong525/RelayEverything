@@ -1,6 +1,6 @@
 # The watch records at once, and every watch note reaches your phone
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** fix-watch-app-sync-recording
 **Open questions:** none
 
@@ -90,3 +90,4 @@ None.
 - **2026-11-11** — Assumed: a watch note whose inbox file has no recording at all still keeps nothing, as the review advised, because the iPhone moves the recording before it writes the inbox file, so it can't happen in normal use, and a note with nothing to play is outside this plan.
 - **2026-11-11** — Assumed: the try on Matthew's own watch is a follow-up after publish, not a task, because only a publish makes the TestFlight build it needs.
 - **2026-11-11** — Built: the watch records on open and saves on leave, shows *On your iPhone*, wakes the iPhone; the phone keeps a watch note with no words. Flutter checks pass here; the Swift is first compiled by CI.
+- **2026-11-11** — Archived for publish: CI built the signed iPhone app with the watch app, and the watch tests passed.

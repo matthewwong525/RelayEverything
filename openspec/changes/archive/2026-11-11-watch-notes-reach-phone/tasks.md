@@ -21,4 +21,4 @@
 ## 4. Checks
 
 - [x] 4.1 Run `cd mobile && flutter analyze && flutter test`; all pass.
-- [ ] 4.2 `/save`, then confirm CI builds the signed iPhone app with the watch app and `watch-tests` passes.
+- [x] 4.2 `/save`, then confirm CI builds the signed iPhone app with the watch app and `watch-tests` passes.

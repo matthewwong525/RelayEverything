@@ -19,6 +19,7 @@
 - [x] 4.4 `onSystemHide` records that the system closed the menu, for 300 ms (`QuillSystemMenu.closedJustNow`), and `_toggleMenu` in `mobile/lib/screens/note_editor.dart` opens nothing in that time. Verify: a fake `ContextMenu.onDismissSystemContextMenu` and at once a tap on the cursor leave the menu closed; a tap 500 ms later opens it.
 - [x] 4.5 The iPhone lens's rim takes `CupertinoTheme.of(context).primaryColor`, not `CupertinoMagnifier`'s fixed blue. Verify: the magnifier test checks the rim color on iOS.
 - [x] 4.6 In `mobile/lib/editor/system_menu.dart`, *Cut*, *Copy* and *Select All* are `IOSSystemContextMenuItemCustom` items titled from `CupertinoLocalizations` that run the editor's own buttons; *Paste* stays the phone's own; after *Select All* the menu opens again once the phone has closed it. Verify: in `mobile/test/paste_menu_test.dart`, pressing *Select All* then *Copy* through `ContextMenu.onPerformCustomAction` selects every word, shows a menu with *Copy*, and puts the words on the clipboard.
+- [x] 4.7 With no words selected, `QuillSystemMenu.itemsOf` leaves out *Cut*, *Copy*, *Look Up*, *Search Web* and *Share*. Verify: a hold in the words that leaves the cursor collapsed sends exactly *Paste* and *Select All*.
 
 ## 3. Checks
 

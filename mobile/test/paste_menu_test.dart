@@ -93,7 +93,8 @@ void main() {
       await tester.longPressAt(onLine(tester, 'Buy milk and eggs', 30));
       await tester.pumpAndSettle();
       expect(methods(calls), ['showSystemContextMenu']);
-      expect(itemsOf(calls.last), contains('paste'));
+      expect(quill(tester).selection.isCollapsed, isTrue);
+      expect(itemsOf(calls.last), ['paste', 'Select All']);
       final rect = (calls.last.arguments as Map)['targetRect'] as Map;
       expect([rect['width'], rect['height']], everyElement(isNonNegative));
       expect(find.byType(AdaptiveTextSelectionToolbar), findsNothing);

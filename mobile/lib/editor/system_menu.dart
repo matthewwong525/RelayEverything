@@ -23,8 +23,12 @@ class QuillSystemMenu extends StatefulWidget {
   /// Select All run the editor's own actions on its own selection. The phone's own Cut, Copy and Select All work on the
   /// phone's copy of the words, and on an iPhone their Select All selected nothing. Paste stays the phone's own, so the
   /// phone asks no *Allow Paste?* question for words from another app.
+  ///
+  /// With no words selected, the menu leaves out the items that act on a selection: the editor offers *Cut* and *Copy*
+  /// even then, and the iPhone's own menu never does.
   static List<IOSSystemContextMenuItem> itemsOf(QuillRawEditorState editor, CupertinoLocalizations words) => [
     for (final button in editor.contextMenuButtonItems)
+      if (!editor.textEditingValue.selection.isCollapsed || !_needsSelection.contains(button.kind))
       ?switch (button.kind) {
         ContextMenuButtonKind.cut => _own(words.cutButtonLabel, button),
         ContextMenuButtonKind.copy => _own(words.copyButtonLabel, button),
@@ -37,6 +41,10 @@ class QuillSystemMenu extends StatefulWidget {
         _ => null,
       },
   ];
+
+  /// The items that act on the selected words.
+  static const _needsSelection = {ContextMenuButtonKind.cut, ContextMenuButtonKind.copy, ContextMenuButtonKind.lookUp,
+    ContextMenuButtonKind.searchWeb, ContextMenuButtonKind.share};
 
   /// An item with the system's look that runs [button]'s own action, after [before].
   static IOSSystemContextMenuItem? _own(String title, ContextMenuButtonItem button, [void Function()? before]) =>

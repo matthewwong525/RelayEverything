@@ -9,40 +9,43 @@ export type HealthType = (typeof HEALTH_TYPES)[number];
 /** A span from its first millisecond to the first one after it. */
 export type Span = [number, number];
 
-// lat, lon and place_from are set together: notes.ts takes lat and lon as a pair. A stored ring note may hold a place
-// from location history, from before that was removed.
-type Row = { id: string; source: "ring" | "typed"; text: string; recorded_at: number; device: string; audio: number;
-  lat: number | null; lon: number | null; accuracy: number | null; place: string | null; place_from: "phone" | "history" | null;
-  files: string };
+// A note has no place: relay_notes keeps its place columns empty (0017_note_places.sql); a reader finds places by time.
+type Row = { id: string; source: "ring" | "typed"; text: string; recorded_at: number; device: string; audio: number; files: string };
 
 /** A note's file: `ready` once the phone has sent its bytes, which GET attachment then opens. */
 export type NoteFile = { id: string; name: string; type: string; size: number; ready: boolean };
 
 const shaped = (row: Row) => ({ id: row.id, source: row.source, text: row.text, recordedAt: row.recorded_at, device: row.device,
-  audio: row.audio === 1, place: row.lat === null ? null :
-    { lat: row.lat, lon: row.lon!, accuracy: row.accuracy, name: row.place, from: row.place_from! },
+  audio: row.audio === 1,
   attachments: (JSON.parse(row.files) as (Omit<NoteFile, "ready"> & { ready: number })[]).map(file => ({ ...file, ready: file.ready === 1 })) });
 
 export type Note = ReturnType<typeof shaped>;
 
 const FILES = `(SELECT json_group_array(json_object('id', a.id, 'name', a.name, 'type', a.content_type, 'size', a.size,
   'ready', a.file_key IS NOT NULL)) FROM (SELECT * FROM relay_attachments WHERE note_id = n.id ORDER BY rowid) a) AS files`;
-const COLUMNS = `n.id, n.source, n.text, n.recorded_at, d.name AS device, n.audio_key IS NOT NULL AS audio, n.lat, n.lon,
-  n.accuracy, n.place, n.place_from, ${FILES}`;
+const COLUMNS = `n.id, n.source, n.text, n.recorded_at, d.name AS device, n.audio_key IS NOT NULL AS audio,
+  ${FILES}`;
 const NOTE = `SELECT ${COLUMNS} FROM relay_notes n JOIN relay_devices d ON d.id = n.device_id`;
 
-export type NoteFilter = { before?: number; beforeId?: string; after?: number; source?: "ring" | "typed"; words?: string[]; limit: number };
+export type NoteFilter = { before?: number; beforeId?: string; after?: number; source?: "ring" | "typed"; words?: string[]; tag?: string; limit: number };
 
 /** LIKE's own characters, escaped, so a word matches as typed. */
-const like = (word: string) => `%${word.replace(/[\\%_]/g, "\\$&")}%`;
+const escaped = (word: string) => word.replace(/[\\%_]/g, "\\$&");
+const like = (word: string) => `%${escaped(word)}%`;
+
+/** A topic and its parts: `bike` finds `bike` and `bike/charging`, never `biker`. Bind tagValues(tag) after it. */
+export const tagged = (table: "relay_memory_tags" | "relay_note_tags", own: "fact_id" | "note_id", key: string) =>
+  `EXISTS (SELECT 1 FROM ${table} t WHERE t.${own} = ${key} AND (t.tag = ? OR t.tag LIKE ? ESCAPE '\\'))`;
+export const tagValues = (tag: string) => [tag, `${escaped(tag)}/%`];
 
 /** A page of notes, newest first, from `after` up to `before`, holding every word in `words` in any case. */
 export async function notePage(db: Db, filter: NoteFilter) {
-  const { before = Number.MAX_SAFE_INTEGER, beforeId = "", after = 0, source, words = [], limit } = filter;
+  const { before = Number.MAX_SAFE_INTEGER, beforeId = "", after = 0, source, words = [], tag, limit } = filter;
   const where = ["(n.recorded_at < ? OR (n.recorded_at = ? AND n.id < ?))", "n.recorded_at >= ?",
-    ...source ? ["n.source = ?"] : [], ...words.map(() => "n.text LIKE ? ESCAPE '\\'")];
+    ...source ? ["n.source = ?"] : [], ...words.map(() => "n.text LIKE ? ESCAPE '\\'"),
+    ...tag === undefined ? [] : [tagged("relay_note_tags", "note_id", "n.id")]];
   const { results } = await db.prepare(`${NOTE} WHERE ${where.join(" AND ")} ORDER BY n.recorded_at DESC, n.id DESC LIMIT ?`)
-    .bind(before, before, beforeId, after, ...source ? [source] : [], ...words.map(like), limit + 1).all<Row>();
+    .bind(before, before, beforeId, after, ...source ? [source] : [], ...words.map(like), ...tag === undefined ? [] : tagValues(tag), limit + 1).all<Row>();
   const page = results.slice(0, limit);
   // Two notes can share a time, so a page ends at a time and an id: the next page starts just after both.
   const last = results.length > limit ? page.at(-1)! : null;
@@ -366,9 +369,9 @@ export async function placeVisits(db: Db, from: number, to: number, limit: numbe
   return { visits: visits.slice(0, limit), trips: found.trips.filter(trip => next === null || trip.left < next), next };
 }
 
-// Chats: each one's title is the newest save's, else the title of its first send. Neither the device nor Claude Code's
+// Chats: each one's title is the newest save's, else the title of its first send. Neither the device nor the app's
 // session id leaves here.
-type ChatRow = { id: string; title: string; project: string; app: "claude-code"; started_at: number; last_at: number; messages: number; saves: number };
+type ChatRow = { id: string; title: string; project: string; app: "claude-code" | "codex"; started_at: number; last_at: number; messages: number; saves: number };
 
 const chatShaped = (row: ChatRow) => ({ id: row.id, title: row.title, project: row.project, app: row.app, startedAt: row.started_at,
   lastAt: row.last_at, messages: row.messages, savedByAi: row.saves > 0 });

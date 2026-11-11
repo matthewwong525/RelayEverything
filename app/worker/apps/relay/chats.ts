@@ -1,5 +1,5 @@
-// POST chats and POST chat-saves: a chat key adds a Claude Code chat a few messages at a time, and the AI's summary.
-// It reads back only how many messages its chat holds, so the plugin sends on; a stored message never changes.
+// POST chats and POST chat-saves: a computer's or chat key adds a Claude Code or Codex chat a few messages at a time,
+// and the AI's summary. It answers only how many its chat holds, so the plugin sends on; stored messages never change.
 import { z } from "zod";
 import { boundedBytes } from "../../api/body.ts";
 import { defineAction, type ActionCall } from "../../api/contract.ts";
@@ -15,19 +15,20 @@ const MESSAGE_CHARACTERS = 200_000;
 // D1 takes a bound value of up to 2 MB, so the messages go in as several JSON values in one batch.
 const CHUNK_BYTES = 1_000_000;
 
-const sessionId = z.string().regex(/^[A-Za-z0-9_-]{8,128}$/).describe("Claude Code's id for the chat.");
+const sessionId = z.string().regex(/^[A-Za-z0-9_-]{8,128}$/).describe("The app's own id for the chat.");
 const message = z.strictObject({
   seq: z.number().int().min(0).max(10_000_000), role: z.enum(["you", "ai", "step"]), text: z.string().max(MESSAGE_CHARACTERS), at: time,
 });
 const chatInput = z.strictObject({
   sessionId, project: z.string().trim().min(1).max(200), startedAt: time, title: z.string().max(200).optional(),
+  app: z.enum(["claude-code", "codex"]).optional(),
   messages: z.array(message).refine(list => list.every((item, index) => item.seq === list[0].seq + index), "Send messages in order, with no gap."),
 });
 
-/** A chat key's route: a phone's key, a person or the checker is refused. */
+/** A chat key's or computer's key's route: a phone's key, an API key, a person or the checker is refused. */
 const chatKey = <C extends Pick<ActionCall, "identity">>(refusal: string, run: (space: PersonSpace, device: string, request: Request, call: C) =>
   Promise<Response>) => asDevice<C>(refusal, async ({ space, device, request, call }) =>
-  device.reaches === "chats" ? run(space, device.id, request, call) : refused(403, refusal));
+  device.reaches === "chats" || device.reaches === "agent" ? run(space, device.id, request, call) : refused(403, refusal));
 
 const stored = async (db: Db, device: string, session: string) => (await db.prepare(
   "SELECT id, message_count FROM relay_chats WHERE device_id = ? AND session_id = ?").bind(device, session).first<{ id: string; message_count: number }>());
@@ -77,8 +78,8 @@ export const chats: (request: Request, env: Env, call: Pick<ActionCall, "identit
     const fresh = chat.messages.filter(item => item.seq >= count);
     if (fresh.length) {
       await db.prepare(`INSERT INTO relay_chats (id, device_id, session_id, app, project, title, started_at, last_at, message_count, created_at)
-        VALUES (?, ?, ?, 'claude-code', ?, ?, ?, ?, 0, ?) ON CONFLICT (device_id, session_id) DO NOTHING`)
-        .bind(crypto.randomUUID(), device, chat.sessionId, chat.project, chat.title ?? "", chat.startedAt, chat.startedAt, now).run();
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?) ON CONFLICT (device_id, session_id) DO NOTHING`)
+        .bind(crypto.randomUUID(), device, chat.sessionId, chat.app ?? "claude-code", chat.project, chat.title ?? "", chat.startedAt, chat.startedAt, now).run();
       const chatId = before?.id ?? (await stored(db, device, chat.sessionId))!.id;
       await db.batch([
         ...chunks(fresh).map(json => db.prepare(`INSERT INTO relay_chat_messages (chat_id, seq, role, text, at)

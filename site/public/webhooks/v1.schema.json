@@ -68,61 +68,6 @@
                   ],
                   "description": "The phone or other device that sent the item."
                 },
-                "place": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "lat": {
-                          "type": "number"
-                        },
-                        "lon": {
-                          "type": "number"
-                        },
-                        "accuracy": {
-                          "anyOf": [
-                            {
-                              "type": "number"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ],
-                          "description": "In meters."
-                        },
-                        "name": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ],
-                          "description": "The place's name from the phone's address lookup, such as a street."
-                        },
-                        "from": {
-                          "type": "string",
-                          "enum": [
-                            "phone",
-                            "history"
-                          ],
-                          "description": "phone: where a typed note was written. history: the location point nearest an older recorded note."
-                        }
-                      },
-                      "required": [
-                        "lat",
-                        "lon",
-                        "accuracy",
-                        "name",
-                        "from"
-                      ]
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
                 "audio": {
                   "anyOf": [
                     {
@@ -190,7 +135,6 @@
                 "recorded_at",
                 "created_at",
                 "device",
-                "place",
                 "audio"
               ]
             }
@@ -275,61 +219,6 @@
                   ],
                   "description": "The phone or other device that sent the item."
                 },
-                "place": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "lat": {
-                          "type": "number"
-                        },
-                        "lon": {
-                          "type": "number"
-                        },
-                        "accuracy": {
-                          "anyOf": [
-                            {
-                              "type": "number"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ],
-                          "description": "In meters."
-                        },
-                        "name": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ],
-                          "description": "The place's name from the phone's address lookup, such as a street."
-                        },
-                        "from": {
-                          "type": "string",
-                          "enum": [
-                            "phone",
-                            "history"
-                          ],
-                          "description": "phone: where a typed note was written. history: the location point nearest an older recorded note."
-                        }
-                      },
-                      "required": [
-                        "lat",
-                        "lon",
-                        "accuracy",
-                        "name",
-                        "from"
-                      ]
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
                 "edited_at": {
                   "description": "When the phone that sent the note changed it.",
                   "type": "string",
@@ -378,8 +267,7 @@
                 "text",
                 "recorded_at",
                 "created_at",
-                "device",
-                "place"
+                "device"
               ]
             }
           },

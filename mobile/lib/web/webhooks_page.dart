@@ -52,9 +52,11 @@ String _listed(List<String> words) =>
 /// *Webhooks*: where Relay Everything sends the person's data, each with its state and actions, and *Add a webhook*.
 /// The server lists the kinds, so a new kind gets its tick and name here by itself.
 class WebhooksPage extends StatelessWidget {
-  const WebhooksPage({super.key, required this.client});
+  const WebhooksPage({super.key, required this.client, this.back});
 
   final SpaceClient client;
+  /// *‹ Account*, back to the page that opened it.
+  final VoidCallback? back;
 
   Future<(List<Map<String, dynamic>>, List<WebhookKind>)> _load() async {
     final json = await client.get('webhooks');
@@ -63,7 +65,7 @@ class WebhooksPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SettingsBody(title: 'Webhooks', line: 'Relay Everything sends each new note to your own database, signed.',
+    return SettingsBody(title: 'Webhooks', back: back, line: 'Relay Everything sends each new note to your own database, signed.',
       children: [SpaceView<(List<Map<String, dynamic>>, List<WebhookKind>)>(what: 'Webhooks', load: _load,
         builder: (context, value, act) {
           final (hooks, kinds) = value;

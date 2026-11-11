@@ -4,12 +4,12 @@ import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import '../brand.dart';
-import '../data/connection.dart' show defaultServer;
 import '../relay.dart';
 import 'back_to.dart';
-import 'connect.dart' show ConnectScreen, Scanner, ServerDialog;
-import 'connected_names.dart';
+import 'days.dart' show shortDay;
 import 'folder.dart';
+import 'timeline.dart' show openPage;
+import 'webhooks.dart';
 
 /// Where this phone's account stands: signed in to a Relay Everything server, sending to the person's own webhook, or
 /// signed out. A phone that keeps a key with sending off is signed out: its sign-in offers the key in one tap.
@@ -22,19 +22,31 @@ AccountState accountOf(Relay relay) {
   return relay.connected && relay.server != null ? AccountState.signedIn : AccountState.signedOut;
 }
 
-/// *Account*, opened from the Account row in Settings. Signed in: the email and server, *AI apps* and *Webhooks* by
-/// name, where health, places, the calendar and photos go, *Open your Relay Everything page*, the server to change,
-/// and *Sign out*. With the person's own webhook: its address, *Send a test*, *Sign in to Relay Everything* and *Stop
-/// sending*. Signing in there sends notes to Relay Everything and keeps the webhook for health, places, the calendar and
-/// photos, then says how to get notes at the webhook too. Adding or removing an AI app or a webhook is on the web page.
+/// The day a device first signed in, such as *Since Oct 14*, with the year when it is not this year.
+String sinceLine(DateTime? since, DateTime now) => since == null ? 'Signed in' : 'Since ${shortDay(since, now)}';
+
+/// Asks before a *Sign out*; true on a yes.
+Future<bool> confirmSignOut(BuildContext context, {required String title, required String body}) async =>
+  await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+    title: Text(title),
+    content: Text(body),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+      TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sign out')),
+    ],
+  )) == true;
+
+/// *Account*, opened from the account card in Settings. Signed in, in this order: the email, *Signed in* and a quiet
+/// *Sign out*; *Phones*, this one marked *This phone* and each other with *Sign out*; *Advanced*, with *Webhooks*; and
+/// *Delete my account*, which opens the Relay Everything page. Computers show in *Connect your AI*. With the person's
+/// own webhook and no account: its address, *Send a test*, *Sign in to Relay Everything* and *Stop sending*. Signing
+/// in there sends notes to Relay Everything and keeps the webhook for health, places, the calendar and photos.
 class AccountPage extends StatefulWidget {
-  const AccountPage({super.key, required this.relay, this.opener, this.scanner});
+  const AccountPage({super.key, required this.relay, this.opener});
 
   final Relay relay;
   /// Opens the Relay Everything page; a test passes its own.
   final Opener? opener;
-  /// Opens the camera for *Scan a key* in the sign-in; Settings passes its own.
-  final Scanner? scanner;
 
   @override
   State<AccountPage> createState() => _AccountPageState();
@@ -70,108 +82,49 @@ class _AccountPageState extends State<AccountPage> {
   }
 
   List<Widget> _server(BuildContext context) {
-    final server = relay.server!;
-    final names = relay.connections;
+    final brand = brandOf(context);
+    final connections = relay.connections;
     final danger = Theme.of(context).colorScheme.error;
+    final now = DateTime.now();
+    final webhooks = connections?.webhooks;
     return [
       Group(children: [ListTile(
         leading: const RelayMark(size: 32),
-        title: Text(names?.email ?? hostOf(server), style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: names?.email == null ? null : Text(hostOf(server)),
+        title: Text(connections?.email ?? hostOf(relay.server), style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: const Text('Signed in'),
+        trailing: TextButton(onPressed: () => _signOut(context), style: quietButton(context), child: const Text('Sign out')),
       )]),
-      Group(title: 'Connections', children: [
-        _connected(ConnectedKind.aiApps, names?.aiApps),
-        _connected(ConnectedKind.webhooks, names?.webhooks),
+      if (connections case final connections? when connections.phones.isNotEmpty) Group(title: 'Phones', children: [
+        for (final phone in connections.phones) ListTile(
+          leading: Icon(CupertinoIcons.device_phone_portrait, color: brand.accentText),
+          title: Text(phone.name),
+          subtitle: Text(phone.id == connections.thisDevice ? 'This phone' : sinceLine(phone.since, now)),
+          trailing: phone.id == connections.thisDevice ? null
+            : TextButton(onPressed: () => _signOutPhone(context, phone), style: quietButton(context), child: const Text('Sign out')),
+        ),
       ]),
-      ..._private(context),
-      Group(children: [
-        ListTile(
-          title: const Text('Open your Relay Everything page'),
-          subtitle: const Text('The notes from all your devices, with their recordings.'),
-          trailing: const Icon(CupertinoIcons.arrow_up_right_square),
-          onTap: () => _open(''),
-        ),
-        ListTile(
-          title: const Text('Server'),
-          subtitle: Text(server),
-          trailing: const Icon(CupertinoIcons.pencil),
-          onTap: () => _editServer(context),
-        ),
+      Group(title: 'Advanced', children: [
+        FolderRow(icon: CupertinoIcons.link, title: 'Webhooks', line: 'Send a copy to your own server',
+          count: webhooks == null || webhooks.isEmpty ? null : webhooks.length,
+          onTap: () => openPage(context, WebhooksPage(relay: relay, opener: widget.opener))),
       ]),
       Group(children: [ListTile(
-        title: Text('Sign out', style: TextStyle(color: danger)),
-        subtitle: const Text('Removes this phone\'s key and stops sending. Notes from this phone stay here.'),
-        onTap: () => _signOut(context),
+        title: Text('Delete my account', style: TextStyle(color: danger)),
+        subtitle: const Text('On your Relay Everything page'),
+        trailing: Icon(CupertinoIcons.arrow_up_right_square, color: brand.muted),
+        onTap: () => openRelayPage(context, relay, '#account', opener: widget.opener),
       )]),
     ];
   }
 
-  /// *AI apps* or *Webhooks*: the names the server last gave, and a tap to their page, which links to the Relay
-  /// Everything page, where the person adds or removes one.
-  Widget _connected(ConnectedKind kind, List<String>? names) => FolderRow(
-    icon: kind.icon, title: kind.title,
-    line: switch (names) { null => 'See them on your page', [] => 'None yet', final names => names.join(', ') },
-    count: names == null || names.isEmpty ? null : names.length,
-    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => ConnectedNamesPage(relay: relay, kind: kind, opener: widget.opener))));
-
-  /// *Health, places, calendar and photos*: to Relay Everything with the notes, or only to the person's own webhook. With
-  /// the webhook picked: its host, *Send a test* and its last failure, or *Set your webhook again* when the phone lost
-  /// it. The picked row's check is its only mark: no filled button.
-  List<Widget> _private(BuildContext context) {
-    final theme = Theme.of(context);
-    final danger = theme.colorScheme.error;
-    final webhook = relay.settings.privateTo == SendPlace.webhook;
-    return [
-      Group(title: 'Health, places, calendar and photos', children: [
-        RadioGroup<SendPlace>(
-          groupValue: relay.settings.privateTo,
-          onChanged: (place) { if (place != null) _pickPrivate(context, place); },
-          child: const Column(children: [
-            RadioListTile(value: SendPlace.server, title: Text('Relay Everything'),
-              subtitle: Text('Your AI and your page can see them.')),
-            RadioListTile(value: SendPlace.webhook, title: Text('Only my own webhook'),
-              subtitle: Text('Straight from this phone. Relay Everything never gets them.')),
-          ]),
-        ),
-        if (webhook && relay.privateWebhookMissing) ListTile(
-          title: Text('Set your webhook again', style: TextStyle(color: danger)),
-          subtitle: const Text('This phone lost its address and secret. Your health, places, calendar and photos wait '
-            'here until you do.'),
-          trailing: const Icon(CupertinoIcons.chevron_forward),
-          onTap: () => _setPrivateWebhook(context),
-        ) else if (webhook) ...[
-          ListTile(
-            title: const Text('Webhook'),
-            subtitle: Text(hostOf(relay.webhookAddress)),
-            trailing: TextButton(onPressed: () => _test(context), style: quietButton(context), child: const Text('Send a test')),
-          ),
-          if (relay.webhookProblem case final problem?) ListTile(
-            subtitle: Text(problemLine(problem, DateTime.now(), what: 'Health, places, calendar and photos'),
-              style: TextStyle(color: danger)),
-          ),
-        ],
-      ]),
-      if (webhook) Padding(
-        padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
-        child: Text('What already went to Relay Everything stays on your page. Your AI apps and your page show none of '
-          'this from now on.', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-      ),
-    ];
-  }
-
-  /// *Relay Everything* moves at once, with no question: it sends nothing new outside the person's server. *Only my own
-  /// webhook* with no webhook kept first opens its setup; leaving it changes nothing.
-  Future<void> _pickPrivate(BuildContext context, SendPlace place) async {
-    if (place == SendPlace.webhook && relay.webhookAddress == null) return _setPrivateWebhook(context);
-    await apply(context, relay.setPrivatePlace(place));
-  }
-
-  /// The webhook's setup, for private data only: its *Save* keeps the webhook, then private data goes there.
-  Future<void> _setPrivateWebhook(BuildContext context) async {
-    final saved = await Navigator.of(context).push(MaterialPageRoute<SendPlace>(
-      builder: (_) => ConnectScreen(relay: relay, privateOnly: true)));
-    if (saved == SendPlace.webhook && context.mounted) await apply(context, relay.setPrivatePlace(SendPlace.webhook));
+  /// Asks first, then signs out another of the person's phones: it stops at its next request, and the others go on.
+  Future<void> _signOutPhone(BuildContext context, ConnectedDevice phone) async {
+    if (!await confirmSignOut(context, title: 'Sign out ${phone.name}?',
+      body: 'It stops sending at its next request. Its notes stay on it. Sign in on it again to send from it.')) {
+      return;
+    }
+    if (!context.mounted) return;
+    await apply(context, relay.signOutPhone(phone.id));
   }
 
   List<Widget> _webhook(BuildContext context) {
@@ -207,18 +160,10 @@ class _AccountPageState extends State<AccountPage> {
   /// the webhook gets no notes from the phone until the person adds it on their page.
   Future<void> _signIn(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
-    if (!await choosePlace(context, relay, widget.scanner, keepWebhook: true)) return;
+    if (!await choosePlace(context, relay, keepWebhook: true)) return;
     unawaited(relay.refreshConnections());
     messenger.showSnackBar(const SnackBar(content: Text('Signed in. To get your notes at your webhook too, add it under '
       'Webhooks on your Relay Everything page.')));
-  }
-
-  /// [part] of the person's Relay Everything page, such as `#webhooks`, in the phone's browser.
-  Future<void> _open(String part) async {
-    final messenger = ScaffoldMessenger.of(context);
-    if (!await (widget.opener ?? openInBrowser)(Uri.parse('${relay.server ?? defaultServer}/$part'))) {
-      messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
-    }
   }
 
   Future<void> _test(BuildContext context) async {
@@ -226,23 +171,13 @@ class _AccountPageState extends State<AccountPage> {
     if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(answer)));
   }
 
-  Future<void> _editServer(BuildContext context) async {
-    final address = await showDialog<String>(context: context, builder: (context) => ServerDialog(server: relay.server));
-    if (address != null && context.mounted) await apply(context, relay.setServer(address));
-  }
-
   /// Asks first, then forgets the key and stops sending, and goes back to Settings, which says *Sign in*.
   Future<void> _signOut(BuildContext context) async {
-    final sure = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
-      title: const Text('Sign out?'),
-      content: const Text('Sending stops and this phone forgets its key. Notes from this phone stay here. Notes from your '
-        'other phones and email leave this phone.'),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-        TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sign out')),
-      ],
-    ));
-    if (sure != true) return;
+    if (!await confirmSignOut(context, title: 'Sign out?',
+      body: 'Sending stops and this phone forgets its key. Notes from this phone stay here. Notes from your other phones '
+        'and email leave this phone.')) {
+      return;
+    }
     await relay.disconnect();
     if (context.mounted) Navigator.of(context).maybePop();
   }

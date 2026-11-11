@@ -28,6 +28,26 @@
 		5E1A7D182F00B00100AA0001 /* Brand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7D092F00B00100AA0001 /* Brand.swift */; };
 		5E1A7D192F00B00100AA0001 /* InterVariable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 5E1A7D0A2F00B00100AA0001 /* InterVariable.ttf */; };
 		5E1A7D1A2F00B00100AA0001 /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 5E1A7D0B2F00B00100AA0001 /* OFL.txt */; };
+		5E1A7E012F00C00200AA0001 /* RelayWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7E012F00C00100AA0001 /* RelayWatchApp.swift */; };
+		5E1A7E022F00C00200AA0001 /* WatchModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7E022F00C00100AA0001 /* WatchModel.swift */; };
+		5E1A7E032F00C00200AA0001 /* WatchRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7E032F00C00100AA0001 /* WatchRecorder.swift */; };
+		5E1A7E042F00C00200AA0001 /* WatchNotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7E042F00C00100AA0001 /* WatchNotes.swift */; };
+		5E1A7E052F00C00200AA0001 /* WatchLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7E052F00C00100AA0001 /* WatchLink.swift */; };
+		5E1A7E062F00C00200AA0001 /* WatchScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7E062F00C00100AA0001 /* WatchScreens.swift */; };
+		5E1A7E072F00C00200AA0001 /* WatchBrand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7E072F00C00100AA0001 /* WatchBrand.swift */; };
+		5E1A7E082F00C00200AA0001 /* StartVoiceNoteIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7E082F00C00100AA0001 /* StartVoiceNoteIntent.swift */; };
+		5E1A7E092F00C00200AA0001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5E1A7E0A2F00C00100AA0001 /* Assets.xcassets */; };
+		5E1A7E0A2F00C00200AA0001 /* InterVariable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 5E1A7D0A2F00B00100AA0001 /* InterVariable.ttf */; };
+		5E1A7E0B2F00C00200AA0001 /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 5E1A7D0B2F00B00100AA0001 /* OFL.txt */; };
+		5E1A7E0C2F00C00200AA0001 /* RelayWatchWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5E1A7E0E2F00C00100AA0001 /* RelayWatchWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		5E1A7E0D2F00C00200AA0001 /* RelayWatchWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7E0C2F00C00100AA0001 /* RelayWatchWidget.swift */; };
+		5E1A7E0E2F00C00200AA0001 /* RelayWatchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7E0F2F00C00100AA0001 /* RelayWatchTests.swift */; };
+		5E1A7E0F2F00C00200AA0001 /* WatchNotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7E042F00C00100AA0001 /* WatchNotes.swift */; };
+		5E1A7E102F00C00200AA0001 /* RelayWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 5E1A7E0B2F00C00100AA0001 /* RelayWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		5E1A7E112F00C00200AA0001 /* ShortcutsInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7E112F00C00100AA0001 /* ShortcutsInbox.swift */; };
+		5E1A7E122F00C00200AA0001 /* RelayWatchReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7E122F00C00100AA0001 /* RelayWatchReceiver.swift */; };
+		5E1A7E132F00C00200AA0001 /* ShortcutsInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7E112F00C00100AA0001 /* ShortcutsInbox.swift */; };
+		5E1A7E142F00C00200AA0001 /* ShortcutsInboxTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7E132F00C00100AA0001 /* ShortcutsInboxTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -44,6 +64,20 @@
 			proxyType = 1;
 			remoteGlobalIDString = 5E1A7D302F00B00100AA0001;
 			remoteInfo = ShareExtension;
+		};
+		5E1A7E012F00C00600AA0001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5E1A7E012F00C00400AA0001;
+			remoteInfo = RelayWatch;
+		};
+		5E1A7E022F00C00600AA0001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5E1A7E022F00C00400AA0001;
+			remoteInfo = RelayWatchWidget;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -67,6 +101,28 @@
 				5E1A7D172F00B00100AA0001 /* ShareExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E1A7E042F00C00500AA0001 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				5E1A7E0C2F00C00200AA0001 /* RelayWatchWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E1A7E0B2F00C00500AA0001 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				5E1A7E102F00C00200AA0001 /* RelayWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -102,6 +158,25 @@
 		5E1A7D092F00B00100AA0001 /* Brand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Brand.swift; sourceTree = "<group>"; };
 		5E1A7D0A2F00B00100AA0001 /* InterVariable.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = InterVariable.ttf; path = ../assets/fonts/inter/InterVariable.ttf; sourceTree = SOURCE_ROOT; };
 		5E1A7D0B2F00B00100AA0001 /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = OFL.txt; path = ../assets/fonts/inter/OFL.txt; sourceTree = SOURCE_ROOT; };
+		5E1A7E012F00C00100AA0001 /* RelayWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayWatchApp.swift; sourceTree = "<group>"; };
+		5E1A7E022F00C00100AA0001 /* WatchModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchModel.swift; sourceTree = "<group>"; };
+		5E1A7E032F00C00100AA0001 /* WatchRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRecorder.swift; sourceTree = "<group>"; };
+		5E1A7E042F00C00100AA0001 /* WatchNotes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchNotes.swift; sourceTree = "<group>"; };
+		5E1A7E052F00C00100AA0001 /* WatchLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLink.swift; sourceTree = "<group>"; };
+		5E1A7E062F00C00100AA0001 /* WatchScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchScreens.swift; sourceTree = "<group>"; };
+		5E1A7E072F00C00100AA0001 /* WatchBrand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchBrand.swift; sourceTree = "<group>"; };
+		5E1A7E082F00C00100AA0001 /* StartVoiceNoteIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartVoiceNoteIntent.swift; sourceTree = "<group>"; };
+		5E1A7E092F00C00100AA0001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		5E1A7E0A2F00C00100AA0001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		5E1A7E0B2F00C00100AA0001 /* RelayWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RelayWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5E1A7E0C2F00C00100AA0001 /* RelayWatchWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayWatchWidget.swift; sourceTree = "<group>"; };
+		5E1A7E0D2F00C00100AA0001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		5E1A7E0E2F00C00100AA0001 /* RelayWatchWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RelayWatchWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		5E1A7E0F2F00C00100AA0001 /* RelayWatchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayWatchTests.swift; sourceTree = "<group>"; };
+		5E1A7E102F00C00100AA0001 /* RelayWatchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RelayWatchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		5E1A7E112F00C00100AA0001 /* ShortcutsInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutsInbox.swift; sourceTree = "<group>"; };
+		5E1A7E122F00C00100AA0001 /* RelayWatchReceiver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayWatchReceiver.swift; sourceTree = "<group>"; };
+		5E1A7E132F00C00100AA0001 /* ShortcutsInboxTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutsInboxTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -120,6 +195,27 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5E1A7E022F00C00500AA0001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E1A7E062F00C00500AA0001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E1A7E092F00C00500AA0001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -127,6 +223,7 @@
 			isa = PBXGroup;
 			children = (
 				331C807B294A618700263BE5 /* RunnerTests.swift */,
+				5E1A7E132F00C00100AA0001 /* ShortcutsInboxTests.swift */,
 			);
 			path = RunnerTests;
 			sourceTree = "<group>";
@@ -151,6 +248,9 @@
 				97C146EF1CF9000F007C117D /* Products */,
 				331C8082294A63A400263BE5 /* RunnerTests */,
 				5E1A7D202F00B00100AA0001 /* ShareExtension */,
+				5E1A7E012F00C00300AA0001 /* RelayWatch */,
+				5E1A7E022F00C00300AA0001 /* RelayWatchWidget */,
+				5E1A7E032F00C00300AA0001 /* RelayWatchTests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -160,6 +260,9 @@
 				97C146EE1CF9000F007C117D /* Runner.app */,
 				331C8081294A63A400263BE5 /* RunnerTests.xctest */,
 				5E1A7D082F00B00100AA0001 /* ShareExtension.appex */,
+				5E1A7E0B2F00C00100AA0001 /* RelayWatch.app */,
+				5E1A7E0E2F00C00100AA0001 /* RelayWatchWidget.appex */,
+				5E1A7E102F00C00100AA0001 /* RelayWatchTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -177,6 +280,8 @@
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
 				5E1A7C0D2F00A00100AA0001 /* RelayIntents.swift */,
 				5E1A7B0B2F00000100A1B2C3 /* RelayBackground.swift */,
+				5E1A7E112F00C00100AA0001 /* ShortcutsInbox.swift */,
+				5E1A7E122F00C00100AA0001 /* RelayWatchReceiver.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 			);
 			path = Runner;
@@ -197,6 +302,40 @@
 				5E1A7D072F00B00100AA0001 /* ShareExtension.entitlements */,
 			);
 			path = ShareExtension;
+			sourceTree = "<group>";
+		};
+		5E1A7E012F00C00300AA0001 /* RelayWatch */ = {
+			isa = PBXGroup;
+			children = (
+				5E1A7E012F00C00100AA0001 /* RelayWatchApp.swift */,
+				5E1A7E022F00C00100AA0001 /* WatchModel.swift */,
+				5E1A7E032F00C00100AA0001 /* WatchRecorder.swift */,
+				5E1A7E042F00C00100AA0001 /* WatchNotes.swift */,
+				5E1A7E052F00C00100AA0001 /* WatchLink.swift */,
+				5E1A7E062F00C00100AA0001 /* WatchScreens.swift */,
+				5E1A7E072F00C00100AA0001 /* WatchBrand.swift */,
+				5E1A7E082F00C00100AA0001 /* StartVoiceNoteIntent.swift */,
+				5E1A7E0A2F00C00100AA0001 /* Assets.xcassets */,
+				5E1A7E092F00C00100AA0001 /* Info.plist */,
+			);
+			path = RelayWatch;
+			sourceTree = "<group>";
+		};
+		5E1A7E022F00C00300AA0001 /* RelayWatchWidget */ = {
+			isa = PBXGroup;
+			children = (
+				5E1A7E0C2F00C00100AA0001 /* RelayWatchWidget.swift */,
+				5E1A7E0D2F00C00100AA0001 /* Info.plist */,
+			);
+			path = RelayWatchWidget;
+			sourceTree = "<group>";
+		};
+		5E1A7E032F00C00300AA0001 /* RelayWatchTests */ = {
+			isa = PBXGroup;
+			children = (
+				5E1A7E0F2F00C00100AA0001 /* RelayWatchTests.swift */,
+			);
+			path = RelayWatchTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -229,12 +368,14 @@
 				97C146EC1CF9000F007C117D /* Resources */,
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
 				5E1A7D242F00B00100AA0001 /* Embed Foundation Extensions */,
+				5E1A7E0B2F00C00500AA0001 /* Embed Watch Content */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				5E1A7D322F00B00100AA0001 /* PBXTargetDependency */,
+				5E1A7E012F00C00700AA0001 /* PBXTargetDependency */,
 			);
 			name = Runner;
 			packageProductDependencies = (
@@ -261,6 +402,59 @@
 			productReference = 5E1A7D082F00B00100AA0001 /* ShareExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		5E1A7E012F00C00400AA0001 /* RelayWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5E1A7E012F00C00800AA0001 /* Build configuration list for PBXNativeTarget "RelayWatch" */;
+			buildPhases = (
+				5E1A7E012F00C00500AA0001 /* Sources */,
+				5E1A7E022F00C00500AA0001 /* Frameworks */,
+				5E1A7E032F00C00500AA0001 /* Resources */,
+				5E1A7E042F00C00500AA0001 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5E1A7E022F00C00700AA0001 /* PBXTargetDependency */,
+			);
+			name = RelayWatch;
+			productName = RelayWatch;
+			productReference = 5E1A7E0B2F00C00100AA0001 /* RelayWatch.app */;
+			productType = "com.apple.product-type.application";
+		};
+		5E1A7E022F00C00400AA0001 /* RelayWatchWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5E1A7E022F00C00800AA0001 /* Build configuration list for PBXNativeTarget "RelayWatchWidget" */;
+			buildPhases = (
+				5E1A7E052F00C00500AA0001 /* Sources */,
+				5E1A7E062F00C00500AA0001 /* Frameworks */,
+				5E1A7E072F00C00500AA0001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RelayWatchWidget;
+			productName = RelayWatchWidget;
+			productReference = 5E1A7E0E2F00C00100AA0001 /* RelayWatchWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		5E1A7E032F00C00400AA0001 /* RelayWatchTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5E1A7E032F00C00800AA0001 /* Build configuration list for PBXNativeTarget "RelayWatchTests" */;
+			buildPhases = (
+				5E1A7E082F00C00500AA0001 /* Sources */,
+				5E1A7E092F00C00500AA0001 /* Frameworks */,
+				5E1A7E0A2F00C00500AA0001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RelayWatchTests;
+			productName = RelayWatchTests;
+			productReference = 5E1A7E102F00C00100AA0001 /* RelayWatchTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -280,6 +474,15 @@
 						LastSwiftMigration = 1100;
 					};
 					5E1A7D302F00B00100AA0001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					5E1A7E012F00C00400AA0001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					5E1A7E022F00C00400AA0001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					5E1A7E032F00C00400AA0001 = {
 						CreatedOnToolsVersion = 15.0;
 					};
 				};
@@ -303,6 +506,9 @@
 				97C146ED1CF9000F007C117D /* Runner */,
 				331C8080294A63A400263BE5 /* RunnerTests */,
 				5E1A7D302F00B00100AA0001 /* ShareExtension */,
+				5E1A7E012F00C00400AA0001 /* RelayWatch */,
+				5E1A7E022F00C00400AA0001 /* RelayWatchWidget */,
+				5E1A7E032F00C00400AA0001 /* RelayWatchTests */,
 			);
 		};
 /* End PBXProject section */
@@ -332,6 +538,30 @@
 			files = (
 				5E1A7D192F00B00100AA0001 /* InterVariable.ttf in Resources */,
 				5E1A7D1A2F00B00100AA0001 /* OFL.txt in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E1A7E032F00C00500AA0001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E1A7E092F00C00200AA0001 /* Assets.xcassets in Resources */,
+				5E1A7E0A2F00C00200AA0001 /* InterVariable.ttf in Resources */,
+				5E1A7E0B2F00C00200AA0001 /* OFL.txt in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E1A7E072F00C00500AA0001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E1A7E0A2F00C00500AA0001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -378,6 +608,8 @@
 			files = (
 				331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */,
 				5E1A7D162F00B00100AA0001 /* ShareNote.swift in Sources */,
+				5E1A7E132F00C00200AA0001 /* ShortcutsInbox.swift in Sources */,
+				5E1A7E142F00C00200AA0001 /* ShortcutsInboxTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -390,6 +622,8 @@
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,
 				5E1A7C0D2F00A00200AA0001 /* RelayIntents.swift in Sources */,
 				5E1A7B0C2F00000100A1B2C3 /* RelayBackground.swift in Sources */,
+				5E1A7E112F00C00200AA0001 /* ShortcutsInbox.swift in Sources */,
+				5E1A7E122F00C00200AA0001 /* RelayWatchReceiver.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -406,6 +640,38 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5E1A7E012F00C00500AA0001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E1A7E012F00C00200AA0001 /* RelayWatchApp.swift in Sources */,
+				5E1A7E022F00C00200AA0001 /* WatchModel.swift in Sources */,
+				5E1A7E032F00C00200AA0001 /* WatchRecorder.swift in Sources */,
+				5E1A7E042F00C00200AA0001 /* WatchNotes.swift in Sources */,
+				5E1A7E052F00C00200AA0001 /* WatchLink.swift in Sources */,
+				5E1A7E062F00C00200AA0001 /* WatchScreens.swift in Sources */,
+				5E1A7E072F00C00200AA0001 /* WatchBrand.swift in Sources */,
+				5E1A7E082F00C00200AA0001 /* StartVoiceNoteIntent.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E1A7E052F00C00500AA0001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E1A7E0D2F00C00200AA0001 /* RelayWatchWidget.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5E1A7E082F00C00500AA0001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E1A7E0E2F00C00200AA0001 /* RelayWatchTests.swift in Sources */,
+				5E1A7E0F2F00C00200AA0001 /* WatchNotes.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -418,6 +684,16 @@
 			isa = PBXTargetDependency;
 			target = 5E1A7D302F00B00100AA0001 /* ShareExtension */;
 			targetProxy = 5E1A7D312F00B00100AA0001 /* PBXContainerItemProxy */;
+		};
+		5E1A7E012F00C00700AA0001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5E1A7E012F00C00400AA0001 /* RelayWatch */;
+			targetProxy = 5E1A7E012F00C00600AA0001 /* PBXContainerItemProxy */;
+		};
+		5E1A7E022F00C00700AA0001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5E1A7E022F00C00400AA0001 /* RelayWatchWidget */;
+			targetProxy = 5E1A7E022F00C00600AA0001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -856,6 +1132,210 @@
 			};
 			name = Profile;
 		};
+		5E1A7E012F00C00900AA0001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				INFOPLIST_FILE = RelayWatch/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.matthewwong525.relayApp.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		5E1A7E022F00C00900AA0001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				INFOPLIST_FILE = RelayWatch/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.matthewwong525.relayApp.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+		5E1A7E032F00C00900AA0001 /* Profile */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				INFOPLIST_FILE = RelayWatch/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.matthewwong525.relayApp.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Profile;
+		};
+		5E1A7E042F00C00900AA0001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				INFOPLIST_FILE = RelayWatchWidget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.matthewwong525.relayApp.watchkitapp.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		5E1A7E052F00C00900AA0001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				INFOPLIST_FILE = RelayWatchWidget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.matthewwong525.relayApp.watchkitapp.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+		5E1A7E062F00C00900AA0001 /* Profile */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				INFOPLIST_FILE = RelayWatchWidget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.matthewwong525.relayApp.watchkitapp.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Profile;
+		};
+		5E1A7E072F00C00900AA0001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.matthewwong525.relayApp.RelayWatchTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		5E1A7E082F00C00900AA0001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.matthewwong525.relayApp.RelayWatchTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+		5E1A7E092F00C00900AA0001 /* Profile */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.matthewwong525.relayApp.RelayWatchTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Profile;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -895,6 +1375,36 @@
 				5E1A7D412F00B00100AA0001 /* Debug */,
 				5E1A7D422F00B00100AA0001 /* Release */,
 				5E1A7D432F00B00100AA0001 /* Profile */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5E1A7E012F00C00800AA0001 /* Build configuration list for PBXNativeTarget "RelayWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5E1A7E012F00C00900AA0001 /* Debug */,
+				5E1A7E022F00C00900AA0001 /* Release */,
+				5E1A7E032F00C00900AA0001 /* Profile */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5E1A7E022F00C00800AA0001 /* Build configuration list for PBXNativeTarget "RelayWatchWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5E1A7E042F00C00900AA0001 /* Debug */,
+				5E1A7E052F00C00900AA0001 /* Release */,
+				5E1A7E062F00C00900AA0001 /* Profile */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5E1A7E032F00C00800AA0001 /* Build configuration list for PBXNativeTarget "RelayWatchTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5E1A7E072F00C00900AA0001 /* Debug */,
+				5E1A7E082F00C00900AA0001 /* Release */,
+				5E1A7E092F00C00900AA0001 /* Profile */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -3,7 +3,8 @@ import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 import { ANA, BEN, NOW, queue, spaces } from "../tests/relay";
-import spacesWorker, { migrate, MIGRATIONS } from "./spaces-worker.ts";
+import type { SqlValue } from "./apps/relay/space.ts";
+import spacesWorker, { migrate, MIGRATIONS, WORKBENCH_LIMITS } from "./spaces-worker.ts";
 
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
@@ -112,4 +113,57 @@ it("loads no route code and no Vite-only import.meta.glob, since wrangler bundle
   expect([...found.keys()].some(file => file.endsWith("apps/relay/webhooks/format.ts"))).toBe(true);
   const bad = [...found.keys()].filter(file => file.endsWith("api/contract.ts") || (file.endsWith(".ts") && readFileSync(file, "utf8").includes("import.meta.glob")));
   expect(bad.map(file => chain(file).join("\n → ")), "the spaces Worker reaches no route code").toEqual([]);
+});
+
+/** A person's agents' database, called as RPC calls it, and its storage's made-up size. */
+const workbench = (name = ANA) => {
+  const { bench, state } = spaces.benches.open(name);
+  return { run: (...statements: [string, SqlValue[]?][]) => bench.run(statements.map(([sql, params = []]) => ({ sql, params }))), bench, state };
+};
+
+it("runs an agent's commands in its own database: a table made, then read back", () => {
+  const { run, bench } = workbench();
+  expect(run(["CREATE TABLE reading_list (title TEXT, done INTEGER)"], ["INSERT INTO reading_list VALUES (?, ?), (?, ?)", ["Dune", 0, "Emma", 1]]))
+    .toEqual({ results: [{ rows: [], changed: 0 }, { rows: [], changed: 2 }] });
+  expect(run(["SELECT title FROM reading_list WHERE done = ?", [1]])).toEqual({ results: [{ rows: [{ title: "Emma" }], changed: 0 }] });
+  expect(bench.tables()).toEqual([{ name: "reading_list", columns: ["title", "done"], rows: 2 }]);
+  // Ben's agents have a database of their own.
+  expect(workbench(BEN).run(["SELECT * FROM reading_list"])).toEqual({ error: expect.stringContaining("no such table") });
+});
+
+it("runs a batch all or none, and never reaches the space's tables", async () => {
+  const { run, bench } = workbench();
+  run(["CREATE TABLE plans (name TEXT NOT NULL)"]);
+  expect(run(["INSERT INTO plans VALUES ('ring')"], ["INSERT INTO plans VALUES (NULL)"])).toEqual({ error: expect.stringContaining("NOT NULL") });
+  expect(bench.tables()).toEqual([{ name: "plans", columns: ["name"], rows: 0 }]);
+  await (await fresh(ANA)).ready;
+  for (const sql of ["SELECT * FROM relay_notes", "DELETE FROM relay_notes", "DROP TABLE relay_health"]) {
+    expect(run([sql]), sql).toEqual({ error: expect.stringContaining("no such table") });
+  }
+});
+
+it("refuses a step past each limit, with the limit, and keeps nothing it wrote", () => {
+  const { run, bench, state } = workbench();
+  run(["CREATE TABLE n (v)"]);
+  expect(run(...Array.from({ length: WORKBENCH_LIMITS.statements + 1 }, () => ["SELECT 1"] as [string]))).toEqual({ error: "Send at most 50 statements at once." });
+  expect(run([`SELECT '${"x".repeat(WORKBENCH_LIMITS.statementBytes)}'`])).toEqual({ error: "A statement is at most 100 KB." });
+  run(["WITH RECURSIVE c(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM c WHERE i < 5001) INSERT INTO n SELECT i FROM c"]);
+  expect(run(["SELECT v FROM n"])).toEqual({ error: "An answer is at most 5000 rows: add a LIMIT." });
+  expect(run(["SELECT v FROM n LIMIT 5000"])).toMatchObject({ results: [{ rows: expect.any(Array) }] });
+  expect(run(["SELECT ? AS big", ["x".repeat(WORKBENCH_LIMITS.answerBytes)]])).toEqual({ error: "An answer is at most 5 MB: add a LIMIT." });
+  state.size = WORKBENCH_LIMITS.databaseBytes + 1;
+  expect(run(["INSERT INTO n VALUES (0)"])).toEqual({ error: "The agents' database is at most 1 GB." });
+  state.size = null;
+  expect(bench.tables()).toEqual([{ name: "n", columns: ["v"], rows: 5001 }]);
+});
+
+it("reads a blob back as base64, as JSON has no bytes", () => {
+  expect(workbench().run(["SELECT x'00ff10' AS b"])).toEqual({ results: [{ rows: [{ b: { base64: "AP8Q" } }], changed: 0 }] });
+});
+
+it("deletes every table the agents made", async () => {
+  const { run, bench } = workbench();
+  run(["CREATE TABLE gone (v)"]);
+  await bench.deleteEverything();
+  expect(bench.tables()).toEqual([]);
 });

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'brand.dart';
 import 'web/page_close.dart';
 import 'web/settings_dialog.dart';
+import 'web/shell.dart' show WebPlace, placeOfPart;
 import 'web/space.dart';
 import 'web/web_app.dart';
 import 'web/web_relay.dart';
@@ -17,13 +18,19 @@ void main() {
   late final WebRelay relay;
   final client = SpaceClient(base: pageOf(Uri.base), onSignedOut: () => relay.signedOut());
   relay = WebRelay(client: client);
-  // The phone's *Webhooks* and *AI apps* rows open `/#webhooks`: Settings opens there once. It is read before
-  // the app starts, because the app then writes its own route in the address.
+  // The phone's *Add or change on your Relay Everything page* opens `/#webhooks`: Settings opens there once. Its
+  // *Disconnect on your Relay Everything page* opens `/#ai-apps`, and *Read them on the web* `/#saved-chats`: that page
+  // shows first, once. Both are read before the app starts, because the app then writes its own route in the address.
   SettingsPage? settingsAt = SettingsPage.ofPart(Uri.base.fragment);
+  WebPlace? placeAt = placeOfPart(Uri.base.fragment);
   runApp(WebApp(relay: relay, client: client, takeSettingsAt: () {
     final page = settingsAt;
     settingsAt = null;
     return page;
+  }, takePlaceAt: () {
+    final place = placeAt;
+    placeAt = null;
+    return place;
   }));
   // A closing tab sends the deletes under *Undo* and the words that did not go.
   onPageClose(relay.pageClosing);

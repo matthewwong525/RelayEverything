@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../brand.dart';
+import '../data/connection.dart' show defaultServer;
 import '../relay.dart';
 import 'back_to.dart';
 import 'connect.dart';
@@ -15,6 +16,15 @@ Future<bool> openInBrowser(Uri address) async {
     return await launchUrl(address, mode: LaunchMode.externalApplication);
   } on Exception {
     return false;
+  }
+}
+
+/// [part] of the person's Relay Everything page, such as `#webhooks`, in the phone's browser, and a message if the
+/// browser did not open. A test passes its own [opener].
+Future<void> openRelayPage(BuildContext context, Relay relay, String part, {Opener? opener}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  if (!await (opener ?? openInBrowser)(Uri.parse('${relay.server ?? defaultServer}/$part'))) {
+    messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
   }
 }
 
@@ -91,11 +101,11 @@ Future<void> apply(BuildContext context, Future<String?> change) async {
 /// *Sign in*: sets up where to send, a key or the person's own webhook. Then asks about the notes that never went, and
 /// turns sending on there, in the same step. The Account row in Settings and a folder's *Sign in* both start here. With
 /// [keepWebhook], the webhook Account page's *Sign in to Relay Everything* starts here too: it offers only the sign-in,
-/// and health, places, the calendar and photos stay on the person's own webhook, as *Only my own webhook*. True once
+/// and health, places, the calendar and photos stay on the person's own webhook, as *Only to my own webhook*. True once
 /// sending starts; a closed sign-in or question changes nothing.
-Future<bool> choosePlace(BuildContext context, Relay relay, Scanner? scanner, {bool keepWebhook = false}) async {
+Future<bool> choosePlace(BuildContext context, Relay relay, {bool keepWebhook = false}) async {
   final place = await Navigator.of(context).push(MaterialPageRoute<SendPlace>(
-    builder: (_) => ConnectScreen(relay: relay, scanner: scanner, signInOnly: keepWebhook)));
+    builder: (_) => ConnectScreen(relay: relay, signInOnly: keepWebhook)));
   if (place == null || !context.mounted) return false;
   final fromWebhook = relay.settings.place == SendPlace.webhook && place == SendPlace.server;
   final earlier = await relay.earlierNotes(to: place);
@@ -114,13 +124,14 @@ Future<bool> choosePlace(BuildContext context, Relay relay, Scanner? scanner, {b
   return problem == null;
 }
 
-/// A page opened from Home: *‹ Home*, a large title, and its groups. Each switch acts at once and asks for its
-/// permission only when turned on.
-class _FolderPage extends StatelessWidget {
-  const _FolderPage({required this.relay, required this.title, required this.groups});
+/// A page opened from Home: *‹ Home*, or the [back] page's name, a large title, and its groups. Each switch acts at
+/// once and asks for its permission only when turned on.
+class FolderPage extends StatelessWidget {
+  const FolderPage({super.key, required this.relay, required this.title, required this.groups, this.back = 'Home'});
 
   final Relay relay;
   final String title;
+  final String back;
   final List<Widget> Function(BuildContext context) groups;
 
   @override
@@ -129,7 +140,7 @@ class _FolderPage extends StatelessWidget {
       body: ListenableBuilder(
         listenable: relay,
         builder: (context, _) => CustomScrollView(slivers: [
-          SliverAppBar.large(leading: const BackTo('Home'), leadingWidth: BackTo.widthOf('Home'), title: Text(title)),
+          SliverAppBar.large(leading: BackTo(back), leadingWidth: BackTo.widthOf(back), title: Text(title)),
           SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 32), sliver: SliverList.list(children: groups(context))),
         ]),
       ),
@@ -140,11 +151,10 @@ class _FolderPage extends StatelessWidget {
 /// With sending off: that the folder works once the person signs in, and *Sign in*, the same sign-in as the Account
 /// row in Settings.
 class _NeedsSending extends StatelessWidget {
-  const _NeedsSending({required this.relay, required this.what, this.scanner});
+  const _NeedsSending({required this.relay, required this.what});
 
   final Relay relay;
   final String what;
-  final Scanner? scanner;
 
   @override
   Widget build(BuildContext context) {
@@ -154,7 +164,7 @@ class _NeedsSending extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 12, children: [
         Text('$what works once you sign in. Nothing leaves this phone until you do.',
           style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        FilledButton(onPressed: () => choosePlace(context, relay, scanner), child: const Text('Sign in')),
+        FilledButton(onPressed: () => choosePlace(context, relay), child: const Text('Sign in')),
       ]),
     );
   }
@@ -162,14 +172,13 @@ class _NeedsSending extends StatelessWidget {
 
 /// *Location*: the location history switch, its send state, on iPhone how often it keeps a point, and what it sends.
 class LocationPage extends StatelessWidget {
-  const LocationPage({super.key, required this.relay, this.scanner});
+  const LocationPage({super.key, required this.relay});
 
   final Relay relay;
-  final Scanner? scanner;
 
   @override
   Widget build(BuildContext context) {
-    return _FolderPage(relay: relay, title: 'Location', groups: (context) {
+    return FolderPage(relay: relay, title: 'Location', groups: (context) {
       final settings = relay.settings;
       return [
         Group(children: [SwitchListTile(
@@ -201,7 +210,7 @@ class LocationPage extends StatelessWidget {
               subtitle: Text('Each point, with its street, as before.')),
           ]),
         )]),
-        if (!settings.sending) _NeedsSending(relay: relay, what: 'Location history', scanner: scanner),
+        if (!settings.sending) _NeedsSending(relay: relay, what: 'Location history'),
       ];
     });
   }
@@ -209,14 +218,13 @@ class LocationPage extends StatelessWidget {
 
 /// *Health*: the switch for steps, heart rate, sleep and more, and when they last went.
 class HealthPage extends StatelessWidget {
-  const HealthPage({super.key, required this.relay, this.scanner});
+  const HealthPage({super.key, required this.relay});
 
   final Relay relay;
-  final Scanner? scanner;
 
   @override
   Widget build(BuildContext context) {
-    return _FolderPage(relay: relay, title: 'Health', groups: (context) {
+    return FolderPage(relay: relay, title: 'Health', groups: (context) {
       final settings = relay.settings;
       return [
         Group(children: [SwitchListTile(
@@ -225,7 +233,7 @@ class HealthPage extends StatelessWidget {
           value: settings.health,
           onChanged: settings.sending ? (on) => apply(context, relay.setHealth(on)) : null,
         )]),
-        if (!settings.sending) _NeedsSending(relay: relay, what: 'Health', scanner: scanner),
+        if (!settings.sending) _NeedsSending(relay: relay, what: 'Health'),
       ];
     });
   }
@@ -233,14 +241,13 @@ class HealthPage extends StatelessWidget {
 
 /// *Calendar*: the switch, when events last went, and while on each of the phone's calendars with its own switch.
 class CalendarPage extends StatelessWidget {
-  const CalendarPage({super.key, required this.relay, this.scanner});
+  const CalendarPage({super.key, required this.relay});
 
   final Relay relay;
-  final Scanner? scanner;
 
   @override
   Widget build(BuildContext context) {
-    return _FolderPage(relay: relay, title: 'Calendar', groups: (context) {
+    return FolderPage(relay: relay, title: 'Calendar', groups: (context) {
       final settings = relay.settings;
       return [
         Group(children: [SwitchListTile(
@@ -257,7 +264,7 @@ class CalendarPage extends StatelessWidget {
             onChanged: (on) => relay.setCalendarShown(calendar.id, on),
           ),
         ]),
-        if (!settings.sending) _NeedsSending(relay: relay, what: 'Calendar', scanner: scanner),
+        if (!settings.sending) _NeedsSending(relay: relay, what: 'Calendar'),
       ];
     });
   }
@@ -265,16 +272,15 @@ class CalendarPage extends StatelessWidget {
 
 /// *Photos*: the switch that sends each new photo, and whether photos may go on mobile data.
 class PhotosPage extends StatelessWidget {
-  const PhotosPage({super.key, required this.relay, this.scanner, this.opener});
+  const PhotosPage({super.key, required this.relay, this.opener});
 
   final Relay relay;
-  final Scanner? scanner;
   /// Opens the Relay Everything page; a test passes its own.
   final Opener? opener;
 
   @override
   Widget build(BuildContext context) {
-    return _FolderPage(relay: relay, title: 'Photos', groups: (context) {
+    return FolderPage(relay: relay, title: 'Photos', groups: (context) {
       final settings = relay.settings;
       return [
         Group(children: [
@@ -293,7 +299,7 @@ class PhotosPage extends StatelessWidget {
             onChanged: settings.photos ? (on) => apply(context, relay.setPhotosOnMobileData(on)) : null,
           ),
         ]),
-        if (!settings.sending) _NeedsSending(relay: relay, what: 'Photos', scanner: scanner),
+        if (!settings.sending) _NeedsSending(relay: relay, what: 'Photos'),
       ];
     });
   }

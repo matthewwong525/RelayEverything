@@ -3,7 +3,7 @@
   "info": {
     "title": "Relay Everything API",
     "version": "1.0.0",
-    "description": "Read one person's Relay Everything notes, health, sleep, workouts, places, calendar and saved chats, and add notes. It changes and deletes nothing. Each caller reaches only the space of the person who connected it or made its key."
+    "description": "Read one person's Relay Everything notes, health, sleep, workouts, places, calendar, saved chats and memory, and add notes. A computer's key also adds facts, changes the memory's columns and the topics of facts and notes, and opens the knowledge web. It deletes nothing. Each caller reaches only the space of the person who connected it or made its key."
   },
   "servers": [
     {
@@ -23,7 +23,7 @@
       "get": {
         "operationId": "listNotes",
         "summary": "Search notes, or read a time range",
-        "description": "With `q`, the notes whose text holds every word, as the `search` tool: `source` picks older recorded or typed notes, and `limit` is at most 50. Without `q`, every note from `from` to `to`, as the `timeline` tool: both are needed, and `limit` is at most 100. Newest first; read on with `cursor`.",
+        "description": "With `q`, the notes whose text holds every word, as the `search` tool; with `tag`, the notes on that topic and its parts: `source` picks older recorded or typed notes, and `limit` is at most 50. Without `q` or `tag`, every note from `from` to `to`, as the `timeline` tool: both are needed, and `limit` is at most 100. Newest first; read on with `cursor`.",
         "parameters": [
           {
             "name": "q",
@@ -34,6 +34,17 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 200
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "description": "A topic, such as battery or bike/charging: it finds its parts too, so bike finds bike/charging.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 81
             }
           },
           {
@@ -143,60 +154,6 @@
                             "type": "boolean",
                             "description": "Whether it has a recording."
                           },
-                          "place": {
-                            "anyOf": [
-                              {
-                                "type": "object",
-                                "properties": {
-                                  "lat": {
-                                    "type": "number"
-                                  },
-                                  "lon": {
-                                    "type": "number"
-                                  },
-                                  "accuracy": {
-                                    "anyOf": [
-                                      {
-                                        "type": "number"
-                                      },
-                                      {
-                                        "type": "null"
-                                      }
-                                    ]
-                                  },
-                                  "name": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "null"
-                                      }
-                                    ]
-                                  },
-                                  "from": {
-                                    "type": "string",
-                                    "enum": [
-                                      "phone",
-                                      "history"
-                                    ],
-                                    "description": "phone: the phone's place at the time; history: matched from the location history."
-                                  }
-                                },
-                                "required": [
-                                  "lat",
-                                  "lon",
-                                  "accuracy",
-                                  "name",
-                                  "from"
-                                ],
-                                "additionalProperties": false
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
                           "attachments": {
                             "type": "array",
                             "items": {
@@ -240,7 +197,6 @@
                           "recordedAt",
                           "device",
                           "audio",
-                          "place",
                           "attachments"
                         ],
                         "additionalProperties": false
@@ -288,7 +244,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -298,7 +254,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat, stay, trip or route in the caller's own space.",
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -319,6 +275,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "additionalProperties": false,
                 "properties": {
                   "clientId": {
                     "type": "string",
@@ -337,7 +294,7 @@
                     "description": "When it was written; now when left out: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset."
                   },
                   "lat": {
-                    "description": "Where it was written: latitude. Send it with lon.",
+                    "description": "Where it was written: latitude. Send it with lon. The place becomes one point of location history at the note's time, not part of the note.",
                     "type": "number",
                     "minimum": -90,
                     "maximum": 90
@@ -355,7 +312,7 @@
                     "maximum": 100000
                   },
                   "place": {
-                    "description": "The place's name, such as a street.",
+                    "description": "The place's name, such as a street, kept on its location point.",
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 200
@@ -375,7 +332,7 @@
         },
         "responses": {
           "200": {
-            "description": "Added before: the same note.",
+            "description": "Added before: the same one.",
             "content": {
               "application/json": {
                 "schema": {
@@ -445,7 +402,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -455,7 +412,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat, stay, trip or route in the caller's own space.",
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -529,60 +486,6 @@
                     "audio": {
                       "type": "boolean",
                       "description": "Whether it has a recording."
-                    },
-                    "place": {
-                      "anyOf": [
-                        {
-                          "type": "object",
-                          "properties": {
-                            "lat": {
-                              "type": "number"
-                            },
-                            "lon": {
-                              "type": "number"
-                            },
-                            "accuracy": {
-                              "anyOf": [
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "name": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
-                            "from": {
-                              "type": "string",
-                              "enum": [
-                                "phone",
-                                "history"
-                              ],
-                              "description": "phone: the phone's place at the time; history: matched from the location history."
-                            }
-                          },
-                          "required": [
-                            "lat",
-                            "lon",
-                            "accuracy",
-                            "name",
-                            "from"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     },
                     "attachments": {
                       "type": "array",
@@ -750,7 +653,6 @@
                     "recordedAt",
                     "device",
                     "audio",
-                    "place",
                     "attachments",
                     "placesNearby",
                     "day"
@@ -781,7 +683,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -791,7 +693,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat, stay, trip or route in the caller's own space.",
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1321,7 +1223,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1331,7 +1233,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat, stay, trip or route in the caller's own space.",
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1503,7 +1405,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1513,7 +1415,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat, stay, trip or route in the caller's own space.",
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1760,7 +1662,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1770,7 +1672,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat, stay, trip or route in the caller's own space.",
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1960,7 +1862,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1970,7 +1872,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat, stay, trip or route in the caller's own space.",
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2208,7 +2110,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2218,7 +2120,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat, stay, trip or route in the caller's own space.",
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2383,7 +2285,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2393,7 +2295,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat, stay, trip or route in the caller's own space.",
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2619,7 +2521,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2629,7 +2531,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat, stay, trip or route in the caller's own space.",
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2645,12 +2547,12 @@
       "get": {
         "operationId": "searchChats",
         "summary": "Search saved chats",
-        "description": "Find saved Claude Code chats whose messages or AI summaries hold every word of the query, newest first, with up to 3 matching lines each.",
+        "description": "Find saved AI chats from Claude Code and Codex whose messages or AI summaries hold every word of the query, newest first, with up to 3 matching lines each. Leave out `q` to list every chat active from `from` to `to`, with no lines.",
         "parameters": [
           {
             "name": "q",
             "in": "query",
-            "required": true,
+            "required": false,
             "description": "The words to find.",
             "schema": {
               "type": "string",
@@ -2735,7 +2637,11 @@
                           },
                           "app": {
                             "type": "string",
-                            "const": "claude-code"
+                            "enum": [
+                              "claude-code",
+                              "codex"
+                            ],
+                            "description": "The app the chat came from."
                           },
                           "startedAt": {
                             "type": "string",
@@ -2832,7 +2738,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2842,7 +2748,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat, stay, trip or route in the caller's own space.",
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2910,7 +2816,11 @@
                     },
                     "app": {
                       "type": "string",
-                      "const": "claude-code"
+                      "enum": [
+                        "claude-code",
+                        "codex"
+                      ],
+                      "description": "The app the chat came from."
                     },
                     "startedAt": {
                       "type": "string",
@@ -3034,7 +2944,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3044,7 +2954,1938 @@
             }
           },
           "404": {
-            "description": "No such note, chat, stay, trip or route in the caller's own space.",
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/notes/{id}/tags": {
+      "post": {
+        "operationId": "tagNote",
+        "summary": "Change a note's topics",
+        "description": "Add and remove a note's topics, as this computer: the note's words stay as the person wrote them. Only a computer's key; it answers the note's topics.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The note's id.",
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "add": {
+                    "default": [],
+                    "description": "Topics to add.",
+                    "maxItems": 10,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 81
+                    }
+                  },
+                  "remove": {
+                    "default": [],
+                    "description": "Topics to remove.",
+                    "maxItems": 10,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 81
+                    }
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Its topics now."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "tags"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/memory": {
+      "get": {
+        "operationId": "searchMemory",
+        "summary": "Search the memory",
+        "description": "The memory's facts, newest first, as the `memory` tool: `q` finds every word in the text columns, `tag` a topic and its parts, `source` the facts from one record, such as relay:chat/<id>, and any column its value as its own field, such as `kind=decision`. Only live facts, unless `all=true`. The answer lists the memory's columns.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "The words to find.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "description": "A topic, such as battery or bike/charging: it finds its parts too, so bike finds bike/charging.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 81
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "description": "A record's link, such as relay:chat/<id> or relay:note/<id>: it finds its messages too.",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Only facts added from this time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset.",
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Only facts added before this time: a day (2026-11-04), a time in the zone (2026-11-04T09:00), or a time with its offset.",
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "description": "Add the facts that were replaced.",
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "where",
+            "in": "query",
+            "required": false,
+            "description": "A value for each of the person's columns, such as { \"kind\": \"decision\" }. In the web API, send each as its own field.",
+            "schema": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "maxLength": 30
+              },
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 400
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "How many facts, at most 50.",
+            "schema": {
+              "default": 20,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "The last answer's `nextCursor`, to read the next page.",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "required": false,
+            "description": "An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "facts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "description": "The fact's id, such as fk3x9."
+                          },
+                          "fields": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                },
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              ]
+                            },
+                            "description": "The fact's value for each column, such as kind and text; a removed column's value stays."
+                          },
+                          "tags": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "The topics it is about."
+                          },
+                          "sources": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "The records it came from, as relay: links."
+                          },
+                          "replaces": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "The ids of the facts it replaced."
+                          },
+                          "replacedBy": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "The id of the fact that replaced it; null for a live fact."
+                          },
+                          "device": {
+                            "type": "string",
+                            "description": "The name of the computer that added it."
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "fields",
+                          "tags",
+                          "sources",
+                          "replaces",
+                          "replacedBy",
+                          "device",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "columns": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "text",
+                              "number",
+                              "date",
+                              "yes_no",
+                              "words"
+                            ]
+                          },
+                          "required": {
+                            "type": "boolean",
+                            "description": "Whether each new fact needs it."
+                          },
+                          "note": {
+                            "type": "string",
+                            "description": "What it holds, for the AIs that fill it."
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "type",
+                          "required",
+                          "note"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "The live columns."
+                    },
+                    "nextCursor": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Send it as `cursor` to read the next page; null on the last one."
+                    }
+                  },
+                  "required": [
+                    "facts",
+                    "columns",
+                    "nextCursor"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "addFacts",
+        "summary": "Add facts",
+        "description": "Add up to 50 facts to the memory, all or none, as this computer. Each fact needs a tag, a source and every required column, and each value must fit its column's type. A fact can't be changed or deleted: name the facts it replaces instead. Send the same `clientId` again after a lost answer, and the fact is stored once. Only a computer's key adds. 201 when any was added.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "facts": {
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "clientId": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9-]{8,64}$",
+                          "description": "Your own id for this fact, such as a new UUID, so a resend is stored once."
+                        },
+                        "tags": {
+                          "minItems": 1,
+                          "maxItems": 10,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 81
+                          },
+                          "description": "The topics it is about, such as battery or bike/charging: at least one."
+                        },
+                        "sources": {
+                          "minItems": 1,
+                          "maxItems": 10,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "maxLength": 100
+                          },
+                          "description": "The records it came from, such as relay:chat/<id>#<message>: at least one."
+                        },
+                        "replaces": {
+                          "description": "The ids of the live facts this one replaces.",
+                          "maxItems": 10,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "^f[a-z2-7]{4,6}$",
+                            "description": "The fact's id, such as fk3x9."
+                          }
+                        },
+                        "fields": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string",
+                            "maxLength": 30
+                          },
+                          "additionalProperties": {},
+                          "description": "A value for each of the memory's columns, such as kind and text."
+                        }
+                      },
+                      "required": [
+                        "clientId",
+                        "tags",
+                        "sources",
+                        "fields"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "description": "The facts to add."
+                  }
+                },
+                "required": [
+                  "facts"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Added before: the same one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "facts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "clientId": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string",
+                            "description": "The fact's id."
+                          },
+                          "added": {
+                            "type": "boolean",
+                            "description": "False when this clientId was added before."
+                          }
+                        },
+                        "required": [
+                          "clientId",
+                          "id",
+                          "added"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "facts"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Added.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "facts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "clientId": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string",
+                            "description": "The fact's id."
+                          },
+                          "added": {
+                            "type": "boolean",
+                            "description": "False when this clientId was added before."
+                          }
+                        },
+                        "required": [
+                          "clientId",
+                          "id",
+                          "added"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "facts"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/memory/columns": {
+      "get": {
+        "operationId": "getColumns",
+        "summary": "Read the memory's columns",
+        "description": "The memory's live columns, each with its type, whether it is required, and its note; the removed ones; and, with `changes`, each column change with its device and time.",
+        "parameters": [
+          {
+            "name": "changes",
+            "in": "query",
+            "required": false,
+            "description": "Add the last 100 column changes.",
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "columns": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "text",
+                              "number",
+                              "date",
+                              "yes_no",
+                              "words"
+                            ]
+                          },
+                          "required": {
+                            "type": "boolean",
+                            "description": "Whether each new fact needs it."
+                          },
+                          "note": {
+                            "type": "string",
+                            "description": "What it holds, for the AIs that fill it."
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "type",
+                          "required",
+                          "note"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "The live columns."
+                    },
+                    "removed": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "text",
+                              "number",
+                              "date",
+                              "yes_no",
+                              "words"
+                            ]
+                          },
+                          "removedAt": {
+                            "type": "number",
+                            "description": "Unix time in milliseconds."
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "type",
+                          "removedAt"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "The removed columns: a name comes back only with its old type."
+                    },
+                    "changes": {
+                      "description": "The last 100 changes, newest first: only with `changes`.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "change": {
+                            "type": "string",
+                            "enum": [
+                              "add",
+                              "change",
+                              "remove"
+                            ]
+                          },
+                          "column": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "text",
+                                  "number",
+                                  "date",
+                                  "yes_no",
+                                  "words"
+                                ]
+                              },
+                              "required": {
+                                "type": "boolean"
+                              },
+                              "note": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "type"
+                            ],
+                            "additionalProperties": false,
+                            "description": "The column as the change left it."
+                          },
+                          "device": {
+                            "type": "string",
+                            "description": "The name of the computer that changed it."
+                          },
+                          "at": {
+                            "type": "number",
+                            "description": "Unix time in milliseconds."
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "change",
+                          "column",
+                          "device",
+                          "at"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "columns",
+                    "removed"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "changeColumns",
+        "summary": "Change the memory's columns",
+        "description": "Add, change and remove the memory's columns, all or none, at most 20 live. A column's type never changes; a removed column's values stay in the facts that have them. Only a computer's key changes columns. It answers the columns.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "add": {
+                    "default": [],
+                    "description": "Columns to add.",
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "maxLength": 30,
+                          "description": "The column's name: a lower-case letter, then letters, digits or _."
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "text",
+                            "number",
+                            "date",
+                            "yes_no",
+                            "words"
+                          ],
+                          "description": "text (up to 400 characters), number, date (YYYY-MM-DD), yes_no (true or false), or words (up to 20 short words)."
+                        },
+                        "required": {
+                          "default": false,
+                          "description": "Whether each new fact needs it.",
+                          "type": "boolean"
+                        },
+                        "note": {
+                          "type": "string",
+                          "maxLength": 200,
+                          "description": "What the column holds, for the AIs that fill it."
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "type"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "change": {
+                    "default": [],
+                    "description": "Columns whose note or `required` changes.",
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "maxLength": 30,
+                          "description": "The column's name: a lower-case letter, then letters, digits or _."
+                        },
+                        "required": {
+                          "type": "boolean"
+                        },
+                        "note": {
+                          "type": "string",
+                          "maxLength": 200,
+                          "description": "What the column holds, for the AIs that fill it."
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "remove": {
+                    "default": [],
+                    "description": "Columns to remove.",
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 30,
+                      "description": "The column's name: a lower-case letter, then letters, digits or _."
+                    }
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "columns": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "text",
+                              "number",
+                              "date",
+                              "yes_no",
+                              "words"
+                            ]
+                          },
+                          "required": {
+                            "type": "boolean",
+                            "description": "Whether each new fact needs it."
+                          },
+                          "note": {
+                            "type": "string",
+                            "description": "What it holds, for the AIs that fill it."
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "type",
+                          "required",
+                          "note"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "The live columns."
+                    },
+                    "removed": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "text",
+                              "number",
+                              "date",
+                              "yes_no",
+                              "words"
+                            ]
+                          },
+                          "removedAt": {
+                            "type": "number",
+                            "description": "Unix time in milliseconds."
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "type",
+                          "removedAt"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "The removed columns: a name comes back only with its old type."
+                    }
+                  },
+                  "required": [
+                    "columns",
+                    "removed"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/memory/{id}": {
+      "get": {
+        "operationId": "getFact",
+        "summary": "Read one fact",
+        "description": "Read one fact of the memory by its id, with the facts it replaced and the fact that replaced it.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The fact's id, such as fk3x9.",
+            "schema": {
+              "type": "string",
+              "pattern": "^f[a-z2-7]{4,6}$"
+            }
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "required": false,
+            "description": "An IANA time zone, such as Europe/London, for days and the times in the answer; America/Toronto when left out.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "The fact's id, such as fk3x9."
+                    },
+                    "fields": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        ]
+                      },
+                      "description": "The fact's value for each column, such as kind and text; a removed column's value stays."
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "The topics it is about."
+                    },
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "The records it came from, as relay: links."
+                    },
+                    "replaces": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "The ids of the facts it replaced."
+                    },
+                    "replacedBy": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "The id of the fact that replaced it; null for a live fact."
+                    },
+                    "device": {
+                      "type": "string",
+                      "description": "The name of the computer that added it."
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                    },
+                    "replacedFacts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "description": "The fact's id, such as fk3x9."
+                          },
+                          "fields": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                },
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              ]
+                            },
+                            "description": "The fact's value for each column, such as kind and text; a removed column's value stays."
+                          },
+                          "tags": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "The topics it is about."
+                          },
+                          "sources": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "The records it came from, as relay: links."
+                          },
+                          "replaces": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "The ids of the facts it replaced."
+                          },
+                          "replacedBy": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "The id of the fact that replaced it; null for a live fact."
+                          },
+                          "device": {
+                            "type": "string",
+                            "description": "The name of the computer that added it."
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "fields",
+                          "tags",
+                          "sources",
+                          "replaces",
+                          "replacedBy",
+                          "device",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "The facts it replaced."
+                    },
+                    "replacedByFact": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "description": "The fact's id, such as fk3x9."
+                            },
+                            "fields": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "boolean"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                ]
+                              },
+                              "description": "The fact's value for each column, such as kind and text; a removed column's value stays."
+                            },
+                            "tags": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              },
+                              "description": "The topics it is about."
+                            },
+                            "sources": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              },
+                              "description": "The records it came from, as relay: links."
+                            },
+                            "replaces": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              },
+                              "description": "The ids of the facts it replaced."
+                            },
+                            "replacedBy": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "description": "The id of the fact that replaced it; null for a live fact."
+                            },
+                            "device": {
+                              "type": "string",
+                              "description": "The name of the computer that added it."
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "description": "A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00."
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "fields",
+                            "tags",
+                            "sources",
+                            "replaces",
+                            "replacedBy",
+                            "device",
+                            "createdAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "The fact that replaced it."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "fields",
+                    "tags",
+                    "sources",
+                    "replaces",
+                    "replacedBy",
+                    "device",
+                    "createdAt",
+                    "replacedFacts",
+                    "replacedByFact"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/memory/{id}/tags": {
+      "post": {
+        "operationId": "tagFact",
+        "summary": "Change a fact's topics",
+        "description": "Add and remove a fact's topics, as this computer: its words and sources stay as they are, and it keeps at least one topic. Only a computer's key; it answers the fact's topics.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The fact's id, such as fk3x9.",
+            "schema": {
+              "type": "string",
+              "pattern": "^f[a-z2-7]{4,6}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "add": {
+                    "default": [],
+                    "description": "Topics to add.",
+                    "maxItems": 10,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 81
+                    }
+                  },
+                  "remove": {
+                    "default": [],
+                    "description": "Topics to remove.",
+                    "maxItems": 10,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 81
+                    }
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Its topics now."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "tags"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/knowledge/access": {
+      "post": {
+        "operationId": "openKnowledge",
+        "summary": "Open the knowledge web",
+        "description": "A pass to the person's knowledge web, a git repository of topic pages, for at most one hour: its git address, the pass to send as `Authorization: Bearer`, and when it ends. The first ask makes the web. Only a computer's key gets one. A server whose Cloudflare account has no Artifacts answers 501 `not_set_up`.",
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "remote": {
+                      "type": "string",
+                      "description": "The web's git address."
+                    },
+                    "token": {
+                      "type": "string",
+                      "description": "The pass: send it to git as `Authorization: Bearer …`, never in the address or a file."
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "description": "When the pass ends, at most one hour on, as an ISO time."
+                    }
+                  },
+                  "required": [
+                    "remote",
+                    "token",
+                    "expiresAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "The knowledge web is not set up on this server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The knowledge web is still being made: try again in a minute.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/db": {
+      "post": {
+        "operationId": "runDb",
+        "summary": "Run commands in the agents' database",
+        "description": "Run SQLite commands in the person's agents' database, as this computer: a database only their computers' agents use, where any table can be made. Relay Everything's own tables are not in it. Send `sql`, or `batch` for up to 50 commands in one step, all or none. A command is at most 100 KB, an answer at most 5,000 rows and 5 MB, and the database at most 1 GB. A blob reads as `{ \"base64\": … }`. Only a computer's key runs commands.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "sql": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "One SQLite command, such as CREATE TABLE, INSERT or SELECT."
+                  },
+                  "params": {
+                    "default": [],
+                    "description": "The values for its `?` marks, in order.",
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "batch": {
+                    "description": "Several commands, run in order in one step: all or none.",
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "sql": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "One SQLite command, such as CREATE TABLE, INSERT or SELECT."
+                        },
+                        "params": {
+                          "default": [],
+                          "description": "The values for its `?` marks, in order.",
+                          "maxItems": 100,
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "sql"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "rows": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {}
+                            },
+                            "description": "The rows it read."
+                          },
+                          "changed": {
+                            "type": "number",
+                            "description": "How many rows it wrote."
+                          }
+                        },
+                        "required": [
+                          "rows",
+                          "changed"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "One for each command, in order."
+                    }
+                  },
+                  "required": [
+                    "results"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/db/tables": {
+      "get": {
+        "operationId": "listDbTables",
+        "summary": "List the agents' database's tables",
+        "description": "Each table in the person's agents' database, with its columns and how many rows it holds. Only a computer's key reads it.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tables": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "columns": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "rows": {
+                            "type": "number",
+                            "description": "How many rows it holds."
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "columns",
+                          "rows"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "tables"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The input can't be read: `error_description` says which field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or one that is not valid: an expired token or a disconnected app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3109,7 +4950,7 @@
             }
           },
           "403": {
-            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, or an app connected before it could add notes.",
+            "description": "This caller may not do it: an unknown key, a phone or chat key, a turned-off key, an app connected before it could add notes, or a caller that is not a computer, for a change to the memory, a topic, the knowledge web or the agents' database.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3119,7 +4960,7 @@
             }
           },
           "404": {
-            "description": "No such note, chat, stay, trip or route in the caller's own space.",
+            "description": "No such note, fact, chat, stay, trip or route in the caller's own space.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3150,7 +4991,7 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "rek_…",
-        "description": "An API key, made on the person's Relay Everything page with *Add a device*: send it as `Authorization: Bearer rek_…`. A phone's or a chat key is refused here."
+        "description": "An API key, made on the person's Relay Everything page with *Add an API key*, or a computer's key from the Relay Everything plugin: send it as `Authorization: Bearer rek_…`. A phone's or a chat key is refused here."
       }
     },
     "schemas": {
@@ -3169,7 +5010,9 @@
               "invalid_token",
               "forbidden",
               "not_found",
-              "method_not_allowed"
+              "method_not_allowed",
+              "not_set_up",
+              "try_again"
             ]
           },
           "error_description": {

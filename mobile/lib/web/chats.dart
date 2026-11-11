@@ -4,22 +4,25 @@ import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import '../brand.dart';
+import '../screens/connect_ai.dart' show pluginGuide;
 import '../screens/days.dart' show daysAgo;
 import '../screens/folder.dart' show Opener, openInBrowser;
+import '../screens/transcripts.dart' show TranscriptSteps;
 import 'space.dart';
 
-// Saved Claude Code chats in the browser: search, the list newest first, and one chat with the AI's saves above its
-// messages. The Relay Everything plugin sends them with a chat key; app/worker/apps/relay/chat-read.ts answers.
+// Saved AI chat transcripts from Claude Code and Codex in the browser: search, the list newest first, and one chat with
+// the AI's saves above its messages. The Relay Everything plugin sends them with a computer's key;
+// app/worker/apps/relay/chat-read.ts answers.
 
 /// One chat in the list: `GET chats`.
 class ChatSummary {
   const ChatSummary({required this.id, required this.title, required this.project, required this.startedAt,
-    required this.lastAt, required this.messages, required this.savedByAi});
+    required this.lastAt, required this.messages, required this.savedByAi, this.app = 'claude-code'});
 
   factory ChatSummary.fromJson(Map<String, dynamic> json) => ChatSummary(
     id: json['id'] as String, title: json['title'] as String? ?? '', project: json['project'] as String? ?? '',
     startedAt: _time(json['startedAt']), lastAt: _time(json['lastAt']), messages: (json['messages'] as num?)?.toInt() ?? 0,
-    savedByAi: json['savedByAi'] == true);
+    savedByAi: json['savedByAi'] == true, app: json['app'] as String? ?? 'claude-code');
 
   final String id;
   final String title;
@@ -28,6 +31,12 @@ class ChatSummary {
   final DateTime lastAt;
   final int messages;
   final bool savedByAi;
+  /// The app the chat came from, as the server names it: `claude-code` or `codex`. An older chat has none, and came
+  /// from Claude Code.
+  final String app;
+
+  /// The app's name to show: *Codex*, else *Claude Code*.
+  String get appName => app == 'codex' ? 'Codex' : 'Claude Code';
 }
 
 /// A title and summary the AI saved beside a chat.
@@ -80,7 +89,7 @@ String _when(BuildContext context, DateTime at) {
   return '${MaterialLocalizations.of(context).formatShortMonthDay(at)}, $time';
 }
 
-/// The saved Claude Code chats. [wide] shows the list in a middle pane and the open chat to its right; else a tap
+/// The saved AI chat transcripts. [wide] shows the list in a middle pane and the open chat to its right; else a tap
 /// opens the chat as its own page. [opener] opens the website's guide; a test passes its own.
 class ChatsView extends StatefulWidget {
   const ChatsView({super.key, required this.client, required this.wide, this.opener});
@@ -170,7 +179,7 @@ class _ChatsViewState extends State<ChatsView> {
       return;
     }
     final deleted = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (context) => Scaffold(
-      appBar: AppBar(title: const Text('Claude Code chats')),
+      appBar: AppBar(title: const Text('Saved chats')),
       body: _ChatPane(key: ValueKey(chat.id), client: widget.client, id: chat.id,
         onDeleted: () => Navigator.of(context).pop(true)),
     )));
@@ -202,10 +211,10 @@ class _ChatsViewState extends State<ChatsView> {
     final text = Theme.of(context).textTheme;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Padding(padding: const EdgeInsets.fromLTRB(20, 14, 12, 6), child: Row(children: [
-        Expanded(child: Semantics(header: true, child: Text('Claude Code chats',
+        Expanded(child: Semantics(header: true, child: Text('Saved chats',
           style: text.titleLarge?.copyWith(fontWeight: FontWeight.w700)))),
         TextButton(onPressed: () => showDialog<void>(context: context,
-          builder: (_) => _ConnectClaude(opener: widget.opener ?? openInBrowser)), child: const Text('Connect Claude Code')),
+          builder: (_) => _ConnectComputer(opener: widget.opener ?? openInBrowser)), child: const Text('Connect a computer')),
       ])),
       Padding(padding: const EdgeInsets.fromLTRB(16, 4, 16, 8), child: TextField(
         controller: _search,
@@ -229,7 +238,7 @@ class _ChatsViewState extends State<ChatsView> {
     final chats = [for (final page in pages) ...page.chats];
     if (chats.isEmpty) {
       return Padding(padding: const EdgeInsets.all(20), child: Text(_query.isEmpty
-        ? 'No chats yet. Connect Claude Code, and each chat from then on is saved here.'
+        ? 'No chats yet. Connect a computer from Claude Code or Codex, and each chat from then on is saved here.'
         : 'No chat holds those words.', style: text.bodyMedium?.copyWith(color: brand.muted)));
     }
     final more = pages.last.next != null;
@@ -271,8 +280,12 @@ class _Row extends StatelessWidget {
               if (chat.savedByAi) ...[const SizedBox(width: 8), const BrandTag('Saved by the AI')],
             ]),
             const SizedBox(height: 2),
-            Text([chat.project, _when(context, chat.lastAt), _plural(chat.messages, 'message')].join(' · '),
-              style: text.bodySmall?.copyWith(color: brand.muted)),
+            Row(children: [
+              Flexible(child: Text([chat.project, _when(context, chat.lastAt), _plural(chat.messages, 'message')].join(' · '),
+                style: text.bodySmall?.copyWith(color: brand.muted))),
+              const SizedBox(width: 8),
+              BrandTag(chat.appName, outlined: true),
+            ]),
           ]),
         )),
       ),
@@ -392,7 +405,10 @@ class _ChatPaneState extends State<_ChatPane> {
           style: TextButton.styleFrom(foregroundColor: brand.danger), child: const Text('Delete')),
       ]),
       const SizedBox(height: 4),
-      Text([chat.project, _when(context, chat.startedAt), 'Claude Code'].join(' · '), style: muted),
+      Wrap(spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        Text([chat.project, _when(context, chat.startedAt)].join(' · '), style: muted),
+        BrandTag(chat.appName, outlined: true),
+      ]),
       if (_error case final error?)
         Padding(padding: const EdgeInsets.only(top: 8), child: Semantics(liveRegion: true,
           child: Text(error, style: text.bodyMedium?.copyWith(color: brand.danger)))),
@@ -463,53 +479,36 @@ class _Failed extends StatelessWidget {
   }
 }
 
-/// How to send Claude Code chats here: a connect code from *Add a device*, then the plugin from the public repository.
-class _ConnectClaude extends StatelessWidget {
-  const _ConnectClaude({required this.opener});
+/// How to save a computer's AI chats here: the plugin in Claude Code or Codex, then `/relay:connect`.
+class _ConnectComputer extends StatelessWidget {
+  const _ConnectComputer({required this.opener});
 
   final Opener opener;
 
-  static final guide = Uri.parse('https://relayeverything.com/connections/claude-code/');
+  static final guide = Uri.parse(pluginGuide);
 
   @override
   Widget build(BuildContext context) {
     final brand = brandOf(context);
     final text = Theme.of(context).textTheme;
     final muted = text.bodySmall?.copyWith(color: brand.muted);
-    Widget code(String line) => Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(top: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: brand.paper, borderRadius: BorderRadius.circular(8)),
-      child: Text(line, style: const TextStyle(fontFamily: 'monospace', fontSize: 14)),
-    );
-    Widget step(int n, List<Widget> children) => Padding(padding: const EdgeInsets.only(top: 12), child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start, children: [
-        SizedBox(width: 22, child: Text('$n.', style: text.bodyMedium)),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children)),
-      ]));
     return AlertDialog(
-      title: const Text('Connect Claude Code'),
-      content: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 480), child: SelectionArea(
-        child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text("A connect code made for Claude Code can only add chats. It can't read, change or delete anything on the "
-            'server, your chats included.', style: text.bodyMedium),
-          step(1, [Text('In Settings, open Devices, click Add a device and choose Claude Code. Copy its connect code.',
-            style: text.bodyMedium)]),
-          step(2, [
-            Text('In Claude Code, add the plugin:', style: text.bodyMedium),
-            code('/plugin marketplace add matthewwong525/RelayEverything'),
-            code('/plugin install relay@relay'),
-          ]),
-          step(3, [Text('Paste the connect code when Claude Code asks.', style: text.bodyMedium)]),
+      title: const Text('Connect a computer'),
+      content: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 480), child: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('The Relay Everything plugin saves your Claude Code and Codex chats word for word. Do these steps one time '
+            'on each computer.', style: text.bodyMedium),
+          const TranscriptSteps(),
           const SizedBox(height: 16),
-          Text('Chats from then on are saved. Older chats are not sent. Type /relay:saving off in a project to keep '
-            'its chats out.', style: muted),
+          Text('Each chat from then on is saved. Older chats are not sent. To keep the chats of a project out, type '
+            '/relay:saving off in that project.', style: muted),
           const SizedBox(height: 8),
-          Text('To keep chats in your own Cloudflare account, run your own Relay Everything server and make the code '
-            'there.', style: muted),
-        ])),
+          Text("The computer's key saves your chats and can read all your Relay Everything data. To stop it, disconnect "
+            'it in Connect your AI.', style: muted),
+          const SizedBox(height: 8),
+          Text('To keep chats in your own Cloudflare account, run your own Relay Everything server and connect to it.',
+            style: muted),
+        ]),
       )),
       actions: [
         TextButton(onPressed: () => unawaited(opener(guide)), child: const Text('Read the guide')),

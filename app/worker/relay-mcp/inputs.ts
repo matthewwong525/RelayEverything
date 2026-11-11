@@ -1,6 +1,7 @@
 // What each connector tool takes, shared by the MCP tools (tools.ts) and the web API (api.ts), so the two can't drift
 // apart: one schema per question, with the same limits. openapi.ts describes the web API from these too.
 import { z } from "zod";
+import { MAX_COLUMNS, MAX_FACTS, TYPES } from "../apps/relay/memory.ts";
 import { MAX_POINTS } from "../apps/relay/points.ts";
 import { HEALTH_TYPES } from "../apps/relay/queries.ts";
 import { accuracy, latitude, longitude, placeName } from "../apps/relay/store.ts";
@@ -19,13 +20,19 @@ const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(text => !Number.isNaN
   .describe("The day, as YYYY-MM-DD.");
 const cursor = z.string().max(100).optional().describe("The last answer's `nextCursor`, to read the next page.");
 const query = z.string().trim().min(1).max(200).describe("The words to find.");
+const tag = z.string().trim().min(1).max(81)
+  .describe("A topic, such as battery or bike/charging: it finds its parts too, so bike finds bike/charging.");
+const tags = z.array(z.string().max(81)).max(10);
+const factId = z.string().regex(/^f[a-z2-7]{4,6}$/, "Not a fact id.").describe("The fact's id, such as fk3x9.");
+const tagChange = { add: tags.default([]).describe("Topics to add."), remove: tags.default([]).describe("Topics to remove.") };
 
 /** Each tool's name, title, words for the AI, and input. A tool that adds is the only one not read-only. */
 export const TOOLS = {
   search: {
     title: "Search notes",
-    description: "Find notes whose text holds every word of the query, in any case, newest first, with each note's time and place.",
-    input: { query, from: when("Only notes from this time").optional(), to: when("Only notes before this time").optional(),
+    description: "Find notes whose text holds every word of the query, in any case, or that carry a topic, newest first, with each " +
+      "note's time. A note has no place: read places by its time. Give `query`, `tag` or both.",
+    input: { query: query.optional(), tag: tag.optional(), from: when("Only notes from this time").optional(), to: when("Only notes before this time").optional(),
       source: z.enum(["ring", "typed"]).optional().describe("Only older recorded notes, or only typed ones."),
       limit: z.number().int().min(1).max(50).default(20).describe("How many notes, at most 50."), cursor, timezone: zone },
   },
@@ -36,7 +43,7 @@ export const TOOLS = {
   },
   timeline: {
     title: "Read notes in a time range",
-    description: "Read every note from one time to another, newest first, a page at a time, with each note's time and place.",
+    description: "Read every note from one time to another, newest first, a page at a time, with each note's time. A note has no place: read places by its time.",
     input: { from: when("The first time"), to: when("The time to stop before"),
       limit: z.number().int().min(1).max(100).default(50).describe("How many notes, at most 100."), cursor, timezone: zone },
   },
@@ -101,9 +108,9 @@ export const TOOLS = {
   },
   search_chats: {
     title: "Search saved chats",
-    description: "Find saved Claude Code chats whose messages or AI summaries hold every word of the query, newest first, with up to " +
-      `${LINES} matching lines each.`,
-    input: { query, from: when("Only chats active from this time").optional(), to: when("Only chats last active before this time").optional(),
+    description: "Find saved AI chats from Claude Code and Codex whose messages or AI summaries hold every word of the query, newest first, with up to " +
+      `${LINES} matching lines each. Leave out \`query\` to list every chat active from \`from\` to \`to\`, with no lines.`,
+    input: { query: query.optional(), from: when("Only chats active from this time").optional(), to: when("Only chats last active before this time").optional(),
       limit: z.number().int().min(1).max(20).default(10).describe("How many chats, at most 20."), cursor, timezone: zone },
   },
   read_chat: {
@@ -127,6 +134,25 @@ export const TOOLS = {
     description: "Look at one photo by its id, from `photos`: the photo itself, at most 1,600 pixels on its long side, and when and where it was taken.",
     input: { id: z.string().max(64).describe("The photo's id, from photos."), timezone: zone },
   },
+  memory: {
+    title: "Search the memory",
+    description: "Search the person's memory: short facts, decisions, preferences, plans and open questions their AIs kept, newest first. " +
+      "Look here first for what the person decided, likes or plans. Words search the text columns; `tag` a topic and its parts; `source` the " +
+      "record a fact came from, such as relay:chat/<id>; `where` a value of any column. Only live facts, unless `all`: a replaced fact " +
+      "names the fact that replaced it in `replacedBy`. The answer lists the memory's columns.",
+    input: { query: query.optional(), tag: tag.optional(),
+      source: z.string().max(100).optional().describe("A record's link, such as relay:chat/<id> or relay:note/<id>: it finds its messages too."),
+      from: when("Only facts added from this time").optional(), to: when("Only facts added before this time").optional(),
+      all: z.boolean().default(false).describe("Add the facts that were replaced."),
+      where: z.record(z.string().max(30), z.union([z.string().max(400), z.number(), z.boolean()])).optional()
+        .describe("A value for each of the person's columns, such as { \"kind\": \"decision\" }. In the web API, send each as its own field."),
+      limit: z.number().int().min(1).max(50).default(20).describe("How many facts, at most 50."), cursor, timezone: zone },
+  },
+  read_fact: {
+    title: "Read one fact",
+    description: "Read one fact of the memory by its id, with the facts it replaced and the fact that replaced it.",
+    input: { id: factId, timezone: zone },
+  },
   add_note: {
     title: "Add a note",
     description: "Add a typed note to the person's notes, with this app's name as its device. Only when the person asks to save something. " +
@@ -134,13 +160,88 @@ export const TOOLS = {
     input: { clientId: z.string().regex(/^[A-Za-z0-9-]{8,64}$/)
       .describe("Your own id for this note, 8 to 64 letters, digits or dashes, such as a new UUID, so a resend is stored once."),
     text: z.string().min(1).max(20_000).describe("What the note says."), createdAt: when("When it was written; now when left out").optional(),
-    lat: latitude.optional().describe("Where it was written: latitude. Send it with lon."),
+    lat: latitude.optional().describe("Where it was written: latitude. Send it with lon. The place becomes one point of location history at the note's time, not part of the note."),
     lon: longitude.optional().describe("Where it was written: longitude. Send it with lat."),
     accuracy: accuracy.optional().describe("How sure you are of the place, in meters."),
-    place: placeName.optional().describe("The place's name, such as a street."), timezone: zone },
+    place: placeName.optional().describe("The place's name, such as a street, kept on its location point."), timezone: zone },
+  },
+} satisfies Record<string, { title: string; description: string; input: z.ZodRawShape }>;
+
+const sqlValue = z.union([z.string(), z.number(), z.null()]);
+const statement = { sql: z.string().min(1).describe("One SQLite command, such as CREATE TABLE, INSERT or SELECT."),
+  params: z.array(sqlValue).max(100).default([]).describe("The values for its `?` marks, in order.") };
+
+const column = z.string().max(30).describe("The column's name: a lower-case letter, then letters, digits or _.");
+const note = z.string().max(200).describe("What the column holds, for the AIs that fill it.");
+
+/** The web API's own questions, for a computer's key: the connector has no tool for them. */
+export const WEB = {
+  add_facts: {
+    title: "Add facts",
+    description: `Add up to ${MAX_FACTS} facts to the memory, all or none, as this computer. Each fact needs a tag, a source and every ` +
+      "required column, and each value must fit its column's type. A fact can't be changed or deleted: name the facts it replaces " +
+      "instead. Send the same `clientId` again after a lost answer, and the fact is stored once. Only a computer's key adds. 201 when any was added.",
+    input: { facts: z.array(z.strictObject({
+      clientId: z.string().regex(/^[A-Za-z0-9-]{8,64}$/).describe("Your own id for this fact, such as a new UUID, so a resend is stored once."),
+      tags: tags.min(1).describe("The topics it is about, such as battery or bike/charging: at least one."),
+      sources: z.array(z.string().max(100)).min(1).max(10).describe("The records it came from, such as relay:chat/<id>#<message>: at least one."),
+      replaces: z.array(factId).max(10).optional().describe("The ids of the live facts this one replaces."),
+      fields: z.record(z.string().max(30), z.unknown()).describe("A value for each of the memory's columns, such as kind and text."),
+    })).min(1).max(MAX_FACTS).describe("The facts to add.") },
+  },
+  columns: {
+    title: "Read the memory's columns",
+    description: "The memory's live columns, each with its type, whether it is required, and its note; the removed ones; and, with " +
+      "`changes`, each column change with its device and time.",
+    input: { changes: z.boolean().default(false).describe("Add the last 100 column changes.") },
+  },
+  change_columns: {
+    title: "Change the memory's columns",
+    description: `Add, change and remove the memory's columns, all or none, at most ${MAX_COLUMNS} live. A column's type never ` +
+      "changes; a removed column's values stay in the facts that have them. Only a computer's key changes columns.",
+    input: {
+      add: z.array(z.strictObject({ name: column, type: z.enum(TYPES).describe("text (up to 400 characters), number, date (YYYY-MM-DD), " +
+        "yes_no (true or false), or words (up to 20 short words)."), required: z.boolean().default(false)
+        .describe("Whether each new fact needs it."), note: note.optional() })).max(MAX_COLUMNS).default([]).describe("Columns to add."),
+      change: z.array(z.strictObject({ name: column, required: z.boolean().optional(), note: note.optional() })).max(MAX_COLUMNS).default([])
+        .describe("Columns whose note or `required` changes."),
+      remove: z.array(column).max(MAX_COLUMNS).default([]).describe("Columns to remove."),
+    },
+  },
+  tag_fact: {
+    title: "Change a fact's topics",
+    description: "Add and remove a fact's topics, as this computer: its words and sources stay as they are, and it keeps at least one topic.",
+    input: { id: factId, ...tagChange },
+  },
+  tag_note: {
+    title: "Change a note's topics",
+    description: "Add and remove a note's topics, as this computer: the note's words stay as the person wrote them.",
+    input: { id: z.string().max(64).describe("The note's id."), ...tagChange },
+  },
+  db: {
+    title: "Run commands in the agents' database",
+    description: "Run SQLite commands in the person's agents' database, as this computer: a database only their computers' agents " +
+      "use, where any table can be made. Relay Everything's own tables are not in it. Send `sql`, or `batch` for up to 50 commands " +
+      "in one step, all or none. A command is at most 100 KB, an answer at most 5,000 rows and 5 MB, and the database at most 1 GB. " +
+      "A blob reads as `{ \"base64\": … }`. Only a computer's key runs commands.",
+    input: { sql: statement.sql.optional(), params: statement.params.optional(),
+      batch: z.array(z.strictObject(statement)).min(1).optional().describe("Several commands, run in order in one step: all or none.") },
+  },
+  db_tables: {
+    title: "List the agents' database's tables",
+    description: "Each table in the person's agents' database, with its columns and how many rows it holds. Only a computer's key reads it.",
+    input: {},
+  },
+  knowledge_access: {
+    title: "Open the knowledge web",
+    description: "A pass to the person's knowledge web, a git repository of topic pages, for at most one hour: its git address, " +
+      "the pass to send as `Authorization: Bearer`, and when it ends. The first ask makes the web. Only a computer's key gets one.",
+    input: {},
   },
 } satisfies Record<string, { title: string; description: string; input: z.ZodRawShape }>;
 
 export type ToolName = keyof typeof TOOLS;
-/** A tool's input once parsed: defaults filled in. */
-export type Input<Name extends ToolName> = z.output<z.ZodObject<(typeof TOOLS)[Name]["input"]>>;
+export type WebName = keyof typeof WEB;
+export const INPUTS = { ...TOOLS, ...WEB };
+/** A question's input once parsed: defaults filled in. */
+export type Input<Name extends ToolName | WebName> = z.output<z.ZodObject<(typeof INPUTS)[Name]["input"]>>;

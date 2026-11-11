@@ -26,12 +26,14 @@ String whenOf(int ms, [DateTime? now]) {
 String thousands(int count) =>
   count.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
 
-/// One Settings page: its title, a short line under it, and its parts, as wide as reads well.
+/// One Settings page: its title, a short line under it, and its parts, as wide as reads well. With [back], a page
+/// opened from Account, such as *Webhooks*, starts with *‹ Account*.
 class SettingsBody extends StatelessWidget {
-  const SettingsBody({super.key, required this.title, this.line, required this.children});
+  const SettingsBody({super.key, required this.title, this.line, this.back, required this.children});
 
   final String title;
   final String? line;
+  final VoidCallback? back;
   final List<Widget> children;
 
   @override
@@ -40,6 +42,9 @@ class SettingsBody extends StatelessWidget {
     return Align(alignment: Alignment.topLeft, child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 680),
       child: ListView(padding: const EdgeInsets.fromLTRB(28, 22, 28, 28), children: [
+        if (back case final back?) Align(alignment: Alignment.centerLeft, child: TextButton.icon(
+          onPressed: back, style: quietButton(context),
+          icon: const Icon(CupertinoIcons.chevron_back, size: 18), label: const Text('Account'))),
         // The dialog's close button sits at the top right, so the title leaves it room.
         Padding(padding: const EdgeInsets.only(right: 48),
           child: Text(title, style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w700))),

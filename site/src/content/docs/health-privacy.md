@@ -17,7 +17,7 @@ Only the types you allow, and only while you are signed in and the part's own sw
 
 - **Health:** steps, heart rate, sleep, workouts, weight, resting heart rate, heart rate variability, blood oxygen, blood pressure, cycle, mindful minutes and water. [Health](../app/health/#what-it-reads) says what the app reads.
 - **Location history:** a point each 100 m you move. [Location](../app/location/#location-history) says how it works.
-- **A note's place:** where you were when you saved a note, if you turn on **Pin notes to where I am**.
+- **Where you made a note:** while **Location history** is on, each note you make adds one point to the history at its time. A note keeps no place of its own. [Location](../app/location/#where-you-made-a-note)
 
 Health notes that you type yourself are notes, and the [Privacy policy](../privacy-policy/) covers them.
 
@@ -30,7 +30,7 @@ We keep your health and location data only to show it to you, and to send it whe
 - **Cloudflare** runs the shared server, so it keeps your space: [Cloudflare's privacy policy](https://www.cloudflare.com/privacypolicy/).
 - **The webhooks you tick for it.** A webhook gets health, calendar or location data only if you tick that kind for it: [Your own database](../connections/your-database/).
 - **The AI apps you connect** read it only when they ask: [Connect your AI](../connections/connect-your-ai/).
-- **Your own webhook only**, when you pick **Send to my own webhook instead** in the app, or, signed in, **Only my own webhook** for health, places, calendar and photos: then the phone sends it straight there, and the shared server gets none of it from then on. What it got before stays until you delete it.
+- **Your own webhook only**, when you pick **Don't want an account? Use your own webhook** in the app, or, signed in, turn on **Only to my own webhook** in **Webhooks** for health, places, calendar and photos: then the phone sends it straight there, and the shared server gets none of it from then on. What it got before stays until you delete it.
 
 No one else gets it, unless a court order or the law makes us give it.
 
@@ -38,7 +38,7 @@ No one else gets it, unless a court order or the law makes us give it.
 
 You agree in two steps, and you can take back each one at any time:
 
-1. In the app, you sign in from the [Account](../app/settings/#account) row in Settings, then turn on **Health** or **Location history** in its folder on Home.
+1. In the app, you sign in from the [account card](../app/settings/#account) in Settings, then turn on **Health** or **Location history** in its folder on Home.
 2. Your phone asks you to allow it: Apple Health or Health Connect for each health type, and the phone's location permission for location history.
 
 With either step off, the app reads none of that data and keeps none of it.

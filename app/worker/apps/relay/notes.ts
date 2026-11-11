@@ -1,5 +1,5 @@
-// POST notes: a note typed on a phone or the page, with its place and its files' names; their bytes come after, by POST
-// attachments. A device that sends it again, after losing its answer, gets the same note back: add-note.ts.
+// POST notes: a note typed on a phone or the page, with its files' names, whose bytes come after by POST attachments. A
+// place sent with it becomes a location point. A resend, after a lost answer, gets the same note back: add-note.ts.
 import { z } from "zod";
 import { defineAction, type ActionCall } from "../../api/contract.ts";
 import { addNote } from "./add-note.ts";
@@ -34,10 +34,10 @@ const noteInput = z.strictObject({
   clientId: z.string().regex(CLIENT_ID).describe("The phone's own id for the note, so a resend is stored once."),
   text: noteText,
   createdAt: time.describe("When it was written, in Unix milliseconds."),
-  lat: latitude.optional().describe("Where it was written: latitude. Send it with lon."),
+  lat: latitude.optional().describe("Where it was written: latitude. Send it with lon. The place becomes one point of location history at the note's time, not part of the note."),
   lon: longitude.optional().describe("Where it was written: longitude. Send it with lat."),
   accuracy: accuracy.optional().describe("How sure the phone was of the place, in meters."),
-  place: placeName.optional().describe("The place's name from the phone's address lookup."),
+  place: placeName.optional().describe("The place's name from the phone's address lookup, kept on its location point."),
   attachments: noteFiles.optional()
     .describe("The note's files, up to 10: only their names, types and sizes. Send each file's bytes after, with POST attachments."),
 }).refine(note => (note.lat === undefined) === (note.lon === undefined), "Send lat and lon together.")

@@ -9,14 +9,15 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:relay_app/brand.dart';
 import 'package:relay_app/relay.dart';
 import 'package:relay_app/screens/hold_to_talk.dart';
-import 'package:relay_app/screens/connected_names.dart' show ConnectedKind;
 import 'package:relay_app/screens/home.dart';
 import 'package:relay_app/screens/note_bars.dart';
 import 'package:relay_app/screens/note_blocks.dart';
 import 'package:relay_app/screens/note_editor.dart';
 import 'package:relay_app/screens/settings.dart';
 import 'package:relay_app/screens/timeline.dart' show TimelineScreen;
+import 'package:relay_app/web/chats.dart' show ChatsView;
 import 'package:relay_app/web/connection_page.dart';
+import 'package:relay_app/web/other_connections.dart';
 import 'package:relay_app/web/settings_dialog.dart';
 import 'package:relay_app/web/shell.dart';
 import 'package:relay_app/web/web_relay.dart';
@@ -54,14 +55,14 @@ void main() {
 
   tearDown(() => drops.close());
 
-  Future<void> show(WidgetTester tester, Size size, {SettingsPage? settingsAt}) async {
+  Future<void> show(WidgetTester tester, Size size, {SettingsPage? settingsAt, WebPlace? placeAt}) async {
     tester.view
       ..physicalSize = size
       ..devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(MaterialApp(theme: brandTheme(Brightness.light),
       home: WebShell(relay: relay, client: space.client, drops: drops.stream, opener: (_) async => true,
-        settingsAt: settingsAt)));
+        settingsAt: settingsAt, placeAt: placeAt)));
     await tester.pumpAndSettle();
   }
 
@@ -105,10 +106,14 @@ void main() {
       expect(sidebarCount('Notes', 3), findsOneWidget);
       expect(sidebarCount('Voice notes', 1), findsOneWidget);
       expect(sidebarCount('Shares', 1), findsOneWidget);
-      for (final title in ['Other connections', 'Location', 'Health', 'Calendar', 'Photos', 'Claude Code chats']) {
+      final rows = ['Other connections', 'Location', 'Health', 'Calendar', 'Photos', 'Connect your AI', 'Email notes'];
+      for (final title in rows) {
         expect(inSidebar(title), findsOneWidget, reason: title);
       }
-      expect(tester.getTopLeft(inSidebar('Settings')).dy, greaterThan(tester.getTopLeft(inSidebar('Claude Code chats')).dy + 100),
+      final tops = [for (final title in rows) tester.getTopLeft(inSidebar(title)).dy];
+      expect(tops, orderedEquals([...tops]..sort()));
+      expect(inSidebar('AI chat transcripts'), findsNothing);
+      expect(tester.getTopLeft(inSidebar('Settings')).dy, greaterThan(tester.getTopLeft(inSidebar('Email notes')).dy + 100),
         reason: 'Settings sits at the bottom of the left bar');
       await finish(tester);
     });
@@ -191,16 +196,20 @@ void main() {
       await finish(tester);
     });
 
-    testWidgets("the phone's links to Webhooks and AI apps open Settings on that page, over the notes", (tester) async {
-      space.answers['GET inbox'] = (_) => {'email': {'on': false}};
-      space.answers['GET webhooks'] = (_) => {'webhooks': <Object>[], 'kinds': <Object>[]};
-      space.answers['GET ai-apps'] = (_) => {'address': 'https://relay-mcp.example.com/mcp', 'apps': <Object>[]};
-      for (final kind in ConnectedKind.values) {
-        final page = SettingsPage.ofPart(Uri.parse('https://relay.example.com/apps/relay/${kind.part}').fragment);
-        expect(page, isNotNull, reason: kind.part);
-        await show(tester, wide, settingsAt: page);
-        expect(find.byType(SettingsView), findsOneWidget, reason: kind.part);
-        expect(tester.widget<ListTile>(find.byKey(ValueKey('settings-${page!.name}'))).selected, isTrue, reason: kind.part);
+    testWidgets("the phone's links to Account and Webhooks open Settings on that page, over the notes", (tester) async {
+      space.answers.addAll({
+        'GET account': (_) => {'email': 'you@example.com'},
+        'GET connections': (_) => {'email': 'you@example.com'},
+        'GET webhooks': (_) => {'webhooks': <Object>[], 'kinds': <Object>[]},
+      });
+      for (final (part, page) in [('account', SettingsPage.account), ('webhooks', SettingsPage.webhooks),
+          ('devices', SettingsPage.account)]) {
+        final at = SettingsPage.ofPart(Uri.parse('https://relay.example.com/apps/relay/#$part').fragment);
+        expect([at, placeOfPart(part)], [page, isNull], reason: part);
+        await show(tester, wide, settingsAt: at);
+        expect(find.byType(SettingsView), findsOneWidget, reason: part);
+        // Webhooks sits under Account in the list.
+        expect(tester.widget<ListTile>(find.byKey(const ValueKey('settings-account'))).selected, isTrue, reason: part);
         expect(find.byType(NotesPane), findsOneWidget, reason: 'Settings opens over the notes');
         await tester.tap(find.byTooltip('Close'));
         await tester.pumpAndSettle();
@@ -210,6 +219,52 @@ void main() {
       expect(SettingsPage.ofPart('/webhooks'), SettingsPage.webhooks, reason: "the app's own route in the address");
       expect(SettingsPage.ofPart(''), isNull);
       expect(SettingsPage.ofPart('/'), isNull);
+    });
+
+    test('an address part opens its place: the old AI apps and chats open Connect your AI', () {
+      expect([placeOfPart('ai-apps'), placeOfPart('chats'), placeOfPart('/ai-apps')], everyElement(isA<ConnectAiPlace>()));
+      expect(placeOfPart('email-notes'), isA<EmailNotesPlace>());
+      expect([placeOfPart('saved-chats'), placeOfPart('/saved-chats')], everyElement(isA<ChatsPlace>()));
+      expect([placeOfPart(''), placeOfPart('webhooks'), placeOfPart('chats/1'), placeOfPart('api-keys')], everyElement(isNull));
+      expect([SettingsPage.ofPart('ai-apps'), SettingsPage.ofPart('email-notes'), SettingsPage.ofPart('saved-chats')],
+        everyElement(isNull));
+    });
+
+    testWidgets('Connect your AI and Email notes open in the main pane; Saved chats opens the saved chats', (tester) async {
+      space.answers.addAll({
+        'GET connections': (_) => {'email': 'you@example.com', 'notesAddress': 'notes-k7q2m9xwab@in.example.com',
+          'sharedAddress': 'notes@in.example.com'},
+        'GET ai-apps': (_) => {'address': 'https://mcp.example.com', 'apps': <Object>[]},
+        'GET chats': (_) => {'chats': <Object>[], 'next': null, 'nextId': null},
+      });
+      await show(tester, wide);
+      await tester.tap(inSidebar('Connect your AI'));
+      await tester.pumpAndSettle();
+      expect(find.byType(WebConnectAiPage), findsOneWidget);
+      expect(find.byType(NotesPane), findsNothing);
+      await tester.tap(find.text('Saved chats'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatsView), findsOneWidget);
+      expect(space.count('GET chats'), 1);
+      await tester.tap(inSidebar('Email notes'));
+      await tester.pumpAndSettle();
+      expect(find.byType(WebEmailNotesPage), findsOneWidget);
+      expect(find.text('notes-k7q2m9xwab@in.example.com'), findsOneWidget);
+      await finish(tester);
+    });
+
+    testWidgets("the phone's Read them on the web opens /#saved-chats on the saved chats", (tester) async {
+      space.answers['GET chats'] = (_) => {'chats': <Object>[], 'next': null, 'nextId': null};
+      final place = placeOfPart(Uri.parse('https://relay.example.com/#saved-chats').fragment);
+      expect(place, isA<ChatsPlace>());
+      await show(tester, wide, placeAt: place);
+      expect(find.byType(ChatsView), findsOneWidget);
+      expect(find.byType(NotesPane), findsNothing);
+      expect(space.count('GET chats'), 1);
+      await tester.tap(inSidebar('Notes'));
+      await tester.pumpAndSettle();
+      expect(find.byType(NotesPane), findsOneWidget);
+      await finish(tester);
     });
   });
 
@@ -234,7 +289,8 @@ void main() {
       expect(find.byType(HomeScreen), findsOneWidget);
       expect(find.text('Other connections'), findsOneWidget);
       expect(find.text('On this phone'), findsNothing);
-      expect(find.text('Claude Code chats'), findsOneWidget);
+      expect([find.text('Connect your AI'), find.text('Email notes')], everyElement(findsOneWidget));
+      expect(find.text('AI chat transcripts'), findsNothing);
       await tester.tap(find.text('Voice notes').first);
       await tester.pumpAndSettle();
       expect(find.byType(TimelineScreen), findsOneWidget);
@@ -255,6 +311,24 @@ void main() {
       await finish(tester);
     });
 
+    testWidgets('/#saved-chats opens the saved chats as a page with Connect your AI to go back, then Home', (tester) async {
+      space.answers.addAll({
+        'GET chats': (_) => {'chats': <Object>[], 'next': null, 'nextId': null},
+        'GET connections': (_) => {'email': 'you@example.com'},
+        'GET ai-apps': (_) => {'address': 'https://mcp.example.com', 'apps': <Object>[]},
+      });
+      await show(tester, narrow, placeAt: const ChatsPlace());
+      expect(find.byType(ChatsView), findsOneWidget);
+      expect(find.byType(HomeScreen), findsNothing);
+      await tester.tap(find.text('Connect your AI'));
+      await tester.pumpAndSettle();
+      expect(find.byType(WebConnectAiPage), findsOneWidget);
+      await tester.tap(find.text('Home'));
+      await tester.pumpAndSettle();
+      expect(find.byType(HomeScreen), findsOneWidget);
+      await finish(tester);
+    });
+
     testWidgets('a connection opens as a page with Home to go back', (tester) async {
       await show(tester, narrow);
       await tester.tap(find.text('Location'));
@@ -270,7 +344,7 @@ void main() {
   testWidgets('a note opened after another holds only itself: once it closes, a phone edit to the first one shows',
       (tester) async {
     Map<String, Object?> phoneNote(String id, String text, int at) => {'id': id, 'clientId': null, 'mine': false,
-      'source': 'typed', 'text': text, 'recordedAt': at, 'editedAt': null, 'device': 'iPhone', 'audio': false, 'place': null,
+      'source': 'typed', 'text': text, 'recordedAt': at, 'editedAt': null, 'device': 'iPhone', 'audio': false,
       'attachments': <Object>[]};
     final at = now.millisecondsSinceEpoch;
     space.answers['GET account'] = (_) => {'email': 'ana@example.com'};
@@ -417,13 +491,13 @@ void main() {
       expect(find.text('Appearance'), findsOneWidget);
     });
 
-    testWidgets('the phone keeps them', (tester) async {
+    testWidgets('the phone keeps the speech model, and has no pin either', (tester) async {
       await settings(tester, RelayPlatform.phone);
-      expect(find.text('Pin notes to where I am'), findsOneWidget);
+      expect(find.text('Pin notes to where I am'), findsNothing);
       expect(find.text('Speech model'), findsOneWidget);
     });
 
-    testWidgets("the phone's Home keeps On this phone and the hold to talk", (tester) async {
+    testWidgets("the phone's Home keeps On this phone, its own Other connections and the hold to talk", (tester) async {
       relay
         ..platform = RelayPlatform.phone
         ..entries = [];
@@ -434,7 +508,9 @@ void main() {
       await tester.pumpWidget(MaterialApp(theme: brandTheme(Brightness.light), home: HomeScreen(relay: relay)));
       await tester.pumpAndSettle();
       expect(find.text('On this phone'), findsOneWidget);
-      expect(find.text('Other connections'), findsNothing);
+      // On the phone, Other connections holds Connect your AI and Email notes, as in the browser.
+      expect(find.text('Other connections'), findsOneWidget);
+      expect([find.text('Connect your AI'), find.text('Email notes')], everyElement(findsOneWidget));
       expect(recordAction(tester), [CustomSemanticsAction.getIdentifier(const CustomSemanticsAction(label: 'Record a voice note'))]);
     });
   });

@@ -17,6 +17,8 @@ import workmanager_apple
     // Health and places wake a closed app only if their observers start at each launch, before it returns.
     HealthWake.shared.apply()
     PlacesWake.shared.apply()
+    // A voice note from the Apple Watch can wake a closed app too (RelayWatchReceiver.swift).
+    RelayWatchReceiver.shared.activate()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 

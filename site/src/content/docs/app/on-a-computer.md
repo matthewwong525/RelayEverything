@@ -36,10 +36,10 @@ When you make the window narrower or wider, the open note stays open, with all t
 ### The left bar
 
 - **Notes**, **Voice notes** and **Shares**: the same folders as on the phone's Home, each with its count. [Notes](../your-notes/#home)
-- **Other connections**: **Location**, **Health**, **Calendar**, **Photos** and **Claude Code chats**. [Other connections](#other-connections)
+- **Other connections**: **Location**, **Health**, **Calendar**, **Photos**, **Connect your AI** and **Email notes**. [Other connections](#other-connections)
 - **Settings**, at the bottom. [Settings](#settings)
 
-On the phone, the folders under **Notes** are in **On this phone**, because the phone sends that data. On a computer, they are in **Other connections**.
+On the phone, Location, Health, Calendar and Photos are in **On this phone**, because the phone sends that data. On a computer, they are in **Other connections**.
 
 ### The notes and the open note
 
@@ -118,7 +118,9 @@ Your phone sends your location, health, calendar and photos. In the browser, **L
 
 The **Photos** page also shows how many photos your space holds, with **Delete all photos**: [Delete all photos](../photos/#delete-all-photos).
 
-**Claude Code chats** lists the chats that the Relay Everything plugin saved, newest first. Search them, open one to read it, or delete it: [Read your chats](../../connections/claude-code/#read-your-chats).
+**Connect your AI** says *Let your AI read your notes*, and has two parts. **Claude Code and Codex** lists each computer with the Relay Everything plugin, with when it last saved a chat and **Disconnect**. Then **Saved chats** opens the chats that the plugin saved, newest first, each with its app. Search them, open one to read it, or delete it: [Read your chats](../../connections/claude-code/#read-your-chats). **Get the plugin** shows how to add it. **Claude, ChatGPT and other AI apps** shows the AI connector's address, with **Copy**, and each AI app you connected, with the day it connected and **Disconnect**: [Connect your AI](../../connections/connect-your-ai/).
+
+**Email notes** says *Email a note to your own address*, and shows your two notes addresses, each with **Copy**. **New address** replaces the private one: [Email notes](../email/).
 
 The browser shows no summary of your day, such as your steps, sleep, heart rate, events and places. Your AI can still read it: [Connect your AI](../../connections/connect-your-ai/#what-the-ai-can-read-and-add).
 
@@ -126,20 +128,27 @@ The browser shows no summary of your day, such as your steps, sleep, heart rate,
 
 Click **Settings** at the bottom of the left bar. Settings opens over your notes, with its pages at the left. Close it with the **X** at the top right: the open note stays as it was.
 
-![Settings over the notes, with the Devices page open](../../../assets/web/settings-computer.png)
-
 | Page | What it does |
 |---|---|
-| **Account** | Your email, **Sign out**, and **Delete my account**. [Delete your account](../../start/sign-up/#delete-your-account) |
-| **Devices** | Each phone, Claude Code computer and script with a key. **Web**, the device of the notes you write in the browser, has no key, so it is not in the list. **Turn off** stops a key at once. **Add a device** makes a new key and shows it once, as a QR code and as text to copy. [Keys](../../api/keys/#make-list-and-turn-off-keys) |
-| **Webhooks** | Add, test and remove the webhooks that send your data to your own database. [Add a webhook](../../connections/your-database/#add-a-webhook) |
-| **AI apps** | The AI connector's address, with **Copy**, and the AI apps you connected, with **Disconnect**. [Connect your AI](../../connections/connect-your-ai/) |
-| **Email notes** | Your secret notes address, with **Copy** and **New address**. [Email notes](../email/) |
+| **Account** | Your email, *Signed in* and **Sign out**. Then **Phones**, **Advanced** and **Delete my account**. [Below](#account) |
 | **Appearance** | How the app looks in this browser: System, Light or Dark. System follows your computer. The browser keeps it only until you reload the page. |
 
-On the phone, **AI apps** and **Webhooks** on the **Account** page open this page in the phone's browser, with Settings open on **AI apps** or **Webhooks**.
+### Account
 
-The phone's own settings, such as the switches for health, places, the calendar and photos, the speech model and **Send to my own webhook instead**, are only in the app on your phone: [Settings](../settings/).
+| Part | What it does |
+|---|---|
+| Your email and **Sign out** | Signs you out of this browser. |
+| **Phones** | Each of your phones by name, each with **Sign out**. **Sign out** asks first, then stops that phone at its next request. The other phones and your computers go on. Use it for a lost or sold phone. [Connect a phone](../../start/connect-a-phone/#sign-out-a-lost-phone) |
+| **Advanced** | **API keys**: *For your own scripts*. Lists your API keys, each with **Turn off**, and **Add an API key**, which shows a new key once. [Keys](../../api/keys/#make-list-and-turn-off-keys) **Webhooks**: add, test and remove the webhooks that send your data to your own database. [Add a webhook](../../connections/your-database/#add-a-webhook) |
+| **Delete my account** | Last, in red. [Delete your account](../../start/sign-up/#delete-your-account) |
+
+Your computers and AI apps are not in Settings: they are in **Connect your AI**, in the left bar. [Other connections](#other-connections)
+
+On the phone, **Delete my account**, **Webhooks** and a tap on an AI app or a computer open this page in the phone's browser, at the matching page.
+
+The phone's own settings, such as the switches for health, places, the calendar and photos, the speech model and **Only to my own webhook**, are only in the app on your phone: [Settings](../settings/).
+
+An old link to a page of Settings still opens the matching page: `/#ai-apps` and `/#chats` open **Connect your AI**, `/#email-notes` opens **Email notes**, `/#webhooks` opens **Webhooks**, `/#devices` and `/#account` open **Account**, and `/#api-keys` opens **API keys**.
 
 ## What the browser keeps
 

@@ -57,8 +57,15 @@ class FakeServer {
   static http.Response ok(http.Request request) => json(switch (request.url.path) {
     '/apps/relay/sign-in/phone/key' => {'server': request.url.origin, 'key': pageKey},
     final path when path.endsWith('/key') => {'device': 'Android phone'},
-    final path when path.endsWith('/connections') => {'email': 'ana@example.com', 'aiApps': [{'name': 'Claude'}],
-      'webhooks': [{'name': 'Home server'}]},
+    final path when path.endsWith('/connections') => {'email': 'ana@example.com',
+      'aiApps': [{'name': 'Claude', 'connectedAt': 1762041600000}], 'webhooks': [{'name': 'Home server'}],
+      'thisDevice': 'd-phone', 'devices': [
+        {'id': 'd-phone', 'name': 'iPhone', 'kind': 'phone', 'since': 1760400000000, 'lastChatAt': null},
+        {'id': 'd-pixel', 'name': 'Pixel', 'kind': 'phone', 'since': 1760400000000, 'lastChatAt': null},
+        {'id': 'd-laptop', 'name': 'Laptop', 'kind': 'computer', 'since': 1762041600000, 'lastChatAt': 1762128000000},
+      ],
+      'notesAddress': 'notes-k7q2m9@in.example.com', 'sharedAddress': 'notes@in.example.com'},
+    final path when path.endsWith('/devices/off') => {'ok': true},
     _ => {'added': 1},
   });
   static http.Response json(Object body, [int status = 200]) =>
@@ -89,7 +96,7 @@ Map<String, dynamic> pulledNote(String id, {String? clientId, bool mine = false,
   List<Map<String, dynamic>> files = const []}) => {
   'id': id, 'clientId': clientId, 'mine': mine, 'source': source, 'text': text,
   'recordedAt': (recordedAt ?? DateTime(2026, 11, 5, 8, 2)).millisecondsSinceEpoch,
-  'editedAt': editedAt?.millisecondsSinceEpoch, 'device': device, 'audio': audio, 'place': null, 'attachments': files,
+  'editedAt': editedAt?.millisecondsSinceEpoch, 'device': device, 'audio': audio, 'attachments': files,
 };
 
 /// A page of `GET notes`.

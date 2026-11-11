@@ -3,11 +3,11 @@ title: Notes
 description: Home and its folders, read, search and change the notes you write on your phone, as in Apple Notes, with text styles, checklists, photos and files, and open them on a computer.
 ---
 
-The Relay Everything app opens on **Home**, a screen of folders. Your notes are the first folders. The app shows the notes that you type or say into this phone, and keeps them on the phone. Once you sign in to Relay Everything, it also shows the notes from your other phones, email, Claude Code and your AI apps: [Your notes on every phone](#your-notes-on-every-phone).
+The Relay Everything app opens on **Home**, a screen of folders. Your notes are the first folders. The app shows the notes that you type or say into this phone, and keeps them on the phone. Once you sign in to Relay Everything, it also shows the notes from your other phones, email, Claude Code, Codex and your AI apps: [Your notes on every phone](#your-notes-on-every-phone).
 
 ## Home
 
-Home has a large **Home** title, the [sync state](#the-sync-state) under it, and the round [gear button](#the-gear-and-your-relay-everything-page) at the top right. Then two cards of folders. Each row shows a name, its status or its count, and a chevron. Tap a row to open it.
+Home has a large **Home** title, the [sync state](#the-sync-state) under it, and the round [gear button](#the-gear-and-your-relay-everything-page) at the top right. Then three cards of folders. Each row shows a name, its status or its count, and a chevron. Tap a row to open it.
 
 | Card | Folder | What it holds |
 |---|---|---|
@@ -18,11 +18,14 @@ Home has a large **Home** title, the [sync state](#the-sync-state) under it, and
 | | **Health** | *Off*, or when the readings last went and how many wait. [Health](../health/) |
 | | **Calendar** | *Off*, or how many calendars and when the events last went. [Calendar](../calendar/) |
 | | **Photos** | *Off*, or *On* and if photos also go on mobile data. [Photos](../photos/) |
-Tap **On this phone** to fold that card away. Tap it again to open it. The phone remembers which cards you folded.
+| **Other connections** | **Connect your AI** | *Let your AI read your notes*. Your computers with the plugin and your **Saved chats**, then the AI connector's address and the AI apps you connected. [Connect your AI](../../connections/connect-your-ai/) |
+| | **Email notes** | *Email a note to your own address*. Your two notes addresses, each with **Copy**. [Email notes](../email/) |
+
+Tap **On this phone** or **Other connections** to fold that card away. Tap it again to open it. The phone remembers which cards you folded.
 
 **Search** and **New note** stay at the bottom of Home, so you still write or talk with one tap.
 
-Home holds no setup. Your account, sign-in, AI apps and webhooks are in [Settings](../settings/#account), on its first row.
+Home holds no setup. Your account, sign-in, phones and webhooks are in [Settings](../settings/#account), on its account card.
 
 ## Read your notes
 
@@ -30,7 +33,7 @@ Tap **Notes**, **Voice notes** or **Shares** on Home. The folder shows its notes
 
 - The note's first line, in bold, without its style marks. A voice note shows **Writing the words…** until the phone writes them. [Voice notes](../voice-notes/)
 - The time, then the rest of the words. Today and yesterday show the time, this week the day, and older notes the date. A note from somewhere else also shows where it came from, such as *8:02 · Email*.
-- **Voice** or **Typed**: how you made the note. Then the length of a voice note, and where you were. With sending off, a pinned note shows **Pinned**: the phone does not look up the place's name.
+- **Voice** or **Typed**: how you made the note. Then the length of a voice note. A note keeps no place: with **Location history** on, where you made it is a point in your [location history](../location/#where-you-made-a-note).
 - With sending on, **Sent** or **Waiting to send**. **Sent** means your server has the note. **Waiting to send** means the note goes on the next sync.
 - The first picture, small, at the right. [Add photos and files](#add-photos-and-files)
 
@@ -114,7 +117,7 @@ With sending off, a change stays on this phone, as every note does.
 
 ## Your notes on every phone
 
-Each phone that you sign in on shows all your notes, as in Apple Notes. It gets the notes from your space: notes from your other phones, your Relay Everything page on a computer, email, Claude Code, your AI apps and the web API. A new phone gets all your old notes the first time.
+Each phone that you sign in on shows all your notes, as in Apple Notes. It gets the notes from your space: notes from your other phones, your Relay Everything page on a computer, email, Claude Code, Codex, your AI apps and the web API. A new phone gets all your old notes the first time.
 
 New notes and changes come in when you open the app, when you come back to it, when you pull down the list, and every hour in the background. A note from somewhere else shows where it came from, under its title in the list and at the top of the note.
 
@@ -141,7 +144,7 @@ Search reads only the notes on this phone, so it works with no signal and sends 
 
 Tap the round gear button at the top right of Home to open [Settings](../settings/).
 
-To open your Relay Everything page, open Settings, tap the first row with your email, then tap **Open your Relay Everything page**. It shows while the phone sends to your Relay Everything server. It opens `<your-relay-server>/` in the phone's browser. Sign in with your email. The notes from all your devices are there. [Account](../settings/#account)
+To open your Relay Everything page, open `<your-relay-server>/` in the phone's browser. Sign in with your email. The notes from all your devices are there. In the app, a tap that changes your account, such as **Delete my account** on the **Account** page, opens this page too. [Account](../settings/#account)
 
 On a computer, open the same address. The page is the same app as on your phone, sized for a computer: you read, write, change and delete your notes there. [On a computer](../on-a-computer/)
 
@@ -151,7 +154,7 @@ On a computer, open the same address. The page is the same app as on your phone,
 2. Type the note. The keyboard opens at once. The first line is the note's title.
 3. Tap **‹** to go back. The phone keeps the note as you type, so you do not save it.
 
-The note shows at once, with or without a signal. With **Pin notes to where I am** on, it keeps where you are; the pin follows when the phone has a fix. With sending on, the note also goes to your server. If the phone sends a note two times, for example after it lost the server's answer, your server keeps it one time.
+The note shows at once, with or without a signal. With **Location history** on, the phone adds one point to your location history at the note's time, when it has a fix: [Where you made a note](../location/#where-you-made-a-note). With sending on, the note also goes to your server. If the phone sends a note two times, for example after it lost the server's answer, your server keeps it one time.
 
 ## Add photos and files
 

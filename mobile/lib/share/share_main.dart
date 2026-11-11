@@ -63,7 +63,7 @@ Future<ShareDraft> sharedDraft({MethodChannel channel = shareChannel}) async {
 /// Keeps the share as one note with no place. While sending is on, it waits up to [wait] for the note and its files
 /// to go.
 Future<ShareOutcome> saveShare(RelayController relay, ShareDraft draft, String words, {Duration wait = shareWait}) async {
-  final kept = await relay.keepNote(draft.noteText(words), files: draft.files, pin: false);
+  final kept = await relay.keepNote(draft.noteText(words), files: draft.files, point: false);
   final note = kept.note;
   if (note == null || !relay.settings.sending) return ShareOutcome.kept;
   await relay.settled().timeout(wait, onTimeout: () {});

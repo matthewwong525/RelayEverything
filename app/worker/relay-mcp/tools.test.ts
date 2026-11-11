@@ -60,18 +60,38 @@ it("names itself Relay Everything to the AI app", () => {
   expect(client.getInstructions()).toMatch(/^Relay Everything /);
 });
 
-it("lists fifteen tools, each read-only but add_note, which changes and deletes nothing", async () => {
+it("lists seventeen tools, each read-only but add_note, which changes and deletes nothing", async () => {
   const { tools } = await client.listTools();
   expect(tools.map(tool => tool.name)).toEqual(["search", "fetch", "timeline", "day_summary", "health", "nights", "workouts", "places",
-    "points", "calendar", "search_chats", "read_chat", "photos", "read_photo", "add_note"]);
-  for (const tool of tools.slice(0, 14)) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
-  expect(tools[14].annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+    "points", "calendar", "search_chats", "read_chat", "photos", "read_photo", "memory", "read_fact", "add_note"]);
+  for (const tool of tools.slice(0, 16)) expect(tool.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+  expect(tools[16].annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+  expect(client.getInstructions()).toContain("search the memory first");
+});
+
+it("answers what the person decided from the live facts, reads a replaced one, and changes no fact", async () => {
+  const { sql, SPACES } = seeded();
+  client = await connect(SPACES);
+  const before = sql.prepare("SELECT * FROM relay_memory ORDER BY id").all();
+  const found = await ask("memory", { query: "battery" });
+  expect(found.facts).toEqual([{ id: "fc5kk", fields: { kind: "decision", text: "The battery is now 50 mAh, for a full day." },
+    tags: ["battery", "ring/charging"], sources: [`relay:chat/${CHAT(2)}#2`], replaces: ["fb4tt"], replacedBy: null, device: "Laptop",
+    createdAt: "2026-11-04T13:16:40-05:00" }]);
+  expect(found.columns.map((column: { name: string }) => column.name)).toEqual(["kind", "text"]);
+  expect((await ask("memory", { tag: "battery", all: true })).facts.map((fact: { id: string }) => fact.id)).toEqual(["fc5kk", "fb4tt"]);
+  expect((await ask("memory", { where: { kind: "fact" } })).facts.map((fact: { id: string }) => fact.id)).toEqual(["fd7mm"]);
+  expect(await ask("read_fact", { id: "fb4tt" })).toMatchObject({ replacedBy: "fc5kk", replacedByFact: { id: "fc5kk" }, replacedFacts: [] });
+  expect(await ask("read_fact", { id: "fzzzz" })).toEqual({ refused: "No fact has this id." });
+  expect(ids(await ask("search", { tag: "ring/charging" }))).toEqual([ID(3)]);
+  expect(await ask("search", {})).toEqual({ refused: "Give the words to find, a tag, or both." });
+  expect(sql.prepare("SELECT * FROM relay_memory ORDER BY id").all()).toEqual(before);
+  client = await connect(seeded().SPACES);
 });
 
 it("finds notes holding every word, in any case, with a title and the time in the zone", async () => {
   expect(await ask("search", { query: "milk" })).toEqual({ nextCursor: null, notes: [{ id: ID(3), source: "ring",
     text: "Buy milk and batteries.", title: "Buy milk and batteries.", recordedAt: "2026-11-04T16:58:20-05:00", device: "iPad",
-    audio: false, place: null, attachments: [] }] });
+    audio: false, attachments: [] }] });
   expect(ids(await ask("search", { query: "the" }))).toEqual([ID(2), ID(1)]);
   expect(ids(await ask("search", { query: "THE ring" }))).toEqual([ID(2)]);
   expect(ids(await ask("search", { query: "the", source: "ring" }))).toEqual([ID(1)]);
@@ -103,9 +123,11 @@ it("never reads past `to`, even with a cursor from a later page", async () => {
   expect(ids(await ask("search", { query: "the", to: "2026-11-04T12:00", cursor: later }))).toEqual([ID(1)]);
 });
 
-it("reads one note with the places near it and its day's health", async () => {
-  expect(await ask("fetch", { id: ID(1) })).toMatchObject({ id: ID(1), title: "Call the PCB fab about the second batch.",
-    place: { name: "Harbord St", from: "history" }, placesNearby: [harbord], day: { day: "2026-11-04", ...day } });
+it("reads one note with no place of its own, the places near it by time and its day's health", async () => {
+  const note = await ask("fetch", { id: ID(1) });
+  expect(note).toMatchObject({ id: ID(1), title: "Call the PCB fab about the second batch.", placesNearby: [harbord],
+    day: { day: "2026-11-04", ...day } });
+  expect(note).not.toHaveProperty("place");
   expect(await ask("fetch", { id: ID(9) })).toEqual({ refused: "No note has this id." });
 });
 
@@ -261,6 +283,20 @@ it("finds saved chats holding every word, with the matching lines and no device 
   expect([first.chats[0].id, first.nextCursor]).toEqual([CHAT(2), `1793816100000.${CHAT(2)}`]);
   expect((await ask("search_chats", { query: "the", cursor: first.nextCursor })).chats.map((chat: { id: string }) => chat.id)).toEqual([CHAT(1)]);
   expect((await ask("search_chats", { query: "the", to: "2026-11-04T12:00" })).chats.map((chat: { id: string }) => chat.id)).toEqual([CHAT(1)]);
+  expect((await ask("search_chats", { query: "dark mode" })).chats).toMatchObject([{ id: CHAT(3), app: "codex" }]);
+});
+
+it("lists every chat active in a week with no words, newest first, a page at a time, with no lines", async () => {
+  const week = { from: "2026-11-01", to: "2026-11-08" };
+  const all = await ask("search_chats", week);
+  expect(all.chats.map((chat: { id: string; messages: number; lines: unknown[] }) => [chat.id, chat.messages, chat.lines]))
+    .toEqual([[CHAT(2), 3, []], [CHAT(1), 4, []], [CHAT(3), 2, []]]);
+  expect(all.chats[0].lastAt).toBe("2026-11-04T13:15:00-05:00");
+  const first = await ask("search_chats", { ...week, limit: 2 });
+  expect([first.chats.length, first.nextCursor]).toEqual([2, `1793801400000.${CHAT(1)}`]);
+  expect((await ask("search_chats", { ...week, cursor: first.nextCursor })).chats.map((chat: { id: string }) => chat.id)).toEqual([CHAT(3)]);
+  expect((await ask("search_chats", { ...week, query: "stiffener" })).chats.map((chat: { id: string }) => chat.id)).toEqual([CHAT(1)]);
+  expect((await ask("search_chats", { from: "2026-11-05", to: "2026-11-08" })).chats).toEqual([]);
 });
 
 it("cuts a long matching line around the word", async () => {
@@ -329,9 +365,14 @@ it("adds a note as the app's own device, once on a resend, and wakes the webhook
   expect(sql.prepare("SELECT name, token_client_id, reaches, created_at, revoked_at FROM relay_devices WHERE id = ?").get(GRANT.deviceId!))
     .toEqual({ name: "Claude", token_client_id: `app:${GRANT.deviceId}`, reaches: "app", created_at: NOW, revoked_at: null });
   expect(await ask("fetch", { id: first.id })).toMatchObject({ text: "Order the second PCB batch.", source: "typed", device: "Claude",
-    recordedAt: "2026-11-04T18:00:00-05:00", place: null });
+    recordedAt: "2026-11-04T18:00:00-05:00" });
+  // A place sent with a note becomes one point of the app's device at the note's time, which fetch finds by time.
   const placed = await ask("add_note", { clientId: "claude-note-0002", text: "At the fab.", lat: 43.65, lon: -79.38, place: "King St W" });
-  expect(await ask("fetch", { id: placed.id })).toMatchObject({ recordedAt: "2026-11-05T09:00:00-05:00", place: { name: "King St W", from: "phone" } });
+  const fetched = await ask("fetch", { id: placed.id });
+  expect(fetched).toMatchObject({ recordedAt: "2026-11-05T09:00:00-05:00", placesNearby: [{ name: "King St W", lat: 43.65, lon: -79.38 }] });
+  expect(fetched).not.toHaveProperty("place");
+  expect(sql.prepare("SELECT device_id, at, accuracy, place FROM relay_locations WHERE place = 'King St W' AND at = ?").all(NOW))
+    .toEqual([{ device_id: GRANT.deviceId, at: NOW, accuracy: 0, place: "King St W" }]);
   expect(await ask("add_note", { clientId: "claude-note-0003", text: "Where?", lat: 43.65 })).toEqual({ refused: "Send lat and lon together." });
   expect(await ask("add_note", { clientId: "claude-note-0003", text: "When?", createdAt: "yesterday" }))
     .toEqual({ refused: "Give `createdAt` as a day or an ISO time." });
@@ -404,7 +445,7 @@ it("shows one photo as an image with a line of its time and place, and refuses a
 });
 
 // Only SELECT reaches a space from the connector, but for these writes: a used sign-in code, an app's device row and
-// its turning off. A note is added only through apps/relay/add-note.ts, as a phone's.
+// its turning off. A note is added only through apps/relay/add-note.ts; agents' commands go to their own database.
 const WRITES = /\b(?:INSERT|UPDATE|DELETE|REPLACE|UPSERT|CREATE|DROP|ALTER|PRAGMA|ATTACH|VACUUM)\b|\b(?:db|DB)\.exec\(|\.(?:batch|run)\(/;
 const writes = (source: string) => WRITES.test(source);
 
@@ -414,9 +455,11 @@ it("holds no statement but SELECT in the connector or its queries", () => {
     new URL("../apps/relay/queries.ts", import.meta.url), new URL("../apps/relay/points.ts", import.meta.url)];
   expect(files.length).toBeGreaterThan(5);
   const CODE_TAKEN = "DELETE FROM relay_connect_codes WHERE code_sha256 = ? AND expires_at > ? RETURNING person_id";
-  const ALLOWED: Record<string, string[]> = { "auth.ts": [CODE_TAKEN],
+  const ALLOWED: Record<string, string[]> = { "auth.ts": [CODE_TAKEN], "index.ts": ['["POST", "DELETE", "OPTIONS"]'],
     "answers.ts": [APP_DEVICE.slice(0, APP_DEVICE.indexOf("VALUES")), ".bind(adder.deviceId, adder.name, `app:${adder.deviceId}`, Date.now()).run()"],
-    "asker.ts": [JSON.stringify(APP_DEVICE_OFF), "db.prepare(APP_DEVICE_OFF).bind(Date.now(), deviceId).run()"] };
+    "asker.ts": [JSON.stringify(APP_DEVICE_OFF), "db.prepare(APP_DEVICE_OFF).bind(Date.now(), deviceId).run()"],
+    "inputs.ts": ['"One SQLite command, such as CREATE TABLE, INSERT or SELECT."'] };
+  ALLOWED["answers.ts"].push("asker.space.workbench.run(");
   for (const file of files) {
     let source = readFileSync(file, "utf8");
     for (const allowed of ALLOWED[file.pathname.split("/").pop()!] ?? []) {

@@ -39,7 +39,7 @@ beforeEach(() => {
   person.run(ANA, "ana@example.com");
   person.run(BEN, "ben@example.com");
   spaces = fakeSpaces();
-  env = { DB: directory.DB, SPACES: spaces.SPACES, RELAY_WEBHOOKS: queue, OAUTH_KV: fakeKv(), RELAY_MCP_ADDRESS: `${ORIGIN}/mcp`,
+  env = { DB: directory.DB, SPACES: spaces.SPACES, RELAY_WEBHOOKS: queue, OAUTH_KV: fakeKv(), RELAY_MCP_ADDRESS: `${ORIGIN}/`,
     RELAY_SERVER_URL: SERVER } as unknown as McpEnv;
 });
 afterEach(() => { vi.useRealTimers(); });
@@ -84,7 +84,7 @@ async function consentPage(client?: object) {
   const redirect = (client as { redirect_uris?: string[] } | undefined)?.redirect_uris?.[0] ?? CLAUDE;
   const go = browser();
   const page = await go(`/authorize?${new URLSearchParams({ response_type: "code", client_id: clientId, redirect_uri: redirect,
-    code_challenge: await challenge(), code_challenge_method: "S256", state: "app-state", resource: `${ORIGIN}/mcp` })}`);
+    code_challenge: await challenge(), code_challenge_method: "S256", state: "app-state", resource: env.RELAY_MCP_ADDRESS })}`);
   const html = await page.text();
   return { go, clientId, redirect, html, handle: /name="handle" value="([^"]+)"/.exec(html)?.[1] ?? "" };
 }
@@ -110,7 +110,7 @@ async function connectTokens(client?: object, person = ANA) {
 }
 const connect = async (client?: object, person = ANA) => (await connectTokens(client, person)).access_token;
 
-const mcp = (body: object, token?: string, headers: Record<string, string> = {}) => provider.fetch(new Request(`${ORIGIN}/mcp`, { method: "POST",
+const mcp = (body: object, token?: string, headers: Record<string, string> = {}, path = "/mcp") => provider.fetch(new Request(`${ORIGIN}${path}`, { method: "POST",
   headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", ...token && { Authorization: `Bearer ${token}` },
     ...headers }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, ...body }) }), env, ctx);
 const listTools = (token?: string, headers: Record<string, string> = {}) => mcp({ method: "tools/list" }, token, headers);
@@ -129,7 +129,7 @@ it("connects a person's AI app after they approve it by name and sign in on the 
   const token = await connect();
   const answer = await listTools(token);
   expect(answer.status).toBe(200);
-  expect((await answer.json() as { result: { tools: unknown[] } }).result.tools).toHaveLength(15);
+  expect((await answer.json() as { result: { tools: unknown[] } }).result.tools).toHaveLength(17);
 });
 
 it("reads only the space of the person who signed in", async () => {
@@ -159,7 +159,7 @@ it("lists each person's own apps newest first; one can't end another's, and an e
   const chatgpt = await connect({ client_name: "ChatGPT" });
   const bens = await connect({ client_name: "Ben's app" }, BEN);
   const listed = await grants().list(ANA);
-  expect(listed).toEqual({ address: `${ORIGIN}/mcp`, apps: [
+  expect(listed).toEqual({ address: ORIGIN, apps: [
     { id: expect.any(String), name: "ChatGPT", connectedAt: Date.UTC(2026, 10, 4, 15, 30) },
     { id: expect.any(String), name: "Claude", connectedAt: Date.UTC(2026, 10, 4, 15) }] });
   expect((await grants().list(BEN)).apps.map(app => app.name)).toEqual(["Ben's app"]);
@@ -246,8 +246,26 @@ it("answers a bad connect link, an unknown page, and /mcp with no token or a dev
   expect((await listTools(`${ANA}:grant:forged`)).status).toBe(401);
   const metadata = await provider.fetch(new Request(`${ORIGIN}/.well-known/oauth-authorization-server`), env, ctx);
   expect(await metadata.json()).toMatchObject({ authorization_endpoint: `${ORIGIN}/authorize`, registration_endpoint: `${ORIGIN}/register` });
-  const resource = await provider.fetch(new Request(`${ORIGIN}/.well-known/oauth-protected-resource/mcp`), env, ctx);
-  expect(await resource.json()).toMatchObject({ resource: `${ORIGIN}/mcp`, resource_name: "Relay Everything" });
+  const resource = await provider.fetch(new Request(`${ORIGIN}/.well-known/oauth-protected-resource`), env, ctx);
+  expect(await resource.json()).toMatchObject({ resource: `${ORIGIN}/`, resource_name: "Relay Everything" });
+});
+
+it("takes MCP on its bare address as on /mcp, with one token, and shows a browser a page there", async () => {
+  const token = await connect();
+  for (const path of ["/", "/mcp"]) {
+    const answer = await mcp({ method: "tools/list" }, token, {}, path);
+    expect([path, answer.status]).toEqual([path, 200]);
+    expect((await answer.json() as { result: { tools: unknown[] } }).result.tools).toHaveLength(17);
+  }
+  const refused = await mcp({ method: "tools/list" }, undefined, {}, "/");
+  expect([refused.status, refused.headers.get("WWW-Authenticate")])
+    .toEqual([401, expect.stringContaining(`resource_metadata="${ORIGIN}/.well-known/oauth-protected-resource"`)]);
+  const page = await provider.fetch(new Request(`${ORIGIN}/`, { headers: { Accept: "text/html" } }), env, ctx);
+  expect([page.status, page.headers.get("Content-Type")]).toEqual([200, expect.stringContaining("text/html")]);
+  const html = await page.text();
+  expect(html).toContain(`<b>${ORIGIN}</b>`);
+  expect(html).toContain("https://relayeverything.com/connections/connect-your-ai/");
+  expect((await provider.fetch(new Request(`${ORIGIN}/`, { method: "PUT" }), env, ctx)).status).toBe(404);
 });
 
 /** A /v1/ call to the connector, with this bearer token or key. */
@@ -278,7 +296,7 @@ it("opens the web API to a connected app's token, which adds notes as the app an
 });
 
 it("opens the web API to a live API key, for its own person, and refuses every other key, cookie or token", async () => {
-  const keys = { api: makeKey("api"), phone: makeKey("phone"), chats: makeKey("chats"), off: makeKey("off") };
+  const keys = { api: makeKey("api"), agent: makeKey("agent"), phone: makeKey("phone"), chats: makeKey("chats"), off: makeKey("off") };
   for (const [reach, key] of Object.entries(keys)) {
     const off = reach === "off" ? 1 : null;
     spaces.sql(ANA).prepare(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, revoked_at, reaches)
@@ -289,15 +307,17 @@ it("opens the web API to a live API key, for its own person, and refuses every o
   expect(await (await v1("me", keys.api)).json()).toEqual({ device: "Ana's api", adds: true });
   expect((await addNote(keys.api, "script-note-0001")).status).toBe(201);
   expect(spaces.sql(ANA).prepare("SELECT device_id FROM relay_notes").all()).toEqual([{ device_id: "d-api" }]);
+  // A computer's key reads and adds through the web API too.
+  expect(await (await v1("me", keys.agent)).json()).toEqual({ device: "Ana's agent", adds: true });
   const refusal = async (response: Response) => [response.status, (await response.json() as { error_description: string }).error_description];
-  expect(await refusal(await v1("me", keys.phone))).toEqual([403, "A phone or chat key only sends. Make an API key on your Relay Everything page."]);
-  expect(await refusal(await v1("me", keys.chats))).toEqual([403, "A phone or chat key only sends. Make an API key on your Relay Everything page."]);
+  expect(await refusal(await v1("me", keys.phone))).toEqual([403, "A phone key only sends. Make an API key on your Relay Everything page."]);
+  expect(await refusal(await v1("me", keys.chats))).toEqual([403, "This computer's key only saves chats. Type /relay:connect to connect it again."]);
   expect(await refusal(await v1("me", keys.off))).toEqual([403, "This device key is turned off."]);
   expect(await refusal(await v1("me", makeKey("unknown")))).toEqual([403, "This key is on no list of devices."]);
   expect((await v1("me", "rek_short")).status).toBe(401);
   const none = await v1("me");
   expect([none.status, none.headers.get("WWW-Authenticate")])
-    .toEqual([401, `Bearer resource_metadata="${ORIGIN}/.well-known/oauth-protected-resource/mcp"`]);
+    .toEqual([401, `Bearer resource_metadata="${ORIGIN}/.well-known/oauth-protected-resource"`]);
   expect((await v1("me", undefined, { headers: { Cookie: "__Host-relay_session=ana-session-token" } })).status).toBe(401);
   expect((await v1("me", undefined, { headers: { "CF-Access-Client-Id": "phone.access", "CF-Access-Client-Secret": "secret" } })).status).toBe(401);
   expect((await v1("me", `${ANA}:grant:forged`)).status).toBe(401);
@@ -305,10 +325,21 @@ it("opens the web API to a live API key, for its own person, and refuses every o
   expect((await listTools(keys.api)).status).toBe(401);
 });
 
-it("refuses a token bound to another resource", async () => {
+it("refuses a token bound to another resource, or to the old /mcp address", async () => {
+  // The provider keeps its helpers on env, made from the first address: each address gets a new env, as a deploy does.
+  const at = (address: string) => { env = { ...env, RELAY_MCP_ADDRESS: address, OAUTH_PROVIDER: undefined } as unknown as McpEnv; };
+  at(`${ORIGIN}/mcp`);
+  const old = await connect();
+  // On a /mcp address the bare address is the sign-in's, with no page, and the refusal names /mcp's metadata.
+  expect((await provider.fetch(new Request(`${ORIGIN}/`), env, ctx)).status).toBe(404);
+  expect((await v1("me")).headers.get("WWW-Authenticate")).toContain("/.well-known/oauth-protected-resource/mcp\"");
+  at(`${ORIGIN}/`);
   const token = await connect();
-  env.RELAY_MCP_ADDRESS = "https://relay-mcp-staging.example.com/mcp";
+  at("https://relay-mcp-staging.example.com/");
   expect((await v1("me", token)).status).toBe(401);
+  at(`${ORIGIN}/`);
+  expect((await v1("me", old)).status).toBe(401);
+  expect((await v1("me", await connect())).status).toBe(200);
 });
 
 it("answers a browser's preflight and the API's description with no sign-in", async () => {

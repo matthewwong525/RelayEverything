@@ -1,10 +1,12 @@
-// The connector's bindings, from app/wrangler.relay-mcp.jsonc: the directory's database, each person's space and the
-// file store its photos are sealed in, the webhooks' queue, the sign-in store and the server whose sign-in it uses.
+// The connector's bindings, from app/wrangler.relay-mcp.jsonc: the directory, each person's space, the photos' file
+// store, the webhooks' queue, the knowledge webs, the sign-in store and the server whose sign-in it uses.
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import type { SpaceEnv } from "../apps/relay/space.ts";
 
 export type McpEnv = SpaceEnv & {
   DB: D1Database;
+  /** Each person's knowledge web; none on a server whose account has no Artifacts. */
+  KNOWLEDGE?: Artifacts;
   /** Wakes the person's webhooks after an added note. */
   RELAY_WEBHOOKS: Queue;
   OAUTH_KV: KVNamespace;

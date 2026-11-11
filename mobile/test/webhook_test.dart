@@ -19,7 +19,7 @@ OutboxItem item(int id, String route, Map<String, dynamic> body) =>
   OutboxItem(id, route, body, destination: ownWebhook, createdAt: queued);
 
 final note = item(7, 'notes', {'clientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'text': 'Receipt for the desk lamp',
-  'createdAt': Date.recorded, 'lat': 43.65, 'lon': -79.38, 'accuracy': 12.0, 'place': 'King St W',
+  'createdAt': Date.recorded,
   'attachments': [{'id': 'f1', 'name': 'receipt.jpg', 'type': 'image/jpeg', 'size': 4}]});
 final update = item(11, noteUpdate, {'clientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'text': '# Receipt\n- [x] Paid',
   'createdAt': Date.recorded, 'editedAt': Date.recorded + 600000,
@@ -75,12 +75,11 @@ void main() {
     final device = {'id': installId, 'name': 'Android phone'};
     expect(webhook.message(note), {'version': 1, 'type': 'note.created', 'timestamp': '2026-11-04T14:01:02.000Z', 'data': {
       'note': {'id': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'source': 'typed', 'text': 'Receipt for the desk lamp',
-        'recorded_at': '2026-11-04T14:01:00.000Z', 'created_at': '2026-11-04T14:01:00.000Z', 'device': device,
-        'place': {'lat': 43.65, 'lon': -79.38, 'accuracy': 12.0, 'name': 'King St W', 'from': 'phone'}, 'audio': null,
+        'recorded_at': '2026-11-04T14:01:00.000Z', 'created_at': '2026-11-04T14:01:00.000Z', 'device': device, 'audio': null,
         'attachments': [{'id': 'f1', 'name': 'receipt.jpg', 'content_type': 'image/jpeg', 'size': 4}]}}});
     expect(webhook.message(update), {'version': 1, 'type': 'note.updated', 'timestamp': '2026-11-04T14:01:02.000Z', 'data': {
       'note': {'id': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'source': 'typed', 'text': '# Receipt\n- [x] Paid',
-        'recorded_at': '2026-11-04T14:01:00.000Z', 'created_at': '2026-11-04T14:01:00.000Z', 'device': device, 'place': null,
+        'recorded_at': '2026-11-04T14:01:00.000Z', 'created_at': '2026-11-04T14:01:00.000Z', 'device': device,
         'attachments': [{'id': 'f1', 'name': 'receipt.jpg', 'content_type': 'image/jpeg', 'size': 4}],
         'edited_at': '2026-11-04T14:11:00.000Z'}}});
     // A delete names the note by the id the receiver keeps it under: the phone's own.
@@ -146,9 +145,9 @@ void main() {
     final again = webhook.message(item(14, 'calendar', {'events': [], 'removed': ['work:a:${Date.recorded}']}))!;
     final id = (again['data']['events'] as List).single['id'] as int;
     expect([id, id < 1 << 48, id == (removed as Map)['id']], [(changed as Map)['id'], true, false]);
-    // A note with no place and no files has place null and no list.
+    // A note has no place, and one with no files has no list.
     final bare = webhook.message(item(11, 'notes', {'clientId': 'a' * 32, 'text': 'Plain', 'createdAt': Date.recorded}))!;
-    expect((bare['data'] as Map)['note'], allOf(containsPair('place', null), isNot(contains('attachments'))));
+    expect((bare['data'] as Map)['note'], allOf(isNot(contains('place')), isNot(contains('attachments'))));
     // An empty batch needs no message.
     expect(webhook.message(item(12, 'health', {'samples': []})), isNull);
     // A photo from *Photos*: its own client id, time, place and JPEG, in the server's photo.created shape.

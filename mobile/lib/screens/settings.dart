@@ -7,19 +7,33 @@ import '../relay.dart';
 import '../voice/model.dart' show megabytes;
 import 'account.dart';
 import 'back_to.dart';
-import 'connect.dart' show Scanner;
-import 'folder.dart' show Group, Opener, apply, choosePlace, hostOf;
+import 'folder.dart' show Group, Opener, choosePlace, hostOf;
 import 'timeline.dart' show openPage;
 
-/// The Account row first, as the Apple Account row in iPhone Settings, then what is about this phone alone:
-/// *Appearance*, *Pin notes to where I am*, the speech model, and at the bottom the app's version and build. Each kind
-/// of phone data has its own folder on Home.
+/// The rows of Settings, in order, on the phone and in the browser: one list, so a row added later shows on both, or is
+/// marked phone-only on purpose. The browser hears no voice and has no version to show.
+enum SettingsRow {
+  account('Account'),
+  appearance('Appearance'),
+  voice('Voice notes', phoneOnly: true),
+  version('Version', phoneOnly: true);
+
+  const SettingsRow(this.title, {this.phoneOnly = false});
+
+  final String title;
+  final bool phoneOnly;
+
+  /// The rows the phone, or with [web] the browser, shows.
+  static List<SettingsRow> on({required bool web}) => [for (final row in values) if (!web || !row.phoneOnly) row];
+}
+
+/// The account card first, as the Apple Account card in iPhone Settings, then *Appearance*, and what is about this
+/// phone alone: the speech model, and at the bottom the app's version and build, as
+/// [SettingsRow] lists them. Each kind of phone data has its own folder on Home.
 class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key, required this.relay, this.scanner, this.opener});
+  const SettingsScreen({super.key, required this.relay, this.opener});
 
   final Relay relay;
-  /// The QR scanner the sign-in uses; a test passes its own.
-  final Scanner? scanner;
   /// Opens the Relay Everything page; a test passes its own.
   final Opener? opener;
 
@@ -31,19 +45,12 @@ class SettingsScreen extends StatelessWidget {
         builder: (context, _) => CustomScrollView(slivers: [
           SliverAppBar.large(leading: const BackTo('Home'), leadingWidth: BackTo.widthOf('Home'), title: const Text('Settings')),
           SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 32), sliver: SliverList.list(children: [
-            _AccountRow(relay: relay, scanner: scanner, opener: opener),
-            Group(title: 'Appearance', children: [_AppearanceRow(relay: relay)]),
-            // The browser keeps no place and hears no voice.
-            if (!relay.web) Group(title: 'Notes', children: [
-              SwitchListTile(
-                title: const Text('Pin notes to where I am'),
-                subtitle: const Text('Each typed note keeps where you were.'),
-                value: relay.settings.pinNotes,
-                onChanged: (on) => apply(context, relay.setPinNotes(on)),
-              ),
-            ]),
-            if (!relay.web) Group(title: 'Voice notes', children: [_VoiceRow(relay: relay)]),
-            const _Version(),
+            for (final row in SettingsRow.on(web: relay.web)) switch (row) {
+              SettingsRow.account => AccountCard(relay: relay, opener: opener),
+              SettingsRow.appearance => Group(title: row.title, children: [_AppearanceRow(relay: relay)]),
+              SettingsRow.voice => Group(title: row.title, children: [_VoiceRow(relay: relay)]),
+              SettingsRow.version => const _Version(),
+            },
           ])),
         ]),
       ),
@@ -51,14 +58,13 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
-/// The account, in its own card: signed in, the Relay Everything mark, the email and the server; with the person's
-/// own webhook, *My own webhook* and its address; else *Sign in to Relay Everything*. Signed out, a tap opens the
-/// sign-in; else it opens the Account page.
-class _AccountRow extends StatelessWidget {
-  const _AccountRow({required this.relay, this.scanner, this.opener});
+/// The account, in its own card: signed in, the Relay Everything mark, the email and *Signed in*, and nothing more;
+/// with the person's own webhook, *My own webhook* and its address; else *Sign in to Relay Everything*. Signed out, a
+/// tap opens the sign-in; else it opens the Account page.
+class AccountCard extends StatelessWidget {
+  const AccountCard({super.key, required this.relay, this.opener});
 
   final Relay relay;
-  final Scanner? scanner;
   final Opener? opener;
 
   @override
@@ -66,8 +72,8 @@ class _AccountRow extends StatelessWidget {
     final brand = brandOf(context);
     final state = accountOf(relay);
     final email = relay.connections?.email;
-    final (String title, String? line) = switch (state) {
-      AccountState.signedIn => (email ?? hostOf(relay.server), email == null ? null : hostOf(relay.server)),
+    final (String title, String line) = switch (state) {
+      AccountState.signedIn => (email ?? hostOf(relay.server), 'Signed in'),
       AccountState.webhook => ('My own webhook', hostOf(relay.webhookAddress)),
       AccountState.signedOut => ('Sign in to Relay Everything', 'Your notes stay on this phone until you sign in.'),
     };
@@ -82,11 +88,11 @@ class _AccountRow extends StatelessWidget {
             ? Icon(CupertinoIcons.link, size: 32, color: brand.accentText)
             : const RelayMark(size: 40),
           title: Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: brand.ink)),
-          subtitle: line == null ? null : Text(line, style: TextStyle(fontSize: 13, color: brand.muted)),
+          subtitle: Text(line, style: TextStyle(fontSize: 13, color: brand.muted)),
           trailing: Icon(CupertinoIcons.chevron_forward, color: brand.muted),
           onTap: () => state == AccountState.signedOut
-            ? choosePlace(context, relay, scanner)
-            : openPage(context, AccountPage(relay: relay, opener: opener, scanner: scanner)),
+            ? choosePlace(context, relay)
+            : openPage(context, AccountPage(relay: relay, opener: opener)),
         ),
       ),
     );

@@ -68,7 +68,7 @@ async function file(files: Files, db: Db, entry: Entry): Promise<Built> {
 }
 
 /** A note alone, as it is now; "skip" when it was deleted since. A `note.updated` is a change from the phone that sent
- *  it, or a ring note's place from before the server stopped placing them. A `note.deleted` needs only its log row. */
+ *  it. A `note.deleted` needs only its log row. */
 async function note(files: Files, db: Db, [entry]: Entry[]): Promise<Built> {
   if (entry.kind === "note.file") return file(files, db, entry);
   if (entry.kind === "note.deleted") return noteDeleted(entry.ref, entry.logged_at);
@@ -98,7 +98,7 @@ async function photo(files: Files, db: Db, [entry]: Entry[]): Promise<Built> {
 const NO_WEBHOOK = "No webhook message yet: a later plan adds one.";
 
 export const KINDS: DataKind[] = [
-  { id: "notes", label: "Notes", detail: "with their words, recording and place", always: true, alone: true,
+  { id: "notes", label: "Notes", detail: "with their words and recording", always: true, alone: true,
     log: ["note.created", "note.updated", "note.file", "note.deleted"], messages: ["note.created", "note.updated", "note.file", "note.deleted"],
     build: note,
     api: ["/v1/notes", "/v1/notes/{id}"], tools: ["search", "fetch", "timeline", "add_note"], docs: "app/your-notes" },
@@ -128,7 +128,7 @@ export const KINDS: DataKind[] = [
   { id: "photos", label: "Photos", detail: "each with the picture, when and where you took it", sensitive: true, alone: true,
     log: ["photo"], messages: ["photo.created"], build: photo, api: [], tools: ["photos", "read_photo"], docs: "app/photos",
     missing: { api: "No /v1/ route reads photos yet: read_photo answers an image, and `near` is no query field." } },
-  { id: "chats", label: "Claude Code chats", detail: "", log: [], messages: [], api: ["/v1/chats", "/v1/chats/{id}"],
+  { id: "chats", label: "AI chat transcripts", detail: "", log: [], messages: [], api: ["/v1/chats", "/v1/chats/{id}"],
     tools: ["search_chats", "read_chat"], docs: "connections/claude-code", missing: { webhook: NO_WEBHOOK } },
 ];
 

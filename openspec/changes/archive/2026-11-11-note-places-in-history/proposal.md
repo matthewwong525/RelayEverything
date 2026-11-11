@@ -1,6 +1,6 @@
 # A note keeps no place: its place goes into your location history
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** spotty-emu
 **Open questions:** none
 
@@ -129,3 +129,5 @@ None.
 - **2026-11-11** — Assumed (build): a note from the watch, the share card, or a shortcut that ran while the app was closed adds no point, as none pinned a place before, because it reaches the app after it was made and the fix would be at another time.
 - **2026-11-11** — Assumed (review): a voice note recorded in the app takes its fix as the recording starts, at the note's time, and adds its point only when the note is kept, because a fix taken when a 5-minute recording stops would put the start time at a later place.
 - **2026-11-11** — Built after *One simple Settings* went live (#105), on the newest main; the migration is `0017_note_places.sql`, as `0016_memory.sql` took 16. A second look found the API reference still said a note keeps its place, and an in-app voice note took its fix when the recording stopped; both fixed. Local checks pass; the live check (5.2) runs after this save.
+- **2026-11-11** — Live check (5.2) passed on this computer: the move left a made-up note with no place and its file, added one point at its time with accuracy 0, and wrote no webhook message or note change; a note sent with a place through an API key showed no place in `GET /v1/notes`, and its point was in `GET /v1/points`. The key was turned off after.
+- **2026-11-11** — Archived for publish: all tasks done, live check 5.2 passed.

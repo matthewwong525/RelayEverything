@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · note-places-in-history</title>
+<title>Review · 2026-11-11-note-places-in-history</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -442,11 +442,11 @@
 })();
 </script>
 </head>
-<body data-change="note-places-in-history" data-own-back>
+<body data-change="2026-11-11-note-places-in-history" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>note-places-in-history</h1>
+  <h1>2026-11-11-note-places-in-history</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Tap a picture to see it full screen.</span></p>
@@ -520,6 +520,8 @@
 <li class="decision card" id="decision-14" data-note="decision-14" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-11</p>Assumed (build): a note from the watch, the share card, or a shortcut that ran while the app was closed adds no point, as none pinned a place before, because it reaches the app after it was made and the fix would be at another time.</li>
 <li class="decision card" id="decision-15" data-note="decision-15" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-11</p>Assumed (review): a voice note recorded in the app takes its fix as the recording starts, at the note's time, and adds its point only when the note is kept, because a fix taken when a 5-minute recording stops would put the start time at a later place.</li>
 <li class="decision card" id="decision-16" data-note="decision-16" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-11</p>Built after <i>One simple Settings</i> went live (#105), on the newest main; the migration is <code>0017_note_places.sql</code>, as <code>0016_memory.sql</code> took 16. A second look found the API reference still said a note keeps its place, and an in-app voice note took its fix when the recording stopped; both fixed. Local checks pass; the live check (5.2) runs after this save.</li>
+<li class="decision card" id="decision-17" data-note="decision-17" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-11</p>Live check (5.2) passed on this computer: the move left a made-up note with no place and its file, added one point at its time with accuracy 0, and wrote no webhook message or note change; a note sent with a place through an API key showed no place in <code>GET /v1/notes</code>, and its point was in <code>GET /v1/points</code>. The key was turned off after.</li>
+<li class="decision card" id="decision-18" data-note="decision-18" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-11</p>Archived for publish: all tasks done, live check 5.2 passed.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

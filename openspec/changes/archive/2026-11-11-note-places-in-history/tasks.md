@@ -24,4 +24,4 @@
 ## 5. Checks
 
 - [x] 5.1 Run `npm test` in `app/`, `flutter test` in `mobile/`, `openspec validate note-places-in-history --strict --no-interactive` and `node scripts/public-check.mjs`; fix what fails.
-- [ ] 5.2 After `/save`, on this computer as `wiki/stack/relay-ai-connector.md#on-this-computer` says: start from a space that holds a made-up placed note and a file on it, run the migrations, and check the note has no place and keeps its file, location history has the point, and no webhook message went; then POST a note with a place with an API key and check `GET /v1/notes` shows no place and the point is in `GET /v1/points` for that time. Turn the key off after.
+- [x] 5.2 After `/save`, on this computer as `wiki/stack/relay-ai-connector.md#on-this-computer` says: start from a space that holds a made-up placed note and a file on it, run the migrations, and check the note has no place and keeps its file, location history has the point, and no webhook message went; then POST a note with a place with an API key and check `GET /v1/notes` shows no place and the point is in `GET /v1/points` for that time. Turn the key off after.

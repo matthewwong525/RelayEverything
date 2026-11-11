@@ -11,8 +11,17 @@ The Relay Everything watch app records a voice note and hands it to the paired i
 ## What WatchConnectivity does and doesn't do
 
 - **`transferFile` queues, but does not hurry.** The system sends when it chooses, and it does not reliably wake the iPhone app. A note sent this way can wait until the next time the phone app opens.
-- **`sendMessage` from a watch app on screen wakes the iPhone app** in the background, when `isReachable`. The watch sends a small wake message beside each file, so the queued file arrives in seconds. Never put the recording in a message: messages are small, and the file transfer keeps the queue's promise.
-- **A watch app can't close itself.** The person leaves with the Digital Crown, or the clock comes back after the wrist goes down. Put work that must happen on leave in the `scenePhase` change to `.background`. `.inactive` is only a wrist down.
+- **`sendMessage` from a watch app on screen wakes the iPhone app** in the background, when `isReachable`. Never put the recording in a message: messages are small, and the file transfer keeps the queue's promise.
+- **`isReachable` on a watch is true only while the watch app is on screen.** A save on leave runs at `.background`, when the app is off screen, so a wake sent then can fail. The watch sends a small wake at three moments: when a recording starts, at `.inactive` while it records (the start of a leave, or a wrist down), and beside each file at the save. Then the iPhone app is awake when the file comes, and the file arrives in seconds. A wake that fails costs nothing: the file waits in the queue.
+- **A watch app can't close itself.** The person leaves with the Digital Crown, or the clock comes back after the wrist goes down. Put work that must happen on leave in the `scenePhase` change to `.background`. `.inactive` comes before a leave, but also with a wrist down, so it may only wake the iPhone.
+
+## Numbers on an older watch are 32 bits
+
+Swift's `Int` is the size of a pointer. A Series 4 to 8, an SE, an SE 2, the first Ultra, and every watch on watchOS 10 or 11 run the `arm64_32` slice, where `Int` is 32 bits: its largest value is 2,147,483,647. A time in milliseconds since 1970 is about 1.8 trillion, so `Int(...)` of it stops the app. That stop at save closed the app on a Series 8, and no note waited.
+
+- **Write a time, or any number that can pass 2 billion, as `Int64`**, not `Int`. `WatchNote.createdAt` is an `Int64`; the iPhone reads it as an `NSNumber`, which holds it.
+- **The watch simulator never shows it.** Every watch simulator is 64-bit, so `RelayWatchTests` pass on code that stops a Series 8.
+- **The build compiles for `arm64_32` but can't run it.** [`watch-tests.sh`](../mobile/device-check/watch-tests.sh) first compiles the watch app and its tests for `arm64_32`, so a literal too large for a 32-bit `Int` fails the build. A number that grows too large while the app runs passes that compile: the real proof is an older watch with a TestFlight build.
 
 ## The phone keeps every watch note
 
@@ -20,7 +29,7 @@ A voice note held on the phone with no words is deleted, because it was a mistak
 
 ## Testing it
 
-CI builds the signed app with the watch app and runs `RelayWatchTests` on a watch simulator. No check here can make a watch hand a file to a phone: the real test is the person's own watch with a TestFlight build. Keep the screen and queue rules in plain Swift types with no hardware, so `RelayWatchTests` can test them.
+CI builds the signed app with the watch app, compiles the watch app for the [32-bit watch](#numbers-on-an-older-watch-are-32-bits), and runs `RelayWatchTests` on a watch simulator. No check here can make a watch hand a file to a phone: the real test is the person's own watch with a TestFlight build. Keep the screen and queue rules in plain Swift types with no hardware, so `RelayWatchTests` can test them.
 
 ## See also
 

@@ -12,9 +12,9 @@ enum RecordingRules {
   static func keeps(_ seconds: TimeInterval) -> Bool { seconds >= shortest }
 }
 
-/// What the watch app shows: nothing yet (*Tap to record*), the recording, *Saved*, *Not saved*, or how to allow the
-/// microphone.
-enum WatchScreen: Equatable { case idle, recording, saved, notSaved, microphoneRefused }
+/// What the watch app shows: the recording look before the microphone is on (starting), nothing yet (*Tap to record*),
+/// the recording, *Saved*, *Not saved*, or how to allow the microphone.
+enum WatchScreen: Equatable { case starting, idle, recording, saved, notSaved, microphoneRefused }
 
 /// Where the app is, as SwiftUI's scene phase says it: on screen, on screen with the wrist down, or left.
 enum AppPhase { case active, inactive, background }
@@ -23,6 +23,17 @@ enum AppPhase { case active, inactive, background }
 enum WatchRules {
   /// The X keeps nothing and says nothing.
   static let afterCancel = WatchScreen.idle
+
+  /// The first screen, from whether the microphone is [allowed]: the recording look, so no *Tap to record* flashes
+  /// before the recording starts. A refused microphone says how to allow it. Not asked yet (nil): the system's question
+  /// shows over the recording look.
+  static func atOpen(allowed: Bool?) -> WatchScreen { allowed == false ? .microphoneRefused : .starting }
+
+  /// The screen after the person left the app, so the next open shows the recording look, not the last *Saved* or
+  /// *Not saved*. A refused microphone stays.
+  static func afterLeave(_ screen: WatchScreen) -> WatchScreen {
+    screen == .microphoneRefused ? .microphoneRefused : .starting
+  }
 
   /// The screen after a save of a recording [seconds] long: *Saved* when the note is [kept]. A note not kept says
   /// *Not saved*, unless it was too short to keep: a quick open and close is not an error.
@@ -49,9 +60,10 @@ func waitingWords(_ count: Int) -> String? {
 }
 
 /// When the app records and saves on its own: it records each time it opens, and when it comes back after the person
-/// left it; it saves when they leave. The wrist down for a moment (inactive) changes nothing.
+/// left it; it saves when they leave. Inactive while open (the wrist down, or the start of a leave) wakes the iPhone,
+/// because at the save the app is off screen and a wake can fail; it changes nothing else.
 struct PhaseRule {
-  enum Action: Equatable { case record, save, nothing }
+  enum Action: Equatable { case record, save, wake, nothing }
 
   /// True at launch and after the app was left: the next active records.
   private var away = true
@@ -66,7 +78,7 @@ struct PhaseRule {
       away = true
       return .save
     case .inactive:
-      return .nothing
+      return away ? .nothing : .wake
     }
   }
 }
@@ -79,11 +91,12 @@ struct WatchNote: Codable, Equatable {
   enum Transfer: String, Codable { case unsent, sending, delivered }
 
   let id: String
-  let createdAt: Int
+  /// Milliseconds since 1970: an Int64, because Int is 32 bits on a Series 8 and older, and this number is larger.
+  let createdAt: Int64
   let durationMs: Int
   var transfer: Transfer
 
-  init(id: String, createdAt: Int, durationMs: Int, transfer: Transfer = .unsent) {
+  init(id: String, createdAt: Int64, durationMs: Int, transfer: Transfer = .unsent) {
     self.id = id
     self.createdAt = createdAt
     self.durationMs = durationMs
@@ -94,7 +107,7 @@ struct WatchNote: Codable, Equatable {
   init(from decoder: Decoder) throws {
     let values = try decoder.container(keyedBy: CodingKeys.self)
     id = try values.decode(String.self, forKey: .id)
-    createdAt = try values.decode(Int.self, forKey: .createdAt)
+    createdAt = try values.decode(Int64.self, forKey: .createdAt)
     durationMs = try values.decode(Int.self, forKey: .durationMs)
     transfer = try values.decodeIfPresent(Transfer.self, forKey: .transfer) ?? .unsent
   }
@@ -113,6 +126,13 @@ protocol WatchSender: AnyObject {
   var reachable: Bool { get }
   /// Starts the iPhone app, so it takes the notes now, not when the system chooses.
   func wake()
+}
+
+extension WatchSender {
+  /// Wakes the iPhone app only when it is near: a message to an iPhone that is away fails.
+  func wakeIfNear() {
+    if reachable { wake() }
+  }
 }
 
 /// The notes that wait, each `<id>.wav` beside `notes.json` in `watch-queue/`. A recording goes only after the iPhone's
@@ -139,7 +159,7 @@ final class WatchQueue {
   /// Keeps [recording] as a new note, saved at [at], and gives it back.
   func add(_ recording: URL, at: Date, durationMs: Int) throws -> WatchNote {
     let id = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
-    let note = WatchNote(id: id, createdAt: Int(at.timeIntervalSince1970 * 1000), durationMs: durationMs)
+    let note = WatchNote(id: id, createdAt: Int64((at.timeIntervalSince1970 * 1000).rounded()), durationMs: durationMs)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     try FileManager.default.moveItem(at: recording, to: file(note))
     notes.append(note)
@@ -173,7 +193,7 @@ final class WatchQueue {
       changed = true
     }
     if changed { try? save() }
-    if (changed || (all && !notes.isEmpty)) && sender.reachable { sender.wake() }
+    if changed || (all && !notes.isEmpty) { sender.wakeIfNear() }
   }
 
   /// Note [id]'s transfer ended: with no [failed], it reached the iPhone and waits for kept; else it goes at the next

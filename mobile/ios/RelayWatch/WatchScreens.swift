@@ -1,7 +1,8 @@
 import SwiftUI
 
-// The watch's screens: Tap to record, recording, Saved, Not saved and the microphone refused. The app records as it
-// opens, so the first is seen only after the X. They mirror the phone's full-screen voice-note recording in lib/voice/.
+// The watch's screens: recording, Tap to record, Saved, Not saved and the microphone refused. The app records as it
+// opens: it shows the recording screen at 0:00 from the first frame, and Tap to record only after the X. They mirror
+// the phone's full-screen voice-note recording in lib/voice/.
 
 struct WatchRoot: View {
   @ObservedObject var model: WatchModel
@@ -9,8 +10,8 @@ struct WatchRoot: View {
   var body: some View {
     Group {
       switch model.screen {
+      case .starting, .recording: RecordingScreen(model: model)
       case .idle: IdleScreen(model: model)
-      case .recording: RecordingScreen(model: model)
       case .saved: SavedScreen(model: model)
       case .notSaved: NotSavedScreen(model: model)
       case .microphoneRefused: MicrophoneScreen()
@@ -51,14 +52,17 @@ struct IdleScreen: View {
   }
 }
 
+/// The recording, and its look before the microphone is on (starting): the clock at 0:00 and the bars at rest.
 struct RecordingScreen: View {
   @ObservedObject var model: WatchModel
 
   var body: some View {
+    let recording = model.screen == .recording
     TimelineView(.periodic(from: .now, by: 0.1)) { context in
       VStack(spacing: 8) {
         HStack {
-          Text(clock(context.date.timeIntervalSince(model.started))).font(WatchBrand.title).monospacedDigit()
+          Text(clock(recording ? context.date.timeIntervalSince(model.started) : 0)).font(WatchBrand.title)
+            .monospacedDigit()
           Spacer()
           Button(action: model.cancel) {
             Image(systemName: "xmark").font(.system(size: 14, weight: .bold))
@@ -69,7 +73,7 @@ struct RecordingScreen: View {
           .accessibilityLabel("Cancel")
         }
         Spacer()
-        SoundBars(level: model.level())
+        SoundBars(level: recording ? model.level() : 0)
         Spacer()
         SmallLine(words: "Tap to save")
         if let words = waitingWords(model.waiting.count) { SmallLine(words: words) }
@@ -77,9 +81,9 @@ struct RecordingScreen: View {
     }
     .padding(.horizontal, 4)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    // The whole screen saves; the X above takes its own tap first.
+    // The whole screen saves, or before the microphone is on, records; the X above takes its own tap first.
     .contentShape(Rectangle())
-    .onTapGesture(perform: model.save)
+    .onTapGesture { if recording { model.save() } else { model.talk() } }
   }
 
   private func clock(_ seconds: TimeInterval) -> String {

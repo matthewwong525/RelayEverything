@@ -5,7 +5,7 @@ Each person's agents' database is a second Durable Object, beside their [person 
 The class is [`Workbench`](../app/worker/spaces-worker.ts), in the spaces Worker, bound as `WORKBENCHES` by the same `script_name` as `SPACES`, and named by the person's id. It has no migration, no `relay_` table, no file key. A Durable Object has one SQLite database, so a separate object is the only way free SQL can't reach the space: a command on `relay_notes` fails as *no such table*. Don't move a Relay Everything table into it, and don't give the space a raw-SQL route instead.
 
 - **The door.** `spaceOf` opens it as `space.workbench`, on first use, for the same checked caller. Deleting the space deletes it first, so *Delete my account* takes both.
-- **The routes.** `POST /v1/db` and `GET /v1/db/tables` on the connector's web API, through `computer()` in [`answers.ts`](../app/worker/relay-mcp/answers.ts): only an `agent` key gets in.
+- **The routes.** `POST /v1/db` and `GET /v1/db/tables` on the connector's web API, through `computer()` in [`answers.ts`](../app/worker/relay-mcp/answers.ts): only an `agent` key gets in. To try them, make the key by hand: [a computer key's route](stack/relay-ai-connector.md#a-computer-keys-route).
 - **The limits.** `WORKBENCH_LIMITS` in `spaces-worker.ts`. A step past one throws inside its transaction, so nothing it wrote stays; a SQL error comes back as the answer, never as a crash.
 - **Kept apart.** No webhook, export or connector tool reads it, and the server writes no health or location data into it.
 

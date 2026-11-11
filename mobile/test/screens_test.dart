@@ -3198,16 +3198,22 @@ void main() {
       expect(find.text('No speech heard. Nothing was saved.'), findsOneWidget);
     });
 
-    testWidgets('a note whose words failed says so in the list; its page says the recording is safe, keeps the player, and Try again writes them again', (tester) async {
-      relay.entries = [Entry(text: '', at: now, voice: true, failed: true, recording: 'voice/a.wav',
-        length: const Duration(seconds: 3))];
+    testWidgets('a note whose words failed says so in the list; its page says the recording is safe and why, keeps the player, and Try again writes them again', (tester) async {
+      relay.entries = [Entry(text: '', at: now, voice: true, failed: true, why: 'the speech engine stopped (code -6).',
+        recording: 'voice/a.wav', length: const Duration(seconds: 3))];
       await tester.pumpWidget(RelayApp(relay: relay));
       await openFolder(tester, 'Notes');
       expect(find.text('The words did not come'), findsOneWidget);
+      // The list row gives no reason: only the note's page does.
+      expect(find.textContaining('Why:'), findsNothing);
       expect([find.text('Writing the words…'), find.byType(LinearProgressIndicator)], [findsNothing, findsNothing]);
       await tester.tap(find.text('The words did not come'));
       await tester.pumpAndSettle();
       expect(find.text('The words did not come. Your recording is safe.'), findsOneWidget);
+      expect(find.text('Why: the speech engine stopped (code -6).'), findsOneWidget);
+      expect(tester.getTopLeft(find.text('Why: the speech engine stopped (code -6).')).dy,
+        allOf(greaterThan(tester.getTopLeft(find.text('The words did not come. Your recording is safe.')).dy),
+          lessThan(tester.getTopLeft(find.text('Try again')).dy)));
       expect([find.text('Writing the words…'), find.byType(LinearProgressIndicator)], [findsNothing, findsNothing]);
       expect(find.byTooltip('Play'), findsOneWidget);
       await tester.tap(find.text('Try again'));
@@ -3217,6 +3223,17 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.text('The words did not come. Tap Try again on the note.'), findsOneWidget);
+    });
+
+    testWidgets('a failed note with no reason shows no Why line', (tester) async {
+      relay.entries = [Entry(text: '', at: now, voice: true, failed: true, recording: 'voice/a.wav',
+        length: const Duration(seconds: 3))];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('The words did not come'));
+      await tester.pumpAndSettle();
+      expect([find.text('The words did not come. Your recording is safe.'), find.textContaining('Why:')],
+        [findsOneWidget, findsNothing]);
     });
 
     testWidgets('the player under the date plays and pauses, shows 0:12 / 0:42 while it plays, and a tap on the waves seeks',

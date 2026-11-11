@@ -20,6 +20,7 @@ import 'package:relay_app/sync/motion.dart';
 import 'package:relay_app/sync/native.dart';
 import 'package:relay_app/sync/photos.dart';
 import 'package:relay_app/voice/model.dart';
+import 'package:whisper_cpp_flutter_plus/whisper_cpp_flutter_plus.dart' show WhisperException;
 
 import 'fakes.dart';
 
@@ -1797,6 +1798,7 @@ void main() {
       expect(limits, [const Duration(seconds: 3)]);
       expect(transcriber.cancelled, 1);
       expect([relay.entries.single.writing, relay.entries.single.failed], [false, true]);
+      expect(relay.entries.single.why, startsWith('the phone took more than'));
       await pumpEventQueue();
       expect(notices, ['The words did not come. Tap Try again on the note.']);
     });
@@ -1906,6 +1908,111 @@ void main() {
       await relay.wordsWritten();
       expect(transcriber.heard, [failed, writing, failed]);
       expect([for (final entry in relay.entries) (entry.writing, entry.failed)], [(false, false), (false, false)]);
+    });
+
+    test('a failed note keeps its reason: the time limit, the speech engine\'s code, or any other error', () async {
+      final relay = voiceController();
+      await relay.load();
+      final errors = <Object, String>{
+        TimeoutException('No words', const Duration(minutes: 2)): 'the phone took more than 2 minutes.',
+        const WhisperException('whisper_full failed with code -6'): 'the speech engine stopped (code -6).',
+        StateError('engine'): 'the speech engine stopped (Bad state: engine).',
+      };
+      for (final MapEntry(key: error, value: why) in errors.entries) {
+        transcriber.error = error;
+        clock = clock.add(const Duration(seconds: 10));
+        await hold(relay, const Duration(seconds: 2));
+        await relay.wordsWritten();
+        expect([relay.entries.first.failed, relay.entries.first.why], [true, why]);
+      }
+      // The words come on Try again: the reason goes with the failed mark.
+      transcriber.error = null;
+      await relay.writeWordsAgain();
+      await relay.wordsWritten();
+      expect([for (final entry in relay.entries) (entry.failed, entry.why)], everyElement((false, null)));
+      expect(server.requests, isEmpty);
+    });
+
+    test('a return to the app writes the words of a failed note again, with no tap', () async {
+      final relay = voiceController();
+      await relay.load();
+      transcriber.error = const WhisperException('whisper_full failed with code -6');
+      await hold(relay, const Duration(seconds: 2));
+      await relay.wordsWritten();
+      expect(relay.entries.single.failed, isTrue);
+      transcriber.error = null;
+      await relay.resume();
+      await relay.wordsWritten();
+      final written = relay.entries.single;
+      expect([written.text, written.writing, written.failed, written.why],
+        ['Ask the fab if the flex stiffener can be 0.2 mm', false, false, null]);
+      expect(transcriber.heard, hasLength(2));
+      await pumpEventQueue();
+      expect(notices, ['The words did not come. Tap Try again on the note.']);
+    });
+
+    test('a note that fails again on each return to the app tells once; a different note that fails tells again', () async {
+      final relay = voiceController();
+      await relay.load();
+      transcriber.error = const WhisperException('whisper_full failed with code -6');
+      await hold(relay, const Duration(seconds: 2));
+      await relay.wordsWritten();
+      await pumpEventQueue();
+      expect(notices, ['The words did not come. Tap Try again on the note.']);
+      for (var again = 0; again < 2; again++) {
+        await relay.resume();
+        await relay.wordsWritten();
+        await pumpEventQueue();
+      }
+      expect(transcriber.heard, hasLength(3));
+      expect(relay.entries.single.failed, isTrue);
+      expect(notices, ['The words did not come. Tap Try again on the note.']);
+      clock = clock.add(const Duration(seconds: 10));
+      await hold(relay, const Duration(seconds: 3));
+      await relay.wordsWritten();
+      await pumpEventQueue();
+      expect([for (final entry in relay.entries) entry.failed], [true, true]);
+      expect(notices, List.filled(2, 'The words did not come. Tap Try again on the note.'));
+    });
+
+    test('a return to the app writes only the failed notes, not a note whose words are being written now', () async {
+      final relay = voiceController();
+      await relay.load();
+      transcriber.error = StateError('engine');
+      await hold(relay, const Duration(seconds: 2));
+      await relay.wordsWritten();
+      final failed = transcriber.heard.single;
+      transcriber.error = null;
+      final held = transcriber.hold = Completer();
+      clock = clock.add(const Duration(seconds: 10));
+      await hold(relay, const Duration(seconds: 3));
+      // The second note's job starts a few turns of the event loop later on a slow computer: wait for it.
+      for (var turn = 0; turn < 50 && transcriber.heard.length < 2; turn++) {
+        await pumpEventQueue();
+      }
+      final writing = transcriber.heard.last;
+      expect(writing, isNot(failed));
+      await relay.resume();
+      held.complete('Order more TL3312 switches');
+      await relay.wordsWritten();
+      expect(transcriber.heard, [failed, writing, failed]);
+      expect([for (final entry in relay.entries) (entry.writing, entry.failed)], [(false, false), (false, false)]);
+    });
+
+    test('a note after a failed note gets its words', () async {
+      final relay = voiceController();
+      await relay.load();
+      transcriber.error = const WhisperException('whisper_full failed with code -6');
+      await hold(relay, const Duration(seconds: 2));
+      await relay.wordsWritten();
+      transcriber.error = null;
+      clock = clock.add(const Duration(seconds: 10));
+      await hold(relay, const Duration(seconds: 3));
+      await relay.wordsWritten();
+      expect([for (final entry in relay.entries) (entry.text, entry.failed)], [
+        ('Ask the fab if the flex stiffener can be 0.2 mm', false),
+        ('', true),
+      ]);
     });
 
     test('first voice note: with no model, the app records nothing and gets nothing until the person says yes', () async {

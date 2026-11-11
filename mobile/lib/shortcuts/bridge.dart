@@ -15,7 +15,8 @@ const sendWait = Duration(seconds: 12);
 
 /// Answers the Shortcuts actions with the app's own controller, so a shortcut's note is saved, pinned and sent as a
 /// typed note is: `add` keeps a note, `get` reads notes from this phone and sends nothing, `inboxChanged` keeps what
-/// waits in the inbox, and `startVoiceNote` opens the recording sheet in the app's own engine.
+/// waits in the inbox and answers once its words are settled, and `startVoiceNote` opens the recording sheet in the
+/// app's own engine.
 class ShortcutsBridge {
   ShortcutsBridge(this.relay, {this.onVoice, this.wait = sendWait});
 
@@ -32,8 +33,10 @@ class ShortcutsBridge {
       case 'get':
         return get(arguments);
       case 'inboxChanged':
-        // The Apple Watch left a voice note in the inbox while the app runs (ios/Runner/RelayWatchReceiver.swift).
+        // The Apple Watch left a voice note in the inbox while the app runs (ios/Runner/RelayWatchReceiver.swift). The
+        // answer waits until its words are written and sent: Swift holds iOS's background time until it comes.
         await relay.drainShortcutsInbox();
+        await relay.wordsSettled();
         return null;
       case 'startVoiceNote':
         final open = onVoice;

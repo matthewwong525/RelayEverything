@@ -7,17 +7,105 @@ import 'package:relay_app/voice/model.dart';
 import 'package:relay_app/voice/recorder.dart';
 import 'package:relay_app/voice/transcriber.dart';
 import 'package:relay_app/voice/wave.dart';
-import 'package:whisper_cpp_flutter_plus/whisper_cpp_flutter_plus.dart' show WhisperBackend, WhisperConfig;
+import 'package:whisper_cpp_flutter_plus/whisper_cpp_flutter_plus.dart' show WhisperBackend, WhisperConfig, WhisperException;
 
 import 'fakes.dart';
 
+/// A speech engine whose runs give what [answer] gives; with no answer, a run ends only when it is cancelled, and fails.
+class FakeSpeechEngine implements SpeechEngine {
+  FakeSpeechEngine(this.answer);
+
+  final Future<List<String>> Function()? Function() answer;
+  int runs = 0, cancels = 0;
+  bool disposed = false;
+
+  @override
+  SpeechRun run(Float32List samples) {
+    runs++;
+    final done = Completer<List<String>>();
+    final give = answer();
+    if (give != null) done.complete(give());
+    return (segments: done.future, cancel: () {
+      cancels++;
+      if (!done.isCompleted) done.completeError(const WhisperException('Transcription cancelled'));
+    });
+  }
+
+  @override
+  void dispose() => disposed = true;
+}
+
 void main() {
-  test('the iPhone simulator loads whisper.cpp on the CPU; a phone keeps the default', () {
-    const simulator = '/Users/me/Library/Developer/CoreSimulator/Devices/23C8/data/Containers/Bundle/Application/0A8D/'
-      'Runner.app/Runner';
-    expect(whisperConfig(executable: simulator).backend, WhisperBackend.cpu);
-    expect(whisperConfig(executable: '/private/var/containers/Bundle/Application/0A8D/Runner.app/Runner').backend,
-      const WhisperConfig().backend);
+  test('an iPhone, a phone or the simulator, loads whisper.cpp on the CPU; another phone keeps the default', () {
+    expect(whisperConfig(ios: true).backend, WhisperBackend.cpu);
+    expect(whisperConfig(ios: false).backend, const WhisperConfig().backend);
+  });
+
+  test('a failed run lets its engine go, but a run the app cancelled at the time limit keeps it', () {
+    expect(dropsEngine(cancelled: false), isTrue);
+    expect(dropsEngine(cancelled: true), isFalse);
+  });
+
+  group('the speech engine', () {
+    late File wav;
+    late List<FakeSpeechEngine> loaded;
+    late WhisperTranscriber transcriber;
+    // What each new engine's runs give; null: a run that ends only when it is cancelled.
+    Future<List<String>> Function()? answer;
+    setUp(() {
+      final folder = tempFolder();
+      wav = File('${folder.path}/note.wav')..writeAsBytesSync(wavOf(List.filled(1600, 1000)));
+      loaded = [];
+      transcriber = WhisperTranscriber(() async => '${folder.path}/model.bin', loadEngine: (path) async {
+        final engine = FakeSpeechEngine(() => answer);
+        loaded.add(engine);
+        return engine;
+      });
+    });
+
+    test('a failed run lets its engine go, and the next recording loads a new one that it keeps', () async {
+      answer = () => Future.error(const WhisperException('whisper_full failed with code -6'));
+      await expectLater(transcriber.words(wav), throwsA(isA<WhisperException>()));
+      expect([loaded.length, loaded.single.disposed], [1, true]);
+      answer = () async => [' Order more switches.'];
+      expect(await transcriber.words(wav), 'Order more switches.');
+      expect(await transcriber.words(wav), 'Order more switches.');
+      expect([loaded.length, loaded.last.runs, loaded.last.disposed], [2, 2, false]);
+    });
+
+    test('a run the app cancelled at the time limit keeps its engine for the next recording', () async {
+      answer = null;
+      await expectLater(transcriber.words(wav, limit: const Duration(seconds: 2)), throwsA(isA<TimeoutException>()));
+      await pumpEventQueue();
+      final engine = loaded.single;
+      expect([engine.runs, engine.cancels > 0, engine.disposed], [1, true, false]);
+      answer = () async => [' Order more switches.'];
+      expect(await transcriber.words(wav), 'Order more switches.');
+      expect([loaded.length, engine.runs, engine.disposed], [1, 2, false]);
+    });
+  });
+
+  group('why the words did not come', () {
+    test('the time limit, in minutes', () {
+      expect(whyNoWords(TimeoutException('No words', const Duration(minutes: 2))), 'the phone took more than 2 minutes.');
+      expect(whyNoWords(TimeoutException('No words', const Duration(minutes: 5, seconds: 30))),
+        'the phone took more than 5 minutes.');
+      expect(whyNoWords(TimeoutException('No words', const Duration(seconds: 30))), 'the phone took more than 30 seconds.');
+      expect(whyNoWords(TimeoutException('No words')), 'the phone took too long.');
+    });
+
+    test('the speech engine\'s code', () {
+      expect(whyNoWords(const WhisperException('whisper_full failed with code -6')), 'the speech engine stopped (code -6).');
+      expect(whyNoWords(const WhisperException('whisper_full failed with code 3')), 'the speech engine stopped (code 3).');
+    });
+
+    test('any other error: its first 80 characters, on one line', () {
+      expect(whyNoWords(const WhisperException('Engine is disposed')), 'the speech engine stopped (Engine is disposed).');
+      expect(whyNoWords(StateError('engine')), 'the speech engine stopped (Bad state: engine).');
+      final long = whyNoWords(ArgumentError('Invalid argument:\n${'x' * 200}'));
+      expect(long, 'the speech engine stopped (Invalid argument(s): Invalid argument: ${'x' * 41}).');
+      expect(long, isNot(contains('\n')));
+    });
   });
 
   group('the sound waves', () {

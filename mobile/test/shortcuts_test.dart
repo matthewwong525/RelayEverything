@@ -374,6 +374,24 @@ void main() {
       expect(server.requests, isEmpty);
     });
 
+    test('from the Apple Watch, inboxChanged answers only once the note\'s words are written, so iOS gives the time',
+      () async {
+      final relay = app();
+      await relay.load();
+      final held = transcriber.hold = Completer();
+      handOverWatchNote();
+      var answered = false;
+      final answer = ShortcutsBridge(relay).handle(const MethodCall('inboxChanged')).whenComplete(() => answered = true);
+      for (var turn = 0; turn < 50 && transcriber.heard.isEmpty; turn++) {
+        await pumpEventQueue();
+      }
+      await pumpEventQueue();
+      expect([transcriber.heard, answered, relay.entries.single.writing], [hasLength(1), false, true]);
+      held.complete('Call the plumber about the kitchen tap');
+      await answer;
+      expect([relay.entries.single.text, relay.entries.single.writing], ['Call the plumber about the kitchen tap', false]);
+    });
+
     test('from the Apple Watch, the note is marked from the watch, also when the app opens again; Add a note is not',
       () async {
       driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;

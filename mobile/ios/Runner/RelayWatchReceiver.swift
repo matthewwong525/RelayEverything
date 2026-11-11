@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import WatchConnectivity
 
 // Takes each voice note the Relay Everything Apple Watch app hands over, into the inbox Dart keeps notes from, and
@@ -32,7 +33,25 @@ final class RelayWatchReceiver: NSObject, WCSessionDelegate {
     guard let id = try? ShortcutsInbox.takeWatchRecording(file.fileURL, metadata: file.metadata) else { return }
     session.transferUserInfo(["kept": id])
     DispatchQueue.main.async {
-      if #available(iOS 16, *) { ShortcutsEngine.shared.inboxChanged() }
+      guard #available(iOS 16, *) else { return }
+      // The phone may be locked, with the app out of sight: ask iOS for time to write the words and send the note.
+      let end = Self.backgroundTime(named: "relay.watch-note")
+      ShortcutsEngine.shared.inboxChanged(done: end)
     }
+  }
+
+  /// Asks iOS for time to finish work while the app is not on the screen, about 30 seconds. It gives the call that
+  /// ends the time: the first call ends it, and later calls, or a call after iOS took the time back, do nothing. Runs
+  /// on the main thread, as the end call and iOS's expiry handler do.
+  static func backgroundTime(named name: String) -> () -> Void {
+    var task = UIBackgroundTaskIdentifier.invalid
+    let end = {
+      guard task != .invalid else { return }
+      let ending = task
+      task = .invalid
+      UIApplication.shared.endBackgroundTask(ending)
+    }
+    task = UIApplication.shared.beginBackgroundTask(withName: name, expirationHandler: end)
+    return end
   }
 }

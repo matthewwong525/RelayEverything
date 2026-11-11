@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · one-notes-list</title>
+<title>Review · 2026-11-11-one-notes-list</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -442,11 +442,11 @@
 })();
 </script>
 </head>
-<body data-change="one-notes-list" data-own-back>
+<body data-change="2026-11-11-one-notes-list" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>one-notes-list</h1>
+  <h1>2026-11-11-one-notes-list</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Tap a picture to see it full screen.</span></p>
@@ -511,6 +511,7 @@
 <li class="decision card" id="decision-32" data-note="decision-32" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-11</p>Assumed (merge with main): Home and the browser's left bar keep main's <i>Other connections</i> (<i>Connect your AI</i>, <i>Email notes</i>) under the one <i>Notes</i> row, and a row and a note's page show no place, as main took the place off notes.</li>
 <li class="decision card" id="decision-33" data-note="decision-33" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-11</p>Device check (76a5bfa): <i>broken</i> only on the old <i>timeline</i> step, which looked for &quot;No notes&quot; alone; the screen showed it, but the new title bar reads its title and line as one label, &quot;Notes&quot; then &quot;No notes&quot;. The step now matches that label. The new <i>notes-filters</i> step and the other three passed.</li>
 <li class="decision card" id="decision-34" data-note="decision-34" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-11</p>Device check (3476627): the <i>timeline</i> step then failed on its next line, <code>assertNotVisible</code> <i>On this phone</i>, because the empty list's hint (from before this change) says &quot;Notes stay on this phone&quot;. The whole-label match &quot;Notes&quot;, then &quot;No notes&quot;, already proves no state word is in the line, so that line goes.</li>
+<li class="decision card" id="decision-35" data-note="decision-35" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-11</p>Device check (90b4d7c): <i>works</i>. All five tour steps pass. One Notes row, no sync buttons and the paperclip menu work on the iPhone. The voice filter, the voice row, the player, the scrolled row and a photo could not be checked there (no microphone in the simulator, one note, no photo picker); the widget and picture tests cover them.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

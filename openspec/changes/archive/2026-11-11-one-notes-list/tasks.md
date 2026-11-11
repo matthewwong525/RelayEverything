@@ -34,4 +34,4 @@
 
 - [x] 6.1 Run `flutter analyze` and `flutter test` in `mobile/`, `node scripts/public-check.mjs` and `node scripts/product-name.test.mjs`, and fix what fails
 - [x] 6.2 Draw the built Home, notes list (at the top and scrolled) and voice note with the plan's picture test, and compare them with the plan's After pictures through `preview-review.mjs --approved`
-- [ ] 6.3 `/save`, then run the device check on the saved commit with this change's scenarios and `--flows notes-filters`, and report its result
+- [x] 6.3 `/save`, then run the device check on the saved commit with this change's scenarios and `--flows notes-filters`, and report its result

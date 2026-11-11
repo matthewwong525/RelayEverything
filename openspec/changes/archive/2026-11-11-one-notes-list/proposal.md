@@ -1,6 +1,6 @@
 # One notes list, a voice player with sound waves, and no sync buttons
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** notes-voice-share-ui-fixes
 **Open questions:** none
 
@@ -125,3 +125,4 @@ None.
 - **2026-11-11** — Assumed (merge with main): Home and the browser's left bar keep main's *Other connections* (*Connect your AI*, *Email notes*) under the one *Notes* row, and a row and a note's page show no place, as main took the place off notes.
 - **2026-11-11** — Device check (76a5bfa): *broken* only on the old *timeline* step, which looked for "No notes" alone; the screen showed it, but the new title bar reads its title and line as one label, "Notes" then "No notes". The step now matches that label. The new *notes-filters* step and the other three passed.
 - **2026-11-11** — Device check (3476627): the *timeline* step then failed on its next line, `assertNotVisible` *On this phone*, because the empty list's hint (from before this change) says "Notes stay on this phone". The whole-label match "Notes", then "No notes", already proves no state word is in the line, so that line goes.
+- **2026-11-11** — Device check (90b4d7c): *works*. All five tour steps pass. One Notes row, no sync buttons and the paperclip menu work on the iPhone. The voice filter, the voice row, the player, the scrolled row and a photo could not be checked there (no microphone in the simulator, one note, no photo picker); the widget and picture tests cover them.

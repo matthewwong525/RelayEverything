@@ -68,6 +68,8 @@ A web address in the words, such as `https://example.com` or `www.example.com`, 
 
 The page works as in Apple Notes: you change the note in place. Tap the words where you want to type. The cursor goes there and the keyboard comes up. There is no **Save** button: the phone keeps each change as you type, and when you leave the page. You can change a voice note's words too. Its recording stays as it was.
 
+To paste, hold in the words, or tap the blinking cursor. On an iPhone with iOS 16 or later, the iPhone's own menu comes up, with **Paste**, **Copy**, **Cut**, **Select All**, **Look Up** and **Share** as each fits. A second tap on the cursor closes it. **Paste** puts in the words at once, with no *Allow Paste?* question. Pasted words come in as plain text, in the note's own style. While you hold and drag the cursor, a magnifier shows the words under your finger.
+
 At the top of the page:
 
 - **‹ Notes**, at the left, goes back to the list.

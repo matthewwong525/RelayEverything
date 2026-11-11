@@ -11,7 +11,9 @@ import 'package:share_plus/share_plus.dart';
 
 import '../brand.dart';
 import '../data/client_id.dart';
+import '../editor/magnifier.dart';
 import '../editor/markdown.dart';
+import '../editor/system_menu.dart';
 import '../relay.dart';
 import 'back_to.dart';
 import 'days.dart';
@@ -103,6 +105,7 @@ class NoteEditorState extends State<NoteEditor> {
   late String _savedText = _current?.text ?? '';
   StreamSubscription<DocChange>? _changes;
   final _focus = FocusNode();
+  final _editor = GlobalKey<QuillEditorState>();
   final _scroll = ScrollController();
   Timer? _pause;
   Future<void> _writing = Future.value();
@@ -411,13 +414,28 @@ class NoteEditorState extends State<NoteEditor> {
         back: widget.back)));
   }
 
-  /// A tap on a link while reading opens it in the browser, and the keyboard stays down. While editing, the tap places
-  /// the cursor, as in Apple Notes: it returns false, so the editor handles it.
+  /// A tap on a link while reading opens it, and the keyboard stays down. While editing, as in Apple Notes, a tap on
+  /// the cursor opens or closes the text menu; any other tap returns false, so the editor places the cursor.
   bool _tapUp(TapUpDetails details, TextPosition Function(Offset) positionOf) {
-    if (_focus.hasFocus || _formatting) return false;
-    final link = linkAtPosition(_controller.document, positionOf(details.globalPosition));
+    final at = positionOf(details.globalPosition);
+    if (_focus.hasFocus || _formatting) return !_formatting && _toggleMenu(at);
+    final link = linkAtPosition(_controller.document, at);
     if (link == null) return false;
     _openLink(link);
+    return true;
+  }
+
+  /// The browser draws its own menu, so a tap there always places the cursor. The iPhone closes its menu at the touch
+  /// down of a tap outside it, so a tap on the cursor just after that opens nothing: the tap closed the menu.
+  bool _toggleMenu(TextPosition at) {
+    final selection = _controller.selection;
+    final editor = _editor.currentState?.editableTextKey.currentState;
+    if (relay.web || editor == null || !selection.isCollapsed || at.offset != selection.baseOffset) return false;
+    if (editor.selectionOverlay?.toolbar != null) {
+      editor.hideToolbar();
+    } else if (!QuillSystemMenu.closedJustNow(editor)) {
+      editor.showToolbar();
+    }
     return true;
   }
 
@@ -543,6 +561,7 @@ class NoteEditorState extends State<NoteEditor> {
             child: FilledButton(onPressed: relay.writeWordsAgain, child: const Text('Try again'))),
         ] else
           QuillEditor(
+            key: _editor,
             controller: _controller,
             focusNode: _focus,
             scrollController: _scroll,
@@ -553,6 +572,8 @@ class NoteEditorState extends State<NoteEditor> {
               customStyles: noteStyles(context),
               customShortcuts: relay.web ? pageKeys : null,
               onTapUp: _tapUp,
+              contextMenuBuilder: noteContextMenu,
+              quillMagnifierBuilder: relay.web ? null : noteMagnifier,
               // A long press on a link offers Open; it goes to the same browser.
               onLaunchUrl: _openLink,
               // The only way to draw Apple's round checklist circles and dashed lists; pinned by pubspec.lock.

@@ -1,0 +1,31 @@
+# The iPhone's own text menu in a note: a hold shows it, Select All and Copy take the words, and its Paste puts them
+# back in. The copy comes from this app, so iOS asks no Allow Paste question here in any case: the device check's
+# `xcrun simctl pbcopy` scenario checks paste with no question. A flow can't find the blinking cursor, so the check
+# taps the words, then holds.
+appId: com.matthewwong525.relayApp
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 60000
+- tapOn: 'Notes(.|\n)*'
+- tapOn: "New note"
+- extendedWaitUntil:
+    visible: "Done"
+    timeout: 30000
+- inputText: "Paste check"
+- longPressOn: "Paste check"
+- extendedWaitUntil:
+    visible: "Select All"
+    timeout: 30000
+- takeScreenshot: paste-menu
+- tapOn: "Select All"
+- tapOn: "Copy"
+- tapOn: "Paste check"
+- longPressOn: "Paste check"
+- extendedWaitUntil:
+    visible: "Paste"
+    timeout: 30000
+- tapOn: "Paste"
+- assertVisible: '(.|\n)*Paste(.|\n)*Paste(.|\n)*check(.|\n)*'

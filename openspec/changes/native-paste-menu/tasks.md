@@ -24,4 +24,4 @@
 ## 3. Checks
 
 - [x] 3.1 Run `flutter analyze` and `flutter test` in `mobile/`, `openspec validate native-paste-menu --strict --no-interactive` and `node scripts/public-check.mjs`; fix what fails.
-- [ ] 3.2 After `/save`, run the device check with `--flows paste-menu` and these scenarios: the iPhone's own menu on a hold; *Paste* of words put on the simulator's clipboard with `xcrun simctl pbcopy`, with no *Allow Paste?* question; a tap on the cursor opens and closes the menu; a magnifier while dragging. A `works` is evidence; Matthew then tries paste from Safari on his iPhone after the TestFlight build.
+- [x] 3.2 After `/save`, run the device check with `--flows paste-menu` and these scenarios: the iPhone's own menu on a hold; *Paste* of words put on the simulator's clipboard with `xcrun simctl pbcopy`, with no *Allow Paste?* question; a tap on the cursor opens and closes the menu; a magnifier while dragging. A `works` is evidence; Matthew then tries paste from Safari on his iPhone after the TestFlight build.

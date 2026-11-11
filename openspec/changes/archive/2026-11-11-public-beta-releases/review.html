@@ -490,6 +490,7 @@
 <li class="decision card" id="decision-10" data-note="decision-10" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-11</p>Check: <code>.github/workflows/mobile-ios.yml</code> loosens no check: it only adds a <code>sent</code> output and a step id, because the scan flags any edit to a workflow file.</li>
 <li class="decision card" id="decision-11" data-note="decision-11" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-11</p>Check: <code>.github/workflows/mobile-public-beta.yml</code> loosens no check: it is a new workflow that only adds builds to the public beta, because the scan flags any new workflow file.</li>
 <li class="decision card" id="decision-12" data-note="decision-12" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-11</p>Assumed: the watch of the first public beta run and the site publish happen after the merge, in <code>/ship</code>'s report, not as a task, because a task must pass before the merge.</li>
+<li class="decision card" id="decision-13" data-note="decision-13" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-11</p>Assumed: archive checkpoint: built, reviewed (three findings fixed: wait for beta processing, own workflow for the wait, 90-minute limit), and archived for publish.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

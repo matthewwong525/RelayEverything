@@ -50,8 +50,6 @@
 	<false/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Relay Everything records a voice note while you hold Hold to talk. The phone writes its words, and the recording never leaves the phone.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Relay Everything uses the camera only to scan the QR code of your device key.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>With the calendar on, Relay Everything reads your events and sends them to your own Relay Everything server. It never changes an event.</string>
 	<key>NSCalendarsUsageDescription</key>

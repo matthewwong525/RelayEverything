@@ -26,7 +26,7 @@ class WebApp extends StatelessWidget {
   /// Gives, once, the Settings page the page's first address named, such as `#webhooks`; null after that. The shell reads
   /// it only as it starts, so a later rebuild or a shell after a new sign-in opens nothing.
   final SettingsPage? Function()? takeSettingsAt;
-  /// Gives, once, the place the page's first address named, such as `#chats`; null after that, as [takeSettingsAt].
+  /// Gives, once, the place the page's first address named, such as `#email-notes`; null after that, as [takeSettingsAt].
   final WebPlace? Function()? takePlaceAt;
 
   @override

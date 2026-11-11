@@ -18,13 +18,14 @@ Home has a large **Home** title, the [sync state](#the-sync-state) under it, and
 | | **Health** | *Off*, or when the readings last went and how many wait. [Health](../health/) |
 | | **Calendar** | *Off*, or how many calendars and when the events last went. [Calendar](../calendar/) |
 | | **Photos** | *Off*, or *On* and if photos also go on mobile data. [Photos](../photos/) |
-| **Other connections** | **AI chat transcripts** | How to save your chats from Claude Code and Codex, and, when you are signed in, a link to read them on the web. [Save AI chat transcripts](../../connections/claude-code/) |
+| **Other connections** | **Connect your AI** | *Let your AI read your notes*. Your computers with the plugin and your **Saved chats**, then the AI connector's address and the AI apps you connected. [Connect your AI](../../connections/connect-your-ai/) |
+| | **Email notes** | *Email a note to your own address*. Your two notes addresses, each with **Copy**. [Email notes](../email/) |
 
 Tap **On this phone** or **Other connections** to fold that card away. Tap it again to open it. The phone remembers which cards you folded.
 
 **Search** and **New note** stay at the bottom of Home, so you still write or talk with one tap.
 
-Home holds no setup. Your account, sign-in, AI apps and webhooks are in [Settings](../settings/#account), on its first row.
+Home holds no setup. Your account, sign-in, phones and webhooks are in [Settings](../settings/#account), on its account card.
 
 ## Read your notes
 
@@ -143,7 +144,7 @@ Search reads only the notes on this phone, so it works with no signal and sends 
 
 Tap the round gear button at the top right of Home to open [Settings](../settings/).
 
-To open your Relay Everything page, open Settings, tap the first row with your email, then tap **Open your Relay Everything page**. It shows while the phone sends to your Relay Everything server. It opens `<your-relay-server>/` in the phone's browser. Sign in with your email. The notes from all your devices are there. [Account](../settings/#account)
+To open your Relay Everything page, open `<your-relay-server>/` in the phone's browser. Sign in with your email. The notes from all your devices are there. In the app, a tap that changes your account, such as **Delete my account** on the **Account** page, opens this page too. [Account](../settings/#account)
 
 On a computer, open the same address. The page is the same app as on your phone, sized for a computer: you read, write, change and delete your notes there. [On a computer](../on-a-computer/)
 

@@ -44,23 +44,19 @@ The browser app SHALL read notes from the person's space and SHALL keep no notes
 
 ### Requirement: The left bar matches the phone's Home
 
-In the three-pane layout the left bar SHALL list the phone's notes folders, then a section named *Other connections* with Location, Health, Calendar, Photos and AI chat transcripts, and SHALL end with *Settings* at its bottom. It SHALL show no summary of the day. Until a later change shows that data, Location, Health, Calendar and Photos SHALL open a page that says the phone sends it and links to the app stores. AI chat transcripts SHALL open the person's saved chats from Claude Code and Codex, each naming its app.
+In the three-pane layout the left bar SHALL list the phone's notes folders, then a section named *Other connections* with Location, Health, Calendar, Photos, Connect your AI and Email notes, and SHALL end with *Settings* at its bottom. The page each of Connect your AI and Email notes opens SHALL say, at its top, what it does, as the phone's row does in its second line. It SHALL show no summary of the day. Until a later change shows that data, Location, Health, Calendar and Photos SHALL open a page that says the phone sends it and links to the app stores. Connect your AI SHALL hold the same two parts as on the phone; each computer and each AI app SHALL have *Disconnect*, after a confirm, and *Saved chats* SHALL open the person's saved chats from Claude Code and Codex, each naming its app. Email notes SHALL show both notes addresses with *Copy*, and *New address* for the private one. A link to `#ai-apps`, `#email-notes` or `#chats` SHALL open the matching page.
 
 #### Scenario: Open Health in the browser
 - **WHEN** a person clicks *Health* in the left bar
 - **THEN** a page says their phone sends health data and shows the links to the app for iPhone and Android, and no health data shows
 
 #### Scenario: Read a saved chat
-- **WHEN** a person clicks *AI chat transcripts* and then a chat
+- **WHEN** a person clicks *Connect your AI*, then *Saved chats*, then a chat
 - **THEN** the chat and its saves show, as on the earlier page
 
-### Requirement: Settings opens as a dialog with every page of the old Settings
-
-*Settings* SHALL open a dialog over the notes, with its pages listed down its left: Account (email, sign out, delete account), Devices with *Add a device*, Webhooks, AI apps, Email notes and Appearance. Each page SHALL do what the earlier page did, with the same server answers. Closing the dialog SHALL leave the open note as it was.
-
-#### Scenario: Add a device
-- **WHEN** a person opens Settings, picks *Devices* and clicks *Add a device*
-- **THEN** the new key shows once, as a QR code and as text to copy, and *Turn off* stops it
+#### Scenario: Disconnect a computer
+- **WHEN** a person clicks *Disconnect* beside their old laptop in *Connect your AI*, and confirms
+- **THEN** the laptop leaves the list and stops saving chats, and the notes stay open in the window
 
 ### Requirement: Keyboard and mouse work as on a computer
 

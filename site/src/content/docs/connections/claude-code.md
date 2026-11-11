@@ -40,7 +40,7 @@ Do the steps for each app you use. One computer needs one connect, for both apps
 3. Make sure that the page shows the same code. Then click **Connect**. Connect only a computer that you just started this on. If someone sent you the link, click **Cancel**.
 4. Tell the AI that you clicked **Connect**. It says when the computer is connected.
 
-The computer now has its own key, kept in a file that only you can read on that computer: `computer.json` in `~/.config/relay-everything/`, or in the folder that `RELAY_EVERYTHING_HOME` names. It shows in **Settings**, **Devices** on your Relay Everything page, as *Claude Code or Codex*. The key saves chats, and reads and adds through the [web API](../../api/connect-a-service/). Each chat from then on is saved. Chats from before the connect are not sent.
+The computer now has its own key, kept in a file that only you can read on that computer: `computer.json` in `~/.config/relay-everything/`, or in the folder that `RELAY_EVERYTHING_HOME` names. It shows under **Claude Code and Codex** in **Connect your AI**, on your Relay Everything page and in the app, with when it last saved a chat. The key saves chats, and reads and adds through the [web API](../../api/connect-a-service/). Each chat from then on is saved. Chats from before the connect are not sent.
 
 If you added the AI connector to Claude Code or Codex before, the connect step names it and how to remove it, because the plugin does the same job. It removes nothing unless you say so.
 
@@ -118,7 +118,9 @@ A send that fails waits on your computer, and the next start of the app sends it
 
 ## Read your chats
 
-On the Relay Everything page, click **AI chat transcripts**, under **Other connections** in the left bar. It lists your chats, newest first, each with its app. Type words in its search to find the chats that hold all of them. Open a chat to read it: the AI's saved summary shows at the top, marked *Written by the AI*, and each step shows as a grey line.
+On the Relay Everything page, click **Connect your AI**, under **Other connections** in the left bar, then **Saved chats**. It lists your chats, newest first, each with its app. Type words in its search to find the chats that hold all of them. Open a chat to read it: the AI's saved summary shows at the top, marked *Written by the AI*, and each step shows as a grey line.
+
+In the app, tap **Connect your AI** on Home, then **Saved chats**. Signed in, **Read them on the web** opens them on your Relay Everything page.
 
 Your AI can search the chats too: the [AI connector](../connect-your-ai/) has the tools `search_chats` and `read_chat`.
 
@@ -126,7 +128,7 @@ Your AI can search the chats too: the [AI connector](../connect-your-ai/) has th
 
 - **In one project:** type `/relay:saving off` (`$relay:saving off` in Codex). Type `/relay:saving on` to save again, or `/relay:saving` to see which it is and when the project last sent a chat. A git worktree counts as its main repository, so saving off holds in each workspace copy of the project, new ones too.
 - **For one run:** start the app with `RELAY_SAVE=0`, such as `RELAY_SAVE=0 claude` or `RELAY_SAVE=0 codex`.
-- **On one computer:** click **Turn off** beside its key, in **Settings**, **Devices** on your Relay Everything page. To also delete the key from the computer, ask the AI to *forget the Relay Everything key*.
+- **On one computer:** click **Disconnect** beside it, in **Connect your AI** on your Relay Everything page. To also delete the key from the computer, ask the AI to *forget the Relay Everything key*.
 
 ## Delete a chat
 

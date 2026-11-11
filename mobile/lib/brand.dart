@@ -213,11 +213,12 @@ class BrandTag extends StatelessWidget {
   }
 }
 
-/// A quiet button: ink on [BrandColors.paper], for a second action inside a card, such as *Remove* or *Cancel*.
+/// A quiet button: ink on [BrandColors.paper], for a second action inside a card, such as *Remove* or *Cancel*. Its
+/// words name the app's own font: a text style with no family draws boxes in a browser that loaded no system font.
 ButtonStyle quietButton(BuildContext context) {
   final brand = brandOf(context);
   return TextButton.styleFrom(backgroundColor: brand.paper, foregroundColor: brand.ink,
-    textStyle: const TextStyle(fontSize: 15, fontWeight: _semi));
+    textStyle: const TextStyle(fontFamily: brandFont, fontSize: 15, fontWeight: _semi));
 }
 
 /// The *Signal R* mark from `brand/mark.svg`: a capital R on a 48 grid in round 4-unit strokes, its bowl sending two

@@ -183,7 +183,7 @@ test('wait still answers when its folder can not be written, and a command line 
 test('status and forget say what this computer has, and forget deletes only the key file', () => {
   const env = relayHome();
   assert.deepEqual(status(env), { code: 0, lines: ['Relay Everything is connected as "Laptop", at https://relay.example.com.'] });
-  assert.match(forget(env).lines[0], /^This computer no longer has its Relay Everything key\. .*Devices.*Turn off\.$/);
+  assert.match(forget(env).lines[0], /^This computer no longer has its Relay Everything key\. .*Connect your AI.*Disconnect\.$/);
   assert.equal(existsSync(keyFile(env)), false);
   assert.equal(existsSync(join(keyFile(env), '..')), true);
   assert.equal(forget(env).lines[0], 'This computer had no Relay Everything key.');

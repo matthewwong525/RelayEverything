@@ -5,13 +5,13 @@ description: Forward or write an email to your own notes address, and it becomes
 
 Relay Everything gives you your own secret notes address. Any mail to it becomes a note in your space, whoever sends it. Forward a receipt, write yourself a reminder, or set a mail rule that forwards each receipt on its own. No mail is ever sent back.
 
-Email notes work on a server that takes email: the shared server, or [your own server](../../start/run-your-own/#take-email) with a mail domain set. With email off, Settings on your Relay Everything page has no **Email notes** page.
+Email notes work on a server that takes email: the shared server, or [your own server](../../start/run-your-own/#take-email) with a mail domain set. With email off, **Email notes** shows no address.
 
 ## Find your address
 
-1. Sign in on your Relay Everything page, `<your-relay-server>/`.
-2. Click **Settings** at the bottom of the left bar, then **Email notes**. Your address starts with `notes-` and ends with your server's mail domain.
-3. Click **Copy**, and add the address to your contacts or to a mail rule.
+1. In the app, tap **Email notes** under **Other connections** on Home. Or sign in on your Relay Everything page, `<your-relay-server>/`, and click **Email notes** under **Other connections** in the left bar.
+2. The page shows two addresses. Your private address starts with `notes-` and ends with your server's mail domain. It takes mail from anyone.
+3. Tap or click **Copy** beside it, and add the address to your contacts or to a mail rule.
 
 Keep the address private. Anyone who has it can add notes to your space.
 
@@ -36,7 +36,7 @@ The same mail sent twice makes one note.
 
 ## Replace your address
 
-If your address leaks, click **New address** on the **Email notes** page in Settings, then **New address** again to confirm. Mail to the old address makes no note from now on. Change the address in your mail rules and contacts.
+If your address leaks, click **New address** on the **Email notes** page of your Relay Everything page, then **New address** again to confirm. Mail to the old address makes no note from now on. Change the address in your mail rules and contacts.
 
 ## What is sent
 

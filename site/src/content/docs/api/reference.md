@@ -926,11 +926,11 @@ Send the input as a JSON body.
 | `unavailable` | The AI connector is not set up here. |
 | `not_found` | You have no connected AI app with this id. |
 
-## List what you connected, by name
+## List what you connected
 
 `GET /apps/relay/api/connections` · `relay.connections` · reads · called by a signed-in person or a phone key
 
-Your account's email and the names of your connected AI apps and of your webhooks, for the phone's Account page. It holds no address, secret or send state. Where the AI connector is not set up, the AI apps list is empty.
+Your account's email, your phones and computers, the names of your connected AI apps and of your webhooks, and your two notes addresses, for the Account and connection pages. It holds no key, and no webhook address, secret or send state. Where the AI connector is not set up, the AI apps list is empty; where email is off, both addresses are null.
 
 ### Input
 
@@ -941,10 +941,20 @@ It takes no input.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `email` | string | yes | The email of the account the key or sign-in belongs to. |
+| `thisDevice` | string or null | yes | The calling device's id, or null for a sign-in. |
+| `devices` | array of object | yes | Each phone and computer that is not signed out, oldest first. No API key. |
+| `devices[].id` | string | yes |  |
+| `devices[].name` | string | yes |  |
+| `devices[].kind` | "phone" or "computer" | yes | phone: a phone's key. computer: Claude Code or Codex. |
+| `devices[].since` | number | yes | When the device connected, in ms. |
+| `devices[].lastChatAt` | number or null | yes | When the device last saved a chat, in ms, or null. |
 | `aiApps` | array of object | yes | Each connected AI app. |
 | `aiApps[].name` | string | yes |  |
+| `aiApps[].connectedAt` | number or null | yes |  |
 | `webhooks` | array of object | yes | Each webhook, paused ones too. |
 | `webhooks[].name` | string | yes |  |
+| `notesAddress` | string or null | yes | Your secret notes address, made on first read, or null when email is off. |
+| `sharedAddress` | string or null | yes | The shared notes address for your sign-in email, or null when email is off. |
 
 ## Save the AI's summary of a chat
 
@@ -1101,11 +1111,11 @@ It takes no input.
 | `devices[].createdAt` | number | yes |  |
 | `devices[].revokedAt` | number or null | yes |  |
 
-## Add a device
+## Add an API key
 
 `POST /apps/relay/api/devices` · `relay.devices-add` · writes · called by a signed-in person only, not a device key
 
-Make a key for a new device. The answer holds the key and its QR code text: both show only this once. An API key's answer names the web API's address.
+Make an API key for the web API. The answer holds the key, which shows only this once, and names the web API's address. A phone or a computer gets its key by signing in instead.
 
 ### Input
 
@@ -1114,7 +1124,7 @@ Send the input as a JSON body.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `name` | string | yes | A name you know the device by. |
-| `reaches` | "phone" or "api" | yes | phone: a phone's key. api: an API key for the web API, which reads and adds notes. A computer connects from Claude Code or Codex with /relay:connect instead. |
+| `reaches` | "api" | yes | api: an API key for the web API, which reads and adds notes. A phone signs in from the Relay Everything app, and a computer from Claude Code or Codex with /relay:connect. |
 
 ### Output
 
@@ -1124,14 +1134,13 @@ Send the input as a JSON body.
 | `name` | string | yes |  |
 | `reaches` | "phone" or "chats" or "api" or "agent" | yes | phone: notes, files, health, places and photos, from a phone. chats: an older Claude Code key that only saves chats. api: the web API, which reads and adds notes. agent: a computer's key from Claude Code or Codex, which saves chats and reads through the web API. |
 | `key` | string | yes | Shown this once. |
-| `qr` | string | yes | What the phone scans: the server's address and the key. |
 | `api` | string or null | yes | An API key's web API address, or null when this server has no AI connector. |
 
-## Turn off a device
+## Sign out a device
 
-`POST /apps/relay/api/devices/off` · `relay.devices-off` · writes · called by a signed-in person only, not a device key
+`POST /apps/relay/api/devices/off` · `relay.devices-off` · writes · called by a signed-in person or a phone key
 
-Turn off a device's key: it stops at once. The device's notes stay.
+Turn off a device's key: it stops at once. The device's notes stay. A phone's key may sign out only your phones.
 
 ### Input
 

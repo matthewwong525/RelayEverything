@@ -26,7 +26,7 @@ void expectOneLine(WidgetTester tester, String text) {
 void main() {
   setUpAll(loadInter);
 
-  testWidgets('at 360 px wide, the large titles, the Home rows, the switches and the Account choices show the whole name', (tester) async {
+  testWidgets('at 360 px wide, the large titles, the Home rows, the switches and the Account rows show the whole name', (tester) async {
     tester.view
       ..physicalSize = const Size(360, 800)
       ..devicePixelRatio = 1;
@@ -53,10 +53,16 @@ void main() {
     await openSettings(tester);
     await tester.tap(find.byKey(const ValueKey('account')));
     await tester.pumpAndSettle();
-    for (final title in ['Account', 'AI apps', 'Webhooks', 'Health, places, calendar and photos', 'Relay Everything',
-        'Only my own webhook', 'Sign out']) {
+    for (final title in ['Account', 'Phones', 'Advanced', 'Webhooks', 'Delete my account', 'Sign out']) {
       expectOneLine(tester, title);
     }
+    await tester.tap(find.text('Webhooks'));
+    await tester.pumpAndSettle();
+    for (final title in ['Webhooks', 'Health, places, calendar and photos', 'Only to my own webhook']) {
+      expectOneLine(tester, title);
+    }
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await tester.pageBack();
     await tester.pumpAndSettle();
     await tester.pageBack();

@@ -535,6 +535,22 @@ class RelayController extends Relay {
     if (_sender.reader(_settings, connection: _connection) != null) await _keepConnections(found);
   }
 
+  @override
+  Future<String?> signOutPhone(String id) async {
+    final reader = _sender.reader(_settings, connection: _connection);
+    if (reader == null) return 'Sign in to Relay Everything first.';
+    try {
+      await reader.post('devices/off', {'id': id});
+    } on ApiException catch (error) {
+      return switch (error.failure) {
+        Failure.offline => 'Relay Everything did not answer. Check your connection and try again.',
+        _ => 'Relay Everything did not sign out this phone. Sign it out on your Relay Everything page.',
+      };
+    }
+    await refreshConnections();
+    return null;
+  }
+
   Future<void> _keepConnections(Connections? value) async {
     _connections = value;
     value == null ? await store.remove(connectionsKey) : await store.set(connectionsKey, value.encode());

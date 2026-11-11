@@ -16,9 +16,12 @@ const codexCommands = ['codex plugin marketplace add matthewwong525/RelayEveryth
 /// The command that connects a computer, typed in Claude Code or Codex.
 const connectCommand = '/relay:connect';
 
-/// *AI chat transcripts*, opened from Home: what the plugin saves, the steps to add it to a computer, and, signed in to a
-/// Relay Everything server, *Read them on the web*, which opens the saved chats on the person's page. The page makes no
-/// request: the phone's key reads no chat.
+/// The part of the Relay Everything page's address that opens the saved chats.
+const savedChatsPart = 'saved-chats';
+
+/// *Saved chats*, opened from *Connect your AI*: what the plugin saves, the steps to add it to a computer, and, signed
+/// in to a Relay Everything server, *Read them on the web*, which opens the saved chats on the person's page. The page
+/// makes no request: the phone's key reads no chat.
 class TranscriptsPage extends StatelessWidget {
   const TranscriptsPage({super.key, required this.relay, this.opener});
 
@@ -28,7 +31,7 @@ class TranscriptsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FolderPage(relay: relay, title: 'AI chat transcripts', groups: (context) {
+    return FolderPage(relay: relay, title: 'Saved chats', back: 'Connect your AI', groups: (context) {
       final theme = Theme.of(context);
       final muted = theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant);
       // Only a Relay Everything server keeps chats: signed out or with the person's own webhook, no link shows.
@@ -42,8 +45,8 @@ class TranscriptsPage extends StatelessWidget {
         Padding(padding: const EdgeInsets.fromLTRB(4, 16, 4, 0), child: Text('Each chat from then on is saved. Older chats '
           'are not sent. To keep the chats of a project out, type /relay:saving off in that project.', style: muted)),
         Padding(padding: const EdgeInsets.fromLTRB(4, 8, 4, 0), child: Text("The computer's key saves your chats and can "
-          'read all your Relay Everything data. To stop it, turn it off in Devices on your Relay Everything page.',
-          style: muted)),
+          'read all your Relay Everything data. To stop it, disconnect it in Connect your AI on your Relay Everything '
+          'page.', style: muted)),
       ];
     });
   }
@@ -51,7 +54,7 @@ class TranscriptsPage extends StatelessWidget {
   /// The saved chats on the person's Relay Everything page, in the phone's browser.
   Future<void> _read(BuildContext context, String server) async {
     final messenger = ScaffoldMessenger.of(context);
-    if (!await (opener ?? openInBrowser)(Uri.parse('$server/#chats'))) {
+    if (!await (opener ?? openInBrowser)(Uri.parse('$server/#$savedChatsPart'))) {
       messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
     }
   }

@@ -7,7 +7,10 @@ appId: com.matthewwong525.relayApp
     visible: "Home"
     timeout: 60000
 # A row's label joins its name, its status and its count, so match inside it.
-- assertVisible: 'Voice notes(.|\n)*'
+- assertVisible: 'Notes(.|\n)*'
+# One Notes row: no Voice notes or Shares folder.
+- assertNotVisible: 'Voice notes(.|\n)*'
+- assertNotVisible: 'Shares(.|\n)*'
 - assertVisible: 'Location(.|\n)*Off(.|\n)*'
 # Sign-in and connections live in Settings now, not on Home.
 - assertNotVisible: 'Connections(.|\n)*'
@@ -16,10 +19,12 @@ appId: com.matthewwong525.relayApp
 - assertVisible: "Search"
 - takeScreenshot: home
 - tapOn: 'Notes(.|\n)*'
-# The count line joins the count and the state, such as "No notes · On this phone", so match the state inside it.
 - extendedWaitUntil:
     visible: 'No notes yet(.|\n)*'
     timeout: 30000
-- assertVisible: '(.|\n)*On this phone(.|\n)*'
+# With sending off, the line under the title gives the count alone: no state, and no Sync now.
+- assertVisible: "No notes"
+- assertNotVisible: '(.|\n)*On this phone(.|\n)*'
+- assertNotVisible: "Sync now"
 - assertVisible: "New note"
 - takeScreenshot: timeline

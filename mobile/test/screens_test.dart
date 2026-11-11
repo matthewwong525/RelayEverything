@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart' show CustomSemanticsAction, RenderParagraph, SemanticsAction;
@@ -16,10 +17,11 @@ import 'package:relay_app/screens/connected_names.dart' show ConnectedNamesPage;
 import 'package:relay_app/screens/hold_to_talk.dart';
 import 'package:relay_app/screens/folder.dart';
 import 'package:relay_app/screens/note_bars.dart';
+import 'package:relay_app/screens/note_blocks.dart' show VoicePlayer, WavePainter;
 import 'package:relay_app/screens/note_editor.dart';
 import 'package:relay_app/screens/round_button.dart' show ButtonPill;
 import 'package:relay_app/screens/settings.dart' show SettingsScreen;
-import 'package:relay_app/screens/timeline.dart' show TimelineScreen;
+import 'package:relay_app/screens/timeline.dart' show SyncLine, TimelineScreen, TitleBar;
 
 class FakeRelay extends Relay {
   /// The phone app, or the browser for a test of the web page.
@@ -336,7 +338,33 @@ class FakeRelay extends Relay {
     notifyListeners();
   }
 
-  @override Future<void> play(String recording) async => calls.add('play $recording');
+  /// What plays now, as a phone's player would say it.
+  final sound = ValueNotifier<Playback?>(null);
+  /// The sound waves [waveOf] gives; none draws a plain line.
+  List<double> waves = const [];
+
+  @override ValueListenable<Playback?> get playback => sound;
+
+  @override
+  Future<void> play(String recording) async {
+    calls.add('play $recording');
+    final at = sound.value?.recording == recording ? sound.value!.at : Duration.zero;
+    sound.value = Playback(recording: recording, at: at, playing: true);
+  }
+
+  @override
+  Future<void> pause() async {
+    calls.add('pause');
+    if (sound.value case final now?) sound.value = Playback(recording: now.recording, at: now.at, playing: false);
+  }
+
+  @override
+  Future<void> seek(Duration at) async {
+    calls.add('seek ${at.inMilliseconds}');
+    if (sound.value case final now?) sound.value = Playback(recording: now.recording, at: at, playing: now.playing);
+  }
+
+  @override Future<List<double>> waveOf(String recording, {int bars = 48}) async => waves;
   @override Future<void> writeWordsAgain() async => calls.add('words again');
 }
 
@@ -413,17 +441,8 @@ List<double> barHeights(WidgetTester tester) => [
     tester.getSize(find.byWidget(bar.widget)).height,
 ];
 
-/// The fill and the word color of a [BrandTag].
-(Color?, Color?) tagColors(WidgetTester tester, String label) {
-  final tag = find.widgetWithText(BrandTag, label).first;
-  final box = tester.widget<DecoratedBox>(find.descendant(of: tag, matching: find.byType(DecoratedBox)).first);
-  final ink = tester.renderObject<RenderParagraph>(find.descendant(of: tag, matching: find.text(label))).text.style?.color;
-  return ((box.decoration as ShapeDecoration).color, ink);
-}
-
-/// How far *Sync now*'s arrows have turned, from 0 to 1.
-double arrowsTurn() => find.ancestor(of: find.byIcon(CupertinoIcons.arrow_2_circlepath), matching: find.byType(RotationTransition))
-  .evaluate().map((element) => (element.widget as RotationTransition).turns.value).first;
+/// The microphone on a voice note's row, not the one on *New note*.
+final rowMic = find.byWidgetPredicate((widget) => widget is Icon && widget.semanticLabel == 'Voice note');
 
 /// The note page's editor.
 QuillController quill(WidgetTester tester) => tester.widget<QuillEditor>(find.byType(QuillEditor)).controller;
@@ -488,15 +507,16 @@ void main() {
     expect(Theme.of(tester.element(bar)).scaffoldBackgroundColor, BrandColors.dark.paper);
   });
 
-  testWidgets('opens on Home with no key: every folder at 0 or Off, no Connections, and Notes keeps a note on this phone',
+  testWidgets('opens on Home with no key: Notes at 0, the rest Off, no Connections, and Notes keeps a note on this phone',
       (tester) async {
     tallScreen(tester);
     await tester.pumpWidget(RelayApp(relay: relay));
     expect(find.text('Sign in'), findsNothing);
-    // The header, and the sync line: nothing leaves the phone.
-    expect(find.text('On this phone'), findsNWidgets(2));
-    for (final title in ['Notes', 'Voice notes', 'Shares']) {
-      expect(countOn(title, 0), findsOneWidget, reason: title);
+    // The header only: with sending off, Home shows no sync line.
+    expect(find.text('On this phone'), findsOneWidget);
+    expect(countOn('Notes', 0), findsOneWidget);
+    for (final gone in ['Voice notes', 'Shares']) {
+      expect(find.widgetWithText(ListTile, gone), findsNothing, reason: gone);
     }
     for (final title in ['Location', 'Health', 'Calendar']) {
       expect(find.descendant(of: find.widgetWithText(ListTile, title), matching: find.text('Off')), findsOneWidget, reason: title);
@@ -518,9 +538,10 @@ void main() {
       ..entries = [Entry(text: 'Buy milk', at: now, place: 'Pinned')]
       ..changed();
     await tester.pump();
-    expect(find.textContaining('Pinned'), findsOneWidget);
-    expect(find.textContaining('Waiting to send'), findsNothing);
-    expect(find.text('Today'), findsOneWidget);
+    expect([find.text('Buy milk'), find.text('Today'), find.text('1 note')], everyElement(findsOneWidget));
+    // A row is the title, the time and the words: no place, no tag, and nothing about sending while it is off.
+    expect([find.textContaining('Pinned'), find.textContaining('Waiting to send'), find.text('Typed')],
+      everyElement(findsNothing));
   });
 
   testWidgets('Settings opens on the Account row: Sign in to Relay Everything, and a tap opens Sign in with no request',
@@ -647,7 +668,8 @@ void main() {
     expect(relay.calls, ['connect {"relay":1}', 'start false']);
   });
 
-  testWidgets('shows each note with its kind, its place, and Sent or Waiting to send', (tester) async {
+  testWidgets('a row has no tag: a sent note says nothing about sending, and a waiting one says Waiting to send',
+      (tester) async {
     relay
       ..connected = true
       ..server = 'https://relay.example.com'
@@ -659,14 +681,35 @@ void main() {
       ];
     await tester.pumpWidget(RelayApp(relay: relay));
     await openFolder(tester, 'Notes');
-    expect(find.text('Typed'), findsNWidgets(2));
-    expect(find.textContaining('King St W · Waiting to send'), findsOneWidget);
-    expect(find.textContaining('Harbord St · Sent'), findsOneWidget);
+    expect([find.text('Typed'), find.text('Voice'), find.text('Sent'), find.byType(BrandTag)], everyElement(findsNothing));
+    expect(find.text('Waiting to send'), findsOneWidget);
+    // The waiting line is on the waiting note's row, under its title.
+    expect(tester.getTopLeft(find.text('Waiting to send')).dy, greaterThan(tester.getTopLeft(find.text('Lunch idea')).dy));
+    expect(tester.getTopLeft(find.text('Waiting to send')).dy,
+      lessThan(tester.getTopLeft(find.text('Buy 0.2 mm steel for the stiffener')).dy));
     expect(find.textContaining('Jan 2'), findsOneWidget);
     expect(find.text('2 notes ·'), findsOneWidget);
-    expect(find.text('1 waiting'), findsOneWidget);
-    await tester.tap(find.text('1 waiting'));
-    expect(relay.calls, ['pull']);
+    expect(find.text('1 waiting'), findsWidgets);
+    // The state is words, not a button.
+    await tester.tap(find.text('1 waiting').first, warnIfMissed: false);
+    await tester.pump();
+    expect(relay.calls, isEmpty);
+  });
+
+  testWidgets('a voice note row shows a microphone and its length, in accent text, in place of a tag', (tester) async {
+    relay.entries = [
+      Entry(id: 'v', text: 'Call the fab\nabout the panel', at: now, voice: true, recording: 'voice/v.wav',
+        length: const Duration(seconds: 42)),
+      Entry(id: 't', text: 'Buy milk', at: now.subtract(const Duration(minutes: 1))),
+    ];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Notes');
+    final mic = rowMic;
+    expect(mic, findsOneWidget);
+    expect(tester.widget<Icon>(mic).color, BrandColors.light.accentText);
+    expect(find.textContaining('0:42'), findsOneWidget);
+    expect(find.textContaining('about the panel'), findsOneWidget);
+    expect([find.text('Voice'), find.text('Typed'), find.byType(BrandTag)], everyElement(findsNothing));
   });
 
   testWidgets('the gear opens Settings in one tap, and Home has no ⋯ menu', (tester) async {
@@ -680,34 +723,44 @@ void main() {
     expect(relay.calls, isEmpty);
   });
 
-  testWidgets('Sync now follows the sync state while sending, and does what a pull down does', (tester) async {
-    relay.entries = [Entry(text: 'Lunch idea', at: now)];
-    await tester.pumpWidget(RelayApp(relay: relay));
-    expect(find.text('On this phone'), findsWidgets);
-    expect(find.byTooltip('Sync now'), findsNothing);
+  testWidgets('no button syncs: Home shows no line when all is sent, 1 waiting while a note waits, and a pull syncs',
+      (tester) async {
     relay
       ..connected = true
       ..settings = const Settings(sending: true)
+      ..entries = [Entry(text: 'Lunch idea', at: now, sent: true)];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    expect([find.byType(SyncLine), find.text('Synced'), find.byTooltip('Sync now'), find.byIcon(CupertinoIcons.arrow_2_circlepath)],
+      everyElement(findsNothing));
+    final open = tester.getBottomLeft(find.text('Home').first).dy;
+    relay
       ..waiting = 1
+      ..entries = [Entry(text: 'Lunch idea', at: now, waiting: true)]
       ..changed();
     await tester.pump();
-    final state = tester.getRect(find.text('1 waiting'));
-    final button = tester.getRect(find.byTooltip('Sync now'));
-    expect(button.left, greaterThan(state.right));
-    expect((button.center.dy - state.center.dy).abs(), lessThan(2));
-    expect([button.width, button.height], [32, 32]);
-    // Muted, not the accent.
-    expect(tester.widget<Icon>(find.byIcon(CupertinoIcons.arrow_2_circlepath)).color, BrandColors.light.muted);
-    await tester.tap(find.byTooltip('Sync now'));
-    await tester.pump();
-    await tester.drag(find.text('Voice notes'), const Offset(0, 300));
+    expect(find.descendant(of: find.byType(SyncLine), matching: find.text('1 waiting')), findsOneWidget);
+    expect(find.byTooltip('Sync now'), findsNothing);
+    // The line makes room under the title: the title moves up, not over it.
+    expect(tester.getBottomLeft(find.text('Home').first).dy, lessThanOrEqualTo(open));
+    await tester.drag(find.text('Notes'), const Offset(0, 300));
+    await tester.pumpAndSettle();
+    expect(relay.calls, ['pull']);
+    // The list has its own pull.
+    await openFolder(tester, 'Notes');
+    await tester.drag(find.text('Lunch idea'), const Offset(0, 300));
     await tester.pumpAndSettle();
     expect(relay.calls, ['pull', 'pull']);
-    // A notes folder has its own, under its title.
-    await openFolder(tester, 'Notes');
-    await tester.tap(find.byTooltip('Sync now'));
+    // Once sent, Home has no line again, and the list only its count.
+    relay
+      ..waiting = 0
+      ..entries = [Entry(text: 'Lunch idea', at: now, sent: true)]
+      ..changed();
     await tester.pump();
-    expect(relay.calls, ['pull', 'pull', 'pull']);
+    expect(find.descendant(of: find.byType(SyncLine), matching: find.text('1 note')), findsOneWidget);
+    expect(find.textContaining('waiting'), findsNothing);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byType(SyncLine), findsNothing);
   });
 
   testWidgets('the Account page lists the email, AI apps and Webhooks by name, and opens the page and its parts',
@@ -1105,7 +1158,7 @@ void main() {
     expect(relay.calls, isEmpty);
   });
 
-  testWidgets('names each sync state while sending, and an empty timeline in words', (tester) async {
+  testWidgets('names each state the person can act on while sending, and an empty timeline in words', (tester) async {
     relay
       ..connected = true
       ..settings = const Settings(sending: true);
@@ -1113,61 +1166,121 @@ void main() {
     await openFolder(tester, 'Notes');
     expect(find.text('No notes yet'), findsOneWidget);
     expect(find.text('Notes stay on this phone until you sign in, in Settings.'), findsNothing);
-    expect(find.text('On this phone'), findsNothing);
-    for (final (status, waiting, label) in [(SyncStatus.syncing, 0, 'Syncing'), (SyncStatus.refused, 0, 'Key refused'),
-      (SyncStatus.offline, 0, 'Offline'), (SyncStatus.offline, 2, '2 waiting'), (SyncStatus.idle, 0, 'Synced')]) {
+    Finder onLine(String words) => find.descendant(of: find.byType(SyncLine), matching: find.text(words));
+    for (final (status, waiting, label) in [(SyncStatus.refused, 0, 'Key refused'),
+      (SyncStatus.offline, 2, '2 waiting'), (SyncStatus.syncing, 3, '3 waiting'), (SyncStatus.idle, 1, '1 waiting')]) {
       relay
         ..status = status
         ..waiting = waiting
         ..changed();
       await tester.pump();
-      expect(find.text(label), findsOneWidget, reason: label);
+      expect(onLine(label), findsOneWidget, reason: label);
     }
+    for (final (status, settings) in [(SyncStatus.syncing, const Settings(sending: true)),
+      (SyncStatus.synced, const Settings(sending: true)), (SyncStatus.idle, const Settings(sending: true)),
+      (SyncStatus.offline, const Settings(sending: true)), (SyncStatus.offline, const Settings())]) {
+      relay
+        ..status = status
+        ..waiting = 0
+        ..settings = settings
+        ..changed();
+      await tester.pump();
+      expect(find.descendant(of: find.byType(SyncLine), matching: find.byType(Text)).evaluate().map((e) => (e.widget as Text).data),
+        ['No notes'], reason: '$status');
+    }
+    for (final words in ['Syncing', 'Synced', 'On this phone', 'Sync now', 'Offline']) {
+      expect(find.text(words), findsNothing, reason: words);
+    }
+    relay
+      ..settings = const Settings(sending: true)
+      ..changed();
     await tester.drag(find.text('No notes yet'), const Offset(0, 300));
     await tester.pumpAndSettle();
     expect(relay.calls, ['pull']);
   });
 
-  testWidgets('the Syncing dot pulses, the Synced dot is still, and with reduced motion Syncing is still too', (tester) async {
+  testWidgets('Home shows no line when all is sent, and 1 waiting with a still dot when the phone asks for less motion',
+      (tester) async {
     relay
       ..connected = true
       ..settings = const Settings(sending: true)
-      ..status = SyncStatus.syncing;
+      ..status = SyncStatus.synced;
     await tester.pumpWidget(RelayApp(relay: relay));
-    await tester.pump(const Duration(milliseconds: 700));
-    expect(tester.hasRunningAnimations, isTrue);
-    relay
-      ..status = SyncStatus.synced
-      ..changed();
-    await tester.pumpAndSettle();
-    expect(tester.hasRunningAnimations, isFalse);
-    tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(disableAnimations: true);
-    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    expect(find.byType(SyncLine), findsNothing);
     relay
       ..status = SyncStatus.syncing
-      ..changed();
-    await tester.pumpAndSettle();
-    expect([find.text('Syncing').evaluate().length, tester.hasRunningAnimations], [1, false]);
-    expect(arrowsTurn(), 0);
-  });
-
-  testWidgets('the Sync now arrows turn only while syncing', (tester) async {
-    relay
-      ..connected = true
-      ..settings = const Settings(sending: true);
-    await tester.pumpWidget(RelayApp(relay: relay));
-    expect([tester.hasRunningAnimations, arrowsTurn()], [false, 0]);
-    relay
-      ..status = SyncStatus.syncing
+      ..waiting = 1
       ..changed();
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
-    expect(arrowsTurn(), greaterThan(0));
+    await tester.pump(const Duration(milliseconds: 700));
+    expect([find.byType(SyncLine).evaluate().length, tester.hasRunningAnimations], [1, true]);
+    tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    relay.changed();
+    await tester.pumpAndSettle();
+    expect([find.descendant(of: find.byType(SyncLine), matching: find.text('1 waiting')).evaluate().length,
+      tester.hasRunningAnimations], [1, false]);
     relay
       ..status = SyncStatus.synced
+      ..waiting = 0
       ..changed();
     await tester.pumpAndSettle();
-    expect(arrowsTurn(), 0);
+    expect(find.byType(SyncLine), findsNothing);
+  });
+
+  testWidgets('scrolled, the top is one row: the small title with 12 notes, and 3 waiting in its place while notes wait',
+      (tester) async {
+    relay
+      ..connected = true
+      ..settings = const Settings(sending: true)
+      ..status = SyncStatus.synced
+      ..entries = [for (var i = 0; i < 12; i++) Entry(text: 'Note $i', at: now.subtract(Duration(minutes: i)))];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Notes');
+    final bar = find.byType(SliverAppBar);
+    // The bar's own card: as tall as the top is now.
+    final card = find.descendant(of: bar, matching: find.byType(Material)).first;
+    final open = tester.getSize(card).height;
+    await tester.drag(find.text('Note 3'), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    final shut = tester.getSize(card).height;
+    expect(shut, lessThan(open));
+    expect(shut, lessThanOrEqualTo(MediaQuery.paddingOf(tester.element(bar)).top + TitleBar.toolbar));
+    Finder top(String words) => find.descendant(of: bar, matching: find.text(words));
+    // One row: the small title, and the count under it, in the row's height.
+    expect([top('Notes'), top('12 notes')], everyElement(findsOneWidget));
+    expect(tester.getBottomLeft(top('12 notes')).dy, lessThanOrEqualTo(tester.getBottomLeft(card).dy));
+    expect(find.byType(SyncLine), findsNothing);
+    relay
+      ..status = SyncStatus.offline
+      ..waiting = 3
+      ..changed();
+    await tester.pump();
+    expect([top('12 notes'), top('3 waiting')], [findsNothing, findsOneWidget]);
+    await tester.drag(find.byType(CustomScrollView).first, const Offset(0, 600));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(card).height, open);
+  });
+
+  testWidgets('Home has no line while all is sent, at the top or scrolled', (tester) async {
+    relay
+      ..connected = true
+      ..settings = const Settings(sending: true)
+      ..status = SyncStatus.synced;
+    await tester.pumpWidget(RelayApp(relay: relay));
+    final bar = find.byType(SliverAppBar);
+    final words = [for (final text in find.descendant(of: bar, matching: find.byType(Text)).evaluate())
+      (text.widget as Text).data];
+    expect(words, ['Home']);
+    expect(find.byType(SyncLine), findsNothing);
+    relay
+      ..entries = [for (var i = 0; i < 20; i++) Entry(text: 'Note $i', at: now)]
+      ..changed();
+    await tester.pump();
+    await tester.drag(find.byType(CustomScrollView).first, const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect([for (final text in find.descendant(of: bar, matching: find.byType(Text)).evaluate()) (text.widget as Text).data],
+      ['Home']);
   });
 
   group('the note page', () {
@@ -1525,9 +1638,9 @@ void main() {
       expect(copied, ['Shop\nEggs']);
       await tester.tap(find.byTooltip('More'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(MenuItemButton, 'Play'));
-      await tester.pumpAndSettle();
-      expect(relay.calls, ['play voice/a.wav']);
+      expect([find.widgetWithText(MenuItemButton, 'Play'), find.widgetWithText(MenuItemButton, 'Copy')],
+        [findsNothing, findsOneWidget]);
+      expect(relay.calls, isEmpty);
     });
 
     testWidgets('⋯ → Delete, last in the menu, closes the page and deletes the note, with Undo on the list', (tester) async {
@@ -1577,7 +1690,7 @@ void main() {
       await tester.pumpAndSettle();
       // The pill's card shape is the button the person sees.
       final button = tester.getRect(find.ancestor(of: find.byTooltip('More'), matching: find.byType(ButtonPill)));
-      for (final item in ['Copy', 'Play']) {
+      for (final item in ['Copy', 'Delete']) {
         final row = tester.getRect(find.widgetWithText(MenuItemButton, item));
         expect(row.left, greaterThanOrEqualTo(12), reason: item);
         expect(row.right, lessThanOrEqualTo(375 - 12), reason: item);
@@ -1787,33 +1900,28 @@ void main() {
       expect(relay.calls, isEmpty);
     });
 
-    testWidgets('Waiting to send is a button that sends now, and says Sending… while it goes', (tester) async {
+    testWidgets('a waiting and a sent note\'s page show only the date, with no tag and no send item in ⋯', (tester) async {
       relay
         ..connected = true
         ..settings = const Settings(sending: true)
         ..entries = [Entry(id: 'n1', text: 'Shop', at: now, waiting: true), Entry(id: 'n2', text: 'Gone', at: now, sent: true)];
       await tester.pumpWidget(RelayApp(relay: relay));
       await openFolder(tester, 'Notes');
-      await tester.tap(find.text('Shop'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(TextButton, 'Waiting to send · Send now'));
-      await tester.pump();
-      expect(relay.calls, ['sync']);
-      relay
-        ..status = SyncStatus.syncing
-        ..changed();
-      await tester.pump();
-      expect(tester.widget<TextButton>(find.widgetWithText(TextButton, 'Sending…')).onPressed, isNull);
-      relay
-        ..status = SyncStatus.synced
-        ..changed();
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Gone'));
-      await tester.pumpAndSettle();
-      expect([find.text('Sent'), find.byType(TextButton).evaluate().where((element) =>
-        (element.widget as TextButton).child is Text && ((element.widget as TextButton).child! as Text).data!.contains('Send now'))],
-        [findsOneWidget, isEmpty]);
+      for (final title in ['Shop', 'Gone']) {
+        await tester.tap(find.text(title));
+        await tester.pumpAndSettle();
+        expect([find.byType(BrandTag), find.textContaining('Waiting to send'), find.text('Sent'), find.textContaining('Send now'),
+          find.text('Sending…')], everyElement(findsNothing), reason: title);
+        await tester.tap(find.byTooltip('More'));
+        await tester.pumpAndSettle();
+        expect([for (final item in tester.widgetList<MenuItemButton>(find.byType(MenuItemButton))) (item.child! as Text).data],
+          ['Copy', 'Delete'], reason: title);
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+      }
+      expect(relay.calls, isEmpty);
     });
   });
 
@@ -2339,7 +2447,8 @@ void main() {
     expect(relay.calls, isEmpty);
   });
 
-  testWidgets('Home counts each notes folder, and Voice notes lists only voice notes, with Home to go back', (tester) async {
+  testWidgets('Home shows one Notes row; the list\'s filters count and show their notes, and a photo does not move a note',
+      (tester) async {
     const photo = EntryFile(name: 'receipt.jpg', type: 'image/jpeg', size: 1258291, path: '/nowhere/receipt.jpg');
     relay.entries = [
       for (final words in ['Buy milk', 'Gift ideas', 'Paint the hall']) Entry(text: words, at: now),
@@ -2347,16 +2456,43 @@ void main() {
       Entry(text: 'Receipt for the lamp', at: now, files: const [photo]),
     ];
     await tester.pumpWidget(RelayApp(relay: relay));
-    expect([countOn('Notes', 6), countOn('Voice notes', 2), countOn('Shares', 1)], everyElement(findsOneWidget));
-    await openFolder(tester, 'Voice notes');
+    expect(countOn('Notes', 6), findsOneWidget);
+    for (final gone in ['Voice notes', 'Shares']) {
+      expect(find.widgetWithText(ListTile, gone), findsNothing, reason: gone);
+    }
+    await openFolder(tester, 'Notes');
     expect(find.byType(TimelineScreen), findsOneWidget);
+    Finder chip(String label) => find.widgetWithText(ChoiceChip, label);
+    expect([chip('All 6'), chip('Voice 2'), chip('Photos and files 1')], everyElement(findsOneWidget));
+    expect(tester.widget<ChoiceChip>(chip('All 6')).selected, isTrue);
+    expect([for (final words in ['Buy milk', 'Call the fab', 'Receipt for the lamp']) find.text(words)],
+      everyElement(findsOneWidget));
+    await tester.tap(chip('Voice 2'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<ChoiceChip>(chip('Voice 2')).selected, isTrue);
     expect([find.text('Call the fab'), find.text('Ask Sam')], everyElement(findsOneWidget));
     expect([find.text('Buy milk'), find.text('Receipt for the lamp')], everyElement(findsNothing));
-    expect(find.text('2 notes ·'), findsOneWidget);
+    expect(find.descendant(of: find.byType(SyncLine), matching: find.text('2 notes')), findsOneWidget);
+    await tester.tap(chip('Photos and files 1'));
+    await tester.pumpAndSettle();
+    expect([find.text('Receipt for the lamp'), find.text('Buy milk'), find.text('Call the fab')],
+      [findsOneWidget, findsNothing, findsNothing]);
+    // A photo added to a note leaves it where it was in All, and adds it to Photos and files.
+    relay.entries = [
+      Entry(text: 'Buy milk', at: now, files: const [photo]),
+      ...relay.entries.skip(1),
+    ];
+    relay.changed();
+    await tester.pumpAndSettle();
+    expect([chip('All 6'), chip('Photos and files 2')], everyElement(findsOneWidget));
+    expect(find.text('Buy milk'), findsOneWidget);
+    await tester.tap(chip('All 6'));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(find.text('Buy milk')).dy, lessThan(tester.getTopLeft(find.text('Gift ideas')).dy));
     await tester.tap(find.text('Call the fab'));
     await tester.pumpAndSettle();
-    // A note opened from a folder goes back to that folder.
-    expect(find.descendant(of: find.byTooltip('Back'), matching: find.text('Voice notes')), findsOneWidget);
+    // A note opened from the list goes back to it, and the list goes back to Home.
+    expect(find.descendant(of: find.byTooltip('Back'), matching: find.text('Notes')), findsOneWidget);
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
     expect(find.descendant(of: find.byTooltip('Back'), matching: find.text('Home')), findsOneWidget);
@@ -2365,7 +2501,18 @@ void main() {
     expect(countOn('Notes', 6), findsOneWidget);
   });
 
-  testWidgets('search on Home finds notes in every folder, on the phone only; Cancel shows the folders again', (tester) async {
+  testWidgets('with no photo or file, Photos and files says so in words', (tester) async {
+    relay.entries = [Entry(text: 'See https://example.com', at: now)];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Notes');
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Photos and files 0'));
+    await tester.pumpAndSettle();
+    expect([find.text('No photos or files yet'), find.text('A note with a photo or a file shows here.')],
+      everyElement(findsOneWidget));
+    expect(find.text('See https://example.com'), findsNothing);
+  });
+
+  testWidgets('search on Home finds every note, on the phone only; Cancel shows the Notes row again', (tester) async {
     relay.entries = [
       Entry(text: 'Call the dentist', at: now),
       Entry(text: 'Dentist moved to Thursday', at: now, voice: true),
@@ -2376,7 +2523,7 @@ void main() {
     await tester.enterText(find.widgetWithText(TextField, 'Search'), 'dentist');
     await tester.pump();
     expect([find.text('Call the dentist'), find.text('Dentist moved to Thursday')], everyElement(findsOneWidget));
-    expect([find.text('Gift ideas'), find.widgetWithText(ListTile, 'Voice notes')], everyElement(findsNothing));
+    expect([find.text('Gift ideas'), find.widgetWithText(ListTile, 'Notes')], everyElement(findsNothing));
     await tester.tap(find.text('Dentist moved to Thursday'));
     await tester.pumpAndSettle();
     expect(find.descendant(of: find.byTooltip('Back'), matching: find.text('Home')), findsOneWidget);
@@ -2384,9 +2531,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
-    expect([find.widgetWithText(ListTile, 'Voice notes'), find.text('Call the dentist')], [findsOneWidget, findsNothing]);
-    // In a folder, search finds that folder's notes only.
-    await openFolder(tester, 'Voice notes');
+    expect([find.widgetWithText(ListTile, 'Notes'), find.text('Call the dentist')], [findsOneWidget, findsNothing]);
+    // With a filter picked, search finds that filter's notes only.
+    await openFolder(tester, 'Notes');
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Voice 1'));
+    await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextField, 'Search'), 'dentist');
     await tester.pump();
     expect([find.text('Dentist moved to Thursday'), find.text('Call the dentist')], [findsOneWidget, findsNothing]);
@@ -2560,12 +2709,13 @@ void main() {
       expect([relay.calls, relay.openNote], [isEmpty, isNull]);
     });
 
-    testWidgets('a voice note and the sound bars wear the spark color; a typed note wears accent soft', (tester) async {
+    testWidgets('a voice row\'s microphone is accent text, rows wear no tag, and the sound bars wear the spark color',
+        (tester) async {
       relay.entries = [Entry(text: 'Spoken', at: now, voice: true), Entry(text: 'Written', at: now)];
       await tester.pumpWidget(RelayApp(relay: relay));
       await openFolder(tester, 'Notes');
-      expect(tagColors(tester, 'Voice'), (BrandColors.light.spark, BrandColors.light.onSpark));
-      expect(tagColors(tester, 'Typed'), (BrandColors.light.accentSoft, BrandColors.light.accentText));
+      expect(tester.widget<Icon>(rowMic).color, BrandColors.light.accentText);
+      expect([find.byType(BrandTag), find.text('Typed')], everyElement(findsNothing));
       await holdNewNote(tester);
       final bar = tester.widget<AnimatedContainer>(find.descendant(of: find.byType(LevelBars),
         matching: find.byType(AnimatedContainer)).first);
@@ -2752,7 +2902,7 @@ void main() {
       expect(find.byType(NoteEditor), findsNothing);
     });
 
-    testWidgets('a voice note shows Writing the words, then its words, its length and Play', (tester) async {
+    testWidgets('a voice note shows Writing the words, then its words, its length and the player', (tester) async {
       await tester.pumpWidget(RelayApp(relay: relay));
       await openFolder(tester, 'Notes');
       // The bar moves until the words come, so the screen never settles while it shows.
@@ -2761,7 +2911,7 @@ void main() {
           length: const Duration(seconds: 12))]
         ..changed();
       await tester.pump();
-      expect(find.text('Voice'), findsOneWidget);
+      expect(rowMic, findsOneWidget);
       expect(find.text('Writing the words…'), findsOneWidget);
       expect(find.byType(LinearProgressIndicator), findsOneWidget);
       relay
@@ -2776,7 +2926,8 @@ void main() {
       await tester.tap(find.text('Ask the fab if the flex stiffener can be 0.2 mm'));
       await tester.pumpAndSettle();
       expect(find.byType(NoteEditor), findsOneWidget);
-      await tester.tap(find.text('Play'));
+      expect(find.text('Play'), findsNothing);
+      await tester.tap(find.byTooltip('Play'));
       expect(relay.calls, ['play voice/a.wav']);
       await tester.pageBack();
       await tester.pumpAndSettle();
@@ -2787,7 +2938,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Typed').first);
       await tester.pumpAndSettle();
-      expect([find.text('Play'), find.text('Voice')], [findsNothing, findsNothing]);
+      expect([find.byType(VoicePlayer), find.byTooltip('Play')], [findsNothing, findsNothing]);
       await tester.pageBack();
       await tester.pumpAndSettle();
       relay.notice('No speech heard. Nothing was saved.');
@@ -2796,18 +2947,18 @@ void main() {
       expect(find.text('No speech heard. Nothing was saved.'), findsOneWidget);
     });
 
-    testWidgets('a note whose words failed says so in the list; its page says the recording is safe, keeps Play, and Try again writes them again', (tester) async {
+    testWidgets('a note whose words failed says so in the list; its page says the recording is safe, keeps the player, and Try again writes them again', (tester) async {
       relay.entries = [Entry(text: '', at: now, voice: true, failed: true, recording: 'voice/a.wav',
         length: const Duration(seconds: 3))];
       await tester.pumpWidget(RelayApp(relay: relay));
-      await openFolder(tester, 'Voice notes');
+      await openFolder(tester, 'Notes');
       expect(find.text('The words did not come'), findsOneWidget);
       expect([find.text('Writing the words…'), find.byType(LinearProgressIndicator)], [findsNothing, findsNothing]);
       await tester.tap(find.text('The words did not come'));
       await tester.pumpAndSettle();
       expect(find.text('The words did not come. Your recording is safe.'), findsOneWidget);
       expect([find.text('Writing the words…'), find.byType(LinearProgressIndicator)], [findsNothing, findsNothing]);
-      expect(find.text('Play'), findsOneWidget);
+      expect(find.byTooltip('Play'), findsOneWidget);
       await tester.tap(find.text('Try again'));
       await tester.pump();
       expect(relay.calls, ['words again']);
@@ -2815,6 +2966,80 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.text('The words did not come. Tap Try again on the note.'), findsOneWidget);
+    });
+
+    testWidgets('the player under the date plays and pauses, shows 0:12 / 0:42 while it plays, and a tap on the waves seeks',
+        (tester) async {
+      relay
+        ..waves = [for (var i = 0; i < 48; i++) (i % 6) / 5]
+        ..entries = [Entry(id: 'v', text: 'Call the fab', at: now, voice: true, recording: 'voice/v.wav',
+          length: const Duration(seconds: 42))];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Call the fab'));
+      await tester.pumpAndSettle();
+      final player = find.byType(VoicePlayer);
+      expect(find.descendant(of: player, matching: find.text('0:42')), findsOneWidget);
+      // Under the date, above the words.
+      expect(tester.getTopLeft(player).dy, lessThan(tester.getTopLeft(find.byType(QuillEditor)).dy));
+      expect(tester.widget<CustomPaint>(find.descendant(of: find.byKey(const ValueKey('waves')),
+        matching: find.byType(CustomPaint))).painter, isA<WavePainter>().having((wave) => wave.levels, 'levels', hasLength(48)));
+      await tester.tap(find.byTooltip('Play'));
+      await tester.pump();
+      expect(relay.calls, ['play voice/v.wav']);
+      expect([find.byTooltip('Pause'), find.byTooltip('Play')], [findsOneWidget, findsNothing]);
+      relay.sound.value = const Playback(recording: 'voice/v.wav', at: Duration(seconds: 12), playing: true);
+      await tester.pump();
+      expect(find.descendant(of: player, matching: find.text('0:12 / 0:42')), findsOneWidget);
+      WavePainter painter() => tester.widget<CustomPaint>(find.descendant(of: find.byKey(const ValueKey('waves')),
+        matching: find.byType(CustomPaint))).painter! as WavePainter;
+      expect(painter().done, closeTo(12 / 42, 0.001));
+      expect(painter().played, BrandColors.light.accentText);
+      await tester.tap(find.byTooltip('Pause'));
+      await tester.pump();
+      expect(relay.calls.last, 'pause');
+      expect(find.byTooltip('Play'), findsOneWidget);
+      // A tap at the middle of the waves goes to the middle of the recording.
+      await tester.tap(find.byKey(const ValueKey('waves')));
+      await tester.pump();
+      expect(relay.calls.last, 'seek 21000');
+      expect(find.descendant(of: player, matching: find.text('0:21 / 0:42')), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('a tap on the waves of a stopped recording plays it from there', (tester) async {
+      relay.entries = [Entry(id: 'v', text: 'Call the fab', at: now, voice: true, recording: 'voice/v.wav',
+        length: const Duration(seconds: 40))];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Call the fab'));
+      await tester.pumpAndSettle();
+      final waves = find.byKey(const ValueKey('waves'));
+      await tester.tapAt(tester.getTopLeft(waves) + Offset(tester.getSize(waves).width / 4, 10));
+      await tester.pump();
+      expect(relay.calls, ['play voice/v.wav', 'seek 10000']);
+      expect(find.byTooltip('Pause'), findsOneWidget);
+    });
+
+    testWidgets('with no sound waves, such as an m4a, the player draws a plain line that fills as it plays', (tester) async {
+      relay.entries = [Entry(id: 'v', text: 'Call the fab', at: now, voice: true, recording: 'voice/v.m4a',
+        length: const Duration(seconds: 10))];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Call the fab'));
+      await tester.pumpAndSettle();
+      final paint = find.descendant(of: find.byKey(const ValueKey('waves')), matching: find.byType(CustomPaint));
+      expect((tester.widget<CustomPaint>(paint).painter! as WavePainter).levels, isEmpty);
+      final rest = (tester.widget<CustomPaint>(paint).painter! as WavePainter).rest;
+      void half(Canvas canvas) => WavePainter(levels: const [], done: 0.5, played: BrandColors.light.accentText, rest: rest)
+        .paint(canvas, const Size(200, 36));
+      expect(half, paints
+        ..line(p1: const Offset(0, 18), p2: const Offset(200, 18), color: rest)
+        ..line(p1: const Offset(0, 18), p2: const Offset(100, 18), color: BrandColors.light.accentText));
+      relay.sound.value = const Playback(recording: 'voice/v.m4a', at: Duration(seconds: 5), playing: true);
+      await tester.pump();
+      expect((tester.widget<CustomPaint>(paint).painter! as WavePainter).done, 0.5);
     });
 
     testWidgets('with no model, a hold asks first, and Not now gets nothing', (tester) async {
@@ -2925,7 +3150,7 @@ void main() {
   });
 
   group('files', () {
-    testWidgets('the paperclip adds photos and files to a new note and to an old one', (tester) async {
+    testWidgets('the paperclip opens a menu with Photos and Files, and adds them to a new note and to an old one', (tester) async {
       final picks = <bool>[];
       Future<List<NewFile>> picker({required bool photos}) async {
         picks.add(photos);
@@ -2941,6 +3166,13 @@ void main() {
       await type(tester, 'Receipt');
       await tester.tap(find.byTooltip('Attach'));
       await tester.pumpAndSettle();
+      // A menu beside the button, not a sheet from the bottom.
+      expect([find.widgetWithText(MenuItemButton, 'Photos'), find.widgetWithText(MenuItemButton, 'Files')],
+        everyElement(findsOneWidget));
+      expect(find.byType(BottomSheet), findsNothing);
+      final clip = tester.getRect(find.byTooltip('Attach'));
+      final menu = tester.getRect(find.widgetWithText(MenuItemButton, 'Photos'));
+      expect((menu.center.dy - clip.center.dy).abs(), lessThan(200));
       await tester.tap(find.text('Photos'));
       await tester.pumpAndSettle();
       expect(relay.calls.single, startsWith('note # Receipt + receipt.jpg'));
@@ -2969,7 +3201,7 @@ void main() {
           files: const [EntryFile(name: 'only.pdf', type: 'application/pdf', size: 512, path: '/nowhere/only.pdf')]),
       ];
       await tester.pumpWidget(RelayApp(relay: relay));
-      await openFolder(tester, 'Shares');
+      await openFolder(tester, 'Notes');
       expect(find.byTooltip('receipt.jpg'), findsOneWidget);
       // A note of files alone takes its first file's name as its title.
       expect(find.text('only.pdf'), findsOneWidget);

@@ -26,7 +26,7 @@ const threePanes = 1000.0;
 /// From this width it shows two panes, with the left bar in a menu; below it, the phone's pages.
 const twoPanes = 700.0;
 
-/// What the left bar has open: a notes folder, one of *Other connections*, or the chats.
+/// What the left bar has open: the notes with a filter, one of *Other connections*, or the chats.
 sealed class WebPlace {
   const WebPlace();
 }
@@ -34,6 +34,7 @@ sealed class WebPlace {
 class FolderPlace extends WebPlace {
   const FolderPlace(this.folder);
 
+  /// The notes list's filter.
   final NotesFolder folder;
 }
 
@@ -54,10 +55,6 @@ const _connections = [
   (ConnectionKind.calendar, 'Calendar', CupertinoIcons.calendar),
   (ConnectionKind.photos, 'Photos', CupertinoIcons.photo),
 ];
-
-const _folderIcons = {
-  NotesFolder.all: CupertinoIcons.doc_text, NotesFolder.voice: CupertinoIcons.mic, NotesFolder.shares: CupertinoIcons.paperclip,
-};
 
 /// The Relay Everything page in the browser: three panes when wide, two from [twoPanes], and the phone's pages below
 /// it. It holds the open note in one place, so a resize keeps the note and the words not yet saved.
@@ -82,7 +79,7 @@ class WebShell extends StatefulWidget {
 
 class WebShellState extends State<WebShell> {
   WebPlace _place = const FolderPlace(NotesFolder.all);
-  /// On the phone's pages: Home shows, not a folder.
+  /// On the phone's pages: Home shows, not the notes list.
   bool _home = true;
   /// The note open now, or null with [_open] for a new one.
   Entry? _entry;
@@ -227,7 +224,8 @@ class WebShellState extends State<WebShell> {
           FolderPlace() => [
             SizedBox(width: three ? 340 : 320,
               child: NotesPane(relay: relay, folder: _folder, notes: notes, search: _search, selected: _openId, onOpen: openNote,
-                onMenu: menu, picker: widget.picker, sharer: widget.sharer, opener: widget.opener)),
+                onFilter: (filter) => _go(FolderPlace(filter)), onMenu: menu, picker: widget.picker, sharer: widget.sharer,
+                opener: widget.opener)),
             VerticalDivider(width: 1, color: brand.line),
             Expanded(child: _open ? _editorOf(pane: true) : _noNote()),
           ],
@@ -272,11 +270,11 @@ class WebShellState extends State<WebShell> {
     );
   }
 
-  /// The phone's pages: Home, a folder, a note, a connection or the chats, one at a time.
+  /// The phone's pages: Home, the notes list, a note, a connection or the chats, one at a time.
   Widget _narrow() {
     if (_open) {
       return PopScope(canPop: false, onPopInvokedWithResult: (popped, _) { if (!popped) _close(); },
-        child: _editorOf(pane: false, back: _home ? 'Home' : _folder.title));
+        child: _editorOf(pane: false, back: _home ? 'Home' : 'Notes'));
     }
     if (_home) {
       return HomeScreen(relay: relay, opener: widget.opener, picker: widget.picker, sharer: widget.sharer, onOpen: openNote,
@@ -291,7 +289,7 @@ class WebShellState extends State<WebShell> {
       onPopInvokedWithResult: (popped, _) { if (!popped) _goHome(); },
       child: switch (_place) {
         FolderPlace(:final folder) => TimelineScreen(relay: relay, folder: folder, picker: widget.picker, sharer: widget.sharer,
-          opener: widget.opener, onOpen: openNote, onBack: _goHome),
+          opener: widget.opener, onOpen: openNote, onBack: _goHome, onFilter: (filter) => setState(() => _place = FolderPlace(filter))),
         ConnectionPlace(:final kind) => _page(ConnectionPage(kind: kind, client: widget.client, opener: widget.opener)),
         ChatsPlace() => _page(ChatsView(client: widget.client, wide: false, opener: widget.opener)),
       },
@@ -305,7 +303,8 @@ class WebShellState extends State<WebShell> {
   );
 }
 
-/// The left bar: the notes folders with their counts, *Other connections*, and *Settings* at the bottom.
+/// The left bar: one *Notes* row with its count, as the phone's Home has, *Other connections*, and *Settings* at the
+/// bottom. The notes list's own filters pick voice notes, or notes with photos and files.
 class Sidebar extends StatelessWidget {
   const Sidebar({super.key, required this.relay, required this.place, required this.onGo, required this.onSettings});
 
@@ -318,9 +317,8 @@ class Sidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final brand = brandOf(context);
     final text = Theme.of(context).textTheme;
-    int count(NotesFolder folder) => relay.entries.where((entry) => entryIn(folder, entry)).length;
     bool on(WebPlace other) => switch ((place, other)) {
-      (FolderPlace(folder: final a), FolderPlace(folder: final b)) => a == b,
+      (FolderPlace(), FolderPlace()) => true,
       (ConnectionPlace(kind: final a), ConnectionPlace(kind: final b)) => a == b,
       (ChatsPlace(), ChatsPlace()) => true,
       _ => false,
@@ -354,7 +352,7 @@ class Sidebar extends StatelessWidget {
           const RelayMark(size: 26),
           Flexible(child: Text('Relay Everything', style: text.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
         ])),
-        for (final folder in NotesFolder.values) row(_folderIcons[folder]!, folder.title, FolderPlace(folder), count: count(folder)),
+        row(CupertinoIcons.doc_text, 'Notes', const FolderPlace(NotesFolder.all), count: relay.entries.length),
         Padding(padding: const EdgeInsets.fromLTRB(22, 20, 16, 6),
           child: Text('Other connections', style: text.labelLarge?.copyWith(color: brand.muted))),
         for (final (kind, title, icon) in _connections) row(icon, title, ConnectionPlace(kind)),
@@ -368,14 +366,16 @@ class Sidebar extends StatelessWidget {
   }
 }
 
-/// The middle pane: the folder's name, its count and the sync state, then its notes by day, filtered by the top bar's
-/// search.
+/// The middle pane: *Notes*, the count and, only when notes wait or can't go, the sync state; the phone's filters; then
+/// the notes in the picked filter by day, filtered by the top bar's search.
 class NotesPane extends StatelessWidget {
   const NotesPane({super.key, required this.relay, required this.folder, required this.notes, required this.search,
-    required this.onOpen, this.selected, this.onMenu, this.picker, this.sharer, this.opener});
+    required this.onOpen, required this.onFilter, this.selected, this.onMenu, this.picker, this.sharer, this.opener});
 
   final Relay relay;
+  /// The picked filter.
   final NotesFolder folder;
+  final ValueChanged<NotesFolder> onFilter;
   final List<Entry> notes;
   final TextEditingController search;
   final NoteOpener onOpen;
@@ -393,20 +393,22 @@ class NotesPane extends StatelessWidget {
       SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(8, 14, 12, 0), child: Row(children: [
         if (onMenu != null) IconButton(tooltip: 'Folders', onPressed: onMenu, icon: const Icon(CupertinoIcons.sidebar_left)),
         Expanded(child: Padding(padding: EdgeInsets.only(left: onMenu == null ? 12 : 4),
-          child: Text(folder.title, style: text.titleLarge?.copyWith(fontWeight: FontWeight.w700)))),
+          child: Text('Notes', style: text.titleLarge?.copyWith(fontWeight: FontWeight.w700)))),
       ]))),
-      SliverToBoxAdapter(child: SyncLine(relay: relay, count: countOf(notes.length), onSync: relay.pullNotes)),
+      SliverToBoxAdapter(child: SyncLine(relay: relay, count: countOf(notes.length))),
+      SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.only(bottom: 4),
+        child: NoteFilters(relay: relay, filter: folder, onFilter: onFilter))),
       if (notes.isEmpty && search.text.trim().isEmpty)
         SliverToBoxAdapter(child: _EmptyFolder(folder: folder))
       else
-        noteSliver(context, relay, notes, search.text, back: folder.title, picker: picker, sharer: sharer, opener: opener,
+        noteSliver(context, relay, notes, search.text, back: 'Notes', picker: picker, sharer: sharer, opener: opener,
           onOpen: onOpen, selected: selected),
       const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
     ]));
   }
 }
 
-/// An empty folder in the middle pane: its title, then how a note gets in it.
+/// An empty filter in the middle pane: its title, then how a note gets in it.
 class _EmptyFolder extends StatelessWidget {
   const _EmptyFolder({required this.folder});
 

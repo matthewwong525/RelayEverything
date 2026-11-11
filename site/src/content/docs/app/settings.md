@@ -19,6 +19,8 @@ The first row of Settings shows your account:
 
 Signed out, tap the row to open **Sign in**. **Sign in to connect** is first. Below it, **Scan a key**, **Use another server** and **Send to my own webhook instead** are the other ways. Signing in starts sending at once, after the app asks about your earlier notes. There is no separate switch. [Connect a phone](../../start/connect-a-phone/)
 
+Once you are signed in, notes send by themselves, also when the phone gets a connection again after it had none. There is no **Sync now** or **Send now**: pull your notes down to sync now. [The sync state](../your-notes/#the-sync-state)
+
 Signed in, tap the row to open the **Account** page:
 
 | Row | What it does |

@@ -37,24 +37,25 @@ void main() {
     expect(entryMatches(Entry(text: 'No place', at: now), 'home'), isFalse);
   });
 
-  test('says Sent, Waiting to send, or nothing', () {
+  test('a row says Waiting to send only for a note the server does not have yet, and nothing once it is sent', () {
     expect([sendState(Entry(text: '', at: now, sent: true)), sendState(Entry(text: '', at: now, waiting: true)),
-      sendState(Entry(text: '', at: now))], ['Sent', 'Waiting to send', null]);
+      sendState(Entry(text: '', at: now))], [null, 'Waiting to send', null]);
   });
 
-  test('a share is a note with a photo, a file or a link; a voice note is only in Voice notes and Notes', () {
+  test('Photos and files holds notes with a photo or a file, and a link alone does not; every note stays in All', () {
     const photo = EntryFile(name: 'receipt.jpg', type: 'image/jpeg', size: 1, path: '/nowhere/receipt.jpg');
+    const file = EntryFile(name: 'lease.pdf', type: 'application/pdf', size: 1, path: '/nowhere/lease.pdf');
     final notes = {
       'typed': Entry(text: 'Buy milk', at: now),
       'voice': Entry(text: 'Call the fab', at: now, voice: true),
-      'photo': Entry(text: '', at: now, files: const [photo]),
+      'photo': Entry(text: 'Receipt', at: now, files: const [photo]),
+      'file': Entry(text: '', at: now, files: const [file]),
       'link': Entry(text: 'Read HTTPS://example.com/post later', at: now),
-      'no link': Entry(text: 'The http header is long', at: now),
     };
     List<String> inFolder(NotesFolder folder) => [for (final MapEntry(:key, :value) in notes.entries) if (entryIn(folder, value)) key];
     expect(inFolder(NotesFolder.all), notes.keys);
     expect(inFolder(NotesFolder.voice), ['voice']);
-    expect(inFolder(NotesFolder.shares), ['photo', 'link']);
-    expect([for (final folder in NotesFolder.values) folder.title], ['Notes', 'Voice notes', 'Shares']);
+    expect(inFolder(NotesFolder.files), ['photo', 'file']);
+    expect([for (final folder in NotesFolder.values) folder.title], ['All', 'Voice', 'Photos and files']);
   });
 }

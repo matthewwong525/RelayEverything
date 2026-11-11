@@ -12,6 +12,7 @@ import 'package:relay_app/data/sender.dart';
 import 'package:relay_app/data/settings.dart';
 import 'package:relay_app/data/store.dart';
 import 'package:relay_app/relay.dart';
+import 'package:relay_app/screens/note_blocks.dart' show VoicePlayer;
 import 'package:relay_app/sync/background.dart';
 
 import 'fakes.dart';
@@ -258,7 +259,7 @@ void main() {
       expect([find.text('3 B · Download'), find.text('4 B · Download')], [findsNothing, findsOneWidget]);
     });
 
-    testWidgets('a voice note from another phone shows its words, where it came from, and no Play', (tester) async {
+    testWidgets('a voice note from another phone shows its words, where it came from, and no player', (tester) async {
       final server = FakeServer((request) => _isPull(request)
         ? notesPage([pulledNote('s1', text: 'Call the dentist about Thursday', device: "Sam's iPhone", recordedAt: DateTime.now())],
           next: 1)
@@ -271,7 +272,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(quill(tester).document.toPlainText(), 'Call the dentist about Thursday\n');
       expect(find.textContaining("From Sam's iPhone"), findsOneWidget);
-      expect(find.text('Play'), findsNothing);
+      expect([find.byType(VoicePlayer), find.byTooltip('Play')], everyElement(findsNothing));
       await tester.tap(find.byTooltip('More'));
       await tester.pumpAndSettle();
       expect([find.widgetWithText(MenuItemButton, 'Copy'), find.widgetWithText(MenuItemButton, 'Play')],

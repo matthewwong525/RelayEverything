@@ -28,7 +28,7 @@ The action's line reads *Add Words with Files to Relay Everything*. Tap **Files*
 
 ### A recording becomes a voice note
 
-Give **Add a note** one recording, such as the **Recorded Audio** from **Record audio**, and the note is a voice note. It shows **Voice** and **Play**, and the phone writes its words itself, as for a voice note you hold **New note** for. [Voice notes](../voice-notes/)
+Give **Add a note** one recording, such as the **Recorded Audio** from **Record audio**, and the note is a voice note. Its row shows a microphone and its length, its page shows the [player](../voice-notes/#play-a-note-back) under the date, and the phone writes its words itself, as for a voice note you hold **New note** for. [Voice notes](../voice-notes/)
 
 - **Your words go first.** Give words with the recording, such as *Note @ 7:07 PM*, and the note starts with them. The written words of the recording follow on the next line.
 - **The words are written in the open app.** When the app is closed, the voice note waits on the phone, and the phone writes its words the next time you open Relay Everything.

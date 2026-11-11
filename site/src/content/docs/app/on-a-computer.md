@@ -25,7 +25,7 @@ The layout follows the width of the window:
 
 | Window width | What shows |
 |---|---|
-| 1,000 px or more | Three parts: the left bar, the open folder's notes, and the open note. |
+| 1,000 px or more | Three parts: the left bar, your notes, and the open note. |
 | 700 to 999 px | The notes and the open note. The folders are in a menu. |
 | Less than 700 px | The phone layout: one page at a time, as in the app on your phone. |
 
@@ -35,7 +35,7 @@ When you make the window narrower or wider, the open note stays open, with all t
 
 ### The left bar
 
-- **Notes**, **Voice notes** and **Shares**: the same folders as on the phone's Home, each with its count. [Notes](../your-notes/#home)
+- **Notes**, with its count: one list of all your notes, as on the phone's Home. [Notes](../your-notes/#home)
 - **Other connections**: **Location**, **Health**, **Calendar**, **Photos** and **Claude Code chats**. [Other connections](#other-connections)
 - **Settings**, at the bottom. [Settings](#settings)
 
@@ -43,7 +43,7 @@ On the phone, the folders under **Notes** are in **On this phone**, because the 
 
 ### The notes and the open note
 
-The middle shows the open folder's notes, newest first, in groups by day: **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then one group for each month. Each row shows the first line, the time, the start of the words, and **Voice** or **Typed**. A note from somewhere else also shows where it came from, such as *Email*. Click a row to open the note at the right.
+The middle shows your notes, newest first, in groups by day: **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then one group for each month. Above them, the filters **All**, **Voice** and **Photos and files** each show how many notes they hold: click one to see only its notes. [Filter your notes](../your-notes/#filter-your-notes) Each row shows the first line, the time, and the start of the words, with no tag. A voice note also shows a microphone and its length. A note from somewhere else also shows where it came from, such as *Email*. Click a row to open the note at the right.
 
 ### The top bar
 
@@ -108,7 +108,7 @@ Type words in **Search**, at the top right, or press Ctrl+F (⌘F on a Mac). The
 
 ## Voice notes
 
-A voice note plays in the browser: open it and click **Play**. You record voice notes on your phone only, because the phone writes the words with its own speech model: [Voice notes](../voice-notes/).
+A voice note plays in the browser: open it and click **Play** in the player under the date. Click or drag on the line to go to that part, and click **Pause** to stop. The browser shows a plain line in place of the sound waves. You record voice notes on your phone only, because the phone writes the words with its own speech model: [Voice notes](../voice-notes/).
 
 ## Other connections
 

@@ -39,24 +39,24 @@ bool entryMatches(Entry entry, String query) {
     .any((part) => part.toLowerCase().contains(words));
 }
 
-/// *Sent* or *Waiting to send*, or null while nothing of it goes anywhere.
-String? sendState(Entry entry) => entry.sent ? 'Sent' : entry.waiting ? 'Waiting to send' : null;
+/// *Waiting to send* for a note the server does not have yet while sending is on, else null: a sent note's row says
+/// nothing about sending.
+String? sendState(Entry entry) => !entry.sent && entry.waiting ? 'Waiting to send' : null;
 
-/// The notes folders on Home: three views of the same notes, with no new kind of note.
+/// The notes list's filters: three views of the same notes, with no new kind of note. A photo or a file never moves a
+/// note: it stays in *All*, and shows under *Photos and files* too.
 enum NotesFolder {
-  all('Notes'), voice('Voice notes'), shares('Shares');
+  all('All'), voice('Voice'), files('Photos and files');
 
   const NotesFolder(this.title);
 
   final String title;
 }
 
-final _link = RegExp(r'https?://', caseSensitive: false);
-
-/// True when [entry] is in [folder]: every note is in *Notes*, a voice note in *Voice notes*, and a note with a photo,
-/// a file or a link in *Shares*. The phone keeps no mark of which notes came from the share button.
+/// True when [entry] is in [folder]: every note is in *All*, a voice note in *Voice*, and a note with a photo or a
+/// file in *Photos and files*. A link alone is not a file: a typed note with a link is still a typed note.
 bool entryIn(NotesFolder folder, Entry entry) => switch (folder) {
   NotesFolder.all => true,
   NotesFolder.voice => entry.voice,
-  NotesFolder.shares => entry.files.isNotEmpty || _link.hasMatch(entry.text),
+  NotesFolder.files => entry.files.isNotEmpty,
 };

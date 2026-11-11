@@ -1,0 +1,38 @@
+# One notes list with filters on a fresh install: open Notes, tap Voice, Photos and files and back to All, then write a
+# note and see its row. Not in the fixed tour: a check names it, `--flows notes-filters`.
+appId: com.matthewwong525.relayApp
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 60000
+# A row's label joins its name and its count, so match its start.
+- tapOn: 'Notes(.|\n)*'
+- extendedWaitUntil:
+    visible: 'No notes yet(.|\n)*'
+    timeout: 30000
+# Each filter's label joins its name and its count, such as "Voice 0".
+- assertVisible: 'All 0'
+- tapOn: 'Voice 0'
+- assertVisible: 'No voice notes yet(.|\n)*'
+- tapOn: 'Photos and files 0'
+- assertVisible: 'No photos or files yet(.|\n)*'
+- takeScreenshot: notes-filters-empty
+- tapOn: 'All 0'
+- assertVisible: 'No notes yet(.|\n)*'
+# A short tap on New note writes.
+- tapOn: "New note"
+- extendedWaitUntil:
+    visible: "Done"
+    timeout: 30000
+- inputText: "Filter check note"
+- tapOn: "Done"
+- tapOn: 'Back(.|\n)*'
+# The row has no tag, and the All filter now counts the note.
+- extendedWaitUntil:
+    visible: 'Filter check note(.|\n)*'
+    timeout: 30000
+- assertVisible: 'All 1'
+- assertVisible: 'Photos and files 0'
+- takeScreenshot: notes-filters

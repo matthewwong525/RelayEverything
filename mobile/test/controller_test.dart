@@ -613,6 +613,46 @@ void main() {
         ['key', 'connections']);
     });
 
+    test('a waiting note sends with no tap when the network comes back after none', () async {
+      final network = FakeNetwork();
+      final relay = controller(network: network);
+      await relay.load();
+      expect(await relay.connect(pageCode), isNull);
+      await relay.startSending(sendEarlier: false);
+      await pumpEventQueue();
+      await relay.addNote('Lunch idea', id: 'n1', sendNow: false);
+      expect(relay.waiting, 1);
+      network.linkChanges.add(Link.none);
+      await pumpEventQueue();
+      expect(sentNotes(), isEmpty);
+      network.linkChanges.add(Link.wifi);
+      await pumpEventQueue();
+      await relay.settled();
+      expect([for (final note in sentNotes()) note['clientId']], ['n1']);
+      expect([relay.waiting, relay.entries.single.sent], [0, true]);
+      // A change from one network to another while all is sent starts nothing.
+      final before = server.requests.length;
+      network.linkChanges.add(Link.mobile);
+      await pumpEventQueue();
+      expect(server.requests, hasLength(before));
+      relay.dispose();
+    });
+
+    test('with sending off, nothing leaves when the network comes back', () async {
+      final network = FakeNetwork();
+      final relay = controller(network: network);
+      await relay.load();
+      expect(await relay.connect(pageCode), isNull);
+      await relay.addNote('Lunch idea', id: 'n1', sendNow: false);
+      final before = server.requests.length;
+      network
+        ..linkChanges.add(Link.none)
+        ..linkChanges.add(Link.wifi);
+      await pumpEventQueue();
+      expect([server.requests.length, sentNotes()], [before, isEmpty]);
+      relay.dispose();
+    });
+
     test('a note emptied while its first upload waits is deleted everywhere, with Undo, as the upload may be on its way',
         () async {
       final relay = controller();
@@ -1399,6 +1439,40 @@ void main() {
       // The recording plays from this phone.
       await relay.play(written.recording!);
       expect(player.played, ['${folder.path}/voice/${transcriber.heard.single}']);
+    });
+
+    test('reads a recording\'s sound waves from its WAV, none from an m4a, and flat ones from silence', () async {
+      // Kept beside the voice folder, so the sweep for stray recordings leaves them be.
+      Directory('${folder.path}/waves').createSync(recursive: true);
+      final relay = voiceController();
+      await relay.load();
+      await relay.wordsWritten();
+      File('${folder.path}/waves/loud.wav').writeAsBytesSync(wavOf([for (var i = 0; i < 4800; i++) i < 2400 ? 500 : 20000]));
+      File('${folder.path}/waves/quiet.wav').writeAsBytesSync(wavOf(List.filled(4800, 0)));
+      File('${folder.path}/waves/shortcut.m4a').writeAsBytesSync([0, 0, 0, 0x20, ...'ftypM4A '.codeUnits]);
+      final loud = await relay.waveOf('waves/loud.wav');
+      expect([loud.length, loud.first, loud.last], [48, closeTo(0.025, 0.001), 1.0]);
+      expect(await relay.waveOf('waves/quiet.wav'), List.filled(48, 0.0));
+      expect([await relay.waveOf('waves/shortcut.m4a'), await relay.waveOf('waves/gone.wav')], everyElement(isEmpty));
+      expect(server.requests, isEmpty);
+      relay.dispose();
+    });
+
+    test('plays, pauses and seeks one recording through the shared player', () async {
+      // Kept beside the voice folder, so the sweep for stray recordings leaves them be.
+      Directory('${folder.path}/waves').createSync(recursive: true);
+      final relay = voiceController();
+      await relay.load();
+      await relay.wordsWritten();
+      File('${folder.path}/waves/a.wav').writeAsBytesSync(wavOf(List.filled(160, 0)));
+      expect(relay.playback.value, isNull);
+      await relay.play('waves/a.wav');
+      expect(relay.playback.value, const Playback(recording: 'waves/a.wav', at: Duration.zero, playing: true));
+      await relay.seek(const Duration(seconds: 3));
+      await relay.pause();
+      expect(relay.playback.value, const Playback(recording: 'waves/a.wav', at: Duration(seconds: 3), playing: false));
+      expect(player.calls, ['play', 'seek 3000', 'pause']);
+      relay.dispose();
     });
 
     test('the app closes before the words are written: the next open writes them from the kept recording', () async {

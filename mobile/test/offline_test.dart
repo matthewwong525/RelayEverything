@@ -13,7 +13,7 @@ import 'package:relay_app/sync/background.dart';
 import 'package:relay_app/voice/model.dart';
 
 import 'fakes.dart';
-import 'screens_test.dart' show holdNewNote, newNote, openFolder, openSettings, quill, tallScreen, type;
+import 'screens_test.dart' show holdNewNote, newNote, openFolder, openSettings, quill, rowMic, tallScreen, type;
 
 /// Pumps, with real time between, until [done]: for file work and the model's checksum, which run outside the test's
 /// fake time.
@@ -112,8 +112,10 @@ void main() {
     await tester.runAsync(relay.settled);
     await tester.pumpAndSettle();
     expect(find.text('Call the PCB fab about the flex stiffener'), findsOneWidget);
-    expect(find.textContaining('Pinned'), findsOneWidget);
-    expect(find.text('On this phone'), findsOneWidget);
+    // A row shows no place: the note keeps its pin, unnamed, as the phone looks up no name with sending off.
+    expect(relay.entries.firstWhere((entry) => entry.text.contains('Call the PCB fab')).place, 'Pinned');
+    // With sending off, the list says no state: the note stays on this phone, and nothing says so on each row.
+    expect([find.text('On this phone'), find.text('Waiting to send')], everyElement(findsNothing));
     expect(find.text('Open your Relay Everything page'), findsNothing);
 
     // Pull to refresh, the app's return and the hourly round.
@@ -158,7 +160,7 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('Ask the fab if the flex stiffener can be 0.2 mm'), findsOneWidget);
-    expect(find.text('Voice'), findsOneWidget);
+    expect(rowMic, findsOneWidget);
     expect(models.requests, hasLength(1));
     // Search on Home finds both, from the phone.
     await tester.pageBack();
@@ -195,7 +197,7 @@ void main() {
       await relay.load();
     });
     await tester.pumpWidget(RelayApp(relay: relay, scanner: (_) async => null));
-    await openFolder(tester, 'Voice notes');
+    await openFolder(tester, 'Notes');
     await holdUntilListening(tester, () => relay.listening != null);
     clock = clock.add(const Duration(seconds: 4));
     await tester.tapAt(const Offset(200, 150));

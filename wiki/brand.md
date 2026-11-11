@@ -19,7 +19,7 @@ The mark is *Signal R*: a capital R on a 48 by 48 grid, in round strokes 4 units
 - **Rerun the icon script** after a change to `brand/mark.svg` or to a brand color: `node brand/make-icons.mjs`, then commit what it writes. It writes `brand/icon.svg`, `brand/logo.svg`, the website's two top-bar marks and its favicon, every iPhone icon size, every Android density, the Android adaptive icon and both launch marks. Headless Chromium draws, because ImageMagick's own SVG renderer drops paths: set `RELAY_CHROME` if it finds no Chromium. Never edit a file it writes by hand: the next run replaces it. A second run changes nothing.
 - **The app draws the mark in code** (`RelayMark` in [`mobile/lib/brand.dart`](../mobile/lib/brand.dart)), with the same paths. A change to the mark changes both.
 - **The website uses** `site/src/assets/relay-mark.svg` (light) and `relay-mark-dark.svg` in the top bar, and the icon with round corners as `site/public/favicon.svg`. The script writes all three.
-- **The icon stays still.** Only the sync dot moves, and only while it says *Syncing*: [words with every color](#rules-for-every-screen).
+- **The icon stays still.** Only the sync dot moves, and only while waiting notes send: [words with every color](#rules-for-every-screen).
 
 ## Colors
 
@@ -66,9 +66,9 @@ Inter, one variable font, inside the app, inside the iPhone share sheet and serv
 
 | Rule | What it means |
 |---|---|
-| One bright thing | The accent marks the one main action on a screen. The spark is for small live moments: the *Voice* tag, *Listening* and *New note* while it records fill with spark, with on-spark text. A *Typed* tag is accent text on accent-soft. Everything else is ink or muted. |
+| One bright thing | The accent marks the one main action on a screen. The spark is for small live moments: *Listening* and *New note* while it records fill with spark, with on-spark text. A note row has no tag: a voice row's microphone is accent text, and the picked filter chip is ink with paper text. Everything else is ink or muted. |
 | Cards, no borders | A card is a lighter shape on paper. No box inside a box. |
-| Words with every color | A state says its name: *Synced*, *Waiting*, *Off*. Never color alone. The sync dot sits beside its word: still accent for *Synced*, spark that pulses for *Syncing*, a hollow ring for *2 waiting* and *Offline*, danger for *Key refused*, and no dot for *On this phone*. With reduced motion on the phone, the dot stays still. |
+| Words with every color | A state says its name: *2 waiting*, *Key refused*, *Off*. Never color alone. The sync state shows only when the person can act on it, so there is no *Synced* or *On this phone*. The sync dot sits beside its word: spark that pulses while waiting notes send, a hollow ring for *2 waiting*, also with no signal, and danger for *Key refused*. With reduced motion on the phone, the dot stays still. |
 | Soft corners | 12 px on buttons and fields, 16 px on cards. |
 
 These rules apply the [UX principles](ux-principles.md#principles) *one primary action*, *fewer borders* and *never rely on color alone* to Relay Everything.

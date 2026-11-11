@@ -6,6 +6,7 @@ import 'package:flutter_quill/flutter_quill.dart';
 
 import '../brand.dart';
 import '../editor/markdown.dart' show dashedList;
+import 'more_menu.dart';
 import 'round_button.dart';
 
 /// A round, frosted pill of buttons, as Apple Notes floats its tool bar: the page shows through, blurred.
@@ -28,35 +29,70 @@ class _FrostedPill extends StatelessWidget {
   );
 }
 
+/// Picks photos ([photos] true) or any files for a note.
+typedef AttachPick = void Function({required bool photos});
+
+/// *Attach*, the paperclip: on the phone a small menu opens beside it, *Photos* or *Files*, not a sheet from the bottom
+/// of the screen. With no [menu], as in the browser, which has one picker for every kind of file, a tap picks files.
+/// With no [onPick], such as on a note from elsewhere, it is off.
+class AttachButton extends StatelessWidget {
+  const AttachButton({super.key, required this.onPick, this.menu = true});
+
+  final AttachPick? onPick;
+  final bool menu;
+
+  @override
+  Widget build(BuildContext context) {
+    final pick = onPick;
+    if (pick == null || !menu) {
+      return PillIconButton(icon: CupertinoIcons.paperclip, tooltip: 'Attach',
+        onPressed: pick == null ? null : () => pick(photos: false));
+    }
+    return MoreMenu(
+      items: [
+        ('Photos', CupertinoIcons.photo, () => pick(photos: true)),
+        ('Files', CupertinoIcons.doc, () => pick(photos: false)),
+      ],
+      builder: (context, toggle) => PillIconButton(icon: CupertinoIcons.paperclip, tooltip: 'Attach', onPressed: toggle),
+    );
+  }
+}
+
 /// Over the keyboard while the person edits: *Text styles*, *Checklist* and *Attach*.
 class FloatingToolBar extends StatelessWidget {
-  const FloatingToolBar({super.key, required this.onStyles, required this.onChecklist, required this.onAttach});
+  const FloatingToolBar({super.key, required this.onStyles, required this.onChecklist, required this.onAttach,
+    this.attachMenu = true});
 
   final VoidCallback onStyles;
   final VoidCallback onChecklist;
-  final VoidCallback? onAttach;
+  final AttachPick? onAttach;
+  /// *Attach* opens *Photos* and *Files*; false in the browser.
+  final bool attachMenu;
 
   @override
   Widget build(BuildContext context) => _FrostedPill(children: [
     PillIconButton(icon: CupertinoIcons.textformat, tooltip: 'Text styles', onPressed: onStyles),
     PillIconButton(icon: CupertinoIcons.checkmark_circle, tooltip: 'Checklist', onPressed: onChecklist),
-    PillIconButton(icon: CupertinoIcons.paperclip, tooltip: 'Attach', onPressed: onAttach),
+    AttachButton(onPick: onAttach, menu: attachMenu),
   ]);
 }
 
 /// At the bottom while the person reads: *Checklist* and *Attach* in a pill, and the round compose button.
 class ReadingBar extends StatelessWidget {
-  const ReadingBar({super.key, required this.onChecklist, required this.onAttach, required this.onCompose});
+  const ReadingBar({super.key, required this.onChecklist, required this.onAttach, required this.onCompose,
+    this.attachMenu = true});
 
   final VoidCallback onChecklist;
-  final VoidCallback? onAttach;
+  final AttachPick? onAttach;
   final VoidCallback onCompose;
+  /// *Attach* opens *Photos* and *Files*; false in the browser.
+  final bool attachMenu;
 
   @override
   Widget build(BuildContext context) => Row(children: [
     _FrostedPill(children: [
       PillIconButton(icon: CupertinoIcons.checkmark_circle, tooltip: 'Checklist', onPressed: onChecklist),
-      PillIconButton(icon: CupertinoIcons.paperclip, tooltip: 'Attach', onPressed: onAttach),
+      AttachButton(onPick: onAttach, menu: attachMenu),
     ]),
     const Spacer(),
     AccentGlow(child: RoundIconButton(icon: CupertinoIcons.square_pencil, tooltip: 'New note', onPressed: onCompose,

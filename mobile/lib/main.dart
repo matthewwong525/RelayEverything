@@ -20,6 +20,7 @@ import 'sync/native.dart';
 import 'sync/photos.dart';
 import 'sync/wake.dart';
 import 'voice/model.dart';
+import 'voice/playback.dart';
 import 'voice/recorder.dart';
 import 'voice/transcriber.dart';
 
@@ -45,7 +46,7 @@ Future<void> main() async {
   final model = SpeechModel(folder: getApplicationSupportDirectory, excludeFromBackup: excludeFromBackup);
   final voice = VoiceParts(model: model, recorder: VoiceRecorder(microphone: PhoneMicrophone(), folder: getApplicationSupportDirectory,
     excludeFromBackup: excludeFromBackup),
-    transcriber: WhisperTranscriber(() async => (await model.file).path), player: PhonePlayer());
+    transcriber: WhisperTranscriber(() async => (await model.file).path), player: SoundPlayer());
   final relay = RelayController(store: openStore(), vault: KeyVault(), places: PhonePlaces(), health: PhoneHealth(), schedule: scheduleSync,
     voice: voice, native: Platform.isIOS ? PhoneBackground() : null, folder: getApplicationSupportDirectory, opener: openWithPhone,
     share: Platform.isIOS ? PhoneShareGroup() : null, calendar: PhoneCalendarSource(), photos: PhonePhotos(),

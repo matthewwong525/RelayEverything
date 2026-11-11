@@ -82,6 +82,30 @@ class EntryFile {
   bool get picture => type.startsWith('image/');
 }
 
+/// The recording that plays or is paused now: which one, how far it is, whether it plays, and its length when known.
+@immutable
+class Playback {
+  const Playback({required this.recording, required this.at, required this.playing, this.length});
+
+  /// The note's recording, as [Entry.recording] names it.
+  final String recording;
+  final Duration at;
+  final bool playing;
+  /// The recording's length as the player reads it, null until it knows. The browser gets no length with a note, so its
+  /// player uses this one.
+  final Duration? length;
+
+  @override
+  bool operator ==(Object other) => other is Playback && other.recording == recording && other.at == at &&
+    other.playing == playing && other.length == length;
+
+  @override
+  int get hashCode => Object.hash(recording, at, playing, length);
+}
+
+/// No recording plays: the [Relay.playback] of a relay that plays none.
+final ValueListenable<Playback?> noPlayback = ValueNotifier<Playback?>(null);
+
 enum SyncStatus { idle, syncing, synced, offline, refused }
 
 /// Where the app runs: the phone app, or the browser at the person's Relay Everything page. The browser shows no part
@@ -284,8 +308,19 @@ abstract class Relay extends ChangeNotifier {
   Future<void> cancelVoiceNote();
   /// *Try again* on a note whose words failed: writes the words of each such note again, from its kept recording.
   Future<void> writeWordsAgain();
-  /// Plays a voice note's recording: from this phone, or in the browser from the person's space.
+  /// Plays a voice note's recording: from this phone, or in the browser from the person's space. The recording that is
+  /// paused plays on from where it stopped; another one stops it.
   Future<void> play(String recording);
+  /// The recording that plays or is paused now, and how far it is; null when none. It changes many times a second while
+  /// a recording plays, so only the player listens to it, not the whole page.
+  ValueListenable<Playback?> get playback => noPlayback;
+  /// Pauses the recording that plays, where it is.
+  Future<void> pause() async {}
+  /// Moves the recording that plays or is paused to [at].
+  Future<void> seek(Duration at) async {}
+  /// The recording's loudness from 0 to 1, in [bars] parts, read from its file on this phone and kept by no one. Empty
+  /// when it can not be read, such as in the browser or for a file that is not a WAV.
+  Future<List<double>> waveOf(String recording, {int bars = 48}) async => const [];
 
   final _notices = StreamController<String>.broadcast();
   /// Short messages that come later than the act, such as *No speech heard*.

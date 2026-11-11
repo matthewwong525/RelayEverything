@@ -121,9 +121,13 @@ A preview has no person spaces, so a branch's new route or tool can't be tried t
 
 1. The spaces Worker: `npx wrangler dev -c wrangler.spaces.jsonc --env local --port 8799 --inspector-port 9341`. Each Worker needs its own inspector port: two on the same port stop with *Address already in use*.
 2. The app: `npm run dev`, signed in as the [local stand-in](cloudflare-access.md#local-development). An empty local D1 has no account for the stand-in, and the app refuses it with *no account*. Add it first: `npx wrangler d1 execute DB --local --env local --command "INSERT OR IGNORE INTO relay_people (id, email, created_at) VALUES ('local-dev', 'dev@example.com', 0)"`. Make a phone or API key with `POST /apps/relay/api/devices`, with the header `Origin: http://localhost:8787`: a change by cookie needs the page's own Origin.
-3. The connector: copy `wrangler.relay-mcp.jsonc` to a throwaway file in `app/`, with no `env`, `RELAY_MCP_ADDRESS` and `RELAY_SERVER_URL` on `localhost`, `SPACES` bound to `relay-everything-spaces-local`, the `-local` queue, and the D1 named `relay-everything-db-local`. Run `npx wrangler dev -c <that file> --port 8798`, then read `/v1/` with the API key. Delete the file after.
+3. The connector: copy `wrangler.relay-mcp.jsonc` to a throwaway file in `app/`, with no `env`, `RELAY_MCP_ADDRESS` and `RELAY_SERVER_URL` on `localhost`, `SPACES` and `WORKBENCHES` bound to `relay-everything-spaces-local`, the `-local` queue, and the D1 named `relay-everything-db-local`. Run `npx wrangler dev -c <that file> --port 8798`, then read `/v1/` with the API key. Delete the file after.
 
 Times go as milliseconds since 1970. A webhook can't get a message here: the sender refuses any address that is not public `https`. So read the space's `relay_outbox` rows (in `app/.wrangler/state/v3/do/`) and each webhook's `waiting` count instead. Turn each key off after.
+
+### A computer key's route
+
+Only `/relay:connect` makes an `agent` key, so a route that takes a computer key only, such as [the agents' database](../relay-agent-database.md), needs one made by hand. Add a test person to the database, local or staging (`--remote --env staging -c wrangler.relay.jsonc`): a `relay_people` row, a `relay_sessions` row, and a `relay_keys` row with `reaches = 'agent'`. Each row keeps its token's SHA-256 in hex. The key is `rek_` and 43 base64url characters; any other length is refused as *not one Relay Everything makes*. On staging, put the branch there first with a [staging-only deploy](../relay-spaces.md#the-workers-and-their-order), and send to `https://mcp-staging.relayeverything.com/v1/`. After, delete the person with `POST account-delete`, then delete its rows.
 
 ## Where the code is
 

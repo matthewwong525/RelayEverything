@@ -4,6 +4,8 @@ paths: ["mobile/**"]
 
 # Check a phone app change on an iPhone
 
+A plan that changes a phone screen draws real *Before* and *After* pictures with a screen test, not a `screen` sketch: [real pictures of a phone app screen](../../wiki/development/phone-pictures.md).
+
 When [`/verify`](../skills/verify/SKILL.md) checks a change that touches `mobile/`, it also runs [the device check](../../wiki/development/device-check.md) on the saved commit, once per walk, in the background:
 
 ```

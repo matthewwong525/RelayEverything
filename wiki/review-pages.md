@@ -61,6 +61,8 @@ A plan that adds or changes a screen makes a throwaway copy of the app, changes 
 4. Notes on the plan change the copy too: upload again, take new pictures, and rebuild the page.
 5. `prototype.mjs finish <change>` keeps the copy's changes as `.scratch/<change>-prototype.diff` and removes the copy. [`/apply`](../.agents/skills/apply/SKILL.md#build-in-a-helper) runs it when the copy is still there, and [its build](../.agents/skills/apply/references/build-helper.md) reads that diff first and builds the same screens properly, with real data and tests.
 
+**A phone app screen** gets its pictures from a screen test instead, because the preview serves only the web app: [real pictures of a phone app screen](development/phone-pictures.md).
+
 No step needs a go from the person, and git never takes the copy. Only when every way fails, keep the `screen` sketch and add a line `No real picture: <the step that failed>` to the bullet. The builder warns on a sketch with neither a picture nor that line.
 
 After the build, `preview-review.mjs --approved "<title>|<After picture>|<built picture>"` shows the approved picture and the built screen side by side, as *Approved* and *Built*.

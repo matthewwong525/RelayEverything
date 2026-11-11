@@ -31,6 +31,8 @@ A phone change writes a step for its main path when the simulator can show it, a
 
 **Check that a word is gone by its own label, not the whole screen.** Maestro ignores upper and lower case, so `assertNotVisible: '(.|\n)*On this phone(.|\n)*'` also fails on the empty list's hint *Notes stay on this phone…*. Match the whole label you mean instead, such as `assertVisible: 'Notes\nNo notes'` for the Notes title and its count: a whole-label match proves no other word is in that line. Before the first device check of a change that edits screen words, read each `assertVisible` and `assertNotVisible` in `flows/` for the old words: each wrong step costs a check of about 30 minutes.
 
+**Never use `waitForAnimationToEnd` on a screen with a blinking cursor.** The cursor never stops, so the step never ends: on 2026-11-11 a check of the note editor's text menu stopped at its time limit with no report. Wait for words with `extendedWaitUntil`, or take the picture at once.
+
 **Never use `hideKeyboard`.** The Flutter app's keyboard has no dismiss action that Maestro can use, so the step fails with *Couldn't hide the keyboard* and the flow ends *broken*. After `inputText`, tap the next button at once, such as `tapOn: "Save"` on the webhook form: the form keeps its buttons above the keyboard.
 
 **Tap an icon button by its label.** A button with no words on the screen, such as the round *New note* or the ⋯ button, has an accessibility label or a tooltip. Maestro matches it as it matches text: `tapOn: "New note"`, `tapOn: "More"`. A Maestro tap is short, so `tapOn: "New note"` opens the *New note* page and never records.

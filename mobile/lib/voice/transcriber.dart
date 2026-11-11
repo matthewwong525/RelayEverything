@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show protected;
+import 'package:flutter/foundation.dart' show protected, visibleForTesting;
 import 'package:whisper_cpp_flutter_plus/whisper_cpp_flutter_plus.dart';
 
 /// One recording's writing, so a time limit stops this recording and no other.
@@ -103,48 +103,122 @@ String cleanWords(Iterable<String> segments) {
   return kept.join(' ').replaceAll(_spaces, ' ').trim();
 }
 
-/// The iPhone simulator's Metal driver traps when whisper.cpp loads its model there, so the simulator runs it on the
-/// CPU; a real phone keeps the GPU. Only a simulator app runs from a CoreSimulator folder: no flag reaches every launch.
-WhisperConfig whisperConfig({String? executable}) =>
-  (executable ?? Platform.resolvedExecutable).contains('/CoreSimulator/')
-    ? const WhisperConfig(backend: WhisperBackend.cpu) : const WhisperConfig();
+/// An iPhone runs whisper.cpp on the CPU, on a phone and on the simulator. iOS refuses GPU (Metal) work from an app
+/// that is not on the screen, such as when a watch note starts it, and a refused run fails the note. The simulator's
+/// Metal driver also traps when whisper.cpp loads its model there. Other phones keep the default. A test gives [ios].
+WhisperConfig whisperConfig({bool? ios}) =>
+  (ios ?? Platform.isIOS) ? const WhisperConfig(backend: WhisperBackend.cpu) : const WhisperConfig();
 
-/// whisper.cpp through `whisper_cpp_flutter_plus`. The model loads at the first recording and stays loaded. The
-/// binding loads the model and writes the words in a background isolate, and the WAV file is read in one too, so the
-/// timeline never stops.
+/// True when a run that failed must let its engine go, so the next recording loads a new one: a native error can stay
+/// in the engine and fail each later run. A run the app [cancelled] at the time limit keeps it: the engine did no wrong.
+bool dropsEngine({required bool cancelled}) => !cancelled;
+
+final _engineCode = RegExp(r'whisper_full failed with code (-?\d+)');
+final _lineBreaks = RegExp(r'\s+');
+
+/// The reason a recording's words did not come, as the note's page shows it after *Why:*. It stays on the phone.
+String whyNoWords(Object error) {
+  if (error is TimeoutException) {
+    final limit = error.duration;
+    if (limit == null) return 'the phone took too long.';
+    final minutes = limit.inMinutes, seconds = limit.inSeconds;
+    final words = minutes >= 1
+      ? '$minutes minute${minutes == 1 ? '' : 's'}' : '$seconds second${seconds == 1 ? '' : 's'}';
+    return 'the phone took more than $words.';
+  }
+  final text = (error is WhisperException ? error.message : '$error').replaceAll(_lineBreaks, ' ').trim();
+  final code = _engineCode.firstMatch(text);
+  if (code != null) return 'the speech engine stopped (code ${code.group(1)}).';
+  return 'the speech engine stopped (${text.length > 80 ? text.substring(0, 80) : text}).';
+}
+
+/// One run of a [SpeechEngine]: the text of each segment, and what asks the engine to stop.
+typedef SpeechRun = ({Future<List<String>> segments, void Function() cancel});
+
+/// A loaded speech engine, as [WhisperTranscriber] uses it. The app's is whisper.cpp; a test's is a fake, because the
+/// package's engine and task are final classes.
+abstract interface class SpeechEngine {
+  /// Starts one run on 16 kHz mono [samples].
+  SpeechRun run(Float32List samples);
+
+  /// Frees the engine. It can throw while a run still holds it.
+  void dispose();
+}
+
+/// whisper.cpp's engine, with the app's settings: [whisperConfig], English, and no marks for sounds.
+final class _Whisper implements SpeechEngine {
+  _Whisper(this._engine);
+
+  static Future<SpeechEngine> load(String modelPath) async =>
+    _Whisper(await WhisperEngine.load(modelPath, config: whisperConfig()));
+
+  final WhisperEngine _engine;
+
+  @override
+  SpeechRun run(Float32List samples) {
+    final task = _engine.transcribe(samples, options: const TranscribeOptions(language: 'en', suppressNonSpeechTokens: true));
+    return (segments: task.result.then((result) => [for (final segment in result.segments) segment.text]), cancel: task.cancel);
+  }
+
+  @override
+  void dispose() => _engine.dispose();
+}
+
+/// whisper.cpp through `whisper_cpp_flutter_plus`. The model loads at the first recording and stays loaded, until a run
+/// fails: then the next recording loads it again ([dropsEngine]). The binding loads the model and writes the words in a
+/// background isolate, and the WAV file is read in one too, so the timeline never stops.
 class WhisperTranscriber extends Transcriber {
-  WhisperTranscriber(this.modelPath);
+  /// A test gives [loadEngine]; the app loads whisper.cpp.
+  WhisperTranscriber(this.modelPath, {@visibleForTesting Future<SpeechEngine> Function(String modelPath)? loadEngine})
+    : _load = loadEngine ?? _Whisper.load;
 
   /// Where the speech model is; [SpeechModel] keeps it there.
   final Future<String> Function() modelPath;
 
-  WhisperEngine? _engine;
+  final Future<SpeechEngine> Function(String modelPath) _load;
+  SpeechEngine? _engine;
 
   @override
   @protected
   Future<String> write(File wav, WordsJob job) async {
     final samples = await _readWav(wav.path);
     if (samples.isEmpty) return '';
-    final engine = _engine ??= await WhisperEngine.load(await modelPath(), config: whisperConfig());
+    final engine = _engine ??= await _load(await modelPath());
     // The time limit can pass while the WAV or the model loads: then the engine starts no job.
     if (job.cancelled) throw StateError('Cancelled at the time limit');
-    final task = engine.transcribe(samples, options: const TranscribeOptions(language: 'en', suppressNonSpeechTokens: true));
-    // The native run starts later, in a new isolate, and clears the cancel flag as it starts: a cancel before then is
-    // lost. So once cancelled, cancel again every 100 ms until the result comes. The package frees the native job in
-    // its own listener on the result, which runs before this one in the same turn, so no tick can touch a freed job.
-    var running = true;
-    Timer? again;
-    task.result.whenComplete(() {
-      running = false;
-      again?.cancel();
-    }).ignore();
-    job.onCancel(() {
-      if (!running) return;
-      task.cancel();
-      again = Timer.periodic(const Duration(milliseconds: 100), (_) => task.cancel());
-    });
-    final result = await task.result;
-    return cleanWords([for (final segment in result.segments) segment.text]);
+    try {
+      final run = engine.run(samples);
+      // The native run starts later, in a new isolate, and clears the cancel flag as it starts: a cancel before then is
+      // lost. So once cancelled, cancel again every 100 ms until the result comes. The package frees the native job in
+      // its own listener on the result, which runs before the segments complete and before any tick, so no tick can
+      // touch a freed job.
+      var running = true;
+      Timer? again;
+      run.segments.whenComplete(() {
+        running = false;
+        again?.cancel();
+      }).ignore();
+      job.onCancel(() {
+        if (!running) return;
+        run.cancel();
+        again = Timer.periodic(const Duration(milliseconds: 100), (_) => run.cancel());
+      });
+      return cleanWords(await run.segments);
+    } catch (_) {
+      if (dropsEngine(cancelled: job.cancelled)) _drop(engine);
+      rethrow;
+    }
+  }
+
+  // Lets go of an engine whose run failed. The package counts the job as ended before this code runs, so dispose does
+  // not refuse; if it still does, the field clears anyway, and the next recording loads a new engine.
+  void _drop(SpeechEngine engine) {
+    if (identical(_engine, engine)) _engine = null;
+    try {
+      engine.dispose();
+    } on Object {
+      // A job still holds it: its native memory stays until the app closes.
+    }
   }
 
   @override

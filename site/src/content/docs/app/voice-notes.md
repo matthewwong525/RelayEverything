@@ -38,7 +38,7 @@ To save, you can also leave the app: press the Digital Crown. If you lower your 
 
 The **Start a voice note** shortcut opens the app and records too: put it on the Action button of an Apple Watch Ultra.
 
-Under **Saved**, the watch shows **Sending to your iPhone**, then **On your iPhone** when the iPhone has the note. When your iPhone is near, the watch also starts the Relay Everything app on the iPhone, so the note gets there in a few seconds. You do not need to open the iPhone app. The note shows in **Notes**, also under the **Voice** filter, at once if the iPhone app is open, or the next time you open it, and the iPhone writes its words, as for a voice note made on the phone.
+Under **Saved**, the watch shows **Sending to your iPhone**, then **On your iPhone** when the iPhone has the note. When your iPhone is near, the watch also starts the Relay Everything app on the iPhone, so the note gets there in a few seconds. You do not need to open the iPhone app, and the iPhone can stay locked in your pocket: the app asks the iPhone for time to write the words and send the note. If the iPhone stops the app first, the note gets its words the next time the app runs. The note shows in **Notes**, also under the **Voice** filter, at once if the iPhone app is open, or the next time you open it, and the iPhone writes its words, as for a voice note made on the phone.
 
 When your iPhone is not near, the note waits on the watch. The watch shows how many notes wait, such as **1 note waits for your iPhone**. The watch deletes its copy only after the iPhone keeps the note, so a note is never kept twice. If the watch can not save a recording, it says **Not saved**.
 
@@ -48,9 +48,9 @@ The same rules apply: a recording shorter than 1 second keeps nothing, and a not
 
 ## When the words do not come
 
-If the phone can not write the words, or they take longer than 2 minutes (or the recording's length, if it is longer), the note shows **The words did not come** in your notes. Open it, and it says **The words did not come. Your recording is safe.** The app tells you once. The note keeps its recording, and its player still works.
+If the phone can not write the words, or they take longer than 2 minutes (or the recording's length, if it is longer), the note shows **The words did not come** in your notes. Open it, and it says **The words did not come. Your recording is safe.** A small line under it gives the reason, such as *Why: the speech engine stopped (code -6).* or *Why: the phone took more than 2 minutes.* The reason stays on the phone. The app tells you once. The note keeps its recording, and its player still works.
 
-Tap **Try again** on the open note to write the words again. The next time you open the app, it also tries again by itself.
+Tap **Try again** on the open note to write the words again. When you come back to the app, or open it again, it also tries again by itself. A note that failed does not stop the next note: the next note gets its words.
 
 ## Get the speech model
 

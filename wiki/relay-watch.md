@@ -1,6 +1,6 @@
 # How the Apple Watch app hands notes to the phone
 
-The Relay Everything watch app records a voice note and hands it to the paired iPhone, which keeps it and writes its words. This page gives the rules that are not clear from the code. Up: [the wiki](README.md).
+The Relay Everything watch app records a voice note and hands it to the paired iPhone, which keeps it and writes its words, often off screen. This page gives the rules that are not clear from the code. Up: [the wiki](README.md).
 
 ## The parts
 
@@ -26,6 +26,14 @@ Swift's `Int` is the size of a pointer. A Series 4 to 8, an SE, an SE 2, the fir
 ## The phone keeps every watch note
 
 A voice note held on the phone with no words is deleted, because it was a mistaken hold. A watch note with no words is kept as *No words heard*, with its recording, and is not sent. The person can't hear the recording on the watch, so a deleted watch note is a silent loss. The note keeps its `source` (`watch`) in the store, not in its body, because the body is what gets sent.
+
+## The phone writes the words off screen
+
+A watch note starts the iPhone app in the background, so the iPhone writes its words with the app off screen, often with the phone locked. Three rules keep that working:
+
+- **An iPhone refuses GPU (Metal) work from an app that is not on screen.** whisper.cpp on the GPU then fails the run at once. So on an iPhone the speech engine always runs on the processor: `whisperConfig` in [`transcriber.dart`](../mobile/lib/voice/transcriber.dart). One way for both cases has no switch to get wrong, and a note half written when the person locks the phone also finishes. The cost is about one or two seconds on a short note with the 57 MB base model.
+- **A speech engine that failed once must be made again.** After one failed Metal run, ggml keeps an error state and fails each later run until the engine is made again. So a failed run disposes the engine, and the next note loads a new one; a run the app cancelled at its time limit keeps it. Without this, one failure becomes every note until the app closes. A return to the app also writes failed notes again, and the note's page shows the reason on a *Why* line, because a TestFlight build keeps no log.
+- **The app asks iOS for time at the hand-off.** `RelayWatchReceiver` begins a background task (`relay.watch-note`) before it tells Dart, and ends it when Dart's `inboxChanged` answers, after the words are written and sent, or when iOS takes the time back, about 30 seconds. Each path ends the task once. A note iOS stops first gets its words the next time the app runs.
 
 ## Testing it
 

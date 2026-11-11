@@ -538,6 +538,11 @@ class NoteEditorState extends State<NoteEditor> {
           const LinearProgressIndicator(),
         ] else if (note != null && note.failed) ...[
           Text('The words did not come. Your recording is safe.', style: TextStyle(color: brand.muted)),
+          // The reason, small and muted: the person sees it only on a note that failed.
+          if (note.why != null) ...[
+            const SizedBox(height: 4),
+            Text('Why: ${note.why}', style: muted),
+          ],
           const SizedBox(height: 8),
           Align(alignment: Alignment.centerLeft,
             child: FilledButton(onPressed: relay.writeWordsAgain, child: const Text('Try again'))),

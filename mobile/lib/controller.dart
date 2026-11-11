@@ -154,8 +154,13 @@ class RelayController extends Relay {
   DateTime? _listening;
   Future<bool>? _starting;
   final _writing = <Future<void>>{};
-  // Voice notes whose words failed in this run of the app. The next open, or *Try again*, writes them again.
-  final _wordsFailed = <String>{};
+  // Voice notes whose words failed in this run of the app, each with its reason. The next open, a return to the app, or
+  // *Try again* writes them again.
+  final _wordsFailed = <String, String>{};
+  // Voice notes the app told about as failed, for the app's life: a note that fails again on each return tells once.
+  final _toldWordsFailed = <String>{};
+  // True once a note's failure showed the notice since the last try again: several notes that fail together tell once.
+  bool _toldSinceAgain = false;
   // Each new note's location point, while its fix is taken: [settled] waits on them.
   final _pointing = <Future<void>>{};
   // The fix an in-app voice note took as it started; it becomes a point only if the note is kept.
@@ -293,19 +298,21 @@ class RelayController extends Relay {
     }
   }
 
-  /// Each return to the app: keeps what the inbox and the share card hold, shows what another engine added to the store, such as
-  /// Android's share window, then sends what waits.
+  /// Each return to the app: keeps what the inbox and the share card hold, writes the words of each note whose words
+  /// failed again, shows what another engine added to the store, such as Android's share window, then sends what waits.
   Future<void> resume() async {
     await drainShortcutsInbox();
     await _drainShare(refresh: false);
+    await writeWordsAgain();
     await _refreshLocal();
     await pullNotes();
   }
 
   Entry _entryOfLocal(LocalNote note) => Entry(id: note.clientId, text: note.text, at: note.createdAt,
     sent: note.mine && note.sentAt != null, waiting: _settings.sending && note.sentAt == null && note.queued,
-    voice: note.kind == NoteKind.voice, writing: note.wordsPending && !_wordsFailed.contains(note.clientId),
-    failed: note.wordsPending && _wordsFailed.contains(note.clientId), noWords: note.noWords, recording: note.audioPath,
+    voice: note.kind == NoteKind.voice, writing: note.wordsPending && !_wordsFailed.containsKey(note.clientId),
+    failed: note.wordsPending && _wordsFailed.containsKey(note.clientId),
+    why: note.wordsPending ? _wordsFailed[note.clientId] : null, noWords: note.noWords, recording: note.audioPath,
     length: note.durationMs == null ? null : Duration(milliseconds: note.durationMs!),
     files: [for (final file in note.attachments) EntryFile(id: file.id, name: file.name, type: file.type, size: file.size,
       path: file.path.isEmpty ? '' : fullPath(file.path))],
@@ -1370,8 +1377,9 @@ class RelayController extends Relay {
   Future<void> writeWordsAgain() async {
     if (_wordsFailed.isEmpty) return;
     // Only the failed notes: a note whose words are being written now must not be written twice.
-    final failed = Set.of(_wordsFailed);
+    final failed = Set.of(_wordsFailed.keys);
     _wordsFailed.clear();
+    _toldSinceAgain = false;
     await _refreshLocal();
     _track(_writePending(only: failed));
   }
@@ -1381,13 +1389,17 @@ class RelayController extends Relay {
     job.whenComplete(() => _writing.remove(job));
   }
 
-  /// Ends when every voice note being written has its words or is gone. Tests wait on it.
-  @visibleForTesting
-  Future<void> wordsWritten() async {
+  /// Ends when every voice note being written has its words, and is sent while sending is on, or is gone or failed. A
+  /// watch note's hand-off waits on it, so iOS gives the app time to finish.
+  Future<void> wordsSettled() async {
     while (_writing.isNotEmpty) {
       await Future.wait(List.of(_writing));
     }
   }
+
+  /// [wordsSettled], by the name the tests use.
+  @visibleForTesting
+  Future<void> wordsWritten() => wordsSettled();
 
   /// Writes the words of each voice note still waiting, oldest first, or only of the notes in [only]. With [dropStray],
   /// deletes recordings no note keeps, such as one the app's close cut off while the person still held the button.
@@ -1437,10 +1449,12 @@ class RelayController extends Relay {
     } on Object catch (error, stack) {
       // Any error, an Error too, such as an ArgumentError from the speech engine: the note must never wait silently.
       debugPrint('Voice note ${note.clientId}: the words failed: $error\n$stack');
-      final first = _wordsFailed.isEmpty;
-      _wordsFailed.add(note.clientId);
+      // The notice shows once for each note: not again when the same note fails on a return to the app.
+      final tell = _toldWordsFailed.add(note.clientId) && !_toldSinceAgain;
+      if (tell) _toldSinceAgain = true;
+      _wordsFailed[note.clientId] = whyNoWords(error);
       await _refreshLocal();
-      if (first && !_disposed) notice(_wordsDidNotCome);
+      if (tell && !_disposed) notice(_wordsDidNotCome);
       return;
     }
     if (words.isEmpty) {

@@ -64,6 +64,8 @@ final class ShortcutsEngine {
   private var appReady = false
   private var pendingVoice = false
   private var pendingInbox = false
+  /// Each `inboxChanged` caller that waits for an app engine that is not ready yet.
+  private var inboxWaiters: [() -> Void] = []
   private var engine: FlutterEngine?
   private var engineChannel: FlutterMethodChannel?
   private var engineReady = false
@@ -88,7 +90,13 @@ final class ShortcutsEngine {
     appReady = true
     if pendingInbox {
       pendingInbox = false
-      appChannel?.invokeMethod("inboxChanged", arguments: nil)
+      let waiters = inboxWaiters
+      inboxWaiters = []
+      if let channel = appChannel {
+        channel.invokeMethod("inboxChanged", arguments: nil) { _ in waiters.forEach { $0() } }
+      } else {
+        waiters.forEach { $0() }
+      }
     }
     if pendingVoice {
       pendingVoice = false
@@ -106,12 +114,16 @@ final class ShortcutsEngine {
   }
 
   /// Tells the app's engine a note waits in the inbox, now or once it is ready. With no app engine, the next open keeps
-  /// it, so no background engine starts for it.
-  func inboxChanged() {
+  /// it, so no background engine starts for it. `done` runs once Dart answers, when the note's words are written and
+  /// sent, or at once with no app engine. With an engine that goes away, it may never run: its caller ends its own wait.
+  func inboxChanged(done: (() -> Void)? = nil) {
     if appReady, let channel = appChannel {
-      channel.invokeMethod("inboxChanged", arguments: nil)
+      channel.invokeMethod("inboxChanged", arguments: nil) { _ in done?() }
     } else if appChannel != nil {
       pendingInbox = true
+      if let done { inboxWaiters.append(done) }
+    } else {
+      done?()
     }
   }
 

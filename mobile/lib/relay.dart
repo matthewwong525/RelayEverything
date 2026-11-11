@@ -27,7 +27,7 @@ enum Emptied { kept, dropped, deleting }
 /// One row of the timeline: a note typed or said on this phone, or one from elsewhere that a pull brought.
 class Entry {
   const Entry({this.id = '', required this.text, required this.at, this.sent = false, this.waiting = false, this.voice = false,
-    this.writing = false, this.failed = false, this.noWords = false, this.recording, this.length, this.files = const [],
+    this.writing = false, this.failed = false, this.why, this.noWords = false, this.recording, this.length, this.files = const [],
     this.from});
 
   /// The phone's own id for the note: [Relay.editNote] takes it.
@@ -46,6 +46,9 @@ class Entry {
   final bool writing;
   /// True when its words failed or took too long: the recording is kept, and *Try again* writes them again.
   final bool failed;
+  /// Why its words failed, such as `the speech engine stopped (code -6).`; null when they did not fail. It stays on
+  /// the phone.
+  final String? why;
   /// True for a watch note in which the phone found no words: it keeps its recording to play, and is not sent.
   final bool noWords;
   /// The recording on this phone, to play: [Relay.play] takes it.

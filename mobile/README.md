@@ -31,7 +31,7 @@ Each permission is asked for only when you turn on its setting. Signed out, the 
 ## Get the app
 
 - **Android:** download the `.apk` file from [the newest release](https://github.com/matthewwong525/RelayEverything/releases/latest) and open it on your phone. Android asks once to allow installs from your browser. Test builds from `main` are on [Releases](https://github.com/matthewwong525/RelayEverything/releases), marked *Pre-release*.
-- **iPhone:** install the newest build from TestFlight, from the invite the owner sends you. After the first App Store release, the App Store has it too.
+- **iPhone:** install TestFlight from the App Store, then open the [public beta](https://testflight.apple.com/join/hSfKtWB7) on the iPhone. You need no invite. After the first App Store release, the App Store has it too.
 
 ## Connect it to a server
 
@@ -63,7 +63,7 @@ The Relay Everything page at a server's `/` is this app, built for the browser f
 Each push that changes `mobile/` runs [`.github/workflows/mobile-ci.yml`](../.github/workflows/mobile-ci.yml). Its first job, `plan`, runs [`scripts/app-release.mjs`](../scripts/app-release.mjs) `version` to get the run's version and build number: you never edit the version in `pubspec.yaml`. Then it analyzes and tests, and builds both apps:
 
 - **A branch or pull request builds and sends nothing.** Both builds start at the same time as the tests, so the run ends in about 6 minutes; a failed test still makes the run fail. The `.apk` is kept with the run, for 64-bit ARM phones only, and the iPhone app is signed and checked, so a broken build shows before it lands.
-- **A push to `main` sends a beta.** Its builds start only after the tests pass, and its `.apk` holds every kind of Android phone. TestFlight gets the iPhone build, and a *Pre-release* tagged `mobile-v<version>+<build>` gets the `.apk`. It is never the latest release. Only the newest change sends: when a newer commit on `main` changes `mobile/`, the older run sends nothing, as the newer run sends its own build. A beta's version is the newest release's with its last number one higher, such as `1.1.1` after `v1.1.0`, because Apple takes no new TestFlight build for a version that is already live. Before the first release, it is the version in `pubspec.yaml`.
+- **A push to `main` sends a beta.** Its builds start only after the tests pass, and its `.apk` holds every kind of Android phone. TestFlight gets the iPhone build, then the [public beta](#public-beta) gets it too, and a *Pre-release* tagged `mobile-v<version>+<build>` gets the `.apk`. It is never the latest release. Only the newest change sends: when a newer commit on `main` changes `mobile/`, the older run sends nothing, as the newer run sends its own build. A beta's version is the newest release's with its last number one higher, such as `1.1.1` after `v1.1.0`, because Apple takes no new TestFlight build for a version that is already live. Before the first release, it is the version in `pubspec.yaml`.
 - **A tag `v<major>.<minor>.<patch>` on `main` releases the app.** See [Release the app](#release-the-app).
 
 One counter, the run number, numbers every build on every branch and tag, so each build is higher than all before it.
@@ -94,6 +94,34 @@ The tag's run then:
 The job `release` can run again for the same tag: it does not send a version that is already in review or live, it edits the GitHub release, and it does not comment twice. To run a failed release again, use *Re-run failed jobs*, or re-run only the job `release`, never *Re-run all jobs*: that builds the iPhone app again with the same build number, and Apple refuses it.
 
 **Apple takes one version in review at a time.** A new tag while the last version is still in review stops at `submit` with Apple's state. Run the job `release` again when that review ends.
+
+### Public beta
+
+Anyone can install the iPhone app from the public link, https://testflight.apple.com/join/hSfKtWB7, with no invite. The link opens the external TestFlight group *Public beta*.
+
+After each beta from `main` goes to TestFlight, the job `public-beta` in [`mobile-ci.yml`](../.github/workflows/mobile-ci.yml) starts the workflow *Mobile public beta*, [`mobile-public-beta.yml`](../.github/workflows/mobile-public-beta.yml), with the build's version, build number and commit. That workflow waits for Apple in its own queue, one build at a time, so the next run of *Mobile CI* on `main` does not wait behind it. It runs fastlane's `public_beta` lane on Ubuntu, for at most 90 minutes. The lane:
+
+1. Waits until Apple has processed the build, and then processed it for TestFlight, for at most 75 minutes in total.
+2. Writes the change's title, without its `(#n)`, as the build's *What to Test*, in the app's primary language.
+3. Adds the build to *Public beta*.
+4. Sends the build to Apple's beta review. Testers with the link get it when Apple approves it. The first build of a new version can wait a day or more; later builds usually pass quickly.
+
+Apple takes one build in beta review at a time. If an earlier build still waits, Apple refuses the new one: the job notes it and passes, and the next change to `mobile/` sends again. A build that Apple can not take for beta review, such as one with missing export compliance, fails the job with Apple's state. You can run *Mobile public beta* again: it does not add or send a build twice. A branch, a release and a release check send nothing to the public beta.
+
+**Set by hand in App Store Connect.** The lane only adds builds. Change these in [App Store Connect](https://appstoreconnect.apple.com/), under the app's *TestFlight* tab:
+
+- **The group *Public beta*,** with its public link and feedback on. Keep its name: the lane finds it by `PUBLIC_BETA_GROUP` in the [`Fastfile`](ios/fastlane/Fastfile), and fails with no group of that name. If you make it again, turn on its public link and put the new link on the website and here.
+- **The beta description and the privacy link,** under *Test Information*. The privacy link is the website's [Privacy page](https://relayeverything.com/privacy/).
+- **The beta review contact,** under *Test Information*: the person Apple calls about a review. Their email and phone stay in App Store Connect, never in this repository.
+
+**Left before the first App Store version:**
+
+- The App Store page: description, keywords, support address and age rating.
+- Screenshots for iPhone, iPad and Apple Watch.
+- Apple's privacy answers.
+- The final privacy policy at its address.
+
+Then tag the release, as [Release the app](#release-the-app) says.
 
 ## Where the code is
 

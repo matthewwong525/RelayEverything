@@ -101,7 +101,7 @@ test('no page names a private address', () => {
 
 test('the home page links to both apps, the code and the docs', () => {
   const home = html.get(join(dist, 'index.html'));
-  for (const link of ['https://github.com/matthewwong525/RelayEverything/releases/latest', 'https://apps.apple.com/app/testflight/id899247664',
+  for (const link of ['https://github.com/matthewwong525/RelayEverything/releases/latest', 'https://testflight.apple.com/join/hSfKtWB7',
     'https://github.com/matthewwong525/RelayEverything/tree/main/mobile', 'start/what-you-need/']) assert.ok(home.includes(`href="${link}"`), link);
   assert.match(home, />\s*Get started\s*</);
 });

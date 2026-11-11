@@ -22,11 +22,13 @@ Test builds that are newer than the release are on [the releases page](https://g
 
 ## iPhone
 
-Until the first App Store release, the iPhone app comes through [TestFlight](https://apps.apple.com/app/testflight/id899247664), Apple's app for test builds. TestFlight gets each new build of the app.
+Until the first App Store release, the iPhone app comes through the public beta on [TestFlight](https://apps.apple.com/app/testflight/id899247664), Apple's app for test builds. You need no invite.
 
 1. Install TestFlight from the App Store.
-2. Open the invite link that the owner of the Relay Everything server sends you.
-3. Tap **Install**.
+2. On the iPhone, open https://testflight.apple.com/join/hSfKtWB7
+3. Tap **Accept**, then **Install**.
+
+TestFlight gets each new build of the app. Apple reviews a new version of the beta first, so a build can take a day to come.
 
 ## Next
 

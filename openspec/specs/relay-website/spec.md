@@ -20,11 +20,11 @@ The Relay website SHALL open for anyone at relayeverything.com and www.relayever
 
 ### Requirement: The home page introduces Relay
 
-The home page SHALL present Relay as a way to get a person's own data (notes, health, location) off their phone and devices into a place they choose, where their own AI can read it. It SHALL name no ring, and it SHALL link to the Android app, the iPhone TestFlight invite, the app's public code, and the docs.
+The home page SHALL present Relay as a way to get a person's own data (notes, health, location) off their phone and devices into a place they choose, where their own AI can read it. It SHALL name no ring, and it SHALL link to the Android app, the iPhone app's public TestFlight beta, the app's public code, and the docs.
 
 #### Scenario: A reader wants the app
 - **WHEN** a reader opens the home page
-- **THEN** they find a link to the Android app, one to TestFlight, and one to the docs
+- **THEN** they find a link to the Android app, one to the public TestFlight beta, and one to the docs
 
 #### Scenario: A reader learns what Relay is
 - **WHEN** a reader opens the home page
@@ -109,3 +109,11 @@ No text a person reads SHALL name the Relay Everything ring: the website, the ph
 #### Scenario: An older ring note is read
 - **WHEN** a webhook or the API reads a note the ring sent
 - **THEN** it gets the note's words, place and recording, with `source` `ring`, as before
+
+### Requirement: The iPhone install steps open the public beta
+
+Until the first App Store release, the install page SHALL tell a reader to install TestFlight and open the public TestFlight beta link, with no invite from a server's owner.
+
+#### Scenario: A stranger installs the iPhone app
+- **WHEN** a reader with no invite follows the install page's iPhone steps
+- **THEN** they open the public link and can install the app through TestFlight

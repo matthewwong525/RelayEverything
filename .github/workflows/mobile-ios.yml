@@ -23,10 +23,16 @@ on:
         description: The build number, the same for every app of one run.
         required: true
         type: string
+    outputs:
+      sent:
+        description: "'true' when this run sent its build to TestFlight, else 'false'."
+        value: ${{ jobs.testflight.outputs.sent }}
 
 jobs:
   testflight:
     runs-on: macos-latest
+    outputs:
+      sent: ${{ steps.testflight.outcome == 'success' }}
     defaults:
       run:
         working-directory: mobile
@@ -97,6 +103,7 @@ jobs:
         working-directory: mobile/ios
         run: bundle exec fastlane build
       - name: TestFlight
+        id: testflight
         if: steps.key.outputs.ready == 'true' && inputs.upload && steps.newest.outputs.send != 'false'
         working-directory: mobile/ios
         run: bundle exec fastlane beta

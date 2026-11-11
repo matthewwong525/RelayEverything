@@ -203,3 +203,32 @@ test("a branch's builds start with the tests, and main's and a release's wait fo
   }
   assert.ok(jobs.release.needs.includes('android') && jobs.release.needs.includes('ios'));
 });
+
+test('only a beta from main that went to TestFlight goes to the public beta', () => {
+  const job = readJobs('mobile-ci.yml')['public-beta'];
+  assert.deepEqual(job.needs, ['plan', 'ios']);
+  assert.match(job.if, /needs\.plan\.outputs\.mode == 'beta' && needs\.ios\.outputs\.sent == 'true'/);
+  assert.doesNotMatch(job.if, /\|\||release|!=/, 'a release or a release check never sends to the public beta');
+  const ios = readFileSync(new URL('../.github/workflows/mobile-ios.yml', import.meta.url), 'utf8');
+  assert.match(ios, /^ {8}value: \$\{\{ jobs\.testflight\.outputs\.sent \}\}$/m);
+  assert.match(ios, /^ {6}sent: \$\{\{ steps\.testflight\.outcome == 'success' \}\}$/m);
+  assert.match(ios, /- name: TestFlight\n {8}id: testflight\n/);
+  const fastfile = readFileSync(new URL('../mobile/ios/fastlane/Fastfile', import.meta.url), 'utf8');
+  assert.match(fastfile, /^PUBLIC_BETA_GROUP = "Public beta"$/m);
+  assert.match(fastfile, /^ {2}lane :public_beta do \|options\|$/m);
+});
+
+test("main's run only starts the public beta, which waits for Apple in its own group", () => {
+  const ci = readFileSync(new URL('../.github/workflows/mobile-ci.yml', import.meta.url), 'utf8');
+  const job = ci.split(/^ {2}public-beta:\n/m)[1].split(/^ {2}[a-z][\w-]*:\n/m)[0];
+  assert.match(job, /^ {6}actions: write$/m);
+  assert.match(job, /gh workflow run mobile-public-beta\.yml --ref main -f version="\$VERSION" -f build="\$BUILD" -f sha="\$GITHUB_SHA"/);
+  assert.doesNotMatch(job, /fastlane|timeout-minutes/, 'the wait for Apple is not in main\'s run');
+  const beta = readFileSync(new URL('../.github/workflows/mobile-public-beta.yml', import.meta.url), 'utf8');
+  assert.match(beta, /^on:\n {2}(#.*\n {2})?workflow_dispatch:\n/m);
+  assert.doesNotMatch(beta, /^ {2}(push|pull_request|workflow_call):/m);
+  assert.match(beta, /^concurrency:\n {2}group: mobile-public-beta\n {2}cancel-in-progress: false$/m);
+  assert.match(beta, /^ {4}timeout-minutes: 90$/m);
+  assert.match(beta, /^ {10}ref: \$\{\{ inputs\.sha \}\}$/m);
+  assert.match(beta, /bundle exec fastlane public_beta version:"\$VERSION" build:"\$BUILD" notes:/);
+});

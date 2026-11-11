@@ -1,5 +1,5 @@
 # Signs the iPhone build with the one saved certificate (scripts/ios-signing-cert.mjs), and never makes one, as Apple's
-# account holds only a few. Main's builds go to TestFlight, and a release to App Store review.
+# account holds only a few. Main's builds go to TestFlight and the public beta, and a release to App Store review.
 require "base64"
 require "shellwords"
 require "tmpdir"
@@ -42,8 +42,16 @@ SENT_STATES = %w[
   READY_FOR_SALE
 ].freeze
 
-# The build's processing at Apple can take over 30 minutes; mobile-ci.yml gives the release job 90.
+# The build's processing at Apple can take over 30 minutes. mobile-ci.yml gives the release job 90 minutes, and
+# mobile-public-beta.yml gives its job 90, so the whole wait and the setup fit.
 PROCESSING_WAIT = 75 * 60
+
+# The external TestFlight group with the public link. It, its beta description and its reviewer contact are set by hand
+# in App Store Connect (mobile/README.md#public-beta); the public_beta lane only adds builds.
+PUBLIC_BETA_GROUP = "Public beta"
+
+# Apple's own What to Test limit.
+WHAT_TO_TEST_LIMIT = 4000
 
 platform :ios do
   # The App Store Connect key from the secrets; it also signs Spaceship's own calls.
@@ -125,10 +133,7 @@ platform :ios do
     notes = File.read(options.fetch(:notes)).strip
     check = options[:check].to_s == "true"
     api_key = connect_key
-
-    app_identifier = CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier)
-    app = Spaceship::ConnectAPI::App.find(app_identifier)
-    UI.user_error!("App Store Connect has no app #{app_identifier}.") if app.nil?
+    app = connect_app
 
     versions = app.get_app_store_versions(filter: { platform: "IOS" })
     same = versions.find { |found| found.version_string == version }
@@ -162,7 +167,7 @@ platform :ios do
     Dir.mktmpdir("metadata") do |metadata|
       deliver(
         api_key: api_key,
-        app_identifier: app_identifier,
+        app_identifier: app.bundle_id,
         platform: "ios",
         app_version: version,
         build_number: build,
@@ -178,11 +183,90 @@ platform :ios do
       )
     end
   end
+
+  # fastlane public_beta version:1.1.1 build:271 notes:what-to-test.txt
+  desc "Add a TestFlight build to the Public beta group with its What to Test text, and send it to beta review"
+  lane :public_beta do |options|
+    version = options.fetch(:version).to_s
+    build = options.fetch(:build).to_s
+    notes = File.read(options.fetch(:notes)).strip[0, WHAT_TO_TEST_LIMIT]
+    connect_key
+    app = connect_app
+
+    group = app.get_beta_groups(filter: { name: PUBLIC_BETA_GROUP }).find { |found| found.name == PUBLIC_BETA_GROUP }
+    if group.nil?
+      UI.user_error!("App Store Connect has no TestFlight group \"#{PUBLIC_BETA_GROUP}\". " \
+                     "Make it as mobile/README.md#public-beta says, then run this job again.")
+    end
+
+    # One deadline for both waits: Apple's processing, then the build's beta processing.
+    deadline = Time.now + PROCESSING_WAIT
+    found = wait_for_processing(app, version, build, deadline)
+    write_what_to_test(found, app.primary_locale, notes)
+    if group.fetch_builds.any? { |member| member.id == found.id }
+      UI.message("Build #{build} of #{version} is already in #{PUBLIC_BETA_GROUP}.")
+    else
+      found.add_beta_groups(beta_groups: [group])
+      UI.success("Build #{build} of #{version} is in #{PUBLIC_BETA_GROUP}.")
+    end
+    submit_beta_review(wait_for_beta_processing(found, deadline))
+  end
+end
+
+# The app in App Store Connect, by the Appfile's bundle id.
+def connect_app
+  app_identifier = CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier)
+  app = Spaceship::ConnectAPI::App.find(app_identifier)
+  UI.user_error!("App Store Connect has no app #{app_identifier}.") if app.nil?
+  app
+end
+
+# Writes the build's What to Test for one locale, or changes it when the build already has that locale.
+def write_what_to_test(build, locale, notes)
+  attributes = { whatsNew: notes }
+  existing = build.get_beta_build_localizations.find { |localization| localization.locale == locale }
+  if existing
+    Spaceship::ConnectAPI.patch_beta_build_localizations(localization_id: existing.id, attributes: attributes)
+  else
+    Spaceship::ConnectAPI.post_beta_build_localizations(build_id: build.id, attributes: attributes.merge(locale: locale))
+  end
+end
+
+# Sends a build to beta review once; a build in any other unsent state fails with that state. Apple takes one build in
+# beta review at a time, so a refusal for that is a notice: the next build sends again.
+def submit_beta_review(build)
+  label = "Build #{build.version} of #{build.app_version}"
+  external = Spaceship::ConnectAPI::BuildBetaDetail::ExternalState
+  # States in which the build was already sent to beta review: a rerun sends it no second time.
+  sent = [
+    external::WAITING_FOR_BETA_REVIEW, external::IN_BETA_REVIEW, external::BETA_APPROVED, external::BETA_REJECTED,
+    external::IN_BETA_TESTING, external::READY_FOR_BETA_TESTING
+  ]
+  state = build.build_beta_detail&.external_build_state
+  if sent.include?(state)
+    UI.message("#{label} is #{state}, so it is not sent to beta review again.")
+    return
+  end
+  unless state == external::READY_FOR_BETA_SUBMISSION
+    UI.user_error!("#{label} is #{state || 'in no beta state'} in App Store Connect, so it can not go to beta review.")
+  end
+  begin
+    build.post_beta_app_review_submission
+  rescue StandardError => e
+    raise unless another_build_in_review?(e.message)
+    UI.important("#{label} is in #{PUBLIC_BETA_GROUP}, but Apple took no beta review: #{e.message}")
+    return
+  end
+  UI.success("#{label} is sent to beta review.")
+end
+
+# Apple's refusal when an earlier build still waits for beta review.
+def another_build_in_review?(message)
+  message.match?(/another build|already (in|waiting for) (beta )?review|one build .*in review/i)
 end
 
 # Waits until Apple has processed the build, as App Store review takes only a processed build.
-def wait_for_processing(app, version, build)
-  deadline = Time.now + PROCESSING_WAIT
+def wait_for_processing(app, version, build, deadline = Time.now + PROCESSING_WAIT)
   loop do
     found = Spaceship::ConnectAPI::Build.all(app_id: app.id, version: version, build_number: build).first
     state = found&.processing_state
@@ -191,9 +275,26 @@ def wait_for_processing(app, version, build)
       UI.user_error!("Build #{build} of #{version} is #{state} in App Store Connect.")
     end
     if Time.now > deadline
-      UI.user_error!("Build #{build} of #{version} was not processed in time. Run the release job again.")
+      UI.user_error!("Build #{build} of #{version} was not processed in time. Run the job again.")
     end
     UI.message("Build #{build} of #{version} is #{state || 'not in App Store Connect yet'}; checking again in a minute.")
+    sleep(60)
+  end
+end
+
+# Waits until Apple has also processed the build for TestFlight: its beta detail can still be PROCESSING after the
+# build is VALID, and beta review takes only a processed build. Returns the build read again, with its beta detail.
+def wait_for_beta_processing(build, deadline)
+  label = "Build #{build.version} of #{build.app_version}"
+  loop do
+    found = Spaceship::ConnectAPI::Build.get(build_id: build.id)
+    detail = found.build_beta_detail
+    return found if detail&.processed?
+    if Time.now > deadline
+      UI.user_error!("#{label} was not processed for TestFlight in time. Run the job again.")
+    end
+    UI.message("#{label} is #{detail&.external_build_state || 'with no beta state yet'} for TestFlight; " \
+               "checking again in a minute.")
     sleep(60)
   end
 end

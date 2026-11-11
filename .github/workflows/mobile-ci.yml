@@ -171,6 +171,24 @@ jobs:
       build: ${{ needs.plan.outputs.build }}
     secrets: inherit
 
+  # Main's build that went to TestFlight goes to the public beta; a release never does. This job only starts
+  # mobile-public-beta.yml, which waits for Apple in its own group, so main's next run does not wait behind it.
+  public-beta:
+    needs: [plan, ios]
+    if: ${{ needs.plan.outputs.mode == 'beta' && needs.ios.outputs.sent == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Start the public beta
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          BUILD: ${{ needs.plan.outputs.build }}
+        run: |
+          gh workflow run mobile-public-beta.yml --ref main -f version="$VERSION" -f build="$BUILD" -f sha="$GITHUB_SHA"
+
   # The fixed iPhone tour on a simulator, each step required, with no Claude.
   tour:
     needs: plan

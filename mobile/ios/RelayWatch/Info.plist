@@ -32,7 +32,7 @@
 		</dict>
 	</array>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Relay Everything records a voice note when you tap Talk. Your iPhone writes its words, and the recording goes only to your iPhone.</string>
+	<string>Relay Everything records a voice note when you open it. Your iPhone writes its words, and the recording goes only to your iPhone.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>InterVariable.ttf</string>

@@ -28,11 +28,13 @@ enum ShortcutsInbox {
   }
 
   /// A note as Dart's `add` and `drainInbox` read it, made at [createdAt] milliseconds. A [durationMs] makes it a voice
-  /// note from `<id>/voice.wav`.
-  static func request(id: String, text: String, createdAt: Int, files: [[String: Any]], durationMs: Int?)
-    -> [String: Any]
+  /// note from `<id>/voice.wav`. A [from] of `watch` marks a note the Apple Watch handed over: the app never deletes it
+  /// for having no words.
+  static func request(id: String, text: String, createdAt: Int, files: [[String: Any]], durationMs: Int?,
+    from: String? = nil) -> [String: Any]
   {
     var request: [String: Any] = ["id": id, "text": text, "createdAt": createdAt, "files": files]
+    if let from { request["from"] = from }
     if let durationMs {
       request["recording"] = ["path": "shortcuts-inbox/\(id)/voice.wav", "durationMs": durationMs] as [String: Any]
     }
@@ -64,7 +66,8 @@ enum ShortcutsInbox {
     var values = URLResourceValues()
     values.isExcludedFromBackup = true
     try? target.setResourceValues(values)
-    try leave(request(id: id, text: "", createdAt: createdAt, files: [], durationMs: durationMs), id: id, in: inbox)
+    try leave(request(id: id, text: "", createdAt: createdAt, files: [], durationMs: durationMs, from: "watch"), id: id,
+      in: inbox)
     return id
   }
 

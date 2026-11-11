@@ -3069,6 +3069,19 @@ void main() {
       expect(find.text('The words did not come. Tap Try again on the note.'), findsOneWidget);
     });
 
+    testWidgets('a watch note with no words shows as Voice note with No words heard; its page keeps Play, with no Try again',
+      (tester) async {
+      relay.entries = [Entry(text: '', at: now, voice: true, noWords: true, recording: 'voice/w.wav',
+        length: const Duration(seconds: 6))];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Voice notes');
+      expect([find.text('Voice note'), find.text('No words heard · 0:06')], [findsOneWidget, findsOneWidget]);
+      expect([find.text('The words did not come'), find.text('Try again')], [findsNothing, findsNothing]);
+      await tester.tap(find.text('Voice note'));
+      await tester.pumpAndSettle();
+      expect([find.text('Play'), find.text('Try again')], [findsOneWidget, findsNothing]);
+    });
+
     testWidgets('with no model, a hold asks first, and Not now gets nothing', (tester) async {
       relay.speechModel = ModelState.missing;
       await tester.pumpWidget(RelayApp(relay: relay));

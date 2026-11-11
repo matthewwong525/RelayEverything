@@ -15,6 +15,7 @@ enum WatchBrand {
   static let body = Font.custom("InterVariable", size: 16, relativeTo: .body)
   static let title = Font.custom("InterVariable-SemiBold", size: 18, relativeTo: .headline)
   static let small = Font.custom("InterVariable", size: 13, relativeTo: .footnote)
+  static let smallest = Font.custom("InterVariable", size: 12, relativeTo: .caption2)
 
   private static func rgb(_ hex: UInt32) -> Color {
     Color(red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)

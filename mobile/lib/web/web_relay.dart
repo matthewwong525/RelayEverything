@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:just_audio/just_audio.dart';
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../data/client_id.dart';
 import '../data/files.dart';
 import '../relay.dart';
+import '../voice/playback.dart';
 import 'page_close.dart';
 import 'space.dart';
 
@@ -17,18 +18,6 @@ Future<bool> openInTab(Uri address) => launchUrl(address, webOnlyWindowName: '_b
 
 /// Sends a change as the page closes, with no answer to wait for; a test passes its own.
 typedef LastSend = void Function(String method, Uri address, [String? json]);
-
-/// Plays a recording from its address; a test passes its own.
-typedef UrlPlayer = Future<void> Function(Uri address);
-
-AudioPlayer? _player;
-
-Future<void> playFromUrl(Uri address) async {
-  final player = _player ??= AudioPlayer();
-  await player.stop();
-  await player.setUrl(address.toString());
-  unawaited(player.play());
-}
 
 /// Where the browser's sign-in stands: [checking] until `GET account` answers.
 enum WebSignIn { checking, signedIn, signedOut }
@@ -52,13 +41,14 @@ class _Note {
 /// The person's notes in the browser, read and changed through their Relay Everything page's routes with the sign-in
 /// cookie. It keeps them only in memory: a reload reads them again, and nothing stays in the browser.
 class WebRelay extends Relay {
-  WebRelay({required this.client, TabOpener? opener, UrlPlayer? player, DateTime Function()? clock, LastSend? lastSend})
-    : _opener = opener ?? openInTab, _player = player ?? playFromUrl, _clock = clock ?? DateTime.now,
+  /// [player] plays a recording from its address; a test passes its own.
+  WebRelay({required this.client, TabOpener? opener, SoundPlayer? player, DateTime Function()? clock, LastSend? lastSend})
+    : _opener = opener ?? openInTab, _player = player ?? SoundPlayer(), _clock = clock ?? DateTime.now,
       _lastSend = lastSend ?? sendAsPageCloses;
 
   final SpaceClient client;
   final TabOpener _opener;
-  final UrlPlayer _player;
+  final SoundPlayer _player;
   final DateTime Function() _clock;
   final LastSend _lastSend;
 
@@ -567,11 +557,21 @@ class WebRelay extends Relay {
   @override
   Future<void> play(String recording) async {
     try {
-      await _player(Uri.parse(recording));
+      await _player.play(recording, Uri.parse(recording));
     } on Exception {
       notice('The recording did not play. Try again.');
     }
   }
+
+  /// The browser streams the recording and keeps no copy, so it reads no waves: [waveOf] stays empty.
+  @override
+  ValueListenable<Playback?> get playback => _player;
+
+  @override
+  Future<void> pause() => _player.pause();
+
+  @override
+  Future<void> seek(Duration at) => _player.seek(at);
 
   /// *Sign out*: the deletes under *Undo* and the changes that wait go first. Then the browser's sign-in ends, even when
   /// the server did not answer, and the notes go from memory.
@@ -655,6 +655,7 @@ class WebRelay extends Relay {
     for (final timer in _deletes.values) {
       timer.cancel();
     }
+    _player.dispose();
     super.dispose();
   }
 }

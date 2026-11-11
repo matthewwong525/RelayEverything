@@ -30,9 +30,8 @@ appId: com.matthewwong525.relayApp
     timeout: 20000
 # Home lists the folders; a row's label joins its name and its count, so match its start.
 - tapOn: 'Notes(.|\n)*'
-# Flutter joins a row's lines into one label, so match a word inside it, or its start.
+# Flutter joins a row's lines into one label, so match its start. A row has no tag.
 - extendedWaitUntil:
-    visible: '(.|\n)*Typed(.|\n)*'
+    visible: 'Shortcut check note(.|\n)*'
     timeout: 30000
-- assertVisible: 'Shortcut check note(.|\n)*'
 - takeScreenshot: shortcut-note

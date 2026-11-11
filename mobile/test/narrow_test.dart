@@ -37,7 +37,7 @@ void main() {
       ..settings = const Settings(sending: true);
     await tester.pumpWidget(RelayApp(relay: relay));
     await tester.pumpAndSettle();
-    for (final title in ['Home', 'Voice notes', 'On this phone', 'Calendar']) {
+    for (final title in ['Home', 'Notes', 'On this phone', 'Calendar']) {
       expectOneLine(tester, title);
     }
     await openSettings(tester);
@@ -46,8 +46,10 @@ void main() {
     }
     await tester.pageBack();
     await tester.pumpAndSettle();
-    await openFolder(tester, 'Voice notes');
-    expectOneLine(tester, 'No notes ·');
+    await openFolder(tester, 'Notes');
+    for (final title in ['No notes', 'All 0', 'Voice 0', 'Photos and files 0']) {
+      expectOneLine(tester, title);
+    }
     await tester.pageBack();
     await tester.pumpAndSettle();
     await openSettings(tester);

@@ -67,7 +67,7 @@ When a person signs out of the phone app or forgets its server, the phone SHALL 
 
 ### Requirement: Notes come before the phone's other data
 
-When the app opens, comes back to the front, when the person pulls down a list, or taps **Sync now**, the phone app SHALL send this phone's waiting notes, note changes, note deletes and note files, and then get the notes changed elsewhere, before it reads or sends health, location points, stays and trips, calendar events or photos. A failed or slow health, place, calendar or photo upload SHALL NOT stop or delay the notes. The sync state on Home SHALL report only the notes: *Syncing* SHALL end when the notes are sent and got, also while the other data still sends. A note kept, or a pull asked for, while the other data sends SHALL stop that work at its next upload, and the phone SHALL then send the notes and get new notes before it goes on. The background round SHALL also send the notes and get new notes before the other data.
+When the app opens, comes back to the front, or when the person pulls down Home or the notes list, the phone app SHALL send this phone's waiting notes, note changes, note deletes and note files, and then get the notes changed elsewhere, before it reads or sends health, location points, stays and trips, calendar events or photos. A failed or slow health, place, calendar or photo upload SHALL NOT stop or delay the notes. The sync state on Home SHALL report only the notes: its waiting count SHALL go when the notes are sent and got, also while the other data still sends. A note kept, or a pull asked for, while the other data sends SHALL stop that work at its next upload, and the phone SHALL then send the notes and get new notes before it goes on. The background round SHALL also send the notes and get new notes before the other data.
 
 #### Scenario: New notes come in before health data sends
 
@@ -82,7 +82,7 @@ When the app opens, comes back to the front, when the person pulls down a list, 
 #### Scenario: Syncing ends with the notes
 
 - **WHEN** the notes are sent and got, and the phone still sends location points
-- **THEN** Home shows *Synced*, not *Syncing*, and pull to refresh ends
+- **THEN** Home shows no sync state, and pull to refresh ends
 
 #### Scenario: A new note goes before the rest of the round
 
@@ -93,3 +93,17 @@ When the app opens, comes back to the front, when the person pulls down a list, 
 
 - **WHEN** a background wake runs with a note and health readings waiting for Relay Everything
 - **THEN** the note goes before the health readings
+
+### Requirement: Waiting notes send when the connection comes back
+
+While the app is open, sending is on and notes wait, the phone app SHALL send them as soon as the phone's connection comes back, with no tap. The phone app SHALL have no button to sync or to send a note; a pull down on Home or the notes list SHALL still sync.
+
+#### Scenario: Back online
+
+- **WHEN** the person keeps a note with no connection, keeps the app open, and the connection comes back
+- **THEN** the note sends with no tap, and *1 waiting* goes from the list
+
+#### Scenario: Sending off
+
+- **WHEN** sending is off and the connection comes back
+- **THEN** no request leaves the phone

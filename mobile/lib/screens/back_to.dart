@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
-/// *‹ Home* or *‹ Voice notes* at the top left of a page, as Apple Notes has it: it names the page it goes back to. Its
+/// *‹ Home* or *‹ Notes* at the top left of a page, as Apple Notes has it: it names the page it goes back to. Its
 /// tooltip is *Back*, the name screen readers and tests know.
 class BackTo extends StatelessWidget {
   const BackTo(this.label, {super.key, this.onPressed});

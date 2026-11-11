@@ -179,25 +179,33 @@ String newPhotoId([Random? random]) {
 /// The phone's network now: Wi-Fi (or a cable), mobile data, or none.
 enum Link { none, wifi, mobile }
 
-/// Tells Wi-Fi from mobile data: the phone's own, or a test's.
+/// Tells Wi-Fi from mobile data, and when it changes: the phone's own, or a test's.
 abstract class Network {
   Future<Link> link();
+
+  /// Each change of the phone's network while the app is open.
+  Stream<Link> changes();
 }
 
 class PhoneNetwork implements Network {
   @override
   Future<Link> link() async {
-    final List<ConnectivityResult> results;
     try {
-      results = await Connectivity().checkConnectivity();
+      return linkOf(await Connectivity().checkConnectivity());
     } on Exception {
       return Link.none;
     }
-    // A VPN on Wi-Fi reports both, so Wi-Fi wins over the rest.
-    if (results.contains(ConnectivityResult.wifi) || results.contains(ConnectivityResult.ethernet)) return Link.wifi;
-    if (results.isEmpty || results.every((result) => result == ConnectivityResult.none)) return Link.none;
-    return Link.mobile;
   }
+
+  @override
+  Stream<Link> changes() => Connectivity().onConnectivityChanged.map(linkOf);
+}
+
+/// The [Link] that [results] name. A VPN on Wi-Fi reports both, so Wi-Fi wins over the rest.
+Link linkOf(List<ConnectivityResult> results) {
+  if (results.contains(ConnectivityResult.wifi) || results.contains(ConnectivityResult.ethernet)) return Link.wifi;
+  if (results.isEmpty || results.every((result) => result == ConnectivityResult.none)) return Link.none;
+  return Link.mobile;
 }
 
 /// True when photos may go on [link]: on Wi-Fi, or on any network while the person allows mobile data.

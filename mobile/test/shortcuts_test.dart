@@ -4,16 +4,20 @@ import 'dart:io';
 
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:relay_app/app.dart';
 import 'package:relay_app/controller.dart';
 import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/store.dart';
+import 'package:relay_app/screens/note_blocks.dart' show VoicePlayer;
 import 'package:relay_app/shortcuts/bridge.dart';
 import 'package:relay_app/shortcuts/inbox.dart';
 import 'package:relay_app/voice/recorder.dart';
 
 import 'fakes.dart';
+import 'screens_test.dart' show openFolder;
 
 final now = DateTime.fromMillisecondsSinceEpoch(1793797200000);
 
@@ -236,6 +240,28 @@ void main() {
       expect([transcriber.heard, recordings()], [['$id.wav'], ['$id.wav']]);
       expect(File('${folder.path}/$inboxFolder/$id/voice.wav').existsSync(), isFalse);
       expect(server.requests, isEmpty);
+    });
+
+    testWidgets('its note page shows the player under the date, not a Play item', (tester) async {
+      final relay = app();
+      final id = 'f' * 32;
+      await tester.runAsync(() async {
+        await relay.load();
+        await ShortcutsBridge(relay, wait: Duration.zero).handle(MethodCall('add', {
+          'id': id, 'text': '', 'recording': {'path': recorded(id), 'durationMs': 42000}}));
+        await relay.wordsWritten();
+      });
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Call the plumber about the kitchen tap'));
+      await tester.pumpAndSettle();
+      expect(find.byType(VoicePlayer), findsOneWidget);
+      expect([find.byTooltip('Play'), find.descendant(of: find.byType(VoicePlayer), matching: find.text('0:42'))],
+        everyElement(findsOneWidget));
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      expect(find.text('Play'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
     });
 
     test('with the app open, its words are written at once, and a second run of the same id keeps one note', () async {

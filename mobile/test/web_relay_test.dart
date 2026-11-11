@@ -7,6 +7,8 @@ import 'package:relay_app/relay.dart';
 import 'package:relay_app/web/space.dart';
 import 'package:relay_app/web/web_relay.dart';
 
+import 'fakes.dart' show FakePlayer;
+
 final base = Uri.parse('https://relay.example.com/apps/relay/');
 
 Map<String, dynamic> note(String id, {String? clientId, bool mine = false, String text = 'Words', int at = 1000,
@@ -38,7 +40,7 @@ void main() {
   late Server server;
   late WebRelay relay;
   final opened = <Uri>[];
-  final played = <Uri>[];
+  late FakePlayer player;
   final lastSends = <(String, Uri, String?)>[];
 
   WebRelay make() {
@@ -48,14 +50,13 @@ void main() {
         opened.add(address);
         return true;
       },
-      player: (address) async => played.add(address), clock: () => DateTime.fromMillisecondsSinceEpoch(5000),
+      player: player = FakePlayer(), clock: () => DateTime.fromMillisecondsSinceEpoch(5000),
       lastSend: (method, address, [json]) => lastSends.add((method, address, json)));
     return made;
   }
 
   setUp(() {
     opened.clear();
-    played.clear();
     lastSends.clear();
     server = Server({
       'GET api/account': (_) => {'email': 'ana@example.com'},
@@ -423,7 +424,12 @@ void main() {
     expect(opened.single.toString(), 'https://relay.example.com/apps/relay/api/attachment?id=file-0001');
     await relay.openFile(ring.files.last);
     await relay.play(ring.recording!);
-    expect(played.single.toString(), 'https://relay.example.com/apps/relay/api/audio?id=n3');
+    expect(player.played.single, 'https://relay.example.com/apps/relay/api/audio?id=n3');
+    // Pause and seek go to the same player, and the browser reads no waves: it keeps no copy of the recording.
+    await relay.pause();
+    await relay.seek(const Duration(seconds: 3));
+    expect([player.calls, relay.playback.value?.at, relay.playback.value?.playing, await relay.waveOf(ring.recording!)],
+      [['play', 'pause', 'seek 3000'], const Duration(seconds: 3), false, isEmpty]);
     await Future<void>.delayed(Duration.zero);
     expect(notices, ['This file is still on its way. Try again soon.']);
     await listening.cancel();

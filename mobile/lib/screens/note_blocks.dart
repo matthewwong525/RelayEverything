@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
@@ -89,30 +90,165 @@ class NoteFileRow extends StatelessWidget {
   }
 }
 
-/// *Play* for a voice note's recording, as a quiet card row with its length.
-class PlayRow extends StatelessWidget {
-  const PlayRow({super.key, required this.length, required this.onPlay});
+/// A voice note's player, at the top of its page: play and pause, the recording's sound waves, which fill in the accent
+/// text color as it plays, and the time: *0:12 / 0:42* while it plays or is paused, the length when it is stopped. A tap
+/// or a drag on the waves goes to that point, and starts the recording there when it is stopped. With no waves to read,
+/// such as in the browser or for a recording that is not a WAV, a plain line takes their place, and it still plays.
+/// With no [length], as in the browser, it uses the length the player reads once the recording starts, and shows no
+/// time until then: a tap on the line starts it, then goes to that place.
+class VoicePlayer extends StatefulWidget {
+  const VoicePlayer({super.key, required this.relay, required this.recording, required this.length});
 
+  final Relay relay;
+  final String recording;
   final Duration? length;
-  final VoidCallback onPlay;
+
+  /// How far a screen reader's swipe up or down moves the playback.
+  static const step = Duration(seconds: 5);
+
+  @override
+  State<VoicePlayer> createState() => _VoicePlayerState();
+}
+
+class _VoicePlayerState extends State<VoicePlayer> {
+  /// Read once for the open page, and kept by no one after it.
+  late Future<List<double>> _wave = widget.relay.waveOf(widget.recording);
+  /// A tap on the waves of a stopped recording starts it: a drag meanwhile starts nothing more.
+  bool _starting = false;
+
+  /// The length the player read for this recording, kept after it stops.
+  Duration? _heard;
+
+  Relay get relay => widget.relay;
+  Duration get _length => widget.length ?? _now?.length ?? _heard ?? Duration.zero;
+
+  @override
+  void didUpdateWidget(VoicePlayer old) {
+    super.didUpdateWidget(old);
+    if (old.recording != widget.recording || old.relay != widget.relay) {
+      _wave = relay.waveOf(widget.recording);
+      _heard = null;
+    }
+  }
+
+  /// This recording's playback, or null while another plays or none does.
+  Playback? get _now => switch (relay.playback.value) {
+    final now? when now.recording == widget.recording => now,
+    _ => null,
+  };
+
+  Duration _clamp(Duration at) => at < Duration.zero ? Duration.zero : at > _length ? _length : at;
+
+  /// Goes to [at], read only after a stopped recording starts: the browser's player knows the length only then.
+  Future<void> _seek(Duration Function() at) async {
+    Future<void> go() async {
+      if (_length > Duration.zero) await relay.seek(_clamp(at()));
+    }
+    if (_now != null) return go();
+    if (_starting) return;
+    _starting = true;
+    try {
+      await relay.play(widget.recording);
+      await go();
+    } finally {
+      _starting = false;
+    }
+  }
+
+  void _seekAt(double x, double width) {
+    if (width <= 0) return;
+    final part = (x / width).clamp(0.0, 1.0);
+    unawaited(_seek(() => _length * part));
+  }
 
   @override
   Widget build(BuildContext context) {
     final brand = brandOf(context);
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onPlay,
+    return ValueListenableBuilder(valueListenable: relay.playback, builder: (context, _, _) {
+      final now = _now;
+      if (now?.length case final heard?) _heard = heard;
+      final playing = now?.playing ?? false;
+      final at = now?.at ?? Duration.zero;
+      final known = _length > Duration.zero;
+      final done = known ? (at.inMilliseconds / _length.inMilliseconds).clamp(0.0, 1.0) : 0.0;
+      final time = switch ((now, known)) {
+        (null, true) => clockOf(_length),
+        (null, false) => '',
+        (_, true) => '${clockOf(at)} / ${clockOf(_length)}',
+        (_, false) => clockOf(at),
+      };
+      return Card(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 10, 14, 10),
-          child: Row(spacing: 12, children: [
-            DecoratedBox(decoration: BoxDecoration(color: brand.paper, shape: BoxShape.circle),
-              child: SizedBox.square(dimension: 40, child: Icon(CupertinoIcons.play_fill, color: brand.ink))),
-            const Expanded(child: Text('Play', style: TextStyle(fontWeight: FontWeight(650)))),
-            if (length != null) Text(clockOf(length!), style: TextStyle(fontSize: 13, color: brand.muted)),
+          padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
+          child: Row(spacing: 10, children: [
+            IconButton(
+              tooltip: playing ? 'Pause' : 'Play',
+              onPressed: () => playing ? relay.pause() : relay.play(widget.recording),
+              // Accent soft, not filled: *New note* stays the one filled control.
+              style: IconButton.styleFrom(backgroundColor: brand.accentSoft, fixedSize: const Size.square(44)),
+              icon: Icon(playing ? CupertinoIcons.pause_fill : CupertinoIcons.play_fill, color: brand.accentText, size: 20),
+            ),
+            Expanded(child: LayoutBuilder(builder: (context, box) => Semantics(
+              slider: true,
+              label: 'Recording',
+              value: time,
+              increasedValue: clockOf(_clamp(at + VoicePlayer.step)),
+              decreasedValue: clockOf(_clamp(at - VoicePlayer.step)),
+              onIncrease: known ? () => _seek(() => at + VoicePlayer.step) : null,
+              onDecrease: known ? () => _seek(() => at - VoicePlayer.step) : null,
+              child: GestureDetector(
+                key: const ValueKey('waves'),
+                behavior: HitTestBehavior.opaque,
+                onTapUp: (tap) => _seekAt(tap.localPosition.dx, box.maxWidth),
+                onHorizontalDragUpdate: (drag) => _seekAt(drag.localPosition.dx, box.maxWidth),
+                child: SizedBox(height: 36, child: FutureBuilder(future: _wave, builder: (context, wave) => CustomPaint(
+                  size: Size.infinite,
+                  painter: WavePainter(levels: wave.data ?? const [], done: done, played: brand.accentText,
+                    rest: brand.muted.withValues(alpha: 0.35)),
+                ))),
+              ),
+            ))),
+            ExcludeSemantics(child: Text(time,
+              style: TextStyle(fontSize: 13, color: brand.muted, fontFeatures: const [FontFeature.tabularFigures()]))),
           ]),
         ),
-      ),
-    );
+      );
+    });
   }
+}
+
+/// The sound waves: one round bar per level, the part played, [done] of the way, in [played] and the rest in [rest].
+/// No levels draws a plain line, which fills the same way.
+class WavePainter extends CustomPainter {
+  const WavePainter({required this.levels, required this.done, required this.played, required this.rest});
+
+  final List<double> levels;
+  /// From 0 to 1.
+  final double done;
+  final Color played;
+  final Color rest;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..strokeCap = StrokeCap.round;
+    final middle = size.height / 2;
+    if (levels.isEmpty) {
+      paint.strokeWidth = 3;
+      canvas.drawLine(Offset(0, middle), Offset(size.width, middle), paint..color = rest);
+      if (done > 0) canvas.drawLine(Offset(0, middle), Offset(size.width * done, middle), paint..color = played);
+      return;
+    }
+    final step = size.width / levels.length;
+    paint.strokeWidth = step * 0.55;
+    for (final (index, level) in levels.indexed) {
+      final x = step * (index + 0.5);
+      // The quietest bar keeps a dot's height, so silence still reads as a recording.
+      final half = middle * (0.12 + 0.88 * level.clamp(0.0, 1.0));
+      paint.color = x / size.width <= done ? played : rest;
+      canvas.drawLine(Offset(x, middle - half), Offset(x, middle + half), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(WavePainter old) => old.levels != levels || old.done != done || old.played != played || old.rest != rest;
 }

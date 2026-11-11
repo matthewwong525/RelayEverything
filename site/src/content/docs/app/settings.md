@@ -19,6 +19,8 @@ The first row of Settings is your account card:
 
 Signed out, tap the card to open **Sign in**. It has one button, **Sign in**, and one link, **Don't want an account? Use your own webhook**. Signing in starts sending at once, after the app asks about your earlier notes. There is no separate switch. The app signs in only to Relay Everything. A phone that already sends to another server keeps sending there. [Connect a phone](../../start/connect-a-phone/)
 
+Once you are signed in, notes send by themselves, also when the phone gets a connection again after it had none. There is no **Sync now** or **Send now**: pull your notes down to sync now. [The sync state](../your-notes/#the-sync-state)
+
 Signed in, tap the card to open the **Account** page:
 
 | Part | What it does |

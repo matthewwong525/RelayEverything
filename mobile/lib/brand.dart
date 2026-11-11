@@ -186,9 +186,9 @@ class AccentGlow extends StatelessWidget {
   }
 }
 
-/// A small pill with a word: *Voice* and *Listening* in the spark color, a small live moment; *Typed* in accent text on
-/// accent soft. [large] is the size on a note's page. [outlined] is a quiet fact, such as a chat's app: muted words in a
-/// thin line, with no fill.
+/// A small pill with a word: *Listening* in the spark color, a small live moment; a quiet word, such as *Off*, in accent
+/// text on accent soft. [large] is a larger size. [outlined] is a quiet fact, such as a chat's app: muted words in a thin
+/// line, with no fill.
 class BrandTag extends StatelessWidget {
   const BrandTag(this.label, {super.key, this.spark = false, this.large = false, this.outlined = false});
 

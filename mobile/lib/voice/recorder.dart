@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:just_audio/just_audio.dart';
 import 'package:record/record.dart';
+
+import 'wave.dart';
 
 /// The phone's microphone. The app's is the `record` package; a test's is a fake that writes a file.
 abstract class Microphone {
@@ -187,19 +188,10 @@ class VoiceRecorder {
   }
 }
 
-/// Plays a recording from this phone. The app's is `just_audio`; a test's is a fake.
-abstract class VoicePlayer {
-  Future<void> play(File file);
-}
-
-class PhonePlayer implements VoicePlayer {
-  AudioPlayer? _player;
-
-  @override
-  Future<void> play(File file) async {
-    final player = _player ??= AudioPlayer();
-    await player.stop();
-    await player.setFilePath(file.path);
-    unawaited(player.play());
-  }
+/// Reads the sound waves of the recording at [job]'s path in [job]'s number of bars, for `compute` to run away from the
+/// page: empty when the file is gone or is not a 16-bit PCM WAV.
+Future<List<double>> readWave((String path, int bars) job) async {
+  final file = File(job.$1);
+  if (!await file.exists()) return const [];
+  return levelsOfWav(await file.readAsBytes(), bars: job.$2);
 }

@@ -95,7 +95,7 @@ The phone app SHALL keep each recording its paired Apple Watch hands it as a voi
 
 #### Scenario: A watch note while the app runs
 - **WHEN** the phone app is open, the speech model is on the phone, and the watch hands it a recording of a sentence
-- **THEN** a voice note shows in *Voice notes* at once, and its words fill in
+- **THEN** a voice note shows in *Notes*, and under its *Voice* filter, at once, and its words fill in
 
 #### Scenario: A watch note while the app is closed
 - **WHEN** the watch hands a recording while the phone app is closed
@@ -103,4 +103,4 @@ The phone app SHALL keep each recording its paired Apple Watch hands it as a voi
 
 #### Scenario: A watch note with no words
 - **WHEN** the watch hands a recording in which the phone finds no words
-- **THEN** the note stays in *Voice notes* as *Voice note* with *No words heard* and its recording to play, and nothing is sent
+- **THEN** the note stays in *Notes* as *Voice note*, its row shows a microphone, its length and *No words heard* with no tag, its page has the voice player, and nothing is sent

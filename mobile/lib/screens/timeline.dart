@@ -25,13 +25,15 @@ String rowTime(BuildContext context, DateTime at, DateTime now) {
   return at.year == now.year ? local.formatShortMonthDay(at) : local.formatShortDate(at);
 }
 
-/// One notes folder's notes, newest first and grouped by day, as Apple Notes lists them: *‹ Home*, a large title with the
-/// count and the sync state, and at the bottom *Search*, which finds notes in this folder only, and *New note*.
+/// The notes, newest first and grouped by day, as Apple Notes lists them: *‹ Home*, a large title with the count and,
+/// only when notes wait or can't go, the sync state; the filters *All*, *Voice* and *Photos and files*; and at the
+/// bottom *Search*, which finds notes in the picked filter only, and *New note*.
 class TimelineScreen extends StatefulWidget {
   const TimelineScreen({super.key, required this.relay, this.folder = NotesFolder.all, this.picker, this.sharer, this.opener,
-    this.onOpen, this.onBack});
+    this.onOpen, this.onBack, this.onFilter});
 
   final Relay relay;
+  /// The filter the list opens on.
   final NotesFolder folder;
   /// The paperclip's picker; a test passes its own.
   final FilesPicker? picker;
@@ -43,6 +45,8 @@ class TimelineScreen extends StatefulWidget {
   final NoteOpener? onOpen;
   /// Goes back to Home where the browser's layout holds it.
   final VoidCallback? onBack;
+  /// Tells the browser's layout the filter picked, so a note opened and closed comes back to it.
+  final ValueChanged<NotesFolder>? onFilter;
 
   @override
   State<TimelineScreen> createState() => _TimelineScreenState();
@@ -53,11 +57,22 @@ class _TimelineScreenState extends State<TimelineScreen> {
   final _searchFocus = FocusNode();
 
   Relay get relay => widget.relay;
-  String get _title => widget.folder.title;
+  static const _title = 'Notes';
+  late NotesFolder _filter = widget.folder;
 
-  /// What pulling the list down does, and *Sync now* too.
-  /// Pull to refresh and *Sync now* do the same: send what waits and take notes from the person's other devices.
+  /// Pulling the list down: sends what waits and takes notes from the person's other devices. No button does it.
   Future<void> _refresh() => relay.pullNotes();
+
+  @override
+  void didUpdateWidget(TimelineScreen old) {
+    super.didUpdateWidget(old);
+    if (widget.folder != old.folder) _filter = widget.folder;
+  }
+
+  void _pick(NotesFolder filter) {
+    setState(() => _filter = filter);
+    widget.onFilter?.call(filter);
+  }
 
   @override
   void dispose() {
@@ -72,24 +87,24 @@ class _TimelineScreenState extends State<TimelineScreen> {
       body: ListenableBuilder(
         listenable: Listenable.merge([relay, _search, _searchFocus]),
         builder: (context, _) {
-          final notes = [for (final entry in relay.entries) if (entryIn(widget.folder, entry)) entry];
+          final notes = [for (final entry in relay.entries) if (entryIn(_filter, entry)) entry];
           return Stack(children: [
             RefreshIndicator(
               onRefresh: _refresh,
               edgeOffset: 140,
               child: CustomScrollView(physics: const AlwaysScrollableScrollPhysics(), slivers: [
-                SliverAppBar.large(
+                TitleBar(
+                  title: _title,
+                  relay: relay,
+                  count: countOf(notes.length),
                   leading: BackTo('Home', onPressed: widget.onBack),
                   leadingWidth: BackTo.widthOf('Home'),
-                  title: Text(_title),
-                  expandedHeight: 140,
-                  bottom: PreferredSize(preferredSize: const Size.fromHeight(SyncLine.height),
-                    child: SyncLine(relay: relay, count: countOf(notes.length), onSync: _refresh)),
                 ),
                 if (modelShows(relay)) modelSliver(relay),
+                SliverToBoxAdapter(child: NoteFilters(relay: relay, filter: _filter, onFilter: _pick)),
                 if (notes.isEmpty)
                   SliverFillRemaining(hasScrollBody: false,
-                    child: _Empty(folder: widget.folder, sending: relay.settings.sending, web: relay.web))
+                    child: _Empty(folder: _filter, sending: relay.settings.sending, web: relay.web))
                 else
                   noteSliver(context, relay, notes, _search.text, back: _title, picker: widget.picker, sharer: widget.sharer,
                     opener: widget.opener, onOpen: widget.onOpen),
@@ -102,6 +117,37 @@ class _TimelineScreenState extends State<TimelineScreen> {
           ]);
         },
       ),
+    );
+  }
+}
+
+/// *All*, *Voice* and *Photos and files* above the notes, each with how many notes it holds: a tap shows only its notes.
+/// The picked one is ink, not the accent, because the accent is for *New note*.
+class NoteFilters extends StatelessWidget {
+  const NoteFilters({super.key, required this.relay, required this.filter, required this.onFilter});
+
+  final Relay relay;
+  final NotesFolder filter;
+  final ValueChanged<NotesFolder> onFilter;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = brandOf(context);
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      child: Row(spacing: 8, children: [
+        for (final each in NotesFolder.values)
+          ChoiceChip(
+            label: Text('${each.title} ${relay.entries.where((entry) => entryIn(each, entry)).length}'),
+            selected: each == filter,
+            showCheckmark: false,
+            backgroundColor: brand.card,
+            selectedColor: brand.ink,
+            labelStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: each == filter ? brand.paper : brand.ink),
+            onSelected: (_) => onFilter(each),
+          ),
+      ]),
     );
   }
 }
@@ -144,111 +190,143 @@ Widget noteSliver(BuildContext context, Relay relay, List<Entry> notes, String q
   );
 }
 
-/// *5 notes · ● Synced ↻* under a title, or the state alone on Home. While sending, *Sync now* follows the state, and a
-/// tap on the state syncs too.
-class SyncLine extends StatelessWidget {
-  const SyncLine({super.key, required this.relay, required this.onSync, this.count});
+/// The top of Home and of the notes list, as Apple Notes has it: a large title with the [SyncLine] under it, which go up
+/// with the page and leave one row, the small title with a [_SmallLine] under it. No band stays under that row.
+class TitleBar extends StatelessWidget {
+  const TitleBar({super.key, required this.title, required this.relay, this.count, this.leading, this.leadingWidth,
+    this.actions});
+
+  final String title;
+  final Relay relay;
+  /// Such as *5 notes*; null on Home, which shows a line only when notes wait or can't go.
+  final String? count;
+  final Widget? leading;
+  final double? leadingWidth;
+  final List<Widget>? actions;
+
+  /// The one row that stays: the way back, the small title and its line, and the actions.
+  static const toolbar = 64.0;
+  /// The open top: the row, the large title, and the [SyncLine].
+  static const expanded = 140.0;
+  /// The room under the large title when no line is there.
+  static const _under = 8.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = brandOf(context);
+    final line = count != null || SyncLine.stateOf(relay) != null;
+    return SliverAppBar(
+      pinned: true,
+      leading: leading,
+      leadingWidth: leadingWidth,
+      actions: actions,
+      toolbarHeight: toolbar,
+      // With no line, Home is that much shorter, less the room kept under the title, so it does not float over a blank.
+      expandedHeight: line ? expanded : expanded - SyncLine.height + _under,
+      flexibleSpace: Builder(builder: (context) {
+        final space = context.dependOnInheritedWidgetOfExactType<FlexibleSpaceBarSettings>()!;
+        final room = space.maxExtent - space.minExtent;
+        // 0 while open, 1 once only the row is left.
+        final shut = room <= 0 ? 1.0 : (1 - (space.currentExtent - space.minExtent) / room).clamp(0.0, 1.0);
+        final top = MediaQuery.paddingOf(context).top;
+        final large = (1 - shut * 1.6).clamp(0.0, 1.0);
+        final small = ((shut - 0.55) / 0.3).clamp(0.0, 1.0);
+        // A title faded out is not built, so a screen reader reads each title once.
+        return Stack(children: [
+          if (large > 0) Positioned(left: 0, right: 0, top: top + toolbar, bottom: 0,
+            child: ClipRect(child: OverflowBox(alignment: Alignment.bottomLeft, minHeight: 0, maxHeight: double.infinity,
+              child: Opacity(opacity: large,
+                child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Padding(padding: EdgeInsets.fromLTRB(16, 0, 16, line ? 0 : _under),
+                    child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: brand.ink, height: 1.25))),
+                  if (line) SyncLine(relay: relay, count: count),
+                ]))))),
+          if (small > 0) Positioned(left: 0, right: 0, top: top, height: toolbar,
+            child: IgnorePointer(
+              child: Opacity(opacity: small,
+                child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(title, maxLines: 1, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: -0.3,
+                    color: brand.ink)),
+                  _SmallLine(relay: relay, count: count),
+                ]))))),
+        ]);
+      }),
+    );
+  }
+}
+
+/// The line under the small title: the count alone when all is well, or the state's dot and words, such as *○ 3
+/// waiting*, in place of the count. Home, with no count, shows nothing when all is well. Words, not a button.
+class _SmallLine extends StatelessWidget {
+  const _SmallLine({required this.relay, this.count});
 
   final Relay relay;
-  /// What *Sync now* and a tap on the state do: the same as the page's pull to refresh.
-  final Future<void> Function() onSync;
-  /// Such as *5 notes*; null on Home.
   final String? count;
 
-  /// The line's height under an app bar: room for *Sync now*'s 32-point tap target.
+  @override
+  Widget build(BuildContext context) {
+    final muted = TextStyle(fontSize: 12, height: 1.3, color: brandOf(context).muted);
+    final state = SyncLine.stateOf(relay);
+    if (state == null) return count == null ? const SizedBox.shrink() : Text(count!, style: muted);
+    return Row(mainAxisSize: MainAxisSize.min, spacing: 5, children: [
+      Transform.scale(scale: 0.75, child: _SyncDot(state: state.$1)),
+      Text(state.$2, style: muted),
+    ]);
+  }
+}
+
+/// *6 notes* under the list's title, and a state only when notes wait or can't go: *1 waiting* or *Key refused*. When
+/// all is sent, or sending is off, it says no state, and Home shows no line, also when the phone is offline. It is words,
+/// not a button: notes send by themselves, and a pull down on the page syncs now.
+class SyncLine extends StatelessWidget {
+  const SyncLine({super.key, required this.relay, this.count});
+
+  final Relay relay;
+  /// Such as *6 notes*; null on Home.
+  final String? count;
+
+  /// The line's height under a title.
   static const height = 36.0;
+
+  /// The state's dot and words, or null when there is nothing the person can act on: all is sent, sending is off, or it
+  /// syncs or is offline with nothing waiting. Offline with notes waiting says *N waiting* with the hollow ring. The dot
+  /// pulses only while waiting notes send.
+  static (SyncDot, String)? stateOf(Relay relay) {
+    if (!relay.settings.sending) return null;
+    final waiting = relay.waiting > 0 ? '${relay.waiting} waiting' : null;
+    return switch (relay.status) {
+      SyncStatus.refused => (SyncDot.refused, relay.web ? 'Not loaded' : 'Key refused'),
+      SyncStatus.syncing => waiting == null ? null : (SyncDot.syncing, waiting),
+      _ => waiting == null ? null : (SyncDot.waiting, waiting),
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
     final brand = brandOf(context);
     final muted = TextStyle(fontSize: 13, color: brand.muted);
     final strong = TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: brand.ink);
-    final (state, label) = switch (relay.status) {
-      SyncStatus.syncing => (_Dot.syncing, 'Syncing'),
-      SyncStatus.refused => (_Dot.refused, relay.web ? 'Not loaded' : 'Key refused'),
-      SyncStatus.offline => (_Dot.waiting, relay.waiting > 0 ? '${relay.waiting} waiting' : 'Offline'),
-      _ => relay.waiting > 0 ? (_Dot.waiting, '${relay.waiting} waiting') : (_Dot.synced, 'Synced'),
-    };
+    final state = stateOf(relay);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
       child: SizedBox(height: 32, child: Row(spacing: 6, children: [
-        if (count != null) Text('$count ·', style: muted),
-        if (!relay.settings.sending)
-          Text('On this phone', style: strong)
-        else ...[
-          InkWell(
-            onTap: onSync,
-            borderRadius: BorderRadius.circular(8),
-            child: Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: [_SyncDot(state: state), Text(label, style: strong)]),
-          ),
-          _SyncNow(syncing: relay.status == SyncStatus.syncing, onSync: onSync),
-        ],
+        if (count case final count?) Text(state == null ? count : '$count ·', style: muted),
+        if (state != null) ...[_SyncDot(state: state.$1), Text(state.$2, style: strong)],
       ])),
     );
   }
 }
 
-/// *Sync now*: small muted arrows after the state, which turn while the phone syncs, and stay still when the phone asks
-/// for less motion.
-class _SyncNow extends StatefulWidget {
-  const _SyncNow({required this.syncing, required this.onSync});
+/// The sync state's dot: [syncing] while waiting notes send, [waiting] while they wait, [refused] for the key.
+enum SyncDot { syncing, waiting, refused }
 
-  final bool syncing;
-  final Future<void> Function() onSync;
-
-  @override
-  State<_SyncNow> createState() => _SyncNowState();
-}
-
-class _SyncNowState extends State<_SyncNow> with SingleTickerProviderStateMixin {
-  late final _turn = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
-
-  void _run() {
-    final moves = widget.syncing && !MediaQuery.disableAnimationsOf(context);
-    if (moves && !_turn.isAnimating) _turn.repeat();
-    if (!moves) _turn.reset();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _run();
-  }
-
-  @override
-  void didUpdateWidget(_SyncNow old) {
-    super.didUpdateWidget(old);
-    _run();
-  }
-
-  @override
-  void dispose() {
-    _turn.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: 'Sync now',
-      onPressed: widget.onSync,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-      style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-      icon: RotationTransition(turns: _turn,
-        child: Icon(CupertinoIcons.arrow_2_circlepath, size: 16, color: brandOf(context).muted)),
-    );
-  }
-}
-
-enum _Dot { synced, syncing, waiting, refused }
-
-/// The sync state's dot: accent and still when synced, spark with a pulsing ring while syncing, a hollow ring while
-/// notes wait, danger when the key is refused. It stays still when the phone asks for less motion.
+/// The sync state's dot: spark with a pulsing ring while waiting notes send, a hollow ring while they wait, danger when
+/// the key is refused. It stays still when the phone asks for less motion.
 class _SyncDot extends StatefulWidget {
   const _SyncDot({required this.state});
 
-  final _Dot state;
+  final SyncDot state;
 
   @override
   State<_SyncDot> createState() => _SyncDotState();
@@ -258,7 +336,7 @@ class _SyncDotState extends State<_SyncDot> with SingleTickerProviderStateMixin 
   late final _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400));
 
   void _run() {
-    final moves = widget.state == _Dot.syncing && !MediaQuery.disableAnimationsOf(context);
+    final moves = widget.state == SyncDot.syncing && !MediaQuery.disableAnimationsOf(context);
     if (moves && !_pulse.isAnimating) _pulse.repeat();
     if (!moves) _pulse.reset();
   }
@@ -285,10 +363,9 @@ class _SyncDotState extends State<_SyncDot> with SingleTickerProviderStateMixin 
   Widget build(BuildContext context) {
     final brand = brandOf(context);
     final fill = switch (widget.state) {
-      _Dot.synced => brand.accent,
-      _Dot.syncing => brand.spark,
-      _Dot.waiting => Colors.transparent,
-      _Dot.refused => brand.danger,
+      SyncDot.syncing => brand.spark,
+      SyncDot.waiting => Colors.transparent,
+      SyncDot.refused => brand.danger,
     };
     return AnimatedBuilder(
       animation: _pulse,
@@ -298,7 +375,7 @@ class _SyncDotState extends State<_SyncDot> with SingleTickerProviderStateMixin 
         decoration: BoxDecoration(
           color: fill,
           shape: BoxShape.circle,
-          border: widget.state == _Dot.waiting ? Border.all(color: brand.muted, width: 2) : null,
+          border: widget.state == SyncDot.waiting ? Border.all(color: brand.muted, width: 2) : null,
           boxShadow: _pulse.isAnimating
             ? [BoxShadow(color: brand.spark.withValues(alpha: 1 - _pulse.value), spreadRadius: 7 * _pulse.value)]
             : null,
@@ -314,7 +391,7 @@ class _SyncDotState extends State<_SyncDot> with SingleTickerProviderStateMixin 
   NotesFolder.voice when web => ('No voice notes yet', 'Voice notes you say into your phone show here.'),
   NotesFolder.all => ('No notes yet', 'Tap New note to write one, or hold it to talk.'),
   NotesFolder.voice => ('No voice notes yet', 'Hold New note to talk.'),
-  NotesFolder.shares => ('No shares yet', 'A note with a photo, a file or a link shows here.'),
+  NotesFolder.files => ('No photos or files yet', 'A note with a photo or a file shows here.'),
 };
 
 /// An empty folder: what goes in it, above the button that makes it.
@@ -397,9 +474,10 @@ void showDeleted(ScaffoldMessengerState? messenger, Relay relay, String id) {
   }));
 }
 
-/// One note in its day's card: the first line in bold; the time, where a note from elsewhere came from, and the rest of
-/// the words; then its kind, *No words heard* for a watch note with none, length, place and send state. A first picture
-/// shows small at the right. A tap opens it; a swipe to the left, or a screen reader's *Delete*, deletes it with *Undo*.
+/// One note in its day's card: the first line in bold; then the time, a microphone and the length for a voice note, where
+/// a note from elsewhere came from, and the rest of the words, or *No words heard* for a watch note with none. No tag:
+/// only a note that waits says so, *Waiting to send*. A first picture shows small at the right. A tap opens it; a swipe
+/// to the left, or a screen reader's *Delete*, deletes it with *Undo*.
 class _NoteRow extends StatelessWidget {
   const _NoteRow({required this.entry, required this.relay, required this.onTap, this.selected = false});
 
@@ -413,8 +491,7 @@ class _NoteRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final brand = brandOf(context);
     final muted = TextStyle(fontSize: 13, color: brand.muted);
-    final meta = [if (entry.noWords) 'No words heard', if (entry.length != null) clockOf(entry.length!), sendState(entry)]
-      .whereType<String>();
+    final send = sendState(entry);
     final picture = entry.files.where((file) => file.picture && file.ready).firstOrNull;
     final row = Material(color: selected ? brand.accentSoft : Colors.transparent, child: InkWell(
       onTap: onTap,
@@ -426,17 +503,17 @@ class _NoteRow extends StatelessWidget {
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight(650))),
             Text.rich(TextSpan(children: [
               TextSpan(text: rowTime(context, entry.at, DateTime.now()), style: TextStyle(fontWeight: FontWeight.w500, color: brand.ink)),
+              if (entry.voice) ...[
+                const TextSpan(text: '  '),
+                WidgetSpan(alignment: PlaceholderAlignment.middle,
+                  child: Icon(CupertinoIcons.mic_fill, size: 14, color: brand.accentText, semanticLabel: 'Voice note')),
+                if (entry.length case final length?) TextSpan(text: ' ${clockOf(length)}'),
+              ],
               if (entry.from != null) TextSpan(text: ' · ${entry.from}'),
-              TextSpan(text: '  ${_preview(entry)}'),
+              TextSpan(text: '  ${entry.noWords ? 'No words heard' : _preview(entry)}'),
             ]), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, color: brand.muted)),
             if (entry.writing) const Padding(padding: EdgeInsets.symmetric(vertical: 4), child: LinearProgressIndicator()),
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Row(spacing: 6, children: [
-                BrandTag(entry.voice ? 'Voice' : 'Typed', spark: entry.voice),
-                if (meta.isNotEmpty) Flexible(child: Text(meta.join(' · '), style: muted, maxLines: 1, overflow: TextOverflow.ellipsis)),
-              ]),
-            ),
+            if (send != null) Text(send, style: muted),
           ])),
           if (picture != null) _Thumbnail(file: picture),
         ]),
@@ -552,7 +629,8 @@ class _SearchField extends StatelessWidget {
           suffixIcon: controller.text.isEmpty ? null : IconButton(tooltip: 'Clear', onPressed: controller.clear,
             icon: Icon(CupertinoIcons.xmark_circle_fill, size: 18, color: brand.muted)),
           enabledBorder: border(),
-          focusedBorder: border(BorderSide(color: brand.accentText, width: 2)),
+          // Quiet while typing: the card color, not the green of a form field.
+          focusedBorder: border(),
         ),
       ),
     );

@@ -27,6 +27,7 @@ import 'sync/native.dart';
 import 'sync/photos.dart';
 import 'sync/stay_round.dart';
 import 'voice/model.dart';
+import 'voice/playback.dart';
 import 'voice/recorder.dart';
 import 'voice/transcriber.dart';
 
@@ -55,7 +56,7 @@ class VoiceParts {
   final SpeechModel model;
   final VoiceRecorder recorder;
   final Transcriber transcriber;
-  final VoicePlayer player;
+  final SoundPlayer player;
 }
 
 /// Opens a file in an app on the phone; false when no app could.
@@ -132,6 +133,9 @@ class RelayController extends Relay {
   int _waiting = 0;
   Settings _settings = const Settings();
   StreamSubscription<Pin>? _history;
+  StreamSubscription<Link>? _links;
+  /// The phone's network as it last changed; null until it does.
+  Link? _link;
   Timer? _drainTimer;
   /// Each deleted note's *Undo* time, by note id: when it ends, the delete runs.
   final _deletes = <String, Timer>{};
@@ -218,6 +222,7 @@ class RelayController extends Relay {
     await _tellShare();
     if (watch && _settings.history) _startHistory();
     if (watch) await _watchMotion();
+    if (watch) _watchNetwork();
     // A close during a delete's Undo time left its mark: the delete runs when that time ends, and goes at the next send.
     // A mark from another window, such as the share card's, still in its time is left to that window's timer too.
     for (final (id, at) in await store.marked()) {
@@ -638,6 +643,18 @@ class RelayController extends Relay {
     } finally {
       await store.set(motionAskedKey, '1');
     }
+  }
+
+  /// While the app is open, notes that wait send as soon as the connection comes back, with no tap: from no network, or
+  /// after a round that found the phone offline. With sending off, or nothing waiting, nothing leaves.
+  void _watchNetwork() {
+    final kind = network;
+    if (kind == null || _links != null) return;
+    _links = kind.changes().listen((link) {
+      final back = link != Link.none && (_link == Link.none || _status == SyncStatus.offline);
+      _link = link;
+      if (back && _settings.sending && _waiting > 0) unawaited(sync());
+    }, onError: (_) {});
   }
 
   /// Tells Android to keep motion changes only while location history makes stays and trips.
@@ -1302,7 +1319,28 @@ class RelayController extends Relay {
     final file = await parts.recorder.fileOf(recording);
     // Phone backups leave recordings out, so a note restored to a new phone has its words but no recording.
     if (!await file.exists()) return notice(_noRecording);
-    await parts.player.play(file);
+    await parts.player.play(recording, file.uri);
+  }
+
+  @override
+  ValueListenable<Playback?> get playback => voice?.player ?? noPlayback;
+
+  @override
+  Future<void> pause() async => voice?.player.pause();
+
+  @override
+  Future<void> seek(Duration at) async => voice?.player.seek(at);
+
+  /// Reads the recording's waves away from the page, so a 5-minute recording does not stall it.
+  @override
+  Future<List<double>> waveOf(String recording, {int bars = 48}) async {
+    final parts = voice;
+    if (parts == null) return const [];
+    try {
+      return await compute(readWave, ((await parts.recorder.fileOf(recording)).path, bars));
+    } on Exception {
+      return const [];
+    }
   }
 
   /// Shows the note at once, with no words yet, and writes them in the background. Returns the words to show when the
@@ -1454,6 +1492,7 @@ class RelayController extends Relay {
   void dispose() {
     _disposed = true;
     _history?.cancel();
+    _links?.cancel();
     _drainTimer?.cancel();
     // A delete still in its Undo time keeps its mark: the next start runs it.
     for (final timer in _deletes.values) {

@@ -11,7 +11,7 @@ appId: com.matthewwong525.relayApp
     timeout: 60000
 # The round gear has no visible words: Maestro finds it by its tooltip, Settings.
 - tapOn: "Settings"
-# Home has a Voice notes folder too, so wait for a word only Settings shows.
+# Wait for a word only Settings shows.
 - extendedWaitUntil:
     visible: "Appearance"
     timeout: 30000

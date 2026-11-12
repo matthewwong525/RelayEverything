@@ -1,6 +1,6 @@
 # Typing stays above the tool bar, Undo while you type, pinned notes, and Find in Note
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** notes-keyboard-undo-pins
 **Open questions:** none
 
@@ -97,3 +97,5 @@ Non-goals: no *Lock Note*, *Move*, *Duplicate* or *Scan*. No long-press menu on 
 - **2026-11-12** — Assumed: the fixed tour's settings step gets 40 seconds, not 20, to scroll to *Save*, because the second iPhone check failed there twice on a slow Mac with *Save* on the screen (each screen read took about 10 seconds); the app's Settings did not change.
 - **2026-11-12** — Assumed: the find field draws no outline or fill, because the iPhone picture showed the app's green field box inside the find pill, which Apple Notes does not have.
 - **2026-11-12** — Asked whether to fix the settings step again or publish anyway after the third iPhone check failed there → chose to fix it and check again: its scroll waits at most 500 ms for the screen to settle, because the address field's blinking cursor never settles; the 40-second time limit stays.
+- **2026-11-12** — Asked whether to publish after the fourth iPhone check failed at the fixed Settings step (a slow Mac's 1-second tap on the gear counted as a long press), with the change's own pin step passed in three checks → chose to publish anyway; Claude's scenario check on the iPhone never ran.
+- **2026-11-12** — Archived for publishing: specs merged into `openspec/specs/` (`relay-note-pins` new; `relay-note-editing` and `relay-notes-screen` updated).

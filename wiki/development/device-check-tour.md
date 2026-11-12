@@ -37,6 +37,8 @@ A phone change writes a step for its main path when the simulator can show it, a
 
 **Give a `scrollUntilVisible` on a screen with a blinking cursor `waitToSettleTimeoutMs: 500`.** After each swipe, Maestro waits for the screen to stop moving, and the cursor never stops: on 2026-11-12 each read of the webhook page took 12 to 57 seconds, and the settings step failed two checks with *Save* on the screen. A longer `timeout` did not help.
 
+**A slow Mac can turn a tap into a long press.** On 2026-11-12 Maestro's tap on Home's gear lasted about 1 second, from touch to lift in `phone.log` (`Sending UIEvent type: 0`, twice). Flutter took it as a long press, so the button showed its tooltip and Settings did not open, in 3 of 4 tries. The screen then shows the same page as before the tap, with no error. Look at the two event times before you change the app.
+
 **Never use `hideKeyboard`.** The Flutter app's keyboard has no dismiss action that Maestro can use, so the step fails with *Couldn't hide the keyboard* and the flow ends *broken*. After `inputText`, tap the next button at once, such as `tapOn: "Save"` on the webhook form: the form keeps its buttons above the keyboard.
 
 **Tap an icon button by its label.** A button with no words on the screen, such as the round *New note* or the ⋯ button, has an accessibility label or a tooltip. Maestro matches it as it matches text: `tapOn: "New note"`, `tapOn: "More"`. A Maestro tap is short, so `tapOn: "New note"` opens the *New note* page and never records.

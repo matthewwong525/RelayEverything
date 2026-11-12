@@ -32,4 +32,4 @@
 ## 6. Checks
 
 - [x] 6.1 Run `flutter analyze` and `flutter test` in `mobile/`, and the app's type check and tests in `app/`, and verify all pass.
-- [ ] 6.2 `/save`, then run the device check on the saved commit with the change's flow and scenarios, and show its pictures.
+- [x] 6.2 `/save`, then run the device check on the saved commit with the change's flow and scenarios, and show its pictures. (The `note-pins` step passed in three checks; the fixed Settings step failed on a slow Mac, so Claude's part never ran; published by the person's choice.)

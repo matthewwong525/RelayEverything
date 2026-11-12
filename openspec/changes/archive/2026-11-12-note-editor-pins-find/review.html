@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · note-editor-pins-find</title>
+<title>Review · 2026-11-12-note-editor-pins-find</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -442,11 +442,11 @@
 })();
 </script>
 </head>
-<body data-change="note-editor-pins-find" data-own-back>
+<body data-change="2026-11-12-note-editor-pins-find" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>note-editor-pins-find</h1>
+  <h1>2026-11-12-note-editor-pins-find</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Tap a picture to see it full screen.</span></p>
@@ -506,6 +506,8 @@
 <li class="decision card" id="decision-28" data-note="decision-28" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-12</p>Assumed: the fixed tour's settings step gets 40 seconds, not 20, to scroll to <i>Save</i>, because the second iPhone check failed there twice on a slow Mac with <i>Save</i> on the screen (each screen read took about 10 seconds); the app's Settings did not change.</li>
 <li class="decision card" id="decision-29" data-note="decision-29" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-12</p>Assumed: the find field draws no outline or fill, because the iPhone picture showed the app's green field box inside the find pill, which Apple Notes does not have.</li>
 <li class="decision card" id="decision-30" data-note="decision-30" tabindex="0"><p class="meta"><span class="tag asked">asked</span>2026-11-12</p>Asked whether to fix the settings step again or publish anyway after the third iPhone check failed there → chose to fix it and check again: its scroll waits at most 500 ms for the screen to settle, because the address field's blinking cursor never settles; the 40-second time limit stays.</li>
+<li class="decision card" id="decision-31" data-note="decision-31" tabindex="0"><p class="meta"><span class="tag asked">asked</span>2026-11-12</p>Asked whether to publish after the fourth iPhone check failed at the fixed Settings step (a slow Mac's 1-second tap on the gear counted as a long press), with the change's own pin step passed in three checks → chose to publish anyway; Claude's scenario check on the iPhone never ran.</li>
+<li class="decision card" id="decision-32" data-note="decision-32" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-12</p>Archived for publishing: specs merged into <code>openspec/specs/</code> (<code>relay-note-pins</code> new; <code>relay-note-editing</code> and <code>relay-notes-screen</code> updated).</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

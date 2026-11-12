@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · relay-memory-plugin</title>
+<title>Review · 2026-11-12-relay-memory-plugin</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -442,11 +442,11 @@
 })();
 </script>
 </head>
-<body data-change="relay-memory-plugin" data-own-back>
+<body data-change="2026-11-12-relay-memory-plugin" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>relay-memory-plugin</h1>
+  <h1>2026-11-12-relay-memory-plugin</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Tap a picture to see it full screen.</span></p>
@@ -556,6 +556,8 @@
 <li class="decision card" id="decision-44" data-note="decision-44" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-12</p>Assumed, after review: the build test finds an older kind in <code>&quot;kind&quot;:&quot;…&quot;</code> with or without a space, because the reader's example is written with no space.</li>
 <li class="decision card" id="decision-45" data-note="decision-45" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-12</p>Assumed, after review: <code>GET /v1/memory</code>'s <code>kind</code> filter also finds the older kinds that read as the given kind, as the store's <code>type</code> filter does, and returns the stored word, because the examples now say <code>kind=project</code>, which missed the older <code>decision</code>, <code>fact</code> and <code>plan</code> facts.</li>
 <li class="decision card" id="decision-46" data-note="decision-46" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-12</p>Built and saved for the last checks: every task through 6.1 passes; 6.2 and 6.3 run locally, and 6.4 runs on staging after this save.</li>
+<li class="decision card" id="decision-47" data-note="decision-47" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-12</p>Checked live: 6.2 and 6.3 on this computer, and 6.4 on staging with a key from the plugin's own sign-in. Assumed: Codex cuts the chat-end hook to 3 seconds; memory's capture starts on its own first, so only the kept transcript can be cut, and that fact then links to the saved chat. No change for it.</li>
+<li class="decision card" id="decision-48" data-note="decision-48" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-12</p>Archived for publishing: every task checked, and the specs <code>relay-memory-store</code> and <code>relay-agent-plugin</code> brought up to date. The wiki now says how to make a test computer key with the plugin's own sign-in.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

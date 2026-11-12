@@ -1,6 +1,6 @@
 # Your WongStack memory inside the Relay Everything plugin, saved in your space
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** relay-memory-plugin-plan
 **Open questions:** none
 
@@ -153,3 +153,5 @@ Matthew likes his own WongStack memory and wants it in Relay Everything, but a p
 - **2026-11-12** — Assumed, after review: the build test finds an older kind in `"kind":"…"` with or without a space, because the reader's example is written with no space.
 - **2026-11-12** — Assumed, after review: `GET /v1/memory`'s `kind` filter also finds the older kinds that read as the given kind, as the store's `type` filter does, and returns the stored word, because the examples now say `kind=project`, which missed the older `decision`, `fact` and `plan` facts.
 - **2026-11-12** — Built and saved for the last checks: every task through 6.1 passes; 6.2 and 6.3 run locally, and 6.4 runs on staging after this save.
+- **2026-11-12** — Checked live: 6.2 and 6.3 on this computer, and 6.4 on staging with a key from the plugin's own sign-in. Assumed: Codex cuts the chat-end hook to 3 seconds; memory's capture starts on its own first, so only the kept transcript can be cut, and that fact then links to the saved chat. No change for it.
+- **2026-11-12** — Archived for publishing: every task checked, and the specs `relay-memory-store` and `relay-agent-plugin` brought up to date. The wiki now says how to make a test computer key with the plugin's own sign-in.

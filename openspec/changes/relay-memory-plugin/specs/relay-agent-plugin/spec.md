@@ -47,15 +47,15 @@ When a computer connects, the plugin SHALL ask whether to also remember things f
 - **THEN** memory is off, and nothing about it changes until Ana turns it on
 
 ### Requirement: With memory on, the plugin runs the person's WongStack memory
-With memory on, in a repo with no memory of its own, the plugin SHALL run WongStack's memory from a copy inside the plugin, with nothing else to install, in Claude Code and in Codex: its save check, its summary at chat start, its search and its before-edit warnings, with the facts kept in the person's space. The copy SHALL match the WongStack memory in this repository at each plugin release. In a repo with its own memory, the plugin's memory SHALL stay off, so memory never runs twice in a chat.
+With memory on, in a repo with no memory of its own, the plugin SHALL run WongStack's memory from a copy inside the plugin, with nothing else to install, in Claude Code and in Codex: its capture when a chat ends, its summary at chat start, its search, its topic pulls and its before-edit warnings, with the facts kept in the person's space. The copy SHALL match the WongStack memory in this repository at each plugin release. In a repo with its own memory, the plugin's memory SHALL stay off, so memory never runs twice in a chat, wherever that repo's memory keeps its facts.
 
 #### Scenario: Memory in a side project
 - **WHEN** Ana turns memory on and the AI in her side project saves "the battery is 40 mAh"
 - **THEN** the fact is in her Relay Everything space, and the next chat's summary shows it
 
 #### Scenario: Memory in WongOS
-- **WHEN** Ana has memory on and starts a chat in WongOS, which has its own memory
-- **THEN** only WongOS's memory runs, and no fact goes to her space from that chat
+- **WHEN** Matthew has memory on and starts a chat in WongOS, whose own memory keeps its facts in his space
+- **THEN** only WongOS's memory runs, once, and its chat start shows one summary
 
 ### Requirement: Relay Everything's plugin owns notes, health, places and around a moment
 Notes, health, places, calendar, saved chats and *around a moment* SHALL be read and added only through the plugin's own commands, in any repo, with memory on or off. Memory SHALL NOT read them, and a fact SHALL point to them only by a `relay:` source link.
@@ -63,3 +63,14 @@ Notes, health, places, calendar, saved chats and *around a moment* SHALL be read
 #### Scenario: Around a moment in a repo with its own memory
 - **WHEN** the person asks in WongOS what they were doing when they wrote the battery note
 - **THEN** the plugin answers with the note, its day, and the places and health around it, and WongOS's memory is not asked for them
+
+### Requirement: One daily job builds the knowledge web
+With memory on or off, the plugin's daily build SHALL stay the one daily job on a computer that runs the plugin's memory: the plugin's memory SHALL start no daily tidy of its own, and its background runs SHALL NOT be saved as chats. The daily build SHALL NOT read a chat that memory already read, so one chat's facts are saved once.
+
+#### Scenario: The first chat of the day with memory on
+- **WHEN** Ana, with memory on, starts her first chat of the day in a side project
+- **THEN** the daily build starts once, memory starts no tidy of its own, and no change is made to the side project's pages
+
+#### Scenario: A chat memory read
+- **WHEN** the daily build lists chats to read, and memory already read one of them when it ended
+- **THEN** the build leaves that chat out and still reads the others and the notes

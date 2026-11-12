@@ -19,7 +19,7 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/relay.mjs" <command> [value] [--field value ...]
 ## Start from your topics
 
 1. A chat starts with the person's topics, one line each, from this computer's copy of their knowledge web. A message that names a topic gets a line with that topic's summary. Use these first.
-2. `topic <name>` pulls a topic in one step: its page, the topics it links and those that link it, its newest facts, its notes, and the chats its facts came from.
+2. `topic <name>` pulls a topic in one step: its page, the topics it links and those that link it, its newest facts, its notes, and the chats its facts came from. With memory on, it prints memory's pull as text, with the notes and chats at the end.
 3. A fact's `sources` lead on: `relay:note/<id>` → `note <id>`, `relay:chat/<id>` → `chat <id>`, `relay:day/<day>` → `day <day>`.
 4. Read raw data only to dig in, by the time of a source.
 
@@ -46,7 +46,7 @@ For a question about a note, read both before you answer: a chat can hold the wh
 - `nights`, `workouts`, `places`, `calendar [--q "words"]`: each with `--from <time> --to <time>`. Add `--stages` to `nights` for each night's stage timeline.
 - `points <id>` reads the route of a stay or a trip, by its id from `places` or `day`; `points --from <time> --to <time>` reads by time, at most 7 days.
 - `chats --q "words"` finds saved AI chats; `chat <id>` reads one.
-- `facts --q "words"` searches the memory of facts; `--tag <topic>` finds a topic and its parts, `--source relay:chat/<id>` the facts from one record, and `--<column> <value>`, such as `--kind decision`, one column's value. Add `--all` for replaced facts too. `fact <id>` reads one, with what it replaced.
+- `facts --q "words"` searches the memory of facts; `--tag <topic>` finds a topic and its parts, `--source relay:chat/<id>` the facts from one record, and `--<column> <value>`, such as `--kind project`, one column's value. Add `--all` for replaced facts too. `fact <id>` reads one, with what it replaced.
 - `columns` lists the memory's columns.
 - `me` says which device this is.
 - `add-note` adds a note with the text from stdin, only when the person asks: `node … add-note <<'NOTE'` … `NOTE`.

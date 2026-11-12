@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { handleApp } from "../index";
 import { hashToken } from "./people";
-import { ANA, call, checker, db, directoryDb, env, laptop, lost, makeKey, matthew, NOW, ipad, phone, request, rows } from "../../../tests/relay";
+import { ANA, call, checker, db, directoryDb, env, laptop, lost, makeKey, matthew, NOW, ipad, phone, request, rows, spaces } from "../../../tests/relay";
 
 const MINUTE = 60_000;
 const SESSION = "0b6f3c1e-5d2a-4e8b-9c7f-1a2b3c4d5e6f";
@@ -105,7 +105,23 @@ it("keeps a save beside the chat, and shows the newest save's title as the chat'
   vi.setSystemTime(NOW + MINUTE);
   await call(laptop, "POST", "chat-saves", { sessionId: SESSION, title: "Stiffener plan, final", text: "Glue it." });
   const listed = await call(matthew, "GET", "chats");
-  expect(listed.json.chats.map(item => [item.title, item.savedByAi, item.messages])).toEqual([["Stiffener plan, final", true, 2]]);
+  expect(listed.json.chats.map(item => [item.title, item.savedByAi, item.messages, item.memory])).toEqual([["Stiffener plan, final", true, 2, false]]);
+  // A chat that memory read, as `claude:<session id>` or `codex:<session id>`, says so: its row is captured, or a fact
+  // names its session. Memory's chat end writes a row before it captures, and that row alone is not a read.
+  const space = spaces.sql(ANA);
+  const memoryRead = async () => (await call(matthew, "GET", "chats")).json.chats[0].memory;
+  for (const agent of ["claude", "codex"]) {
+    space.prepare("DELETE FROM relay_memory_sessions").run();
+    space.prepare("INSERT INTO relay_memory_sessions (id, status, reason, updated_at) VALUES (?, 'skipped', 'not captured yet', '2026-11-05T14:00:00Z')")
+      .run(`${agent}:${SESSION}`);
+    expect(await memoryRead()).toBe(false);
+    space.prepare("UPDATE relay_memory_sessions SET status = 'captured', reason = NULL").run();
+    expect(await memoryRead()).toBe(true);
+  }
+  space.prepare("DELETE FROM relay_memory_sessions").run();
+  space.prepare(`INSERT INTO relay_memory (id, fields, sources, device_id, client_id, created_at, session_id)
+    VALUES ('fab2c', '{"kind":"project","text":"Glue the stiffener."}', '["relay:day/2026-11-05"]', 'd-laptop', 'c-1', 6, ?)`).run(`codex:${SESSION}`);
+  expect(await memoryRead()).toBe(true);
   const read = await call(matthew, "GET", "chat", { id: listed.json.chats[0].id });
   expect(read.json.saves.map(item => item.text)).toEqual(["Glue it.", "Use 0.2 mm steel."]);
   expect(messageRows()).toHaveLength(2);

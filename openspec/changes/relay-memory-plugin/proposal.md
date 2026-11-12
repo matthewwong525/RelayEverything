@@ -1,6 +1,6 @@
 # Your WongStack memory inside the Relay Everything plugin, saved in your space
 
-**Status:** planned
+**Status:** in-progress
 **Branch:** relay-memory-plugin-plan
 **Open questions:** none
 
@@ -99,7 +99,7 @@ Matthew likes his own WongStack memory and wants it in Relay Everything, but a p
 
 ## Impact
 
-- **Server:** `app/worker/apps/relay/memory-store.ts` (new) answers the twelve requests through WongStack's `serve()`; `memory-import.ts` (new) for the one-time import; the connector's `/v1/` routes, `key-rules.ts`, and `GET /v1/chats` (a chat memory read); migration `schema/space-migrations/0019_memory_store.sql`; transcripts in the person's held files.
+- **Server:** `app/worker/relay-memory/store.ts` (new) answers the twelve requests through WongStack's `serve()`; `relay-memory/import.ts` (new) for the one-time import; the connector's `/v1/` routes for a computer key alone, and `GET /v1/chats` (a chat memory read); migration `schema/space-migrations/0019_memory_store.sql`; transcripts in the person's held files.
 - **Script:** `scripts/import-wongstack-memory.mjs` (new).
 - **Plugin:** `plugin/memory/` (the copy, made by `scripts/copy-plugin-memory.mjs`), `plugin/memory-profile.mjs` (new), `plugin/test/memory-copy.test.mjs` (new), `plugin/bin/connect.mjs` (the setup choice), `plugin/bin/hook.mjs` and `plugin/hooks/hooks.json` (memory's hooks when on), `plugin/bin/build.mjs` and `plugin/build/` (five kinds, skip read chats), `plugin/skills/` (memory's skill), README, version `0.6.0`.
 - **Docs:** `wiki/stack/relay-knowledge-web.md`, `wiki/stack/relay-chats.md`, the site's API and plugin pages, `npm run relay:api-doc`.
@@ -134,3 +134,22 @@ Matthew likes his own WongStack memory and wants it in Relay Everything, but a p
 - **2026-11-12** — Assumed: the daily build skips a chat that memory already read, because both would save the same facts from it.
 - **2026-11-12** — WongOS's plan (*Relay Everything in WongOS*) asked that the import run twice, before and right after its switch, read the old store through a profile it gives while that store refuses writes, and count by kind → the import keys each fact by its old number, adds only new facts on a later run, reads only, and answers counts by kind; the build's `check-facts` drops a fact the space already holds.
 - **2026-11-12** — Assumed: plugin version `0.6.0`, because `0.5.1` shipped meanwhile and memory is a new feature.
+- **2026-11-12** — Task 1.1: memory's folder here is `.agents/skills/memory/`, read also at `.claude/skills/memory/`, and WongStack's own parts are in `.agents/memory/`; design §1, §6, §7 and the tasks now name these paths. The shipped `OPERATIONS` and `interface.d.mts` match §3.
+- **2026-11-12** — Assumed: the store gives the older facts, which name no owner, author or import, to the person on each store call, because a migration does not know the space's person; `POST /v1/memory` now sets the owner on each new fact.
+- **2026-11-12** — Assumed: an older kind reads as its new kind in SQL, and only the store refuses one on a new fact; `POST /v1/memory` still takes the older kinds, so an installed older plugin keeps working.
+- **2026-11-12** — Assumed: a store search matches each significant word of the question and ranks by how many match, in place of D1's full-text search, because a space has no FTS table; filler words count only when nothing else is left.
+- **2026-11-12** — Assumed: a given `limit` is capped at 200, and no `limit` gives every row, as WongStack's D1 store does.
+- **2026-11-12** — Assumed: a store topic name may hold `.` and `_`, wider than Relay Everything's own topic names, because WongStack names topics such as `node.js`.
+- **2026-11-12** — Assumed: a new fact's `relay:` source is each `relay:` link it names, each checked against the space, else its session's saved chat, else its day; an imported fact's is its day.
+- **2026-11-12** — Assumed: the store routes are not in `openapi.json`, because WongStack's `httpStore` owns their shapes; the site's memory page names them in words.
+- **2026-11-12** — Assumed: the store and the import live in `app/worker/relay-memory/` (`store.ts`, `import.ts`), not in `apps/relay/`, because the mini-app lint rule lets a file there import only its own folder, and the store must import WongStack's `interface.mjs`, as `worker/access-store/` does; both routes are in `relay-mcp/memory-routes.ts`, tested in `memory-routes.test.ts`, not `api.test.ts`. The store test loads WongStack's `contract.mjs` by a dynamic import, because it ships with no types.
+- **2026-11-12** — Assumed: the digest's last run leaves out the daily and import runs, because an import is no capture or tidy.
+- **2026-11-12** — Assumed: the import's `start` is refused once any fact came in by import, too, and a taken number gets the highest number plus one.
+- **2026-11-12** — Assumed, in the plugin: the edit hook has its own matcher and a 5 s limit, and `SessionEnd` 8 s; memory is off outside git, with `RELAY_SAVE=0`, and where saving is off; `relay.mjs topic` adds the notes and chats lines after the pull; the plugin's memory skill leaves out the Daily tidy and Team access parts; the old `FORMAT.md` hash goes in `OLD_FORMATS`; the profile test is `plugin/test/memory.test.mjs`.
+- **2026-11-12** — Assumed, in the import script: all topic definitions go in the first chunk, a missing transcript is skipped, the run checks the counts, and a refusal's words come from `error_description`.
+- **2026-11-12** — Assumed, after review: the copy's chat start runs with no `WONG_MEMORY_NO_HEADLESS`, and only its daily tidy is off, by `off: true` in the copy's `daily.json`, written by the copy's own `setDaily` in a module loaded before the start, because that variable also stopped the start's capture and made it ask the open chat for a subagent.
+- **2026-11-12** — Assumed, after review: `GET /v1/chats` says `memory: true` only when the chat's memory session row is `captured` or a fact names its session, because memory's chat end writes a `skipped` row before any capture, and the build would skip a chat no one read.
+- **2026-11-12** — Assumed, after review: the import's finish counts an imported fact as live unless an imported fact replaced it, because a fact written in the space after the switch may replace one, such as #628, which the source still counts as live, and the catch-up run would report that the counts differ.
+- **2026-11-12** — Assumed, after review: the build test finds an older kind in `"kind":"…"` with or without a space, because the reader's example is written with no space.
+- **2026-11-12** — Assumed, after review: `GET /v1/memory`'s `kind` filter also finds the older kinds that read as the given kind, as the store's `type` filter does, and returns the stored word, because the examples now say `kind=project`, which missed the older `decision`, `fact` and `plan` facts.
+- **2026-11-12** — Built and saved for the last checks: every task through 6.1 passes; 6.2 and 6.3 run locally, and 6.4 runs on staging after this save.

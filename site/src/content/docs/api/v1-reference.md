@@ -192,7 +192,7 @@ Add and remove a note's topics, as this computer: the note's words stay as the p
 
 `GET /v1/memory` · `searchMemory`
 
-The memory's facts, newest first, as the `memory` tool: `q` finds every word in the text columns, `tag` a topic and its parts, `source` the facts from one record, such as relay:chat/<id>, and any column its value as its own field, such as `kind=decision`. Only live facts, unless `all=true`. The answer lists the memory's columns.
+The memory's facts, newest first, as the `memory` tool: `q` finds every word in the text columns, `tag` a topic and its parts, `source` the facts from one record, such as relay:chat/<id>, and any column its value as its own field, such as `kind=project`, which also finds the older kinds that read as it, such as decision. Only live facts, unless `all=true`. The answer lists the memory's columns.
 
 | Field | In | Type | Required | What it holds |
 |---|---|---|---|---|

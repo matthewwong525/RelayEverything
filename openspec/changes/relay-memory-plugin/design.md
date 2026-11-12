@@ -3,7 +3,7 @@
 ## Context
 
 - **WongStack 55.2.1** (commit `a282a4a9`; read in `/root/.cache/wong-stack/WongStack`) ships the memory this plan waited for. The chat *Update to WongStack 55.2.1* syncs it here. What this plan uses from it:
-  - **The plugin folder** `.agents/plugins/memory/`, self-contained: `scripts/` (the CLI `memory.mjs`, the hook scripts `session-start.mjs`, `topic-match.mjs`, `before-edit.mjs`, `session-end.mjs`, the background `run.mjs`, and `lib/`), `store/interface.mjs` (the 12 `OPERATIONS`, `httpStore`, `serve`, `StoreError`), `store/interface.d.mts` (the `Fact`, `FactQuery`, `FactWrite`, `RunWrite` and `Digest` shapes), `store/contract.mjs` (`checkStore(makeStore)`), `skills/dream-memory/`, `hooks/`, `references/`, and `SKILL.md`. A project gets it as a real folder at `.claude/skills/memory/`.
+  - **The plugin folder** `.agents/skills/memory/` in this repo (WongStack's own layout names it `.agents/plugins/memory/`), self-contained: `README.md`, `scripts/` (the CLI `memory.mjs`, the hook scripts `session-start.mjs`, `topic-match.mjs`, `before-edit.mjs`, `session-end.mjs`, the background `run.mjs`, and `lib/`), `store/interface.mjs` (the 12 `OPERATIONS`, `httpStore`, `serve`, `StoreError`), `store/interface.d.mts` (the `Fact`, `FactQuery`, `FactWrite`, `RunWrite` and `Digest` shapes), `store/contract.mjs` (`checkStore(makeStore)`), `skills/dream-memory/`, `hooks/` (`claude.json`, `codex.json`), `.claude-plugin/`, `.codex-plugin/`, `references/`, and `SKILL.md`. The agents read it at `.claude/skills/memory/`, an untracked copy of the same files.
   - **The profile**: `scripts/lib/store.mjs` loads `WONG_MEMORY_PROFILE`, else `<repo>/.agents/memory/profile.mjs`. Its parts: `connect` (a store, or `{ url, headers }` for the plugin's own `httpStore`), `topics`, `steps`, `currentSlug`, `slugState`, `person`, `lookup` (`{ named, before, after, files }`), `tidy` (`{ pages, deny, publish }`), `sessionStart`, `commands`. Each is optional except `connect`.
   - **WongStack's own parts** sit outside the plugin, in `.agents/memory/` (the D1 store, sign-in, migrations, admin jobs, the profile). The app's memory route is `/_memory/v2/`.
   - **New since this plan was written**: the daily tidy and `pull`/`related` (53.0.0), memory sending each chat's redacted transcript itself (52.0.0), and the files behind each fact through `lookup.files` (55.1.0).
@@ -27,7 +27,7 @@
 Claude Code / Codex on a computer
   relay@relay (one plugin)
     chat saving, notes, health, places, around, db, daily build     always
-    memory/   copy of this repo's synced .agents/plugins/memory/     only when on (§6)
+    memory/   copy of this repo's synced .agents/skills/memory/      only when on (§6)
     memory-profile.mjs   Relay's profile for the copy
         │ computer key (agent reach)
         ▼
@@ -35,17 +35,17 @@ Claude Code / Codex on a computer
     .claude/skills/memory/ + .agents/memory/profile.mjs → connect: { url: <relay>/v1/memory, key }   (§9)
         │ computer key (agent reach)
         ▼
-connector Worker  /v1/memory/v2/<op>  → memory-store.ts → Space (relay_memory…) + held files (transcripts)
-                  /v1/memory/import…  → memory-import.ts (§10)
+connector Worker  /v1/memory/v2/<op>  → relay-memory/store.ts → Space (relay_memory…) + held files (transcripts)
+                  /v1/memory/import…  → relay-memory/import.ts (§10)
 ```
 
-`memory-store.ts` imports `serve`, `OPERATIONS` and `StoreError` from `.agents/plugins/memory/store/interface.mjs` in this repo, the same source the plugin's copy is made from, so the client and the server always match.
+`relay-memory/store.ts` imports `serve`, `OPERATIONS` and `StoreError` from `.agents/skills/memory/store/interface.mjs` in this repo, the same source the plugin's copy is made from, so the client and the server always match.
 
 ### 2. The store: route and caller
 
 - **Route:** `/v1/memory/v2/<op>` on the connector Worker, the same `/v1/` the plugin calls (`computer.api`). The client's `url` is `<api>/memory`; `httpStore` adds `/v2/<op>`, so the server calls `serve(request, { prefix: '/v1/memory/v2/', caller, store: relayStore(space, caller) })`.
-- **Caller:** only a computer key (`agent` reach) passes; `key-rules.ts` adds the route to that reach alone. `caller` answers `{ role: 'admin', subject: <personId>, email: <account email> }`. An API key, the connector and a phone key get 403 before `serve` runs; `httpStore` reads a 403 with no store `kind` as a refused sign-in. A key reaches only its own person's space, as today.
-- **Every SQL statement is written in `memory-store.ts` or `memory.ts`**; no operation takes SQL, a table name, or an owner.
+- **Caller:** only a computer key (`agent` reach) passes: the connector (`relay-mcp/index.ts`, through `relay-mcp/memory-routes.ts`) answers `/v1/memory/v2/` and `/v1/memory/import` before `/v1/`'s own routes, and only for a key whose asker is a computer, as `answers.ts`'s `computer()` does for facts. This repo has no `key-rules.ts`. `caller` answers `{ role: 'admin', subject: <personId>, email: <account email> }`. An API key, the connector and a phone key get 403 before `serve` runs; `httpStore` reads a 403 with no store `kind` as a refused sign-in. A key reaches only its own person's space, as today.
+- **Every SQL statement is written in `relay-memory/store.ts`, `relay-memory/import.ts` or `memory.ts`**; no operation takes SQL, a table name, or an owner.
 
 ### 3. The twelve operations
 
@@ -89,11 +89,11 @@ The build backfills `owner_subject` with the person's id. The shapes are `store/
 - **Sources.** `memory_sources` holds memory's own sources as written (`session:<id>`, a path, a link), never checked against the space; reads give them back exactly. Relay's `sources` column keeps its rule of at least one `relay:` link: the server sets `relay:chat/<id>` when the device has a chat with that session's id, else `relay:day/<YYYY-MM-DD>` of the fact's time. A `relay:` link in memory's sources is also checked, and one to a record not in the space is refused. The page and the connector show `relay:` sources, as today.
 - **Tags.** A store fact may have no tag, as memory allows; `relay_memory_tags` has no rule against it, and the one-tag rule stays for Relay's own `add-facts` and tag changes.
 - **Ids.** A new fact's `n` is `max(n) + 1` inside the batch, which a Durable Object runs alone. `relay:fact/<id>` links keep the `f…` id.
-- **The check.** `memory-store.test.ts` runs `checkStore(makeStore)` against a test space, where `as(caller)` gives `relayStore(space, caller)`, plus Relay's own cases: history kept, no `relay_notes`/`relay_health`/`relay_locations` row changed, a non-computer key refused.
+- **The check.** `relay-memory/store.test.ts` runs `checkStore(makeStore)` against a test space, where `as(caller)` gives `relayStore(space, caller)`, plus Relay's own cases: history kept, no `relay_notes`/`relay_health`/`relay_locations` row changed, a non-computer key refused.
 
 ### 4. Kinds
 
-`relay_memory_columns.kind`'s note, `schema/knowledge/FORMAT.md`, and the daily build's `plugin/build/FORMAT.md` list the five: `user`, `feedback`, `project`, `reference`, `thread`. A write checks `kind` against them. A read through the store maps an older value without changing the row: `open` → `thread`, `preference` → `feedback`, `fact`/`decision`/`plan` → `project`, `reference` → `reference`. A `type` filter matches the new kind and the old kinds that map to it. The `/v1/memory` reads return the stored word, as today.
+`relay_memory_columns.kind`'s note, `schema/knowledge/FORMAT.md`, and the daily build's `plugin/build/FORMAT.md` list the five: `user`, `feedback`, `project`, `reference`, `thread`. A write checks `kind` against them. A read through the store maps an older value without changing the row: `open` → `thread`, `preference` → `feedback`, `fact`/`decision`/`plan` → `project`, `reference` → `reference`. A `type` filter matches the new kind and the old kinds that map to it. `GET /v1/memory`'s `kind` filter does the same: `kind=project` also finds `fact`, `decision` and `plan`, and an older word, such as `kind=decision`, finds only itself. The `/v1/memory` reads return the stored word, as today.
 
 ### 5. The agents' database
 
@@ -101,14 +101,14 @@ Shipped in its own change, `relay-agent-database` (plugin 0.5.1). Memory never u
 
 ### 6. Memory inside Relay's plugin
 
-- **The copy.** `scripts/copy-plugin-memory.mjs` copies `.agents/plugins/memory/` to `plugin/memory/`, leaving out a short list: `hooks/` and `.codex-plugin/`/`.claude-plugin/` (Relay's hook runs the scripts), `skills/dream-memory/` (the daily tidy; below), `references/setup.md` (setup is `/relay:connect`), `scripts/lib/documents/runtime/` (packages; the document search stays off until a host sets it up, and memory reads facts without it), and `store/contract.mjs`. It writes memory's `SKILL.md` to `plugin/skills/memory/SKILL.md` with the plugin's script path; the copy's `pluginPath` already prints full paths outside a WongStack checkout. The plugin release runs it; `plugin/test/memory-copy.test.mjs` fails when the copy differs from the source, or when a copied file imports a file that was not copied, so a `/wong-sync` that changes memory updates the copy in the same change. The copy is MIT code from Matthew's own public repo, so `public-check.mjs` passes it.
+- **The copy.** `scripts/copy-plugin-memory.mjs` copies `.agents/skills/memory/` to `plugin/memory/`, leaving out a short list: `hooks/`, `.codex-plugin/`, `.claude-plugin/` and `README.md` (Relay's hook runs the scripts, and Relay's plugin has its own README), `skills/dream-memory/` (the daily tidy; below), `references/setup.md` (setup is `/relay:connect`), `scripts/lib/documents/runtime/` (packages; the document search stays off until a host sets it up, and memory reads facts without it), and `store/contract.mjs`. It writes memory's `SKILL.md` to `plugin/skills/memory/SKILL.md` with the plugin's script path; the copy's `pluginPath` already prints full paths outside a WongStack checkout. The plugin release runs it; `plugin/test/memory-copy.test.mjs` fails when the copy differs from the source, or when a copied file imports a file that was not copied, so a `/wong-sync` that changes memory updates the copy in the same change. The copy is MIT code from Matthew's own public repo, so `public-check.mjs` passes it.
 - **Relay's profile.** `plugin/memory-profile.mjs`, no packages, as the rest of `plugin/`. `hook.mjs` and the memory skill set `WONG_MEMORY_PROFILE` to it for each memory script they run:
   - `connect`: reads `computer.json`; returns `{ url: computer.api + '/memory', headers: () => ({ Authorization: 'Bearer ' + key }) }`. Memory off, no connection, saving off in this project (`saving.mjs`'s rule), or a repo with its own memory (§8) → it throws `StoreError` of kind `unconfigured`, and the copy stays quiet.
   - `topics`: the local knowledge copy's pages, as `relay.mjs` reads them, each `{ tag, kind: 'company', page, summary, aliases: [], paths: [page], docs: [page] }`. Memory reads a page at `join(ctx.root, page)`, so `page` is the copy's file relative to the repo root.
   - `lookup.after(ctx, { tags })`: for a pulled topic, the notes with its tag and the titles and summaries of up to 3 chats its facts came from, through `/v1/`; a failure adds nothing.
   - No `steps`, `currentSlug`, `slugState`, `person`, `tidy`, `commands`, `sessionStart`, or `lookup.named/before/files`: a side project has no WongStack verbs, and `hook.mjs` already syncs the knowledge copy.
-- **One daily job.** Relay's daily build stays the person's one daily job. `hook.mjs` runs the copy's `session-start.mjs` with `WONG_MEMORY_NO_HEADLESS=1`, so it starts no daily tidy, and the copy's `session-end.mjs` without it, so each chat's capture runs when it ends. `hook.mjs` saves no chat and starts no build when `WONG_MEMORY_RUN=1`, as for `RELAY_BUILD_RUN`, so memory's background run is never saved as a chat.
-- **The build skips what memory read.** `GET /v1/chats` marks a chat `memory: true` when `relay_memory_sessions` has a row whose id ends with that chat's session id. `build.mjs work` leaves those chats out; it still reads notes.
+- **One daily job.** Relay's daily build stays the person's one daily job. Before the copy's `session-start.mjs` runs, `hook.mjs` loads `plugin/lib/daily-off.mjs` (`node --import`), which writes `off: true` into the copy's `daily.json` in memory's state folder, by the copy's own `repoContext` and `setDaily`. So the start starts no daily tidy (`dailyBlocker`: *off on this computer*), but still starts the capture of the chats that wait, on its own. No copy script gets `WONG_MEMORY_NO_HEADLESS`: with it, the start would start no capture either, and would ask the open chat to start a subagent for it. The copy's `session-end.mjs` starts each chat's capture when it ends. `hook.mjs` saves no chat and starts no build when `WONG_MEMORY_RUN=1`, as for `RELAY_BUILD_RUN`, so memory's background run is never saved as a chat.
+- **The build skips what memory read.** `GET /v1/chats` marks a chat `memory: true` when memory read it: its `relay_memory_sessions` row, `claude:` or `codex:` and the chat's session id, has the status `captured`, or a fact in the space has that session id as `session_id`. A row alone is not enough: memory's chat end writes one (`skipped`, *not captured yet*) before the capture runs. `build.mjs work` leaves those chats out; it still reads notes.
 - **The setup choice.** After the sign-in, `/relay:connect` asks *Also remember things for you?* and keeps `memory: true|false` in `computer.json`; `/relay:memory on|off` changes it later. A computer connected before this release reads as off.
 - **Hooks.** `hooks.json` keeps `SessionStart`, `UserPromptSubmit`, `Stop`, and `SessionEnd`, adds `PreToolUse` on `Edit|Write|MultiEdit|NotebookEdit`, and gives `SessionEnd` 8 seconds. `hook.mjs` decides each time:
   - repo with its own memory (§8) → chat saving only; no topics, no memory;
@@ -132,7 +132,7 @@ Checked against 55.2.1 on 2026-11-12. Every needed part shipped; nothing is edit
 
 **Not needed:** a plugins folder of Relay's own, manifests, a shop, or a setup guide for other repos. WongStack's hooks file stays out of the copy.
 
-Task 1.1 confirms the sync is live here and stops for Matthew only if a part above changed.
+Task 1.1 confirmed on 2026-11-12 that the sync is live here: `OPERATIONS` lists the same twelve operations as §3, and `interface.d.mts`'s `Fact`, `FactQuery`, `FactWrite`, `RunWrite` and `Digest` match §3. Only the folder's place differs: `.agents/skills/memory/`, not `.agents/plugins/memory/`.
 
 ### 8. Repos that have their own memory
 
@@ -151,10 +151,16 @@ A WongStack project uses the store by its own profile: `.agents/memory/profile.m
 
 The import moves a WongStack memory in, in one main run and, if the source changed meanwhile, one or more catch-up runs. WongOS runs it once before its switch and again right after.
 
-- **The routes**, on the same computer-key reach: `POST /v1/memory/import` with `{ start: { highest } }`, then chunks of `{ facts, sessions, tags }`, then `{ finish: true }`; `POST /v1/memory/import/transcript?session=<id>` with bytes. All in `memory-import.ts`.
-- **Start**, in the first run only. Refused when the space has a session row or a fact with a `session_id` or `slug`: memory has used it, and its numbers are in use. Else, in one batch, the space's own facts move to `n` above `highest`, in their order. No one has read those numbers yet, so nothing points at them. A later run sends no `start`.
+- **The routes**, on the same computer-key reach, routed in `relay-mcp/memory-routes.ts` and answered in `relay-memory/import.ts`. `POST /v1/memory/import` takes one JSON body of four kinds:
+  - `{}` → `{ imported, used, highest }`: how many facts came in by import, whether memory used the space (below), and the highest `n`;
+  - `{ start: { highest } }` → `{ moved }`;
+  - a chunk `{ subject, facts, sessions, tags }` → `{ added, skipped, renumbered: [{ old, new }] }`, where `subject` is the source's id of the importing person, `facts` are the source's `Fact` rows, `sessions` its session rows, and `tags` its `tags` rows;
+  - `{ finish: { links: [{ id, by }] } }` → `{ linked, counts: { live, all } }`, each link an imported fact's old number and its replacer's old number, each count by kind.
+
+  `POST /v1/memory/import/transcript?session=<id>` with the bytes → `{ key }`, or `{ skipped: true }` when one is kept.
+- **Start**, in the first run only. Refused when the space has a session row, a fact with a `session_id` or `slug`, or an imported fact: memory has used it, and its numbers are in use. Else, in one batch, the space's own facts move to `n` above `highest`, in their order. No one has read those numbers yet, so nothing points at them. A later run sends no `start`.
 - **Facts.** Each is keyed by its source number: `client_id` is `import:<old id>`, so a fact already imported is skipped, in any run. A new one keeps its old number as `n` when that number is free, else takes the next free number; the chunk's answer names each `old → new` that differs. It keeps its `slug`, `type` as `kind`, `body`, `author`, `created_at`, `session_id`, `owner_subject` (the source's id of the importing person becomes the space's person id; others stay as they are), `shared`, `sources` as `memory_sources`, and `tags`. Chunks hold up to 200 facts, in number order. In the main run every number is free, so #628 stays #628; only a fact the source added after the main run can get a new number.
-- **Finish**, in each run. In one batch, each imported fact the source marks superseded gets `replaced_by` its replacer's `f…` id, found by the replacer's old number, and the replacer `replaces` it; a link already set is skipped. A link to a number not imported fails the finish and names it. The finish adds a run row `import` and answers the imported facts' counts, live and in all, by kind, so the source's `stats` can be compared with it. The space's `stats` also counts Relay's own build facts, so it is larger.
+- **Finish**, in each run. The script sends every link the source holds, so a later run sends the old ones again. In one batch, each imported fact the source marks superseded gets `replaced_by` its replacer's `f…` id, found by the replacer's old number, and the replacer `replaces` it; a link already set is skipped. A link to a number not imported fails the finish and names it. The finish adds a run row `import` and answers the imported facts' counts, live and in all, by kind, so the source's `stats` can be compared with it. An imported fact counts as live unless an imported fact replaced it: after the switch, a fact memory writes in the space may replace one, such as #628, which the read-only source still holds live. The space's `stats` also counts Relay's own build facts, so it is larger.
 - **Sessions, tags and transcripts.** Session rows and tag definitions come with the chunks, each stored once by its id or name. Each transcript goes to `memory/transcripts/<session id>`, as `putTranscript` keeps it, skipped when one is there, so `transcript` works for imported facts.
 - **The script.** `scripts/import-wongstack-memory.mjs --from <WongStack checkout> [--profile <file>] [--dry-run]` reads the source only through that checkout's memory plugin (`openStore` from its `.claude/skills/memory/scripts/lib/store.mjs`), with the profile `--profile` names, else the checkout's own, and that profile's sign-in. So after WongOS's profile points at the space, a profile for the old store still reads it. It uses only the read requests (`caller`, `facts` with `all`, `everyone` and `withTags` by number ranges, `tags`, `session`, `transcript`, `stats`), so a source that refuses every write still works. It writes to the space with this computer's Relay Everything key, never to the source, and holds no address. `--dry-run` reads and prints the counts only. A run sends `start` only when the space has no imported fact.
 - **The source stays.** WongOS's old store stays as it is, as a read-only backup; *Relay Everything in WongOS* stops its writes and switches WongOS's profile.

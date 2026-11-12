@@ -273,7 +273,7 @@ const CHAT = (n: number) => `c0000000-0000-4000-8000-00000000000${n}`;
 it("finds saved chats holding every word, with the matching lines and no device or session id", async () => {
   const found = await ask("search_chats", { query: "stiffener" });
   expect(found).toEqual({ nextCursor: null, chats: [{ id: CHAT(1), title: "Stiffener plan", project: "relay-ring", app: "claude-code",
-    startedAt: "2026-11-04T09:00:00-05:00", lastAt: "2026-11-04T09:10:00-05:00", messages: 4, savedByAi: true,
+    startedAt: "2026-11-04T09:00:00-05:00", lastAt: "2026-11-04T09:10:00-05:00", messages: 4, savedByAi: true, memory: false,
     lines: [{ role: "you", text: "How thick should the stiffener be?" }, { role: "you", text: "Save the plan for the stiffener to Relay" }] }] });
   expect(JSON.stringify(found)).not.toMatch(/seed-session|d0000000|device/);
   // A word in the AI's summary alone finds the chat too; every word must match.

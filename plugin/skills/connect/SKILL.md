@@ -26,7 +26,13 @@ allowed-tools: Bash(node:*)
 
    If it says *Not connected yet*, ask the person to click **Connect**, then run `wait` again.
 4. Show the lines it prints, word for word. A line can name a second Relay Everything AI connector with a command that removes it. Ask the person before you run that command, and never run it unasked.
+5. When it says *connected*, ask the person: *Also remember things for you?* Say in one line what it does: Relay Everything keeps short facts from each chat on this computer, such as what they decided, prefer and left open, in their own Relay Everything space, and each new chat starts with them. A project with its own memory keeps its own. On a yes, run the first command; on a no, the second. Show the lines it prints, word for word.
+
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/bin/connect.mjs" memory on
+   node "${CLAUDE_PLUGIN_ROOT}/bin/connect.mjs" memory off
+   ```
 
 Never show, print or copy the key. It stays in this computer's key file.
 
-`status` says whether this computer is connected. `forget` deletes the key file.
+`status` says whether this computer is connected. `forget` deletes the key file. `/relay:memory on` or `off` changes the memory choice later.

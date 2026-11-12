@@ -37,17 +37,29 @@ The Relay Everything plugin saves each Claude Code or Codex chat to your Relay E
 3. Make sure that the page shows the same code as the AI. Then click **Connect**. The link works one time, for 10 minutes.
 4. Tell the AI that you clicked **Connect**. The AI says the name of the computer.
 5. If Claude Code or Codex also has the Relay Everything AI connector, the AI shows the command that removes it. The plugin does the same work. The AI runs the command only when you say yes.
+6. The AI asks *Also remember things for you?* Say yes to turn on memory, or no to keep it off. You can change it later: [Memory](#memory).
 
 One connection works for Claude Code and Codex on this computer.
 
 If you used version 0.2 of the plugin, type `/relay:connect` one time. The old key only saves chats.
 
+## Memory
+
+Memory is off until you say yes at `/relay:connect`. Type `/relay:memory on` to turn it on, `/relay:memory off` to turn it off, or `/relay:memory` to see which it is. A computer that you connected before version 0.6.0 has memory off.
+
+- **What it saves.** When a chat ends, your own AI reads it in the background and keeps short facts: who you are, how you want a job done, what you decided or plan, where to find a thing, and what is still open. It keeps a copy of the chat's transcript with keys hidden, so a fact can show where it came from.
+- **Where.** The facts and transcripts go to your own Relay Everything space, with this computer's key. They do not go to a webhook.
+- **What a chat gets.** A chat starts with your open threads, your newest facts and your topics. A message that names a topic gets its summary. Ask *what did we decide about …*, or type `/relay:memory`, to search it.
+- **A project's own memory wins.** In a project that has its own memory, such as a WongStack project (`.claude/skills/memory/` or `.agents/memory/profile.mjs`), Relay Everything's memory stays off. The plugin still saves the chat there, and shows no topics.
+- **It stays off** where saving is off, with `RELAY_SAVE=0`, and in a folder that is not a git project.
+- **One daily job.** Memory starts no daily job of its own. The daily build stays the one job each day, and it leaves out a chat that memory read.
+
 ## Ask about your data
 
 Ask in your own words, for example *how did I sleep last night?*, *find my notes about the battery*, or *what was I doing when I wrote the battery note?* The AI uses the plugin's `ask` skill. Times are in this computer's time zone, unless you name a different zone.
 
-- **Your topics come first.** When a chat starts, the AI gets your top-level topics, one line each, from this computer's copy of your knowledge web. When your message names a topic, the AI gets that topic's summary. Both read only the copy on this computer: no network call, and the chat never waits. The copy syncs on its own when a chat starts, at most once in 15 minutes.
-- **One step pulls a topic.** `relay.mjs topic battery` gets the page, the topics it links and those that link it, the newest facts and notes on it, and the chats its facts came from.
+- **Your topics come first.** With memory off, when a chat starts, the AI gets your top-level topics, one line each, from this computer's copy of your knowledge web. When your message names a topic, the AI gets that topic's summary. Both read only the copy on this computer: no network call, and the chat never waits. The copy syncs on its own when a chat starts, at most once in 15 minutes.
+- **One step pulls a topic.** `relay.mjs topic battery` gets the page, the topics it links and those that link it, the newest facts and notes on it, and the chats its facts came from. With memory on, it gives memory's pull of the topic, then its notes and chats.
 - **One step reads around a moment.** `relay.mjs around <note id>`, or `--at <time>`, gets the note, its day, and the notes, places, calendar events and hourly steps and heart rate from 2 hours before to 2 hours after. `--hours` sets the window, up to 12 hours each way.
 - **The route of a stay or a trip.** `relay.mjs points <id>` gets its location points.
 
@@ -103,8 +115,9 @@ A chat that ended before you connected the computer is not sent.
 
 The plugin keeps its files in `~/.config/relay-everything/`, or in `$XDG_CONFIG_HOME/relay-everything/` if you set `XDG_CONFIG_HOME`. To use a different folder, set `RELAY_EVERYTHING_HOME`.
 
-- `computer.json` holds the server address, the key and the name of this computer. Only you can read it. Never copy the key into a chat or a file.
+- `computer.json` holds the server address, the key, the name of this computer and your memory choice. Only you can read it. Never copy the key into a chat or a file.
 - The `state/` folder holds the path of each chat file, its project, how many messages were sent, the projects with saving off, and `send.log`. `send.log` holds the last 200 sends, with only session IDs, counts and statuses. A send that fails waits there, and the next start of the app sends it.
+- With memory on, memory keeps its own files for each project in the project's git folder, in `.git/wong-memory/`: the chats it knows, facts that wait for the network, and the last start's summary.
 - The `knowledge/` folder is this computer's copy of your knowledge web: a git folder of topic pages. `knowledge.mjs sync` gets the newest pages and sends your changes, at most once every 15 minutes unless the copy has changes or you add `--now`. `knowledge.json` holds the time of the last sync. The one-hour pass for each sync goes to git only in its environment: it is never written to a file. The knowledge web needs git, and a server whose Cloudflare account has Artifacts.
 
 - `build.json` holds the daily build's settings for this computer: off or on, the day of the last try, a random id for this computer, what is still to read, and the last error. The `build/` folder holds a lock while a build runs, and the run's counts, ids and topic names, which the next build clears.

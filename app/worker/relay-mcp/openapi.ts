@@ -49,7 +49,8 @@ const event = z.strictObject({ id: z.string(), title: z.string(), calendar: z.st
   allDay: z.boolean(), location: z.string().nullable(), notes: z.string().nullable(), url: z.string().nullable(), people: z.array(person),
   device: z.string().describe("The name of the phone that sent it.") });
 const chat = { id: z.string(), title: z.string(), project: z.string().describe("The project's folder name."), app: z.enum(["claude-code", "codex"]).describe("The app the chat came from."),
-  startedAt: at, lastAt: at, messages: z.number(), savedByAi: z.boolean() };
+  startedAt: at, lastAt: at, messages: z.number(), savedByAi: z.boolean(),
+  memory: z.boolean().describe("True when the computer's memory read the chat and saved its facts.") };
 const role = z.enum(["you", "ai", "step"]);
 const photo = z.strictObject({ id: z.string(), takenAt: at, lat: z.number().nullable(), lon: z.number().nullable(), width: z.number(), height: z.number() });
 const fact = z.strictObject({ id: z.string().describe("The fact's id, such as fk3x9."),

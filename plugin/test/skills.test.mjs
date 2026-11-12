@@ -120,16 +120,19 @@ test('each skill names itself and runs its own script from the plugin\'s folder'
 
 test('the hooks run in Claude Code and Codex: no async hook, a short end, and the plugin\'s folder in each command', () => {
   const { hooks } = JSON.parse(read('hooks/hooks.json'));
-  assert.deepEqual(Object.keys(hooks), ['SessionStart', 'UserPromptSubmit', 'Stop', 'SessionEnd']);
-  const events = { SessionStart: 'session-start', UserPromptSubmit: 'prompt', Stop: 'stop', SessionEnd: 'session-end' };
+  assert.deepEqual(Object.keys(hooks), ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'Stop', 'SessionEnd']);
+  const events = { SessionStart: 'session-start', UserPromptSubmit: 'prompt', PreToolUse: 'before-edit', Stop: 'stop', SessionEnd: 'session-end' };
   for (const [event, groups] of Object.entries(hooks)) {
     const [hook] = groups.flatMap(group => group.hooks);
     assert.equal(hook.async, undefined, `${event}: Codex does not run an async hook`);
     assert.equal(hook.command, `node "\${CLAUDE_PLUGIN_ROOT}/bin/hook.mjs" ${events[event]}`);
   }
-  assert.equal(hooks.SessionEnd[0].hooks[0].timeout, 3);
+  // Memory's end gets its own 5 seconds in Claude Code; Codex keeps an end to 3 seconds, after the send has started.
+  assert.equal(hooks.SessionEnd[0].hooks[0].timeout, 8);
+  // An edit in either app: Claude Code's edit tools, and Codex's apply_patch.
+  assert.deepEqual(hooks.PreToolUse[0].matcher.split('|'), ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'apply_patch']);
   const manifest = JSON.parse(read('.claude-plugin/plugin.json'));
-  assert.equal(manifest.version, '0.5.1');
+  assert.equal(manifest.version, '0.6.0');
   assert.equal(manifest.userConfig, undefined);
   assert.match(manifest.description, /Claude Code/);
   assert.match(manifest.description, /Codex/);

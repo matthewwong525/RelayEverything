@@ -4,7 +4,14 @@ Your AI reads this page before it writes a fact or a page. Change it, and your A
 
 ## Facts
 
-- A fact is one row in your memory. Each fact has one short sentence in `text`, and one kind in `kind`: `fact`, `decision`, `preference`, `plan`, `open` or `reference`.
+- A fact is one row in your memory. Each fact has one short sentence in `text`, and one kind in `kind`:
+  - `user`: who you are, what you know, and how you like to work.
+  - `feedback`: how you want a job done: a correction, or a way that worked, with its reason.
+  - `project`: a fact, a decision or a plan about something that goes on.
+  - `reference`: where to find a thing: a link, a file or a place to look.
+  - `thread`: a question or a job that is still open.
+
+  A fact saved with an older kind keeps its word, and reads as its new kind: `open` as `thread`, `preference` as `feedback`, and `fact`, `decision` and `plan` as `project`.
 - Read the memory's columns with `relay.mjs columns`, and fill each column that fits.
 - Tags name topics, such as `battery` or `bike-charger`. A fact has at least one tag, and a tag for each topic it touches.
 - A fact has at least one source: a link to the record it came from.
@@ -15,7 +22,7 @@ A sample fact:
 
 ```json
 { "tags": ["bike-battery"], "sources": ["relay:chat/7f3a#120"], "replaces": ["fk2pq"],
-  "fields": { "kind": "decision", "text": "The bike's battery is 500 Wh, not 400 Wh." } }
+  "fields": { "kind": "project", "text": "The bike's battery is 500 Wh, not 400 Wh." } }
 ```
 
 ## Pages

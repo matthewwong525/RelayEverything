@@ -189,6 +189,12 @@ it("searches facts by words, tag, source, column and time, newest first, a page 
   expect(facts((await call(`memory?source=relay:chat/${CHAT(1)}&all=true`)).json)).toEqual(["fb4tt"]);
   expect(facts((await call(`memory?source=relay:note/${ID(2)}`)).json)).toEqual(["fd7mm"]);
   expect(facts((await call("memory?kind=fact")).json)).toEqual(["fd7mm"]);
+  // A new kind finds the older kinds that read as it, and each fact keeps its stored word.
+  // An older word finds only itself.
+  const projects = (await call("memory?kind=Project&all=true")).json as { facts: { id: string; fields: { kind: string } }[] };
+  expect(projects.facts.map(fact => [fact.id, fact.fields.kind])).toEqual([["fc5kk", "decision"], ["fd7mm", "fact"], ["fb4tt", "decision"]]);
+  expect(facts((await call("memory?kind=decision")).json)).toEqual(["fc5kk"]);
+  expect(facts((await call("memory?kind=thread")).json)).toEqual([]);
   expect(facts((await call("memory?from=2026-11-04T17:00:00Z&to=2026-11-04T18:00:00Z")).json)).toEqual(["fd7mm"]);
   const first = await call("memory?limit=1");
   expect([facts(first.json), first.json.nextCursor]).toEqual([["fc5kk"], "1793816200000.fc5kk"]);

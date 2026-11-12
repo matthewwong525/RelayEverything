@@ -27,11 +27,19 @@ Any plugin with a computer's key reaches the memory and the web in the same way.
 1. **Open the web.** `POST /v1/knowledge/access` answers `{ "remote": "…", "token": "…", "expiresAt": "…" }`: your web's git address, and a pass that reads and writes it for one hour. Give the pass to git as a header, never in the address or a file: `git -c http.extraHeader="Authorization: Bearer $TOKEN" clone "$REMOTE"`. A server whose Cloudflare account has no Artifacts answers `501`, `not_set_up`.
 2. **Read the rules.** Read your web's own `FORMAT.md`, and follow it over the default below. Read the columns with `GET /v1/memory/columns`.
 3. **Add facts.** `POST /v1/memory` with `{ "facts": [ … ] }`, up to 50 at a time. Give each fact your own `clientId`, so a resend after a lost answer is kept once. All of the facts are added, or none.
-4. **Find facts.** `GET /v1/memory?tag=battery`, `?q=words`, `?source=relay:chat/<id>`, or any column as its own field, such as `?kind=decision`. Add `all=true` for replaced facts too.
+4. **Find facts.** `GET /v1/memory?tag=battery`, `?q=words`, `?source=relay:chat/<id>`, or any column as its own field, such as `?kind=project`. `?kind=project` also finds the facts saved with an older kind that reads as `project`, such as `decision`; each fact shows the kind word it was saved with. Add `all=true` for replaced facts too.
 5. **Change topics.** `POST /v1/memory/{id}/tags` and `POST /v1/notes/{id}/tags` with `{ "add": ["bike/charging"], "remove": ["bike"] }`. A fact keeps at least one topic.
 6. **List your chats.** `GET /v1/chats?from=2026-11-03&to=2026-11-10` with no `q` lists every saved chat active in that time, newest first, each with its message count and last time. Read one from a message on with `GET /v1/chats/{id}?cursor=<seq>`. The daily build keeps what it read in [the builder's record](#the-builders-record).
 
 Only a computer's key changes the memory and opens the web: an API key and the AI connector read the memory, and change nothing in it. The [Web API reference](../v1-reference/) lists each route's fields.
+
+### The memory store
+
+The plugin's memory, from WongStack, reaches your memory through its own store routes: `POST /v1/memory/v2/<request>`, such as `facts`, `write`, `digest` or `transcript`, with a computer's key. Give memory the address `<your-relay-server>/v1/memory`. Each fact there has a number, such as `#12`, beside its `f…` id. The store keeps memory's chat transcripts in your space's sealed files, and when it kept none, it gives the saved chat as text. A chat that memory read shows `memory: true` in `GET /v1/chats`, and the daily build skips it. Memory read a chat when it captured the chat, or a fact came from it; a chat that memory has not captured yet shows `memory: false`. An API key, a phone's key and the AI connector get `403` from these routes.
+
+### Move a WongStack memory in
+
+`node scripts/import-wongstack-memory.mjs --from <WongStack checkout>` moves a WongStack project's memory into your space, one time, with this computer's key. Add `--dry-run` to count the facts and send nothing. Each fact keeps its number, date, author, kind, topics and sources, and a replaced fact stays linked to its replacer. Run it again to bring only the facts added since; a fact whose number is taken gets the next free number, and the script prints it. The script only reads the old memory. It sends to `POST /v1/memory/import` and `POST /v1/memory/import/transcript`.
 
 ## The default rules
 
@@ -41,7 +49,14 @@ Your AI reads this page before it writes a fact or a page. Change it, and your A
 
 ## Facts
 
-- A fact is one row in your memory. Each fact has one short sentence in `text`, and one kind in `kind`: `fact`, `decision`, `preference`, `plan`, `open` or `reference`.
+- A fact is one row in your memory. Each fact has one short sentence in `text`, and one kind in `kind`:
+  - `user`: who you are, what you know, and how you like to work.
+  - `feedback`: how you want a job done: a correction, or a way that worked, with its reason.
+  - `project`: a fact, a decision or a plan about something that goes on.
+  - `reference`: where to find a thing: a link, a file or a place to look.
+  - `thread`: a question or a job that is still open.
+
+  A fact saved with an older kind keeps its word, and reads as its new kind: `open` as `thread`, `preference` as `feedback`, and `fact`, `decision` and `plan` as `project`.
 - Read the memory's columns with `relay.mjs columns`, and fill each column that fits.
 - Tags name topics, such as `battery` or `bike-charger`. A fact has at least one tag, and a tag for each topic it touches.
 - A fact has at least one source: a link to the record it came from.
@@ -52,7 +67,7 @@ A sample fact:
 
 ```json
 { "tags": ["bike-battery"], "sources": ["relay:chat/7f3a#120"], "replaces": ["fk2pq"],
-  "fields": { "kind": "decision", "text": "The bike's battery is 500 Wh, not 400 Wh." } }
+  "fields": { "kind": "project", "text": "The bike's battery is 500 Wh, not 400 Wh." } }
 ```
 
 ## Pages

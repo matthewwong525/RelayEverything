@@ -14,7 +14,8 @@ const notFound = () => Response.json({ error: { code: "not_found", message: ERRO
 
 const chat = z.strictObject({ id: z.string(), title: z.string(), project: z.string(), app: z.enum(["claude-code", "codex"]).describe("The app the chat came from."),
   startedAt: z.number(), lastAt: z.number(), messages: z.number().describe("How many messages the chat holds."),
-  savedByAi: z.boolean().describe("True when the AI saved a title and summary for it.") });
+  savedByAi: z.boolean().describe("True when the AI saved a title and summary for it."),
+  memory: z.boolean().describe("True when the computer's memory read the chat and saved its facts.") });
 const save = z.strictObject({ id: z.string(), title: z.string(), text: z.string().describe("The summary, written by the AI."), createdAt: z.number() });
 const message = z.strictObject({ seq: z.number(), role: z.enum(["you", "ai", "step"]).describe("Yours, the AI's, or one step the AI took."),
   text: z.string(), at: z.number() });

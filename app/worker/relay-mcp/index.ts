@@ -8,6 +8,7 @@ import type { Asker } from "./answers.ts";
 import { appDeviceOff, grantAsker, keyAsker } from "./asker.ts";
 import { authHandler } from "./auth.ts";
 import type { GrantProps, McpEnv } from "./env.ts";
+import { memoryRoute } from "./memory-routes.ts";
 import { openApi } from "./openapi.ts";
 import { mcpHandler } from "./tools.ts";
 
@@ -60,6 +61,9 @@ async function tokenCaller(env: McpEnv, token: string): Promise<Asker | Response
   return asker ?? problem(401, "This token is not valid: it ended, or its app was disconnected. Connect the app again.", challenge(env));
 }
 
+/** Memory's store and import first, then /v1/'s own routes. */
+const routed = async (request: Request, asker: Asker) => await memoryRoute(request, asker) ?? v1(request, asker);
+
 async function api(request: Request, env: McpEnv): Promise<Response> {
   if (request.method === "OPTIONS") return new Response(null, { status: 204 });
   if (new URL(request.url).pathname === "/v1/openapi.json") {
@@ -69,7 +73,7 @@ async function api(request: Request, env: McpEnv): Promise<Response> {
   const token = /^Bearer (\S+)$/.exec(header)?.[1];
   if (!token) return problem(401, "Send a connected app's token or an API key as `Authorization: Bearer …`.", challenge(env));
   const asker = token.startsWith("rek_") ? await keyCaller(env, header) : await tokenCaller(env, token);
-  return asker instanceof Response ? asker : v1(request, asker);
+  return asker instanceof Response ? asker : routed(request, asker);
 }
 
 /** True for an MCP call on the bare address: a POST, a delete that ends a session, a preflight, or a GET that opens

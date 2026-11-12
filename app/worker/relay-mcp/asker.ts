@@ -21,7 +21,8 @@ export function grantAsker(env: Bindings, props: GrantProps | undefined): Asker 
 
 /** An API key's or a computer key's person, from the caller caller.ts vouched for: it adds as its own device. */
 export const keyAsker = (env: Bindings, caller: Caller & { device: { id: string } }): Asker =>
-  ({ space: open(env, caller), env, adder: { deviceId: caller.device.id, name: "", kind: caller.device.reaches === "agent" ? "agent" : "api" } });
+  ({ space: open(env, caller), env, email: caller.email,
+    adder: { deviceId: caller.device.id, name: "", kind: caller.device.reaches === "agent" ? "agent" : "api" } });
 
 export const APP_DEVICE_OFF = "UPDATE relay_devices SET revoked_at = coalesce(revoked_at, ?) WHERE id = ? AND reaches = 'app'";
 

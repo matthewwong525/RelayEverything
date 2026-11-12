@@ -29,13 +29,14 @@ The `ask` skill runs `bin/relay.mjs`, which maps each command to one `/v1/` rout
 ## Change the plugin
 
 - **No packages.** The plugin is plain Node 20 or later, with no `npm install`: each app copies only `plugin/` to a computer, so it can't import anything else in the repository.
-- **One plugin, two apps.** Claude Code and Codex both read `.claude-plugin/plugin.json`, `hooks/hooks.json` and `skills/`. Codex skips an `"async": true` hook and keeps `SessionEnd` to 3 seconds, so no hook is async: each ends at once and the send runs detached.
+- **One plugin, two apps.** Claude Code and Codex both read `.claude-plugin/plugin.json`, `hooks/hooks.json` and `skills/`. Codex skips an `"async": true` hook and keeps `SessionEnd` to 3 seconds, so no hook is async: the send runs detached before memory's end, which gets 5 seconds in Claude Code and may be cut in Codex.
 - **Codex runs only trusted hooks.** At its next start, Codex asks the person to trust the plugin's hooks (**Trust all and continue**, or `/hooks`), and again after an update that changes a hook. With no trust it runs none and says nothing, so no chat saves. `codex exec` runs an untrusted hook only with `--dangerously-bypass-hook-trust`.
 - **What Codex gives a hook and a skill.** A hook gets `CLAUDE_PLUGIN_ROOT`, `CLAUDE_PLUGIN_DATA`, `PLUGIN_ROOT`, `PLUGIN_DATA` and `CODEX_HOME`, and on stdin `session_id`, `transcript_path` (the rollout under `~/.codex/sessions/`) and `cwd`. A skill gets no `CLAUDE_PLUGIN_ROOT` and no `$ARGUMENTS`, so each skill names its folder as two levels above `SKILL.md`; the session id is `CODEX_THREAD_ID`. Codex types a skill as `$relay:connect`, not `/relay:connect`.
 - **The key shapes are copied.** `lib/hide.mjs` copies the shapes of the memory store's [`scan.mjs`](../../.agents/skills/memory/scripts/lib/scan.mjs) by name. `plugin/test/hide.test.mjs` fails when `scan.mjs` gains a shape the plugin lacks.
 - **No key in `plugin/`, and one address.** The only address is the default server, `https://app.relayeverything.com`; the key file names the server after `/relay:connect`. `plugin/test/no-secrets.test.mjs` fails on a key shape, any other address or an email in the folder.
 - **Test it:** `node --test plugin/test/*.test.mjs`, which `npm test` in `app/` also runs, and `claude plugin validate plugin`.
-- **Ship a new version:** raise `version` in `plugin/.claude-plugin/plugin.json`. Each app updates an installed plugin only when the version changes.
+- **Memory is a copy.** `plugin/memory/` is a copy of [memory's plugin folder](../../.agents/skills/memory/SKILL.md), less WongStack's hooks, manifests, daily tidy, setup guide, document-search packages and store contract; `plugin/skills/memory/SKILL.md` is its skill with the plugin's command. Never edit the copy: `node scripts/copy-plugin-memory.mjs` makes it again. `plugin/test/memory-copy.test.mjs` fails while it differs, so a `/wong-sync` that changes memory runs the script in the same change. `plugin/memory-profile.mjs` is Relay Everything's profile, and `hook.mjs` runs the copy's hook scripts only with memory on and no memory of the project's own.
+- **Ship a new version:** run `node scripts/copy-plugin-memory.mjs`, then raise `version` in `plugin/.claude-plugin/plugin.json`. Each app updates an installed plugin only when the version changes.
 
 ## Try it on staging
 

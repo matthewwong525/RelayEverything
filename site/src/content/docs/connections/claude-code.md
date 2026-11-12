@@ -39,10 +39,23 @@ Do the steps for each app you use. One computer needs one connect, for both apps
 2. The AI shows a link and a code, such as `KITE-4821`. Open the link, and sign in to Relay Everything if it asks.
 3. Make sure that the page shows the same code. Then click **Connect**. Connect only a computer that you just started this on. If someone sent you the link, click **Cancel**.
 4. Tell the AI that you clicked **Connect**. It says when the computer is connected.
+5. The AI asks *Also remember things for you?* Say yes to turn on [memory](#remember-things-for-you), or no to keep it off.
 
 The computer now has its own key, kept in a file that only you can read on that computer: `computer.json` in `~/.config/relay-everything/`, or in the folder that `RELAY_EVERYTHING_HOME` names. It shows under **Claude Code and Codex** in **Connect your AI**, on your Relay Everything page and in the app, with when it last saved a chat. The key saves chats, and reads and adds through the [web API](../../api/connect-a-service/). Each chat from then on is saved. Chats from before the connect are not sent.
 
 If you added the AI connector to Claude Code or Codex before, the connect step names it and how to remove it, because the plugin does the same job. It removes nothing unless you say so.
+
+## Remember things for you
+
+Memory is off until you say yes at `/relay:connect`. Type `/relay:memory on` (`$relay:memory on` in Codex) to turn it on, `/relay:memory off` to turn it off, or `/relay:memory` to see which it is. A computer connected before version 0.6.0 of the plugin has memory off.
+
+- **What it keeps.** When a chat ends, your own AI reads it in the background and keeps short facts: who you are, how you want a job done, what you decided or plan, where to find a thing, and what is still open. It keeps the chat's transcript too, with keys hidden, so a fact can show where it came from.
+- **Where.** The facts and transcripts go to your own space on your Relay Everything server, with the computer's key. They never go to a webhook.
+- **What a chat gets.** A chat starts with your open threads, your newest facts and your topics. A message that names a topic gets its summary. Ask *what did we decide about the charger?*, and the AI searches your memory.
+- **A project's own memory wins.** A project that has its own memory, such as a WongStack project, keeps its own. There the plugin still saves the chat, and adds no memory and no topics.
+- **One daily job.** Memory starts no daily job of its own. The [daily build](#your-web-builds-itself) stays the one job each day, and it leaves out a chat that memory already read.
+
+Memory stays off in a project with saving off, with `RELAY_SAVE=0`, and in a folder that is not a git project.
 
 ## Ask about your data
 
@@ -50,7 +63,7 @@ Ask in plain words, such as *what did I note about the charger?*, *how did I sle
 
 The AI also reads and adds to your memory of facts, and keeps a copy of your knowledge web on the computer, in `knowledge/` in `~/.config/relay-everything/`: [Memory and knowledge web](../../api/knowledge-web/). It can keep its own tables in [your agents' database](../../api/agents-database/).
 
-**The AI starts from your topics.** When a chat starts, the AI gets your top-level topics, one line each, from the copy on your computer:
+**The AI starts from your topics.** With memory off, when a chat starts, the AI gets your top-level topics, one line each, from the copy on your computer:
 
 ```text
 Relay Everything topics, from your knowledge web:
@@ -61,7 +74,7 @@ sam      Friend from the bike club
 
 When your message names a topic, such as *is the battery still 40 mAh?*, the AI also gets that topic's summary. Both read only the copy on your computer, so the chat never waits for the network. The copy syncs on its own when a chat starts, at most once in 15 minutes.
 
-**One step pulls a topic.** The AI gets the topic's page, the topics it links and those that link it, its newest facts and notes, and up to 3 saved chats that its facts came from. From there it opens a fact's source.
+**One step pulls a topic.** The AI gets the topic's page, the topics it links and those that link it, its newest facts and notes, and up to 3 saved chats that its facts came from. With memory on, it gets memory's view of the topic, then its notes and chats. From there it opens a fact's source.
 
 **One step reads around a moment.** Ask about a note, and the AI reads its day, and the notes, places, calendar events and hourly steps and heart rate from 2 hours before to 2 hours after:
 
@@ -78,7 +91,7 @@ The AI can also read the route of a stay or a trip, such as *which way did I wal
 
 Once a day, your own AI builds your memory and your knowledge web on this computer. The first chat of the day starts the build in the background, and your chat never waits. You pick nothing: no topic, no tag.
 
-- **Helpers read your chats and notes.** A chat is read when it has been quiet for an hour, so the chat you are in waits for tomorrow. A chat that grew is read again from where the last read stopped. Each helper adds short facts, each with its topics and a link to the message or note it came from. Before it adds a fact, it looks at the facts you already have: it adds a new one, replaces an old one that changed, or adds nothing.
+- **Helpers read your chats and notes.** A chat is read when it has been quiet for an hour, and memory has not read it, so the chat you are in waits for tomorrow. A chat that grew is read again from where the last read stopped. Each helper adds short facts, each with its topics and a link to the message or note it came from. Before it adds a fact, it looks at the facts you already have: it adds a new one, replaces an old one that changed, or adds nothing.
 - **Your notes get topics.** Your words stay as you wrote them.
 - **A helper writes your topic pages, side by side.** It sums up each topic's facts, splits a big topic into smaller linked pages, links topics that share a fact, a note or a chat, and keeps `README.md` current. When it makes a new topic, it looks back for older facts and notes that fit.
 - **Your past fills in a part each day.** Each build reads the newest unread chats and notes first: at most 20 chats and 100 notes. A record of what was read stays in your web, in `.relay/`, so nothing is read twice, on any of your computers.

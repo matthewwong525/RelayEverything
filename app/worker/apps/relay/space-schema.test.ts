@@ -11,7 +11,7 @@ const DIRECTORY = ["relay_people", "relay_logins", "relay_sessions", "relay_sign
 const PERSON = ["relay_devices", "relay_notes", "relay_health", "relay_locations", "relay_chats", "relay_chat_messages",
   "relay_chat_saves", "relay_outbox", "relay_webhooks", "relay_webhook_attempts", "relay_attachments", "relay_calendar_events", "relay_photos",
   "relay_note_changes", "relay_stays", "relay_nights"];
-const MEMORY = ["relay_memory", "relay_memory_tags", "relay_memory_columns", "relay_memory_column_changes", "relay_note_tags", "relay_tag_changes"];
+const MEMORY = ["relay_memory", "relay_memory_tags", "relay_memory_columns", "relay_memory_column_changes", "relay_note_tags", "relay_tag_changes", "relay_memory_sessions", "relay_memory_runs", "relay_topic_defs"];
 
 const tables = (sql: DatabaseSync) => (sql.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'relay\\_%' ESCAPE '\\'").all() as { name: string }[]).map(row => row.name).sort();
 

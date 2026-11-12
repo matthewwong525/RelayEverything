@@ -438,7 +438,10 @@ class FoldHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brand = brandOf(context);
+    // A node of its own: merged into the list's node, its box would cover the card below, so a screen reader's or
+    // Maestro's tap on the name would land on a note.
     return Semantics(
+      container: true,
       button: true,
       expanded: !folded,
       child: GestureDetector(

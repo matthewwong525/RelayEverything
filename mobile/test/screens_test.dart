@@ -1121,6 +1121,13 @@ void main() {
     expect(find.descendant(of: find.byType(FoldHeader), matching: find.text('Pinned')), findsOneWidget);
     expect(find.descendant(of: find.byType(FoldHeader), matching: find.byType(InkWell)), findsNothing,
       reason: 'a tap on the heading shows no shade');
+    // The heading's own node: a tap at its middle, as VoiceOver or Maestro taps, folds it and opens no note.
+    final semantics = tester.ensureSemantics();
+    final heading = tester.getSemantics(find.text('Pinned'));
+    expect(heading.label, 'Pinned');
+    expect(heading.rect.height, lessThan(tester.getSize(find.byType(FoldHeader)).height + 1),
+      reason: 'the node covers the heading, not the card below');
+    semantics.dispose();
     await tester.tap(find.text('Pinned'));
     await tester.pumpAndSettle();
     expect(relay.calls, ['fold Pinned true']);

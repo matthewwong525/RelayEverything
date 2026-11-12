@@ -21,16 +21,13 @@ set -uo pipefail
 
 # An Artifacts install has no GitHub to ask: the check run for the exact HEAD
 # carries the address its deploy reported (wiki/stack/artifacts-route.md).
-SCRIPTS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+SCRIPTS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 ROUTE=$(node "$SCRIPTS/delivery-route.mjs" 2>/dev/null) || exit 0
-if [ "$ROUTE" = artifacts ]; then
-  node "$SCRIPTS/artifacts-run.mjs" preview
-  exit 0
-fi
 # A copy installed through Connect your assistant asks the app, which filters
-# the address as the methods below do.
-if [ "$ROUTE" = app ]; then
-  node "$SCRIPTS/app-change.mjs" preview
+# the address as the methods below do. A local route has no preview.
+if [ "$ROUTE" = local ]; then exit 0; fi
+if [ "$ROUTE" != github ]; then
+  node "$SCRIPTS/delivery-route.mjs" run "$ROUTE" preview
   exit 0
 fi
 

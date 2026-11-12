@@ -19,4 +19,4 @@ A verb walks the rungs in order; the first with exactly one candidate selects it
 
 `/ship`'s `prepare`, and `/continue` on a pull request's head branch, walk only `changed-active`, then `recorded-branch`.
 
-A branch name alone never selects a change: a proposal with no Branch line needs an earlier rung. Keep the change name separate from the branch name.
+A branch name alone never selects a change: a proposal with no Branch line needs an earlier rung.

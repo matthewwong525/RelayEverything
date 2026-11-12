@@ -5,7 +5,8 @@ import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, wri
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isMain, parseCli, usageError } from '../../memory/scripts/lib/cli.mjs';
+import { isMain, parseCli, usageError } from '../../loop/scripts/lib/cli.mjs';
+import { runCommand, slot, SLOT } from '../../loop/scripts/slot.mjs';
 import { buildReview } from '../../plan/scripts/build-review.mjs';
 import { checkpointEvidence } from '../../save/scripts/checkpoint-evidence.mjs';
 import { askRoute, defaultBranch, firstLine, sh } from '../../save/scripts/checkpoint.mjs';
@@ -20,13 +21,13 @@ prepare  preflight, tasks check, validate, archive, number the release, sync, ma
   --move-others    push each other active change this branch adds to its own branch, then remove it from this one
   --skip-specs     archive without a spec update (the deltas already equal the main specs)
   --sync           merge the default branch in even when no release is behind it
-finish   merge the gated pull request, promote secret edits, close the plan's Inbox page, look at the live app;
-         in an app copy, publish through the app`;
+finish   merge the gated pull request, run the project's after-merge part, look at the live app;
+         in an app copy, publish through the app; on a local route, run the pre-check and merge on this computer`;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SELF = 'node .claude/skills/ship/scripts/ship.mjs';
-const ARTIFACTS_RUN = join(here, '..', '..', 'save', 'scripts', 'artifacts-run.mjs');
-const APP_CHANGE = join(here, '..', '..', 'save', 'scripts', 'app-change.mjs');
+// A route the profile owns runs through delivery-route.mjs's `run`, `node` by name as the shell scripts call it.
+const routeArgs = (route, args) => [join(here, '..', '..', 'save', 'scripts', 'delivery-route.mjs'), 'run', route, ...args];
 const MAIN_CHECKS = '.check_runs[] | [.name, .conclusion // "pending"] | @tsv';
 // Dependabot's own update job attaches to the default branch's commit, and fails when a security
 // fix has no version to move to. It is not one of the project's checks.
@@ -58,16 +59,15 @@ const APP_NEXT = 'NEXT: this copy saves through the app and never publishes. Sav
 
 // `github`, `artifacts` or `app`; a route that can not be told stops the command. So does `app`, with `appCode`,
 // for a person without the publish tick: their copy, installed through Connect, has nothing to prepare or merge.
-function routeOf(cwd, appCode) {
-  const asked = askRoute(cwd);
+async function routeOf(cwd, appCode) {
+  const asked = await askRoute(cwd);
   if (asked.lines) throw new Stop(1, asked.lines);
-  // `node` by name, as for artifacts-run.mjs.
-  if (asked.route === 'app' && sh('node', [APP_CHANGE, 'can-publish']).stdout.trim() !== 'yes') throw new Stop(appCode, [APP_NEXT]);
+  if (asked.route === 'app' && sh('node', routeArgs('app', ['can-publish'])).stdout.trim() !== 'yes') throw new Stop(appCode, [APP_NEXT]);
   return asked.route;
 }
 
 // What NEXT: prints for a check run that was cut off: start that same run again, then wait for it.
-const RUN_AGAIN = 'node .claude/skills/save/scripts/artifacts-run.mjs';
+const RUN_AGAIN = 'node .claude/skills/save/scripts/delivery-route.mjs run artifacts';
 const restartSteps = (sha, base) => `Start it again with \`${RUN_AGAIN} restart ${sha} refs/heads/${base}\`, then wait for it with \`${RUN_AGAIN} live ${sha}\`.`;
 
 // The default branch's checks on an Artifacts install, in the shape of the gh answer prepare reads: `ok`, `failure`,
@@ -77,7 +77,7 @@ function artifactsDefaultChecks(base) {
   const sha = fetch.status === 0 ? sh('git', ['rev-parse', `origin/${base}`]).stdout.trim() : '';
   if (!sha) return { status: 1, stdout: '', stderr: `origin/${base} could not be fetched, so its check run can not be named` };
   // `node` by name, as the shell scripts beside this one call it.
-  const read = sh('node', [ARTIFACTS_RUN, 'result', sha, `refs/heads/${base}`]);
+  const read = sh('node', routeArgs('artifacts', ['result', sha, `refs/heads/${base}`]));
   const word = read.status === 0 ? read.stdout.trim() : '';
   const answer = { SUCCESS: 'ok', NONE: 'ok', FAILURE: 'failure', INTERRUPTED: 'interrupted' }[word] ?? '';
   return { status: 0, sha, stdout: answer, stderr: `${base}'s check run for ${sha.slice(0, 7)} reads ${word || 'nothing'}, so it is unverified` };
@@ -112,13 +112,13 @@ function conflictStop(files) {
     `NEXT: resolve each file above as the union of intent (a merge, never a rebase), git add them, and rerun: ${SELF} prepare`]);
 }
 
-/** Merge the default branch in. CHANGELOG.md and VERSION resolve by rule; any other conflict stops. */
-function mergeDefault(root, base) {
-  const merge = sh('git', ['merge', '--no-edit', `origin/${base}`]);
+/** Merge the default branch in, `origin/<base>` or a local route's own. CHANGELOG.md and VERSION resolve by rule. */
+function mergeDefault(root, ref) {
+  const merge = sh('git', ['merge', '--no-edit', ref]);
   if (merge.status === 0) return;
   const files = unmerged();
   if (!files.length) {
-    throw new Stop(5, [`error=git merge origin/${base}: ${firstLine(merge.stderr) || firstLine(merge.stdout)}`,
+    throw new Stop(5, [`error=git merge ${ref}: ${firstLine(merge.stderr) || firstLine(merge.stdout)}`,
       `NEXT: git did not start the merge, so nothing changed. Stage the intended files and commit them here, without pushing, then rerun: ${SELF} prepare --sync`]);
   }
   if (!files.every(file => MECHANICAL.has(file))) throw conflictStop(files);
@@ -135,8 +135,8 @@ function mergeDefault(root, base) {
 }
 
 /** number-release.mjs: its line on a pass, `behind` when the default branch must be merged first. */
-function numberRelease() {
-  const result = sh(process.execPath, [join(here, 'number-release.mjs')]);
+function numberRelease(base) {
+  const result = sh(process.execPath, [join(here, 'number-release.mjs'), ...(base ? ['--base', base] : [])]);
   if (result.status === 3) return { behind: true };
   if (result.status !== 0) throw new Stop(1, [`error=${firstLine(result.stderr) || `number-release.mjs exit ${result.status}`}`, 'NEXT: report this message and stop before /save.']);
   const line = firstLine(result.stdout);
@@ -257,15 +257,21 @@ function markReady(archive) {
   }
 }
 
+/** The project's pre-check command, from its profile's `precheck`; null when it names none. */
+async function precheckOf(root, base) {
+  const found = await slot('precheck', { base }, root);
+  return found.empty ? null : found.value || null;
+}
+
 // The local pre-check on a tree the default branch was just merged into: the value of its last `LOCAL_CHECKS=`
-// line. Its output goes to stderr. It decides nothing, so it never stops prepare.
-function recheck(root, base) {
-  const script = join(root, '.github', 'scripts', 'checks.mjs');
-  if (!existsSync(script)) return 'not run (this repo has no .github/scripts/checks.mjs)';
-  const run = sh(process.execPath, [script, '--worktree', '--default-branch', base], { stdio: ['ignore', 'pipe', 'inherit'] });
+// line, else pass or not run by its exit. Its output goes to stderr. It decides nothing, so it never stops prepare.
+async function recheck(root, base) {
+  const command = await precheckOf(root, base);
+  if (!command) return 'not run (the project names no pre-check)';
+  const run = sh('sh', ['-c', command], { cwd: root, stdio: ['ignore', 'pipe', 'inherit'] });
   process.stderr.write(run.stdout);
   return run.stdout.match(/^LOCAL_CHECKS=(.*)$/gm)?.at(-1).slice('LOCAL_CHECKS='.length)
-    ?? `not run (checks.mjs exited ${run.status} with no LOCAL_CHECKS line)`;
+    ?? (run.status === 0 ? 'pass' : `not run (the pre-check exited ${run.status} with no LOCAL_CHECKS line)`);
 }
 
 /** A red or unreadable default branch stops every ship, a new intent included, before any build. */
@@ -280,8 +286,8 @@ function defaultChecks(artifacts, base, again = true) {
   // A cut-off run is not a failure: start that same run once and wait for it, so the person has no step to take.
   if (answer === 'interrupted' && again) {
     say('DEFAULT_CHECKS=restarted');
-    sh('node', [ARTIFACTS_RUN, 'restart', checks.sha, `refs/heads/${base}`]);
-    sh('node', [ARTIFACTS_RUN, 'live', checks.sha]);
+    sh('node', routeArgs('artifacts', ['restart', checks.sha, `refs/heads/${base}`]));
+    sh('node', routeArgs('artifacts', ['live', checks.sha]));
     return defaultChecks(artifacts, base, false);
   }
   say(`DEFAULT_CHECKS=${answer || 'unknown'}`);
@@ -297,9 +303,12 @@ async function prepare(values) {
   // Every git and OpenSpec call below sees the whole repo, whichever folder the command was started in.
   process.chdir(root);
   const branch = must('git', ['rev-parse', '--abbrev-ref', 'HEAD'], 'cannot read the current branch');
-  const route = routeOf(root, 8);
+  const route = await routeOf(root, 8);
   const artifacts = route === 'artifacts';
+  // A local route has no origin: the default branch is this computer's own.
+  const local = route === 'local';
   const base = defaultBranch(route);
+  const ref = local ? base : `origin/${base}`;
 
   // A merge an earlier run left for the agent to resolve is concluded here.
   let broughtIn = false;
@@ -311,12 +320,13 @@ async function prepare(values) {
   }
 
   const dirty = must('git', ['status', '--porcelain'], 'git status') !== '';
-  const ahead = Number(must('git', ['rev-list', '--count', `origin/${base}..HEAD`], `cannot compare with origin/${base}`));
+  const ahead = Number(must('git', ['rev-list', '--count', `${ref}..HEAD`], `cannot compare with ${ref}`));
   say(`BRANCH=${branch}`);
   say(`DIRTY=${dirty ? 'yes' : 'no'}`);
   say(`AHEAD=${ahead}`);
   // The app reads this change's own checks before it publishes; a teammate's copy can not read main's.
   if (route === 'app') say('DEFAULT_CHECKS=not read (the app checks this change before it publishes)');
+  else if (local) say('DEFAULT_CHECKS=not read (a local route has no checks; finish runs the pre-check)');
   else defaultChecks(artifacts, base);
   if (!dirty && (branch === base || ahead === 0)) {
     throw new Stop(3, ['NEXT: nothing to ship yet. Take the pull-in in the ship skill: invoke apply inside /ship, or say there is nothing to continue.']);
@@ -326,7 +336,7 @@ async function prepare(values) {
   if (!Array.isArray(active.changes) || !active.root?.path) throw new Stop(1, ['error=openspec list returned no changes or root; the CLI contract changed']);
   const names = active.changes.map(change => change.name);
   let evidence;
-  try { evidence = checkpointEvidence({ repo: root, base: `origin/${base}` }); } catch (error) { throw new Stop(1, [`error=${error.message}`]); }
+  try { evidence = checkpointEvidence({ repo: root, base: ref }); } catch (error) { throw new Stop(1, [`error=${error.message}`]); }
   const name = selectChange(values, root, names);
   // Only a change this branch adds or edits rides along; one the default branch already holds is not this merge's.
   const others = names.filter(other => other !== name && evidence.active.includes(other));
@@ -344,15 +354,15 @@ async function prepare(values) {
     [archive] = folders;
   }
 
-  must('git', ['fetch', 'origin', base], `git fetch origin ${base}`);
-  let numbered = numberRelease();
+  if (!local) must('git', ['fetch', 'origin', base], `git fetch origin ${base}`);
+  let numbered = numberRelease(local && base);
   let synced = 'none';
-  if (numbered.behind || (values.sync && sh('git', ['merge-base', '--is-ancestor', `origin/${base}`, 'HEAD']).status !== 0)) {
-    mergeDefault(root, base);
+  if (numbered.behind || (values.sync && sh('git', ['merge-base', '--is-ancestor', ref, 'HEAD']).status !== 0)) {
+    mergeDefault(root, ref);
     broughtIn = true;
-    synced = `merged origin/${base}`;
-    numbered = numberRelease();
-    if (numbered.behind) throw new Stop(5, [`error=still behind origin/${base} after the merge`]);
+    synced = `merged ${ref}`;
+    numbered = numberRelease(local && base);
+    if (numbered.behind) throw new Stop(5, [`error=still behind ${ref} after the merge`]);
   }
 
   say(`CHANGE=${name ?? 'none'}`);
@@ -361,27 +371,31 @@ async function prepare(values) {
   say(`SYNC=${synced}`);
   if (archive) say(`REVIEW=${markReady(archive)}`);
   // What came in was checked by nobody here; the tree /save will commit is checked once, now.
-  const local = broughtIn ? recheck(root, base) : '';
-  if (broughtIn) say(`LOCAL_CHECKS=${local}`);
-  const failed = local.match(/^fail \(([^)]*)\)/)?.[1].split(', ').join(',');
+  const checked = broughtIn ? await recheck(root, base) : '';
+  if (broughtIn) say(`LOCAL_CHECKS=${checked}`);
+  const failed = checked.match(/^fail \(([^)]*)\)/)?.[1].split(', ').join(',');
   const repair = failed ? `the local checks failed after ${base} came in. Repair what fails and rerun only that: node .github/scripts/checks.mjs --worktree --only ${failed}, three rounds at most. Then ` : '';
   const save = archive ? `with change ${name} and archive path ${relative(root, archive)} (mode archive)` : 'with no change';
-  say(`NEXT: ${repair}invoke ordinary /save once, ${save}. Go on to /verify only on SUCCESS or NONE.`);
+  // A local save prints LOCAL and leaves no receipt to verify; finish reruns the pre-check before it merges.
+  const then = local ? 'On LOCAL, skip /verify and run finish.' : 'Go on to /verify only on SUCCESS or NONE.';
+  say(`NEXT: ${repair}invoke ordinary /save once, ${save}. ${then}`);
   return 0;
 }
 
 /** The merged pull request's commit, as GitHub names it. */
 const mergeCommit = prNumber => (prNumber ? sh('gh', ['pr', 'view', prNumber, '--json', 'mergeCommit', '--jq', '.mergeCommit.oid']).stdout.trim() : '');
 
+// The project's `liveLook` part, as its own process: the lines it prints.
 function liveLook(commit) {
   if (!/^[0-9a-f]{40,64}$/.test(commit)) return 'LIVE_LOOK=unknown\nREASON=the merge commit could not be read';
-  const look = sh('bash', [join(here, 'live-look.sh'), commit]);
-  return look.stdout.trim() || 'LIVE_LOOK=unknown\nREASON=the live look printed nothing';
+  const look = sh(process.execPath, [SLOT, 'liveLook', commit]).stdout.trim();
+  if (look === 'SLOT=liveLook empty') return 'LIVE_LOOK=skipped\nREASON=this project names no live look';
+  return look || 'LIVE_LOOK=unknown\nREASON=the live look printed nothing';
 }
 
 // The app publishes the saved change once its checks passed; it refuses anything else and says why.
 function publishThroughApp() {
-  const sent = sh('node', [APP_CHANGE, 'publish']);
+  const sent = sh('node', routeArgs('app', ['publish']));
   process.stdout.write(sent.stdout);
   process.stderr.write(sent.stderr);
   if (sent.status !== 0) {
@@ -395,24 +409,65 @@ function publishThroughApp() {
 /** The change this branch archived, or null. Read before the merge, which may move this folder to main. */
 function shippedChange(root, route) {
   try {
-    const { archive } = checkpointEvidence({ repo: root, base: `origin/${defaultBranch(route)}` });
+    const base = defaultBranch(route);
+    const { archive } = checkpointEvidence({ repo: root, base: route === 'local' ? base : `origin/${base}` });
     return archive.length === 1 ? archive[0].replace(/^\d{4}-\d{2}-\d{2}-/, '') : null;
   } catch { return null; }
 }
 
-/** Closes the shipped plan's pages in the Inbox; any failure is one reason, never a failed ship. */
-async function closePlan(root, name) {
-  if (!name) return 'none';
+/** The project's `afterMerge` part, such as WongStack's secret edits and Inbox pages; never a failed ship. */
+async function afterMerge(root, change) {
   try {
-    const { closePlanPages } = await import('../../hand-over/scripts/reply-link.mjs');
-    return await closePlanPages(root, name);
-  } catch (error) { return `skipped (${firstLine(error.message) || 'it failed'})`; }
+    const found = await slot('afterMerge', { change }, root);
+    if (!found.empty && found.value) say(String(found.value));
+  } catch (error) { say(`AFTER_MERGE=skipped (${firstLine(error.message) || 'it failed'})`); }
+}
+
+/** The worktree that has `branch` checked out, or null. */
+function checkoutOf(branch) {
+  const list = must('git', ['worktree', 'list', '--porcelain'], 'git worktree list').split('\n\n');
+  const found = list.find(block => block.split('\n').includes(`branch refs/heads/${branch}`));
+  return found ? found.split('\n')[0].replace(/^worktree /, '') : null;
+}
+
+// A local route: the pre-check on the saved branch, then one squash commit on the default branch, on this computer.
+// The checkout that has the default branch takes it; with none, this one switches to it. Nothing is pushed.
+async function finishLocal(root) {
+  const branch = must('git', ['rev-parse', '--abbrev-ref', 'HEAD'], 'cannot read the current branch');
+  const base = defaultBranch('local');
+  if (branch === 'HEAD' || branch === base) throw new Stop(1, ['merged=no', `error=on ${branch === 'HEAD' ? 'a detached HEAD' : base}; nothing to merge`]);
+  if (must('git', ['status', '--porcelain'], 'git status')) throw new Stop(1, ['merged=no', 'error=this checkout has unsaved work', 'NEXT: save it with /save, then rerun finish.']);
+  const command = await precheckOf(root, base);
+  const status = command ? runCommand(command, [], { cwd: root, stdio: ['ignore', 2, 2] }) : 0;
+  say(`PRECHECK=${command ? (status === 0 ? 'pass' : `fail (exit ${status})`) : 'none (the project names no pre-check)'}`);
+  if (status !== 0) throw new Stop(6, ['merged=no', 'NEXT: the pre-check failed, so nothing was merged. Fix what it shows, /save, then rerun finish.']);
+  const shipped = shippedChange(root, 'local');
+  const subject = must('git', ['log', '-1', '--format=%s'], 'cannot read the newest commit');
+  const at = checkoutOf(base);
+  if (at && must('git', ['-C', at, 'status', '--porcelain'], `git status in ${at}`)) {
+    throw new Stop(1, ['merged=no', `error=the checkout of ${base} at ${at} has unsaved work`, 'NEXT: ask the person to save or put it aside there, then rerun finish.']);
+  }
+  const dir = at ?? root;
+  if (!at) must('git', ['switch', '--quiet', base], `git switch ${base}`);
+  const merge = sh('git', ['-C', dir, 'merge', '--squash', branch]);
+  if (merge.status !== 0) {
+    sh('git', ['-C', dir, 'reset', '--merge']);
+    throw new Stop(5, ['merged=no', `error=git merge --squash ${branch}: ${firstLine(merge.stderr) || firstLine(merge.stdout)}`,
+      `NEXT: ${base} moved and conflicts with this branch. Run: ${SELF} prepare --sync, /save, then finish again.`]);
+  }
+  must('git', ['-C', dir, 'commit', '--quiet', '-m', subject], 'git commit of the merge');
+  say('merged=yes');
+  say(`commit=${must('git', ['-C', dir, 'rev-parse', 'HEAD'], 'cannot read the merge commit')}`);
+  await afterMerge(root, shipped);
+  say(`NEXT: it merged into ${base} on this computer, and nothing was pushed. Report it, then ask before any push.`);
+  return 0;
 }
 
 async function finish() {
   const root = must('git', ['rev-parse', '--show-toplevel'], 'not inside a git repository');
-  const route = routeOf(root, 1);
+  const route = await routeOf(root, 1);
   if (route === 'app') return publishThroughApp();
+  if (route === 'local') return finishLocal(root);
   const artifacts = route === 'artifacts';
   const shipped = shippedChange(root, route);
   const merge = sh('bash', [join(here, 'merge.sh')]);
@@ -428,11 +483,7 @@ async function finish() {
   }
 
   // Nothing below can fail the ship: the pull request is merged.
-  const secrets = sh(process.execPath, [join(here, 'worktree-secrets.mjs'), 'promote']);
-  let promoted;
-  try { promoted = JSON.stringify(JSON.parse(secrets.stdout)); } catch { promoted = `error (${firstLine(secrets.stderr) || `exit ${secrets.status}`})`; }
-  say(`SECRETS=${promoted}`);
-  say(`PLAN_PAGE=${await closePlan(root, shipped)}`);
+  await afterMerge(root, shipped);
   // An Artifacts publish that main's own run did not pass is not shown to be live: there is
   // nothing to look at, and another push would not make that run pass.
   if (artifacts && merge.status === 3) {

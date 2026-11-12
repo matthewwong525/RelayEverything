@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 
 import 'brand.dart';
@@ -7,6 +8,13 @@ import 'screens/note_editor.dart' show FilesPicker, Sharer;
 
 final _light = brandTheme(Brightness.light);
 final _dark = brandTheme(Brightness.dark);
+
+/// On an iPhone, a named round button acts when the finger lifts, however long the press, and a long press shows no
+/// name bubble, as in other iPhone apps. The name stays for VoiceOver, and a mouse still shows it on hover. Read in
+/// [RelayApp.build], not in [_light], so a test's platform reaches it.
+ThemeData _iPhoneButtons(ThemeData theme) => defaultTargetPlatform == TargetPlatform.iOS
+  ? theme.copyWith(tooltipTheme: theme.tooltipTheme.copyWith(triggerMode: TooltipTriggerMode.manual))
+  : theme;
 
 /// Home, with or without a key: notes stay on this phone until the person turns sending on. The look follows the
 /// person's *Appearance* pick, and the phone's own setting while it is *System*.
@@ -29,8 +37,8 @@ class RelayApp extends StatelessWidget {
       listenable: relay,
       builder: (context, home) => MaterialApp(
         title: 'Relay Everything',
-        theme: _light,
-        darkTheme: _dark,
+        theme: _iPhoneButtons(_light),
+        darkTheme: _iPhoneButtons(_dark),
         themeMode: switch (relay.settings.appearance) {
           Appearance.light => ThemeMode.light,
           Appearance.dark => ThemeMode.dark,

@@ -8,7 +8,7 @@ user-invocable: true
 
 Start [the change loop](../../../wiki/development/the-change-loop.md): compare options and settle scope before `/plan`. Find related work with `openspec list --json` and `openspec context --json` ([CLI contract](../plan/references/openspec-cli.md#select-one-root)); read their pointers.
 
-**Change no repo file** ([limits](../../../wiki/development/the-change-loop.md#what-each-step-may-change)); [`/plan`](../plan/SKILL.md) logs answers. Explore precedes planning except [review-page notes](../plan/SKILL.md#review-notes); use [bounded mode](#when-plan-invokes-explore) under `/plan`. Standalone, run `node .claude/skills/explore/scripts/step-title.mjs set EXPLORE --task "<the idea>"`.
+**Change no repo file** ([limits](../../../wiki/development/the-change-loop.md#what-each-step-may-change)); [`/plan`](../plan/SKILL.md) logs answers. Explore precedes planning except [review-page notes](../plan/SKILL.md#review-notes); use [bounded mode](#when-plan-invokes-explore) under `/plan`. Standalone, run `node .claude/skills/loop/scripts/slot.mjs stepTitle set EXPLORE --task "<the idea>"`.
 
 ## Investigate the relevant flow
 
@@ -26,21 +26,21 @@ Update dependencies after answers or evidence. Explain changed premises; reopen 
 
 ## Search memory before asking
 
-Before asking, recall the task and its likely paths once; read the originals cited:
+Before asking, recall the task and pull its likely topic; read the originals cited:
 
 ```bash
 node "$(git rev-parse --show-toplevel)/.claude/skills/memory/scripts/memory.mjs" recall <question>
-node "$(git rev-parse --show-toplevel)/.claude/skills/memory/scripts/memory.mjs" areas <paths>
+node "$(git rev-parse --show-toplevel)/.claude/skills/memory/scripts/memory.mjs" pull <path-or-topic>
 ```
 
-Treat dated facts as assumptions. [Memory unavailable](../memory/SKILL.md#read)? Say so; continue with available sources.
+A task across topics: [the memory helper](../memory/references/recall-helper.md). Treat dated facts as assumptions. No `.claude/skills/memory/`, or [memory unavailable](../memory/SKILL.md#read)? Say so; continue with available sources.
 
 ## Check for other work
 
 For repo edits, check other work once:
 
 ```bash
-node "$(git rev-parse --show-toplevel)/.claude/skills/explore/scripts/other-work.mjs"
+node "$(git rev-parse --show-toplevel)/.claude/skills/loop/scripts/slot.mjs" otherWork
 ```
 
 Compare intent, not files: plans can overlap before edits.

@@ -12,7 +12,7 @@ The command pushes to an **OPEN** PR, or creates one. A **MERGED** PR gets no pu
 
 ### The body mirrors the change
 
-The body is regenerated as the [change mirror](../../../../wiki/development/the-change-loop.md#the-change-is-a-living-handoff-not-just-a-plan), replacing manual edits. A rendering failure keeps the old body and stops. With no change, the body is the summary and a footer naming `/ship`.
+The body is regenerated as the [change mirror](../../../../wiki/development/the-change-loop.md#the-change-is-a-living-handoff-not-just-a-plan), replacing manual edits; a rendering failure keeps the old body and stops. With no change, it is the summary and a `/ship` footer.
 
 ## 2 — wait for checks, auto-fix on failure
 
@@ -22,6 +22,7 @@ The command waits up to 20 minutes and ends with `SAVE_GATE_RESULT=`:
 |---|---|---|---|
 | **SUCCESS** | checks passed | report | mergeable |
 | **NONE** | no checks configured — PR review is the gate | report | mergeable; invoking `/ship` is the approval |
+| **LOCAL** | no remote: the pre-check passed | report | mergeable, no `/verify`; `finish` reruns the pre-check |
 | **FAILURE** | checks failed | auto-fix loop; report when the cap runs out | do not merge |
 | **TIMEOUT** | still running past the budget | report with the PR link | do not merge |
 | **UNKNOWN** | `gh` couldn't be asked | report as **unverified** | do not merge |
@@ -30,12 +31,12 @@ The command waits up to 20 minutes and ends with `SAVE_GATE_RESULT=`:
 
 ### The auto-fix loop
 
-`FAILURE` lists every failing check with the cause its log shows. Fix all by [fix it or ask](../../../../wiki/development/the-change-loop.md#fix-it-or-ask) in one push, after rerunning the failed check here where the tools exist: `node .github/scripts/checks.mjs --worktree`, a pre-check. A failure outside the diff gets one rerun; still red: stop, no code edit, but [in `/ship`](../../../../wiki/development/the-change-loop.md#inside-ship) one fix that keeps the check as strong.
+`FAILURE` lists every failing check with the cause its log shows. Fix all by [fix it or ask](../../../../wiki/development/the-change-loop.md#fix-it-or-ask) in one push, after rerunning the failed check here where the tools exist: `node .claude/skills/loop/scripts/slot.mjs --run precheck`. A failure outside the diff gets one rerun; still red: stop, no code edit, but [in `/ship`](../../../../wiki/development/the-change-loop.md#inside-ship) one fix that keeps the check as strong.
 
 **Cap: 3 attempts per `/save` run**, counted by the command; each of [`/verify`](../../verify/SKILL.md)'s two re-walks passes `--new-run` for a fresh cap (budgets nest, never share). Still red → stop with the error and the checks link. Never bypass with `--no-verify` or `--force`.
 
 ## Saved revision handoff
 
-`RECEIPT` is a temporary nonsecret file with the saved revision's identity and the waiter's result. Return its path and `SAVE_HEAD` inside a chain; keep `SAVE_GATE_RESULT`. UNKNOWN yields no receipt.
+`RECEIPT` is a temporary nonsecret file with the saved revision's identity and the waiter's result. UNKNOWN and LOCAL yield no receipt.
 
 `/verify --checkpoint <receipt>` reuses SUCCESS/NONE only for the same head and newest check/run identity; a new attempt invalidates it. Otherwise it reads the existing gate, without reruns, pushes or record edits. Delete receipts at chain end.

@@ -2,7 +2,7 @@
 // Assemble a body file. The save skill owns summary judgment and publication.
 import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
-import { isMain } from '../../memory/scripts/lib/cli.mjs';
+import { isMain } from '../../loop/scripts/lib/cli.mjs';
 
 function webUrl(value) {
   const url = new URL(value);

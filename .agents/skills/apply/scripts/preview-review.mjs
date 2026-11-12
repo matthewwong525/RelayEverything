@@ -3,8 +3,8 @@
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
-import { isMain, parseCli, usageError } from '../../memory/scripts/lib/cli.mjs';
-import { buildReview, planLink, previewActions, previewNotesHeader } from '../../plan/scripts/build-review.mjs';
+import { isMain, parseCli, usageError } from '../../loop/scripts/lib/cli.mjs';
+import { buildReview, linked, planLink, previewActions, previewNotesHeader } from '../../plan/scripts/build-review.mjs';
 
 const USAGE = `usage: preview-review.mjs <change-name> [--approved "<title>|<approved picture>|<built picture>"]...
          [--pair "<title>|<live picture>|<preview picture>"]... [--note <line>]... [--link]
@@ -69,8 +69,7 @@ if (isMain(import.meta.url)) {
     const page = join(dir, 'review.html');
     let link = page;
     if (values.link) {
-      const { openReplyLink } = await import('../../hand-over/scripts/reply-link.mjs');
-      link = (await openReplyLink({ file: page, header: previewNotesHeader(change), actions: previewActions(change) })) ?? page;
+      link = await linked(page, previewNotesHeader(change), previewActions(change));
     }
     console.log(`${planLink(link, 'the preview')}\n\n${link === page ? PREVIEW_IN_CHAT : PREVIEW_ON_PAGE}`);
   } catch (error) { console.error(`preview: ${error.message}`); process.exitCode = 1; }

@@ -5,7 +5,7 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { isMain, parseCli, usageError } from '../../memory/scripts/lib/cli.mjs';
+import { isMain, parseCli, usageError } from '../../browser/scripts/lib/cli.mjs';
 
 const USAGE = `usage: details.mjs list | save --name <name> --field <kind>=<value>... | forget <name> | forget --all
   list    each saved set: its name, hint, and kinds, then each value; prints DETAILS_SETS=<count> first

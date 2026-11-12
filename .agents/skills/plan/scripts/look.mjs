@@ -1,13 +1,14 @@
 // The app's look as plain CSS for pages that can't run the app: the review page, the private pages, a closed link.
 // The colours come from app/src/index.css, so a rebranded app carries them everywhere; look.css holds the parts.
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LOOK = resolve(HERE, '../references/look.css');
-/** The checkout these scripts sit in: .agents/skills/plan/scripts → its top. */
-export const ROOT = resolve(HERE, '../../../..');
+/** The checkout these scripts sit in: the nearest folder up from here with a `.git`, by any folder depth. */
+const top = dir => existsSync(join(dir, '.git')) || dirname(dir) === dir ? dir : top(dirname(dir));
+export const ROOT = top(HERE);
 const START = '/* tokens:start */';
 const END = '/* tokens:end */';
 

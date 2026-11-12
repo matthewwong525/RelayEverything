@@ -6,8 +6,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
-const USAGE = `usage: number-release.mjs
-  Numbers this branch's CHANGELOG.md entry and VERSION from origin/<default branch>.
+const USAGE = `usage: number-release.mjs [--base <ref>]
+  Numbers this branch's CHANGELOG.md entry and VERSION from origin/<default branch>, or from --base (a local route).
   Prints release=none, release=X.Y.Z from=A.B.C, or behind=yes (exit 3).`;
 
 const NEXT = /^## Next\b/;
@@ -15,8 +15,9 @@ const NEXT_PARTS = /^## Next \((patch|minor|major)\) — (.+)$/;
 const NUMBERED = /^## (\d+)\.(\d+)\.(\d+) — (.+)$/;
 const LEVELS = ['major', 'minor', 'patch'];
 
+let values;
 try {
-  const { values } = parseArgs({ options: { help: { type: 'boolean' } }, strict: true });
+  ({ values } = parseArgs({ options: { help: { type: 'boolean' }, base: { type: 'string' } }, strict: true }));
   if (values.help) { console.log(USAGE); process.exit(0); }
 } catch (error) {
   console.error(`${error.message}\n${USAGE}`);
@@ -32,7 +33,7 @@ const root = gitOr('', 'rev-parse', '--show-toplevel') || fail('not inside a git
 const changelogPath = join(root, 'CHANGELOG.md');
 if (!existsSync(changelogPath)) { console.log('release=none'); process.exit(0); }
 
-const base = gitOr('origin/main', 'symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD');
+const base = values.base ?? gitOr('origin/main', 'symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD');
 if (!gitOr('', 'rev-parse', '--verify', '--quiet', `${base}^{commit}`)) fail(`no ${base}; fetch the default branch first`);
 
 const lines = readFileSync(changelogPath, 'utf8').split('\n');

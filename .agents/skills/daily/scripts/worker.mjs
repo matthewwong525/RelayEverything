@@ -5,20 +5,24 @@ import { createHash } from 'node:crypto';
 import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { linkCopy, place } from '../../memory/scripts/knowledge.mjs';
-import { headlessCommand } from '../../memory/scripts/lib/headless.mjs';
+import { headlessCommand } from './lib/headless.mjs';
 import { runNode } from './addons.mjs';
 import { HOLD_MS, beat, readJson, sameRepo, serviceAlive, userAt, watch, watchStops, writeJson } from './chief.mjs';
 import { RUN_AGENTS, SETTINGS_DIR, localDay, morningOf } from './config.mjs';
 import { addLine, prune, readLines } from './journal.mjs';
 import { deliverNotes } from './line-up.mjs';
-import { checkRun, scheduleApp, takeRuns as takeHandOvers } from './schedule-runs.mjs';
+import { takeRuns as takeHandOvers } from './schedule-runs.mjs';
+import { slot } from './lib/slot.mjs';
 
 const REFERENCES = fileURLToPath(new URL('../references/', import.meta.url));
+const SCRIPTS_DIR = dirname(fileURLToPath(import.meta.url));
 export const SKILL_BRIEFS = join(REFERENCES, 'briefs');
 export const DEFAULT_SWEEPS = join(REFERENCES, 'sweeps.json');
 export const DEFAULT_SCHEDULES = join(REFERENCES, 'schedules.json');
 export const RUN_MS = 30 * 60e3;
+/** With no schedule store, the worker runs *Keep my chats in line* itself: the default's check, brief and limit. */
+export const LINE_UP = { check: join(SCRIPTS_DIR, 'line-up-check.mjs'), brief: 'line-up.md', minutes: 15, everyMs: 5 * 60e3 };
+export const lineUpOffFile = stateDir => join(stateDir, 'line-up-off');
 const DAY_MS = 24 * 3600e3;
 // A handed-over schedule run waits at most this long for a free run: the app calls it not started after 2 minutes.
 const HAND_OVER_MS = 100e3;
@@ -33,7 +37,7 @@ const plain = value => value !== null && typeof value === 'object' && !Array.isA
 const BRIEF = /^[a-z0-9][a-z0-9-]*\.md$/;
 
 /** The default list with the install's merged over it: its `events` over the default's. A `sweeps` entry is a timed
- * job: one with a default schedule's id is that schedule's, and any other waits, by id, in `waiting`, to move. */
+ * job: a default schedule's id, shipped or retired, is that schedule's; any other waits, by id, in `waiting`. */
 export function loadSweeps({ project, file, base = DEFAULT_SWEEPS, schedules = DEFAULT_SCHEDULES }) {
   const read = path => JSON.parse(readFileSync(path, 'utf8'));
   const defaults = read(base);
@@ -44,7 +48,9 @@ export function loadSweeps({ project, file, base = DEFAULT_SWEEPS, schedules = D
     || (Array.isArray(merged.deny) && merged.deny.every(pattern => typeof pattern === 'string' && pattern.trim() !== ''));
   const bad = (goodDeny ? undefined : 'deny') ?? Object.entries(merged.events).find(([, entry]) => !plain(entry) || !BRIEF.test(entry.brief))?.[0];
   if (bad !== undefined) throw new Error(`The sweep list has a bad entry: ${bad}. See wiki/development/daily.md#your-own-jobs.`);
-  const ids = new Set(read(schedules).schedules.map(schedule => schedule.id));
+  const shipped = read(schedules);
+  // A retired default's id is still WongStack's, so an install entry naming it is skipped, not moved.
+  const ids = new Set([...shipped.schedules, ...(shipped.retired ?? [])].map(schedule => schedule.id));
   merged.waiting = (own.sweeps ?? []).filter(sweep => !ids.has(sweep?.id) && sweep?.off !== true).map(sweep => String(sweep?.id));
   return merged;
 }
@@ -180,8 +186,6 @@ export const needsYouFile = stateDir => join(stateDir, 'needs-you.json');
 export const needsYouChats = stateDir => readJson(needsYouFile(stateDir), {}).chats ?? [];
 const DAILY = 'node .claude/skills/daily/scripts/daily.mjs';
 const NEEDS_YOU = {
-  chats: { what: 'the chat list', steps: [`Run \`${DAILY} who\`. On \`missing\` or \`expired\`, run its \`login\` command in the background and show the person its link.`,
-    'The worker sends the list again within a minute of the sign-in.'] },
   paseo: { what: 'Paseo', steps: ['Run `paseo ls`.', 'Fix what its error names, such as a stopped Paseo daemon.'] },
   morning: { what: 'the morning start', steps: [`Run \`${DAILY} start --dry-run\`.`,
     'Fix the settings file it names, by wiki/development/daily.md#your-settings-file.'] },
@@ -196,7 +200,7 @@ export function needsYouMessage({ what, reason, steps, guide }) {
 }
 
 // The watch sources that count as a kind; other sources stay journal lines.
-const NEEDS_SOURCES = { chats: 'chats', workspaces: 'paseo' };
+const NEEDS_SOURCES = { workspaces: 'paseo' };
 
 // ---------------------------------------------------------------------------
 // The worker
@@ -206,6 +210,7 @@ const NEEDS_SOURCES = { chats: 'chats', workspaces: 'paseo' };
 export function makeWorker({ stateDir, project, timezone, sweeps, agent = RUN_AGENTS[0], context = {}, call, env = process.env,
   briefs = briefFolders(project), launch = spawnRun, typedAt = userAt, isAlive = alive, kill = stopGroup, now = () => Date.now(),
   runCheck, git = runGit, dryRun = false, print = () => {}, wake = () => {}, guide = () => null, app = null, takeRuns = () => [],
+  prepare = async () => {}, lineUp = null,
   openChat = async () => { throw new Error('no way to open a chat here'); } }) {
   const file = join(stateDir, 'worker-queue.json');
   const waitingFile = join(stateDir, 'waiting.json');
@@ -274,13 +279,13 @@ export function makeWorker({ stateDir, project, timezone, sweeps, agent = RUN_AG
   const ended = run => readLines({ stateDir }).some(entry => entry.run === run.runId && entry.kind === 'end');
 
   // A job's own copy of the repo: a detached worktree of `origin/main`, removed with its run.
-  function makeCopy(runId) {
+  async function makeCopy(runId) {
     const dir = join(copies, runId);
     git(project, ['fetch', '-q', 'origin', 'main']);
     mkdirSync(copies, { recursive: true, mode: 0o700 });
     git(project, ['worktree', 'add', '-q', '--detach', dir, 'origin/main']);
-    // Company knowledge, when this computer holds a copy, so a job saves its pages there.
-    try { linkCopy(place(dir)); } catch { /* the job works without it */ }
+    // The profile's `prepareRun`, such as WongStack's link to company knowledge; the job works without it.
+    await prepare(dir);
     return dir;
   }
   function removeCopy(dir) {
@@ -329,7 +334,7 @@ export function makeWorker({ stateDir, project, timezone, sweeps, agent = RUN_AG
     if (dryRun) { print({ wouldStart: item.kind, title: item.title, lane: item.lane, brief: item.brief }); return; }
     let copy = null;
     if (item.place === 'copy') {
-      try { copy = makeCopy(runId); } catch (error) {
+      try { copy = await makeCopy(runId); } catch (error) {
         removeCopy(join(copies, runId));
         await notStarted(oneLine(error));
         return;
@@ -375,9 +380,9 @@ export function makeWorker({ stateDir, project, timezone, sweeps, agent = RUN_AG
   async function handOver(event, state) {
     const refuse = (outcome, reason) => {
       journal(`Not started: schedule ${event.key} — ${reason}`, { kind: 'not-started' });
-      return app.report(event.run, { state: outcome, reason });
+      return app?.report(event.run, { state: outcome, reason });
     };
-    const { schedule, reason } = await checkRun(event, { app, project, env });
+    const { schedule, reason } = app?.check ? await app.check(event, { project, env }) : { reason: 'no_app' };
     if (!schedule) return refuse(reason === 'no_app' ? 'failed' : 'blocked', reason);
     const run = schedule.run;
     let fields = {};
@@ -386,11 +391,26 @@ export function makeWorker({ stateDir, project, timezone, sweeps, agent = RUN_AG
         fields = runOf(await runCheck({ sweep: { id: schedule.key, check: resolve(run.cwd, run.check) },
           context: { ...context, kind: 'schedule-run', day: today(), schedule: schedule.key } }));
       } catch { return refuse('failed', 'check_failed'); }
-      if (!fields) return app.report(event.run, { state: 'blocked', reason: 'no_work' });
+      if (!fields) return app?.report(event.run, { state: 'blocked', reason: 'no_work' });
     }
     enqueue(state, { key: `schedule:${event.run}`, kind: 'schedule-run', text: schedule.instructions, title: schedule.name ?? schedule.key,
       fields: { ...fields, schedule: schedule.key }, lane: `schedule:${schedule.key}`, ownPlace: false, hold: false, request: null,
       place: run.place === 'copy' ? 'copy' : null, minutes: run.minutes ?? null, cwd: run.cwd, report: event.run, at: date().toISOString() });
+  }
+
+  // The worker's own line-up, every `everyMs` unless `D lineup off`: the same check and brief as the default schedule.
+  async function lineUpDue(state) {
+    const tried = join(stateDir, 'line-up-pass.json');
+    if (existsSync(lineUpOffFile(stateDir)) || now() - (readJson(tried, {}).at ?? 0) < lineUp.everyMs) return;
+    writeJson(tried, { at: now() });
+    let fields = null;
+    try {
+      fields = runOf(await runCheck({ sweep: { id: 'line-up', check: lineUp.check }, context: { ...context, kind: 'line-up', day: today() } }));
+    } catch (error) { journal(`Not run: the line-up check — ${oneLine(error)}`, { kind: 'not-started' }); }
+    if (fields) {
+      enqueue(state, { key: 'line-up', kind: 'line-up', brief: lineUp.brief, title: 'Keep my chats in line', fields, lane: 'line-up',
+        ownPlace: false, hold: false, request: null, minutes: lineUp.minutes, at: date().toISOString() });
+    }
   }
 
   // An ended run's handoff opens its one chat, named for the run and labeled with its schedule; the app's run shows it.
@@ -449,6 +469,7 @@ export function makeWorker({ stateDir, project, timezone, sweeps, agent = RUN_AG
         journal(`Timed jobs wait to move to the app, and do not run: ${sweeps.waiting.join(', ')}`, { kind: 'waiting' });
       }
       for (const event of dryRun ? [] : takeRuns()) await handOver(event, state);
+      if (lineUp && !dryRun) await lineUpDue(state);
       save(state);
     },
 
@@ -495,12 +516,15 @@ export function makeWorker({ stateDir, project, timezone, sweeps, agent = RUN_AG
 // One worker per person and repo
 
 const lockFile = stateDir => join(stateDir, 'serve.lock');
-const SCRIPTS = dirname(fileURLToPath(import.meta.url));
 
-/** A short hash of the daily scripts: a worker's beat holds the one it started with, so `D ensure` sees older code. */
-export function codeStamp(dir = SCRIPTS) {
+/** A short hash of the daily scripts and their `lib/`: a worker's beat holds the one it started with, so `D ensure`
+ * sees older code. */
+export function codeStamp(dir = SCRIPTS_DIR) {
   const hash = createHash('sha256');
-  for (const name of readdirSync(dir).filter(each => each.endsWith('.mjs')).sort()) hash.update(`${name}\0`).update(readFileSync(join(dir, name)));
+  const files = folder => { try { return readdirSync(folder).filter(each => each.endsWith('.mjs')).sort(); } catch { return []; } };
+  for (const name of [...files(dir), ...files(join(dir, 'lib')).map(each => join('lib', each))]) {
+    hash.update(`${name}\0`).update(readFileSync(join(dir, name)));
+  }
   return hash.digest('hex').slice(0, 12);
 }
 // A new worker writes its first beat within a pass; until then its lock counts as held.
@@ -609,20 +633,23 @@ export async function serveWorker({ worker, pass, signal, seconds = 60, once = f
   }
 }
 
-/** `daily.mjs serve`: `watching` holds the chat list and add-ons; `start` runs the morning when `settings()`, read
+/** `daily.mjs serve`: `watching` holds the add-ons; `start` runs the morning when `settings()`, read
  * each pass, has a file; `openChat` opens a *Needs you* or handoff chat. A dry run starts nothing, on a state copy. */
 export async function serveDaily({ config, project, stateDir, call, env = process.env, watching, started, hasFile = false,
   settings = () => ({ config, hasFile }), start = null, seconds = 60, once = false, dryRun = false, print = item => console.log(JSON.stringify(item)),
   log, launch, watcher, sleep, agent = RUN_AGENTS[0], ownRepo = sameRepo(project), now = () => Date.now(), code = codeStamp(), openChat,
-  guide = config.guide ?? null, typedAt }) {
+  guide = config.guide ?? null, typedAt, lineUp = LINE_UP }) {
   const signal = { heard: false };
   const timezone = config.timezone;
+  const store = await slot('schedules', [], { env, journal: { stateDir, timezone } }) ?? null;
   // The guide of the settings read last: a file made or changed after the start counts.
   let current = { config: { guide } };
   const worker = makeWorker({ stateDir, project, timezone, sweeps: loadSweeps({ project, file: config.sweeps }),
     agent: config.runs?.agent ?? agent, call, env, dryRun, print, launch, context: { person: config.person, timezone, repo: project }, now,
     runCheck: ({ sweep, context }) => runNode({ file: resolve(project, sweep.check), cwd: project, input: context }),
-    app: scheduleApp(project), takeRuns: () => takeHandOvers({ env, project, emails: config.emails, stateDir }),
+    app: store && { check: (event, more) => store.check?.(event, more) ?? { reason: 'no_app' }, report: (id, result) => store.report?.(id, result, { project }) },
+    takeRuns: () => takeHandOvers({ env, project, emails: config.emails, stateDir }), lineUp: store ? null : lineUp,
+    prepare: dir => slot('prepareRun', [dir], { env, journal: { stateDir, timezone } }),
     wake: () => { signal.heard = true; }, guide: () => current?.config?.guide ?? null, ...(openChat && { openChat }) });
   const watchOnce = async () => {
     const events = [];

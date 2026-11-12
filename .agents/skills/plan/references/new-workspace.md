@@ -58,18 +58,18 @@ A chat's task is its first ask, change or to-do. Another task, not a quick quest
 
 ## Open each workspace
 
-Write each other part's [brief](#the-brief) to a file in the scratch folder that `node "$(git rev-parse --show-toplevel)/.claude/skills/schedule/scripts/tidy.mjs" scratch` prints, then run:
+Write each other part's [brief](#the-brief) to a file in the `path` of the JSON that `node "$W" newWorkspace scratch` prints, then run:
 
 ```bash
-W="$(git rev-parse --show-toplevel)/.claude/skills/schedule/scripts/workspace.mjs"
-node "$W" open --title '<part>' --brief <file>
+W="$(git rev-parse --show-toplevel)/.claude/skills/loop/scripts/slot.mjs"
+node "$W" newWorkspace open --title '<part>' --brief <file>
 ```
 
 Open every workspace this way: a raw `paseo run --new-workspace --new-branch`, or Paseo's Handoff skill, keeps a slug name and skips the medium-thinking floor. Title it in the person's words, like *Sign in with Google*; the script refuses a placeholder like `main`.
 
 The workspace starts from the fresh default branch, never this one. Outside a Paseo agent (`PASEO_AGENT_ID` unset), add `--agent claude` or `--agent codex` for the agent you are.
 
-Exit `2` is bad input or Paseo refusing: show `error`. Exits `3` to `5` opened nothing: show `error` and `fallback.app`, then do the parts here.
+Exit `2` is bad input or Paseo refusing: show `error`. Exits `3` to `5`, or `SLOT=newWorkspace empty`, opened nothing: show `error` and `fallback.app`, then do the parts here.
 
 ## The brief
 
@@ -102,6 +102,6 @@ Its title is the proposal's `#` heading, minus `'` and backticks, else the chang
 
 ## Next work
 
-When `/ship` finishes, look for more asked-for work in this conversation, then with `node "$(git rev-parse --show-toplevel)/.claude/skills/memory/scripts/memory.mjs" search --type thread <the change's key terms>`. Name a part already open elsewhere; never open it twice.
+When `/ship` finishes, look for more asked-for work in this conversation, then, with `.claude/skills/memory/`, with `node "$(git rev-parse --show-toplevel)/.claude/skills/memory/scripts/memory.mjs" search --type thread <the change's key terms>`. Name a part already open elsewhere; never open it twice.
 
 In a Paseo worktree, [open](#open-each-workspace) and [report](#report) each part with no workspace, then [ask *Close this chat?*](../../explore/references/asking-the-user.md#end-every-reply-with-the-next-step). Elsewhere ask: the next part *(Recommended)*, a [`/verify`](../../verify/SKILL.md) walk, or stop.

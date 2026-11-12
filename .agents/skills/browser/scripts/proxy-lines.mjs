@@ -4,17 +4,17 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { primaryRoot } from '../../memory/scripts/lib/primary-root.mjs';
-import { parseEnv } from '../../memory/scripts/lib/store.mjs';
+import { primaryRoot } from './lib/primary-root.mjs';
+import { parseEnv } from './lib/env.mjs';
 
-/** The repo key of the upstream proxy line, `[http://]login:password@host:port` (wiki/development/browser-proxy.md). */
+/** The repo key of the upstream proxy line, `[http://]login:password@host:port` (../references/browser-proxy.md). */
 export const PROXY_KEY = 'BROWSE_UPSTREAM_PROXY';
 /** The line saved for the whole computer: the browser is shared, so a start from any repo uses it. */
 export const UPSTREAM_FILE = join(homedir(), '.wong-stack', 'camoufox', 'upstream-proxy');
 /** The old camofox browser's file, read when the new one is missing. */
 export const OLD_UPSTREAM_FILE = join(homedir(), '.wong-stack', 'camofox', 'upstream-proxy');
 /** The repo key for the proxy tried before the upstream, `[http://][login:password@]host:port`: a home proxy, such as a
- * Raspberry Pi (wiki/development/browser-proxy.md). The upstream is its backup. */
+ * Raspberry Pi (../references/browser-proxy.md). The upstream is its backup. */
 export const FIRST_KEY = 'BROWSE_FIRST_PROXY';
 /** The first proxy line saved for the whole computer, by the same rules as the upstream file. */
 export const FIRST_FILE = join(homedir(), '.wong-stack', 'camoufox', 'first-proxy');

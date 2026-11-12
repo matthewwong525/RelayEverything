@@ -3,7 +3,7 @@ title: Settings
 description: Each setting in the Relay Everything app, and what it does.
 ---
 
-Open **Settings** with the round gear button at the top right of Home. Tap **Home** at the top left to go back. Each switch acts at once, and asks for its permission only when you turn it on. On a new phone, you are signed out and every switch is off: your notes stay on the phone, and the app sends nothing.
+Open **Settings** with the round gear button at the top right of Home. On an iPhone, a long press on the gear opens Settings too. Tap **Home** at the top left to go back. Each switch acts at once, and asks for its permission only when you turn it on. On a new phone, you are signed out and every switch is off: your notes stay on the phone, and the app sends nothing.
 
 Settings starts with the [Account](#account) card, as the Apple Account row on an iPhone. Then it has two groups: **Appearance** and **Voice notes**. At the bottom, it shows the [version](#version) of the app. Settings on your Relay Everything page has the same account card and **Appearance**: [Settings on your Relay Everything page](#settings-on-your-relay-everything-page). Each kind of phone data has its own folder on Home: [Health, Calendar, Location and Photos](#health-calendar-location-and-photos). The website's pages, linked below, give the details.
 

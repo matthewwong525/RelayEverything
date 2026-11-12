@@ -1,15 +1,14 @@
-// The watch over the person's chats for the daily's helpers, their replies and the Inbox's chat list. Its
-// limits live here, not in a model: only watched agents, 5 own actions in a row, outward commands wait for the person.
+// The watch over the person's chats for the daily's helpers and their replies. Its limits live here, not in a
+// model: only watched agents, 5 own actions in a row, outward commands wait for the person.
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync,
   watch as fsWatch } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir, tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
-import { EXIT, PaseoError, findPaseo, paseo } from '../../schedule/scripts/lib/paseo.mjs';
+import { EXIT, PaseoError, findPaseo, paseo } from './lib/paseo.mjs';
 import { localDay } from './config.mjs';
 import { finished } from './finished.mjs';
-import { keepChats, openChats } from './todos.mjs';
 
 export const BUCKETS = ['keep-going', 'pick', 'person'];
 // The watch's own actions in a row on one agent before the next stop is left for the person.
@@ -35,7 +34,6 @@ export function writeJson(file, value) {
 export const watchFile = (stateDir, day) => join(stateDir, `${day}.watch.json`);
 /** The line-up's map of the watched chats and its pending notes: line-up.mjs owns it. */
 export const lineUpFile = stateDir => join(stateDir, 'line-up.json');
-const handsFile = (stateDir, day) => join(stateDir, `${day}.hands.json`);
 const actionsFile = (stateDir, day) => join(stateDir, `${day}.actions.jsonl`);
 const oneLine = value => String(value).split('\n')[0].slice(0, 200);
 const lowered = value => String(value ?? '').toLowerCase();
@@ -71,14 +69,14 @@ function newerDay({ stateDir, started, timezone, day }) {
 /** The chats a pass add-on said to leave alone, as the watch last read them. */
 const skipped = (stateDir, day) => new Set(readJson(watchFile(stateDir, day), {}).skip ?? []);
 
-// The watch list for `day`: started rows, hands, then admitted chats, one row per agent. Never this chat or a `skip`.
+// The watch list for `day`: started rows, then admitted chats, one row per agent. Never this chat or a `skip`.
 export function watched({ stateDir, day, started, timezone, list = [], self, ignore = [], chats = readJson(watchFile(stateDir, day), {}).chats ?? [],
   skip = skipped(stateDir, day) }) {
   const agents = list.filter(live);
   const byFolder = cwd => (cwd ? agents.find(agent => folder(agent.cwd) === folder(cwd))?.id : null) ?? null;
   const own = startedOn(started(), timezone, day).map(row => ({ ...row, agentId: row.agentId ?? byFolder(row.cwd) }));
   const seen = new Set();
-  return [...own, ...readJson(handsFile(stateDir, day), []), ...chats]
+  return [...own, ...chats]
     .filter(row => row.agentId && row.agentId !== self && !ignore.includes(row.agentId) && !row.closed && !skip.has(row.agentId)
       && !seen.has(row.agentId) && seen.add(row.agentId));
 }
@@ -178,21 +176,6 @@ export function paseoRecord(agentId, home = homedir()) {
 
 /** When the person last typed in a chat, from Paseo's own agent record (its CLI does not show it); null when unread. */
 export const userAt = (agentId, home = homedir()) => paseoRecord(agentId, home).lastUserMessageAt ?? null;
-
-/** The listed agents a name means: its id, an id prefix of 4 or more, its title, or its workspace folder, in order. */
-export function findAgents(list, name) {
-  const want = lowered(name);
-  for (const match of [
-    agent => agent.id === name,
-    agent => name.length >= 4 && agent.id.startsWith(name),
-    agent => lowered(agent.name) === want,
-    agent => lowered(basename(folder(agent.cwd))) === want,
-  ]) {
-    const found = list.filter(match);
-    if (found.length) return found;
-  }
-  return [];
-}
 
 export function watchedRow(rows, name) {
   const want = lowered(name);
@@ -334,10 +317,9 @@ export async function watch({ stops = () => null, ...args }) {
   try { return await passes({ ...args, wake }); } finally { watcher?.close?.(); }
 }
 
-// `chats`, `{sync, computer}`, sends the Inbox's chat list each pass; without it the pass sends none.
-async function passes({ stateDir, started, timezone, call, chats = null, addons = null, env = process.env, self = env.PASEO_AGENT_ID,
+async function passes({ stateDir, started, timezone, call, addons = null, env = process.env, self = env.PASEO_AGENT_ID,
   ignore = [], service = false, print = console.log, seconds = 60, once = false, now = () => Date.now(),
-  sleep = ms => new Promise(done => setTimeout(done, ms)), wake, typedAt = userAt, agentRecord = paseoRecord, ownRepo = () => true }) {
+  sleep = ms => new Promise(done => setTimeout(done, ms)), wake, typedAt = userAt, ownRepo = () => true }) {
   let printed = [];
   const line = event => { printed.push(event); print(JSON.stringify(event)); };
   if (!service && !self) { line({ event: 'unsupported', reason: UNSUPPORTED }); return null; }
@@ -387,12 +369,6 @@ async function passes({ stateDir, started, timezone, call, chats = null, addons 
       wake.ids = new Set(rows.map(row => row.agentId));
       const log = actions({ stateDir, day });
       await notice({ rows, ...read, state, log, record: action => logAction(stateDir, day, action), call, line, now, typedAt });
-      if (chats) {
-        const open = openChats({ rows, list: read.list, known: state.known, ignore, self, ownRepo: cwd => ownRepo(folder(cwd)),
-          record: id => agentRecord(id), now: now() });
-        await keepChats({ stateDir, chats: open, ...chats, list: read.list, send: agentId => sendText(call, agentId, '/close'), typedAt, line,
-          now: new Date(now()), read: name => readJson(name, {}), write: writeJson }).then(() => cleared('chats'), error => missed('chats', error));
-      }
     }
     state.lastEvents = printed.slice(-KEPT_EVENTS);
     writeJson(file, state);
@@ -461,25 +437,6 @@ export const RUN_ID = 'daily-worker';
 /** The env a command runs with: a background run with no Paseo id acts under the stand-in, so an install's jobs run. */
 export const chiefEnv = env => (env.PASEO_AGENT_ID || !env.WONG_DAILY_RUN ? env : { ...env, PASEO_AGENT_ID: RUN_ID });
 
-/** Adds a chat the person names to the day's watch list. */
-export async function hand({ stateDir, day, started, timezone, agent: name, call, env = process.env, now = new Date() }) {
-  if (!env.PASEO_AGENT_ID) return unsupported;
-  const list = await call(['ls', '--global']);
-  const found = findAgents(list.filter(live), name);
-  if (!found.length) return { status: 'unknown', error: `No chat named ${name}: check its name in the app, or give its id.` };
-  if (found.length > 1) {
-    return { status: 'ambiguous', error: `${name} names ${found.length} chats: give one id.`, agents: found.map(agent => ({ agent: agent.id, title: agent.name })) };
-  }
-  const [agent] = found;
-  if (agent.id === env.PASEO_AGENT_ID) return { status: 'refused', error: 'That is this chat.' };
-  if (skipped(stateDir, day).has(agent.id)) return { status: 'refused', reason: 'skip', error: `An add-on leaves ${agent.name ?? name} alone.` };
-  const before = watched({ stateDir, day, started, timezone, list }).find(row => row.agentId === agent.id);
-  if (before) return { status: 'already', ...describe(before) };
-  const entry = { agentId: agent.id, title: agent.name ?? name, ...placeOf(await workspaceNames(call), agent.cwd), source: 'handed', at: now.toISOString() };
-  writeJson(handsFile(stateDir, day), [...readJson(handsFile(stateDir, day), []), entry]);
-  return { status: 'handed', ...describe(entry) };
-}
-
 // What reply, answer and allow share: a watched agent, or the line-up's `row` for a chat with a card, a message, and
 // room left in the streak.
 async function handFor({ stateDir, day, started, timezone, agent: name, text, bucket, label, call, env = process.env, now = new Date(), typedAt = userAt,
@@ -487,7 +444,7 @@ async function handFor({ stateDir, day, started, timezone, agent: name, text, bu
   if (!env.PASEO_AGENT_ID) return { refused: unsupported };
   const list = await call(['ls', '--global']);
   const row = given ?? watchedRow(watched({ stateDir, day, started, timezone, list, self: env.PASEO_AGENT_ID }), name);
-  if (!row) return { refused: { status: 'refused', reason: 'unwatched', error: `${name} is not a chat the watch has: hand it first.` } };
+  if (!row) return { refused: { status: 'refused', reason: 'unwatched', error: `${name} is not a chat the watch has.` } };
   if (!String(text ?? '').trim()) return { refused: { status: 'refused', reason: 'message', error: 'The message is empty.' } };
   if (bucket !== 'person' && streak(actions({ stateDir, day }), row.agentId, typedAt(row.agentId)) >= STREAK) {
     return { refused: { status: 'refused', reason: 'streak', ...describe(row),
@@ -536,7 +493,7 @@ export async function answer({ request, text, ...args }) {
   if (refused) return refused;
   const ask = await pendingAsk(args.call, row.agentId, request);
   if (!ask) return noRequest(row, request);
-  if (ask.name === COMMAND_TOOL && args.bucket !== 'person') {
+  if (ask.name === COMMAND_TOOL) {
     return { status: 'refused', reason: 'tool', ...describe(row), error: 'A command card takes allow, or waits in its chat: a denial makes the chat ask again.' };
   }
   const words = `Answer: ${text.trim()}`;
@@ -569,15 +526,15 @@ export function outwardReason(command) {
   return OUTWARD.some(pattern => pattern.test(command)) ? `The command reaches outside or can't be undone: ${command.slice(0, 200)}` : null;
 }
 
-/** Allows a pending command card. With `keep-going`, never an outward command; `person` is the person's own yes. */
+/** Allows a pending command card, never an outward one: that waits in its chat for the person. */
 export async function allow({ request, ...args }) {
-  if (!['keep-going', 'person'].includes(args.bucket)) return { status: 'refused', reason: 'bucket', error: 'allow takes keep-going or person.' };
+  if (args.bucket !== 'keep-going') return { status: 'refused', reason: 'bucket', error: 'allow takes keep-going: the person answers in the chat itself.' };
   const { refused, row, log } = await handFor({ ...args, text: args.label });
   if (refused) return refused;
   const ask = await pendingAsk(args.call, row.agentId, request);
   if (!ask) return noRequest(row, request);
   if (ask.name !== COMMAND_TOOL) return { status: 'refused', reason: 'tool', ...describe(row), error: `${ask.name} is not a command card: answer it.` };
-  const why = args.bucket === 'person' ? null : await keepGoingReason(args.call, row.agentId, ask);
+  const why = await keepGoingReason(args.call, row.agentId, ask);
   if (why) return { status: 'refused', reason: 'outward', ...describe(row), error: why };
   await args.call(['permit', 'allow', row.agentId, ask.id]);
   return { status: 'allowed', ...log({ kind: 'allow', request: ask.id }, args.label) };

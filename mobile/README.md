@@ -106,7 +106,7 @@ After each beta from `main` goes to TestFlight, the job `public-beta` in [`mobil
 3. Adds the build to *Public beta*.
 4. Sends the build to Apple's beta review. Testers with the link get it when Apple approves it. The first build of a new version can wait a day or more; later builds usually pass quickly.
 
-Apple takes one build in beta review at a time. If an earlier build still waits, Apple refuses the new one: the job notes it and passes, and the next change to `mobile/` sends again. A build that Apple can not take for beta review, such as one with missing export compliance, fails the job with Apple's state. You can run *Mobile public beta* again: it does not add or send a build twice. A branch, a release and a release check send nothing to the public beta.
+Apple takes one build in beta review at a time. If an earlier build still waits, Apple refuses the new one: the job notes it and passes, and the next change to `mobile/` sends again. A build that Apple can not take for beta review, such as one with missing export compliance, fails the job with Apple's state. You can run *Mobile public beta* again: it does not add or send a build twice. Just after a build is processed, Apple can answer *no resource of type 'builds'* at the beta review step, also when the build is already in *Public beta*. Wait about 20 minutes, then run the job again. A branch, a release and a release check send nothing to the public beta.
 
 **Set by hand in App Store Connect.** The lane only adds builds. Change these in [App Store Connect](https://appstoreconnect.apple.com/), under the app's *TestFlight* tab:
 

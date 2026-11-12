@@ -720,6 +720,30 @@ void main() {
     expect(relay.calls, isEmpty);
   });
 
+  /// Holds Home's gear for 1 second, as a slow tap on a slow Mac does, and returns what showed before the finger lifts.
+  Future<bool> holdGear(WidgetTester tester) async {
+    await tester.pumpWidget(RelayApp(relay: relay));
+    expect(find.text('Settings'), findsNothing);
+    final press = await tester.startGesture(tester.getCenter(find.byTooltip('Settings')));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 200));
+    final bubble = find.text('Settings').evaluate().isNotEmpty;
+    await press.up();
+    await tester.pumpAndSettle();
+    return bubble;
+  }
+
+  testWidgets('on an iPhone, a 1-second press on the gear opens Settings when the finger lifts, with no name bubble',
+      (tester) async {
+    expect(await holdGear(tester), isFalse);
+    expect(find.byType(SettingsScreen), findsOneWidget);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+  testWidgets('on Android, a 1-second press on the gear shows its name and stays on Home', (tester) async {
+    expect(await holdGear(tester), isTrue);
+    expect(find.byType(SettingsScreen), findsNothing);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
   testWidgets('no button syncs: Home shows no line when all is sent, 1 waiting while a note waits, and a pull syncs',
       (tester) async {
     relay

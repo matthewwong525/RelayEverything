@@ -25,4 +25,4 @@
 ## 4. Record and publish
 
 - [x] 4.1 Set `version` to `55.2.1` and `commit` to `a282a4a936bc3b02b671682822bacfe82c255be1` in `.claude/.wong-stack.json`; in `components.skills` drop `dream-memory` and `services`, add `reply-link` and `access`, and keep every other key. Verify: the preflight run again reports `status: current`.
-- [ ] 4.2 `/save`, then wait for CI on the pull request. Verify: every check passes.
+- [x] 4.2 `/save`, then wait for CI on the pull request. Verify: every check passes.

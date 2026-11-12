@@ -1,6 +1,6 @@
 # Update WongStack to 55.2.1: the new memory, with a daily tidy and the files behind each fact
 
-**Status:** building
+**Status:** ready-to-ship
 **Branch:** sync-wongstack-memory-system
 **Open questions:** none
 
@@ -126,3 +126,5 @@ None: this update changes WongStack's shared tools, not a Relay Everything behav
 - **2026-11-12** — Assumed, inside `/ship`: task 3.3 checks only that the memory start hook runs before the deploy, and the digest and *files behind these facts* check moves to the Migration Plan, because production serves the new memory route only after the merge's deploy, and `/ship` archives only a change with every task ticked.
 - **2026-11-12** — Asked, after the second look found that a trusted checkout would run the memory, Daily and Access hooks twice (the plugin from its skill folder and the settings lines), how to fix it → chose one copy always: `.agents/settings.json` keeps the hook lines and sets `enabledPlugins` `memory@skills-dir`, `daily@skills-dir` and `access@skills-dir` to false, a local edit each sync keeps; Matthew may also trust `/root/relay-ring` on his own.
 - **2026-11-12** — Built inside `/ship`: 453 files copied, 153 removed, 27 merged, install record at 55.2.1. Merge check names only kept local lines, preflight `current`, local checks pass, second look clean after the hooks fix (`claude plugin list` in the trusted WongStack checkout names `memory@skills-dir`, `daily@skills-dir`, `access@skills-dir`). Main's red public-beta run passed on its rerun, on Matthew's yes. Saving for task 4.2.
+- **2026-11-12** — Task 4.2 passed: PR #121 checks SUCCESS at 1eaf427.
+- **2026-11-12** — Archived inside `/ship`: main's public-beta run for #120 failed twice at Apple's beta review and passed on its third run, after a 20-minute wait; this change touches no phone code.

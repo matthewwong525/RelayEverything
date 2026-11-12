@@ -60,7 +60,7 @@ This page sets how a question **looks**, never which actions **need** one. An ac
 - Finished standalone `/explore`: *Plan it (Recommended)* / *Keep thinking* / *Stop*.
 - Blocked task: the ways to clear it, below the intact blocker report.
 - Report or audit: the one fix worth taking next.
-- Finished task that will clearly come back: one [routine or app offer](../../../../wiki/development/the-change-loop.md#offer-a-routine-or-an-app).
+- Finished task that will clearly come back, when `node .claude/skills/loop/scripts/slot.mjs schedule` prints `true`: one [routine or app offer](../../../../wiki/development/the-change-loop.md#offer-a-routine-or-an-app).
 - Asked-for work left after a publish, outside Paseo: the next part *(Recommended)* ([next work](../../plan/references/new-workspace.md#next-work)).
 - Finished work in a Paseo worktree: *Close this chat?*: *Close it (Recommended)*, any offer, *Keep it open*; only *Close it* runs [`/close`](../../close/SKILL.md).
 

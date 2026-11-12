@@ -1,14 +1,16 @@
-// Code areas: which area tags a repo path falls in, from references/areas.json; the docs an area names; the paths a
-// change names; and the archived changes that touched a path or an area.
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+// Areas: the profile's topics as tag -> { definition, paths, docs, aliases, kind, page }; which tags a repo path
+// falls in; and the docs an area names.
+import { existsSync, realpathSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { readJson } from './store.mjs';
+import { loadProfile } from './store.mjs';
 
-export const AREAS_FILE = fileURLToPath(new URL('../../references/areas.json', import.meta.url));
+export const areaMap = topics => Object.fromEntries(topics.map(({ tag, summary, paths = [], docs = [], aliases = [], kind, page }) =>
+  [tag, { definition: summary, paths, docs, aliases, kind, page }]));
 
-// Tag -> { definition, paths }. A missing or broken list maps nothing, so no write ever fails on it.
-export const loadAreas = (file = AREAS_FILE) => readJson(file, {});
+// A missing profile or a broken topic list maps nothing, so no write ever fails on it.
+export async function loadAreas(ctx, profile) {
+  try { return areaMap(await (profile ?? await loadProfile(ctx))?.topics?.(ctx) ?? []); } catch { return {}; }
+}
 
 // A repo-relative path, with .claude/ and .codex/ read as .agents/; null for a path outside the repo.
 export function normalizePath(path, root) {
@@ -21,8 +23,16 @@ export function normalizePath(path, root) {
   return rel.replace(/^\.(?:claude|codex)\//, '.agents/');
 }
 
+// The repo path a path really is, through any symlinked folder, so one file has one name; null when it is missing.
+export function realPath(path, root) {
+  try {
+    const rel = relative(realpathSync(root), realpathSync(join(root, path)));
+    return rel && !rel.startsWith('..') && !isAbsolute(rel) ? rel : null;
+  } catch { return null; }
+}
+
 // The tags of a path's longest matching prefix, and that prefix's length; equal-length matches all count.
-function longestArea(path, areas, root) {
+export function longestArea(path, areas, root) {
   const rel = normalizePath(path, root);
   let longest = 0;
   let tags = [];
@@ -49,15 +59,6 @@ export function areaDocs(tags, areas, root) {
   return [...new Set(tags.flatMap(tag => areas[tag]?.docs || []))].filter(doc => existsSync(join(root, doc)));
 }
 
-// Every word inside a backticked span of a change's proposal, design, and tasks: the paths it names.
-// The name may be an archived change's `archive/<folder>`.
-export function changePaths(root, name) {
-  const dir = join(root, 'openspec', 'changes', name);
-  return ['proposal.md', 'design.md', 'tasks.md'].map(file => join(dir, file)).filter(existsSync)
-    .flatMap(file => [...readFileSync(file, 'utf8').matchAll(/`([^`\n]+)`/g)])
-    .flatMap(([, span]) => span.split(/[\s"'()]+/).filter(Boolean));
-}
-
 // Each area the paths fall in, with the first path that put it there.
 export function pathAreas(paths, areas, root) {
   const found = new Map();
@@ -65,40 +66,9 @@ export function pathAreas(paths, areas, root) {
   return found;
 }
 
-// newTags plus every area tag the facts use that the store lacks, defined from the list.
-export function withAreaTags(existing, facts, newTags = [], areas = loadAreas()) {
-  const named = new Set([...existing, ...newTags.map(tag => tag.name)]);
+// newTags plus every topic tag the facts use that the store lacks, defined from its summary.
+export function withAreaTags(existing, facts, newTags, areas) {
+  const named = new Set([...existing, ...(newTags || []).map(tag => tag.name)]);
   const missing = [...new Set(facts.flatMap(fact => fact.tags || []))].filter(tag => !named.has(tag) && areas[tag]?.definition);
-  return [...newTags, ...missing.map(name => ({ name, definition: areas[name].definition }))];
-}
-
-const looksLikePath = word => word.includes('/') || /\.[a-z]+$/i.test(word);
-const bare = (path, root) => normalizePath(path, root)?.replace(/\/+$/, '');
-
-// Does an archived change name this path: the path itself, a path inside it, or a folder holding it at least as
-// deep as its area's folder? A broad folder like `wiki/` or `.agents/skills/` names too much to count.
-function namesPath(named, path, areas, root) {
-  const longest = Math.max(longestArea(path, areas, root).longest, longestArea(`${path}/`, areas, root).longest);
-  return named.some(word => word === path || word.startsWith(`${path}/`)
-    || (path.startsWith(`${word}/`) && word.length + 1 >= longest && word.includes('/')));
-}
-
-// Up to `limit` archived changes, newest first: those naming one of the paths, then those sharing only an area.
-// Read from the archive on each call, so nothing is kept up to date. `skip` is a change's own name.
-export function pastChanges(root, paths, tags, areas, { skip, limit = 5 } = {}) {
-  const archive = join(root, 'openspec', 'changes', 'archive');
-  if (!existsSync(archive)) return [];
-  const asked = [...new Set(paths.filter(looksLikePath).map(path => bare(path, root)).filter(Boolean))];
-  const ranked = [[], []];
-  for (const folder of readdirSync(archive).sort().reverse()) {
-    if (folder.replace(/^\d{4}-\d{2}-\d{2}-/, '') === skip) continue;
-    const named = [...new Set(changePaths(root, `archive/${folder}`).filter(looksLikePath).map(word => bare(word, root)).filter(Boolean))];
-    if (asked.some(path => namesPath(named, path, areas, root))) ranked[0].push(folder);
-    else if ([...pathAreas(named, areas, root).keys()].some(tag => tags.includes(tag))) ranked[1].push(folder);
-  }
-  return ranked.flat().slice(0, limit).map(folder => {
-    const proposal = join(archive, folder, 'proposal.md');
-    const title = existsSync(proposal) && readFileSync(proposal, 'utf8').match(/^# (.+)$/m)?.[1];
-    return { folder, title: title || folder, proposal: `openspec/changes/archive/${folder}/proposal.md` };
-  });
+  return [...(newTags || []), ...missing.map(name => ({ name, definition: areas[name].definition }))];
 }

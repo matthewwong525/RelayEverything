@@ -83,7 +83,7 @@ Evidence rules:
 ## c — run it
 
 ```bash
-bash "$ROOT/.claude/skills/verify/scripts/verify-staging.sh" run "$RUN_DIR" "$URL"
+node "$V" verify run "$RUN_DIR" "$URL"
 ```
 
 Stage independent journeys together; grade prerequisites before dependent stages. Move completed inputs out of `journeys/` before retries: every staged mutation replays. The driver runs browsers then requests; finish state/readbacks and CI imports before grading. CI-only needs no browser/preview. Failed cleanup: retain owned record IDs, defer dependent mutations.
@@ -96,7 +96,7 @@ Read evidence beside each verbatim `then`: screenshots and `evidence/<id>.result
 
 **Partly shown**: some claims observed, others inherently unobservable through available routes (delivery, screen-reader speech). Name every missing claim and why; neither failure nor plain pass, verdict unchanged.
 
-**Show screenshots while grading, before the verdict**: open numbered images in order, with one plain description above each. [The picture convention](../../../../wiki/development/browsing.md#show-what-the-browser-is-doing) applies; skip recapturing them.
+**Show screenshots while grading, before the verdict**: open numbered images in order, with one plain description above each. [The picture convention](../../browser/references/browsing.md#show-what-the-browser-is-doing) applies; skip recapturing them.
 
 - **A clean exit, green suite or `200` is not a pass.** A clean batch whose screenshot lacks the message the `THEN` requires **fails**, as does exit zero or `200` with contradictory output.
 - A failing command is evidence, not a crash. `--bail` stops a browser journey there, so earlier evidence shows how far it got.
@@ -124,21 +124,21 @@ Before handoff, try safe simulations through deployed interfaces, disposable syn
 
 After independent checks/simulations, make **one handoff**, including human-checkable partial claims: text in the comment, the question tool in chat. Each remaining check names its reason, needed action/permission, expected observation and dependents. Offer help or selected/all skips in [the shared ask format](../../explore/references/asking-the-user.md). Skips stay **skipped, unverified**, grant no permission/pass and erase no failure; ask again only if reopened.
 
-Use [key links](../../../../wiki/development/secrets.md#receive-a-key-through-a-private-link) for credentials or [a live view](../../../../wiki/development/live-view.md#sign-in) for login. Waiting grants no permission. Resume pending checks after help; repeat completed checks only on changed conditions. Retain observations, pending/skipped ledger and owned IDs before cleanup.
+Use [key links](../../../../wiki/development/secrets.md#receive-a-key-through-a-private-link) for credentials or [a live view](../../hand-over/references/live-view.md#sign-in) for login. Waiting grants no permission. Resume pending checks after help; repeat completed checks only on changed conditions. Retain observations, pending/skipped ledger and owned IDs before cleanup.
 
 Publish pictures, post, clean up:
 
 ```bash
-bash "$ROOT/.claude/skills/verify/scripts/verify-staging.sh" publish "$RUN_DIR"
+node "$V" verify publish "$RUN_DIR"
 gh pr comment --body-file "$RUN_DIR/comment.md"
-bash "$ROOT/.claude/skills/verify/scripts/verify-staging.sh" cleanup "$RUN_DIR"
+node "$V" verify cleanup "$RUN_DIR"
 ```
 
 `publish`: `<local-path>\t<url>`, then `MEDIA=`. **private** → links; **public** → `![<label>](<url>)`; **none** → report `REASON`, omit pictures, verdict unchanged. Never cite missing URLs or cleaned local paths; no video.
 
 ## g — kept checks
 
-Inside `/ship` only, before § f's post. `J` is `node "$ROOT/.claude/skills/verify/scripts/verify-journeys.mjs"`; every call takes `--run-dir "$RUN_DIR"`, `replay` and `keep` also `--url "$URL"`.
+Inside `/ship` only, before § f's post. `J` is `node "$V" verify journeys`; every call takes `--run-dir "$RUN_DIR"`, `replay` and `keep` also `--url "$URL"`.
 
 1. **Replay** once §§ c–e settle: `J replay --change-root <archive>`. `same` → list as *replayed, unchanged*, no fresh grade. `changed` → walk it fresh once, three per walk, the rest unverified: pass → keep; contradiction → § e, naming the older promise. `skipped` → this change's walk covers it. `not-run` → name its reason; no pass, no failure.
 2. **Keep** each passed browser/request journey, its inputs back in `journeys/`: `J keep --id <id> --expect '<json>'`, `--writes` if it submits or changes data, `--site <status name>` with that site's `--url` if walked on a second site ([why](../../../../wiki/development/kept-checks.md#what-is-kept)). `expect` rows hold shown claims only: `{"text"}`, `{"gone"}`, `{"path"}`; request `{"step","status","includes"}`. Never one using a private link, an outside service or a manual job trigger ([why](../../../../wiki/development/kept-checks.md#what-is-never-kept)).

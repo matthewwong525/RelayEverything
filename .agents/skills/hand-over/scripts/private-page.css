@@ -1,5 +1,5 @@
-/* What the key link, the password link, the private form, and the live view add to the app's look
-   (plan/references/look.css): hand-over.mjs serves the look first, then this, at /page.css. Colours are its tokens. */
+/* What the key link, the password link, the private form, and the live view add to a look: hand-over.mjs serves the
+   profile's look, or plain-look.css, first, then this, at /page.css. Colours are the look's tokens. */
 * { box-sizing: border-box; }
 html { background: var(--background); -webkit-text-size-adjust: 100%; }
 body { margin: 0 auto; max-width: 560px; padding: 1.25rem 1rem 2rem; font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }

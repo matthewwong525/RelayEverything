@@ -6,7 +6,7 @@ user-invocable: true
 
 # /plan
 
-Create an apply-ready OpenSpec change and its `review.html` page. First run `node .claude/skills/explore/scripts/step-title.mjs set PLAN --task "<the work>"`.
+Create an apply-ready OpenSpec change and its `review.html` page. First run `node .claude/skills/loop/scripts/slot.mjs stepTitle set PLAN --task "<the work>"`.
 
 **Change only plans and wiki pages**, and save a schedule to the app [after an OK](../schedule/SKILL.md); code waits for the person's go ([limits](../../../wiki/development/the-change-loop.md#what-each-step-may-change)).
 
@@ -28,7 +28,7 @@ Why and What Changes use [plain words](../explore/references/asking-the-user.md#
 
 ## Draw in the proposal, then build the page
 
-Draw as you write, with no second agent: one drawing per What Changes bullet by default, as a fence in its bullet by [the drawing guide](references/drawings.md). A card shows [the closest real result](../../../wiki/review-pages.md#a-card-shows-the-closest-real-result): a screen change gets [a prototype](../../../wiki/review-pages.md#the-prototype) with sample data, a phone app screen [a screen test](../../../wiki/development/phone-pictures.md), a site this app doesn't run [a live one](../../../wiki/review-pages.md#a-website-prototype); notes update it too. Every plan lists [what the build needs](../../../wiki/review-pages.md#what-the-build-needs), its answers [asked in the chat](../explore/references/asking-the-user.md#choices-go-in-the-chat).
+Draw as you write, with no second agent: by default one fence in each What Changes bullet, by [the drawing guide](references/drawings.md). A card shows [the closest real result](../../../wiki/review-pages.md#a-card-shows-the-closest-real-result): a screen change gets [a prototype](../../../wiki/prototypes.md) with sample data, by browser or [screen test](../../../wiki/prototypes.md#an-app-the-preview-cant-serve), a phone app screen by [its screen test](../../../wiki/development/phone-pictures.md), a site this app doesn't run [a live one](../../../wiki/review-pages.md#a-website-prototype); notes update it too. Every plan lists [what the build needs](../../../wiki/review-pages.md#what-the-build-needs), its answers [asked in the chat](../explore/references/asking-the-user.md#choices-go-in-the-chat).
 
 Build the page after drafting and each edit:
 
@@ -52,4 +52,4 @@ A change that adds or restructures a screen gets [a `## UX` design section](../.
 
 Lay out tasks so the build is written before it is checked ([why](../../../wiki/development/the-change-loop.md#apply-never-saves-to-stop-but-may-save-to-finish-a-task)): group source and test authoring by surface, and put required checks in one final phase, not per-part `/save` tasks. A substantive deployed acceptance task names `/save` after implementation.
 
-Run `step-title.mjs set PLAN --task "<proposal title>"`. Validate with `openspec validate "<name>" --strict --no-interactive`; confirm the review page and every apply-required artifact are complete. Standalone, end on [the plan's copy, link, and review line](../explore/references/asking-the-user.md#print-the-plans-link), asking nothing. Invoked by `/apply`, return the exact change name to it.
+Run `slot.mjs stepTitle set PLAN --task "<proposal title>"`. Validate with `openspec validate "<name>" --strict --no-interactive`; confirm the review page and every apply-required artifact are complete. Standalone, end on [the plan's copy, link, and review line](../explore/references/asking-the-user.md#print-the-plans-link), asking nothing. Invoked by `/apply`, return the exact change name to it.

@@ -19,7 +19,7 @@ export const TOOLS = {
   novnc: `noVNC ${VIEWER.version} draws that screen on the link's page. It goes in your home folder.`,
 };
 export const OFF_LINUX = 'A live view needs Linux, where the browser runs on a virtual screen it can show.';
-export const VIEW_ROUTES = new Set(['/view', '/fit', '/give', '/watch', '/take']);
+export const VIEW_ROUTES = new Set(['/view', '/fit', '/give', '/show', '/watch', '/take']);
 /** A watch link's buttons, each its route: the person takes the browser, or hands it back. */
 const WATCH_ACTIONS = new Set(['/take', '/give']);
 const BODY_MOST = 16 * 1024;
@@ -232,7 +232,7 @@ function pageWindows(display) {
 }
 
 /** Sizes each page window bigger than the screen to the screen, at its corner: on an add-on's page the browser keeps
- * the page's size, and a window from a bigger start would hang off the screen, toolbar included. */
+ * the page's height, and a window from a bigger start would hang off the screen, toolbar included. */
 function fitWindows(display, screen) {
   for (const win of pageWindows(display).filter(each => each.width > screen.width || each.height > screen.height)) {
     try {
@@ -260,12 +260,14 @@ export async function endView(view, page) {
   await stopSource(view);
 }
 
-/** The open view's fit and source, for the watcher. Each step waits for the one before it, and none
- * acts once `end` has run. */
-export function liveView(view, page) {
+/** The open view's fit and source, for the watcher, on the shown `page`, which `show` sets. Each step waits for the
+ * one before it, and none acts once `end` has run. */
+export function liveView(view, page = null) {
   let kind = 'wide';
   let screen = null;
   let bar = null;
+  // The last answer came from the password manager's page.
+  let addon = false;
   let ended = false;
   let last = Promise.resolve();
   const seen = new Set();
@@ -278,12 +280,15 @@ export function liveView(view, page) {
   const fitted = () => ({ width: kind === 'phone' ? Math.min(PHONE_WIDTH, screen.width) : screen.width, height: screen.height - (bar ?? 0) });
   const describe = () => screen && { kind, width: fitted().width, screen: [screen.width, screen.height] };
   /** The bar above the page: how much taller its window is than the page, read with the page as tall as the screen.
-   * None on the password manager's page, which keeps its size; a window only the screen's size was sized there. */
+   * None on the password manager's page, which takes only the width and keeps its height under the bar. */
   const measureBar = async () => {
-    if ((await page.resize(screen.width, screen.height))?.addonPage) return null;
+    addon = Boolean((await page.resize(screen.width, screen.height))?.addonPage);
+    if (addon) return null;
     const over = pageWindows(view.display).filter(win => win.width === screen.width && win.height > screen.height).map(win => win.height - screen.height);
     return over.length ? Math.min(...over) : null;
   };
+  /** Sizes the page as the fit; resolves to whether the password manager's page shows. */
+  const size = async () => (addon = Boolean((await page.resize(fitted().width, fitted().height))?.addonPage));
   /** Raises and focuses a window as tall as the screen and at least as wide as the fit (the browser's stops near 500).
    * None while a pop-up shows: a raise covers it, and focus on it closes it; it takes keys with the page's focus. */
   const front = () => {
@@ -302,11 +307,18 @@ export function liveView(view, page) {
     popupOpen: () => !ended && popupOpen(view.display),
     /** Fits the page as `next`, `phone` or `wide`, or as it was; resolves to the fit. */
     fit: (next = kind) => inTurn(async () => {
-      if (ended) return describe();
+      if (ended || !page) return describe();
       kind = next;
       screen ??= screenSize(view.display);
-      bar ??= await measureBar();
-      if ((await page.resize(fitted().width, fitted().height))?.addonPage) fitWindows(view.display, screen);
+      // On the password manager's page a reading widens the page to the screen, and the fit narrows it again: so the
+      // bar waits there, and is read at the first fit whose answer comes from a site.
+      const waited = addon;
+      if (!waited) bar ??= await measureBar();
+      if (!await size() && waited && bar == null) {
+        bar = await measureBar();
+        await size();
+      }
+      if (addon) fitWindows(view.display, screen);
       front();
       return describe();
     }),
@@ -317,6 +329,12 @@ export function liveView(view, page) {
       if (!display) throw new Error('the browser has no screen to show');
       Object.assign(view, { display }, await startSource(display, view.dir));
       return true;
+    }),
+    /** Shows `next`, or none, once `swap` has let the page shown before go. */
+    show: (next, swap = async () => {}) => inTurn(async () => {
+      if (ended) return;
+      await swap();
+      page = next;
     }),
     end: () => inTurn(async () => {
       ended = true;
@@ -355,30 +373,32 @@ export function reply(response, status, body) {
   response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', 'content-length': Buffer.byteLength(text) }).end(text);
 }
 
-/** The view's routes for `{note}`: a view's first `/give` (Hand back) ends the turn, then runs `onGive()`; a watch
- * link's `watch` hooks answer `/watch` and its buttons with who holds the browser. `onFit(kind)` refits. */
-export function viewRoutes({ note }, { fitted = () => null, onFit = async () => null, onGive = () => {}, closesAt, watch = null } = {}) {
-  let ended = false;
+/** The view's routes for `{note}`: `tabs()` adds a turn view's tabs, `/show` runs `onShow(chat)`, and `/give` runs
+ * `onGive(chat)`, which gives what ends that turn after the answer, or null. `watch` hooks serve a watch link. */
+export function viewRoutes({ note }, { fitted = () => null, onFit = async () => null, onGive = () => null, onShow = async () => false, tabs = null, closesAt, watch = null } = {}) {
   return async (pathname, request, response) => {
     if (pathname === '/view') {
       if (request.method !== 'GET') return reply(response, 405);
       watch?.shown();
-      return reply(response, 200, { note, ...(watch ? { watch: true } : { control: 'turn' }), fit: fitted(), closesAt, now: Date.now() });
+      return reply(response, 200, { note, ...(watch ? { watch: true } : { control: 'turn' }), fit: fitted(), closesAt, ...tabs?.(), now: Date.now() });
     }
-    if (!watch && (pathname === '/watch' || pathname === '/take')) return reply(response, 404);
+    if ((!watch && (pathname === '/watch' || pathname === '/take')) || (!tabs && pathname === '/show')) return reply(response, 404);
     if (pathname === '/watch') return request.method === 'GET' ? reply(response, 200, watch.info()) : reply(response, 405);
     if (request.method !== 'POST') return reply(response, 405);
     if (watch && WATCH_ACTIONS.has(pathname)) {
       const now = watch[pathname.slice(1)]();
       return now ? reply(response, 200, now) : reply(response, 409);
     }
+    // A body that is too big or not JSON names no chat and no fit.
+    const body = await readBody(request).then(read => (typeof read === 'object' ? read : null));
     if (pathname === '/give') {
-      if (ended) return reply(response, 409);
-      ended = true;
-      response.once('finish', onGive);
+      const end = onGive(body?.chat);
+      if (!end) return reply(response, 409);
+      response.once('finish', end);
       return reply(response, 200, { control: 'assistant' });
     }
-    const kind = (await readBody(request))?.fit;
+    if (pathname === '/show') return (await onShow(body?.chat)) ? reply(response, 200, { ...tabs(), now: Date.now() }) : reply(response, 409);
+    const kind = body?.fit;
     if (!FITS.includes(kind)) return reply(response, 400);
     reply(response, 200, { fit: await onFit(kind) });
   };

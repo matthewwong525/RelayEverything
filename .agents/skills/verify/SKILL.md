@@ -14,8 +14,9 @@ Authorized: needed `/save` (kept checks' too), browser install, Access heal, sta
 
 ```bash
 ROOT="$(git rev-parse --show-toplevel)"
-bash "$ROOT/.claude/skills/verify/scripts/verify-staging.sh" scout-check
-bash "$ROOT/.claude/skills/verify/scripts/verify-staging.sh" preflight
+V="$(git rev-parse --show-toplevel)/.claude/skills/loop/scripts/slot.mjs"
+node "$V" verify scout-check # SLOT=verify empty → CI evidence only
+node "$V" verify preflight
 ```
 
 1. **Scout** the change this chat or the caller named, else the branch's own, archived included ([rungs](../save/references/checkpoint-evidence.md#selection-rungs)). Asks name candidates' scenarios. READY → match probes/recipes/consumers by [§ a](references/walkthrough.md#a--scout-the-scenarios); nothing reachable → NONE, name exclusions and stop.

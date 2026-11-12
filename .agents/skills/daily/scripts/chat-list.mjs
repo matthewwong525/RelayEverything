@@ -3,8 +3,8 @@
 import { readdirSync, rmSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
-import { codexDayDir } from '../../memory/scripts/lib/transcripts.mjs';
-import { folderOf, readState, titleOf } from '../../explore/scripts/step-title.mjs';
+import { codexDayDir } from './lib/transcripts.mjs';
+import { slotNow } from './lib/slot.mjs';
 import { paseoRecord, readJson, sameRepo, writeJson } from './chief.mjs';
 import { RUN_FLAGS } from './daily.mjs';
 
@@ -32,10 +32,10 @@ function codexTranscript(key, home, now) {
   return null;
 }
 
-/** The chat's name: its Paseo title, else its step title, else its folder. */
+/** The chat's name: its Paseo title, else the profile's `chatName`, `{step, task}`, else its folder. */
 function nameOf({ paseoId, key, cwd, home }) {
-  const folder = folderOf(cwd);
-  return text(paseoRecord(paseoId, home).title) ?? (folder && text(titleOf(readState(folder, paseoId ?? key)))) ?? basename(cwd);
+  const named = paseoRecord(paseoId, home).title ? null : slotNow('chatName', [cwd, paseoId ?? key]);
+  return text(paseoRecord(paseoId, home).title) ?? (named?.step && named.task ? text(`${named.step}: ${named.task}`) : null) ?? basename(cwd);
 }
 
 /** A hook's card for its chat: `working` from a start or a message, `idle` from a stop, or `state` when given. Not for

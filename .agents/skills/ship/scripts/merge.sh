@@ -30,11 +30,11 @@ set -uo pipefail
 say() { printf '%s\n' "$*"; }
 fail() { say "error=$*" >&2; }
 
-# An Artifacts install has no pull request to merge: publish-artifacts.sh moves
+# An Artifacts install has no pull request to merge: its route's publish moves
 # main forward itself and prints the same lines (wiki/stack/artifacts-route.md).
-HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 ROUTE=$(node "$HERE/../../save/scripts/delivery-route.mjs" 2>/dev/null) || { say "merged=no"; fail "the delivery route could not be told"; exit 1; }
-if [ "$ROUTE" = artifacts ]; then exec bash "$HERE/publish-artifacts.sh" "$@"; fi
+if [ "$ROUTE" = artifacts ]; then exec node "$HERE/../../save/scripts/delivery-route.mjs" run artifacts publish "$@"; fi
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD) || { say "merged=no"; fail "cannot read the current branch"; exit 1; }
 SHA=$(git rev-parse HEAD) || { say "merged=no"; fail "cannot read HEAD"; exit 1; }

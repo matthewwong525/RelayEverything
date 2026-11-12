@@ -6,8 +6,8 @@ import { accessSync, constants, readFileSync, renameSync, rmSync, statSync, writ
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isMain } from '../../memory/scripts/lib/cli.mjs';
-import { EXIT, PaseoError, findPaseo, parseCommand, runPaseo } from './lib/paseo.mjs';
+import { isMain } from '../../daily/scripts/lib/cli.mjs';
+import { EXIT, PaseoError, findPaseo, parseCommand, runPaseo } from '../../daily/scripts/lib/paseo.mjs';
 
 const USAGE = 'usage: presets.mjs add [--dry-run] [--home <paseo home>]';
 const PRESETS = fileURLToPath(new URL('paseo-presets.json', import.meta.url));

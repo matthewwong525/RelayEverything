@@ -5,11 +5,10 @@
 import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { promisify } from 'node:util';
-import { isMain } from '../../memory/scripts/lib/cli.mjs';
-import { primaryRoot, PrimaryRootError } from '../../memory/scripts/lib/primary-root.mjs';
-import { PickupError, pinBranch, reviewBranch } from '../../continue/scripts/pickup.mjs';
-import { delivery } from '../../save/scripts/delivery-route.mjs';
-import { EXIT, PaseoError, findPaseo, git, paseo, parseCommand, runPaseo, withJson } from './lib/paseo.mjs';
+import { isMain } from '../../daily/scripts/lib/cli.mjs';
+import { primaryRoot, PrimaryRootError } from '../../daily/scripts/lib/primary-root.mjs';
+import { slot, slotResult } from '../../daily/scripts/lib/slot.mjs';
+import { EXIT, PaseoError, findPaseo, git, paseo, parseCommand, runPaseo, withJson } from '../../daily/scripts/lib/paseo.mjs';
 
 const USAGE = `usage: workspace.mjs open --title <part> --brief <file>
                          [--checkout <branch> [--reviewed <commit>]] [--agent claude|codex] [--label key=value] [--dry-run]`;
@@ -18,6 +17,8 @@ const VALUE_FLAGS = ['title', 'brief', 'checkout', 'reviewed', 'agent', 'label']
 const LABEL = /^[a-z][a-z0-9-]{0,39}=[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
 export const MODES = { claude: 'bypassPermissions', codex: 'full-access' };
 const PARENT_VARS = ['PASEO_AGENT_ID', 'PASEO_WORKSPACE_ID'];
+// The review fetches the branch, so it gets longer than a part's usual time limit.
+const CHECKOUT_MS = 60e3;
 export const PLACEHOLDERS = new Set(['main', 'master', 'default', 'hello', 'hello world', 'test', 'testing', 'untitled',
   'new workspace', 'workspace', 'scratch', 'temp', 'tmp', 'wip']);
 const SLUG = /^(?=.*[A-Za-z0-9])(?=.*[-_])[A-Za-z0-9._-]+$/;
@@ -162,14 +163,10 @@ export async function defaultBranch(cwd) {
   throw new PaseoError(EXIT.input, 'No `main` branch here or on origin, and `gh` could not name the default branch.');
 }
 
-/** The step that fixes a failed fetch in a copy installed through the app: its sign-in has usually run out. */
-function signInStep(cwd) {
-  try {
-    if (delivery(cwd).route !== 'app') return '';
-    return ` Sign in to the company app again, then retry: cloudflared access login ${new URL(git(cwd, 'remote', 'get-url', 'origin')).origin}`;
-  } catch {
-    return '';
-  }
+/** The step that fixes a failed fetch, from the profile's `person().help`, such as a sign-in that ran out. */
+async function signInStep(cwd) {
+  const help = (await slot('person', [cwd]))?.help;
+  return help ? ` ${help}` : '';
 }
 
 /** Fetches the default branch (unless a dry run) and returns the ref to branch from, preferring origin's copy. A
@@ -181,28 +178,23 @@ export async function freshBase(cwd, branch, { fetch, timeout = 0 }) {
       await promisify(execFile)('git', ['-C', cwd, 'fetch', '--quiet', 'origin', branch], { encoding: 'utf8', timeout });
     } catch (error) {
       const why = error.killed ? `no answer in ${timeout / 1000} s` : String(error.stderr || error.message).trim();
-      warning = `Could not fetch origin/${branch}, so the workspace starts from the last fetched copy: ${why}${signInStep(cwd)}`;
+      warning = `Could not fetch origin/${branch}, so the workspace starts from the last fetched copy: ${why}${await signInStep(cwd)}`;
     }
   }
   if (await hasRef(cwd, `refs/remotes/origin/${branch}`)) return { base: `origin/${branch}`, warning };
   return { base: branch, warning };
 }
 
-// pickup.mjs's review of a --checkout branch: new work without a matching --reviewed is exit 2. The primary's local
-// branch is then pinned to the commit, so Paseo uses it as it is and fetches nothing newer.
-function reviewedCheckout(primary, branch, reviewed, { dryRun }) {
-  try {
-    const review = reviewBranch({ cwd: primary, branch, reviewed, fetch: !dryRun });
-    if (review.commits.length) {
-      const { tip, commits, files } = review;
-      throw new PaseoError(EXIT.input, `"${branch}" holds work this computer has never had. Show it and ask; on a yes, pass --reviewed ${tip}.`,
-        { review: { branch: review.branch, tip, commits, files } });
-    }
-    return dryRun ? review.tip : pinBranch({ cwd: primary, ...review });
-  } catch (error) {
-    if (error instanceof PickupError) throw new PaseoError(EXIT.input, error.message, error.extra);
-    throw error;
+// The profile's `checkout` reviews a --checkout branch: `{commit}` to open at, or `{refused, extra}` (exit 2). With no
+// profile or no part, the branch opens as it is; a part that fails refuses, so nothing opens unreviewed.
+async function reviewedCheckout(primary, branch, reviewed, { dryRun }) {
+  const { error, value } = await slotResult('checkout', [branch, primary, { reviewed, dryRun }], { ms: CHECKOUT_MS });
+  if (error) {
+    const why = String(error?.message ?? error).split('\n')[0];
+    throw new PaseoError(EXIT.input, `The review check for "${branch}" failed, so the workspace does not open: ${why}`);
   }
+  if (value?.refused) throw new PaseoError(EXIT.input, value.refused, value.extra ?? {});
+  return value?.commit ?? null;
 }
 
 /** The new worktree's HEAD, checked against the commit it was opened for; a mismatch is exit 5. */
@@ -243,7 +235,7 @@ export async function openWorkspace(flags, env = process.env, { cwd = process.cw
   const primary = primaryWorktree(cwd);
   const ctx = { primary, title, briefFile: flags.brief, checkout: flags.checkout, commit: null, label: flags.label, settings: null, base: null };
   if (flags.reviewed !== undefined && !ctx.checkout) throw new PaseoError(EXIT.input, '--reviewed goes with --checkout <branch>.');
-  if (ctx.checkout) ctx.commit = reviewedCheckout(primary, ctx.checkout, flags.reviewed ?? null, { dryRun: flags.dryRun });
+  if (ctx.checkout) ctx.commit = await reviewedCheckout(primary, ctx.checkout, flags.reviewed ?? null, { dryRun: flags.dryRun });
   try {
     const bin = findPaseo(env, 'WORKSPACE_PASEO_BIN');
     const caller = env.PASEO_AGENT_ID?.trim();
@@ -304,4 +296,5 @@ async function main(argv = process.argv.slice(2), env = process.env) {
   }
 }
 
-if (isMain(import.meta.url)) process.exitCode = await main();
+// No top-level await: the profile imports this file through step-title.mjs, and an await would deadlock that import.
+if (isMain(import.meta.url)) main().then(code => { process.exitCode = code; });

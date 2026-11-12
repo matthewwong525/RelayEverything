@@ -1,5 +1,5 @@
 import { beforeEach, expect, it } from "vitest";
-import type { AccessIdentity } from "../../../access";
+import type { AccessIdentity } from "../../../access-slots";
 import { body } from "../../../../tests/body";
 import { database } from "../../../../tests/employee-access/connections";
 import { hashToken } from "../people";

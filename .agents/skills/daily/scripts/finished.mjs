@@ -1,7 +1,7 @@
 // Whether a watched chat is finished: stopped, its work published at its last commit, nothing new in its folder.
 // Read-only: `D status` marks it, and the person picks which to close. wiki/development/daily.md#close-finished-chats
 import { realpathSync } from 'node:fs';
-import { git } from '../../schedule/scripts/lib/paseo.mjs';
+import { git } from './lib/paseo.mjs';
 import { mergedAtTip, ownWorkspace, pullRequest, savedState, worktreeState } from '../../schedule/scripts/tidy.mjs';
 
 const DEFAULT_BRANCHES = new Set(['main', 'master', 'HEAD']);

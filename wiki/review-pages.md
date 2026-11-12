@@ -11,7 +11,7 @@ Every review page shows the same parts, in this order:
 3. **The cards**: the things to review, numbered, each with its picture or words.
 4. **What the build needs**, on a plan: [each key, login, file, or answer](#what-the-build-needs), *Ready* or *Needs you*. An answer is asked in the chat first, so it is *Ready*.
 5. **Decisions**, only when there are some. A page with none shows no Decisions section and no link to one.
-6. **The bar** at the bottom: *Send notes*, and only the buttons the page's link offers. Opened from a file, *Send notes* is *Copy notes*.
+6. **The bar** at the bottom: *Send notes*, and only the buttons the page's link offers. Opened from a file, *Send notes* is *Copy notes*. A project with only [the build loop](../.agents/skills/loop/README.md) has no reply link, so its pages open so, and the person replies in the chat. A shipped plan's link is its saved file too: a live page would wait for an answer again, with build buttons.
 
 On a screen 900 px or wider, every part and the bar's buttons share one width, with or without pictures: two widths make the edge jump as you scroll.
 
@@ -29,9 +29,9 @@ A card shows what the go makes, as close to the real thing as you can make it. A
 
 | Job | The card shows |
 |---|---|
-| A plan that adds or changes a screen | *Before*, a screenshot of today's screen; *After*, one picture per state from [the prototype](#the-prototype); and a *Try it* link |
+| A plan that adds or changes a screen | *Before*, a picture of today's screen; *After*, one picture per state from [the prototype](prototypes.md); and a *Try it* link when it is online |
 | A website this app doesn't run, such as a shop's pages | a [live card](#the-live-card) of [its prototype](#a-website-prototype) as its *After* picture, with no second picture of the same sample |
-| A screen when no prototype can run | a `screen` sketch, and a line `No real picture: <the step that failed>` |
+| A screen, or a part of one, that no prototype or [screen test](prototypes.md#an-app-the-preview-cant-serve) can draw | a `screen` sketch, and a line `No real picture: <the step or part>` ([when every way fails](prototypes.md#when-every-way-fails)) |
 | A flow, states, or a back-and-forth | a `mermaid` picture |
 | A finished build | *Approved* and *Built*, or *Live now* and *Preview*, side by side |
 | Ads | an [`ad` card](#the-ad-card) per ad, side by side |
@@ -53,19 +53,9 @@ A card shows each picture, drawing, ad, page, and live card as one labelled pict
 
 ## The prototype
 
-A plan that adds or changes a screen makes a throwaway copy of the app, changes the screen there, and puts it on the change's preview address. [`prototype.mjs`](../.agents/skills/plan/scripts/prototype.mjs) runs each step:
+A plan that adds or changes a screen makes a throwaway copy of the app, changes the screen there with sample data, and takes real *Before* and *After* pictures of it. A web app goes on the change's preview address; a phone or desktop app is drawn by its own screen test. [Prototypes](prototypes.md) owns every step, and the sketch that stays only when no route can draw the screen.
 
-1. `prototype.mjs start <change>` makes the copy at `.scratch/<change>-prototype` and prints its path. When an earlier `finish` left a diff, the new copy starts with those edits. Edit the screen in the copy. Write sample data into the screen for each state and for data the copy can't reach, such as another service's: the copy changes no database.
-2. `prototype.mjs upload <change>` puts the copy on the change's preview address. A new file in `schema/migrations` stops it, because the preview shares the practice database. When `upload` can't run, `prototype.mjs serve <change>` runs the copy on this computer and prints `PROTOTYPE_URL=`: take the pictures there, and stop it when you are done.
-3. Take one picture per state the plan names, with [the browser](development/browsing.md) (`browse.mjs screenshot`), at phone width and the visible part only. Copy them to `<change>/pictures/`, and write them in the bullet's `picture` fence after the *Before* picture, with a `Try it: <https address>` line. *Try it* opens a new tab; an address that is not `https://` stops the builder.
-4. Notes on the plan change the copy too: upload again, take new pictures, and rebuild the page.
-5. `prototype.mjs finish <change>` keeps the copy's changes as `.scratch/<change>-prototype.diff` and removes the copy. [`/apply`](../.agents/skills/apply/SKILL.md#build-in-a-helper) runs it when the copy is still there, and [its build](../.agents/skills/apply/references/build-helper.md) reads that diff first and builds the same screens properly, with real data and tests.
-
-**A phone app screen** gets its pictures from a screen test instead, because the preview serves only the web app: [real pictures of a phone app screen](development/phone-pictures.md).
-
-No step needs a go from the person, and git never takes the copy. Only when every way fails, keep the `screen` sketch and add a line `No real picture: <the step that failed>` to the bullet. The builder warns on a sketch with neither a picture nor that line.
-
-After the build, `preview-review.mjs --approved "<title>|<After picture>|<built picture>"` shows the approved picture and the built screen side by side, as *Approved* and *Built*.
+**A phone app screen** gets its pictures from a screen test, because the preview serves only the web app: [real pictures of a phone app screen](development/phone-pictures.md).
 
 ## A website prototype
 
@@ -126,7 +116,7 @@ Every plan lists what its build needs from you, so a build never stops halfway t
 - **Meta ads key**: Needs you. Get it: <https://key.example.dev/k>
 ````
 
-- **Check each thing before you mark it.** A business service's key: `node scripts/company-api.mjs services`, then the computer's own `.env` ([secrets](development/secrets.md)). A website sign-in: open the site with `browse.mjs` and read whether it is signed in ([saved browser logins](development/browsing.md#saved-browser-logins)). A thing that is there is *Ready*.
+- **Check each thing before you mark it.** A business service's key: `node scripts/company-api.mjs services`, then the computer's own `.env` ([secrets](development/secrets.md)). A website sign-in: open the site with `browse.mjs` and read whether it is signed in ([saved browser logins](../.agents/skills/browser/references/browsing.md#saved-browser-logins)). A thing that is there is *Ready*.
 - **A *Needs you* item holds its file question or its link**: a [`form` fence](#files), or one `https` link, such as a key's [private link](development/secrets.md#receive-a-key-through-a-private-link), which the page shows as *Open the link*. A plan that needs nothing has one bullet, `- **Nothing.**`
 - **The bar waits for it.** An item counts as open until you send its files on the page. While any item is open, each button but *Send notes* reads *2 things need you*, and a tap shows the first open item. A key saved on its private link turns *Ready* when the chat builds the page again.
 - **A need still open stops the build**, which says what is missing.

@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // A throwaway copy of the app for a plan's screens: real After pictures and a Try it link before the build.
-import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
-import { isMain, parseCli, usageError } from '../../memory/scripts/lib/cli.mjs';
+import { isMain, parseCli, usageError } from '../../loop/scripts/lib/cli.mjs';
+import { runCommand, slot } from '../../loop/scripts/slot.mjs';
 
 const USAGE = `usage: prototype.mjs start|upload|serve|finish <change-name> [--wait <seconds>]
   start   make the copy at .scratch/<change-name>-prototype from this commit, with any earlier finish's diff, and print its path
@@ -43,13 +44,15 @@ export function start(top, change) {
 }
 
 // The preview shares the staging database, so a prototype shows sample data in the screen, never a migration.
-export function upload(top, change) {
+export async function upload(top, change) {
   const copy = copyOf(top, change);
   needCopy(copy);
   if (git(copy, ['status', '--porcelain', '--untracked-files=all', '--', 'schema/migrations']).trim()) {
     throw new Error('the prototype changes schema/migrations: write sample data into the screen instead');
   }
-  return spawnSync('bash', ['scripts/cf-preview.sh', '--alias', change], { cwd: copy, stdio: 'inherit' }).status ?? 1;
+  const preview = await slot('preview', {}, copy);
+  if (preview.empty) throw new Error('this project has no preview upload (its profile names no preview); use serve');
+  return runCommand(preview.value, ['--alias', change], { cwd: copy });
 }
 
 const freePort = () => new Promise((done, fail) => {
@@ -97,7 +100,7 @@ if (isMain(import.meta.url)) {
   try {
     let top;
     try { top = git(process.cwd(), ['rev-parse', '--show-toplevel']).trim(); } catch { throw new Error('run it inside the change\'s checkout'); }
-    if (verb === 'upload') process.exitCode = upload(top, change);
+    if (verb === 'upload') process.exitCode = await upload(top, change);
     else if (verb === 'serve') {
       const { url, server } = await serve(top, change, wait);
       console.log(`PROTOTYPE_URL=${url}`);

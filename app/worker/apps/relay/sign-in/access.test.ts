@@ -1,6 +1,6 @@
 // Task 3.3: a self-hosted server signs in with Access. An Access email gets a person only while the server may take it.
 import { beforeEach, expect, it } from "vitest";
-import type { AccessIdentity } from "../../../access";
+import type { AccessIdentity } from "../../../access-slots";
 import { database } from "../../../../tests/employee-access/connections";
 import { callerOf, type CallerEnv } from "../caller";
 

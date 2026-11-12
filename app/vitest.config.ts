@@ -10,8 +10,12 @@ export default defineConfig({
   // `cloudflare:workers` exists only in the Workers runtime: the AI connector's tests get a stand-in.
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)),
     "cloudflare:workers": fileURLToPath(new URL("./tests/cloudflare-workers.ts", import.meta.url)) } },
+  // A browser-like test loads files through the dev server, which serves only app/ unless told: the module's screen
+  // tests sit in the repo root's .agents/.
+  server: { fs: { allow: [".."] } },
   test: {
-    include: ["worker/**/*.test.ts", "src/**/*.test.{ts,tsx}"],
+    // The Access module's own tests run here too, through its skill link: wiki/stack/employee-access.md
+    include: ["worker/**/*.test.ts", "src/**/*.test.{ts,tsx}", "../.agents/skills/access/**/*.test.mjs"],
     environment: "node",
     // The OAuth library imports `cloudflare:workers` too, so it goes through the alias rather than Node's loader.
     server: { deps: { inline: ["@cloudflare/workers-oauth-provider"] } },

@@ -6,7 +6,8 @@ import { createRequire } from 'node:module';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { isMain } from '../../memory/scripts/lib/cli.mjs';
+import { isMain } from '../../loop/scripts/lib/cli.mjs';
+import { slot } from '../../loop/scripts/slot.mjs';
 import { lookCss } from './look.mjs';
 
 const FORMAT = '<!-- wong-review:3 -->';
@@ -667,11 +668,11 @@ function view(drawn) {
     + `<div class="clip">${shown.html}</div><figcaption>${esc(shown.label)}</figcaption></figure>`).join('')}</div></div>`;
 }
 
-// A sketch stands in for a real picture only with a line that names the step that failed.
+// A sketch stands in for a real picture only with a line that names the step that failed, or the part no test draws.
 function sketchOnly(block, ctx, warnings) {
   const sketch = block.drawings.find(fence => fence.lang === 'screen' || fence.lang === 'svg');
   if (!sketch || block.drawings.some(fence => fence.lang === 'picture') || /\bNo real picture:/i.test(block.text)) return;
-  warnings.push(`${ctx.file} line ${sketch.at}: item ${block.n}: a screen sketch with no real picture: run the prototype with sample data, `
+  warnings.push(`${ctx.file} line ${sketch.at}: item ${block.n}: a screen sketch with no real picture: draw it from the prototype or the app's screen test, with sample data, `
     + 'or add a line "No real picture: <the step that failed>"');
 }
 
@@ -902,10 +903,10 @@ export function workActions(pairs = [], confirm = []) {
   return actions;
 }
 
-// The page's reply link when one can open, else its file.
-async function linked(page, header, actions) {
-  const { openReplyLink } = await import('../../hand-over/scripts/reply-link.mjs');
-  return (await openReplyLink({ file: page, header, ...(actions && { actions }) })) ?? page;
+/** The page's reply link from the profile's `reviewLink`, else its file: with no link the person answers in chat. */
+export async function linked(page, header, actions) {
+  const found = await slot('reviewLink', { file: page, header, ...(actions && { actions }) });
+  return (!found.empty && found.value) || page;
 }
 
 export function buildReview(changeRoot, { requireCurrent = false, kind = 'plan', actions } = {}) {

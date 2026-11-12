@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
-import { isMain, parseCli, usageError } from '../../memory/scripts/lib/cli.mjs';
+import { isMain, parseCli, usageError } from '../../loop/scripts/lib/cli.mjs';
 
 const USAGE = 'usage: verify-receipts.mjs {check|collect|compare} --recipe <path> [--root <repo>] [--sha <head> --run-dir <owned-folder>] [--baseline-sha <selected-revision>]';
 const SHA = /^[a-f0-9]{40}$/;

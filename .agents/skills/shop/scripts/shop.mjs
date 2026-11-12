@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { isMain, parseCli, usageError } from '../../memory/scripts/lib/cli.mjs';
+import { isMain, parseCli, usageError } from '../../browser/scripts/lib/cli.mjs';
 
 const USAGE = `usage: shop.mjs <command> [...]
   install                       download Shop's command in the one tried version; prints SHOP_INSTALLED=

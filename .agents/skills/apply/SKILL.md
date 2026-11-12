@@ -6,7 +6,7 @@ user-invocable: true
 
 # /apply
 
-Build [the chosen plan](../../../wiki/development/the-change-loop.md). Run `node .claude/skills/explore/scripts/step-title.mjs set APPLY --task "<plan or to-do title>"` before a build, to-do, or preview.
+Build [the chosen plan](../../../wiki/development/the-change-loop.md). Run `node .claude/skills/loop/scripts/slot.mjs stepTitle set APPLY --task "<plan or to-do title>"` before a build, to-do, or preview.
 
 **No repo file** → [work the to-do](#work-that-changes-no-repo-file). Repo code or process, [mini apps](../../../wiki/stack/mini-apps.md) included → resolve the plan.
 
@@ -48,18 +48,16 @@ Start a fresh helper as above, prompted with the change name, then *read `$(git 
 
 ## Finish with a preview
 
-1. **Did the app change?** CI's own check, `DEFAULT_BRANCH=main bash "$(git rev-parse --show-toplevel)/.github/scripts/app-untouched.sh" --worktree`: `untouched=true` → skip the upload and say so in one line.
-2. **Upload the preview** from this host, `bash "$(git rev-parse --show-toplevel)/scripts/cf-preview.sh" --alias "<change-name>"`, with the Cloudflare credential from the primary worktree's `.env` ([secrets](../../../wiki/development/secrets.md)). Can't run (no stack pack, no credential) → say why in one line.
-
-3. **Catch loosened checks:** `DEFAULT_BRANCH=main node "$(git rev-parse --show-toplevel)/.github/scripts/loosened-checks.mjs" --worktree`. Fix each file marked *needs a reason*: switch the check back on, or add [the `Check:` bullet](../../../wiki/development/the-change-loop.md#a-loosened-check-needs-a-reason) when the plan settles it, else ask. Rerun until it exits 0.
-4. **Show changed screens on a preview page**: capture each live and in this preview by [`/verify`'s plain checks](../verify/SKILL.md#plain-checks) at phone width (computer too if it differs), no `--full-page`, scout, save, or PR comment. Run `node "$(git rev-parse --show-toplevel)/.claude/skills/apply/scripts/preview-review.mjs" "<change-name>" --pair "<title>|<live>|<preview>" --link` (no live one for a new screen; `--approved` with the plan's *After*, or its live card at 390 and 1280 px, in place of live); report its link. None to show, or a capture fails → say why; keep the link and the choice.
-5. **Report and ask** in [plain words](../explore/references/asking-the-user.md#write-in-plain-words): what was built, what the review found and fixed, any can't-be-undone line, [the preview link](../explore/references/asking-the-user.md#print-the-previews-link), each `Check:` bullet under *Checks loosened* (what is no longer checked, why), and unfixed files. Ask [the next step](../explore/references/asking-the-user.md#end-every-reply-with-the-next-step) with the question tool: publish it *(Recommended)* via [`/ship`](../ship/SKILL.md), change it more, or save via [`/save`](../save/SKILL.md).
+1. **Run CI's guards**, `node "$(git rev-parse --show-toplevel)/.claude/skills/loop/scripts/slot.mjs" guards`. `untouched=true` → skip the upload, in one line. Fix each file marked *needs a reason*: switch the check back on, or add [the `Check:` bullet](../../../wiki/development/the-change-loop.md#a-loosened-check-needs-a-reason) when the plan settles it, else ask. Rerun until it exits 0.
+2. **Upload the preview** from this host, `node "$(git rev-parse --show-toplevel)/.claude/skills/loop/scripts/slot.mjs" --run preview --alias "<change-name>"`, with the credential from the primary worktree's `.env` ([secrets](../../../wiki/development/secrets.md)). Empty or can't run (no credential) → say why in one line.
+3. **Show changed screens on a preview page**: capture each live and in this preview by [`/verify`'s plain checks](../verify/SKILL.md#plain-checks) at phone width (computer too if it differs), no `--full-page`, scout, save, or PR comment. Run `node "$(git rev-parse --show-toplevel)/.claude/skills/apply/scripts/preview-review.mjs" "<change-name>" --pair "<title>|<live>|<preview>" --link` (no live one for a new screen; `--approved` with the plan's *After*, or its live card at 390 and 1280 px, in place of live); report its link. None to show, or a capture fails → say why; keep the link and the choice.
+4. **Report and ask** in [plain words](../explore/references/asking-the-user.md#write-in-plain-words): what was built, what the review found and fixed, any can't-be-undone line, [the preview link](../explore/references/asking-the-user.md#print-the-previews-link), each `Check:` bullet under *Checks loosened* (what is no longer checked, why), and unfixed files. Ask [the next step](../explore/references/asking-the-user.md#end-every-reply-with-the-next-step) with the question tool: publish it *(Recommended)* via [`/ship`](../ship/SKILL.md), change it more, or save via [`/save`](../save/SKILL.md).
 
 Repeat under the same alias for more edits; added tasks go to a new helper.
 
 ## Work that changes no repo file
 
-Work the conversation's numbered to-do in order, writing one if missing ([verbs for any work](../../../wiki/development/the-change-loop.md#verbs-for-any-work)). Only an outward step asks, showing exactly what it will do (recipient, full text, amount, target) in [the shared ask format](../explore/references/asking-the-user.md): one confirmation, one action, unless the person asked for a batch. Skip and report a declined step. Report without `/save`. Done → `step-title.mjs set DONE`.
+Work the conversation's numbered to-do in order, writing one if missing ([verbs for any work](../../../wiki/development/the-change-loop.md#verbs-for-any-work)). Only an outward step asks, showing exactly what it will do (recipient, full text, amount, target) in [the shared ask format](../explore/references/asking-the-user.md): one confirmation, one action, unless the person asked for a batch. Skip and report a declined step. Report without `/save`. Done → `slot.mjs stepTitle set DONE`.
 
 ## Boundaries
 

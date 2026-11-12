@@ -8,25 +8,25 @@ import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { isMain, parseCli, usageError } from '../../memory/scripts/lib/cli.mjs';
-import { primaryRoot } from '../../memory/scripts/lib/primary-root.mjs';
-import { loadConfig, memoryOrigin, repoContext, signIn, signInHelp } from '../../memory/scripts/lib/store.mjs';
+import { isMain, parseCli, usageError } from './lib/cli.mjs';
+import { primaryRoot } from './lib/primary-root.mjs';
+import { repoContext } from './lib/env.mjs';
+import { loadProfile, moduleRepo, readProfile, slotNow, slotResult } from './lib/slot.mjs';
 import { runAddons } from './addons.mjs';
-import { computerId } from '../../hand-over/scripts/lib/computer.mjs';
-import { SCHEDULE_LABEL, chatCalls, chatClient } from './chats.mjs';
-import { BUCKETS, allow, answer, chiefDay, chiefEnv, doneAgent, hand, mark, noteEnd, paseoCli, readBeat, readJson, reply,
+import { SCHEDULE_LABEL } from './chats.mjs';
+import { BUCKETS, allow, answer, chiefDay, chiefEnv, doneAgent, mark, noteEnd, paseoCli, readBeat, readJson, reply,
   serviceAlive, status, writeJson } from './chief.mjs';
-import { RUN_AGENTS, SettingsError, defaultSettings, loadSettings, localDay, settingsFor } from './config.mjs';
+import { RUN_AGENTS, SETTINGS_DOC, SettingsError, defaultSettings, loadSettings, localDay, settingsFor } from './config.mjs';
 import { addLine, format, newLines, readLines } from './journal.mjs';
 import { writeCard } from './chat-list.mjs';
 import { lineUpData, saveMap, tell } from './line-up.mjs';
-import { refuseRuns, scheduleApp, takeRuns, waitingRuns } from './schedule-runs.mjs';
+import { refuseRuns, takeRuns, waitingRuns } from './schedule-runs.mjs';
 import { handOver } from './waiting-notes.mjs';
-import { DEFAULT_SCHEDULES, alive, codeStamp, dropServeLock, handOff, loadSweeps, lockedBy, morningFile, serveDaily, stopGroup,
+import { DEFAULT_SCHEDULES, alive, codeStamp, dropServeLock, handOff, lineUpOffFile, loadSweeps, lockedBy, morningFile, serveDaily, stopGroup,
   takeServeLock } from './worker.mjs';
 
 const LAUNCHER = fileURLToPath(new URL('../../schedule/scripts/workspace.mjs', import.meta.url));
-const REPO = fileURLToPath(new URL('../../../../', import.meta.url));
+const REPO = moduleRepo();
 const SELF = fileURLToPath(import.meta.url);
 const KEPT = 400;
 const run = promisify(execFile);
@@ -39,21 +39,13 @@ export const stateDirectory = (project, person, root = join(homedir(), '.local',
 // ---------------------------------------------------------------------------
 // who
 
-function appOrigin(ctx) {
-  try { return memoryOrigin(loadConfig(ctx)); } catch { return null; }
-}
-
-/** The settings file: `--config`, else the one whose `emails` hold the git email, else the sign-in email. A lone file
- * that lists neither is another person's. */
-export function who({ repo = REPO, ctx = repoContext(repo), origin = appOrigin(ctx), signedIn = signIn, config = null } = {}) {
-  let me;
-  if (origin) {
-    const found = signedIn(origin);
-    const ok = found.state === 'valid' || found.state === 'near';
-    me = { source: 'sign-in', state: found.state, email: found.email ?? null, origin, days: found.days ?? null, login: ok ? null : signInHelp(origin) };
-  } else {
-    me = { source: 'git', state: ctx.author ? 'valid' : 'missing', email: ctx.author || null, origin: null, days: null, login: null };
-  }
+/** The settings file: `--config`, else the one whose `emails` hold the git email, else the profile's person's email.
+ * A lone file that lists neither is another person's. */
+export function who({ repo = REPO, ctx = repoContext(repo), person = slotNow('person', [repo]), config = null } = {}) {
+  const me = person
+    ? { source: 'profile', state: person.state ?? 'valid', email: person.email ?? null, origin: person.origin ?? null, days: person.days ?? null,
+      login: person.login ?? null }
+    : { source: 'git', state: ctx.author ? 'valid' : 'missing', email: ctx.author || null, origin: null, days: null, login: null };
   const file = config ? resolve(config) : settingsFor(repo, ctx.author) ?? settingsFor(repo, me.email);
   let settings = null, error = null;
   if (file) { try { settings = loadSettings(file, repo); } catch (failed) { error = failed.message; } }
@@ -61,12 +53,12 @@ export function who({ repo = REPO, ctx = repoContext(repo), origin = appOrigin(c
     ...(error ? { error } : {}) };
 }
 
-/** `{me, config}`: the person's settings file, else the defaults from the sign-in email while it is good, else the git
- * email; `config` is null with neither. */
+/** `{me, config}`: the person's settings file, else the defaults from the profile's email while it is good, else the
+ * git email; `config` is null with neither. */
 export function personSettings({ repo = REPO, ctx = repoContext(repo), ...rest } = {}) {
   const me = who({ repo, ctx, ...rest });
   if (me.file) return { me, config: loadSettings(me.file, repo) };
-  const email = (me.source === 'sign-in' && ['valid', 'near'].includes(me.state) && me.email) || ctx.author || null;
+  const email = (me.source === 'profile' && ['valid', 'near'].includes(me.state) && me.email) || ctx.author || null;
   return { me, config: email ? defaultSettings({ email }) : null };
 }
 
@@ -203,24 +195,23 @@ export function startReport({ config, stateDir, now = new Date() }) {
 
 const USAGE = `usage: daily.mjs who | start [--dry-run] [--report] | handoff --file <text file>
        daily.mjs remind   a reminder is a one-time chat schedule now: ask /schedule
-       daily.mjs serve [--agent claude|codex] [--seconds 60] [--once] [--dry-run] | ensure [--agent claude|codex] | status
-       daily.mjs checkins off | checkins on
+       daily.mjs serve [--agent claude|codex] [--seconds 60] [--once] [--dry-run] | ensure [--agent claude|codex] | status | check
+       daily.mjs checkins off | checkins on | lineup off | lineup on
        daily.mjs journal [--new] | journal --line <words> [--run <id>]
-       daily.mjs hand --agent <id|title|workspace>
        daily.mjs reply --agent <a> --file <text file> --bucket keep-going|pick|person --label <line> [--mark <mark>]
-       daily.mjs answer --agent <a> --request <id> --file <text file> --bucket keep-going|pick|person --label <line>
-       daily.mjs allow --agent <a> --request <id> --bucket keep-going|person --label <line>
+       daily.mjs answer --agent <a> --request <id> --file <text file> --bucket keep-going|pick --label <line>
+       daily.mjs allow --agent <a> --request <id> --bucket keep-going --label <line>
        daily.mjs done-agent --agent <a> --proof <text> | note-end --line <words>
        daily.mjs line-up | map --file <json file> | tell --agent <a> --file <text file> [--now] [--covered-by <a>] | tell --drop <a>
        daily.mjs mark [--agent claude|codex]
   each but the mark hook takes --config <settings file>; a hook never fails; chief-service is serve`;
 const FLAGS = { who: [], start: ['dry-run', 'report'], handoff: ['file'], remind: ['day', 'text'],
-  serve: ['agent', 'seconds', 'once', 'dry-run'], ensure: ['agent'], 'checkins off': [], 'checkins on': [], journal: ['new', 'line', 'run'], status: [],
-  hand: ['agent'],
+  serve: ['agent', 'seconds', 'once', 'dry-run'], ensure: ['agent'], 'checkins off': [], 'checkins on': [], 'lineup off': [], 'lineup on': [],
+  journal: ['new', 'line', 'run'], status: [], check: [],
   reply: ['agent', 'file', 'bucket', 'label', 'mark'], answer: ['agent', 'request', 'file', 'bucket', 'label'], allow: ['agent', 'request', 'bucket', 'label'],
   'done-agent': ['agent', 'proof'], 'note-end': ['line'], 'line-up': [], map: ['file'],
   tell: ['agent', 'file', 'now', 'covered-by', 'drop'] };
-const NEEDS = { handoff: ['file'], hand: ['agent'], reply: ['agent', 'file', 'bucket', 'label'],
+const NEEDS = { handoff: ['file'], reply: ['agent', 'file', 'bucket', 'label'],
   answer: ['agent', 'request', 'file', 'bucket', 'label'], allow: ['agent', 'request', 'bucket', 'label'], 'done-agent': ['agent', 'proof'],
   'note-end': ['line'], map: ['file'] };
 /** An answer that changed nothing it was asked to change. */
@@ -233,7 +224,7 @@ export function readArgs(args) {
       'run', 'covered-by', 'drop'].map(name => [name, { type: 'string' }]),
     ...['dry-run', 'once', 'report', 'new', 'now'].map(name => [name, { type: 'boolean' }])]) });
   const [first, ...extra] = positionals;
-  const named = first === 'checkins' ? `${first} ${extra.shift()}` : first;
+  const named = ['checkins', 'lineup'].includes(first) ? `${first} ${extra.shift()}` : first;
   const command = named === 'chief-service' ? 'serve' : named;
   const flags = Object.keys(values).filter(name => name !== 'config');
   if (!Object.hasOwn(FLAGS, command) || extra.length || flags.some(flag => !FLAGS[command].includes(flag)) || (NEEDS[command] ?? []).some(flag => !values[flag])) {
@@ -245,26 +236,30 @@ export function readArgs(args) {
   if (['serve', 'ensure'].includes(command) && values.agent !== undefined && !RUN_AGENTS.includes(values.agent)) {
     usageError(USAGE, `--agent takes ${RUN_AGENTS.join(', ')}.`);
   }
-  // A line-up run answers a card a person's choice in another chat settles.
-  const buckets = command === 'answer' ? [...BUCKETS, 'line-up'] : BUCKETS;
+  // Only `reply` speaks for the person: `/close` sends their pick. `answer` and `allow` never relay a choice.
+  const buckets = command === 'reply' ? BUCKETS : command === 'allow' ? ['keep-going'] : BUCKETS.filter(bucket => bucket !== 'person');
   if (values.bucket !== undefined && !buckets.includes(values.bucket)) usageError(USAGE, `--bucket takes ${buckets.join(', ')}.`);
   if (command === 'tell' && (Boolean(values.agent) !== Boolean(values.file) || !(values.agent || values.drop))) usageError(USAGE);
-  if (command === 'allow' && values.bucket === 'pick') usageError(USAGE, '--bucket takes keep-going or person.');
   return { command, values };
 }
 
 /** What `D remind` says: a reminder is a schedule now. */
 export const REMIND = 'A reminder is a one-time chat schedule now: ask /schedule for one that opens a chat with the words at that time.';
-const TASKS_IGNORED = 'Ignored: `sources.tasks` in your settings. The week board is gone; your open chats show in the Inbox.';
+const IGNORED = {
+  tasks: 'Ignored: `sources.tasks` in your settings. The week board is gone; the plans waiting for you show in the Inbox.',
+  chats: 'Ignored: `sources.chats` in your settings. Daily keeps no chat list in the app now; the plans waiting for you show in the Inbox.',
+};
 
-/** One journal line, the first time, for an older settings file's `tasks` source: the week board is gone. */
+/** One journal line, the first time, for each source an older settings file still turns on: `tasks` or `chats`. */
 export function ignoreTasks({ config, stateDir }) {
-  if (!config.sources.tasks || readLines({ stateDir }).some(entry => entry.kind === 'tasks-ignored')) return;
-  addLine({ stateDir, timezone: config.timezone, line: TASKS_IGNORED, kind: 'tasks-ignored' });
+  for (const [source, line] of Object.entries(IGNORED)) {
+    if (!config.sources[source] || readLines({ stateDir }).some(entry => entry.kind === `${source}-ignored`)) continue;
+    addLine({ stateDir, timezone: config.timezone, line, kind: `${source}-ignored` });
+  }
 }
 
-/** Each command, over the settings, the checkout, the state folder and the injected calls, `chats` the chat list. */
-export function commands({ config, project, stateDir, values, call, chats, env = process.env, addons = runAddons,
+/** Each command, over the settings, the checkout, the state folder and the injected calls. */
+export function commands({ config, project, stateDir, values, call, env = process.env, addons = runAddons,
   print = console.log, warn = console.error, keep = () => ensure({ env }), reread = () => personSettings({ repo: project, config: values.config }),
   defaults = () => startDefaults({ home: workerHome(project), stateDir, env, timezone: config.timezone }) }) {
   const started = () => startedRecord(stateDir).read();
@@ -273,8 +268,6 @@ export function commands({ config, project, stateDir, values, call, chats, env =
   const passAddons = config.addons?.pass?.length
     ? events => addons({ list: config.addons.pass, repo: project, context: { ...addonContext(config, project, localDay(new Date(), config.timezone), 'pass'), events } })
     : null;
-  // No app or `chats: false`: the worker sends no list, so a missing app never opens a *Needs you* chat.
-  const chatList = async () => (config.sources.chats && await chats.origin() ? { sync: chats.sync, computer: computerId(env) } : null);
   const said = () => ({ agent: values.agent, text: readFileSync(values.file, 'utf8'), bucket: values.bucket, label: values.label });
   return {
     start: () => (values.report ? startReport({ config, stateDir }) : start({ config, project, stateDir, dryRun: Boolean(values['dry-run']), addons })),
@@ -296,7 +289,7 @@ export function commands({ config, project, stateDir, values, call, chats, env =
           settings: () => { const found = reread(); return { config: found.config, hasFile: Boolean(found.me.file) }; },
           ...(values.agent && { agent: values.agent }),
           openChat: ({ title, message, schedule }) => launchWorkspace({ destination: project, title, message, schedule }),
-          watching: dryRun ? {} : { chats: await chatList(), addons: passAddons } });
+          watching: dryRun ? {} : { addons: passAddons } });
       } finally { if (dryRun) rmSync(dir, { recursive: true, force: true }); else dropServeLock(stateDir); }
     },
     // The default schedules pause or go on again at once, not at the next chat.
@@ -311,6 +304,18 @@ export function commands({ config, project, stateDir, values, call, chats, env =
       addLine({ stateDir, timezone: config.timezone, line: 'Check-ins on.', kind: 'checkins' });
       return { state: 'on', worker: keep().state };
     },
+    // The worker's own line-up, run with no schedule store; the store's line-up schedule pauses in the app instead.
+    'lineup off': () => {
+      writeJson(lineUpOffFile(stateDir), { at: new Date().toISOString() });
+      addLine({ stateDir, timezone: config.timezone, line: 'Line-up off: Daily stops keeping your chats in line.', kind: 'checkins' });
+      return { lineUp: 'off' };
+    },
+    'lineup on': () => {
+      rmSync(lineUpOffFile(stateDir), { force: true });
+      addLine({ stateDir, timezone: config.timezone, line: 'Line-up on.', kind: 'checkins' });
+      return { lineUp: 'on' };
+    },
+    check: () => check({ config, project, stateDir, env }),
     journal: () => {
       if (values.line) return addLine({ stateDir, timezone: config.timezone, line: values.line, run: values.run, kind: values.run ? 'end' : 'note' });
       const text = values.new
@@ -319,7 +324,6 @@ export function commands({ config, project, stateDir, values, call, chats, env =
       if (text) print(text);
     },
     status: async () => status({ ...(await chief()), project }),
-    hand: async () => hand({ ...(await chief()), agent: values.agent }),
     reply: async () => reply({ ...(await chief()), ...said(), mark: values.mark }),
     answer: async () => answer({ ...(await chief()), ...said(), request: values.request }),
     allow: async () => allow({ ...(await chief()), agent: values.agent, request: values.request, bucket: values.bucket, label: values.label }),
@@ -357,10 +361,10 @@ export function checkinsOff({ stateDir, timezone, kill = stopGroup, isAlive = al
   return { state: 'off', stopped };
 }
 
-/** True when the worker has work: the chat list with an app, add-ons, a background schedule run handed over, a default
- * schedule this computer added, or an event job on the default list merged with the person's own. */
-function hasJobs(config, project, env, stateDir, app) {
-  if ((config.sources.chats && app) || config.addons?.morning?.length || config.addons?.pass?.length || waitingRuns(env).length) return true;
+/** True when the worker has work: its own line-up with no schedule store, add-ons, a background schedule run handed
+ * over, a default schedule this computer added, or an event job on the default list merged with the person's own. */
+function hasJobs(config, project, env, stateDir, schedules) {
+  if ((!schedules && !existsSync(lineUpOffFile(stateDir))) || config.addons?.morning?.length || config.addons?.pass?.length || waitingRuns(env).length) return true;
   if (Object.keys(readJson(defaultsFile(stateDir), {}).added ?? {}).length) return true;
   try { return Object.keys(loadSweeps({ project, file: config.sweeps }).events).length > 0; } catch { return false; }
 }
@@ -476,19 +480,19 @@ export function startDefaults({ home, stateDir, env, now = Date.now(), timezone,
   return true;
 }
 
-/** `D ensure`: starts the main checkout's worker, detached, when the person has a job and none runs, and restarts one
- * whose code is not the main checkout's; returns at once. Off, it takes handed-over schedule runs as `refused`. */
-export function ensure({ repo = REPO, home = workerHome(repo), env = process.env, agent = RUN_AGENTS[0],
+/** `D ensure`: starts the main checkout's worker when the person has a job and none runs, or restarts a stale one;
+ * off, it refuses handed-over runs. With `schedules` false (no store): no defaults, and the worker runs the line-up. */
+export function ensure({ repo = REPO, home = workerHome(repo), env = process.env, agent = RUN_AGENTS[0], schedules = true,
   resolve: settings = () => personSettings({ repo: home.repo }), spawnServe = startServe, root, now = Date.now(), isAlive = alive, kill = stopGroup,
   code = codeStamp(home.dir), stamped = stamps(home.dir), moveIn = startMoveIn, defaults = startDefaults } = {}) {
   if (RUN_FLAGS.some(name => env[name])) return { state: 'run' };
-  const { me, config } = settings();
+  const { config } = settings();
   if (!config) return { state: 'no-person' };
   const stateDir = stateOf(config, repo, root);
   if (config.checks?.length) {
     try { moveIn({ home, stateDir, env, now, timezone: config.timezone }); } catch { /* best effort */ }
   }
-  try { defaults({ home, stateDir, env, now, timezone: config.timezone }); } catch { /* best effort */ }
+  if (schedules) try { defaults({ home, stateDir, env, now, timezone: config.timezone }); } catch { /* best effort */ }
   if (existsSync(offFile(stateDir))) {
     const refused = waitingRuns(env).length ? takeRuns({ env, project: primaryRoot(repo).primary, emails: config.emails, stateDir, now }) : [];
     return { state: 'off', ...(refused.length ? { refused } : {}) };
@@ -496,7 +500,7 @@ export function ensure({ repo = REPO, home = workerHome(repo), env = process.env
   const holder = lockedBy(stateDir, { isAlive, now });
   const changed = stamped && oldCode(stateDir, holder, code);
   if (!changed && (serviceAlive(stateDir, now) || holder)) return { state: 'running' };
-  if (!hasJobs(config, primaryRoot(repo).primary, env, stateDir, Boolean(me?.origin))) return { state: 'no-jobs' };
+  if (!hasJobs(config, primaryRoot(repo).primary, env, stateDir, schedules)) return { state: 'no-jobs' };
   const stop = changed && holder && holder !== process.pid ? holder : null;
   if (stop) {
     kill(stop);
@@ -530,17 +534,40 @@ const NEED_FILE = new Set(['start']);
 /** The settings `command` runs with: the file's, else the defaults; it throws for a command that needs a file. */
 export function commandSettings(command, { me, config }) {
   if (config && (me.file || !NEED_FILE.has(command))) return config;
-  throw new SettingsError(`No daily settings for ${me.email ?? 'this person'}: add .agents/daily/<name>.json. See wiki/development/daily.md#your-settings-file.`);
+  throw new SettingsError(`No daily settings for ${me.email ?? 'this person'}: add .agents/daily/<name>.json. See ${SETTINGS_DOC}`);
+}
+
+/** `D check`: the profile loads, one dry worker pass runs, a sample stop sorts, and the schedule store answers.
+ *  `ok` only when each part worked; `store` is `app`, `paseo`, or `off`; a broken profile is `profileError`. */
+export async function check({ config, project, env = process.env, sortStop = null }) {
+  const { parts, error } = await readProfile(env);
+  const { findStore } = await import('../../schedule/scripts/schedule.mjs');
+  const store = error ? null : await findStore({ env, root: project });
+  const lines = [], dir = mkdtempSync(join(tmpdir(), 'daily-check-'));
+  try {
+    await serveDaily({ config, project, stateDir: dir, call: paseoCli(env), env, dryRun: true, started: () => ({}), watching: {}, print: item => lines.push(item) });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+  const { sampleStop } = await import('./stop-check.mjs');
+  const sorted = await (sortStop ?? sampleStop)();
+  return { status: sorted && !error ? 'ok' : 'failed', profile: Object.keys(parts), ...(error && { profileError: String(error.message ?? error).split('\n')[0] }),
+    store: store?.name ?? 'off', pass: lines.length, stop: sorted ?? null };
 }
 
 async function main(args = process.argv.slice(2)) {
   // Each chat's hooks run mark: it never fails the chat. A chat opened before the update runs the old prompt hook.
-  if (args[0] === 'mark') { markHook({ tool: args.includes('codex') ? 'codex' : 'claude', input: hookInput() }); return; }
+  if (args[0] === 'mark') {
+    await loadProfile().catch(() => {});
+    markHook({ tool: args.includes('codex') ? 'codex' : 'claude', input: hookInput() });
+    return;
+  }
   if (args[0] === 'journal' && args.includes('--hook')) return;
   const { command, values } = readArgs(args);
+  await readProfile();
   if (command === 'ensure') {
-    const { refused = [], ...result } = ensure({ agent: values.agent });
-    if (refused.length) result.refused = await refuseRuns(refused, scheduleApp(primaryRoot(REPO).primary));
+    // A store that failed still owns the line-up: the worker must not start a second one.
+    const { value: store, error } = await slotResult('schedules');
+    const { refused = [], ...result } = ensure({ agent: values.agent, schedules: Boolean(store || error) });
+    if (refused.length && store?.report) result.refused = await refuseRuns(refused, { report: (id, done) => store.report(id, done, { project: primaryRoot(REPO).primary }) });
     console.log(JSON.stringify(result)); return;
   }
   const found = personSettings({ config: values.config });
@@ -548,7 +575,7 @@ async function main(args = process.argv.slice(2)) {
   const config = commandSettings(command, found);
   const project = primaryRoot(REPO).primary;
   const stateDir = stateDirectory(project, config.person);
-  const result = await commands({ config, project, stateDir, values, call: paseoCli(), chats: chatCalls(chatClient(project)) })[command]();
+  const result = await commands({ config, project, stateDir, values, call: paseoCli() })[command]();
   if (result !== undefined) console.log(JSON.stringify(result, null, 2));
   if (REFUSED.has(result?.status ?? result?.state)) process.exitCode = 1;
 }

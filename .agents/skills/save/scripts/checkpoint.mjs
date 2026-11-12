@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 // One /save checkpoint, after the agent has staged the files: review page, scan, commit, push, pull request, check
-// wait, failing logs, receipt, preview. The save skill keeps the judgment. Exit codes: each `Stop(code, …)` below.
+// wait, failing logs, receipt, preview; on `local`, the commit and the pre-check. Exit codes: each `Stop(code, …)`.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isMain, parseCli, usageError } from '../../memory/scripts/lib/cli.mjs';
-import { primaryRoot } from '../../memory/scripts/lib/primary-root.mjs';
-import { parseEnv } from '../../memory/scripts/lib/store.mjs';
+import { isMain, parseCli, usageError } from '../../loop/scripts/lib/cli.mjs';
+import { primaryRoot } from '../../loop/scripts/lib/primary-root.mjs';
+import { parseEnv } from '../../loop/scripts/lib/env.mjs';
+import { runCommand, slot } from '../../loop/scripts/slot.mjs';
 import { buildReview } from '../../plan/scripts/build-review.mjs';
-import { liveFiles } from '../../ship/scripts/worktree-secrets.mjs';
 import { delivery, RouteError } from './delivery-route.mjs';
 import { writePrBody } from './render-pr-body.mjs';
 
@@ -30,7 +30,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const CAP = 3;
 const LOG_LINES = 60;
 const RERUN = 'node .claude/skills/save/scripts/checkpoint.mjs';
-const APP = join(here, 'app-change.mjs');
+// A route the profile owns runs through delivery-route.mjs's `run`, `node` by name as the shell scripts call it.
+const routeArgs = (route, args) => [join(here, 'delivery-route.mjs'), 'run', route, ...args];
 const APP_STOP = 'NEXT: the app did not take this, so nothing after it ran. Report the line above in plain words and stop; try no other way to save.';
 const NO_CHANGE_FOOTER = '\n\n---\n_No change record was needed for this edit. `/ship` publishes it._\n';
 
@@ -56,9 +57,9 @@ const readJson = file => { try { return JSON.parse(readFileSync(file, 'utf8')); 
 
 // Which way this checkout saves and publishes, asked once a command: `{ route }`, or `{ lines }`, the stop to
 // print when origin and the install record disagree. No command guesses a route, and none falls back to GitHub.
-export function askRoute(cwd = process.cwd()) {
+export async function askRoute(cwd = process.cwd()) {
   try {
-    return { route: delivery(cwd).route };
+    return { route: (await delivery(cwd)).route };
   } catch (error) {
     if (!(error instanceof RouteError)) throw error;
     return { lines: [`error=the delivery route could not be told: ${error.message}`,
@@ -66,13 +67,14 @@ export function askRoute(cwd = process.cwd()) {
   }
 }
 
-// `main`, unless neither a local nor a remote `main` exists; then what GitHub names. An Artifacts install and a
-// copy installed through the app have no GitHub to ask: the first has `main`, the second reads `origin/HEAD`.
+// `main`, else what GitHub names. Artifacts has no GitHub to ask, so `main`; an app copy reads `origin/HEAD`, and
+// a local route takes `master` when only that exists.
 export function defaultBranch(route = 'github') {
   for (const ref of ['refs/remotes/origin/main', 'refs/heads/main']) {
     if (sh('git', ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]).status === 0) return 'main';
   }
   if (route === 'artifacts') return 'main';
+  if (route === 'local') return sh('git', ['rev-parse', '--verify', '--quiet', 'refs/heads/master']).status === 0 ? 'master' : 'main';
   if (route === 'app') return sh('git', ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD']).stdout.trim().replace(/^origin\//, '') || 'main';
   const named = sh('gh', ['repo', 'view', '--json', 'defaultBranchRef', '--jq', '.defaultBranchRef.name']);
   return named.status === 0 && named.stdout.trim() ? named.stdout.trim() : 'main';
@@ -87,28 +89,33 @@ function outsideFile(root, path, flag) {
   return file;
 }
 
-/** Nonempty live values of the named keys, from every live secrets file of both checkouts. */
-function liveValues(root, keys) {
+/** Each env the project's `keys` part names; else this process's, and `.env` in this checkout and the primary one. */
+async function keyEnvs(root) {
+  const named = await slot('keys', {}, root);
+  if (!named.empty) return named.value;
   let primary = root;
   try { primary = primaryRoot(root).primary; } catch { /* a bare repo's worktree: scan this checkout */ }
+  const files = [...new Set([primary, root])].map(dir => join(dir, '.env')).filter(existsSync);
+  return [process.env, ...files.map(file => parseEnv(readFileSync(file, 'utf8')))];
+}
+
+/** Nonempty live values of the named keys, from every env of `keyEnvs`. */
+async function liveValues(root, keys) {
   const values = new Set();
   const found = new Set();
-  for (const dir of new Set([primary, root])) {
-    for (const rel of liveFiles(dir)) {
-      const env = parseEnv(readFileSync(join(dir, rel), 'utf8'));
-      for (const key of keys) {
-        if (!env[key]) continue;
-        found.add(key);
-        values.add(env[key]);
-      }
+  for (const env of await keyEnvs(root)) {
+    for (const key of keys) {
+      if (!env[key]) continue;
+      found.add(key);
+      values.add(env[key]);
     }
   }
   return { values: [...values], missing: keys.filter(key => !found.has(key)) };
 }
 
 /** Stop when a handled value is staged, or sits in a text that is about to be published. */
-function scanCredentials(root, keys, texts) {
-  const { values, missing } = liveValues(root, keys);
+async function scanCredentials(root, keys, texts) {
+  const { values, missing } = await liveValues(root, keys);
   if (missing.length) say(`SCAN_NO_VALUE=${missing.join(',')}`);
   if (!values.length) return;
   const grep = sh('git', ['grep', '--cached', '-l', '-F', '-f', '-'], { input: `${values.join('\n')}\n` });
@@ -148,7 +155,7 @@ function readPr() {
 // One app-change.mjs command, `node` by name as the shell scripts beside this one call it. A refusal stops with
 // the one line it printed: the app's own words, never Git's output.
 function viaApp(args) {
-  const result = sh('node', [APP, ...args]);
+  const result = sh('node', routeArgs('app', args));
   if (result.status !== 0) throw new Stop(1, [`error=${firstLine(result.stderr) || `app-change.mjs exit ${result.status}`}`, APP_STOP]);
   return result.stdout.trim();
 }
@@ -207,7 +214,7 @@ function printFailures(checks, app) {
     say(`LINK=${link}`);
     const ids = link.match(/\/actions\/runs\/(\d+)(?:\/job\/(\d+))?/);
     if (!ids || (app && !ids[2])) { say('CAUSE=no GitHub Actions log for this check; open LINK'); continue; }
-    if (app) { say(sh('node', [APP, 'log', ids[2]]).stdout.trimEnd() || 'CAUSE=the log could not be read (empty); open LINK'); continue; }
+    if (app) { say(sh('node', routeArgs('app', ['log', ids[2]])).stdout.trimEnd() || 'CAUSE=the log could not be read (empty); open LINK'); continue; }
     say(`RERUN=gh run rerun ${ids[1]} --failed`);
     const log = sh('gh', ['run', 'view', ...(ids[2] ? ['--job', ids[2]] : [ids[1]]), '--log-failed']);
     const lines = log.stdout.trimEnd().split('\n').filter(Boolean).slice(-LOG_LINES);
@@ -229,13 +236,17 @@ function writeReceipt(root, branch, result, receiptFile) {
   return receiptFile;
 }
 
+// The project's pre-check, for NEXT lines: the profile's `precheck`, read once a run.
+let PRECHECK = null;
+const precheckHint = () => (PRECHECK ? ` (${PRECHECK})` : '');
+
 function nextLine(result, fixes) {
   if (result === 'SUCCESS') return 'NEXT: checks passed. Report the save; inside a chain, hand RECEIPT on.';
   if (result === 'NONE') return 'NEXT: no checks are configured, so pull request review is the gate. Report the save.';
   if (result === 'TIMEOUT') return `NEXT: checks are still running. Report with PR_URL, or keep waiting with: ${RERUN} --wait`;
   if (result === 'UNKNOWN') return 'NEXT: the gate is unverified, which is never "no checks". Report it as unverified with the reason above.';
   if (fixes >= CAP) return `NEXT: the ${CAP} fix attempts are spent. Stop and report the failing checks above with PR_URL; change no more code.`;
-  return `NEXT: fix every cause above in one push. Where this computer has the tools, rerun the failed check first (node .github/scripts/checks.mjs --worktree). Then stage and rerun this command: fix attempt ${fixes + 1} of ${CAP}. A failure outside the diff gets its RERUN command once, then: ${RERUN} --wait; still red: stop, with no code edit.`;
+  return `NEXT: fix every cause above in one push. Where this computer has the tools, rerun the failed check first${precheckHint()}. Then stage and rerun this command: fix attempt ${fixes + 1} of ${CAP}. A failure outside the diff gets its RERUN command once, then: ${RERUN} --wait; still red: stop, with no code edit.`;
 }
 
 /** The same answers on an Artifacts install, which has no pull request, no receipt, and no rerun. */
@@ -245,7 +256,7 @@ function artifactsNextLine(result, fixes) {
   if (result === 'TIMEOUT') return `NEXT: checks are still running. Report that, or keep waiting with: ${RERUN} --wait`;
   if (result === 'UNKNOWN') return nextLine(result, fixes);
   if (fixes >= CAP) return `NEXT: the ${CAP} fix attempts are spent. Stop and report the failing output above; change no more code.`;
-  return `NEXT: fix the cause the lines under RESULT show, in one push. Where this computer has the tools, rerun the failed check first (node .github/scripts/checks.mjs --worktree). Then stage and rerun this command: fix attempt ${fixes + 1} of ${CAP}. A failure outside the diff has no rerun on this route: stop and report it, with no code edit.`;
+  return `NEXT: fix the cause the lines under RESULT show, in one push. Where this computer has the tools, rerun the failed check first${precheckHint()}. Then stage and rerun this command: fix attempt ${fixes + 1} of ${CAP}. A failure outside the diff has no rerun on this route: stop and report it, with no code edit.`;
 }
 
 // A copy installed through Connect: a pass ends at the save, and someone else publishes.
@@ -257,6 +268,30 @@ function appNextLine(result, fixes) {
   return artifactsNextLine(result, fixes);
 }
 
+/** The local route's gate: the project's pre-check on the commit just made. `LOCAL`, or FAILURE with the fix cap. */
+function saveLocal({ precheck, state, stateFile, files }) {
+  if (state.last === 'FAILURE') state.fixes += 1;
+  const status = precheck ? runCommand(precheck, [], { stdio: ['ignore', 'inherit', 'inherit'] }) : 0;
+  say(`PRECHECK=${precheck ? (status === 0 ? 'pass' : `fail (exit ${status})`) : 'none (the profile names no pre-check)'}`);
+  say(`ATTEMPT=${state.fixes}`);
+  rmSync(files.message, { force: true });
+  if (status === 0) {
+    rmSync(stateFile, { force: true });
+    rmSync(files.summary, { force: true });
+    say('NEXT: the commit is saved on this computer only; nothing was pushed. Report the save.');
+    return 'LOCAL';
+  }
+  writeFileSync(stateFile, JSON.stringify({ fixes: state.fixes, last: 'FAILURE' }));
+  if (state.fixes >= CAP) {
+    rmSync(files.summary, { force: true });
+    say(`NEXT: the ${CAP} fix attempts are spent. Stop and report the failing pre-check above; change no more code.`);
+  } else {
+    say(`SUMMARY_FILE=${files.summary} (kept for the rerun)`);
+    say(`NEXT: fix what the pre-check shows, stage it, and rerun this command: fix attempt ${state.fixes + 1} of ${CAP}.`);
+  }
+  return 'FAILURE';
+}
+
 async function checkpoint(values) {
   const root = must('git', ['rev-parse', '--show-toplevel'], 'not inside a git repository');
   const wait = Boolean(values.wait);
@@ -264,10 +299,14 @@ async function checkpoint(values) {
   // Every git call below sees the whole repo, whichever folder the command was started in.
   process.chdir(root);
   const branch = must('git', ['rev-parse', '--abbrev-ref', 'HEAD'], 'cannot read the current branch');
-  const remote = sh('git', ['remote', 'get-url', 'origin']);
-  if (remote.status !== 0) throw new Stop(1, ['error=no origin remote', 'NEXT: add the remote by .claude/skills/save/references/preconditions.md, then rerun this command.']);
-  const asked = askRoute(root);
+  const asked = await askRoute(root);
   if (asked.lines) throw new Stop(1, asked.lines);
+  const precheck = await slot('precheck', {}, root);
+  PRECHECK = precheck.empty ? null : precheck.value;
+  // A local route keeps its commits on this computer: no origin, no pull request, no wait.
+  const local = asked.route === 'local';
+  const remote = sh('git', ['remote', 'get-url', 'origin']);
+  if (!local && remote.status !== 0) throw new Stop(1, ['error=no origin remote', 'NEXT: add the remote by .claude/skills/save/references/preconditions.md, then rerun this command.']);
   // An Artifacts install has no pull request: the pushed branch and its check run are the save.
   const artifacts = asked.route === 'artifacts';
   // A copy installed through the app asks the app, and gh nothing.
@@ -290,18 +329,20 @@ async function checkpoint(values) {
       `NEXT: stop and report the failing checks${artifacts || app ? '' : ' with the pull request link'}. A later /save run starts a new count with --new-run.`]);
   }
 
+  if (local && wait) throw new Stop(4, ['REFUSED=a local route has no checks to wait for', 'NEXT: rerun without --wait to commit and run the pre-check.']);
   if (!wait) {
     if (values['change-root']) refreshReview(root, values['change-root']);
     const staged = must('git', ['diff', '--cached', '--name-only'], 'cannot read the staged files').split('\n').filter(Boolean);
-    if (!staged.length && !unpushed(base)) {
+    if (!staged.length && (local || !unpushed(base))) {
       throw new Stop(4, ['REFUSED=nothing is staged and nothing waits to be pushed', `NEXT: stage the intended files and rerun, or read the gate again with: ${RERUN} --wait`]);
     }
     const keys = (values['scan-keys'] ?? '').split(',').map(name => name.trim()).filter(Boolean);
-    if (keys.length) scanCredentials(root, keys, [['the commit message', files.message], ['the summary', files.summary]]);
+    if (keys.length) await scanCredentials(root, keys, [['the commit message', files.message], ['the summary', files.summary]]);
     if (staged.length) must('git', ['commit', '-F', files.message], 'git commit');
   }
   const head = must('git', ['rev-parse', 'HEAD'], 'cannot read HEAD');
   say(`SAVE_HEAD=${head}`);
+  if (local) return saveLocal({ precheck: PRECHECK, state, stateFile, files });
 
   let pr = artifacts ? null : app ? appChange(['change']) : readPr();
   if (pr?.state === 'CLOSED') {

@@ -27,7 +27,7 @@ Readers land from search, without context.
 
 ## Folders only for deep branches
 
-Use a folder only if a step grows into several pages (`onboarding/`: a hub, a page per role), with its `README.md` as the hub; a lone page stays flat. Breadcrumbs follow folders; don't hand-write them. Moving a page changes its URL: `memory.mjs areas <page>` lists links to fix.
+Use a folder only if a step grows into several pages (`onboarding/`: a hub, a page per role), with its `README.md` as the hub; a lone page stays flat. Breadcrumbs follow folders; don't hand-write them. Moving a page changes its URL: `memory.mjs pull <page>` lists links to fix.
 
 ## Maps are pictures; links live in the list
 
@@ -51,7 +51,7 @@ The wiki is long-term memory for **repeatable knowledge**: facts that stay true 
 
 Find the current person by `git config user.email`. When no page lists it, write a short one (name and email) in the next save, without asking; the first page also makes the hub and links it from its root `README.md`.
 
-When a person asks for more detail than [plain words](../.agents/skills/explore/references/asking-the-user.md#write-in-plain-words) from now on, such as branch names, write it on their page; never infer it from one message.
+When a person asks for more detail than [plain words](../.agents/skills/explore/references/asking-the-user.md#write-in-plain-words) from now on, such as branch names, write it on their page, never from one message.
 
 ### Where a fact goes
 

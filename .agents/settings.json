@@ -11,8 +11,13 @@
           },
           {
             "type": "command",
-            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/skills/hand-over/scripts/helper.mjs\" start",
+            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/skills/reply-link/scripts/helper.mjs\" start",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/loop/step-title.mjs\" hook --agent claude --event session-start",
+            "timeout": 3
           },
           {
             "type": "command",
@@ -21,13 +26,8 @@
           },
           {
             "type": "command",
-            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/skills/explore/scripts/step-title.mjs\" hook --agent claude --event session-start",
-            "timeout": 3
-          },
-          {
-            "type": "command",
-            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/skills/daily/scripts/daily.mjs\" mark --agent claude",
-            "timeout": 3
+            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/skills/daily/scripts/session-start.mjs\" --agent claude",
+            "timeout": 5
           }
         ]
       },
@@ -36,8 +36,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/skills/explore/scripts/ask-check.mjs\" reminder",
+            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/loop/ask-check.mjs\" reminder",
             "timeout": 3
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/skills/access/scripts/session-start.mjs\"",
+            "timeout": 5
           }
         ]
       }
@@ -47,7 +57,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/skills/explore/scripts/step-title.mjs\" hook --agent claude",
+            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/loop/step-title.mjs\" hook --agent claude",
+            "timeout": 3
+          },
+          {
+            "type": "command",
+            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/skills/memory/scripts/topic-match.mjs\"",
             "timeout": 3
           },
           {
@@ -60,21 +75,21 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "matcher": "AskUserQuestion",
         "hooks": [
           {
             "type": "command",
-            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/skills/memory/scripts/before-edit.mjs\"",
+            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/loop/ask-check.mjs\" links",
             "timeout": 3
           }
         ]
       },
       {
-        "matcher": "AskUserQuestion",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/skills/explore/scripts/ask-check.mjs\" links",
+            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/skills/memory/scripts/before-edit.mjs\"",
             "timeout": 3
           }
         ]
@@ -85,7 +100,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/skills/explore/scripts/ask-check.mjs\" stop",
+            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/loop/ask-check.mjs\" stop",
             "timeout": 3
           },
           {
@@ -101,6 +116,28 @@
         ]
       }
     ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/loop/helper-stop-check.mjs\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/skills/memory/scripts/session-end.mjs\" --agent claude",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "Notification": [
       {
         "hooks": [
@@ -111,17 +148,11 @@
           }
         ]
       }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "PATH=\"$HOME/.local/bin:$PATH\" node \"$CLAUDE_PROJECT_DIR/.claude/skills/apply/scripts/helper-stop-check.mjs\"",
-            "timeout": 3
-          }
-        ]
-      }
     ]
+  },
+  "enabledPlugins": {
+    "memory@skills-dir": false,
+    "daily@skills-dir": false,
+    "access@skills-dir": false
   }
 }

@@ -2,7 +2,7 @@
 // node:sqlite; Ana's devices and keys; a stand-in bucket and queue; and a call through the app router.
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { beforeEach, vi } from "vitest";
-import type { AccessIdentity } from "../worker/access";
+import type { AccessIdentity } from "../worker/access-slots";
 import { handleApp } from "../worker/apps/index";
 import { hashToken } from "../worker/apps/relay/people";
 import { Space, Workbench } from "../worker/spaces-worker";
@@ -182,8 +182,9 @@ beforeEach(async () => {
   queue.failing = false;
 });
 
-export const env = (more: object = {}) =>
-  fakeEnv({ DB: directoryDb.DB, SPACES: spaces.SPACES, WORKBENCHES: spaces.WORKBENCHES, RELAY_BUCKET: bucket, RELAY_WEBHOOKS: queue, ...more });
+/** The bindings: an open install, as the company app reaches a call with a key or a cookie and no person only then. */
+export const env = (more: object = {}) => fakeEnv({ DB: directoryDb.DB, SPACES: spaces.SPACES, WORKBENCHES: spaces.WORKBENCHES,
+  RELAY_BUCKET: bucket, RELAY_WEBHOOKS: queue, WORKSPACE_LOGIN: "off", ...more });
 
 const sendsJson = (method: string) => method === "POST" || method === "PATCH" || method === "PUT";
 

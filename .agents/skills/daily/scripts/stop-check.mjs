@@ -3,16 +3,16 @@
 // and a keep-going, safe pick or typed question to ask by tap goes back as a turn. wiki/development/daily.md#check-ins
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { stopDecision } from '../../explore/scripts/ask-check.mjs';
-import { isMain, parseCli, usageError } from '../../memory/scripts/lib/cli.mjs';
-import { headlessCommand } from '../../memory/scripts/lib/headless.mjs';
+import { isMain, parseCli, usageError } from './lib/cli.mjs';
+import { headlessCommand } from './lib/headless.mjs';
+import { readProfile, slot } from './lib/slot.mjs';
 import { BUCKETS, HOLD_MS, STREAK, paseoRecord, readJson, writeJson } from './chief.mjs';
 import { writeCard } from './chat-list.mjs';
-import { RUN_AGENTS } from './config.mjs';
+import { RUN_AGENTS, defaultSettings } from './config.mjs';
 import { RUN_FLAGS, hookInput, offFile, personSettings, stateOf } from './daily.mjs';
 import { addLine } from './journal.mjs';
 import { elsewhere } from './line-up.mjs';
@@ -85,9 +85,10 @@ const judgeEnv = (env, agent) => {
   return { ...rest, WONG_STOP_CHECK: '1' };
 };
 
-/** `{out, why}`: `out` is the block decision for the hook, or null to let the chat stop. */
+/** `{out, why}`: `out` is the block decision for the hook, or null to let the chat stop. `offered` is true when the
+ *  turn ended in typed choices the repo's own check sends back. */
 export async function stopCheck({ input, agent = RUN_AGENTS[0], env = process.env, now = Date.now(), resolve = () => personSettings(), root,
-  home = homedir(), judge = runJudge, brief = () => readFileSync(BRIEF, 'utf8') }) {
+  home = homedir(), judge = runJudge, brief = () => readFileSync(BRIEF, 'utf8'), offered = false }) {
   const skip = why => ({ out: null, why });
   if (RUN_FLAGS.some(name => env[name])) return skip('run');
   if (!input?.transcript_path) return skip('no transcript');
@@ -100,7 +101,7 @@ export async function stopCheck({ input, agent = RUN_AGENTS[0], env = process.en
   const file = streakFile(stateDir, input);
   const saved = { count: 0, since: null, sent: [], ...readJson(file, {}) };
   const chat = readChat(input.transcript_path, saved.sent);
-  if (agent === 'claude' && stopDecision(input, env)) return skip('ask-check');
+  if (offered) return skip('ask-check');
   const since = chat.person.at(-1)?.at ?? null;
   const streak = saved.since === since ? saved : { ...saved, count: 0, since, told: false, asked: false };
   const here = since && now - Date.parse(since) < HOLD_MS;
@@ -143,10 +144,25 @@ export async function stopCheck({ input, agent = RUN_AGENTS[0], env = process.en
 }
 
 /** The stop's card, written after the checks, as hooks of one event run side by side: a stop that this check or
- * Claude Code's ask check sends back keeps the chat `working`, so the line-up waits for its real stop. */
-export function stopCard({ input, agent, out, env = process.env, home = homedir(), now = Date.now() }) {
-  const back = Boolean(out) || (agent === 'claude' && Boolean(stopDecision(input, env)));
-  return writeCard({ tool: agent, input, env, home, now, state: back ? 'working' : 'idle' });
+ * the repo's own choices check sends back keeps the chat `working`, so the line-up waits for its real stop. */
+export function stopCard({ input, agent, out, offered = false, env = process.env, home = homedir(), now = Date.now() }) {
+  return writeCard({ tool: agent, input, env, home, now, state: out || offered ? 'working' : 'idle' });
+}
+
+const SAMPLE = '{"bucket":"keep-going","line":"Sample stop: keep going","reply":"Go on with the next step."}';
+
+/** `D check`'s sample: one made-up stop, sorted by a stand-in judge in a scratch folder; the bucket, or null. */
+export async function sampleStop({ judge = async () => ({ stdout: SAMPLE }) } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'daily-stop-'));
+  try {
+    const transcript = join(dir, 'chat.jsonl');
+    const said = (role, text) => JSON.stringify({ type: role, sessionId: 'sample', cwd: dir, message: { role, content: [{ type: 'text', text }] } });
+    writeFileSync(transcript, `${said('user', 'Build the report page.')}\n${said('assistant', 'Step one is done.')}\n`);
+    const config = defaultSettings({ email: 'sample@example.com' });
+    const { why } = await stopCheck({ input: { session_id: 'sample', transcript_path: transcript, cwd: dir }, env: {}, root: dir, home: dir,
+      resolve: () => ({ config }), judge });
+    return MOVES.includes(why) ? why : null;
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
 if (isMain(import.meta.url)) {
@@ -154,8 +170,10 @@ if (isMain(import.meta.url)) {
   if (positionals.join(' ') !== 'stop' || !RUN_AGENTS.includes(values.agent)) usageError(USAGE);
   // A stop hook never fails the chat: any error lets it stop, with no output.
   const input = hookInput();
-  stopCheck({ input, agent: values.agent }).then(({ out }) => out, () => null).then(out => {
-    try { stopCard({ input, agent: values.agent, out }); } catch { /* the card never fails the chat */ }
+  await readProfile();
+  const offered = Boolean(await slot('offeredChoices', [input, values.agent]));
+  stopCheck({ input, agent: values.agent, offered }).then(({ out }) => out, () => null).then(out => {
+    try { stopCard({ input, agent: values.agent, out, offered }); } catch { /* the card never fails the chat */ }
     if (out) console.log(JSON.stringify(out));
   });
 }

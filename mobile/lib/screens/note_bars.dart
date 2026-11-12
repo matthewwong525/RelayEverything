@@ -124,7 +124,9 @@ class FindBar extends StatelessWidget {
         Padding(padding: const EdgeInsets.only(left: 10, right: 6), child: Icon(CupertinoIcons.search, size: 20, color: brand.muted)),
         Expanded(child: TextField(controller: controller, focusNode: focus, onChanged: (_) => onChanged(),
           textInputAction: TextInputAction.search, onSubmitted: (_) => step?.call(1),
-          decoration: const InputDecoration.collapsed(hintText: 'Find in Note'))),
+          // No outline or fill: the app's field look would draw a green box inside the pill when it has focus.
+          decoration: const InputDecoration(hintText: 'Find in Note', isCollapsed: true, filled: false,
+            border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none))),
         if (found case final found?) Text(found, style: TextStyle(fontSize: 13, color: brand.muted)),
         if (controller.text.isNotEmpty) PillIconButton(icon: CupertinoIcons.xmark_circle_fill, tooltip: 'Clear',
           onPressed: () {

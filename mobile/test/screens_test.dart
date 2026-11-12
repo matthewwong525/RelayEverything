@@ -2154,6 +2154,9 @@ void main() {
         [findsOneWidget, findsNothing, findsNothing]);
       final field = find.descendant(of: find.byType(FindBar), matching: find.byType(TextField));
       expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
+      final look = tester.widget<TextField>(field).decoration!;
+      expect([look.focusedBorder, look.enabledBorder, look.filled], [InputBorder.none, InputBorder.none, false],
+        reason: 'the field draws no box inside the pill, as in Apple Notes');
       await tester.enterText(field, 'train');
       await tester.pumpAndSettle();
       final words = quill(tester).document.toPlainText();

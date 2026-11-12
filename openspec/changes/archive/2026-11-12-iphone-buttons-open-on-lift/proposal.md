@@ -1,6 +1,6 @@
 # Buttons on iPhone open when you lift your finger, even after a long press
 
-**Status:** building
+**Status:** ready-to-ship
 **Branch:** salty-fox
 **Open questions:** none
 
@@ -51,3 +51,5 @@ None.
 - **2026-11-12** — Assumed: *New note* keeps its hold to talk, because the hold is its own action, not a name bubble.
 - **2026-11-12** — Assumed: a held picture in a note, or a note row's small picture, shows no file name on an iPhone either, because the review found the same theme setting covers them, and iPhone apps show no name bubble there too.
 - **2026-11-12** — Checkpoint: built the iPhone theme setting, two screen tests and both guides; the review fixed the website sentence to name the gear only. The device check is next.
+- **2026-11-12** — Checked: the iPhone device check on b6f478a gave works (run 43246099581); the settings step passed with tries: 1, and a long press on the gear and on ⋯ acted with no name bubble. The New note hold was not checked there: it needs a microphone.
+- **2026-11-12** — Archive checkpoint: all tasks done, ready to ship.

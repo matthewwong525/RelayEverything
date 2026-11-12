@@ -13,4 +13,4 @@
 
 ## 3. Check
 
-- [ ] 3.1 `/save`, then `/verify` with the device check, fixed tour only: the `settings` step passes with `tries: 1` in `tour.json`.
+- [x] 3.1 `/save`, then `/verify` with the device check, fixed tour only: the `settings` step passes with `tries: 1` in `tour.json`.

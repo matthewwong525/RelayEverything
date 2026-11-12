@@ -35,7 +35,8 @@ appId: com.matthewwong525.relayApp
 - takeScreenshot: sign-in
 # The webhook setup has four numbered steps. The address field keeps the label Address and starts as https://, so
 # type the rest, then Save. Save, step 4, sits under the keyboard, and Flutter's keyboard has no dismiss action
-# Maestro's hideKeyboard can use, so scroll the page up to it first.
+# Maestro's hideKeyboard can use, so scroll the page up to it first. A slow Mac takes about 10 seconds to read each
+# screen here, so the scroll gets 40 seconds, not 20: it ends as soon as Save shows.
 - tapOn: 'Don''t want an account\? Use your own webhook'
 - extendedWaitUntil:
     visible: "My own webhook"
@@ -47,7 +48,7 @@ appId: com.matthewwong525.relayApp
     element:
       text: "Save"
     direction: DOWN
-    timeout: 20000
+    timeout: 40000
     centerElement: true
 - tapOn: "Save"
 # A new install has no notes, so the earlier-notes question shows only if a note was kept.

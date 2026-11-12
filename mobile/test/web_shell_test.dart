@@ -136,6 +136,20 @@ void main() {
       await finish(tester);
     });
 
+    testWidgets("the open note's ⋯ offers Pin Note, which moves it under Pinned, and no Find in Note: the browser has its own",
+        (tester) async {
+      await show(tester, wide);
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      expect([for (final item in tester.widgetList<MenuItemButton>(find.byType(MenuItemButton))) (item.child! as Text).data],
+        ['Pin Note', 'Copy', 'Delete']);
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Pin Note'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['pin own']);
+      expect(inList('Pinned'), findsOneWidget);
+      await finish(tester);
+    });
+
     testWidgets('a click on a note opens it, and a filter above the list shows only its notes', (tester) async {
       await show(tester, wide);
       await tester.tap(inList('Call the dentist at 3'));

@@ -59,6 +59,9 @@ class SpaceClient {
   Future<Map<String, dynamic>> patch(String route, Object body) =>
     _call(() => _client.patch(api(route), headers: _json, body: jsonEncode(body)));
 
+  Future<Map<String, dynamic>> put(String route, Object body) =>
+    _call(() => _client.put(api(route), headers: _json, body: jsonEncode(body)));
+
   Future<Map<String, dynamic>> delete(String route, {Map<String, String>? query}) =>
     _call(() => _client.delete(api(route, query), headers: const {'Accept': 'application/json'}));
 

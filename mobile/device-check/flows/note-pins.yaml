@@ -1,0 +1,53 @@
+# A long note, then a pin: typing at the end of a long note keeps the cursor above the floating tool bar, Undo shows
+# after the first change, Find in Note finds a word, ⋯ → Pin Note puts the note under Pinned, and a tap folds Pinned.
+appId: com.matthewwong525.relayApp
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 60000
+- tapOn: 'Notes(.|\n)*'
+- tapOn: "New note"
+- extendedWaitUntil:
+    visible: "Done"
+    timeout: 30000
+- inputText: "Packing list"
+- repeat:
+    times: 24
+    commands:
+      - pressKey: Enter
+      - inputText: "Socks"
+- pressKey: Enter
+- inputText: "Last line typed"
+# The line with the cursor shows above the tool bar, which sits close over the keyboard.
+- assertVisible: '(.|\n)*Last line typed(.|\n)*'
+- assertVisible: "Text styles"
+- assertVisible: "Undo"
+- takeScreenshot: note-typing-long
+- tapOn: "Done"
+# The ⋯ button's tooltip is More.
+- tapOn: "More"
+- tapOn: "Find in Note"
+- inputText: "socks"
+- extendedWaitUntil:
+    visible: "1 of 24"
+    timeout: 30000
+- tapOn: "Next match"
+- assertVisible: "2 of 24"
+- takeScreenshot: note-find
+- tapOn: "Done"
+- tapOn: "More"
+- tapOn: "Pin Note"
+- tapOn: 'Back(.|\n)*'
+- extendedWaitUntil:
+    visible: "Pinned"
+    timeout: 30000
+- assertVisible: 'Packing list(.|\n)*'
+- takeScreenshot: notes-pinned
+- tapOn: "Pinned"
+- assertVisible: "Pinned"
+- assertNotVisible: 'Packing list(.|\n)*'
+- takeScreenshot: notes-pinned-folded
+- tapOn: "Pinned"
+- assertVisible: 'Packing list(.|\n)*'

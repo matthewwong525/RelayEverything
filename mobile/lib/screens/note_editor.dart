@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
@@ -48,6 +49,12 @@ Future<void> shareWithPhone(String text) => SharePlus.instance.share(ShareParams
 
 /// How long typing pauses before the change is kept: under the two seconds the person may wait.
 const savePause = Duration(milliseconds: 1500);
+
+/// The room the floating tool bar or find bar takes over the keyboard, with a margin: the caret scrolls above it.
+const barRoom = 64.0;
+
+/// The room kept over the caret when the page scrolls up to it, as the editor keeps.
+const _caretTopRoom = 8.0;
 
 /// A key the browser's page takes, not the editor: new note, search and delete.
 class PageKeyIntent extends Intent {
@@ -123,6 +130,16 @@ class NoteEditorState extends State<NoteEditor> {
   /// The note held open before this page, such as the note page a voice note from Shortcuts opens over: leaving gives
   /// the hold back to it, so a pull does not change that note's words under its page.
   String? _heldBefore;
+  /// *Find in Note* is open: its bar takes the tool bar's place, with its own field.
+  bool _finding = false;
+  final _find = TextEditingController();
+  final _findFocus = FocusNode();
+  /// Where each match of [_find] is in the words, and which one is selected.
+  List<TextRange> _matches = const [];
+  int _match = 0;
+  /// A scroll to the caret waits for the frame: one is enough for each frame.
+  bool _revealing = false;
+  double _inset = 0;
 
   Relay get relay => widget.relay;
   /// The note's own id, made here for a new note.
@@ -153,6 +170,7 @@ class NoteEditorState extends State<NoteEditor> {
     final entry = _current;
     _controller = QuillController(document: _documentOf(entry), selection: const TextSelection.collapsed(offset: 0));
     _listen();
+    _controller.addListener(_caretMoved);
     _focus.addListener(_focusChanged);
     relay.addListener(_relayChanged);
     // The browser's layout holds one note at a time: the note before has closed, so nothing gets the hold back.
@@ -176,7 +194,11 @@ class NoteEditorState extends State<NoteEditor> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _messenger = ScaffoldMessenger.maybeOf(context);
-    _measureKeyboard(MediaQuery.viewInsetsOf(context).bottom);
+    final inset = MediaQuery.viewInsetsOf(context).bottom;
+    _measureKeyboard(inset);
+    // The keyboard coming up shrinks the page under the caret.
+    if (inset != _inset && _focus.hasFocus) _revealCaret();
+    _inset = inset;
   }
 
   /// The Format panel takes the keyboard's height. Only a keyboard up for the cursor counts: while it slides down for
@@ -201,7 +223,10 @@ class NoteEditorState extends State<NoteEditor> {
     relay.removeListener(_relayChanged);
     _changes?.cancel();
     _pause?.cancel();
+    _controller.removeListener(_caretMoved);
     _focus.dispose();
+    _find.dispose();
+    _findFocus.dispose();
     _scroll.dispose();
     _controller.dispose();
     super.dispose();
@@ -211,6 +236,9 @@ class NoteEditorState extends State<NoteEditor> {
   /// editing ends, an address typed meanwhile becomes a link.
   void _focusChanged() {
     if (_focus.hasFocus) _formatting = false;
+    // A tap in the words while finding edits them, as in Apple Notes: find mode ends, and the tool bar comes back.
+    if (_focus.hasFocus && _finding) _endFind();
+    if (_focus.hasFocus) _revealCaret();
     _typing = _focus.hasFocus || _formatting;
     if (!_typing && mounted) _markLinks();
     if (mounted) setState(() {});
@@ -340,6 +368,104 @@ class NoteEditorState extends State<NoteEditor> {
 
   void _closeStyles() => _focus.requestFocus();
 
+  /// *Undo* and *Redo* change the words as typing does, so the save on a pause keeps them; the keyboard stays up.
+  Widget _history() => ListenableBuilder(listenable: _controller, builder: (context, _) {
+    if (!_controller.hasUndo && !_controller.hasRedo) return const SizedBox.shrink();
+    final undo = _controller.hasUndo ? _controller.undo : null;
+    return Padding(padding: const EdgeInsets.only(right: 8), child: _controller.hasRedo
+      ? ButtonPill(children: [
+          PillIconButton(icon: CupertinoIcons.arrow_uturn_left, tooltip: 'Undo', onPressed: undo),
+          PillIconButton(icon: CupertinoIcons.arrow_uturn_right, tooltip: 'Redo', onPressed: _controller.redo),
+        ])
+      : RoundIconButton(icon: CupertinoIcons.arrow_uturn_left, tooltip: 'Undo', onPressed: undo));
+  });
+
+  /// ⋯ → *Find in Note*: the find bar takes the keyboard from the words, so typing there changes nothing in the note.
+  void _openFind() {
+    setState(() => _finding = true);
+    _findFocus.requestFocus();
+  }
+
+  /// Each match keeps its place in the words as they are: no lowercase copy, whose length can differ, as for *İ*.
+  void _findChanged() {
+    final words = _find.text;
+    final matches = words.isEmpty ? const <TextRange>[] : [
+      for (final match in RegExp(RegExp.escape(words), caseSensitive: false).allMatches(_controller.document.toPlainText()))
+        TextRange(start: match.start, end: match.end),
+    ];
+    setState(() {
+      _matches = matches;
+      _match = 0;
+    });
+    if (matches.isNotEmpty) _select(matches.first);
+  }
+
+  /// Down (1) or up (-1) to the next match, round from the last to the first.
+  void _step(int step) {
+    setState(() => _match = (_match + step) % _matches.length);
+    _select(_matches[_match]);
+  }
+
+  /// Selects a match as a mark on the page, not a change: the editor must not take the keyboard back for it.
+  void _select(TextRange match) {
+    _controller.ignoreFocusOnTextChange = true;
+    _controller.updateSelection(TextSelection(baseOffset: match.start, extentOffset: match.end), ChangeSource.silent);
+    _controller.ignoreFocusOnTextChange = false;
+    _revealCaret();
+  }
+
+  /// While editing or finding, each move of the caret scrolls the page so the caret shows above the floating bar.
+  void _caretMoved() {
+    if (_focus.hasFocus || _finding) _revealCaret();
+  }
+
+  /// Scrolls the page, after the frame, so the caret's line shows under the top edge and above the bar. The editor
+  /// scrolls the caret only to the page's bottom edge, under the bar: this runs after its own scroll in the same frame,
+  /// or stops it, as a jump ends a scroll that is still moving. The editor's `scrollBottomInset` would keep the bar's
+  /// room over the caret too, so a caret that moves up would go under the top edge.
+  void _revealCaret() {
+    if (_revealing) return;
+    _revealing = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _revealing = false;
+      final editor = _editor.currentState?.editableTextKey.currentState?.renderEditor;
+      final selection = _controller.selection;
+      if (!mounted || editor == null || !editor.attached || !_scroll.hasClients || !selection.isValid) return;
+      final caret = editor.getLocalRectForCaret(selection.extent);
+      final position = _scroll.position;
+      final top = editor.localToGlobal(Offset.zero, ancestor: RenderAbstractViewport.of(editor)).dy + position.pixels;
+      final above = top + caret.top - _caretTopRoom, below = top + caret.bottom + barRoom;
+      final to = above < position.pixels ? above
+        : below > position.pixels + position.viewportDimension ? below - position.viewportDimension : null;
+      if (to != null) _scroll.jumpTo(to.clamp(position.minScrollExtent, position.maxScrollExtent));
+    });
+    WidgetsBinding.instance.scheduleFrame();
+  }
+
+  /// ✓ on the find bar: the match stays as the caret, with the keyboard down.
+  void _closeFind() {
+    final end = _controller.selection.end;
+    _endFind();
+    _controller.ignoreFocusOnTextChange = true;
+    _controller.updateSelection(TextSelection.collapsed(offset: end), ChangeSource.silent);
+    _controller.ignoreFocusOnTextChange = false;
+  }
+
+  void _endFind() {
+    _find.clear();
+    _findFocus.unfocus();
+    setState(() {
+      _finding = false;
+      _matches = const [];
+    });
+  }
+
+  /// ⋯ → *Pin Note* or *Unpin Note*; a new note not kept yet has nothing to pin.
+  void _pin() {
+    final note = _current;
+    if (note != null) unawaited(relay.pinNote(_id, !note.pinned));
+  }
+
   /// *Checklist*: the cursor's line becomes a checklist item, or stops being one. With the keyboard down it adds an
   /// item at the end and brings the keyboard up.
   void _checklist() {
@@ -463,11 +589,12 @@ class NoteEditorState extends State<NoteEditor> {
     return Scaffold(
       appBar: widget.pane ? _paneBar(brand) : AppBar(leading: BackTo(widget.back, onPressed: widget.onClose),
         leadingWidth: BackTo.widthOf(widget.back), actions: [
+        if (editing && !_finding) _history(),
         ButtonPill(children: [
           PillIconButton(icon: CupertinoIcons.square_arrow_up, tooltip: 'Share', onPressed: _share),
           _more(),
         ]),
-        if (editing) Padding(padding: const EdgeInsets.only(left: 8),
+        if (editing && !_finding) Padding(padding: const EdgeInsets.only(left: 8),
           child: RoundIconButton(icon: CupertinoIcons.checkmark_alt, tooltip: 'Done', onPressed: _done, accent: true)),
         const SizedBox(width: 12),
       ]),
@@ -478,10 +605,14 @@ class NoteEditorState extends State<NoteEditor> {
             ? Align(alignment: Alignment.topCenter,
                 child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 760), child: _page(context, brand)))
             : _page(context, brand))),
-          if (!widget.pane && !_waiting && !_formatting) Positioned(left: 16, right: 16, bottom: editing ? 8 : 0, child: SafeArea(
+          if (!widget.pane && !_waiting && !_formatting) Positioned(left: 16, right: 16, bottom: 0, child: SafeArea(
             top: false,
-            minimum: const EdgeInsets.only(bottom: 12),
-            child: editing
+            minimum: EdgeInsets.only(bottom: editing || _finding ? 6 : 12),
+            child: _finding
+              ? FindBar(controller: _find, focus: _findFocus, onChanged: _findChanged, onDone: _closeFind,
+                  found: _find.text.isEmpty ? null : _matches.isEmpty ? 'No matches' : '${_match + 1} of ${_matches.length}',
+                  onStep: _matches.isEmpty ? null : _step)
+              : editing
               ? Center(child: FloatingToolBar(onStyles: _styles, onChecklist: _checklist, onAttach: _attachOrNull,
                   attachMenu: !relay.web))
               : ReadingBar(onChecklist: _checklist, onAttach: _attachOrNull, onCompose: _compose, attachMenu: !relay.web),
@@ -524,13 +655,18 @@ class NoteEditorState extends State<NoteEditor> {
     )),
   );
 
-  Widget _more() => MoreMenu(
+  /// Built with the list, so a pin from another device changes *Pin Note* to *Unpin Note* while the page is open.
+  Widget _more() => ListenableBuilder(listenable: relay, builder: (context, _) => MoreMenu(
     items: [
+      if (_current case final note?)
+        note.pinned ? ('Unpin Note', CupertinoIcons.pin_slash, _pin) : ('Pin Note', CupertinoIcons.pin, _pin),
+      // The browser has its own find, Ctrl+F.
+      if (!relay.web && !_waiting) ('Find in Note', CupertinoIcons.search, _openFind),
       ('Copy', CupertinoIcons.doc_on_doc, _copy),
     ],
     destructive: ('Delete', CupertinoIcons.trash, _delete),
     builder: (context, toggle) => PillIconButton(icon: CupertinoIcons.ellipsis, tooltip: 'More', onPressed: toggle),
-  );
+  ));
 
   Widget _page(BuildContext context, BrandColors brand) {
     final note = _current;

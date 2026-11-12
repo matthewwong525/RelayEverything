@@ -17,6 +17,7 @@ import { key } from "./key.ts";
 import { nights } from "./nights.ts";
 import { notes } from "./notes.ts";
 import { noteSync } from "./note-sync.ts";
+import { notePin } from "./pin-note.ts";
 import { photoAdd, photoCount, photoDelete } from "./photos.ts";
 import { health, locations } from "./samples.ts";
 import { stays } from "./stays.ts";
@@ -29,6 +30,7 @@ export const routes = new Map<string, Route>([
   ["POST notes", notes],
   ["PATCH notes", noteEdit],
   ["DELETE notes", noteDelete],
+  ["PUT notes/pin", notePin],
   ["GET notes", noteSync],
   ["POST attachments", attachmentAdd],
   ["POST health", health],

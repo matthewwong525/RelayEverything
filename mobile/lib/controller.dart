@@ -316,7 +316,7 @@ class RelayController extends Relay {
     length: note.durationMs == null ? null : Duration(milliseconds: note.durationMs!),
     files: [for (final file in note.attachments) EntryFile(id: file.id, name: file.name, type: file.type, size: file.size,
       path: file.path.isEmpty ? '' : fullPath(file.path))],
-    from: note.mine ? null : note.device ?? 'elsewhere');
+    from: note.mine ? null : note.device ?? 'elsewhere', pinned: note.pinned);
 
   /// The app's support folder, once [load] has read it.
   String? get filesRoot => _root;
@@ -429,6 +429,8 @@ class RelayController extends Relay {
     final next = _settings.copyWith(sending: true, place: to, privateTo: privateTo);
     await _moveOutbox(next);
     if (sendEarlier) await store.queueEarlier(fromWebhook: fromWebhook);
+    // A pin made while sending was off goes now: no pull would bring that note back to send it.
+    if (to == SendPlace.server) await store.queueUnsentPins();
     // The photos waiting on this phone go to the new place too, as the outbox does.
     await _saveSettings(next);
     await _refreshLocal();
@@ -828,6 +830,14 @@ class RelayController extends Relay {
     if (await store.editNote(id, text, files: attachments, send: _settings.sending, at: _clock())) await _refreshLocal();
     if (sendNow) unawaited(sync());
     return problems.isEmpty ? null : problems.join(' ');
+  }
+
+  @override
+  Future<void> pinNote(String id, bool pinned) async {
+    final server = _settings.sending && _settings.place == SendPlace.server;
+    if (!await store.pinNote(id, pinned, send: server, at: _clock())) return;
+    await _refreshLocal();
+    if (server) unawaited(sync());
   }
 
   @override

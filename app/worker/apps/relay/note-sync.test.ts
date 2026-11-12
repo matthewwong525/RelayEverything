@@ -42,9 +42,9 @@ it("gives each note's sync fields, with mine true only for the calling phone's o
   const [ownId, otherId] = rows("relay_notes").map(row => row.id);
   expect(json.notes).toEqual([
     { id: ownId, clientId: "note-sync-01", mine: true, source: "typed", text: "Note 1", recordedAt: NOW - MINUTE, editedAt: null,
-      device: "Android phone", audio: false, attachments: [{ ...PDF, ready: false }] },
+      device: "Android phone", audio: false, attachments: [{ ...PDF, ready: false }], pinned: false, pinChangedAt: null },
     { id: otherId, clientId: "note-sync-02", mine: false, source: "typed", text: "Changed", recordedAt: NOW - 2 * MINUTE,
-      editedAt: NOW - MINUTE, device: "iPad", audio: false, attachments: [] },
+      editedAt: NOW - MINUTE, device: "iPad", audio: false, attachments: [], pinned: false, pinChangedAt: null },
   ]);
   expect((await page(ipad)).notes.map(note => note.mine)).toEqual([false, true]);
   // The page reads the same feed, and owns none of it.
@@ -83,4 +83,13 @@ it("gives a deleted note as its id alone, once, to a phone that asks, and leaves
     ({ next: since, more } = json);
   }
   expect(ids).toEqual([added, gone, kept]);
+});
+
+it("gives a pinned note again, once, with its pin and the time of the pin change", async () => {
+  await send(phone, 1);
+  await send(phone, 2);
+  const { next } = await page(phone);
+  await call(ipad, "PUT", "notes/pin", { id: rows("relay_notes")[0].id as string, pinned: true, at: NOW - MINUTE });
+  const pulled = (await sync(phone, next)).json as unknown as { notes: Record<string, unknown>[] };
+  expect(pulled.notes).toEqual([expect.objectContaining({ text: "Note 1", pinned: true, pinChangedAt: NOW - MINUTE })]);
 });

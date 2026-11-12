@@ -1,6 +1,6 @@
 ---
 title: Notes
-description: Home and its folders, one notes list with filters, read, search and change the notes you write on your phone, as in Apple Notes, with text styles, checklists, photos and files, and open them on a computer.
+description: Home and its folders, one notes list with filters and pinned notes, read, search, find, pin and change the notes you write on your phone, as in Apple Notes, with text styles, checklists, photos and files, and open them on a computer.
 ---
 
 The Relay Everything app opens on **Home**, a screen of folders. Your notes are the first folder. The app shows the notes that you type or say into this phone, and keeps them on the phone. Once you sign in to Relay Everything, it also shows the notes from your other phones, email, Claude Code, Codex and your AI apps: [Your notes on every phone](#your-notes-on-every-phone).
@@ -35,6 +35,8 @@ Tap **Notes** on Home. The list shows your notes, newest first, under the **Note
 - The first picture, small, at the right. [Add photos and files](#add-photos-and-files)
 
 A row has no tag: a typed note and a voice note look the same, except for the microphone. A row shows no place, because a note keeps no place: with **Location history** on, where you made it is a point in your [location history](../location/#where-you-made-a-note).
+
+Your [pinned notes](#pin-a-note) show first, in their own **Pinned** card above the day groups.
 
 Before your first note, the list says **No notes yet**: *Tap New note to write one, or hold it to talk.* With sending off, it also says *Notes stay on this phone until you sign in, in Settings.*
 
@@ -73,12 +75,41 @@ To paste, hold in the words, or tap the blinking cursor. On an iPhone with iOS 1
 At the top of the page:
 
 - **‹ Notes**, at the left, goes back to the list.
-- **Share** and **⋯**, in a round button at the right. **⋯** opens a menu under it with **Copy**, which copies the words without their style marks, and **Delete**.
+- **Undo**, while you type, after your first change. It takes back your last change, and the keyboard stays up. After an undo, **Undo** and **Redo** show side by side: **Redo** puts the change back. A new change removes **Redo**.
+- **Share** and **⋯**, in a round button at the right. **⋯** opens a menu under it with **Pin Note** (or **Unpin Note**), [**Find in Note**](#find-in-a-note), **Copy**, which copies the words without their style marks, and **Delete**.
 - **✓**, while you type, closes the keyboard. The change stays.
 
-While you type, a round bar floats above the keyboard: **Aa** for [text styles](#text-styles-and-checklists), the checklist button, and the paperclip to [add photos and files](#add-photos-and-files). With the keyboard closed, a bar at the bottom holds the checklist button, the paperclip, and the round compose button, which starts a new note.
+While you type, a round bar floats just above the keyboard: **Aa** for [text styles](#text-styles-and-checklists), the checklist button, and the paperclip to [add photos and files](#add-photos-and-files). With the keyboard closed, a bar at the bottom holds the checklist button, the paperclip, and the round compose button, which starts a new note.
+
+When you type at the end of a long note, the page scrolls so that the line you type stays above the bar.
 
 If you leave a note with no words and no files, the app deletes it, as Apple Notes does. A note that your server has, or that is on its way to it, is deleted everywhere, with **Undo**, as when you [delete a note](#delete-a-note). A voice note keeps its recording.
+
+## Pin a note
+
+A pinned note stays at the top of your notes list, as in Apple Notes. Pin a note in one of two ways:
+
+- In the notes list, swipe the note's row to the right. The row goes back to its place, and the note moves to **Pinned**.
+- On the note's page, tap **⋯**, then **Pin Note**.
+
+The **Pinned** card shows first in the list, above **Today**, with the newest note first. A pinned note shows only there, not in its day group. The card shows only when a note is pinned. [Filters](#filter-your-notes) and [search](#search-your-notes) work in it too: with no pinned match, the card does not show.
+
+Tap **Pinned** to fold the card away. Tap it again to open it. The phone remembers that you folded it.
+
+To unpin a note, swipe its row to the right again, or tap **⋯**, then **Unpin Note**. The note goes back to its day group. With a screen reader, each note's row has a **Pin** or **Unpin** action.
+
+With sending on to Relay Everything, the pin goes to your server, and your other phones and your Relay Everything page show the note under **Pinned** at their next sync. You can pin any note, also one from email or another phone. If two phones change the same note's pin before they sync, the change made later stays. A pin is not a change to the note's words, so your webhooks get no message. With sending off, or with **My own webhook**, the pin stays on this phone.
+
+## Find in a note
+
+Find a word in an open note, as in Apple Notes:
+
+1. On the note's page, tap **⋯**, then **Find in Note**.
+2. Type a word in the bar above the keyboard. Upper and lower case are the same. The page selects the first match and scrolls to it, and the bar shows its place, such as *1 of 3*. With no match, it says *No matches*.
+3. Tap the down arrow, or return, for the next match, and the up arrow for the one before. After the last match, the first one comes again.
+4. Tap **✓** to close the bar. The note's words do not change.
+
+**Find in Note** is on the phone only. It shows on a voice note after the phone writes its words. On a computer, use the browser's own find.
 
 ## Text styles and checklists
 
@@ -114,7 +145,7 @@ Your notes list shows the first line and the start of the rest without these mar
 
 Delete a note in one of two ways:
 
-- In the notes list, swipe the note's row to the left.
+- In the notes list, swipe the note's row to the left. A swipe to the right [pins the note](#pin-a-note) and deletes nothing.
 - On the note's page, tap **⋯**, then **Delete**, the last item, in red. The page closes.
 
 The note leaves the list at once, and the bar at the bottom says **Note deleted**, with **Undo**. Tap **Undo** in the next 5 seconds to get the note back as it was. After that, the phone deletes the note, its files and its recording. With a screen reader, each note's row has a **Delete** action.

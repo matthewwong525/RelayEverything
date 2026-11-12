@@ -27,6 +27,7 @@ A device key reaches only the space of the person who made it. It adds data ther
   - `GET notes`, which answers the notes added or changed since the phone's last sync, from every device and way in, so each signed-in phone shows all your notes
   - `GET attachment` and `GET audio`, which open a note's file and an older recorded note's recording, when you tap one in the app
   - `PATCH notes`, which changes the words of any note in your space, by its `id`, or of the phone's own note, by its `clientId`. It adds new files only to a note the same phone sent. When the note changed later on another phone, the server keeps the newer words and answers `409`.
+  - `PUT notes/pin`, which pins or unpins any note in your space, by its `id`, or the phone's own note, by its `clientId`. When the note's pin changed later on another phone, the server keeps the newer pin and answers `409`.
   - `GET connections`, which answers your account's email, the names of your phones and computers, the names of your AI apps with the day each connected, the names of your webhooks, and your two notes addresses, for the account card, the **Account** page, **Connect your AI** and **Email notes** in the app. It answers no key and no webhook address, secret or send state.
   - `POST devices/off`, which signs out one of your phones, for **Phones** on the app's **Account** page. It can't sign out a computer or an API key, or add a key, an AI app or a webhook.
 

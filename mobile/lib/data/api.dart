@@ -50,6 +50,10 @@ class RelayApi implements Outbound {
   Future<void> send(OutboxItem item) async {
     if (item.route == noteUpdate) return _change(item.body);
     if (item.route == noteDelete) return _delete(item.body);
+    if (item.route == notePin) {
+      await pin(item.body);
+      return;
+    }
     final body = _forServer(item.route, item.body);
     try {
       await post(item.route, body);
@@ -84,6 +88,23 @@ class RelayApi implements Outbound {
   Future<void> _delete(Map<String, dynamic> body) => _call(() => _client.delete(_uri('notes').replace(queryParameters: {
       if (body['id'] != null) 'id': body['id'] as String else 'clientId': body['clientId'] as String}), headers: _headers),
     rejected: const {400, 404});
+
+  /// A note's pin, by its server `id` once a pull saved one, else by its `clientId`, and gives when the server says the
+  /// pin changed, by its own clock. A 404 (no such note) or a 409 (a newer pin change is kept) is dropped; the pull then
+  /// takes the server's pin. A server older than pins refuses a phone key's PUT as it refuses a turned-off key, so a
+  /// refusal asks `GET key`: a key that answers means an older server, and the pin is dropped, so the rest still sends.
+  Future<int?> pin(Map<String, dynamic> body) async {
+    try {
+      final answer = await _call(() => _client.put(_uri('notes/pin'), headers: {..._headers, 'Content-Type': 'application/json'},
+        body: jsonEncode({if (body['id'] != null) 'id': body['id'] else 'clientId': body['clientId'], 'pinned': body['pinned'],
+          'at': body['at']})), rejected: const {400, 404, 409});
+      return answer['pinChangedAt'] as int?;
+    } on ApiException catch (error) {
+      if (error.failure != Failure.refused) rethrow;
+      await key();
+      throw ApiException(Failure.rejected, error.status);
+    }
+  }
 
   @override
   Future<void> sendFile(OutboxItem item, List<int> bytes) => upload(noteClientId: item.body['noteClientId'] as String,

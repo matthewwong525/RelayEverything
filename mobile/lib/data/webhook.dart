@@ -59,8 +59,9 @@ class WebhookClient implements Outbound {
   Map<String, dynamic> get _device => {'id': installId, 'name': deviceName};
 
   /// The v1 message for one waiting upload, the same each time it is built. [bytes] are an `attachment`'s file. Null
-  /// for a batch with no rows, which needs no message.
+  /// for a batch with no rows, and for a pin, which changes no note: neither needs a message.
   Map<String, dynamic>? message(OutboxItem item, [List<int>? bytes]) {
+    if (item.route == notePin) return null;
     final body = item.body;
     final (String type, Map<String, dynamic> data) = switch (item.route) {
       'notes' => ('note.created', {'note': _note(body)}),

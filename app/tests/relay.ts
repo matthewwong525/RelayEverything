@@ -185,7 +185,7 @@ beforeEach(async () => {
 export const env = (more: object = {}) =>
   fakeEnv({ DB: directoryDb.DB, SPACES: spaces.SPACES, WORKBENCHES: spaces.WORKBENCHES, RELAY_BUCKET: bucket, RELAY_WEBHOOKS: queue, ...more });
 
-const sendsJson = (method: string) => method === "POST" || method === "PATCH";
+const sendsJson = (method: string) => method === "POST" || method === "PATCH" || method === "PUT";
 
 /** The request a caller makes: its key or cookie in the headers. */
 export function request(who: Who, method: string, url: string, init: RequestInit = {}) {
@@ -197,7 +197,7 @@ export function request(who: Who, method: string, url: string, init: RequestInit
 }
 const identityOf = (who: Who) => who && "kind" in who ? who : null;
 
-/** A Relay Everything route called as `who`: JSON for a POST or PATCH, query fields otherwise; `more` adds bindings. */
+/** A Relay Everything route called as `who`: JSON for POST, PATCH or PUT, else query fields; `more` adds bindings. */
 export async function call(who: Who, method: string, route: string, input?: Record<string, unknown>, more?: object) {
   const query = !sendsJson(method) && input ? `?${new URLSearchParams(input as Record<string, string>)}` : "";
   const response = await handleApp(request(who, method, `https://relay.example.com/apps/relay/api/${route}${query}`,

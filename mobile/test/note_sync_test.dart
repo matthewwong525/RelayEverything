@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -94,6 +95,34 @@ void main() {
       expect([[for (final note in await store.notes()) note.clientId], await store.get(noteSyncSeq)], [['srv:s2'], '3']);
     });
 
+    test('takes a pulled pin that changed later than the phone\'s, when no pin of the note waits', () async {
+      await store.applyPulled([pulledNote('s1', pinned: true, pinChangedAt: DateTime(2026, 11, 5, 9))]);
+      await store.pinNote('srv:s1', false, send: false, at: DateTime(2026, 11, 5, 10));
+      final server = FakeServer((_) => notesPage([pulledNote('s1', pinned: true, pinChangedAt: DateTime(2026, 11, 5, 11))],
+        next: 2));
+      await syncNotes(store, Sender(server.api), settings: _on, connection: bearer);
+      expect([(await store.notes()).single.pinned, await store.outbox()], [true, isEmpty]);
+    });
+
+    test('drops a waiting pin older than the pulled one, which wins, as the server would refuse the older', () async {
+      await store.applyPulled([pulledNote('s1', pinned: false)]);
+      await store.pinNote('srv:s1', true, send: true, at: DateTime(2026, 11, 5, 9));
+      final server = FakeServer((_) => notesPage([pulledNote('s1', pinned: false, pinChangedAt: DateTime(2026, 11, 5, 10))],
+        next: 2));
+      await syncNotes(store, Sender(server.api), settings: _on, connection: bearer);
+      expect([(await store.notes()).single.pinned, await store.outbox()], [false, isEmpty]);
+    });
+
+    test('keeps a waiting pin newer than the pulled one, which then goes', () async {
+      await store.applyPulled([pulledNote('s1', pinned: true, pinChangedAt: DateTime(2026, 11, 5, 9))]);
+      await store.pinNote('srv:s1', false, send: true, at: DateTime(2026, 11, 5, 10));
+      final server = FakeServer((_) => notesPage([pulledNote('s1', pinned: true, pinChangedAt: DateTime(2026, 11, 5, 9))],
+        next: 2));
+      await syncNotes(store, Sender(server.api), settings: _on, connection: bearer);
+      expect([(await store.notes()).single.pinned, [for (final item in await store.outbox()) (item.route, item.body['id'])]],
+        [false, [(notePin, 's1')]]);
+    });
+
     test('leaves the note open in the editor, and keeps its place so the next pull reads it again', () async {
       await store.applyPulled([pulledNote('s1', text: 'One')]);
       final server = FakeServer((_) => notesPage([pulledNote('s1', text: 'Two'), pulledNote('s2')], next: 7));
@@ -179,6 +208,60 @@ void main() {
       relay.addListener(() => shown.add(relay.entries.length));
       await _pullAll(relay);
       expect(shown.toSet().toList(), containsAllInOrder([1, 2, 3]));
+    });
+
+    test('a pin made elsewhere shows at the next pull, and a pin here goes as PUT notes/pin by the server id', () async {
+      var pinned = true;
+      final server = FakeServer((request) => _isPull(request)
+        ? notesPage([pulledNote('s1', pinned: pinned, pinChangedAt: DateTime(2026, 11, 5, pinned ? 9 : 10))], next: pinned ? 1 : 2)
+        : FakeServer.ok(request));
+      final relay = relayFor(server);
+      await sendToServer(relay);
+      await _pullAll(relay);
+      expect(relay.entries.single.pinned, isTrue);
+      pinned = false;
+      await _pullAll(relay);
+      expect(relay.entries.single.pinned, isFalse);
+      await relay.pinNote('srv:s1', true);
+      await relay.settled();
+      final put = server.requests.singleWhere((request) => request.method == 'PUT');
+      expect([put.url.path, (jsonDecode(put.body) as Map)['id'], (jsonDecode(put.body) as Map)['pinned']],
+        ['/apps/relay/api/notes/pin', 's1', true]);
+      expect([relay.entries.single.pinned, await store.outbox()], [true, isEmpty]);
+    });
+
+    test('a pin with sending off stays on the phone and calls nothing', () async {
+      final server = noNetwork();
+      final relay = relayFor(server);
+      await relay.load();
+      await relay.addNote('Door code');
+      final id = relay.entries.single.id;
+      await relay.pinNote(id, true);
+      expect([relay.entries.single.pinned, await store.outbox(), server.requests], [true, isEmpty, isEmpty]);
+      await relay.pinNote(id, false);
+      expect([relay.entries.single.pinned, await store.outbox(), server.requests], [false, isEmpty, isEmpty]);
+    });
+
+    test('a pin made while sending was off goes as PUT notes/pin once sending turns on, though no pull brings the note',
+        () async {
+      var pulled = false;
+      final server = FakeServer((request) {
+        if (!_isPull(request)) return FakeServer.ok(request);
+        final first = !pulled;
+        pulled = true;
+        return notesPage(first ? [pulledNote('s1', pinned: false)] : [], next: 1);
+      });
+      final relay = relayFor(server);
+      await sendToServer(relay);
+      await _pullAll(relay);
+      await relay.stopSending();
+      await relay.pinNote('srv:s1', true);
+      expect(server.requests.where((request) => request.method == 'PUT'), isEmpty);
+      expect(await relay.startSending(sendEarlier: false), isNull);
+      await relay.settled();
+      final put = server.requests.singleWhere((request) => request.method == 'PUT');
+      expect([(jsonDecode(put.body) as Map)['id'], (jsonDecode(put.body) as Map)['pinned']], ['s1', true]);
+      expect([relay.entries.single.pinned, await store.outbox()], [true, isEmpty]);
     });
 
     test('a refused key on a pull shows Key refused', () async {

@@ -22,7 +22,7 @@ import 'package:relay_app/screens/note_blocks.dart' show VoicePlayer, WavePainte
 import 'package:relay_app/screens/note_editor.dart';
 import 'package:relay_app/screens/round_button.dart' show ButtonPill;
 import 'package:relay_app/screens/settings.dart' show SettingsRow, SettingsScreen;
-import 'package:relay_app/screens/timeline.dart' show SyncLine, TimelineScreen, TitleBar;
+import 'package:relay_app/screens/timeline.dart' show FoldHeader, SyncLine, TimelineScreen, TitleBar;
 import 'package:relay_app/screens/transcripts.dart' show CommandBox, TranscriptsPage;
 import 'package:relay_app/screens/webhooks.dart' show WebhooksPage;
 
@@ -270,6 +270,14 @@ class FakeRelay extends Relay {
     deleted.remove(id);
   }
 
+  /// Pins at once, as the controller does: the note keeps its words and its time.
+  @override
+  Future<void> pinNote(String id, bool pinned) async {
+    calls.add('${pinned ? 'pin' : 'unpin'} $id');
+    entries = [for (final entry in entries) entry.id == id ? pinnedCopy(entry, pinned) : entry];
+    notifyListeners();
+  }
+
   static String _names(List<NewFile> files) => files.isEmpty ? '' : ' + ${[for (final file in files) file.name].join(', ')}';
 
   @override Future<void> openFile(EntryFile file) async => calls.add('open ${file.name}');
@@ -383,6 +391,11 @@ class FakeRelay extends Relay {
 }
 
 final now = DateTime.now();
+
+/// [entry], pinned or not.
+Entry pinnedCopy(Entry entry, bool pinned) => Entry(id: entry.id, text: entry.text, at: entry.at, sent: entry.sent,
+  waiting: entry.waiting, voice: entry.voice, writing: entry.writing, failed: entry.failed, why: entry.why,
+  noWords: entry.noWords, recording: entry.recording, length: entry.length, files: entry.files, from: entry.from, pinned: pinned);
 
 /// The round *New note* button: a tap writes, a hold talks.
 final newNote = find.byType(NewNoteButton);
@@ -1073,22 +1086,87 @@ void main() {
     expect([relay.calls, find.text('Note deleted').evaluate().length], [['delete n1', 'delete n2', 'end n1'], 1]);
   });
 
-  testWidgets('a swipe to the right deletes nothing', (tester) async {
-    relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now)];
+  /// The heading a note's row shows under: *Pinned* or its day.
+  String groupOf(WidgetTester tester, String title) {
+    final headings = [for (final name in ['Pinned', 'Today', 'Yesterday']) if (find.text(name).evaluate().isNotEmpty) name];
+    final row = tester.getTopLeft(find.text(title)).dy;
+    return headings.lastWhere((name) => tester.getTopLeft(find.text(name)).dy < row);
+  }
+
+  testWidgets('a swipe to the right pins a note and deletes nothing; a swipe on a pinned note unpins it', (tester) async {
+    relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now), Entry(id: 'n2', text: 'Call Sam', at: now)];
     await tester.pumpWidget(RelayApp(relay: relay));
     await openFolder(tester, 'Notes');
     await tester.drag(find.text('Buy milk'), const Offset(500, 0));
     await tester.pumpAndSettle();
-    expect([relay.calls, find.text('Buy milk').evaluate().length], [isEmpty, 1]);
+    expect([relay.calls, find.text('Buy milk').evaluate().length, groupOf(tester, 'Buy milk')], [['pin n1'], 1, 'Pinned']);
+    await tester.drag(find.text('Buy milk'), const Offset(500, 0));
+    await tester.pumpAndSettle();
+    expect([relay.calls, groupOf(tester, 'Buy milk'), find.text('Pinned').evaluate()], [['pin n1', 'unpin n1'], 'Today', isEmpty]);
   });
 
-  testWidgets('with a screen reader, each note row has its own Delete action', (tester) async {
+  testWidgets('pinned notes show first under Pinned, newest first, and leave their day; a tap on Pinned folds it', (tester) async {
+    relay.entries = [
+      Entry(id: 'n1', text: 'Shop', at: now),
+      Entry(id: 'n2', text: 'Door code', at: now.subtract(const Duration(days: 1)), pinned: true),
+      Entry(id: 'n3', text: 'Call Sam', at: now, pinned: true),
+      Entry(id: 'n4', text: 'Plan trip', at: now.subtract(const Duration(days: 1))),
+    ];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Notes');
+    expect([for (final title in ['Call Sam', 'Door code', 'Shop', 'Plan trip']) groupOf(tester, title)],
+      ['Pinned', 'Pinned', 'Today', 'Yesterday']);
+    expect(tester.getTopLeft(find.text('Call Sam')).dy, lessThan(tester.getTopLeft(find.text('Door code')).dy));
+    expect(tester.getTopLeft(find.text('Pinned')).dy, lessThan(tester.getTopLeft(find.text('Today')).dy));
+    expect(find.descendant(of: find.byType(FoldHeader), matching: find.text('Pinned')), findsOneWidget);
+    expect(find.descendant(of: find.byType(FoldHeader), matching: find.byType(InkWell)), findsNothing,
+      reason: 'a tap on the heading shows no shade');
+    await tester.tap(find.text('Pinned'));
+    await tester.pumpAndSettle();
+    expect(relay.calls, ['fold Pinned true']);
+    expect([find.text('Pinned'), find.text('Call Sam'), find.text('Door code'), find.text('Shop')],
+      [findsOneWidget, findsNothing, findsNothing, findsOneWidget]);
+    // The phone keeps the fold: a new start draws it folded.
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Notes');
+    expect([find.text('Pinned'), find.text('Call Sam')], [findsOneWidget, findsNothing]);
+    await tester.tap(find.text('Pinned'));
+    await tester.pumpAndSettle();
+    expect([relay.calls.last, find.text('Call Sam').evaluate().length], ['fold Pinned false', 1]);
+  });
+
+  testWidgets('search finds pinned notes as others; with no pinned match the list has no Pinned part', (tester) async {
+    relay.entries = [
+      Entry(id: 'n1', text: 'Door code', at: now, pinned: true),
+      Entry(id: 'n2', text: 'Gate code', at: now, pinned: true),
+      Entry(id: 'n3', text: 'Buy milk', at: now),
+    ];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Notes');
+    await tester.enterText(find.byType(TextField), 'milk');
+    await tester.pumpAndSettle();
+    expect([find.text('Pinned'), find.text('Door code'), find.text('Buy milk')], [findsNothing, findsNothing, findsOneWidget]);
+    expect(groupOf(tester, 'Buy milk'), 'Today');
+    await tester.enterText(find.byType(TextField), 'gate');
+    await tester.pumpAndSettle();
+    expect([find.text('Pinned'), find.text('Gate code'), find.text('Buy milk')], [findsOneWidget, findsOneWidget, findsNothing]);
+  });
+
+  testWidgets('with a screen reader, each note row has its own Pin and Delete actions', (tester) async {
     final semantics = tester.ensureSemantics();
     relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now), Entry(id: 'n2', text: 'Call Sam', at: now)];
     await tester.pumpWidget(RelayApp(relay: relay));
     await openFolder(tester, 'Notes');
-    expect(tester.getSemantics(find.text('Call Sam')),
-      isSemantics(customActions: [const CustomSemanticsAction(label: 'Delete')]));
+    expect(tester.getSemantics(find.text('Call Sam')), isSemantics(customActions: [const CustomSemanticsAction(label: 'Pin'),
+      const CustomSemanticsAction(label: 'Delete')]));
+    tester.semantics.performAction(find.semantics.byLabel(RegExp('Call Sam')), SemanticsAction.customAction,
+      args: CustomSemanticsAction.getIdentifier(const CustomSemanticsAction(label: 'Pin')));
+    await tester.pumpAndSettle();
+    expect(relay.calls, ['pin n2']);
+    expect(tester.getSemantics(find.text('Call Sam')), isSemantics(customActions: [const CustomSemanticsAction(label: 'Unpin'),
+      const CustomSemanticsAction(label: 'Delete')]));
+    relay.calls.clear();
     tester.semantics.performAction(find.semantics.byLabel(RegExp('Call Sam')), SemanticsAction.customAction,
       args: CustomSemanticsAction.getIdentifier(const CustomSemanticsAction(label: 'Delete')));
     await tester.pumpAndSettle();
@@ -1911,6 +1989,258 @@ void main() {
       expect(relay.calls, isEmpty);
     });
 
+    testWidgets('typing at the end of a long note keeps the cursor above the tool bar, which sits 6 points over the keyboard',
+      (tester) async {
+      tester.view
+        ..physicalSize = const Size(390, 844)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      relay.entries = [Entry(id: 'n1', text: ['Long', for (var line = 1; line <= 60; line++) 'Line $line'].join('\n'), at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Long'));
+      await tester.pumpAndSettle();
+      await tester.tapAt(tester.getTopLeft(find.byType(QuillEditor)) + const Offset(40, 10));
+      await tester.pump();
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      quill(tester).updateSelection(TextSelection.collapsed(offset: quill(tester).document.length - 1), ChangeSource.local);
+      await type(tester, '\nMore');
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      final bar = tester.getRect(find.byType(FloatingToolBar));
+      expect(bar.bottom, 844 - 300 - 6);
+      final editor = tester.allRenderObjects.whereType<RenderEditor>().first;
+      final caret = editor.getLocalRectForCaret(quill(tester).selection.extent);
+      final top = editor.localToGlobal(caret.topLeft).dy, bottom = editor.localToGlobal(caret.bottomLeft).dy;
+      expect(top, greaterThan(0));
+      expect(bottom, lessThanOrEqualTo(bar.top));
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('a caret that moves up a long note, as an Undo far up does, stays under the top edge of the page',
+      (tester) async {
+      tester.view
+        ..physicalSize = const Size(390, 844)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      relay.entries = [Entry(id: 'n1', text: ['Long', for (var line = 1; line <= 60; line++) 'Line $line'].join('\n'), at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Long'));
+      await tester.pumpAndSettle();
+      await tester.tapAt(tester.getTopLeft(find.byType(QuillEditor)) + const Offset(40, 10));
+      await tester.pump();
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      quill(tester).updateSelection(TextSelection.collapsed(offset: quill(tester).document.length - 1), ChangeSource.local);
+      await type(tester, '\nMore');
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      final page = tester.getRect(find.byType(SingleChildScrollView));
+      final editor = tester.allRenderObjects.whereType<RenderEditor>().first;
+      expect(editor.localToGlobal(Offset.zero).dy, lessThan(page.top - 400), reason: 'the page scrolled far down');
+      final line2 = quill(tester).document.toPlainText().indexOf('Line 2');
+      quill(tester).updateSelection(TextSelection.collapsed(offset: line2), ChangeSource.local);
+      await tester.pumpAndSettle();
+      final caret = editor.getLocalRectForCaret(quill(tester).selection.extent);
+      expect(editor.localToGlobal(caret.topLeft).dy, greaterThanOrEqualTo(page.top));
+      expect(editor.localToGlobal(caret.bottomLeft).dy, lessThanOrEqualTo(tester.getRect(find.byType(FloatingToolBar)).top));
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('Undo shows only after a change, takes it back with the keyboard up, Redo puts it again, and an undo is kept',
+      (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Shop', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Shop'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(QuillEditor));
+      await tester.pump();
+      expect(editorFocused(tester), isTrue);
+      expect([find.byTooltip('Undo'), find.byTooltip('Redo')], everyElement(findsNothing));
+      quill(tester).updateSelection(const TextSelection.collapsed(offset: 4), ChangeSource.local);
+      await type(tester, ' buy milk');
+      expect([find.byTooltip('Undo'), find.byTooltip('Redo')], [findsOneWidget, findsNothing]);
+      await tester.pump(const Duration(seconds: 2));
+      expect(relay.calls, ['edit # Shop buy milk (later)']);
+      await tester.tap(find.byTooltip('Undo'));
+      await tester.pump();
+      expect(markdownOf(tester), '# Shop');
+      expect(editorFocused(tester), isTrue);
+      expect([find.byTooltip('Undo'), find.byTooltip('Redo')], everyElement(findsOneWidget));
+      await tester.tap(find.byTooltip('Redo'));
+      await tester.pump();
+      expect(markdownOf(tester), '# Shop buy milk');
+      await tester.tap(find.byTooltip('Undo'));
+      await tester.pump(const Duration(seconds: 2));
+      expect(relay.calls, ['edit # Shop buy milk (later)', 'edit # Shop (later)']);
+      await type(tester, '!');
+      expect([find.byTooltip('Undo'), find.byTooltip('Redo')], [findsOneWidget, findsNothing]);
+      await tester.tap(find.byTooltip('Done'));
+      await tester.pumpAndSettle();
+      expect([find.byTooltip('Undo'), find.byTooltip('Redo')], everyElement(findsNothing));
+    });
+
+    testWidgets('voice note words that come later start Undo from them, not from the empty page', (tester) async {
+      final writing = Entry(id: 'v1', text: '', at: now, voice: true, writing: true, recording: 'voice/a.wav');
+      relay.entries = [writing];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      // The list's Writing the words… row never settles, so the page opens as a tap on it would.
+      Navigator.of(tester.element(newNote)).push(MaterialPageRoute<void>(builder: (_) => NoteEditor(relay: relay, entry: writing)));
+      await tester.pump();
+      relay
+        ..entries = [Entry(id: 'v1', text: 'Call Sam', at: now, voice: true, recording: 'voice/a.wav')]
+        ..changed();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(QuillEditor));
+      await tester.pump();
+      expect(find.byTooltip('Undo'), findsNothing);
+    });
+
+    testWidgets('⋯ → Pin Note pins the note, which then reads Unpin Note, and its words and time stay', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Door code', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Door code'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Pin Note'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['pin n1']);
+      expect([relay.entries.single.pinned, relay.entries.single.text, relay.entries.single.at], [true, 'Door code', now]);
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      expect([find.widgetWithText(MenuItemButton, 'Unpin Note'), find.widgetWithText(MenuItemButton, 'Pin Note')],
+        [findsOneWidget, findsNothing]);
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Unpin Note'));
+      await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['pin n1', 'unpin n1']);
+    });
+
+    testWidgets('a new note not kept yet offers no Pin Note', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.tap(newNote);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      expect([for (final item in tester.widgetList<MenuItemButton>(find.byType(MenuItemButton))) (item.child! as Text).data],
+        ['Find in Note', 'Copy', 'Delete']);
+    });
+
+    testWidgets('Find in Note steps round the matches in any case, says No matches, and ✓ closes it with the words unchanged',
+      (tester) async {
+      const text = 'Trip\nTrain at 9\nthe train back\nno train on Sunday';
+      relay.entries = [Entry(id: 'n1', text: text, at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Trip'));
+      await tester.pumpAndSettle();
+      final before = markdownOf(tester);
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Find in Note'));
+      await tester.pumpAndSettle();
+      expect([find.byType(FindBar), find.byType(ReadingBar), find.byType(FloatingToolBar)],
+        [findsOneWidget, findsNothing, findsNothing]);
+      final field = find.descendant(of: find.byType(FindBar), matching: find.byType(TextField));
+      expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
+      await tester.enterText(field, 'train');
+      await tester.pumpAndSettle();
+      final words = quill(tester).document.toPlainText();
+      final starts = [words.indexOf('Train'), words.indexOf('train'), words.lastIndexOf('train')];
+      TextSelection match(int index) => TextSelection(baseOffset: starts[index], extentOffset: starts[index] + 5);
+      expect([find.text('1 of 3').evaluate().length, quill(tester).selection], [1, match(0)]);
+      for (final (index, label) in [(1, '2 of 3'), (2, '3 of 3'), (0, '1 of 3')]) {
+        await tester.tap(find.byTooltip('Next match'));
+        await tester.pumpAndSettle();
+        expect([find.text(label).evaluate().length, quill(tester).selection], [1, match(index)], reason: label);
+      }
+      await tester.tap(find.byTooltip('Previous match'));
+      await tester.pumpAndSettle();
+      expect([find.text('3 of 3').evaluate().length, quill(tester).selection], [1, match(2)]);
+      expect(editorFocused(tester), isFalse);
+      await tester.enterText(field, 'plane');
+      await tester.pumpAndSettle();
+      expect(find.text('No matches'), findsOneWidget);
+      expect(tester.widget<IconButton>(find.widgetWithIcon(IconButton, CupertinoIcons.chevron_down)).onPressed, isNull);
+      expect(tester.widget<IconButton>(find.widgetWithIcon(IconButton, CupertinoIcons.chevron_up)).onPressed, isNull);
+      await tester.tap(find.byTooltip('Done'));
+      await tester.pumpAndSettle();
+      expect([find.byType(FindBar), find.byType(ReadingBar)], [findsNothing, findsOneWidget]);
+      expect(quill(tester).selection.isCollapsed, isTrue);
+      expect(markdownOf(tester), before);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, isEmpty);
+    });
+
+    testWidgets('a tap in the words while finding ends find mode, and the tool bar, ✓ and Undo come back', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Trip\nTrain at 9', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Trip'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Find in Note'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.descendant(of: find.byType(FindBar), matching: find.byType(TextField)), 'train');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(QuillEditor));
+      await tester.pumpAndSettle();
+      expect(editorFocused(tester), isTrue);
+      expect([find.byType(FindBar), find.byType(FloatingToolBar), find.byTooltip('Done')],
+        [findsNothing, findsOneWidget, findsOneWidget]);
+      await type(tester, '!');
+      expect(find.byTooltip('Undo'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('Find in Note selects the right letters after a letter whose lowercase is longer, such as İ', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'İİ trip\nBuy MILK and milk', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('İİ trip'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Find in Note'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.descendant(of: find.byType(FindBar), matching: find.byType(TextField)), 'milk');
+      await tester.pumpAndSettle();
+      final words = quill(tester).document.toPlainText();
+      expect([find.text('1 of 2').evaluate().length, quill(tester).selection.textInside(words)], [1, 'MILK']);
+      await tester.tap(find.byTooltip('Next match'));
+      await tester.pumpAndSettle();
+      expect([quill(tester).selection.start, quill(tester).selection.textInside(words)], [words.lastIndexOf('milk'), 'milk']);
+    });
+
+    testWidgets('Find in Note scrolls a match far down a long note into view above the find bar', (tester) async {
+      tester.view
+        ..physicalSize = const Size(390, 844)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      relay.entries = [Entry(id: 'n1', text: ['Long', for (var line = 1; line <= 60; line++) 'Line $line', 'Gate code 4512']
+        .join('\n'), at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Long'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Find in Note'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.descendant(of: find.byType(FindBar), matching: find.byType(TextField)), 'gate');
+      await tester.pumpAndSettle();
+      final editor = tester.allRenderObjects.whereType<RenderEditor>().first;
+      final caret = editor.getLocalRectForCaret(quill(tester).selection.extent);
+      expect(editor.localToGlobal(caret.bottomLeft).dy, lessThanOrEqualTo(tester.getRect(find.byType(FindBar)).top));
+      expect(editor.localToGlobal(caret.topLeft).dy, greaterThan(0));
+    });
+
     testWidgets('a waiting and a sent note\'s page show only the date, with no tag and no send item in ⋯', (tester) async {
       relay
         ..connected = true
@@ -1926,7 +2256,7 @@ void main() {
         await tester.tap(find.byTooltip('More'));
         await tester.pumpAndSettle();
         expect([for (final item in tester.widgetList<MenuItemButton>(find.byType(MenuItemButton))) (item.child! as Text).data],
-          ['Copy', 'Delete'], reason: title);
+          ['Pin Note', 'Find in Note', 'Copy', 'Delete'], reason: title);
         await tester.sendKeyEvent(LogicalKeyboardKey.escape);
         await tester.pumpAndSettle();
         await tester.pageBack();

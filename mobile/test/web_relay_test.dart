@@ -160,6 +160,39 @@ void main() {
     expect(body['id'], 'n1');
   });
 
+  test('pins at once with PUT notes/pin, by clientId for its own note and by id for one from elsewhere', () async {
+    server.routes['PUT api/notes/pin'] = (request) => {'id': 'n1', 'pinned': true, 'updated': true};
+    await relay.start();
+    expect(relay.entries.firstWhere((entry) => entry.id == 'n1').pinned, isFalse);
+    await relay.pinNote('n1', true);
+    expect([server.calls.last, jsonDecode(server.requests.last.body)], ['PUT pin', {'id': 'n1', 'pinned': true, 'at': 5000}]);
+    expect(relay.entries.firstWhere((entry) => entry.id == 'n1').pinned, isTrue);
+    await relay.pinNote('web-note-1', true);
+    expect(jsonDecode(server.requests.last.body), {'clientId': 'web-note-1', 'pinned': true, 'at': 5000});
+    final before = server.requests.length;
+    await relay.pinNote('n1', true);
+    expect(server.requests.length, before, reason: 'a note already pinned sends nothing');
+  });
+
+  test('reads the pin from GET notes; a refused pin goes back with a notice, and a 409 reads the newer pin', () async {
+    server.routes['GET api/notes'] = (_) => {'notes': [{...note('n1'), 'pinned': true, 'pinChangedAt': 900}], 'next': 3};
+    await relay.start();
+    expect(relay.entries.single.pinned, isTrue);
+    final notices = <String>[];
+    final listening = relay.notices.listen(notices.add);
+    server.routes['PUT api/notes/pin'] = (_) => http.Response('{"error":{"message":"Try later."}}', 500);
+    await relay.pinNote('n1', false);
+    await Future<void>.delayed(Duration.zero);
+    expect([relay.entries.single.pinned, notices], [true, ['The note was not unpinned. Try later.']]);
+    server.routes['PUT api/notes/pin'] = (_) => http.Response('{"error":{"code":"older","message":"A newer pin is kept."}}', 409);
+    final reads = server.calls.where((call) => call == 'GET notes').length;
+    await relay.pinNote('n1', false);
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect([relay.entries.single.pinned, notices.length], [true, 1]);
+    expect(server.calls.where((call) => call == 'GET notes').length, reads + 1);
+    await listening.cancel();
+  });
+
   String textOf(String id) => relay.entries.firstWhere((entry) => entry.id == id).text;
   List<String?> sinces() => [for (final request in server.requests)
     if (request.method == 'GET' && request.url.path.endsWith('/notes')) request.url.queryParameters['since']];

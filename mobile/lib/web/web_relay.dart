@@ -227,6 +227,7 @@ class WebRelay extends Relay {
             url: file['ready'] == true ? client.api('attachment', {'id': file['id'] as String}).toString() : null),
       ],
       from: json['mine'] == true ? null : json['device'] as String?,
+      pinned: json['pinned'] == true,
     );
   }
 
@@ -440,9 +441,29 @@ class WebRelay extends Relay {
     notifyListeners();
   }
 
-  static Entry _copy(Entry entry, {String? text, List<EntryFile>? files, bool? waiting}) => Entry(id: entry.id,
+  static Entry _copy(Entry entry, {String? text, List<EntryFile>? files, bool? waiting, bool? pinned}) => Entry(id: entry.id,
     text: text ?? entry.text, at: entry.at, sent: entry.sent, waiting: waiting ?? entry.waiting,
-    voice: entry.voice, recording: entry.recording, length: entry.length, files: files ?? entry.files, from: entry.from);
+    voice: entry.voice, recording: entry.recording, length: entry.length, files: files ?? entry.files, from: entry.from,
+    pinned: pinned ?? entry.pinned);
+
+  /// Shows the pin at once, then sends it after the changes before it, so a new note lands first. A refusal puts the
+  /// pin back; a 409 means a newer pin came from elsewhere, which the read after shows.
+  @override
+  Future<void> pinNote(String id, bool pinned) async {
+    final note = _notes[id];
+    if (note == null || note.entry.pinned == pinned) return;
+    note.entry = _copy(note.entry, pinned: pinned);
+    notifyListeners();
+    final at = _clock().millisecondsSinceEpoch;
+    try {
+      await _inOrder(() => client.put('notes/pin', {...note.key, 'pinned': pinned, 'at': at}));
+    } on SpaceRefused catch (refused) {
+      if (_notes[id] == note) note.entry = _copy(note.entry, pinned: !pinned);
+      notifyListeners();
+      if (refused.status == 409) return unawaited(pullNotes());
+      if (!refused.signedOut) notice('The note was not ${pinned ? 'pinned' : 'unpinned'}. ${refused.message}');
+    }
+  }
 
   @override
   Future<Emptied> dropEmptyNote(String id) async {

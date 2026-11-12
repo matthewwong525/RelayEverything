@@ -5,12 +5,14 @@
 // A start on a connected computer also adds the person's topics from the copy of their knowledge web, and starts
 // `hook.mjs sync` to bring the copy up to date on its own; the first start of the day starts the daily build instead,
 // which syncs first. `prompt` adds the topics a message names. Otherwise it prints nothing but one notice, once, when
-// this computer is not connected, because a hook's output joins the chat.
+// this computer is not connected, because a hook's output joins the chat. With memory on, memory's copy adds its own
+// start and topics instead, and `before-edit` adds a folder's facts; a project with its own memory gets neither.
 import { spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { copyOf, openState, readComputer } from '../lib/config.mjs';
 import { appOf } from '../lib/headless.mjs';
+import { memoryState, runMemory } from '../lib/memory.mjs';
 import { sendPending, sendSession } from '../lib/send.mjs';
 import { SESSION } from '../lib/state.mjs';
 import { matchTopics, projectTopic, readTopic, topicPages, topLevel } from '../lib/topics.mjs';
@@ -78,18 +80,39 @@ export function record(store, input, now = Date.now()) {
 }
 
 /**
- * Runs one hook event, and answers what to print. `start` runs a send on its own, as `hook.mjs <args>`. A session
- * ended by /clear is marked cleared, so the save skill, which may keep its old id, finds the chat that follows.
+ * Runs one hook event, and answers what to print. `start` runs a send on its own, as `hook.mjs <args>`, and `memory`
+ * runs memory's copy. A session ended by /clear is marked cleared, so the save skill finds the chat that follows.
  */
-export async function run(event, input, { env, fetcher = fetch, start = startSend, wait = END_WAIT, now = Date.now(), zone = computerZone() }) {
+export async function run(event, input, { env, fetcher = fetch, start = startSend, wait = END_WAIT, now = Date.now(), zone = computerZone(),
+  memory = runMemory }) {
+  const mode = () => (typeof input?.cwd === 'string' ? memoryState(env, input.cwd) : 'off');
+  if (event === 'before-edit') return mode() === 'on' ? memory('before-edit', input, env) : '';
   // Topics only read this computer's copy, so a project with saving off, or RELAY_SAVE=0, still gets them.
-  if (event === 'prompt') return readComputer(env) ? context('UserPromptSubmit', topicMatches(copyOf(env), input?.prompt)) : '';
+  if (event === 'prompt') {
+    if (!readComputer(env)) return '';
+    const state = mode();
+    if (state === 'on') return memory('prompt', input, env);
+    return state === 'repo' ? '' : context('UserPromptSubmit', topicMatches(copyOf(env), input?.prompt));
+  }
   if (event === 'sync') {
     await sync({ env, fetcher });
     return '';
   }
   const topics = () => (typeof input?.cwd === 'string' ? context('SessionStart', topicList(copyOf(env), projectName(projectRoot(input.cwd)))) : '');
-  if (env.RELAY_SAVE === '0') return event === 'session-start' && readComputer(env) ? topics() : '';
+  // What a start adds: memory's own start when it is on, nothing in a project with its own memory, else the topics.
+  const opening = async () => {
+    const state = mode();
+    if (state === 'on') return memory('session-start', input, env);
+    return state === 'repo' ? '' : topics();
+  };
+  const closing = async () => {
+    if (event === 'session-end' && mode() === 'on') await memory('session-end', input, env);
+  };
+  // Memory's own background chat, like RELAY_SAVE=0, saves no chat and starts no build.
+  if (env.RELAY_SAVE === '0' || env.WONG_MEMORY_RUN === '1') {
+    await closing();
+    return event === 'session-start' && readComputer(env) ? opening() : '';
+  }
   const store = openState(env);
   if (event === 'send') {
     await sendSession(input, { env, store, fetcher, wait });
@@ -110,7 +133,7 @@ export async function run(event, input, { env, fetcher = fetch, start = startSen
         markTried(env, now, zone);
         await start(['build', appOf(env, input?.transcript_path)], env);
       } else await start(['sync'], env);
-      return topics();
+      return opening();
     }
     if (store.marked('not-connected')) return '';
     store.mark('not-connected');
@@ -121,6 +144,7 @@ export async function run(event, input, { env, fetcher = fetch, start = startSen
     if (input.reason === 'clear') store.update(id, { cleared: true });
     await start(['send', id, String(END_WAIT)], env);
   }
+  await closing();
   return '';
 }
 

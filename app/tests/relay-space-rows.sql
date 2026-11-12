@@ -131,13 +131,13 @@ INSERT INTO relay_health (device_id, type, start_at, end_at, value, unit, source
   ('d0000000-0000-4000-8000-000000000001', 'workout', 1794064800000, 1794066000000, 20, 'min', 'com.google.android.apps.fitness', 1794066000000);
 -- The memory, from the laptop's chats that Wednesday: the battery decision and the newer one that replaced it, and a
 -- fact about Sam from the lunch note. Two notes carry topics, as the person's own Claude gave them.
-INSERT INTO relay_memory (id, fields, sources, replaces, replaced_by, device_id, client_id, created_at) VALUES
+INSERT INTO relay_memory (id, fields, sources, replaces, replaced_by, device_id, client_id, created_at, n) VALUES
   ('fd7mm', '{"kind":"fact","text":"Sam makes the shell of the ring."}', '["relay:note/a0000000-0000-4000-8000-000000000002"]', '[]', NULL,
-   'd0000000-0000-4000-8000-000000000004', 'seed-fact-0003', 1793812000000),
+   'd0000000-0000-4000-8000-000000000004', 'seed-fact-0003', 1793812000000, 2),
   ('fb4tt', '{"kind":"decision","text":"The battery stays 40 mAh."}', '["relay:chat/c0000000-0000-4000-8000-000000000001#2"]', '[]', NULL,
-   'd0000000-0000-4000-8000-000000000004', 'seed-fact-0001', 1793801500000),
+   'd0000000-0000-4000-8000-000000000004', 'seed-fact-0001', 1793801500000, 1),
   ('fc5kk', '{"kind":"decision","text":"The battery is now 50 mAh, for a full day."}', '["relay:chat/c0000000-0000-4000-8000-000000000002#2"]',
-   '["fb4tt"]', NULL, 'd0000000-0000-4000-8000-000000000004', 'seed-fact-0002', 1793816200000);
+   '["fb4tt"]', NULL, 'd0000000-0000-4000-8000-000000000004', 'seed-fact-0002', 1793816200000, 3);
 UPDATE relay_memory SET replaced_by = 'fc5kk' WHERE id = 'fb4tt';
 INSERT INTO relay_memory_tags (fact_id, tag) VALUES ('fd7mm', 'sam'), ('fd7mm', 'ring'), ('fb4tt', 'battery'), ('fc5kk', 'battery'),
   ('fc5kk', 'ring/charging');

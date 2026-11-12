@@ -196,7 +196,8 @@ async function readPhoto(space: PersonSpace, { id, timezone = ZONE }: Input<"rea
 type Adder = { deviceId: string; name: string; kind: "api" | "agent" | "app" } | null;
 
 /** The caller's own space and what it may do: every caller reads; `adder` says whether and as whom it adds. */
-export type Asker = { space: PersonSpace; adder: Adder; env: Pick<McpEnv, "RELAY_WEBHOOKS" | "KNOWLEDGE"> };
+/** `email` is the account's, for a key's caller: memory's store writes it on each fact. */
+export type Asker = { space: PersonSpace; adder: Adder; env: Pick<McpEnv, "RELAY_WEBHOOKS" | "KNOWLEDGE">; email?: string };
 
 /** A fact as the caller reads it: its time in the zone. */
 const factShown = (fact: Fact, timezone: string) => ({ ...fact, createdAt: local(fact.createdAt, timezone) });
@@ -315,7 +316,7 @@ async function tagsOf(asker: Asker, kind: "fact" | "note", id: string, change: {
 
 /** The web API's own questions: the columns read for any caller; the rest change, for a computer's key. */
 const WEB_ANSWERS: { [Name in WebName]: (asker: Asker, input: Input<Name>) => Promise<unknown> } = {
-  add_facts: async (asker, { facts }) => addFacts(asker.space.db, computer(asker), facts),
+  add_facts: async (asker, { facts }) => addFacts(asker.space.db, computer(asker), asker.space.personId, facts),
   columns: async ({ space }, { changes }) => ({ ...await columnsOf(space.db), ...changes && { changes: await columnChanges(space.db) } }),
   change_columns: async (asker, change) => changeColumns(asker.space.db, computer(asker), change),
   tag_fact: async (asker, { id, ...change }) => tagsOf(asker, "fact", id, change),

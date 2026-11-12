@@ -19,7 +19,7 @@ const ids = (answer: Record<string, unknown>, list = "facts") => (answer[list] a
 
 it("reads the two first columns, and adds, changes and removes a column, each change kept with its computer", async () => {
   expect(await v1("memory/columns", V1_KEYS.api)).toEqual({ status: 200, json: { removed: [], columns: [
-    { name: "kind", type: "text", required: true, note: expect.stringContaining("decision") },
+    { name: "kind", type: "text", required: true, note: "The kind of fact, as FORMAT.md lists them: user, feedback, project, reference or thread." },
     { name: "text", type: "text", required: true, note: "The fact in one short sentence." }] } });
   const added = await columns({ add: [{ name: "mood", type: "text", note: "How the person felt." }] });
   expect([added.status, names(added.json)]).toEqual([200, ["kind", "text", "mood"]]);

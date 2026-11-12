@@ -100,8 +100,8 @@ async function pages(computer, path, query, key, fetcher) {
 }
 
 /**
- * The work list: quiet chats past the read record and notes not in it, newest first, at most MOST_CHATS and
- * MOST_NOTES, each with where to read from and its day, and how many more are left.
+ * The work list: quiet chats past the read record that memory did not read, and notes not in it, newest first, at
+ * most MOST_CHATS and MOST_NOTES, each with where to read from and its day, and how many more are left.
  */
 export async function work({ env = process.env, fetcher = fetch, now = Date.now(), zone = computerZone() } = {}) {
   const computer = readComputer(env);
@@ -110,7 +110,9 @@ export async function work({ env = process.env, fetcher = fetch, now = Date.now(
   const chats = await pages(computer, '/chats', { limit: '20', timezone: zone }, 'chats', fetcher);
   const notes = await pages(computer, '/notes', { from: '2001-01-01', to: '2286-01-01', limit: '100', timezone: zone }, 'notes', fetcher);
   if (notes.status !== 200) return { code: 1, text: `Relay Everything refused the list of notes: it answered ${notes.status}.` };
-  const unreadChats = chats.items.filter(chat => now - Date.parse(chat.lastAt) >= QUIET && chat.messages - 1 > (record.chats.get(chat.id) ?? -1))
+  // A chat that memory already read is left out: its facts are in the space.
+  const unreadChats = chats.items.filter(chat => !chat.memory && now - Date.parse(chat.lastAt) >= QUIET
+    && chat.messages - 1 > (record.chats.get(chat.id) ?? -1))
     .map(chat => ({ id: chat.id, title: chat.title, project: chat.project, after: record.chats.get(chat.id) ?? -1, messages: chat.messages,
       day: chat.lastAt.slice(0, 10) }));
   const unreadNotes = notes.items.filter(note => !record.notes.has(note.id))
@@ -357,7 +359,8 @@ function knownTopics(copy) {
 }
 
 /** The SHA-256 of each earlier default `FORMAT.md`: a web that still has one word for word gets the new default. */
-const OLD_FORMATS = new Set(['4224d5c920c5f963262a2323869cb3617e7f1ae037355cce011dc4729ddcb15e']);
+const OLD_FORMATS = new Set(['4224d5c920c5f963262a2323869cb3617e7f1ae037355cce011dc4729ddcb15e',
+  'd96a833793c90806bef3f551c40a7ae42741c51c8fcc83c03df6aebb43dfc9c3']);
 /** The default `FORMAT.md`, the same as `schema/knowledge/FORMAT.md`. */
 export const FORMAT = join(PROMPTS, 'FORMAT.md');
 

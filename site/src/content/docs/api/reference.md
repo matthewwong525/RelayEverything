@@ -1037,6 +1037,7 @@ Send the input as query parameters.
 | `chats[].lastAt` | number | yes |  |
 | `chats[].messages` | number | yes | How many messages the chat holds. |
 | `chats[].savedByAi` | boolean | yes | True when the AI saved a title and summary for it. |
+| `chats[].memory` | boolean | yes | True when the computer's memory read the chat and saved its facts. |
 | `next` | number or null | yes |  |
 | `nextId` | string or null | yes |  |
 
@@ -1069,6 +1070,7 @@ Send the input as query parameters.
 | `chat.lastAt` | number | yes |  |
 | `chat.messages` | number | yes | How many messages the chat holds. |
 | `chat.savedByAi` | boolean | yes | True when the AI saved a title and summary for it. |
+| `chat.memory` | boolean | yes | True when the computer's memory read the chat and saved its facts. |
 | `saves` | array of object | yes |  |
 | `saves[].id` | string | yes |  |
 | `saves[].title` | string | yes |  |

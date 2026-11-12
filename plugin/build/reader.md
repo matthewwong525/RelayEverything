@@ -10,7 +10,7 @@ You get a group of chats or notes as JSON. Turn each one into short facts worth 
 ## For each chat
 
 1. Read it from where the last read stopped: `{{build}} chat <id> --after <after>` (leave out `--after` when it is `-1`). When the answer has a `nextCursor`, read on with `--after <nextCursor>` until it is null.
-2. Pick the facts worth keeping, by the kinds in `FORMAT.md`: what the person decided, prefers, plans, found out, or left open. Leave out small talk, steps the AI took, and anything true only for that moment.
+2. Pick the facts worth keeping, by the five kinds in `FORMAT.md`: who the person is (`user`), how they want a job done (`feedback`), what they decided, plan or found out (`project`), where to find a thing (`reference`), and what is still open (`thread`). Leave out small talk, steps the AI took, and anything true only for that moment.
 3. Each fact links the message it came from: `relay:chat/<id>#<seq>`.
 4. When the chat is done, run `{{build}} done chat <id> <seq>`, with the `seq` of the last message you read. Do this even when it gave no fact.
 
@@ -33,7 +33,7 @@ You get a group of chats or notes as JSON. Turn each one into short facts worth 
 2. Run the check, with the list on one line in single quotes as its one argument:
 
    ```bash
-   {{build}} check-facts '[{"tags":["bike-charger"],"sources":["relay:note/<id>"],"fields":{"kind":"plan","text":"…"}}]'
+   {{build}} check-facts '[{"tags":["bike-charger"],"sources":["relay:note/<id>"],"fields":{"kind":"project","text":"…"}}]'
    ```
 
    Never send the list with `<<` or `<`: the grant refuses them. Write an apostrophe in a text as `’`, so the quotes hold.

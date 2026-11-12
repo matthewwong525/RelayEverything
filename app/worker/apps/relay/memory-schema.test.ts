@@ -36,3 +36,26 @@ it("adds the memory with its two first columns, and topics on facts and notes th
   expect(all(space, "SELECT * FROM relay_note_tags")).toEqual([]);
   expect(all(space, "PRAGMA foreign_key_check")).toEqual([]);
 });
+
+it("numbers a space's facts by time for memory's store, and changes no fact's words", () => {
+  const space = new DatabaseSync(":memory:");
+  space.exec("PRAGMA foreign_keys = ON");
+  const at = MIGRATIONS.findIndex(([name]) => name === "0019_memory_store");
+  for (const [, text] of MIGRATIONS.slice(0, at)) inTransaction(space, text);
+  space.exec(`INSERT INTO relay_devices (id, name, token_client_id, token_id, created_at, reaches) VALUES ('d-mac', 'Mac', 'rek:d-mac', '', 1, 'agent');
+    INSERT INTO relay_memory (id, fields, sources, device_id, client_id, created_at) VALUES
+      ('fcccc', '{"kind":"open","text":"Third."}', '["relay:day/2026-11-03"]', 'd-mac', 'c-3', 9),
+      ('fbbbb', '{"kind":"fact","text":"Second, same time."}', '["relay:day/2026-11-02"]', 'd-mac', 'c-2', 5),
+      ('faaaa', '{"kind":"decision","text":"First."}', '["relay:day/2026-11-01"]', 'd-mac', 'c-1', 5);`);
+  const before = all(space, "SELECT id, fields, sources, replaces, replaced_by, created_at FROM relay_memory ORDER BY id");
+  inTransaction(space, MIGRATIONS[at][1]);
+  expect(all(space, "SELECT id, fields, sources, replaces, replaced_by, created_at FROM relay_memory ORDER BY id")).toEqual(before);
+  expect(all(space, "SELECT id, n, slug, owner_subject, shared, memory_sources FROM relay_memory ORDER BY n")).toEqual([
+    { id: "faaaa", n: 1, slug: null, owner_subject: null, shared: 1, memory_sources: "[]" },
+    { id: "fbbbb", n: 2, slug: null, owner_subject: null, shared: 1, memory_sources: "[]" },
+    { id: "fcccc", n: 3, slug: null, owner_subject: null, shared: 1, memory_sources: "[]" }]);
+  expect(() => space.exec("UPDATE relay_memory SET n = 1 WHERE id = 'fcccc'")).toThrow(/UNIQUE/);
+  expect(all(space, "SELECT note FROM relay_memory_columns WHERE name = 'kind'")[0].note).toMatch(/user, feedback, project, reference or thread/);
+  expect(all(space, "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('relay_memory_sessions', 'relay_memory_runs', 'relay_topic_defs')"))
+    .toHaveLength(3);
+});

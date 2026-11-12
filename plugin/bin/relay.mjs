@@ -6,8 +6,9 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { copyOf, readComputer } from '../lib/config.mjs';
+import { memoryState, notesAndChats, pullTopic } from '../lib/memory.mjs';
 import { withSandbox } from '../lib/sandbox.mjs';
-import { api, reason } from '../lib/server.mjs';
+import { api, chatIds, reason } from '../lib/server.mjs';
 import { linksIn, readTopic, TOPIC, topicPages } from '../lib/topics.mjs';
 
 export const CHAT_KEY = "This computer's key only saves chats. Type /relay:connect to connect it again.";
@@ -218,17 +219,20 @@ async function around(computer, { value, fields, zone, fetcher }) {
   return answered({ at, from, to, timezone, hours, ...answer, ...read, health: { steps, heart_rate: heartRate } }, got.errors);
 }
 
-/** The chat ids that facts name in their sources, such as `relay:chat/7f3a#120`, in the facts' order. */
-const chatIds = facts => [...new Set((facts ?? []).flatMap(fact => fact?.sources ?? [])
-  .map(source => /^relay:chat\/([^#\s]+)/.exec(String(source))?.[1]).filter(Boolean))];
-
 /**
  * A topic and one step around it, in one answer: its page and the topics it links and that link it, from this
  * computer's copy; its newest facts and notes, and the titles and summaries of the chats those facts came from.
  */
-async function topic(computer, { value, env, zone, fields, fetcher }) {
+async function topic(computer, { value, env, zone, fields, fetcher, cwd, pull }) {
   const name = String(value).toLowerCase().replace(/^#/, '').replace(/^\/+|\/+$/g, '');
   if (!TOPIC.test(name)) return { code: 2, text: 'Give a topic name, such as battery or bike/charging: node relay.mjs topic <name>.' };
+  // With memory on, memory's pull answers, with the topic's notes and chats after it; a failed pull answers as before.
+  if (memoryState(env, cwd, computer) === 'on') {
+    const pulled = pull(name, { env, cwd });
+    if (pulled.code === 0 && pulled.text.trim()) {
+      return { code: 0, text: [pulled.text.trimEnd(), ...await notesAndChats([name], { env, fetcher })].join('\n') };
+    }
+  }
   const timezone = fields.timezone ?? zone;
   const dir = copyOf(env);
   const pages = topicPages(dir);
@@ -256,13 +260,14 @@ async function topic(computer, { value, env, zone, fields, fetcher }) {
 const JOINED = { around: { run: around }, topic: { run: topic, needs: 'the topic name' } };
 
 /** Runs one command and answers `{ code, text }`: the JSON answer, or a line that says what went wrong. */
-export async function relay(args, { env = process.env, input = '', fetcher = fetch, zone = computerZone() } = {}) {
+export async function relay(args, { env = process.env, input = '', fetcher = fetch, zone = computerZone(), cwd = process.cwd(),
+  pull = pullTopic } = {}) {
   const { command, value, second, fields } = parseArgs(args);
   if (JOINED[command]) {
     if (JOINED[command].needs && !value) return { code: 2, text: `Give ${JOINED[command].needs}: node relay.mjs ${command} <value>.` };
     const computer = readComputer(env);
     if (!computer) return { code: 1, text: NOT_CONNECTED };
-    return JOINED[command].run(computer, { value, fields, env, zone, fetcher });
+    return JOINED[command].run(computer, { value, fields, env, zone, fetcher, cwd, pull });
   }
   const spec = COMMANDS[command];
   if (!spec) return { code: 2, text: USAGE };

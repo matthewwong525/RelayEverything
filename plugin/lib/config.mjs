@@ -59,13 +59,14 @@ export function apiAddress(text) {
   return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
 }
 
-/** The computer's key file as `{ server, key, api, name }`, or null when it is missing or not one this plugin wrote. */
+/** The computer's key file as `{ server, key, api, name, memory }`, or null when it is missing or not one this plugin
+ *  wrote. `memory` is the person's choice at /relay:connect; a file from before it reads as off. */
 export function parseComputer(value) {
   if (value?.relay !== 1 || !KEY.test(value.key ?? '')) return null;
   const server = serverOrigin(value.server);
   const api = apiAddress(value.api);
   if (!server || !api) return null;
-  return { server, key: value.key, api, name: String(value.name ?? '').slice(0, NAME_CHARACTERS) };
+  return { server, key: value.key, api, name: String(value.name ?? '').slice(0, NAME_CHARACTERS), memory: value.memory === true };
 }
 
 export function readComputer(env = process.env) {

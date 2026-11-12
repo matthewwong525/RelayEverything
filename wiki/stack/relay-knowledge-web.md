@@ -4,10 +4,21 @@ Each Relay Everything person has a memory of facts, a table in their own [space]
 
 ## The memory
 
-- The tables come from [`0016_memory.sql`](../../schema/space-migrations/0016_memory.sql). Only [`memory.ts`](../../app/worker/apps/relay/memory.ts) writes them. The connector's files only read: [`tools.test.ts`](../../app/worker/relay-mcp/tools.test.ts) fails on a write word there.
+- The tables come from [`0016_memory.sql`](../../schema/space-migrations/0016_memory.sql). Only [`memory.ts`](../../app/worker/apps/relay/memory.ts), and the [memory store](#the-memory-store) beside it, write them.
 - A person's columns are values in `relay_memory_columns`, not SQL columns. A fact's values are JSON in `fields`. So a column change needs no migration, and no caller's text becomes SQL: a name is checked by pattern, and a filter binds its value.
 - A fact is only added. A replace sets the old fact's `replaced_by` in the same batch, and that is the only update. Only deleting the account deletes a fact.
 - Only a computer's key (`agent` reach) adds facts, changes columns and changes topics. An API key and the [AI connector](relay-ai-connector.md) read. A phone's key is refused before the web API runs.
+
+### The memory store
+
+The plugin's copy of WongStack memory reaches the same table through its own store, not the `/v1/memory` routes.
+
+- [`memory-routes.ts`](../../app/worker/relay-mcp/memory-routes.ts) answers `/v1/memory/v2/<request>` before `/v1/`'s own routes, only for a computer's key, with WongStack's `serve()` from [`interface.mjs`](../../.agents/skills/memory/store/interface.mjs). The caller is always the admin of the key's own space, so the person sees all of it. Any other key gets 403.
+- [`relay-memory/store.ts`](../../app/worker/relay-memory/store.ts) answers the twelve requests. [`0019_memory_store.sql`](../../schema/space-migrations/0019_memory_store.sql) adds memory's number `n` beside the `f…` id, its slug, session, author, owner, sharing and own sources, and the tables for sessions, runs and topic definitions. The store gives the older facts, which name no owner, to the person on each call.
+- **Five kinds.** `kindSql` in [`memory.ts`](../../app/worker/apps/relay/memory.ts) reads an older kind as its new one when it reads: `open` as `thread`, `preference` as `feedback`, and `fact`, `decision` and `plan` as `project`. No row's words change. The store refuses an older kind on a new fact; `POST /v1/memory` still takes one, so an older plugin keeps working.
+- **Transcripts.** A transcript memory sends goes to the person's sealed files at `memory/transcripts/<session id>`, and deleting the account removes it. With none kept, the store gives the saved Relay Everything chat for that session as text.
+- **The daily build skips a chat memory read**: `GET /v1/chats` marks it `memory: true`, because both would save the same facts. Memory read a chat when its session row is `captured`, or a fact names its session: memory's chat end writes a row before it captures.
+- [`relay-memory/store.test.ts`](../../app/worker/relay-memory/store.test.ts) runs WongStack's own store check, `checkStore`, against the space. A change to the store passes it first.
 
 ## The knowledge web
 
@@ -33,3 +44,19 @@ The person's own AI builds the memory and the web once a day, on their computer,
 ## Cost
 
 Artifacts needs Workers Paid. There is no charge for each repo. 10,000 operations a month are free, then $0.15 for each 1,000. A sync is about 2 to 3 operations. In Artifacts analytics, each sync's pass shows as one `token_create` event, a sync with nothing new makes no pull, and a read of a repo makes no event. Cloudflare's pricing names only create, push, pull and clone as billed operations.
+
+## Move a WongStack memory in
+
+A WongStack project, such as WongOS, moves its memory into the person's space once with [`scripts/import-wongstack-memory.mjs`](../../scripts/import-wongstack-memory.mjs). Run it on a computer that `/relay:connect` connected: it writes with that computer's key.
+
+```sh
+node scripts/import-wongstack-memory.mjs --from <WongStack checkout> --profile <old store's profile> --dry-run
+node scripts/import-wongstack-memory.mjs --from <WongStack checkout> --profile <old store's profile>
+```
+
+- **It only reads the source.** It opens the checkout's own memory store, with the profile `--profile` names, else the checkout's own, and sends only read requests. A source that refuses every write still works, so the old store stays as a read-only backup.
+- **Numbers stay.** The first run moves the space's own facts above the source's highest number, so fact #628 stays #628. The space refuses that first step when memory has used it already.
+- **Run it again to catch up.** A later run sends no first step. It skips each fact it imported before, adds only the new ones, and gives a new fact a new number when the old one is taken. It prints each changed number.
+- **What comes with each fact:** its date, author, owner, kind, topics, sources and replaced-by link, its chat's session row, the topic definitions, and the transcript, kept as `memory/transcripts/<session id>`.
+- **The server side** is [`relay-memory/import.ts`](../../app/worker/relay-memory/import.ts): `POST /v1/memory/import` takes the status, the first step, a chunk of up to 200 facts, or the finish, by the body's shape, and `POST /v1/memory/import/transcript?session=<id>` takes one transcript. A fact keeps `client_id` `import:<old number>`, so a resent chunk stores once.
+- **The check.** The run compares the space's counts of imported facts, live and in all, by kind, with the source's `stats`. It exits 1 and names each count that differs. `--dry-run` prints the source's counts and sends nothing.

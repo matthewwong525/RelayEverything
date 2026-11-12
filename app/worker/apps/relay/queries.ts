@@ -372,17 +372,20 @@ export async function placeVisits(db: Db, from: number, to: number, limit: numbe
 }
 
 // Chats: each one's title is the newest save's, else the title of its first send. Neither the device nor the app's
-// session id leaves here.
-type ChatRow = { id: string; title: string; project: string; app: "claude-code" | "codex"; started_at: number; last_at: number; messages: number; saves: number };
+// session id leaves here. `memory`: WongStack memory captured the chat, or a fact names it; its bare row is not a read.
+type ChatRow = { id: string; title: string; project: string; app: "claude-code" | "codex"; started_at: number; last_at: number; messages: number; saves: number;
+  memory: number };
 
 const chatShaped = (row: ChatRow) => ({ id: row.id, title: row.title, project: row.project, app: row.app, startedAt: row.started_at,
-  lastAt: row.last_at, messages: row.messages, savedByAi: row.saves > 0 });
+  lastAt: row.last_at, messages: row.messages, savedByAi: row.saves > 0, memory: row.memory === 1 });
 
 export type Chat = ReturnType<typeof chatShaped>;
 
 const CHAT = `SELECT c.id, COALESCE((SELECT s.title FROM relay_chat_saves s WHERE s.chat_id = c.id ORDER BY s.created_at DESC, s.id DESC LIMIT 1),
   NULLIF(c.title, ''), 'A chat with no title') AS title, c.project, c.app, c.started_at, c.last_at, c.message_count AS messages,
-  (SELECT COUNT(*) FROM relay_chat_saves s WHERE s.chat_id = c.id) AS saves FROM relay_chats c`;
+  (SELECT COUNT(*) FROM relay_chat_saves s WHERE s.chat_id = c.id) AS saves,
+  (EXISTS (SELECT 1 FROM relay_memory_sessions ms WHERE ms.id IN ('claude:' || c.session_id, 'codex:' || c.session_id) AND ms.status = 'captured')
+    OR EXISTS (SELECT 1 FROM relay_memory f WHERE f.session_id IN ('claude:' || c.session_id, 'codex:' || c.session_id))) AS memory FROM relay_chats c`;
 
 /** A word in any message or save of the chat. */
 const CHAT_WORD = `(EXISTS (SELECT 1 FROM relay_chat_messages m WHERE m.chat_id = c.id AND m.text LIKE ?1 ESCAPE '\\')

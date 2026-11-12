@@ -4,6 +4,7 @@
 //   wait            waits up to 90 seconds for the person to click Connect, then checks for a second connector
 //   status          says whether this computer is connected
 //   forget          deletes this computer's key file
+//   memory [on|off] turns Relay Everything's memory on or off on this computer, or says which it is
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
@@ -13,6 +14,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { withSandbox } from '../lib/sandbox.mjs';
 import { DEFAULT_SERVER, forgetComputer, home, openState, readComputer, serverOrigin, stateDir, writeComputer } from '../lib/config.mjs';
+import { whyOff } from '../lib/memory.mjs';
 
 const self = fileURLToPath(import.meta.url);
 export const EVERY = 3_000;
@@ -118,7 +120,9 @@ export async function poll(startedAt, { env = process.env, fetcher = fetch, ever
     const json = await response.json().catch(() => null);
     if (response.status === 200 && json) {
       try {
-        const computer = writeComputer(env, { server: json.server || pending.server, key: json.key, api: json.api, name: json.name });
+        // A computer connected again keeps the person's memory choice until the skill asks again.
+        const computer = writeComputer(env, { server: json.server || pending.server, key: json.key, api: json.api, name: json.name,
+          memory: readComputer(env)?.memory === true });
         writePending(env, { startedAt, result: 'connected', name: computer.name });
         return 'connected';
       } catch {
@@ -201,6 +205,28 @@ export function forget(env = process.env) {
     : 'This computer had no Relay Everything key.'] };
 }
 
+export const MEMORY_ON = 'Memory is on. Relay Everything keeps short facts from each chat on this computer, such as what you '
+  + 'decided, prefer and left open, in your own Relay Everything space, and each new chat starts with them. Type /relay:memory off to stop.';
+export const MEMORY_OFF = 'Memory is off. Chats still save to Relay Everything, and your topics still show. Type /relay:memory on to start it.';
+
+/** `/relay:memory on|off`, and the setup choice at /relay:connect: keeps the choice in the key file, or says it. */
+export function remember(choice, { env = process.env, cwd = process.cwd() } = {}) {
+  const computer = readComputer(env);
+  if (!computer) return { code: 1, lines: ['This computer is not connected to Relay Everything. Type /relay:connect to connect it.'] };
+  if (choice && choice !== 'on' && choice !== 'off') return { code: 2, lines: ['Type /relay:memory on, /relay:memory off, or /relay:memory to see which it is.'] };
+  let now = computer;
+  if (choice) {
+    try {
+      now = writeComputer(env, { ...computer, memory: choice === 'on' });
+    } catch (error) {
+      return { code: 1, lines: [withSandbox(`The folder ${home(env)} could not be written, so memory did not change.`, error)] };
+    }
+  }
+  if (!now.memory) return { code: 0, lines: [MEMORY_OFF] };
+  const why = whyOff(env, cwd, now);
+  return { code: 0, lines: [MEMORY_ON, ...why ? [`It does not run in this folder now: ${why}.`] : []] };
+}
+
 function runCommand(command, args) {
   return spawnSync(command, args, { encoding: 'utf8', timeout: LIST_WAIT, stdio: ['ignore', 'pipe', 'pipe'] });
 }
@@ -276,7 +302,8 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(self)) {
         : command === 'wait' ? await wait()
           : command === 'status' ? status()
             : command === 'forget' ? forget()
-              : { code: 2, lines: ['Type /relay:connect, or give start [server], wait, status or forget.'] };
+              : command === 'memory' ? remember(value)
+                : { code: 2, lines: ['Type /relay:connect, or give start [server], wait, status, forget or memory [on|off].'] };
     } catch (error) {
       done = { code: 1, lines: [withSandbox('Relay Everything could not finish this step on this computer. Try again in a minute.', error)] };
     }

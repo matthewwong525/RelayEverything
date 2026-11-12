@@ -15,7 +15,7 @@ const NAME = /^[a-z][a-z0-9_]{0,29}$/;
 /** A topic: words of letters, digits and dashes, a `/` between a topic and its part, such as `bike/charging`. */
 const TAG = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/;
 /** A link to a record: `relay:chat/<id>#<message>`, `relay:day/2026-11-04`. */
-const SOURCE = /^relay:(?:note|chat|day|night|workout|stay|event|photo)\/[A-Za-z0-9._:-]{1,64}(?:#\d{1,8})?$/;
+export const SOURCE = /^relay:(?:note|chat|day|night|workout|stay|event|photo)\/[A-Za-z0-9._:-]{1,64}(?:#\d{1,8})?$/;
 /** The names Relay Everything keeps on every fact, and the search's own fields: no column takes one. */
 const KEPT = new Set(["id", "tags", "tag", "sources", "source", "replaces", "replaced_by", "device", "client_id", "created_at", "fields",
   "q", "query", "from", "to", "all", "limit", "cursor", "timezone", "where", "changes"]);
@@ -24,6 +24,15 @@ type ColumnType = (typeof TYPES)[number];
 type Column = { name: string; type: ColumnType; required: boolean; note: string };
 type ColumnRow = { name: string; type: ColumnType; required: number; note: string; removed_at: number | null };
 type Value = string | number | boolean | string[];
+
+/** Memory's five kinds of fact. A fact saved with an older kind keeps its word and reads as its nearest new kind. */
+export const KINDS = ["user", "feedback", "project", "reference", "thread"] as const;
+const OLDER_KINDS = { open: "thread", preference: "feedback", fact: "project", decision: "project", plan: "project" };
+/** A fact's kind as one of the five, in SQL over its `fields`; a word no list names reads as project. */
+export const kindSql = (alias: string) => `CASE json_extract(${alias}.fields, '$.kind') ${[...KINDS.map(kind => [kind, kind]),
+  ...Object.entries(OLDER_KINDS)].map(([from, to]) => `WHEN '${from}' THEN '${to}'`).join(" ")} ELSE 'project' END`;
+/** The next free fact number, read inside the batch that adds the fact, which a space runs alone. */
+export const NEXT_NUMBER = "(SELECT coalesce(max(n), 0) + 1 FROM relay_memory)";
 
 const now = () => Date.now();
 const like = (text: string) => text.replace(/[\\%_]/g, "\\$&");
@@ -115,6 +124,12 @@ export async function factPage(db: Db, filter: FactFilter) {
     const column = columns.find(live => live.name === name);
     if (!column) throw new Refusal(`No live column is named \`${name}\`. Read the columns with GET /v1/memory/columns.`);
     const wanted = filterValue(column, value);
+    if (column.name === "kind" && column.type === "text") {
+      // A new kind also finds the older kinds that read as it, as the store's `type` does; an older word finds itself.
+      clauses.push(`(lower(json_extract(m.fields, '$.kind')) = lower(?) OR ${kindSql("m")} = lower(?))`);
+      params.push(String(wanted), String(wanted));
+      continue;
+    }
     clauses.push(column.type === "words" ? "EXISTS (SELECT 1 FROM json_each(m.fields, ?) w WHERE lower(w.value) = lower(?))"
       : column.type === "text" ? "lower(json_extract(m.fields, ?)) = lower(?)" : "json_extract(m.fields, ?) = ?");
     params.push(`$.${column.name}`, typeof wanted === "boolean" ? Number(wanted) : wanted as string | number);
@@ -145,7 +160,7 @@ const BASE32 = "abcdefghijklmnopqrstuvwxyz234567";
 const factId = (length: number) => `f${[...crypto.getRandomValues(new Uint8Array(length))].map(byte => BASE32[byte % 32]).join("")}`;
 
 /** New ids for `count` facts, unused in the space: 4 letters, one more for each that was taken. */
-async function newIds(db: Db, count: number): Promise<string[]> {
+export async function newIds(db: Db, count: number): Promise<string[]> {
   const ids: string[] = [];
   for (let length = 4; ids.length < count && length <= 6; length++) {
     const tries = [...new Set(Array.from({ length: count - ids.length }, () => factId(length)))];
@@ -183,9 +198,9 @@ function checkLinks(fact: NewFact, at: string) {
   if (source !== undefined) throw new Refusal(`${at}: \`${source}\` is not a source: relay:<note|chat|day|night|workout|stay|event|photo>/<id>.`);
 }
 
-/** Adds facts as the device, all or none: each is checked first. A clientId this device stored before is not stored
- *  again. A fact that replaces others marks them replaced, the only change a fact gets, in the same transaction. */
-export async function addFacts(db: Db, deviceId: string, facts: NewFact[]) {
+/** Adds facts as the device, owned by the person, all or none: each is checked first. A clientId this device stored
+ *  before is not stored again. A fact that replaces others marks them replaced, the only change a fact gets. */
+export async function addFacts(db: Db, deviceId: string, owner: string, facts: NewFact[]) {
   const { columns } = await columnsOf(db);
   const { results: before } = await db.prepare("SELECT client_id, id FROM relay_memory WHERE device_id = ? AND client_id IN (SELECT value FROM json_each(?))")
     .bind(deviceId, JSON.stringify(facts.map(fact => fact.clientId))).all<{ client_id: string; id: string }>();
@@ -208,8 +223,9 @@ export async function addFacts(db: Db, deviceId: string, facts: NewFact[]) {
   const ids = await newIds(db, checkedFacts.length);
   const at = now();
   const statements = checkedFacts.flatMap((fact, index) => [
-    db.prepare("INSERT INTO relay_memory (id, fields, sources, replaces, device_id, client_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-      .bind(ids[index], JSON.stringify(fact.fields), JSON.stringify(fact.sources), JSON.stringify(fact.replaces), deviceId, fact.clientId, at),
+    db.prepare(`INSERT INTO relay_memory (id, fields, sources, replaces, device_id, client_id, created_at, n, owner_subject)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ${NEXT_NUMBER}, ?)`).bind(ids[index], JSON.stringify(fact.fields), JSON.stringify(fact.sources),
+      JSON.stringify(fact.replaces), deviceId, fact.clientId, at, owner),
     ...fact.tags.map(tag => db.prepare("INSERT INTO relay_memory_tags (fact_id, tag) VALUES (?, ?)").bind(ids[index], tag)),
     ...fact.replaces.map(id => db.prepare("UPDATE relay_memory SET replaced_by = ? WHERE id = ? AND replaced_by IS NULL").bind(ids[index], id)),
   ]);

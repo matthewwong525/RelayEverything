@@ -11,7 +11,7 @@ export const SESSION = '5d1c2b7a-0e4f-4a6b-9c3d-8e7f6a5b4c3d';
 export const SECRET = `rek_${'made-up'.padEnd(43, 'x')}`;
 export const SERVER = 'https://relay.example.com';
 export const API = 'https://connector.example.com/v1';
-export const computer = (server = SERVER) => ({ server, key: SECRET, api: API, name: 'Laptop' });
+export const computer = (server = SERVER, memory = false) => ({ server, key: SECRET, api: API, name: 'Laptop', memory });
 
 const answer = (status, json) => new Response(JSON.stringify(json), { status, headers: { 'content-type': 'application/json' } });
 

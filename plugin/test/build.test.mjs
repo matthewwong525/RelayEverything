@@ -109,6 +109,20 @@ test('work lists a new chat from the start, a grown one from its last read, and 
   assert.deepEqual(hides(JSON.stringify(got)), []);
 });
 
+test('work leaves out a chat that memory has read, because its facts are in the space already', async () => {
+  const server = fakeWeb({ chats: [{ ...chat('c-memory'), memory: true }, chat('c-plain'), { ...chat('c-false'), memory: false }] });
+  assert.deepEqual((await listed(homeWith(), server)).chats.map(one => one.id), ['c-plain', 'c-false']);
+});
+
+test('the rules and the reader name the five kinds of a fact, and no kind from before them', () => {
+  const read = name => readFileSync(new URL(`../build/${name}`, import.meta.url), 'utf8');
+  for (const name of ['FORMAT.md', 'reader.md']) {
+    const text = read(name);
+    for (const kind of ['user', 'feedback', 'project', 'reference', 'thread']) assert.match(text, new RegExp(`\\b${kind}\\b`), `${name} names ${kind}`);
+    for (const old of ['fact', 'decision', 'preference', 'plan', 'open']) assert.doesNotMatch(text, new RegExp(`"kind":\\s*"${old}"`), `${name} has no kind ${old}`);
+  }
+});
+
 test('work reads at most 20 chats and 100 notes, newest first, and counts what is left', async () => {
   const env = homeWith();
   const server = fakeWeb({ chats: Array.from({ length: 25 }, (_, at) => chat(`c${at}`, { quietHours: 2 + at })),

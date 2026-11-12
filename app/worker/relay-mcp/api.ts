@@ -37,7 +37,8 @@ export const ROUTES: readonly V1Route[] = [
   { method: "GET", path: "/v1/memory", id: "searchMemory", summary: TOOLS.memory.title, tools: ["memory"], q: true, rest: "where",
     description: "The memory's facts, newest first, as the `memory` tool: `q` finds every word in the text columns, `tag` a topic and its " +
       "parts, `source` the facts from one record, such as relay:chat/<id>, and any column its value as its own field, such as " +
-      "`kind=decision`. Only live facts, unless `all=true`. The answer lists the memory's columns." },
+      "`kind=project`, which also finds the older kinds that read as it, such as decision. Only live facts, unless `all=true`. " +
+      "The answer lists the memory's columns." },
   { method: "POST", path: "/v1/memory", id: "addFacts", summary: WEB.add_facts.title, tools: ["add_facts"], adds: true,
     description: WEB.add_facts.description },
   { method: "GET", path: "/v1/memory/columns", id: "getColumns", summary: WEB.columns.title, tools: ["columns"], description: WEB.columns.description },

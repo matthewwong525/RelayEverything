@@ -9,10 +9,11 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { test } from 'node:test';
-import { claudeEntries, codexEntries, doubles, forget, isRelayEntry, LINK_LIFE, makeVerifier, poll, start, status, wait } from '../bin/connect.mjs';
-import { keyFile, readComputer, stateDir } from '../lib/config.mjs';
+import { claudeEntries, codexEntries, doubles, forget, isRelayEntry, LINK_LIFE, makeVerifier, MEMORY_OFF, MEMORY_ON, poll, remember, start, status, wait }
+  from '../bin/connect.mjs';
+import { keyFile, readComputer, stateDir, writeComputer } from '../lib/config.mjs';
 import { SANDBOX, sandboxed, withSandbox } from '../lib/sandbox.mjs';
-import { API, computer, relayHome, SECRET } from './fake.mjs';
+import { API, computer, project, relayHome, SECRET } from './fake.mjs';
 
 const CONNECT = fileURLToPath(new URL('../bin/connect.mjs', import.meta.url));
 const run = promisify(execFile);
@@ -111,7 +112,8 @@ test('the waiter asks until Connect, keeps the key in a private file, and wait n
   const flaky = async (url, init) => { if (lost-- > 0) throw new TypeError('fetch failed'); return server.fetcher(url, init); };
   assert.equal(await poll(startedAt, { env, fetcher: flaky, every: 1 }), 'connected');
   assert.deepEqual(server.calls.slice(1).map(call => Object.keys(call.body)), [['verifier'], ['verifier'], ['verifier']]);
-  assert.deepEqual(readComputer(env), KEY_ANSWER);
+  // A new key starts with memory off, until the person says yes.
+  assert.deepEqual(readComputer(env), { ...KEY_ANSWER, memory: false });
   assert.equal(statSync(keyFile(env)).mode & 0o777, 0o600);
   assert.ok(!JSON.stringify(pending(env)).includes(SECRET));
   const done = await wait({ env, run: () => ({ status: 1, stdout: '' }) });
@@ -283,4 +285,36 @@ else process.exit(1);
   } finally {
     server.close();
   }
+});
+
+test('/relay:memory turns memory on and off in the key file, says which it is, and a new connect keeps the choice', async () => {
+  const place = project();
+  const { env, root } = place;
+  assert.equal(readComputer(env).memory, false);
+  assert.deepEqual(remember(undefined, { env, cwd: root }), { code: 0, lines: [MEMORY_OFF] });
+  assert.deepEqual(remember('on', { env, cwd: root }), { code: 0, lines: [MEMORY_ON] });
+  assert.equal(readComputer(env).memory, true);
+  assert.deepEqual(remember('', { env, cwd: root }), { code: 0, lines: [MEMORY_ON] });
+  assert.equal(statSync(keyFile(env)).mode & 0o777, 0o600);
+  // On, but not in this folder now: it says why.
+  place.store.setOff(root, true);
+  assert.deepEqual(remember(undefined, { env, cwd: root }).lines,
+    [MEMORY_ON, 'It does not run in this folder now: saving to Relay Everything is off in this project; type /relay:saving on.']);
+  place.store.setOff(root, false);
+  mkdirSync(join(root, '.claude', 'skills', 'memory'), { recursive: true });
+  assert.deepEqual(remember(undefined, { env, cwd: root }).lines, [MEMORY_ON, 'It does not run in this folder now: this project has its own memory.']);
+  assert.deepEqual(remember('maybe', { env, cwd: root }).code, 2);
+  assert.equal(readComputer(env).memory, true);
+  assert.deepEqual(remember('off', { env, cwd: root }), { code: 0, lines: [MEMORY_OFF] });
+  assert.equal(readComputer(env).memory, false);
+  assert.equal(remember('on', { env: relayHome({ connected: false }), cwd: root }).code, 1);
+  // A key file from before memory reads as off.
+  writeFileSync(keyFile(env), `${JSON.stringify({ relay: 1, ...computer(), memory: undefined })}\n`, { mode: 0o600 });
+  assert.equal(readComputer(env).memory, false);
+  // Connecting again keeps the choice.
+  writeComputer(env, computer(undefined, true));
+  const server = signIn();
+  await start('https://relay.example.com', { env, fetcher: server.fetcher, waiter: () => {}, now: () => Date.now() });
+  assert.equal(await poll(pending(env).startedAt, { env, fetcher: server.fetcher, every: 1 }), 'connected');
+  assert.equal(readComputer(env).memory, true);
 });

@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import { CHAT_KEY, dayIn, NOT_CONNECTED, parseArgs, relay, shiftTime } from '../bin/relay.mjs';
 import { copyOf, writeComputer } from '../lib/config.mjs';
 import { reason } from '../lib/server.mjs';
-import { API, computer, copy, page, relayHome, SECRET } from './fake.mjs';
+import { API, computer, copy, page, project, relayHome, SECRET, SERVER } from './fake.mjs';
 
 const RELAY = fileURLToPath(new URL('../bin/relay.mjs', import.meta.url));
 
@@ -384,4 +384,28 @@ test('topic answers with page null when only facts carry it, says which part fai
   assert.deepEqual(Object.keys(shown.errors), ['chat c1']);
   assert.match(shown.errors['chat c1'], /could not be reached/);
   assert.deepEqual(await relay(['topic', 'battery'], { env: relayHome({ connected: false }), fetcher: api.fetcher }), { code: 1, text: NOT_CONNECTED });
+});
+
+test('with memory on, topic gives memory\'s pull and then the topic\'s notes and chats; a failed pull answers as before', async () => {
+  const place = project();
+  writeComputer(place.env, computer(SERVER, true));
+  const pulls = [];
+  const pulled = (code, text) => (name, options) => { pulls.push([name, options.cwd]); return { code, text }; };
+  const api = routedApi({ ...TOPIC, '/notes': () => ({ json: { notes: [{ id: 'n1', title: 'Battery note', recordedAt: '2026-11-04T14:20:00-05:00' }] } }) });
+  const ask = (pull, env = place.env) => relay(['topic', '#Battery'], { env, zone: 'Europe/London', fetcher: api.fetcher, cwd: place.root, pull });
+  const done = await ask(pulled(0, '# battery\nThe pull.\n\n'));
+  assert.equal(done.code, 0);
+  assert.equal(done.text, ['# battery', 'The pull.', 'Relay Everything notes on battery:', '- Battery note (n1, 2026-11-04)',
+    'Relay Everything chats behind battery\'s facts:', '- Battery size (c1): Chose 40 mAh.', '- Cable (c2)'].join('\n'));
+  assert.deepEqual(pulls, [['battery', place.root]]);
+  // A pull that fails or says nothing gives the JSON answer.
+  for (const pull of [pulled(1, 'Memory could not be reached.'), pulled(0, '  \n')]) assert.equal(JSON.parse((await ask(pull)).text).topic, 'battery');
+  // With memory off, or in a project with saving off, there is no pull.
+  pulls.length = 0;
+  writeComputer(place.env, computer(SERVER, false));
+  assert.equal(JSON.parse((await ask(pulled(0, 'Not this.'))).text).topic, 'battery');
+  writeComputer(place.env, computer(SERVER, true));
+  place.store.setOff(place.root, true);
+  assert.equal(JSON.parse((await ask(pulled(0, 'Not this.'))).text).topic, 'battery');
+  assert.deepEqual(pulls, []);
 });

@@ -15,7 +15,9 @@ const safePath = value => text(value) && !value.startsWith('/') && !value.split(
 const paths = (values, max = 20) => Array.isArray(values) && values.length <= max && values.every(safePath);
 const placeOk = value => text(value) && (value === '.' || value.startsWith('~/') || safePath(value)) && !value.split('/').includes('..');
 export class SettingsError extends Error {}
-const fail = why => { throw new SettingsError(`Invalid daily settings: ${why}. See wiki/development/daily.md#your-settings-file.`); };
+// Upstream, so the link works in a repo with Daily alone, which has no wiki.
+export const SETTINGS_DOC = 'https://github.com/matthewwong525/WongStack/blob/main/wiki/development/daily.md#your-settings-file';
+const fail = why => { throw new SettingsError(`Invalid daily settings: ${why}. See ${SETTINGS_DOC}`); };
 export const validDay = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
   && !Number.isNaN(Date.parse(`${value}T12:00Z`)) && new Date(`${value}T12:00Z`).toISOString().startsWith(value);
 const unsafe = /[\r\n@]|:\/\/|\b(?:password|secret|credential|token)\b/i;
@@ -134,7 +136,7 @@ export function loadSettings(file, repo) {
 export function defaultSettings({ email, timezone = Intl.DateTimeFormat().resolvedOptions().timeZone }) {
   const id = String(email).split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 72) || 'me';
   const person = id === 'team' ? 'team-member' : id;
-  return { ...validateConfig({ version: 1, person, emails: [email], timezone, sources: { chats: true }, places: {} }),
+  return { ...validateConfig({ version: 1, person, emails: [email], timezone, sources: {}, places: {} }),
     teamFile: null };
 }
 

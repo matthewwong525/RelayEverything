@@ -26,7 +26,7 @@ export function renderBrief({ facts, filters }, generatedAt = new Date().toISOSt
   // Admit entries in retrieval order; display order must not spend the budget first.
   for (const fact of facts) {
     const group = groups.get(fact.type);
-    const entry = `\nFact #${fact.id} · ${fact.created_at} · author: ${fact.author || '(not recorded)'} · session: ${fact.session_id || '(not recorded)'}\n${fact.body}\n`;
+    const entry = `\nFact #${fact.id} · ${fact.created_at} · author: ${fact.author || '(not recorded)'} · sources: ${(fact.sources || []).join(', ') || '(not recorded)'}\n${fact.body}\n`;
     const entryBytes = Buffer.byteLength(entry + (group.entries.length ? '' : `\n## ${group.heading}\n`));
     if (bytes + entryBytes + Buffer.byteLength(footer(shown + 1)) > BRIEF_MAX_BYTES) continue;
     group.entries.push(entry);

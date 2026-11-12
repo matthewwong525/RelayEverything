@@ -1,54 +1,12 @@
 #!/usr/bin/env node
-// Which way this checkout saves and publishes: `github`, `artifacts` or `app` (wiki/stack/artifacts-route.md).
-// `origin` and the install record must agree, else it exits 1. A copy installed through the app is always `app`.
-import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { isMain } from '../../memory/scripts/lib/cli.mjs';
+// Which way this checkout saves: the profile's `route`, else `github` with a working `gh` and a GitHub origin, else
+// `local`. Exit 1 on a RouteError. `run <route> <command…>` runs the profile's `routeRun` for a route it owns.
+import { execFileSync, spawnSync } from 'node:child_process';
+import { isMain } from '../../loop/scripts/lib/cli.mjs';
+import { originHost, RouteError } from '../../loop/scripts/lib/origin.mjs';
+import { slot } from '../../loop/scripts/slot.mjs';
 
-/** The host an Artifacts repository answers on: the account id, then Cloudflare's Git domain. */
-export const ARTIFACTS_HOST = /^([0-9a-f]{32})\.artifacts\.cloudflare\.net$/;
-
-export class RouteError extends Error {}
-
-/** True for the app's own Git address and nothing near it: https, that exact path, no credentials, query or hash. */
-export function appOrigin(origin) {
-  const text = String(origin ?? '').trim();
-  try {
-    return text === `${new URL(text).origin}/api/access/code/git/` && text.startsWith('https://');
-  } catch {
-    return false;
-  }
-}
-
-/** The host of a Git remote address, for `https://host/…` and `git@host:…`; null when there is none. */
-export function originHost(origin) {
-  const text = String(origin ?? '').trim();
-  if (!text) return null;
-  const scp = /^[^/@\s]+@([^:/\s]+):/.exec(text);
-  if (scp) return scp[1].toLowerCase();
-  try {
-    return new URL(text).hostname.toLowerCase() || null;
-  } catch {
-    return null;
-  }
-}
-
-/** The route for one origin address and one install record; a RouteError when they disagree. */
-export function routeOf({ origin, record }) {
-  if (appOrigin(origin)) return 'app';
-  const delivery = record?.components?.delivery;
-  const recorded = delivery?.route === 'artifacts';
-  const host = originHost(origin);
-  const artifacts = host !== null && ARTIFACTS_HOST.test(host);
-  if (artifacts && recorded) {
-    if (delivery.remote && delivery.remote !== String(origin).trim()) throw new RouteError('origin is not the repository the install record names');
-    return 'artifacts';
-  }
-  if (!artifacts && !recorded) return 'github';
-  if (recorded) throw new RouteError(host ? `the install record says artifacts, but origin is on ${host}` : 'the install record says artifacts, but this checkout has no origin');
-  throw new RouteError('origin is a Cloudflare Artifacts repository, but the install record names no artifacts route');
-}
+export { originHost, RouteError };
 
 const git = (cwd, ...args) => {
   try {
@@ -58,22 +16,31 @@ const git = (cwd, ...args) => {
   }
 };
 
-/** A checkout's route with its recorded delivery details: `{ route, root, delivery }`. */
-export function delivery(cwd = process.cwd()) {
+/** `github` for a GitHub origin with a working `gh`, else `local`. */
+export function ownRoute(root) {
+  const github = originHost(git(root, 'remote', 'get-url', 'origin')) === 'github.com';
+  return github && spawnSync('gh', ['--version'], { stdio: 'ignore' }).status === 0 ? 'github' : 'local';
+}
+
+/** A checkout's route: `{ route, root }`. */
+export async function delivery(cwd = process.cwd()) {
   const root = git(cwd, 'rev-parse', '--show-toplevel') ?? cwd;
-  let record = null;
-  try {
-    record = JSON.parse(readFileSync(join(root, '.claude', '.wong-stack.json'), 'utf8'));
-  } catch {
-    // No install record: an uninstalled or GitHub checkout.
-  }
-  const route = routeOf({ origin: git(root, 'remote', 'get-url', 'origin'), record });
-  return { route, root, delivery: route === 'artifacts' ? record.components.delivery : null };
+  const named = await slot('route', {}, root);
+  return { route: (!named.empty && named.value) || ownRoute(root), root };
+}
+
+/** Runs one command of a route the profile owns; its exit code, or 2 when no part runs it. */
+export async function runRoute(args, root) {
+  const found = await slot('routeRun', { args }, root);
+  if (found.empty) console.error(`delivery-route: this project runs no ${args[0]} route`);
+  return found.empty ? 2 : typeof found.value === 'number' ? found.value : 0;
 }
 
 if (isMain(import.meta.url)) {
+  const [first, ...rest] = process.argv.slice(2);
   try {
-    console.log(delivery(process.argv[2] || process.cwd()).route);
+    if (first === 'run') process.exitCode = await runRoute(rest);
+    else console.log((await delivery(first || process.cwd())).route);
   } catch (error) {
     if (!(error instanceof RouteError)) throw error;
     console.error(`delivery-route: ${error.message}`);

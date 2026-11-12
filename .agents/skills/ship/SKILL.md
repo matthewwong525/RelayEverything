@@ -34,11 +34,11 @@ Check [preconditions](../save/references/preconditions.md), then run `prepare`. 
 
 `/plan` pauses, tasks stay pending, or a task-driven `/save` fails or is unverifiable → report the blocker and stop before Step 2: [no verb merges to stop](../../../wiki/development/the-change-loop.md).
 
-**Work that changes no repo file** finishes in `/apply`: say so in one line and stop; no git change.
+**Work that changes no repo file** finishes in `/apply`: say so in one line and stop.
 
 ## Step 2 — archive the change
 
-Run `node .claude/skills/explore/scripts/step-title.mjs set SHIP --task "<plan title>"`, again after each `apply` until `finish` merges, then `set DONE`. `CHANGE_NAME` is separate from `BRANCH`. Pass `--change` for a change the person or this chat named; without it `prepare` picks by [the rungs](../save/references/checkpoint-evidence.md#selection-rungs). None selects → follow `NEXT:`; a new change comes from [the new-plan fallback](../save/references/new-plan.md).
+Run `node .claude/skills/loop/scripts/slot.mjs stepTitle set SHIP --task "<plan title>"`, again after each `apply` until `finish` merges, then `set DONE`. Pass `--change` for a change the person or this chat named; without it `prepare` picks by [the rungs](../save/references/checkpoint-evidence.md#selection-rungs). None selects → follow `NEXT:`; a new change comes from [the new-plan fallback](../save/references/new-plan.md).
 
 `prepare` archives by [the CLI contract](../plan/references/openspec-cli.md#validate-and-archive), which owns `--skip-specs`, after two stops:
 
@@ -47,19 +47,19 @@ Run `node .claude/skills/explore/scripts/step-title.mjs set SHIP --task "<plan t
 
 ## Step 3 — delegate the checkpoint to /save
 
-`prepare` numbers the `## Next` changelog entry, merging `main` first when behind, then reruns the local checks: allow 15 minutes. `NEXT:` carries any repair.
+`prepare` numbers the `## Next` changelog entry, merging `main` first when behind, then reruns the local checks: allow 15 minutes.
 
-**Invoke the `save` skill once (plus one after Step 4's fix) as ordinary `/save` inside `/ship` and follow it verbatim**, with `prepare`'s `CHANGE` and `ARCHIVE` if any. Proceed only on `SUCCESS` or `NONE`. Any other result → stop before merge and report `/save`'s reason; never repeat, bypass, or reinterpret the gate.
+**Invoke the `save` skill once (plus one after Step 4's fix) as ordinary `/save` inside `/ship` and follow it verbatim**, with `prepare`'s `CHANGE` and `ARCHIVE` if any. Proceed only on `SUCCESS`, `NONE`, or `LOCAL`. Any other result → stop before merge and report `/save`'s reason; never repeat, bypass, or reinterpret the gate.
 
 ## Step 4 — verify the preview (evidence, not a gate)
 
-**Invoke `verify` once with Step 3's exact checkpoint receipt**, plus one with the fix's receipt, never for a better verdict. No `verify` skill → say so in one line and go on; never install it.
+**Invoke `verify` once with Step 3's exact checkpoint receipt**, plus one with the fix's receipt, never for a better verdict. No `verify` skill, or `LOCAL` → say so in one line and go on; never install it.
 
 Any verdict but `FAILURE` → report it and merge. `FAILURE` after `/verify`'s own fixes → one fix: `apply` inside `/ship` with `ARCHIVE` and the failures, then `/save` as in Step 3, and `verify`. Still `FAILURE`, or the fix must stop → say what fails and **ask**: fix more *(Recommended)*, or *publish anyway*, recorded. If the walk's fixes, or its one `/save` of [kept checks](../verify/references/walkthrough.md#g--kept-checks), advanced `HEAD`, merge that commit only when that `/save` returns `SUCCESS` or `NONE`.
 
 ## Step 5 — merge and sync
 
-Run `finish` once; allow 12 minutes. It merges the gated commit, promotes deferred [secret edits](../../../wiki/development/secrets.md), closes the plan's Inbox page, and looks at the live app. A skipped sync, a secrets error, or `PLAN_PAGE=skipped` is one report line, never a failed ship. Not merged → report the error and stop, unless `NEXT:` gives a recovery; then `finish` again only on `SUCCESS` or `NONE`.
+Run `finish` once; allow 12 minutes. It merges the gated commit, runs the project's after-merge part, and looks at the live app. A skipped sync, a secrets error, or `PLAN_PAGE=skipped` is one report line, never a failed ship. Not merged → report the error and stop, unless `NEXT:` gives a recovery; then `finish` again only on a result Step 3 proceeds on.
 
 Merge, not rebase, unless asked. Never check out, switch, stash, reset, or force a branch to make the sync succeed, or delete a local branch.
 

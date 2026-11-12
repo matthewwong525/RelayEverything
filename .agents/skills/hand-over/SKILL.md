@@ -1,6 +1,6 @@
 ---
 name: hand-over
-description: Private links: keys, the live view, reply links.
+description: Private links: keys, the live view, saved details.
 hidden: true
 disable-model-invocation: true
 ---
@@ -9,8 +9,6 @@ disable-model-invocation: true
 
 `scripts/hand-over.mjs` opens a private link that closes itself. The guides own each mode:
 
-- **A key** into `.env`: [secrets](../../../wiki/development/secrets.md#receive-a-key-through-a-private-link).
-- **A live view** for the person's turn (a sign-in, a card, a backup code, a robot check, or a stuck step): [live view](../../../wiki/development/live-view.md).
-- **Saved everyday answers**: [saved details](../../../wiki/development/saved-details.md). `scripts/details.mjs` lists, saves, and forgets them; never read `~/.wong-stack/details.json`.
-
-`scripts/reply-link.mjs` opens [a reply link](../../../wiki/development/reply-links.md): its one send reaches the chat, never a secret.
+- **A key** into `.env`: [key link](references/key-link.md).
+- **A live view** for the person's turn (a sign-in, a card, a backup code, a robot check, or a stuck step): [live view](references/live-view.md).
+- **Saved everyday answers**: [saved details](references/saved-details.md). `scripts/details.mjs` lists, saves, and forgets them; never read `~/.wong-stack/details.json`.

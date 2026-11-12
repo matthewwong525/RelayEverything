@@ -1,171 +1,65 @@
 #!/usr/bin/env node
-// The person's schedules in the company app: show, save and approve here, manage, finish a run, and the move to the
-// app. No git. wiki/stack/host-schedules.md
+// The person's schedules: show, save and approve here, manage, finish a run. The store is the profile's `schedules`
+// part, else Paseo; with neither, `/schedule` is off. No git. wiki/stack/host-schedules.md
 import { parseArgs } from 'node:util';
-import { existsSync, readFileSync } from 'node:fs';
-import { isMain } from '../../memory/scripts/lib/cli.mjs';
-import { primaryRoot } from '../../memory/scripts/lib/primary-root.mjs';
-import { computerId, helperService } from '../../hand-over/scripts/lib/computer.mjs';
-import { companyFor } from '../../hand-over/scripts/lib/inbox.mjs';
-import { approveHere, approvalState, approver, appHost, definition, heldDefinition, readSchedule, saveDefinition, send, shownText } from './lib/app.mjs';
-import { mirrorRound } from './lib/app-runs.mjs';
-import { paseoAdapter, selectHost, validateReceipt } from './lib/hosts.mjs';
-import { legacyAdapter, legacyContext, teardownLegacy } from './lib/legacy.mjs';
-import { addDefaults } from './lib/defaults.mjs';
-import { moveIn } from './lib/move-in.mjs';
-import { appProgress } from './lib/progress.mjs';
-import { listRecords, loadRecord, requireValue, ScheduleError } from './lib/records.mjs';
-import { scheduleVersion } from './lib/version.mjs';
+import { readFileSync } from 'node:fs';
+import { isMain } from '../../daily/scripts/lib/cli.mjs';
+import { primaryRoot } from '../../daily/scripts/lib/primary-root.mjs';
+import { slotResult } from '../../daily/scripts/lib/slot.mjs';
+import { paseoStore } from './lib/paseo-store.mjs';
+import { requireValue, ScheduleError } from './lib/records.mjs';
 
-const USAGE = 'usage: schedule.mjs list | inspect|show <key> | show --file <json> | save --file <json> [--approve [--version <sha>]] [--team <emails>] | approve <key> --version <sha> | pause|resume|run <key> | cancel <key> [--run <id>] | end <key> --evidence <text> | finish --key <key> --run <id> [--progress <json file>] [--done <proof>] | move-in [--unattended] [--dry-run] [--keep <id>] [--drop <id>] | move <key> | defaults [--unattended] [--dry-run] | hosts | mirror | legacy list|inspect|pause|resume|cancel|teardown [native-id]';
-const COMMANDS = ['list', 'ls', 'inspect', 'show', 'save', 'approve', 'pause', 'resume', 'run', 'cancel', 'end', 'finish', 'move-in', 'move',
-  'defaults', 'hosts', 'mirror', 'legacy'];
-const UNREACHABLE = 'The app can not be reached; no times are shown.';
-const iso = at => (Number.isFinite(at) ? new Date(at).toISOString() : null);
+const USAGE = 'usage: schedule.mjs list | inspect|show <key> | show --file <json> | save --file <json> [--approve [--version <sha>]] [--team <emails>] | approve <key> --version <sha> | pause|resume|run <key> | cancel <key> [--run <id>] | end <key> --evidence <text> | finish --key <key> --run <id> [--progress <json file>] [--done <proof>] | defaults [--unattended] [--dry-run] | store | a command the store adds, such as move-in, move, hosts, mirror or legacy';
+const CORE = ['list', 'ls', 'inspect', 'show', 'save', 'approve', 'pause', 'resume', 'run', 'cancel', 'end', 'finish', 'defaults', 'store'];
+const shellQuote = text => `'${String(text).replace(/'/g, "'\\''")}'`;
+
+/** With no store: what is needed, and the line the person adds to the computer's own timer to run a script. */
+function noStore(world, file) {
+  let timing = {};
+  try { timing = JSON.parse(readFileSync(file, 'utf8')).timing ?? {}; } catch { /* no plan: a blank time */ }
+  const crontab = `${timing.cron ?? '<minute> <hour> <day> <month> <weekday>'} cd ${shellQuote(world.primary)} && <command>`;
+  // The computer's timer reads the time in its own timezone, not the plan's.
+  const zone = timing.timezone ? ` The time is in ${timing.timezone}: change it if the computer's clock uses another timezone.` : '';
+  return new ScheduleError('No schedule store: this repo has no `schedules` part, and Paseo is not installed. Install Paseo, or add a store. '
+    + `To run a script on a clock, add this line to the computer's own timer with \`crontab -e\`, with your command.${zone} ${crontab}`, 3, { code: 'no-store', crontab, timezone: timing.timezone ?? null });
+}
 const primaryOf = root => { try { return primaryRoot(root).primary; } catch { return root; } };
 
-async function connect(world) {
-  let client;
-  try { client = await (world.company ?? companyFor)(world.root); } catch { /* reported below */ }
-  if (!client) throw new ScheduleError('The company app does not answer from this checkout. Sign in first.', 3);
-  return client;
+/** The profile's store, else Paseo's, else null. */
+export async function findStore(world) {
+  if (world.store !== undefined) return world.store;
+  // A profile that fails stops here: falling back to Paseo would hide the app's schedules and save new ones outside it.
+  const found = await slotResult('schedules', [], { env: world.env });
+  if (found.error) throw new ScheduleError(`The repo's schedule store failed, so nothing moved to Paseo: ${found.error.message}`, 3, { code: 'store-failed' });
+  if (found.value) return found.value;
+  try { return paseoStore(world.env); } catch { return null; }
 }
 
-/** One list row: what it does, its state, where it runs, its next run, its last result, and whether it needs an OK. */
-function row(schedule, who, computer, env) {
-  return { key: schedule.key, name: schedule.name, kind: schedule.kind, host: schedule.host, state: schedule.ended ? 'ended' : schedule.state,
-    nextRunAt: iso(schedule.nextRunAt), lastRun: schedule.lastRun && { state: schedule.lastRun.state, result: schedule.lastRun.result, dueAt: iso(schedule.lastRun.dueAt) },
-    runsOn: schedule.computerName ?? null, ...approvalState(schedule, who, computer, env) };
-}
-
-/** The schedule as it would run here: a team copy with no folder runs in this primary checkout. */
-function localDefinition(schedule, primary) {
-  const def = heldDefinition(schedule);
-  return def.run.cwd ? def : { ...def, run: { ...def.run, cwd: primary } };
-}
-
-/** pause or resume: the app's routes, or the Paseo job of a schedule that still runs there. */
-async function control(command, key, world, client) {
-  try { return { schedule: (await send(client, command === 'run' ? 'run-now' : command, 'POST', { key })).schedule }; } catch (error) {
-    if (error.extra?.reason !== 'not_app' || command === 'run') throw error;
+async function run(command, values, args, world) {
+  const store = await findStore(world);
+  if (command === 'store') return { store: store?.name ?? 'off' };
+  if (!store) throw noStore(world, values.file);
+  const key = values.key ?? args[0];
+  if (!CORE.includes(command)) {
+    requireValue(store.extra, `Unknown schedule command ${command}.`);
+    return store.extra(command, values, args, world);
   }
-  const item = loadRecord(world.root, `schedules/${key}.json`), id = item.binding.execution.nativeId;
-  const receipt = validateReceipt(await (world.paseo ?? paseoAdapter({ env: world.env }))[command](id), { host: 'paseo', nativeId: id, action: command });
-  return { host: 'paseo', receipt };
-}
-
-const SIGN_IN = 'Default schedules wait: sign in to the company app (`D who` gives the link).';
-const notSetUp = each => each.state === 'failed' || each.state === 'refused';
-
-/** `defaults`: WongStack's default schedules for this person, added and approved here. A run that sets up every
- *  default marks the day done; an unattended one that fails, with no sign-in included, journals why. */
-async function defaults(values, world) {
-  const { root, primary, computer, env, email, list } = world;
-  const { defaultsDone, defaultsFailed, defaultsStamp, offFile, personSettings, stateOf } = await import('../../daily/scripts/daily.mjs');
-  const { config } = (world.settings ?? personSettings)({ repo: root });
-  requireValue(config, 'No daily settings and no sign-in: nothing to add the default schedules for.');
-  const stateDir = world.stateDir ?? stateOf(config, root);
-  // The run marks the stamp it applies, read with the off switch before it starts, not one that changed meanwhile.
-  const off = existsSync(offFile(stateDir)), stamp = defaultsStamp(stateDir, list, off);
-  const at = { stateDir, timezone: config.timezone, stamp };
-  if (values['dry-run']) return addDefaults({ root, primary, config, stateDir, client: null, computer, env, email, dryRun: true, list });
-  try {
-    let client;
-    try { client = await connect(world); approver(client, { email }); } catch (error) {
-      if (!values.unattended) throw error;
-      defaultsFailed({ ...at, reason: 'no_sign_in', line: SIGN_IN });
-      return { skipped: 'no_sign_in' };
-    }
-    const result = await addDefaults({ root, primary, config, stateDir, client, computer, env, email, list, off });
-    const failed = result.results.filter(notSetUp);
-    if (!failed.length) defaultsDone(at);
-    else if (values.unattended) defaultsFailed({ ...at, reason: failed.map(each => `${each.key ?? each.id}: ${each.reason}`).join('; ') });
-    return result;
-  } catch (error) {
-    if (!values.unattended) throw error;
-    defaultsFailed({ ...at, reason: error.message });
-    return { failed: error.message };
-  }
-}
-
-async function run(command, values, key, world) {
-  const { root, env } = world, primary = world.primary ?? primaryOf(root);
-  const computer = world.computer ?? computerId(env), email = world.email;
-  const options = { computer, env, email, ...(world.hostname ? { name: world.hostname } : {}) };
-  if (command === 'hosts') {
-    const app = await (world.appHost ?? appHost)({ service: () => helperService(env), client: () => connect(world) });
-    return { preferred: selectHost({ enclosing: 'paseo', available: [app, { name: 'paseo', supported: true }] }).name, app };
-  }
-  if (command === 'show' && values.file) {
-    const def = definition(JSON.parse(readFileSync(values.file, 'utf8')), { primary }), version = scheduleVersion(def);
-    return { key: def.key, version, text: shownText(def, version) };
-  }
-  if (command === 'move-in' || command === 'move') {
-    requireValue(command === 'move-in' || key, 'Name the schedule record to move.');
-    const me = (world.who ?? (await import('../../daily/scripts/daily.mjs')).who)({ repo: root });
-    const config = me.file ? (world.settings ?? (await import('../../daily/scripts/config.mjs')).loadSettings)(me.file, root) : null;
-    const client = values['dry-run'] ? null : await connect(world);
-    const note = world.note ?? (async line => {
-      const [{ stateOf }, { addLine }] = await Promise.all([import('../../daily/scripts/daily.mjs'), import('../../daily/scripts/journal.mjs')]);
-      if (config) addLine({ stateDir: stateOf(config, root), timezone: config.timezone, line, kind: 'move-in' });
-    });
-    return moveIn({ root, primary, me, config, records: listRecords(root), client, computer, env, email, paseo: world.paseo ?? paseoAdapter({ env }),
-      note, unattended: values.unattended, dryRun: values['dry-run'], keep: values.keep, drop: values.drop, only: command === 'move' ? `record:${key}` : null });
-  }
-  if (command === 'defaults') return defaults(values, { ...world, primary, computer, email });
-  const client = await connect(world);
-  if (['list', 'ls'].includes(command)) {
-    let listed;
-    try { listed = await send(client, 'schedules'); } catch (error) { throw error.code === 3 ? new ScheduleError(UNREACHABLE, 3) : error; }
-    let who = null;
-    try { who = approver(client, { email }); } catch { /* not signed in: no row counts as approved */ }
-    return { schedules: listed.schedules.map(schedule => row(schedule, who, computer, env)), computerOnline: listed.computerOnline };
-  }
-  if (command === 'mirror') {
-    const mirrored = await mirrorRound(client, { computer, root, list: () => listRecords(root), ...(world.paseo && { inspect: id => world.paseo.inspect(id) }), env });
-    if (mirrored === null) throw new ScheduleError('The app did not take the mirror.', 1);
-    return { mirrored };
-  }
+  if (['list', 'ls'].includes(command)) return store.list(world);
+  if (command === 'defaults') return store.defaults(values, world);
+  const raw = values.file ? JSON.parse(readFileSync(values.file, 'utf8')) : null;
+  if (command === 'show' && raw) return store.show(null, world, raw);
   if (command === 'save') {
-    const def = definition(JSON.parse(readFileSync(values.file, 'utf8')), { primary, team: Boolean(values.team) });
-    if (values.team) return saveDefinition(client, def, { team: values.team.split(',').map(each => each.trim()).filter(Boolean) });
-    requireValue(!values.version || values.version === scheduleVersion(def), 'The file differs from the version the person saw; show it again.');
-    const { version, schedule } = await saveDefinition(client, def, { computer });
-    return { key: def.key, version, ...(values.approve ? await approveHere(client, schedule, version, options) : { needsOk: true }) };
+    requireValue(raw, 'Save needs --file.');
+    return store.save(raw, { approve: values.approve, version: values.version, team: values.team }, world);
   }
   requireValue(key, 'Name a schedule key.');
-  if (command === 'finish') {
-    requireValue(values.run, 'A finish names its run.');
-    const progress = appProgress(client, key);
-    requireValue((await progress.read()).claim?.run === values.run, 'This run does not hold the schedule\'s progress.');
-    if (values.progress) await progress.write(values.run, JSON.parse(readFileSync(values.progress, 'utf8')));
-    const ended = values.done ? (await send(client, 'schedule-end', 'POST', { key, reason: values.done.slice(0, 300) })).schedule.ended : null;
-    return { key, run: values.run, released: !(await progress.release(values.run)), ...(ended ? { ended } : {}) };
+  if (command === 'inspect') return store.get(key, world);
+  if (command === 'show') return store.show(key, world);
+  if (command === 'approve') {
+    requireValue(values.version, 'Name the version the person approved, from show.');
+    return store.approve(key, values.version, world);
   }
-  if (command === 'end') {
-    requireValue(values.evidence, 'Ending a schedule needs the proof that its work is done, or the person\'s request.');
-    return send(client, 'schedule-end', 'POST', { key, reason: values.evidence.slice(0, 300) });
-  }
-  if (command === 'cancel') {
-    if (values.run) return send(client, 'run-cancel', 'POST', { id: values.run });
-    return send(client, 'schedule-end', 'POST', { key, reason: (values.evidence ?? 'Cancelled at the person\'s request.').slice(0, 300) });
-  }
-  if (['pause', 'resume', 'run'].includes(command)) return control(command, key, world, client);
-  const found = await readSchedule(client, key);
-  if (!found) throw new ScheduleError('The app has no schedule with this key.', 2);
-  if (command === 'inspect') {
-    let who = null;
-    try { who = approver(client, { email }); } catch { /* shown as needing an OK */ }
-    return { schedule: found.schedule, runs: found.runs, approval: approvalState(found.schedule, who, computer, env) };
-  }
-  const def = localDefinition(found.schedule, primary), version = scheduleVersion(def);
-  if (command === 'show') return { key, version, text: shownText(def, version), ...(version !== found.schedule.version ? { binds: primary } : {}) };
-  // approve: the version the person saw, saved first when this computer fills in a team copy's folder.
-  requireValue(values.version, 'Name the version the person approved, from show.');
-  if (version !== values.version) throw new ScheduleError('The schedule changed since it was shown; show it again.', 1, { reason: 'changed' });
-  requireValue(!found.schedule.computer || found.schedule.computer === computer, `This schedule runs on ${found.schedule.computerName ?? 'another computer'}; approve it there.`);
-  const schedule = version === found.schedule.version ? found.schedule : (await saveDefinition(client, def, { computer })).schedule;
-  return { key, version, ...(await approveHere(client, schedule, version, options)) };
+  return store.control(command, key, values, world);
 }
 
 export async function main(argv = process.argv.slice(2), world = {}) {
@@ -177,19 +71,10 @@ export async function main(argv = process.argv.slice(2), world = {}) {
       drop: { type: 'string', multiple: true }, resources: { type: 'string' }, help: { type: 'boolean' },
     } });
     if (values.help) { world.out(`${USAGE}\n`); return 0; }
-    const [command = 'list', action, nativeId] = positionals;
+    const [command = 'list', ...args] = positionals;
     world = { ...world, root: values.root ?? world.root };
-    requireValue(COMMANDS.includes(command), `Unknown schedule command ${command}.`);
-    let result;
-    if (command === 'legacy') {
-      const context = world.legacyContext ?? legacyContext(world.root, world.env);
-      if (action === 'teardown') result = await teardownLegacy(context, values.resources?.split(','), world);
-      else {
-        const host = legacyAdapter(context, world);
-        requireValue(['list', 'inspect', 'pause', 'resume', 'cancel'].includes(action), 'Legacy supports only list/inspect/pause/resume/cancel/explicit teardown.');
-        result = action === 'list' ? await host.list() : await host[action](nativeId);
-      }
-    } else result = await run(command, values, values.key ?? action, world);
+    world.primary ??= primaryOf(world.root);
+    const result = await run(command, values, args, world);
     world.out(`${JSON.stringify({ ok: true, ...result }, null, 2)}\n`); return 0;
   } catch (error) {
     const code = error instanceof ScheduleError ? error.code : String(error.code).startsWith('ERR_PARSE_ARGS') ? 2 : 1;

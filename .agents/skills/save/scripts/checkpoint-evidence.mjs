@@ -3,7 +3,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
-import { isMain } from '../../memory/scripts/lib/cli.mjs';
+import { isMain } from '../../loop/scripts/lib/cli.mjs';
 
 const USAGE = 'usage: checkpoint-evidence.mjs (active|archive [ref] | --json) [--repo DIR] [--ref REF] [--base REF] [--changes-dir DIR] [--branch NAME]';
 const usageError = message => Object.assign(new Error(message), { usage: true });

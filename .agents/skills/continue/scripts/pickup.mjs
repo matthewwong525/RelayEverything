@@ -3,7 +3,7 @@
 // anyone can type any email. It runs only git, from this trusted copy, so nothing from the branch runs before the yes.
 
 import { execFileSync } from 'node:child_process';
-import { isMain, parseCli } from '../../memory/scripts/lib/cli.mjs';
+import { isMain, parseCli } from '../../loop/scripts/lib/cli.mjs';
 
 const USAGE = `usage: pickup.mjs <branch> [--reviewed <commit>] [--dry-run]
   Fetches the branch, then switches to it when every commit on it is known here. Otherwise it switches nothing

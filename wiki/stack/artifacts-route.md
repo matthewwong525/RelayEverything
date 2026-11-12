@@ -71,17 +71,17 @@ A result that can not be read is **unverified**: a save reports it and carries o
   - `RECEIPT=none`: the saved-revision receipt is not written, so `/verify` reads the gate again with the waiter.
   - `SAVE_HEAD=`, `PREVIEW_URL=`, `ATTEMPT=`, `NEXT:` and `SAVE_GATE_RESULT=` are as on GitHub, and the three-fix count too.
 - **`/ship`.** [`ship.mjs`](../../.agents/skills/ship/scripts/ship.mjs) runs both halves on both routes, and here it calls no `gh`:
-  - `prepare` fetches `main`, then reads its checks with `node .claude/skills/save/scripts/artifacts-run.mjs result "$(git rev-parse origin/main)" refs/heads/main`. `SUCCESS` or `NONE` is `ok`, `FAILURE` stops, and anything else is unverified and stops, a run still going included. `INTERRUPTED` is [restarted](#a-run-that-was-cut-off) and waited for once; a second stops.
-  - `finish` runs [`merge.sh`](../../.agents/skills/ship/scripts/merge.sh), which hands over to [`publish-artifacts.sh`](../../.agents/skills/ship/scripts/publish-artifacts.sh); that prints `merged=`, `commit=` and `main=`. `finish` gives [`live-look.sh`](../../.agents/skills/ship/scripts/live-look.sh) the `commit=` value, not a pull request's merge commit.
+  - `prepare` fetches `main`, then reads its checks with `node .claude/loop/routes/artifacts-run.mjs result "$(git rev-parse origin/main)" refs/heads/main`. `SUCCESS` or `NONE` is `ok`, `FAILURE` stops, and anything else is unverified and stops, a run still going included. `INTERRUPTED` is [restarted](#a-run-that-was-cut-off) and waited for once; a second stops.
+  - `finish` runs [`merge.sh`](../../.agents/skills/ship/scripts/merge.sh), which hands over to [`publish-artifacts.sh`](../../.agents/loop/routes/publish-artifacts.sh); that prints `merged=`, `commit=` and `main=`. `finish` gives [`live-look.sh`](../../.agents/loop/staging/live-look.sh) the `commit=` value, not a pull request's merge commit.
   - `moved=yes` → `main` moved and nothing was published. `NEXT:` says to bring `main` in with `prepare --sync`, `/save`, and run `finish` again on `SUCCESS` or `NONE`.
   - Exit 3 → the change is on `main`, but `main` is red, unread, or cut off. `finish` skips the live look, and `NEXT:` says to report it and stop, never to push again. `main=INTERRUPTED` → `NEXT:` gives the [restart](#a-run-that-was-cut-off) first.
-- **`/continue`.** A handle is a change name. With none, [`other-work.mjs`](../../.agents/skills/explore/scripts/other-work.mjs) lists `savedBranches`: each remote branch holding an unarchived change, with its Status. The drift check counts commits only.
+- **`/continue`.** A handle is a change name. With none, [`other-work.mjs`](../../.agents/loop/other-work.mjs) lists `savedBranches`: each remote branch holding an unarchived change, with its Status. The drift check counts commits only.
 - **`/apply`** previews from this host as on GitHub.
 - **Reports** name the preview, never *the change on GitHub*.
 
 ## Renewing access
 
-Git reaches the repository with a token that lasts a day. [`artifacts-credential.mjs`](../../.agents/skills/save/scripts/artifacts-credential.mjs), a Git credential helper, makes a new one when Git asks, from `CLOUDFLARE_API_TOKEN` in [the primary worktree's `.env`](../development/secrets.md). Nobody is asked. The token is kept in a private file under `~/.local/state/wongstack/`, never in the repository, its address, or a command.
+Git reaches the repository with a token that lasts a day. [`artifacts-credential.mjs`](../../.agents/loop/routes/artifacts-credential.mjs), a Git credential helper, makes a new one when Git asks, from `CLOUDFLARE_API_TOKEN` in [the primary worktree's `.env`](../development/secrets.md). Nobody is asked. The token is kept in a private file under `~/.local/state/wongstack/`, never in the repository, its address, or a command.
 
 **A second computer of yours.** Put the Cloudflare token in an `.env` there, clone once with a token made by hand, then let the helper take over:
 
@@ -91,7 +91,7 @@ TOKEN=$(curl -s -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Con
   --data '{"repo":"<repo>","scope":"read","ttl":600}' \
   "https://api.cloudflare.com/client/v4/accounts/<account id>/artifacts/namespaces/wongstack/tokens" | jq -r .result.plaintext)
 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraHeader GIT_CONFIG_VALUE_0="Authorization: Bearer $TOKEN" git clone "$REMOTE"
-node <repo>/.claude/skills/save/scripts/artifacts-credential.mjs install <repo>
+node <repo>/.claude/loop/routes/artifacts-credential.mjs install <repo>
 ```
 
 ## The check runner
@@ -109,11 +109,11 @@ The bounds: one run at a time for the repository, a later run waiting its turn; 
 Cloudflare sometimes stops a container mid-stage. That is the Sandbox's doing, not the commit's, so the run is **cut off**, never failed:
 
 - **A long output hides the ending.** The Sandbox keeps only the end of a long output, under `[diagnostic truncated]`, and can lose the line holding the exit code; the runner reads that as cut off too ([`pipeline.mjs`](../../scripts/check-runner/pipeline.mjs)).
-- **A finished run can carry an error flag.** Cloudflare can answer a finished Workflow run with its whole result and an error flag beside it, when one step's detail fails to load. The run's own result stands ([`artifacts-run.mjs`](../../.agents/skills/save/scripts/artifacts-run.mjs)).
+- **A finished run can carry an error flag.** Cloudflare can answer a finished Workflow run with its whole result and an error flag beside it, when one step's detail fails to load. The run's own result stands ([`artifacts-run.mjs`](../../.agents/loop/routes/artifacts-run.mjs)).
 - **The runner tries again by itself.** A cut-off stage is started again, up to three times a run, shared by its stages. A command's own failure or a timeout is never retried.
 - **Still cut off → its own result.** The run ends `interrupted` with its stage. `/save` reports `RESULT: UNKNOWN` with *the check run was cut off* and carries on; a publish stops. A run that never got its turn, and a Workflow that errored or was terminated, read the same way.
 - **The waiter starts it again once.** `artifacts-run.mjs wait` and `live` restart an interrupted run one time, then wait inside the same limit.
-- **You can start it again by hand**: `node .claude/skills/save/scripts/artifacts-run.mjs restart <sha> <ref>`. It restarts that same run, so its result still belongs to the one commit and branch. Never push an empty commit to get a new run: on `main` that moves `main` under a pending publish.
+- **You can start it again by hand**: `node .claude/loop/routes/artifacts-run.mjs restart <sha> <ref>`. It restarts that same run, so its result still belongs to the one commit and branch. Never push an empty commit to get a new run: on `main` that moves `main` under a pending publish.
 - **A failed check is never restarted.** `restart` refuses a run that failed, finished, or is still going, and the failure stands.
 
 The runner's Node is the container image's, not [`.nvmrc`](../../.nvmrc)'s: the public Sandbox image at the SDK's version ships Node 24.

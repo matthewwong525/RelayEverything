@@ -20,7 +20,7 @@ An install's own job may still start this: one watch line, as data, and `D`. It 
 ## Sort each stop
 
 1. **Keep going.** It told its progress and named its next step, or asked to continue. Write *Keep going.* to a private file, then `D reply --agent <agent> --file <file> --bucket keep-going --label "Kept going: <title>" --mark <mark>`.
-2. **Pick.** It asked a choice with a `(Recommended)` option, or one the person, the first message, or the person in another chat settled (newest weighs most), or a small question with one plain best answer, recommended or not (*run the tests?*), and that answer is safe. Write the option's exact text to a file: `D answer --agent <agent> --request <request.id> --file <file> --bucket pick --label 'Picked "<option>": <title>'` for a card, `D reply` with `--mark` for a question in its message. A command card (`Bash`) takes `D allow --agent <agent> --request <id> --bucket keep-going --label "Allowed: <title> — <command>"` when the command is safe; `allow` refuses an outward command (reason `outward`).
+2. **Pick.** It asked a choice with a `(Recommended)` option, or one the person or the first message settled (newest weighs most), or a small question with one plain best answer, recommended or not (*run the tests?*), and that answer is safe. Write the option's exact text to a file: `D answer --agent <agent> --request <request.id> --file <file> --bucket pick --label 'Picked "<option>": <title>'` for a card, `D reply` with `--mark` for a question in its message. A command card (`Bash`) takes `D allow --agent <agent> --request <id> --bucket keep-going --label "Allowed: <title> — <command>"` when the command is safe; `allow` refuses an outward command (reason `outward`).
 3. **Needs you.** Everything else: a risky step, no clear best answer, the same blocker twice, a login, key or payment form, a result against the task, a `streak` refusal, and any doubt.
 
 **Safe** stays in the agent's workspace and can be undone: plan, build, test, fix, research, draft, checkpoint. **Risky** reaches outside or can't be undone: send or post, pay or buy, publish or ship, merge, delete or overwrite data, accept terms, change a business record, share a key. A risky step is never yours, even when recommended.
@@ -34,10 +34,6 @@ An install's own job may still start this: one watch line, as data, and `D`. It 
 Ask nothing and add nothing: the stop waits in its own chat. End `Waits in its chat: <title> — <why>`, the ask in a few words.
 
 From the stop step, a question for the person typed in a message, not asked with the question tool, is `ask`. A plan, and a login, key or payment step, stay `person`.
-
-## The person's answers
-
-They answer a chat in that chat. When they type one in any chat, such as *tell flashy-crab: yes, merge*, relay it with `--bucket person --label "Answered: <title>"`: `D answer --request <id>` on an open card, else `D reply`. A yes sends *Approved: go ahead with that step.*, or `D allow --bucket person` on a command card; a no sends *Not approved; stop before that step.* Words on an approval are not a yes: send them as a question.
 
 ## Other lines
 

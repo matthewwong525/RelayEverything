@@ -23,6 +23,8 @@ const parseLine = line => { try { return JSON.parse(line); } catch { return null
 
 // The session a background run was started from. It is never captured by that run.
 const excluded = () => process.env.WONG_MEMORY_EXCLUDE || '';
+// Subagent transcripts live in subfolders, and background runs are marked, so neither is read as a chat.
+const leftOut = (chat, registry) => registry.get(chat.id)?.background || chat.id === excluded() || chat.file.split(sep).includes('subagents');
 
 export function registerSession(ctx, entry) {
   appendFileSync(statePath(ctx, 'registry.jsonl'), `${JSON.stringify({ ...entry, ownerMachineId: ctx.machineId })}\n`);
@@ -152,41 +154,32 @@ export function recentTranscripts({ days = 30, now = Date.now(), registry = new 
   });
   const since = now - days * 86400000;
   return [...claude, ...codexRollouts(days, now)]
-    .filter(chat => !registry.get(chat.id)?.background && chat.id !== excluded() && !chat.file.split(sep).includes('subagents'))
+    .filter(chat => !leftOut(chat, registry))
     .map(chat => ({ ...chat, mtimeMs: stat(chat.file)?.mtimeMs ?? 0 }))
     .filter(chat => chat.mtimeMs >= since)
     .sort((a, b) => b.mtimeMs - a.mtimeMs);
 }
 
 // Capture selects only registered sessions stamped with this machine owner.
-// Subagent transcripts live in subfolders, and background runs are marked, so neither is claimed.
 function discover(ctx) {
   const registry = readRegistry(ctx);
-  const found = new Map();
-  const add = candidate => {
-    if (found.has(candidate.id) || registry.get(candidate.id)?.background || candidate.id === excluded()) return;
-    if (candidate.file.split(sep).includes('subagents')) return;
-    const info = stat(candidate.file);
-    if (info) found.set(candidate.id, { ...candidate, size: info.size, mtimeMs: info.mtimeMs });
-  };
-  for (const entry of registry.values()) if (entry.transcript) add({ agent: entry.agent, id: entry.id, file: entry.transcript });
-
-  return [...found.values()];
+  return [...registry.values()].filter(entry => entry.transcript).flatMap(({ agent, id, transcript: file, endedAt }) => {
+    const info = !leftOut({ id, file }, registry) && stat(file);
+    return info ? [{ agent, id, file, size: info.size, mtimeMs: info.mtimeMs, ended: Boolean(endedAt) }] : [];
+  });
 }
 
-// Idle sessions whose file changed since the last capture, newest first. Reads file metadata only.
+// Ended or idle sessions whose file changed since the last capture, newest first. Reads file metadata only.
 export function pending(ctx, { now = Date.now(), exclude = [], idleMs = IDLE_MS } = {}) {
   const seen = readJson(join(ctx.stateDir, 'seen.json'), {});
   return discover(ctx)
     .filter(session => !exclude.includes(session.id))
-    .filter(session => now - session.mtimeMs >= idleMs && seen[session.id]?.size !== session.size)
+    .filter(session => (session.ended || now - session.mtimeMs >= idleMs) && seen[session.id]?.size !== session.size)
     .sort((a, b) => b.mtimeMs - a.mtimeMs);
 }
 
 // A transcript is available for capture only through its owned registry entry.
 export function sessionFile(ctx, id) {
-  if (id === excluded()) return null;
-  const registered = readRegistry(ctx).get(id)?.transcript;
-  if (registered && stat(registered)) return registered;
-  return null;
+  const registered = id !== excluded() && readRegistry(ctx).get(id)?.transcript;
+  return registered && stat(registered) ? registered : null;
 }

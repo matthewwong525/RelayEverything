@@ -1,12 +1,12 @@
 import { expect, it, vi } from "vitest";
-import type { AccessIdentity } from "./access";
+import type { AccessIdentity } from "./access-slots";
 import { ANA, directoryDb, env, matthew, NOW, owner, phone, request, rows, type Who } from "../tests/relay";
 import { fixture, inboxEnv, mailTo } from "../tests/relay-inbox";
 import { hold, KEEP_MS } from "./apps/relay/inbox/held";
 import { addressOf } from "./apps/relay/inbox/links";
 
 const who = vi.hoisted(() => ({ current: null as AccessIdentity | null }));
-vi.mock("./access.ts", async (original) => ({ ...await original<object>(), getAccessIdentity: async () => who.current }));
+vi.mock("./access-slots.ts", async (original) => ({ ...await original<object>(), getAccessIdentity: async () => who.current }));
 const { default: worker } = await import("./relay-only");
 // A test sends a plain Request, which has no Cloudflare edge properties.
 const fetch = worker.fetch as (request: Request, env: object) => Promise<Response>;

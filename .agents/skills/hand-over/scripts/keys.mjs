@@ -1,25 +1,18 @@
 // The key link's routes, mounted by `hand-over.mjs open --keys`, which checks the key and the guide first.
 // Nothing here logs, and no value reaches argv, env, or any file but the live ones: only a check's own address.
 
+import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import { ENTRY, isIgnored, loadBase } from '../../ship/scripts/worktree-secrets.mjs';
+import { slot } from '../../browser/scripts/lib/profile.mjs';
 
 export const LIMITS = { names: 20, body: 16 * 1024, value: 4096, hint: 200, title: 40, why: 140, steps: 6, step: 140 };
 const CHECK_TIMEOUT_MS = 8000;
 export const KEY_ROUTES = new Set(['/keys', '/save', '/continue', '/done']);
 export const NAME = /^[A-Z_][A-Z0-9_]*$/;
-/** Where each example file's names are written. */
-export const DESTINATIONS = [
-  { example: '.env.example', live: '.env' },
-  { example: 'app/.dev.vars.example', live: 'app/.dev.vars' },
-];
-/** The Worker's own file: a key saved here reaches the live app through `npm run secrets:push`. */
-export const APP_FILE = 'app/.dev.vars';
-/** A tool's key added from a chat, as `scripts/lib-staging-secrets.mjs` names it: no example file declares it, and
- * `secrets:push` sends it to the live app alone. */
-export const TOOL_KEY = /^TOOL_[A-Z][A-Z0-9_]*$/;
+/** One line of a dotenv file: its name, then its value. */
+export const ENTRY = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/;
 // Written bare, a value of only these reads back unchanged in dotenv, wrangler, the memory parser, and a
 // shell's `source`; `~` is left out, since a shell expands it.
 const BARE = /^[A-Za-z0-9_\-.:/+=@]+$/;
@@ -55,29 +48,37 @@ function hasValue(file, name) {
   });
 }
 
-/** The branch copy of `rel` in a linked worktree, or null when `seed` never recorded one. */
-function branchCopy(ctx, rel) {
-  if (!ctx.linked) return null;
+/** True when Git ignores `rel` in the checkout at `root`. */
+export function isIgnored(root, rel) {
   try {
-    return loadBase(ctx)?.files?.[rel] ? join(ctx.root, rel) : null;
+    execFileSync('git', ['check-ignore', '-q', rel], { cwd: root, stdio: 'ignore' });
+    return true;
   } catch {
-    return null;
+    return false;
   }
 }
 
-/** Where each name goes, from the active checkout's example files; an undeclared tool's key goes to the app's file.
- * The link opens only when `undeclared`, `ambiguous`, and `unignored` are empty. `ctx` is primary-root.mjs's result. */
-export function resolveKeys(names, ctx) {
-  const declared = DESTINATIONS.map(destination => ({ ...destination, names: declarations(readText(join(ctx.root, destination.example))) }));
+/** The files a key may go to, from the profile's `keyFiles(ctx)` slot: each `{ file, names?, app?, copy? }`, where
+ * `names(name)` gives a name's hint, or null for one the file does not take. Empty, the top `.env` takes any name. */
+export async function keyFiles(ctx) {
+  const files = await slot('keyFiles');
+  return files ? files(ctx) : [{ file: '.env' }];
+}
+
+/** Where each name goes: the one file of `files` that takes it. The link opens only when `undeclared`, `ambiguous`,
+ * and `unignored` are empty. `ctx` is primary-root.mjs's result. */
+export function resolveKeys(names, ctx, files) {
   const keys = [];
   const undeclared = [];
   const ambiguous = [];
   for (const name of names) {
-    const where = declared.filter(destination => destination.names.has(name));
-    if (!where.length && TOOL_KEY.test(name)) keys.push({ name, file: APP_FILE, hint: 'The key for a tool added from a chat.' });
-    else if (!where.length) undeclared.push(name);
+    const where = files.map(entry => ({ entry, hint: entry.names ? entry.names(name) : '' })).filter(found => found.hint != null);
+    if (!where.length) undeclared.push(name);
     else if (where.length > 1) ambiguous.push(name);
-    else keys.push({ name, file: where[0].live, hint: where[0].names.get(name) });
+    else {
+      const [{ entry: { file, app, copy }, hint }] = where;
+      keys.push({ name, file, hint, ...(app && { app: true }), ...(copy && { copy }) });
+    }
   }
   const roots = ctx.linked ? [ctx.primary, ctx.root] : [ctx.primary];
   const unignored = [...new Set(keys.map(key => key.file))].flatMap(file => roots
@@ -88,8 +89,7 @@ export function resolveKeys(names, ctx) {
 
 /** The page's list: each key's name, hint, whether a value is set now, and its guide, the test as its host alone. */
 export function describeKeys(config) {
-  return config.keys.map(({ name, file, hint, guide }) => {
-    const copy = branchCopy(config, file);
+  return config.keys.map(({ name, file, hint, guide, copy }) => {
     const { check, ...shown } = guide ?? {};
     return { name, hint, set: hasValue(join(config.primary, file), name) || Boolean(copy && hasValue(copy, name)), ...shown, ...(check && { checkHost: new URL(check.url).host }) };
   });
@@ -221,11 +221,10 @@ export function setKey(path, name, line) {
   }
 }
 
-/** Writes one key's line to the primary worktree's file and any seeded branch copy; false when it can't. */
-function writeKey(config, { name, file }, line) {
+/** Writes one key's line to the primary worktree's file and any copy its key file names; false when it can't. */
+function writeKey(config, { name, file, copy }, line) {
   try {
     setKey(join(config.primary, file), name, line);
-    const copy = branchCopy(config, file);
     if (copy) setKey(copy, name, line);
     return true;
   } catch {

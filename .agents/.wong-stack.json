@@ -1,6 +1,6 @@
 {
-  "version": "51.10.0",
-  "commit": "16a0af7ed5b6a02c1f629e2bc0b06e1c58e9fb21",
+  "version": "55.2.1",
+  "commit": "a282a4a936bc3b02b671682822bacfe82c255be1",
   "upstream": {
     "repo": "https://github.com/matthewwong525/WongStack",
     "clone": "/root/.cache/wong-stack/WongStack"
@@ -14,7 +14,6 @@
       "continue",
       "ship",
       "close",
-      "dream-memory",
       "verify",
       "hand-over",
       "browser",
@@ -23,11 +22,12 @@
       "schedule",
       "daily",
       "connect",
-      "services",
       "lesson",
       "memory",
       "wong-sync",
-      "agent-browser"
+      "agent-browser",
+      "reply-link",
+      "access"
     ],
     "access": {
       "teamDomain": "startuptemplate.cloudflareaccess.com",

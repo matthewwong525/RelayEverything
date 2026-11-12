@@ -5,18 +5,16 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isMain, parseCli } from '../../memory/scripts/lib/cli.mjs';
-import { appOrigin, ARTIFACTS_HOST, originHost } from './delivery-route.mjs';
+import { isMain, parseCli } from '../../loop/scripts/lib/cli.mjs';
+import { slot } from '../../loop/scripts/slot.mjs';
 
 const SHA = /^[a-f0-9]{40}$/;
 const unknown = reason => ({ state: 'UNKNOWN', gateResult: 'UNKNOWN', reason });
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const githubRepo = remote => remote.match(/^(?:https:\/\/github\.com\/|git@github\.com:)([\w.-]+\/[\w.-]+?)(?:\.git)?$/)?.[1];
-// An Artifacts install has no pull request: its gate is the check run named for the commit and branch.
-const RUN = join(dirname(fileURLToPath(import.meta.url)), 'artifacts-run.mjs');
-// A copy installed through the app is named by that address; app-change.mjs reads its head and gate there.
-const APP = join(dirname(fileURLToPath(import.meta.url)), 'app-change.mjs');
-const artifactsRepo = remote => { try { return ARTIFACTS_HOST.test(originHost(remote) ?? '') ? remote : undefined; } catch { return undefined; } };
+// A route the profile names for this address, such as WongStack's Artifacts or app copy, has no pull request:
+// its own script reads the saved head and the gate for the exact commit, through delivery-route.mjs's `run`.
+const ROUTE = join(dirname(fileURLToPath(import.meta.url)), 'delivery-route.mjs');
 const failure = value => ['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure', 'error'].includes(value);
 
 // Keep the newest attempt for each workflow/event; old green runs cannot hide a rerun.
@@ -52,22 +50,22 @@ export async function savedRevision({ repo = '.', branch, checkpoint, run } = {}
     const local = { headSha, branch: actualBranch };
     if (git('status', '--porcelain=v1', '--untracked-files=all')) return { ...local, state: 'NEEDS_SAVE', gateResult: 'UNKNOWN', reason: 'Working tree has unsaved work' };
     const remote = git('remote', 'get-url', 'origin');
-    const artifacts = artifactsRepo(remote);
-    const app = appOrigin(remote);
-    const repository = app ? remote : githubRepo(remote) ?? artifacts;
+    const named = await slot('route', { origin: remote }, dir);
+    const route = named.empty || ['github', 'local'].includes(named.value) ? undefined : named.value;
+    const repository = route ? remote : githubRepo(remote);
     if (!repository) return unknown('Unsupported or foreign repository identity');
     if (checkpoint && (checkpoint.repository !== repository || checkpoint.branch !== actualBranch || checkpoint.headSha !== headSha)) return unknown('Checkpoint belongs to different work');
-    const refs = app ? run('node', [APP, 'heads', `refs/heads/${actualBranch}`]) : git('ls-remote', '--heads', 'origin', `refs/heads/${actualBranch}`);
+    const refs = route ? run('node', [ROUTE, 'run', route, 'heads', `refs/heads/${actualBranch}`]) : git('ls-remote', '--heads', 'origin', `refs/heads/${actualBranch}`);
     const ref = refs.split(/\s+/);
     const remoteHead = ref.length === 2 && ref[1] === `refs/heads/${actualBranch}` && SHA.test(ref[0]) ? ref[0] : undefined;
     if (!refs) return { ...local, repository, state: 'NEEDS_SAVE', gateResult: 'UNKNOWN', reason: 'Branch has not been pushed' };
     if (!remoteHead) return unknown('Authoritative remote head is malformed');
     if (remoteHead !== headSha) return { ...local, repository, state: 'NEEDS_SAVE', gateResult: 'UNKNOWN', reason: 'Local head is not the saved remote head' };
-    if (artifacts || app) {
-      const word = run('node', [app ? APP : RUN, 'result', headSha, `refs/heads/${actualBranch}`]);
+    if (route) {
+      const word = run('node', [ROUTE, 'run', route, 'result', headSha, `refs/heads/${actualBranch}`]);
       const gateResult = ['SUCCESS', 'NONE', 'FAILURE'].includes(word) ? word : 'UNKNOWN';
       return { ...local, repository, state: 'SAVED', gateIdentity: hash({ run: [headSha, actualBranch, word] }), gateResult, reused: false,
-        reason: app ? 'Read through the app for this exact commit' : 'Read from the check run for this exact commit' };
+        reason: route === 'app' ? 'Read through the app for this exact commit' : 'Read from the check run for this exact commit' };
     }
     if (gh('repo', 'view', '--json', 'nameWithOwner').nameWithOwner !== repository) return unknown('GitHub repository differs from origin');
     const pr = gh('pr', 'view', '--json', 'number,headRefOid,headRefName,statusCheckRollup');

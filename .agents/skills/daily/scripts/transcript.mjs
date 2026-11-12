@@ -1,6 +1,6 @@
 // A chat's transcript as the daily reads it, Claude Code or Codex: every readable message, and the person's own.
 import { closeSync, openSync, readFileSync, readSync, statSync } from 'node:fs';
-import { parseTranscriptText } from '../../memory/scripts/lib/transcripts.mjs';
+import { parseTranscriptText } from './lib/transcripts.mjs';
 
 // Another chat's message sent through Paseo: an agent's words, not the person's.
 const AGENT_MESSAGE = /^<paseo-system\b[^>]*\bkind="agent-message"/;

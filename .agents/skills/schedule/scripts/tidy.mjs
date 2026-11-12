@@ -10,9 +10,9 @@ import {
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isMain } from '../../memory/scripts/lib/cli.mjs';
-import { primaryRoot, PrimaryRootError } from '../../memory/scripts/lib/primary-root.mjs';
-import { EXIT, PaseoError, findPaseo, git, paseo, parseCommand } from './lib/paseo.mjs';
+import { isMain } from '../../daily/scripts/lib/cli.mjs';
+import { primaryRoot, PrimaryRootError } from '../../daily/scripts/lib/primary-root.mjs';
+import { EXIT, PaseoError, findPaseo, git, paseo, parseCommand } from '../../daily/scripts/lib/paseo.mjs';
 
 const USAGE = `usage: tidy.mjs scratch [--dry-run]         make .scratch/ here and print its path
        tidy.mjs close [--discard] [--dry-run] close this workspace once this reply ends;

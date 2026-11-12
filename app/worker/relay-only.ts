@@ -1,7 +1,7 @@
 // The Relay Everything server: the shared server at app.relayeverything.com, and the Worker a person installs in their
 // own account. Relay Everything's routes, page, sign-in and webhooks, and none of WongStack's. app/self-host/SETUP.md
 import { dispatch } from "./api/contract.ts";
-import { getAccessIdentity, type AccessEnv } from "./access.ts";
+import { getAccessIdentity, type AccessEnv } from "./access-slots.ts";
 import type { AppEnv } from "./apps/index.ts";
 import { queues, routes } from "./apps/relay/api.ts";
 import { relayGate } from "./apps/relay/caller.ts";
@@ -20,15 +20,15 @@ const RELAY_API = /^\/apps\/relay\/api(?:\/(.*))?$/;
 type ServerEnv = AppEnv & AccessEnv & SignInEnv & InboxEnv & { RELAY_SIGN_IN?: string };
 
 /** Relay Everything's API, or null for an address that is not its. Each route opens only its caller's space, so the
- *  company's sign-in policy has no part here: without the owner email it reads as an older install's, which admits. */
+ *  company's sign-in policy has no part here: as an open install with no owner, it admits a call with no person. */
 function relayRoute(request: Request, env: ServerEnv, url: URL, identity: Awaited<ReturnType<typeof getAccessIdentity>>) {
   const match = RELAY_API.exec(url.pathname);
   if (!match) return null;
   const route = match[1] ?? "";
   const handler = routes.get(`${request.method} ${route}`);
   if (!handler) return Response.json({ error: "Not found" }, { status: 404 });
-  const { WONG_OWNER_EMAIL: _owner, ...rest } = env;
-  return dispatch(handler, request, rest as AppEnv, { url, route, identity }, { apps: ["relay"] });
+  const { WONG_OWNER_EMAIL: _owner, CF_ACCESS_TEAM_DOMAIN: _team, CF_ACCESS_AUD: _aud, ...rest } = env;
+  return dispatch(handler, request, { ...rest, WORKSPACE_LOGIN: "off" } as AppEnv, { url, route, identity }, { apps: ["relay"] });
 }
 
 export default {

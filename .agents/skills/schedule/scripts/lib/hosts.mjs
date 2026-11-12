@@ -1,8 +1,13 @@
 // Host receipts and the Paseo adapter, kept to read, pause and remove the schedules Paseo still runs; and the first
 // message a scheduled chat opens with. Paseo uses only the public installed CLI.
-import { mayDo } from './app.mjs';
-import { findPaseo, paseo } from './paseo.mjs';
+import { findPaseo, paseo } from '../../../daily/scripts/lib/paseo.mjs';
 import { credentialFree, requireValue, ScheduleError } from './records.mjs';
+
+/** What a schedule may do, in the words the person approved. */
+export function mayDo(authority = {}) {
+  const leave = authority.actions?.length ? authority.actions.join(', ') : 'read and draft only';
+  return `${leave}${authority.minIntervalMs ? `, at most once each ${Math.round(authority.minIntervalMs / 60000)} minutes` : ''}`;
+}
 
 export function selectHost({ preferred, enclosing, available = [], model: _model }) {
   // The app host wins whenever it answers: its runs survive this chat and show on the person's page.

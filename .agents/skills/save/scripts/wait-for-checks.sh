@@ -73,20 +73,16 @@ err_or() {
 }
 
 # ── An Artifacts install has no pull request ──────────────────────────────────
-# Its checks run in the person's own Cloudflare account. artifacts-run.mjs reads
+# Its checks run in the person's own Cloudflare account. Its route script reads
 # the run named for the exact local HEAD and prints the same RESULT lines. A
 # route that can not be told is UNKNOWN, never a guess
 # (wiki/stack/artifacts-route.md).
-SCRIPTS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+SCRIPTS=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 ROUTE=$(node "$SCRIPTS/delivery-route.mjs" 2>"$ERR_FILE") || unknown "$(err_or 'the delivery route could not be told')"
-if [ "$ROUTE" = artifacts ]; then
-  node "$SCRIPTS/artifacts-run.mjs" wait "$MAX_MIN"
-  exit 0
-fi
-# A copy installed through Connect your assistant has no gh: the app reads the
-# checks, and app-change.mjs keeps the waiting rules below over what it answers.
-if [ "$ROUTE" = app ]; then
-  node "$SCRIPTS/app-change.mjs" wait "$MAX_MIN"
+# A copy installed through Connect your assistant has no gh either: the app reads
+# the checks. Each such route is the project's own, run through its profile.
+if [ "$ROUTE" != github ] && [ "$ROUTE" != local ]; then
+  node "$SCRIPTS/delivery-route.mjs" run "$ROUTE" wait "$MAX_MIN"
   exit 0
 fi
 

@@ -167,8 +167,11 @@ bool modelShows(Relay relay) => relay.speechModel == ModelState.downloading || r
 Widget modelSliver(Relay relay) =>
   SliverPadding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 0), sliver: SliverToBoxAdapter(child: ModelCard(relay: relay)));
 
-/// [notes] that hold [query], grouped by day, or a line that says none does. A tap opens a note, whose back button
-/// says [back], or calls [onOpen]. The [selected] note's row shows it is open.
+/// The part at the top of the notes list that holds the pinned notes; also its name in [Relay.folded].
+const pinnedPart = 'Pinned';
+
+/// [notes] that hold [query]: the pinned ones in [pinnedPart], which folds, and the rest grouped by day, or a line that
+/// says none does. A tap opens a note, whose back button says [back], or calls [onOpen]. The [selected] row shows it is open.
 Widget noteSliver(BuildContext context, Relay relay, List<Entry> notes, String query,
   {required String back, FilesPicker? picker, Sharer? sharer, Opener? opener, NoteOpener? onOpen, String? selected}) {
   final shown = [for (final entry in notes) if (entryMatches(entry, query)) entry];
@@ -176,16 +179,18 @@ Widget noteSliver(BuildContext context, Relay relay, List<Entry> notes, String q
     return SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(32), child: Text('No notes with "${query.trim()}"',
       textAlign: TextAlign.center, style: TextStyle(color: brandOf(context).muted))));
   }
+  Widget row(Entry entry) => _NoteRow(entry: entry, relay: relay, selected: selected != null && entry.id == selected,
+    onTap: () => onOpen != null ? onOpen(entry) : openPage(context,
+      NoteEditor(entry: entry, relay: relay, picker: picker, sharer: sharer, opener: opener, back: back)));
+  final pinned = [for (final entry in shown) if (entry.pinned) entry]..sort((a, b) => b.at.compareTo(a.at));
+  final folded = relay.folded.contains(pinnedPart);
   return SliverPadding(
     padding: const EdgeInsets.symmetric(horizontal: 16),
     sliver: SliverList.list(children: [
-      for (final (name, group) in groupByDay(shown, DateTime.now()))
-        _DayGroup(name: name, children: [
-          for (final entry in group)
-            _NoteRow(entry: entry, relay: relay, selected: selected != null && entry.id == selected,
-              onTap: () => onOpen != null ? onOpen(entry) : openPage(context,
-                NoteEditor(entry: entry, relay: relay, picker: picker, sharer: sharer, opener: opener, back: back))),
-        ]),
+      if (pinned.isNotEmpty) _DayGroup(name: pinnedPart, folded: folded,
+        onFold: () => relay.setFolded(pinnedPart, !folded), children: [for (final entry in pinned) row(entry)]),
+      for (final (name, group) in groupByDay([for (final entry in shown) if (!entry.pinned) entry], DateTime.now()))
+        _DayGroup(name: name, children: [for (final entry in group) row(entry)]),
     ]),
   );
 }
@@ -420,18 +425,62 @@ class _Empty extends StatelessWidget {
   }
 }
 
-/// One day group: its heading, and one card with a row per note.
-class _DayGroup extends StatelessWidget {
-  const _DayGroup({required this.name, required this.children});
+/// A section name with a chevron that turns as it folds, as in Apple Notes: a tap shows no highlight.
+class FoldHeader extends StatelessWidget {
+  const FoldHeader({super.key, required this.name, required this.folded, required this.onTap, this.top = 18});
 
   final String name;
-  final List<Widget> children;
+  final bool folded;
+  final VoidCallback onTap;
+  /// The room above the name: a day group's in the notes list.
+  final double top;
 
   @override
   Widget build(BuildContext context) {
+    final brand = brandOf(context);
+    // A node of its own: merged into the list's node, its box would cover the card below, so a screen reader's or
+    // Maestro's tap on the name would land on a note.
+    return Semantics(
+      container: true,
+      button: true,
+      expanded: !folded,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(2, top, 2, 6),
+          child: Row(children: [
+            Expanded(child: Text(name, style: Theme.of(context).textTheme.titleLarge)),
+            AnimatedRotation(
+              turns: folded ? -0.25 : 0,
+              duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 200),
+              child: Icon(CupertinoIcons.chevron_down, color: brand.accentText),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// One day group: its heading, and one card with a row per note. With [onFold], a tap on the heading folds the card.
+class _DayGroup extends StatelessWidget {
+  const _DayGroup({required this.name, required this.children, this.folded = false, this.onFold});
+
+  final String name;
+  final List<Widget> children;
+  final bool folded;
+  final VoidCallback? onFold;
+
+  @override
+  Widget build(BuildContext context) {
+    final fold = onFold;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Padding(padding: const EdgeInsets.fromLTRB(2, 12, 2, 6), child: Text(name, style: Theme.of(context).textTheme.titleLarge)),
-      Card(
+      if (fold != null)
+        FoldHeader(name: name, folded: folded, onTap: fold, top: 12)
+      else
+        Padding(padding: const EdgeInsets.fromLTRB(2, 12, 2, 6), child: Text(name, style: Theme.of(context).textTheme.titleLarge)),
+      if (!folded) Card(
         clipBehavior: Clip.antiAlias,
         child: Column(children: [
           for (final (index, row) in children.indexed) ...[
@@ -477,7 +526,7 @@ void showDeleted(ScaffoldMessengerState? messenger, Relay relay, String id) {
 /// One note in its day's card: the first line in bold; then the time, a microphone and the length for a voice note, where
 /// a note from elsewhere came from, and the rest of the words, or *No words heard* for a watch note with none. No tag:
 /// only a note that waits says so, *Waiting to send*. A first picture shows small at the right. A tap opens it; a swipe
-/// to the left, or a screen reader's *Delete*, deletes it with *Undo*.
+/// to the left, or a screen reader's *Delete*, deletes it with *Undo*; a swipe to the right, or *Pin*, pins or unpins it.
 class _NoteRow extends StatelessWidget {
   const _NoteRow({required this.entry, required this.relay, required this.onTap, this.selected = false});
 
@@ -520,20 +569,34 @@ class _NoteRow extends StatelessWidget {
       ),
     ));
     if (entry.id.isEmpty) return row;
+    final pin = entry.pinned ? 'Unpin' : 'Pin';
     // A node of its own, so a screen reader's *Delete* is on this row, not on the whole card.
     return Semantics(
       container: true,
-      customSemanticsActions: {const CustomSemanticsAction(label: 'Delete'): () => _delete(context)},
+      customSemanticsActions: {
+        CustomSemanticsAction(label: pin): _pin,
+        const CustomSemanticsAction(label: 'Delete'): () => _delete(context),
+      },
       child: Dismissible(
         key: ValueKey('note:${entry.id}'),
-        direction: DismissDirection.endToStart,
-        background: ColoredBox(color: brand.danger, child: Align(alignment: Alignment.centerRight,
+        background: ColoredBox(color: brand.accent, child: Align(alignment: Alignment.centerLeft,
+          child: Padding(padding: const EdgeInsets.only(left: 24), child: Icon(
+            entry.pinned ? CupertinoIcons.pin_slash_fill : CupertinoIcons.pin_fill, color: brand.onAccent)))),
+        secondaryBackground: ColoredBox(color: brand.danger, child: Align(alignment: Alignment.centerRight,
           child: Padding(padding: const EdgeInsets.only(right: 24), child: Icon(CupertinoIcons.trash, color: brand.onDanger)))),
+        // A pin keeps the row: it moves in or out of *Pinned* when the list draws again.
+        confirmDismiss: (direction) async {
+          if (direction == DismissDirection.endToStart) return true;
+          _pin();
+          return false;
+        },
         onDismissed: (_) => _delete(context),
         child: row,
       ),
     );
   }
+
+  void _pin() => unawaited(relay.pinNote(entry.id, !entry.pinned));
 
   void _delete(BuildContext context) {
     final messenger = ScaffoldMessenger.maybeOf(context);

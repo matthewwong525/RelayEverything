@@ -31,7 +31,13 @@ A phone change writes a step for its main path when the simulator can show it, a
 
 **Check that a word is gone by its own label, not the whole screen.** Maestro ignores upper and lower case, so `assertNotVisible: '(.|\n)*On this phone(.|\n)*'` also fails on the empty list's hint *Notes stay on this phone…*. Match the whole label you mean instead, such as `assertVisible: 'Notes\nNo notes'` for the Notes title and its count: a whole-label match proves no other word is in that line. Before the first device check of a change that edits screen words, read each `assertVisible` and `assertNotVisible` in `flows/` for the old words: each wrong step costs a check of about 30 minutes.
 
+**A tap that opens the wrong thing can mean a label's box is too big.** Maestro taps the middle of the label's box. A Flutter `Semantics` with no `container: true` joins its parent's node, so its box can cover the rows below: on 2026-11-12 a tap on the *Pinned* heading opened the note under it, because the heading's box held the card too. VoiceOver gets the same wrong box, so fix the app, not the flow: give that `Semantics` `container: true`. The `bounds=` of each tap in `maestro.log` shows the box.
+
 **Never use `waitForAnimationToEnd` on a screen with a blinking cursor.** The cursor never stops, so the step never ends: on 2026-11-11 a check of the note editor's text menu stopped at its time limit with no report. Wait for words with `extendedWaitUntil`, or take the picture at once.
+
+**Give a `scrollUntilVisible` on a screen with a blinking cursor `waitToSettleTimeoutMs: 500`.** After each swipe, Maestro waits for the screen to stop moving, and the cursor never stops: on 2026-11-12 each read of the webhook page took 12 to 57 seconds, and the settings step failed two checks with *Save* on the screen. A longer `timeout` did not help.
+
+**A slow Mac can turn a tap into a long press.** On 2026-11-12 Maestro's tap on Home's gear lasted about 1 second, from touch to lift in `phone.log` (`Sending UIEvent type: 0`, twice). Flutter took it as a long press, so the button showed its tooltip and Settings did not open, in 3 of 4 tries. The screen then shows the same page as before the tap, with no error. Look at the two event times before you change the app.
 
 **Never use `hideKeyboard`.** The Flutter app's keyboard has no dismiss action that Maestro can use, so the step fails with *Couldn't hide the keyboard* and the flow ends *broken*. After `inputText`, tap the next button at once, such as `tapOn: "Save"` on the webhook form: the form keeps its buttons above the keyboard.
 

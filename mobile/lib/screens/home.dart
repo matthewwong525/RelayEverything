@@ -198,42 +198,9 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Widget> _section(String name, List<Widget> rows) {
     final folded = relay.folded.contains(name);
     return [
-      _FoldHeader(name: name, folded: folded, onTap: () => relay.setFolded(name, !folded)),
+      FoldHeader(name: name, folded: folded, onTap: () => relay.setFolded(name, !folded)),
       if (!folded) _Card(rows: rows),
     ];
-  }
-}
-
-/// A section name with a chevron that turns as it folds, as in Apple Notes: a tap shows no highlight.
-class _FoldHeader extends StatelessWidget {
-  const _FoldHeader({required this.name, required this.folded, required this.onTap});
-
-  final String name;
-  final bool folded;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = brandOf(context);
-    return Semantics(
-      button: true,
-      expanded: !folded,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(2, 18, 2, 6),
-          child: Row(children: [
-            Expanded(child: Text(name, style: Theme.of(context).textTheme.titleLarge)),
-            AnimatedRotation(
-              turns: folded ? -0.25 : 0,
-              duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 200),
-              child: Icon(CupertinoIcons.chevron_down, color: brand.accentText),
-            ),
-          ]),
-        ),
-      ),
-    );
   }
 }
 

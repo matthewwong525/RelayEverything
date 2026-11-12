@@ -43,7 +43,7 @@ On the phone, Location, Health, Calendar and Photos are in **On this phone**, be
 
 ### The notes and the open note
 
-The middle shows your notes, newest first, in groups by day: **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then one group for each month. Above them, the filters **All**, **Voice** and **Photos and files** each show how many notes they hold: click one to see only its notes. [Filter your notes](../your-notes/#filter-your-notes) Each row shows the first line, the time, and the start of the words, with no tag. A voice note also shows a microphone and its length. A note from somewhere else also shows where it came from, such as *Email*. Click a row to open the note at the right.
+The middle shows your notes, newest first, with your pinned notes first in **Pinned**, then in groups by day: **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then one group for each month. Above them, the filters **All**, **Voice** and **Photos and files** each show how many notes they hold: click one to see only its notes. [Filter your notes](../your-notes/#filter-your-notes) Each row shows the first line, the time, and the start of the words, with no tag. A voice note also shows a microphone and its length. A note from somewhere else also shows where it came from, such as *Email*. Click a row to open the note at the right.
 
 ### The top bar
 
@@ -56,7 +56,7 @@ One bar runs along the top, over the notes and the open note. Nothing is at the 
 | The checklist button | Makes the line a checklist item. |
 | The paperclip | Adds photos or files to the open note. [Add photos and files](#add-photos-and-files) |
 | **Share** | Shares the open note. |
-| **⋯** | Opens the note's menu, with **Copy** and **Delete**, as on the phone. |
+| **⋯** | Opens the note's menu, with **Pin Note** (or **Unpin Note**), **Copy** and **Delete**, as on the phone. A pinned note shows first, in the **Pinned** group: [Pin a note](../your-notes/#pin-a-note) |
 | **Search** | At the top right. [Search](#search) |
 
 ## Write and change notes

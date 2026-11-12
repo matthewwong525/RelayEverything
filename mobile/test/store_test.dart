@@ -405,6 +405,185 @@ void main() {
     });
   });
 
+  group('a pin', () {
+    List<(String, Object?, Object?, Object?)> pins(List<OutboxItem> items) =>
+      [for (final item in items) (item.route, item.body['id'], item.body['pinned'], item.body['at'])];
+
+    test('keeps the note\'s words and time, shows in the list, and a second pin the same way changes nothing', () async {
+      await store.addNote(note('n1'));
+      expect(await store.pinNote('n1', true, send: false, at: later), isTrue);
+      expect(await store.pinNote('n1', true, send: false, at: later), isFalse);
+      expect(await store.pinNote('gone', true, send: false, at: later), isFalse);
+      final pinned = await kept('n1');
+      expect([pinned.pinned, pinned.text, pinned.createdAt, pinned.editedAt], [true, 'Buy milk', at, null]);
+      expect(await store.outbox(), isEmpty);
+      expect(await store.pinNote('n1', false, send: false, at: later), isTrue);
+      expect((await kept('n1')).pinned, isFalse);
+    });
+
+    test('of a sent note queues one note.pin, and a later pin replaces the one still waiting', () async {
+      await store.addNote(note('n1'), send: true);
+      await flush(store, FakeServer().api(connection), clock: () => at);
+      await store.pinNote('n1', true, send: true, at: at);
+      await store.pinNote('n1', false, send: true, at: later);
+      expect(pins(await store.outbox()), [(notePin, null, false, later.millisecondsSinceEpoch)]);
+    });
+
+    test('of a note not sent yet goes after the note\'s own upload, and a note never queued queues no pin', () async {
+      await store.addNote(note('n1'), send: true);
+      await store.pinNote('n1', true, send: true, at: later);
+      expect([for (final item in await store.outbox()) item.route], ['notes', notePin]);
+      await store.addNote(note('n2'));
+      await store.pinNote('n2', true, send: true, at: later);
+      expect((await store.outbox()).length, 2);
+    });
+
+    test('of a note kept while sending was off goes after its upload once it is queued', () async {
+      await store.addNote(note('n1'));
+      await store.pinNote('n1', true, send: false, at: later);
+      await store.queueEarlier();
+      expect(pins(await store.outbox()), [('notes', null, null, null), (notePin, null, true, later.millisecondsSinceEpoch)]);
+    });
+
+    test('goes as PUT notes/pin by clientId, or by the server id once a pull saved it, and a webhook gets no pin', () async {
+      await store.addNote(note('n1'), send: true);
+      await flush(store, FakeServer().api(connection), clock: () => at);
+      await store.pinNote('n1', true, send: true, at: later);
+      final server = FakeServer((_) => FakeServer.json({'id': 's1', 'pinned': true, 'updated': true}));
+      await flush(store, server.api(connection));
+      expect([server.requests.single.method, server.requests.single.url.path], ['PUT', '/apps/relay/api/notes/pin']);
+      expect(jsonDecode(server.requests.single.body), {'clientId': 'n1', 'pinned': true, 'at': later.millisecondsSinceEpoch});
+      await store.pinNote('n1', false, send: true, at: later.add(const Duration(minutes: 1)));
+      await store.applyPulled([pulledNote('s1', clientId: 'n1', mine: true, text: 'Buy milk', recordedAt: at, pinned: true,
+        pinChangedAt: later)]);
+      expect(pins(await store.outbox()), [(notePin, 's1', false, later.add(const Duration(minutes: 1)).millisecondsSinceEpoch)]);
+      expect((await kept('n1')).pinned, isFalse, reason: 'the pin still waiting is newer than the pulled one');
+      await store.moveOutbox(ownWebhook);
+      final receiver = FakeServer();
+      expect((await flush(store, receiver.webhook(hook, installId))).sent, 1);
+      expect(receiver.requests, isEmpty);
+    });
+
+    test('refused as older (409) leaves the outbox, and the next pull takes the newer pin', () async {
+      await store.applyPulled([pulledNote('s1', text: 'Door code', recordedAt: at, pinned: false)]);
+      await store.pinNote('srv:s1', false, send: true, at: at);
+      await store.pinNote('srv:s1', true, send: true, at: at);
+      await store.pinNote('srv:s1', false, send: true, at: later);
+      final server = FakeServer((_) => FakeServer.json({'error': {'code': 'older', 'message': 'A newer pin is kept.'}}, 409));
+      await flush(store, server.api(connection));
+      expect(jsonDecode(server.requests.single.body), {'id': 's1', 'pinned': false, 'at': later.millisecondsSinceEpoch});
+      expect(await store.waiting(), 0);
+      await store.applyPulled([pulledNote('s1', text: 'Door code', recordedAt: at, pinned: true,
+        pinChangedAt: later.add(const Duration(minutes: 30)))]);
+      expect([(await kept('srv:s1')).pinned, await store.outbox()], [true, isEmpty]);
+    });
+
+    test('with the person\'s own webhook, or with sending off, stays on the phone', () async {
+      await store.addNote(note('n1'), send: true);
+      await store.moveOutbox(ownWebhook);
+      await store.pinNote('n1', true, send: true, at: later);
+      expect([for (final item in await store.outbox()) item.route], ['notes']);
+      await store.applyPulled([pulledNote('s2', text: 'Door code', recordedAt: at)]);
+      await store.pinNote('srv:s2', true, send: false, at: later);
+      expect([for (final item in await store.outbox()) item.route], ['notes']);
+    });
+
+    test('pulled when newer than the phone\'s and none waits is kept; a server from before pins changes nothing', () async {
+      await store.applyPulled([pulledNote('s1', text: 'Door code', recordedAt: at, pinned: true, pinChangedAt: at)]);
+      expect((await kept('srv:s1')).pinned, isTrue);
+      await store.applyPulled([pulledNote('s1', text: 'Door code', recordedAt: at)]);
+      expect((await kept('srv:s1')).pinned, isTrue);
+      await store.applyPulled([pulledNote('s1', text: 'Door code', recordedAt: at, pinned: false, pinChangedAt: later)]);
+      expect([(await kept('srv:s1')).pinned, await store.outbox()], [false, isEmpty]);
+    });
+
+    test('made while sending was off goes once sending turns on, with no pull, and one the server took never goes again',
+        () async {
+      await store.applyPulled([pulledNote('s1', text: 'Door code', recordedAt: at, pinned: false)]);
+      await store.addNote(note('n1'));
+      await store.pinNote('srv:s1', true, send: false, at: later);
+      await store.pinNote('n1', true, send: false, at: later);
+      expect(await store.outbox(), isEmpty);
+      await store.queueUnsentPins();
+      expect(pins(await store.outbox()), [(notePin, 's1', true, later.millisecondsSinceEpoch)],
+        reason: 'n1 never went, so its pin waits for its own upload');
+      await store.queueUnsentPins();
+      expect((await store.outbox()).length, 1);
+      await flush(store, FakeServer().api(connection));
+      await store.queueUnsentPins();
+      expect(await store.outbox(), isEmpty);
+    });
+
+    test('keeps the server\'s time once it took the pin, so a later pin elsewhere wins over a phone clock set ahead',
+        () async {
+      await store.applyPulled([pulledNote('s1', text: 'Door code', recordedAt: at, pinned: false)]);
+      final ahead = later.add(const Duration(hours: 1));
+      await store.pinNote('srv:s1', true, send: true, at: ahead);
+      final server = FakeServer((_) => FakeServer.json({'id': 's1', 'pinned': true, 'pinChangedAt': later.millisecondsSinceEpoch,
+        'updated': true}));
+      await flush(store, server.api(connection));
+      expect((jsonDecode(server.requests.single.body) as Map)['at'], ahead.millisecondsSinceEpoch);
+      await store.applyPulled([pulledNote('s1', text: 'Door code', recordedAt: at, pinned: false,
+        pinChangedAt: later.add(const Duration(minutes: 10)))]);
+      expect([(await kept('srv:s1')).pinned, await store.outbox()], [false, isEmpty]);
+    });
+
+    test('a pull of a note whose pin the server has takes the server\'s pin and time, even an older one', () async {
+      await store.applyPulled([pulledNote('s1', text: 'Door code', recordedAt: at, pinned: false)]);
+      await store.pinNote('srv:s1', true, send: true, at: later.add(const Duration(hours: 1)));
+      await flush(store, FakeServer().api(connection));
+      await store.applyPulled([pulledNote('s1', text: 'Door code', recordedAt: at, pinned: true, pinChangedAt: later)]);
+      await store.applyPulled([pulledNote('s1', text: 'Door code', recordedAt: at, pinned: false,
+        pinChangedAt: later.add(const Duration(minutes: 1)))]);
+      expect([(await kept('srv:s1')).pinned, await store.outbox()], [false, isEmpty]);
+    });
+
+    test('made on a phone whose clock runs behind still counts as after the last pin it knows, and a 409 leaves no mark',
+        () async {
+      final serverAt = later.add(const Duration(minutes: 2));
+      await store.applyPulled([pulledNote('s1', text: 'Door code', recordedAt: at, pinned: true, pinChangedAt: serverAt)]);
+      await store.pinNote('srv:s1', false, send: true, at: later);
+      expect(pins(await store.outbox()), [(notePin, 's1', false, serverAt.millisecondsSinceEpoch + 1)]);
+      final server = FakeServer((_) => FakeServer.json({'error': {'code': 'older', 'message': 'A newer pin is kept.'}}, 409));
+      expect((await flush(store, server.api(connection))).dropped, 1);
+      await store.queueUnsentPins();
+      expect(await store.outbox(), isEmpty, reason: 'a pin refused as older never goes again');
+      await store.applyPulled([pulledNote('s1', text: 'Door code', recordedAt: at, pinned: true, pinChangedAt: serverAt)]);
+      expect([(await kept('srv:s1')).pinned, await store.outbox()], [true, isEmpty],
+        reason: 'the next pull of the note takes the server\'s pin, though it is not newer than the refused one');
+    });
+
+    test('refused by a server older than pins is dropped, and the rest still sends; a refused key stops all', () async {
+      await store.applyPulled([pulledNote('s1', text: 'Door code', recordedAt: at, pinned: false)]);
+      await store.pinNote('srv:s1', true, send: true, at: later);
+      await store.addNote(note('n1'), send: true);
+      var keyWorks = true;
+      final server = FakeServer((request) => request.method == 'PUT' || (!keyWorks && request.url.path.endsWith('/key'))
+        ? FakeServer.json({'error': {'code': 'forbidden', 'message': 'A device key can only send to Relay Everything.'}}, 403)
+        : FakeServer.ok(request));
+      keyWorks = false;
+      final refused = await flush(store, server.api(connection));
+      expect([refused.failure, [for (final item in await store.outbox()) item.route]], [Failure.refused, [notePin, 'notes']]);
+      keyWorks = true;
+      final result = await flush(store, server.api(connection), clock: () => at);
+      expect([result.failure, result.sent, result.dropped, await store.outbox()], [null, 1, 1, isEmpty]);
+      expect([(await kept('srv:s1')).pinned, (await kept('n1')).sentAt], [true, at]);
+    });
+
+    test('of a deleted note, or a sign-out, goes with it', () async {
+      await store.applyPulled([pulledNote('s1', text: 'Door code', recordedAt: at)]);
+      await store.pinNote('srv:s1', true, send: true, at: later);
+      await store.dropSynced();
+      expect(await store.outbox(), isEmpty);
+      await store.addNote(note('n1'));
+      await store.addNote(note('n2'), send: true);
+      await flush(store, FakeServer().api(connection), clock: () => at);
+      await store.pinNote('n2', true, send: true, at: later);
+      await store.deleteNote('n2');
+      expect([for (final item in await store.outbox()) item.route], [noteDelete]);
+    });
+  });
+
   test('upgrades a phone from before changes: every note stays, and can change', () async {
     driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
     addTearDown(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = false);
@@ -465,7 +644,7 @@ void main() {
       [('kept', 's1'), ('srv:s2', 's2')]);
   });
 
-  test('upgrades a phone from version 9: it can delete a note, and its next pull starts again from 0', () async {
+  test('upgrades a phone from version 9: it can delete and pin a note, and its next pull starts again from 0', () async {
     driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
     addTearDown(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = false);
     final old = Store(NativeDatabase.memory(setup: (db) {
@@ -495,6 +674,8 @@ void main() {
     addTearDown(old.close);
     expect([for (final kept in await old.notes()) kept.clientId], ['kept']);
     expect(await old.get(noteSyncSeq), isNull);
+    // Version 14 added the pin.
+    expect([await old.pinNote('kept', true, send: false, at: at), (await old.notes()).single.pinned], [true, true]);
     await old.markDeleted('kept', at);
     expect(await old.notes(), isEmpty);
     expect(await old.deleteNote('kept'), isTrue);

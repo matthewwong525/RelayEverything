@@ -106,6 +106,39 @@ Send the input as query parameters.
 |---|---|
 | `not_found` | Your space has no note with this id, or this device sent no note with this clientId. |
 
+## Pin or unpin a note
+
+`PUT /apps/relay/api/notes/pin` · `relay.notes-pin` · writes · called by a signed-in person or a phone key
+
+Pin any note in your space to the top of the notes list on every phone and the page, or unpin it. The page pins notes as your space's Web device. The newer change wins: a change made before the note's last pin change gets 409. Webhooks get no message: a pin does not change the note.
+
+### Input
+
+Send the input as a JSON body.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | no | The server's id for the note, as GET notes gives it: any note in your space. |
+| `clientId` | string | no | Or the device's own id for a note it sent, as POST notes sent it. |
+| `pinned` | boolean | yes | True to pin the note to the top of the notes list, false to unpin it. |
+| `at` | integer | no | When the device made the change, in Unix ms; now when left out. A later time is taken as now. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | yes |  |
+| `pinned` | boolean | yes | Whether the note is pinned now. |
+| `pinChangedAt` | integer | yes | When the note's pin last changed, by the server's clock, in Unix ms: keep it to compare with GET notes. |
+| `updated` | boolean | yes | False when the note was already pinned or unpinned as asked. |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `not_found` | Your space has no note with this id, or this device sent no note with this clientId. |
+| `older` | The note's pin changed after this change was made, so the newer pin stays: GET notes gives it. |
+
 ## Read the notes changed since the last sync
 
 `GET /apps/relay/api/notes` · `relay.notes-sync` · reads · called by a signed-in person or a phone key
@@ -142,6 +175,8 @@ Send the input as query parameters.
 | `notes[].attachments[].type` | string | yes |  |
 | `notes[].attachments[].size` | number | yes |  |
 | `notes[].attachments[].ready` | boolean | yes | True once the phone has sent the file: then GET attachment opens it. |
+| `notes[].pinned` | boolean | yes | True when the note is pinned to the top of the notes list. |
+| `notes[].pinChangedAt` | number or null | yes | When the note's pin last changed, in Unix ms; null when never. |
 | `next` | number | yes | The change number to ask from next time. |
 | `more` | boolean | yes | True when more changes wait after this page. |
 

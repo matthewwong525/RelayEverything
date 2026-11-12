@@ -100,6 +100,47 @@ class ReadingBar extends StatelessWidget {
   ]);
 }
 
+/// *Find in Note*, over the keyboard in the tool bar's place: the words to find, then *2 of 14* or *No matches*, clear,
+/// up and down in a frosted pill, and ✓, which closes it.
+class FindBar extends StatelessWidget {
+  const FindBar({super.key, required this.controller, required this.focus, required this.onChanged, required this.found,
+    required this.onStep, required this.onDone});
+
+  final TextEditingController controller;
+  final FocusNode focus;
+  final VoidCallback onChanged;
+  /// *2 of 14* or *No matches*; null while the field is empty.
+  final String? found;
+  /// Goes to the next match (1) or the one before (-1); null with no match.
+  final void Function(int step)? onStep;
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = brandOf(context);
+    final step = onStep;
+    return Row(spacing: 8, children: [
+      Expanded(child: _FrostedPill(children: [
+        Padding(padding: const EdgeInsets.only(left: 10, right: 6), child: Icon(CupertinoIcons.search, size: 20, color: brand.muted)),
+        Expanded(child: TextField(controller: controller, focusNode: focus, onChanged: (_) => onChanged(),
+          textInputAction: TextInputAction.search, onSubmitted: (_) => step?.call(1),
+          // No outline or fill: the app's field look would draw a green box inside the pill when it has focus.
+          decoration: const InputDecoration(hintText: 'Find in Note', isCollapsed: true, filled: false,
+            border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none))),
+        if (found case final found?) Text(found, style: TextStyle(fontSize: 13, color: brand.muted)),
+        if (controller.text.isNotEmpty) PillIconButton(icon: CupertinoIcons.xmark_circle_fill, tooltip: 'Clear',
+          onPressed: () {
+            controller.clear();
+            onChanged();
+          }),
+        PillIconButton(icon: CupertinoIcons.chevron_up, tooltip: 'Previous match', onPressed: step == null ? null : () => step(-1)),
+        PillIconButton(icon: CupertinoIcons.chevron_down, tooltip: 'Next match', onPressed: step == null ? null : () => step(1)),
+      ])),
+      RoundIconButton(icon: CupertinoIcons.checkmark_alt, tooltip: 'Done', onPressed: onDone, accent: true),
+    ]);
+  }
+}
+
 /// The line styles *Text styles* offers, with the Delta attribute each sets.
 final _lineStyles = <(String, Attribute?)>[
   ('Title', Attribute.h1), ('Heading', Attribute.h2), ('Subheading', Attribute.h3), ('Body', null),

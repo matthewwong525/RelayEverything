@@ -18,7 +18,7 @@ class LocalNote {
   const LocalNote({required this.clientId, required this.text, required this.createdAt, this.sentAt,
     this.queued = false, this.kind = NoteKind.typed, this.audioPath, this.durationMs,
     this.wordsPending = false, this.attachments = const [], this.editedAt, this.serverId, this.device, this.mine = true,
-    this.fromWatch = false});
+    this.fromWatch = false, this.pinned = false});
 
   final String clientId;
   final String text;
@@ -56,6 +56,9 @@ class LocalNote {
 
   /// True for a voice note the person's Apple Watch handed over. It stays on this phone only: the server never gets it.
   final bool fromWatch;
+
+  /// True for a note pinned to the top of the notes list. A pin is not part of the note's upload.
+  final bool pinned;
 
   /// True for a watch note in which the phone found no words: it keeps its recording, waits for nothing, and is not
   /// sent until the person writes words in it. Its SQL twin is [Store]'s `_noWords`.
@@ -119,6 +122,12 @@ const noteUpdate = 'note.update';
 
 /// The route of a sent note's delete: `DELETE notes` on the server, `note.deleted` to a webhook.
 const noteDelete = 'note.delete';
+
+/// The route of a note's pin or unpin: `PUT notes/pin` on the server, and no message to a webhook.
+const notePin = 'note.pin';
+
+/// The routes of uploads that change one note, found by the `clientId` in their body.
+const _noteRoutes = "'notes', '$noteUpdate', '$notePin'";
 
 /// Where an upload goes: the person's Relay Everything server, or their own webhook. Each waiting upload keeps one.
 const relayServer = 'relay-server', ownWebhook = 'webhook';
@@ -217,6 +226,12 @@ const _deletingColumn = 'deleting_at INTEGER';
 // source: 'watch' for a voice note the Apple Watch handed over, else null. It is not in the body, which is the upload.
 const _sourceColumn = 'source TEXT';
 
+// pinned_at: when the note was pinned, null when it is not. pin_changed_at: when the pin last changed, so the newer change
+// wins: by the server's clock once the server took or gave the pin, by this phone's until then. pin_unsent = 1: a pin
+// changed here that the server has not taken yet, such as one made while sending was off. The word pin is not the old
+// place pin: `pinning` is that.
+const _pinColumns = 'pinned_at INTEGER, pin_changed_at INTEGER, pin_unsent INTEGER NOT NULL DEFAULT 0';
+
 const _schema = [
   'CREATE TABLE outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, destination TEXT NOT NULL DEFAULT \'$relayServer\', route TEXT NOT NULL, '
     'body TEXT NOT NULL, created_at INTEGER NOT NULL)',
@@ -224,7 +239,7 @@ const _schema = [
   // words_pending = 1: a voice note still waits for its words, so no upload can go without them.
   'CREATE TABLE notes (client_id TEXT PRIMARY KEY, body TEXT NOT NULL, created_at INTEGER NOT NULL, sent_at INTEGER, '
     'queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0, $_voiceColumns, edited_at INTEGER, $_syncColumns, '
-    '$_deletingColumn, $_sourceColumn)',
+    '$_deletingColumn, $_sourceColumn, $_pinColumns)',
   _serverIdIndex,
   'CREATE TABLE points (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
   'CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
@@ -265,7 +280,7 @@ class Store extends GeneratedDatabase {
   Iterable<TableInfo<Table, dynamic>> get allTables => const [];
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(onCreate: (_) async {
@@ -323,6 +338,12 @@ class Store extends GeneratedDatabase {
     if (from < 12) await _movePins();
     // Version 12 did not know which notes came from the watch.
     if (from < 13) await customStatement('ALTER TABLE notes ADD COLUMN $_sourceColumn');
+    // Version 13 could not pin a note.
+    if (from < 14) {
+      for (final column in _pinColumns.split(', ')) {
+        await customStatement('ALTER TABLE notes ADD COLUMN $column');
+      }
+    }
   });
 
   /// A note keeps no place: each unsent note's place becomes one location point at its time while location history is
@@ -346,7 +367,7 @@ class Store extends GeneratedDatabase {
       final body = jsonDecode(row.read<String>('body')) as Map<String, dynamic>;
       final queue = settings.sending && row.read<int>('words_pending') == 0;
       await _run('UPDATE notes SET pinning = 0, queued = ? WHERE client_id = ?', [queue ? 1 : 0, body['clientId']]);
-      if (queue) await _queue(body);
+      if (queue) await _queue(body, pins: false);
     }
   });
 
@@ -564,14 +585,67 @@ class Store extends GeneratedDatabase {
     });
 
   /// Queues a note's upload, then one upload for each of its files not sent yet, so a file never reaches the server
-  /// before its note. With [allFiles], one for each file on this phone, sent or not.
-  Future<void> _queue(Map<String, dynamic> body, {bool allFiles = false}) async {
+  /// before its note, then its pin. With [allFiles], one for each file on this phone, sent or not. A store older than
+  /// pins, as in the step to version 12, passes [pins] false.
+  Future<void> _queue(Map<String, dynamic> body, {bool allFiles = false, bool pins = true}) async {
     final clientId = body['clientId'] as String;
     await enqueue('notes', body);
     await _run('UPDATE notes SET edit_unsent = 0 WHERE client_id = ?', [clientId]);
     for (final file in await attachmentsOf(clientId)) {
       if (file.sentAt == null || (allFiles && file.path.isNotEmpty)) await enqueue('attachment', file.upload(clientId));
     }
+    if (pins && (await _rows('SELECT 1 FROM notes WHERE client_id = ? AND pinned_at IS NOT NULL AND pin_unsent = 1',
+        [clientId])).isNotEmpty) {
+      await _queuePin(clientId);
+    }
+  }
+
+  /// Pins or unpins a note on this phone at once, with no change to its words or time. With [send], a note the server
+  /// has or will get gets one `note.pin`, after its upload: a pin still waiting for the note goes. False when the note
+  /// is gone or already so. The change is made after the last one this phone knows, so it is never stamped older than
+  /// that, even by a phone clock that runs behind the server's: the server would refuse it as older.
+  Future<bool> pinNote(String clientId, bool pinned, {required bool send, required DateTime at}) => transaction(() async {
+    final rows = await _rows('SELECT pinned_at, pin_changed_at, sent_at, server_id FROM notes WHERE client_id = ?', [clientId]);
+    if (rows.isEmpty || (rows.single.read<int?>('pinned_at') != null) == pinned) return false;
+    final last = rows.single.read<int?>('pin_changed_at');
+    final ms = last == null ? at.millisecondsSinceEpoch : max(at.millisecondsSinceEpoch, last + 1);
+    await _run('UPDATE notes SET pinned_at = ?, pin_changed_at = ?, pin_unsent = 1 WHERE client_id = ?',
+      [pinned ? ms : null, ms, clientId]);
+    final known = rows.single.read<int?>('sent_at') != null || rows.single.read<String?>('server_id') != null ||
+      (await _rows("SELECT 1 FROM outbox WHERE route = 'notes' AND json_extract(body, '\$.clientId') = ?", [clientId])).isNotEmpty;
+    if (send && known) await _queuePin(clientId);
+    return true;
+  });
+
+  /// After sending turns on to Relay Everything: queues the pin of each note the server has or will get whose pin
+  /// changed here and never went, such as one made while sending was off. A pull reads only notes that changed on the
+  /// server, so it would never find these.
+  Future<void> queueUnsentPins() => transaction(() async {
+    for (final row in await _rows('SELECT client_id FROM notes WHERE pin_unsent = 1 AND deleting_at IS NULL AND '
+        "(sent_at IS NOT NULL OR server_id IS NOT NULL OR EXISTS (SELECT 1 FROM outbox WHERE route = 'notes' AND "
+        "json_extract(outbox.body, '\$.clientId') = notes.client_id)) AND NOT EXISTS (SELECT 1 FROM outbox WHERE "
+        "route = '$notePin' AND json_extract(outbox.body, '\$.clientId') = notes.client_id) ORDER BY created_at, client_id")) {
+      await _queuePin(row.read<String>('client_id'));
+    }
+  });
+
+  /// The server took the pin in [body]: the note keeps the server's time for it, [serverAt], so a later pin made
+  /// elsewhere compares by one clock. A pin changed here again since then still waits to go, and keeps its own. A pin
+  /// the server refused as older passes null: the mark goes, so the next pull takes the server's newer pin.
+  Future<void> pinSent(Map<String, dynamic> body, int? serverAt) => _run('UPDATE notes SET pin_unsent = 0, '
+    'pin_changed_at = coalesce(?, pin_changed_at), pinned_at = CASE WHEN pinned_at IS NULL THEN NULL ELSE coalesce(?, pinned_at) END '
+    'WHERE client_id = ? AND pin_changed_at = ?', [serverAt, serverAt, body['clientId'], body['at']]);
+
+  /// Queues the note's pin as it is now, only while notes go to Relay Everything: a webhook gets no pin. A pin still
+  /// waiting for the note goes, so only the newest one is sent.
+  Future<void> _queuePin(String clientId) async {
+    if (await destination() != relayServer) return;
+    final rows = await _rows('SELECT pinned_at, pin_changed_at, server_id FROM notes WHERE client_id = ?', [clientId]);
+    if (rows.isEmpty) return;
+    final row = rows.single;
+    await _run("DELETE FROM outbox WHERE route = '$notePin' AND json_extract(body, '\$.clientId') = ?", [clientId]);
+    await enqueue(notePin, {'clientId': clientId, 'id': ?row.read<String?>('server_id'), 'pinned': row.read<int?>('pinned_at') != null,
+      'at': row.read<int?>('pin_changed_at') ?? DateTime.now().millisecondsSinceEpoch}, destination: relayServer);
   }
 
   /// True when this phone keeps a note with [clientId].
@@ -644,7 +718,7 @@ class Store extends GeneratedDatabase {
       [clientId]);
     if (bare.isEmpty) return false;
     await _run('DELETE FROM notes WHERE client_id = ?', [clientId]);
-    await _run("DELETE FROM outbox WHERE route IN ('notes', '$noteUpdate') AND json_extract(body, '\$.clientId') = ?", [clientId]);
+    await _run("DELETE FROM outbox WHERE route IN ($_noteRoutes) AND json_extract(body, '\$.clientId') = ?", [clientId]);
     return true;
   });
 
@@ -691,7 +765,7 @@ class Store extends GeneratedDatabase {
       for (final row in await _rows('SELECT audio_path FROM notes WHERE client_id = ? AND audio_path IS NOT NULL', [clientId]))
         row.read<String>('audio_path'),
     ];
-    await _run("DELETE FROM outbox WHERE (route IN ('notes', '$noteUpdate') AND json_extract(body, '\$.clientId') = ?) "
+    await _run("DELETE FROM outbox WHERE (route IN ($_noteRoutes) AND json_extract(body, '\$.clientId') = ?) "
       "OR (route = 'attachment' AND json_extract(body, '\$.noteClientId') = ?)", [clientId, clientId]);
     await _run('DELETE FROM attachments WHERE note_client_id = ?', [clientId]);
     await _run('DELETE FROM notes WHERE client_id = ?', [clientId]);
@@ -783,7 +857,7 @@ class Store extends GeneratedDatabase {
   Future<bool> _applyPulled(Map<String, dynamic> note, String? editing) async {
     final serverId = note['id'] as String;
     final clientId = note['clientId'] as String?;
-    const columns = 'SELECT client_id, body, edited_at, mine, edit_unsent FROM notes';
+    const columns = 'SELECT client_id, body, edited_at, mine, edit_unsent, pinned_at, pin_changed_at, pin_unsent FROM notes';
     var rows = await _rows('$columns WHERE server_id = ?', [serverId]);
     if (rows.isEmpty && clientId != null) rows = await _rows('$columns WHERE client_id = ? AND mine = 1', [clientId]);
     final mine = rows.isNotEmpty ? rows.single.read<int>('mine') == 1 : note['mine'] == true && clientId != null;
@@ -834,7 +908,31 @@ class Store extends GeneratedDatabase {
       await _run('INSERT OR IGNORE INTO attachments (id, note_client_id, name, type, size, sent_at) VALUES (?, ?, ?, ?, ?, ?)',
         [file.id, id, file.name, file.type, file.size, recordedAt]);
     }
+    await _applyPin(id, serverId, note, rows.isEmpty ? null : rows.single);
     return true;
+  }
+
+  /// Newer pin wins, here as on the server. A note whose pin the server already has takes the pulled pin and its time.
+  /// A pin changed here that the server has not taken yet stays when it is newer, and a pulled pin that changed later
+  /// wins, with the pin still waiting gone, as the server would refuse it. Such a newer pin with no upload, as when its
+  /// send was dropped, gets one. A server older than pins says nothing of them, and gets none.
+  Future<void> _applyPin(String id, String serverId, Map<String, dynamic> note, QueryRow? row) async {
+    const waiting = "route = '$notePin' AND json_extract(body, '\$.clientId') = ?";
+    // A pin queued before this pull saved the server id goes by it now.
+    await _run("UPDATE outbox SET body = json_set(body, '\$.id', ?) WHERE $waiting", [serverId, id]);
+    if (!note.containsKey('pinned')) return;
+    final serverAt = note['pinChangedAt'] as int?;
+    final pinned = note['pinned'] == true;
+    final localAt = row?.read<int?>('pin_changed_at');
+    final unsent = row?.read<int>('pin_unsent') == 1;
+    if (!unsent || (serverAt != null && (localAt == null || serverAt > localAt))) {
+      await _run('UPDATE notes SET pinned_at = ?, pin_changed_at = ?, pin_unsent = 0 WHERE client_id = ?',
+        [pinned ? serverAt ?? localAt ?? 0 : null, serverAt, id]);
+      await _run('DELETE FROM outbox WHERE $waiting', [id]);
+    } else if ((row?.read<int?>('pinned_at') != null) != pinned &&
+        (await _rows('SELECT 1 FROM outbox WHERE $waiting', [id])).isEmpty) {
+      await _queuePin(id);
+    }
   }
 
   /// Keeps where a downloaded file of a note now is, from the app's support folder.
@@ -847,7 +945,7 @@ class Store extends GeneratedDatabase {
     final files = await _rows("SELECT path FROM attachments WHERE path IS NOT NULL AND path != '' AND note_client_id IN ($synced)");
     await transaction(() async {
       await _run('DELETE FROM attachments WHERE note_client_id IN ($synced)');
-      await _run("DELETE FROM outbox WHERE route = '$noteUpdate' AND json_extract(body, '\$.clientId') IN ($synced)");
+      await _run("DELETE FROM outbox WHERE route IN ('$noteUpdate', '$notePin') AND json_extract(body, '\$.clientId') IN ($synced)");
       await _run('DELETE FROM notes WHERE mine = 0');
       await remove(noteSyncSeq);
     });
@@ -864,14 +962,15 @@ class Store extends GeneratedDatabase {
     }
     return [
       for (final row in await _rows('SELECT client_id, body, sent_at, queued, kind, audio_path, duration_ms, words_pending, '
-          'edited_at, server_id, device, mine, source FROM notes WHERE deleting_at IS NULL ORDER BY created_at DESC, client_id DESC'))
+          'edited_at, server_id, device, mine, source, pinned_at FROM notes WHERE deleting_at IS NULL '
+          'ORDER BY created_at DESC, client_id DESC'))
         _noteOf(jsonDecode(row.read<String>('body')) as Map<String, dynamic>, sentAt: row.read<int?>('sent_at'),
           queued: row.read<int>('queued') == 1,
           kind: NoteKind.values.byName(row.read<String>('kind')), audioPath: row.read<String?>('audio_path'),
           durationMs: row.read<int?>('duration_ms'), wordsPending: row.read<int>('words_pending') == 1,
           attachments: files[row.read<String>('client_id')], editedAt: row.read<int?>('edited_at'),
           serverId: row.read<String?>('server_id'), device: row.read<String?>('device'), mine: row.read<int>('mine') == 1,
-          fromWatch: row.read<String?>('source') == 'watch'),
+          fromWatch: row.read<String?>('source') == 'watch', pinned: row.read<int?>('pinned_at') != null),
     ];
   }
 
@@ -879,13 +978,13 @@ class Store extends GeneratedDatabase {
   static LocalNote _noteOf(Map<String, dynamic> body, {int? sentAt, bool queued = false,
     NoteKind kind = NoteKind.typed, String? audioPath, int? durationMs, bool wordsPending = false,
     List<Attachment>? attachments, int? editedAt, String? serverId, String? device, bool mine = true,
-    bool fromWatch = false}) => LocalNote(
+    bool fromWatch = false, bool pinned = false}) => LocalNote(
     clientId: body['clientId'] as String, text: body['text'] as String,
     createdAt: DateTime.fromMillisecondsSinceEpoch(body['createdAt'] as int),
     sentAt: sentAt == null ? null : DateTime.fromMillisecondsSinceEpoch(sentAt), queued: queued,
     kind: kind, audioPath: audioPath, durationMs: durationMs, wordsPending: wordsPending,
     editedAt: editedAt == null ? null : DateTime.fromMillisecondsSinceEpoch(editedAt),
-    serverId: serverId, device: device, mine: mine, fromWatch: fromWatch,
+    serverId: serverId, device: device, mine: mine, fromWatch: fromWatch, pinned: pinned,
     attachments: attachments ?? [
       for (final file in (body['attachments'] as List?) ?? const [])
         Attachment(id: (file as Map)['id'] as String, name: file['name'] as String, type: file['type'] as String,

@@ -93,13 +93,15 @@ class FakeServer {
 /// stays empty.
 FakeServer noNetwork() => FakeServer((_) => FakeServer.json({'error': 'no call may reach the network'}, 500));
 
-/// One note as `GET notes` gives it: from elsewhere unless [mine], when this phone sent it as [clientId].
+/// One note as `GET notes` gives it: from elsewhere unless [mine], when this phone sent it as [clientId]. With no
+/// [pinned], as a server from before pins gives it.
 Map<String, dynamic> pulledNote(String id, {String? clientId, bool mine = false, String text = 'Flight moved to 9:40',
   DateTime? recordedAt, DateTime? editedAt, String device = 'Email', String source = 'typed', bool audio = false,
-  List<Map<String, dynamic>> files = const []}) => {
+  List<Map<String, dynamic>> files = const [], bool? pinned, DateTime? pinChangedAt}) => {
   'id': id, 'clientId': clientId, 'mine': mine, 'source': source, 'text': text,
   'recordedAt': (recordedAt ?? DateTime(2026, 11, 5, 8, 2)).millisecondsSinceEpoch,
   'editedAt': editedAt?.millisecondsSinceEpoch, 'device': device, 'audio': audio, 'attachments': files,
+  if (pinned != null) ...{'pinned': pinned, 'pinChangedAt': pinChangedAt?.millisecondsSinceEpoch},
 };
 
 /// A page of `GET notes`.

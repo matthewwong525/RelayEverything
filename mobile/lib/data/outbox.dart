@@ -48,6 +48,8 @@ Future<FlushResult> flush(Store store, Outbound api, {DateTime Function()? clock
         final bytes = await _bytesOf(item.body, folder);
         if (bytes == null) throw const ApiException(Failure.rejected, null);
         await api.sendFile(item, bytes);
+      } else if (item.route == notePin && api is RelayApi) {
+        await _sendPin(store, api, item);
       } else {
         await api.send(item);
       }
@@ -68,6 +70,17 @@ Future<FlushResult> flush(Store store, Outbound api, {DateTime Function()? clock
     await store.finish(item);
   }
   return FlushResult(sent: sent, dropped: dropped);
+}
+
+/// Sends a note's pin and keeps the server's time for it. A pin refused as older (409) is dropped and leaves its
+/// unsent mark too: the server has a newer pin change, which the next pull brings, and the phone takes it.
+Future<void> _sendPin(Store store, RelayApi api, OutboxItem item) async {
+  try {
+    await store.pinSent(item.body, await api.pin(item.body));
+  } on ApiException catch (error) {
+    if (error.status == 409) await store.pinSent(item.body, null);
+    rethrow;
+  }
 }
 
 /// A 2xx ends the last failure. A file dropped as too large stays named until the next problem.

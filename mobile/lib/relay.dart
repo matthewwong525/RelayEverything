@@ -28,7 +28,7 @@ enum Emptied { kept, dropped, deleting }
 class Entry {
   const Entry({this.id = '', required this.text, required this.at, this.sent = false, this.waiting = false, this.voice = false,
     this.writing = false, this.failed = false, this.why, this.noWords = false, this.recording, this.length, this.files = const [],
-    this.from});
+    this.from, this.pinned = false});
 
   /// The phone's own id for the note: [Relay.editNote] takes it.
   final String id;
@@ -60,6 +60,9 @@ class Entry {
 
   /// Where a note from elsewhere was made, such as `Email` or another phone; null for a note from this phone.
   final String? from;
+
+  /// Pinned to the top of the notes list, in *Pinned*.
+  final bool pinned;
 }
 
 /// One file on a note: kept on this phone, or, for a note from elsewhere, in the person's space until opened. In the
@@ -246,7 +249,7 @@ abstract class Relay extends ChangeNotifier {
   /// *Sign out* beside another of the person's phones: its key stops at its next request. Returns the words to show
   /// when it could not, else null, and reads [connections] again.
   Future<String?> signOutPhone(String id);
-  /// The Home headers the person folded, such as *On this phone*. The phone keeps them.
+  /// The headers the person folded, such as *On this phone* on Home and *Pinned* in the notes. The phone keeps them.
   Set<String> get folded;
   Future<void> setFolded(String header, bool folded);
 
@@ -334,6 +337,9 @@ abstract class Relay extends ChangeNotifier {
   Future<void> undoDelete(String id);
   /// The *Undo* bar of note [id] closed with no *Undo*: the delete runs now. A note brought back or gone stays as it is.
   Future<void> endUndo(String id);
+  /// Pins note [id] to the top of the notes list, or unpins it, at once and with no change to its words. While sending to
+  /// Relay Everything, the pin goes to the person's space, their other phones and their page; a webhook gets nothing.
+  Future<void> pinNote(String id, bool pinned);
   /// Opens a note's file in an app on the phone. A file not on the phone downloads first, with sending on.
   Future<void> openFile(EntryFile file);
 

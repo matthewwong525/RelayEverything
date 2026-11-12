@@ -58,15 +58,17 @@ export async function noteById(db: Db, id: string): Promise<Note | null> {
 }
 
 type SyncRow = Row & { seq: number; deleted: number; note_id: string; deleted_client_id: string | null; client_id: string | null;
-  edited_at: number | null; device_id: string };
+  edited_at: number | null; device_id: string; pinned_at: number | null; pin_changed_at: number | null };
 // A deleted note's row has no note to join: it reads as its ids alone.
-const SYNCED = `SELECT c.seq, c.deleted, c.note_id, c.client_id AS deleted_client_id, n.client_id, n.edited_at, n.device_id, ${COLUMNS}
+const SYNCED = `SELECT c.seq, c.deleted, c.note_id, c.client_id AS deleted_client_id, n.client_id, n.edited_at, n.device_id, n.pinned_at, n.pin_changed_at,
+  ${COLUMNS}
   FROM relay_note_changes c
   LEFT JOIN relay_notes n ON n.id = c.note_id LEFT JOIN relay_devices d ON d.id = n.device_id`;
 
-/** The timeline's note, and what a phone needs to sync it: its own id, whether it sent it, and the last change. */
+/** The timeline's note, and what a phone needs to sync it: its id, whether it sent it, its last change and pin. */
 const synced = (row: SyncRow, deviceId: string | null) =>
-  ({ ...shaped(row), clientId: row.client_id, mine: row.device_id === deviceId, editedAt: row.edited_at });
+  ({ ...shaped(row), clientId: row.client_id, mine: row.device_id === deviceId, editedAt: row.edited_at,
+    pinned: row.pinned_at !== null, pinChangedAt: row.pin_changed_at });
 
 /** The notes changed after change number `since`, oldest change first; `next` is the page's last number. With
  *  `deleted`, a deleted note comes as `{ id, clientId, deleted: true }`; without it, as an older phone asks, none. */

@@ -814,9 +814,11 @@ void main() {
         await made.get('x');
         await made.close();
         final old = Store(NativeDatabase(file, setup: (db) {
-          if (db.userVersion != 13) return;
-          // Version 13 added the source column.
-          db.execute('ALTER TABLE notes DROP COLUMN source');
+          if (db.userVersion != 14) return;
+          // Version 13 added the source column, and version 14 the pin columns.
+          for (final column in ['source', 'pinned_at', 'pin_changed_at', 'pin_unsent']) {
+            db.execute('ALTER TABLE notes DROP COLUMN $column');
+          }
           db.execute('INSERT INTO state VALUES (?, ?)',
             [settingsKey, jsonEncode({'sending': true, 'history': history, 'locationSend': 'points'})]);
           db.execute('INSERT INTO notes (client_id, body, created_at, sent_at, queued, pinning) VALUES '
@@ -861,8 +863,10 @@ void main() {
       await made.get('x');
       await made.close();
       final old = Store(NativeDatabase(file, setup: (db) {
-        if (db.userVersion != 13) return;
-        db.execute('ALTER TABLE notes DROP COLUMN source');
+        if (db.userVersion != 14) return;
+        for (final column in ['source', 'pinned_at', 'pin_changed_at', 'pin_unsent']) {
+          db.execute('ALTER TABLE notes DROP COLUMN $column');
+        }
         db.execute("INSERT INTO notes (client_id, body, created_at, kind, audio_path, duration_ms) VALUES (?, ?, 1, 'voice', ?, 3000)",
           ['old', jsonEncode(note('old').toJson()), 'voice/old.wav']);
         db.execute('PRAGMA user_version = 12');

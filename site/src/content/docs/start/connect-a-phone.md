@@ -18,7 +18,7 @@ To send straight to your own database, with no account and nothing on Relay Ever
 
 The key never shows. It goes from the server to the phone only, and works only with a secret that the phone made for this one sign-in. Tap **Cancel** on the page, or close it, and the phone gets no key. Each phone gets its key only this way: your Relay Everything page makes no phone key and no QR code.
 
-The app signs in only to Relay Everything. A phone that already sends to another server, such as [your own server](../run-your-own/), keeps sending there. On your own server, use your Relay Everything page in a browser and the [plugin for Claude Code and Codex](../../connections/claude-code/).
+The app signs in only to Relay Everything. A phone that already sends to another server, such as [your own server](../run-your-own/), keeps sending there. On your own server, use your Relay Everything page in a browser and [Relay Everything in Claude Code and Codex](../../connections/claude-code/).
 
 To connect, the phone checks its key with the server, and reads no data. Once connected, it reads your account's email, the names of your phones, computers, AI apps and webhooks, and your two notes addresses, for the **Account** page, **Connect your AI** and **Email notes**: [Account](../../app/settings/#account). Then your notes go to your space, and the phone gets your notes from your other phones, email and AI apps: [Your notes on every phone](../../app/your-notes/#your-notes-on-every-phone). The key reads no health, calendar, places or photos.
 

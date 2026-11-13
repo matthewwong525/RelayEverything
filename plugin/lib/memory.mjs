@@ -55,11 +55,11 @@ const savingIsOff = (env, cwd) => {
 /** Why memory does not run in `cwd` now, in words, or null when it runs. */
 export function whyOff(env, cwd, computer = readComputer(env)) {
   if (ownMemory(cwd, env)) return OWN_MEMORY;
-  if (!computer) return 'this computer is not connected to Relay Everything; type /relay:connect';
-  if (!computer.memory) return 'memory is off on this computer; type /relay:memory on';
+  if (!computer) return 'this computer is not connected to Relay Everything; type /relay-connect';
+  if (!computer.memory) return 'memory is off on this computer; type /relay-memory on';
   if (env.RELAY_SAVE === '0') return 'RELAY_SAVE is 0 where this app started';
   if (!existsSync(join(gitTop(cwd), '.git'))) return 'this folder is not in a git project';
-  if (savingIsOff(env, cwd)) return 'saving to Relay Everything is off in this project; type /relay:saving on';
+  if (savingIsOff(env, cwd)) return 'saving to Relay Everything is off in this project; type /relay-saving on';
   return null;
 }
 

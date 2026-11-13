@@ -206,7 +206,7 @@ it("gives an API key the web API's address, and lets it reach only that and its 
   expect(await apiKeyCaller({ DB: db.DB }, key)).toMatchObject({ kind: "key", personId: ANA, device: { id: json.id, reaches: "api" } });
   // A phone or an older chat key is refused by the web API's door, and a turned-off API key too.
   for (const [sent, message] of [[phone, "A phone key only sends. Make an API key on your Relay Everything page."],
-    [laptop, "This computer's key only saves chats. Type /relay:connect to connect it again."]] as const) {
+    [laptop, "This computer's key only saves chats. Type /relay-connect to connect it again."]] as const) {
     const refused = await apiKeyCaller({ DB: db.DB }, (sent as { bearer: string }).bearer) as Response;
     expect([refused.status, (await body(refused)).error.message]).toEqual([403, message]);
   }

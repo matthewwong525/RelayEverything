@@ -5,13 +5,6 @@ The Relay Everything plugin for Claude Code and Codex: it connects a computer by
 
 ## Requirements
 
-### Requirement: One plugin installs in Claude Code and Codex
-The plugin SHALL install from the public Relay Everything repository, with no other repository, in Claude Code and in Codex, and SHALL do the same things in both. It SHALL start no MCP server of its own.
-
-#### Scenario: Install in Codex
-- **WHEN** a person adds the Relay Everything repository as a plugin source in Codex and adds `relay@relay`
-- **THEN** Codex lists the plugin's skills, and the plugin starts no MCP server
-
 ### Requirement: A computer connects by a sign-in link
 `/relay:connect` SHALL show a link and a short code, and SHALL wait while the person opens the link on any device, signs in, sees the same code and the computer's name, and confirms. The computer SHALL then get its own key, which SHALL never show in the chat, on screen or in a project file. The link SHALL work once and only for a few minutes. With no address given, it SHALL connect to Relay Everything's own server; with an address, to that server. Claude Code and Codex on one computer SHALL share the one key.
 
@@ -42,7 +35,7 @@ The plugin SHALL send the person's messages and the AI's answers word for word, 
 - **THEN** Relay Everything gets the message with that text hidden
 
 ### Requirement: Saving can be turned off per project
-Saving SHALL be on in every project until the person turns it off there. With saving off, nothing from that project SHALL be sent, and the save skill SHALL say how to turn it on. The person SHALL be able to see whether saving is on and when the project last sent. A git worktree SHALL count as its main repository: a chat in any worktree SHALL carry the main repository's name, and saving off or on SHALL hold in every worktree of it, made before or after.
+Saving SHALL be on in every project that has the copy until the person turns it off there, and a project with neither the copy nor the plugin SHALL send nothing. While the 0.7.0 plugin is installed, it SHALL keep saving a project with no copy until the person removes it. With saving off, nothing from that project SHALL be sent, and the save skill SHALL say how to turn it on. The person SHALL be able to see whether saving is on and when the project last sent. A git worktree SHALL count as its main repository: a chat in any worktree SHALL carry the main repository's name, and saving off or on SHALL hold in every worktree of it, made before or after.
 
 #### Scenario: Saving is off
 - **WHEN** the person turns saving off in a project and then chats there
@@ -55,6 +48,14 @@ Saving SHALL be on in every project until the person turns it off there. With sa
 #### Scenario: A chat in a workspace copy is named
 - **WHEN** a chat runs in a worktree named `rural-horse` of the `WongOS` repository, with saving on
 - **THEN** Relay Everything shows the chat under the project `WongOS`
+
+#### Scenario: A project with no copy
+- **WHEN** the person chats in a project that does not have the copy, on a computer with no Relay Everything plugin
+- **THEN** nothing from that chat reaches Relay Everything
+
+#### Scenario: A project with no copy, before the plugin is removed
+- **WHEN** the person chats in a project that does not have the copy, on a computer that still has the plugin
+- **THEN** the plugin saves the chat, once, until the person removes the plugin
 
 ### Requirement: The AI saves a summary on request
 When the person asks to save the chat, the AI SHALL send the chat so far with a title and a summary it writes, marked as written by the AI.
@@ -86,11 +87,11 @@ When it connects, the plugin SHALL say if Claude Code or Codex on that computer 
 - **THEN** the plugin says so and offers to remove it, and removes nothing unasked
 
 ### Requirement: The plugin holds no key and no private address
-The plugin's files SHALL hold no key, email or private address; they MAY name Relay Everything's public address. The computer's key SHALL be kept only in one file readable only by the person's own login, and SHALL NOT be written to a log, a project file or a chat.
+The copy's files SHALL hold no key, email or private address; they MAY name Relay Everything's public address. The computer's key SHALL be kept only in one file readable only by the person's own login, outside every project, and SHALL NOT be written to a log, a project file or a chat.
 
 #### Scenario: A key or private address is added to the plugin
-- **WHEN** a file in the plugin holds text shaped like a key, an email, or a workers.dev address
-- **THEN** the plugin's checks fail before it can be published
+- **WHEN** a file in the copy's source holds text shaped like a key, an email, or a workers.dev address
+- **THEN** the checks fail before it can be published
 
 ### Requirement: The AI sees the person's topics when a chat starts
 In a repo with no memory of its own, when a chat starts on a connected computer, the plugin SHALL give the AI the person's top-level topics, one short line each, from the computer's copy of the web, whether memory is on or off. The chat SHALL NOT wait for the network: the copy SHALL be synced on its own. With no copy or no topics, nothing SHALL be added. In a repo with its own memory, the plugin SHALL add no topics: the repo's memory gives its own.
@@ -193,3 +194,12 @@ With memory on or off, the plugin's daily build SHALL stay the one daily job on 
 #### Scenario: A chat memory read
 - **WHEN** the daily build lists chats to read, and memory already read one of them when it ended
 - **THEN** the build leaves that chat out and still reads the others and the notes
+
+### Requirement: One copy serves Claude Code and Codex
+
+A project's copy SHALL come from the public Relay Everything repository, with no other repository, and SHALL do the same things in Claude Code and in Codex. It SHALL start no MCP server of its own.
+
+#### Scenario: The copy in Codex
+
+- **WHEN** a project has the copy and the person trusts its hooks in Codex
+- **THEN** Codex lists Relay Everything's skills and saves the chat, and no MCP server starts

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// `/relay:saving [on|off]`: turns saving to Relay Everything on or off for this project, in Claude Code and Codex alike,
+// `/relay-saving [on|off]`: turns saving to Relay Everything on or off for this project, in Claude Code and Codex alike,
 // or says which it is and when it last sent.
 // usage: node saving.mjs [on|off]
 import { realpathSync } from 'node:fs';
@@ -35,12 +35,12 @@ export function saving(store, cwd, choice, env = {}, now = Date.now()) {
     store.setOff(root, choice === 'off');
     // An entry for this worktree alone, made before worktrees counted as their main repository, goes with an on.
     if (choice === 'on' && top !== root) store.setOff(top, false);
-  } else if (choice) return [`Type /relay:saving on, /relay:saving off, or /relay:saving to see which it is.`];
+  } else if (choice) return [`Type /relay-saving on, /relay-saving off, or /relay-saving to see which it is.`];
   const lines = savingOff(store, root, top)
-    ? [`Saving to Relay Everything is off for ${name}.`, 'Chats in this project stay on this computer. Type /relay:saving on to save them again.']
-    : [`Saving to Relay Everything is on for ${name}.`, 'Each chat here goes to your Relay Everything server as you talk, from Claude Code or Codex. Type /relay:saving off to stop.'];
+    ? [`Saving to Relay Everything is off for ${name}.`, 'Chats in this project stay on this computer. Type /relay-saving on to save them again.']
+    : [`Saving to Relay Everything is on for ${name}.`, 'Each chat here goes to your Relay Everything server as you talk, from Claude Code or Codex. Type /relay-saving off to stop.'];
   lines.push(lastSent(store, root, now));
-  if (!readComputer(env)) lines.push('This computer is not connected, so no chat is saved now. Type /relay:connect to connect it.');
+  if (!readComputer(env)) lines.push('This computer is not connected, so no chat is saved now. Type /relay-connect to connect it.');
   return env.RELAY_SAVE === '0' ? [...lines, 'RELAY_SAVE is 0 where this app started, so no chat is saved now.'] : lines;
 }
 

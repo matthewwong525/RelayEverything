@@ -23,7 +23,7 @@ On [your own server](../run-your-own/), you sign in with your server's own login
 
 1. [Install the app](../install/) on your phone.
 2. In the app, open **Settings**, tap **Sign in to Relay Everything**, then **Sign in**: [Connect a phone](../connect-a-phone/).
-3. On a computer with Claude Code or Codex, add the [Relay Everything plugin](../../connections/claude-code/), and type `/relay:connect`.
+3. In a Claude Code or Codex project, [install Relay Everything](../../install/). It starts `/relay-connect` for you.
 
 Each phone and each Claude Code computer gets its own key when it signs in. The key never shows. A key adds data to your space, and a phone's key also syncs your notes: [Keys](../../api/keys/).
 

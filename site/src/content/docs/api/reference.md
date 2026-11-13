@@ -1149,7 +1149,7 @@ Send the input as a JSON body.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `name` | string | yes | A name you know the device by. |
-| `reaches` | "api" | yes | api: an API key for the web API, which reads and adds notes. A phone signs in from the Relay Everything app, and a computer from Claude Code or Codex with /relay:connect. |
+| `reaches` | "api" | yes | api: an API key for the web API, which reads and adds notes. A phone signs in from the Relay Everything app, and a computer from Claude Code or Codex with /relay-connect. |
 
 ### Output
 

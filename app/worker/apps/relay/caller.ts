@@ -51,7 +51,7 @@ async function keyCaller(env: Pick<CallerEnv, "DB">, key: string): Promise<Calle
 export async function apiKeyCaller(env: Pick<CallerEnv, "DB">, key: string): Promise<Caller | Response> {
   const caller = await keyCaller(env, key);
   if (caller instanceof Response || caller.device?.reaches === "api" || caller.device?.reaches === "agent") return caller;
-  if (caller.device?.reaches === "chats") return refused(403, "This computer's key only saves chats. Type /relay:connect to connect it again.");
+  if (caller.device?.reaches === "chats") return refused(403, "This computer's key only saves chats. Type /relay-connect to connect it again.");
   return refused(403, "A phone key only sends. Make an API key on your Relay Everything page.");
 }
 

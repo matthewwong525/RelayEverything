@@ -3,7 +3,7 @@ import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -150,13 +150,18 @@ test('db sends one command with its values, a file\'s commands as one batch, and
 });
 
 test('an old chat key is told to connect again, a turned-off key shows the server\'s reason, and other refusals say why', async () => {
-  // The words keyCaller and apiKeyCaller send, in app/worker/apps/relay/caller.ts.
-  assert.deepEqual(await ask(['notes', '--q', 'x'], { fetcher: fakeApi(403, CHAT_KEY).fetcher }), { code: 1, text: CHAT_KEY });
-  assert.equal(CHAT_KEY, "This computer's key only saves chats. Type /relay:connect to connect it again.");
+  // The server's own words, from apiKeyCaller in app/worker/apps/relay/caller.ts, and an older server's command.
+  const caller = readFileSync(fileURLToPath(new URL('../../app/worker/apps/relay/caller.ts', import.meta.url)), 'utf8');
+  const [, server] = /refused\(403, "(This computer's key only saves chats\.[^"]*)"\)/.exec(caller) ?? [];
+  assert.ok(server, 'caller.ts refuses a chat key');
+  for (const words of [server, "This computer's key only saves chats. Type /relay:connect to connect it again."]) {
+    assert.deepEqual(await ask(['notes', '--q', 'x'], { fetcher: fakeApi(403, words).fetcher }), { code: 1, text: CHAT_KEY }, words);
+  }
+  assert.equal(CHAT_KEY, "This computer's key only saves chats. Type /relay-connect to connect it again.");
   assert.deepEqual(await ask(['me'], { fetcher: fakeApi(403, 'This device key is turned off.').fetcher }), { code: 1,
-    text: "Relay Everything refused this computer's key: This device key is turned off. Type /relay:connect to connect again." });
+    text: "Relay Everything refused this computer's key: This device key is turned off. Type /relay-connect to connect again." });
   assert.match((await ask(['me'], { fetcher: fakeApi(401, 'This key is not one Relay Everything makes.').fetcher })).text,
-    /^Relay Everything refused this computer's key: This key is not one Relay Everything makes\. Type \/relay:connect/);
+    /^Relay Everything refused this computer's key: This key is not one Relay Everything makes\. Type \/relay-connect/);
   assert.equal((await ask(['notes'], { fetcher: fakeApi(400).fetcher })).text, 'Relay Everything refused the request: A made-up refusal.');
   const bare = async () => new Response('Bad gateway', { status: 502 });
   assert.equal((await ask(['notes'], { fetcher: bare })).text, 'Relay Everything refused the request: It answered 502.');

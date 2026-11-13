@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
@@ -14,29 +14,29 @@ import { fakeServer, project, repoWithWorktree, SESSION } from './fake.mjs';
 const bin = name => fileURLToPath(new URL(`../bin/${name}`, import.meta.url));
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
-test('/relay:saving turns a project off and on, and says which it is', () => {
+test('/relay-saving turns a project off and on, and says which it is', () => {
   const place = project();
   const say = (choice, env = place.env) => saving(place.store, place.root, choice, env);
   assert.deepEqual(say(undefined), [
     'Saving to Relay Everything is on for relay-ring.',
-    'Each chat here goes to your Relay Everything server as you talk, from Claude Code or Codex. Type /relay:saving off to stop.',
+    'Each chat here goes to your Relay Everything server as you talk, from Claude Code or Codex. Type /relay-saving off to stop.',
     'No chat from this project has gone to Relay Everything yet.']);
   assert.deepEqual(say('off').slice(0, 2), [
-    'Saving to Relay Everything is off for relay-ring.', 'Chats in this project stay on this computer. Type /relay:saving on to save them again.']);
+    'Saving to Relay Everything is off for relay-ring.', 'Chats in this project stay on this computer. Type /relay-saving on to save them again.']);
   assert.equal(place.store.isOff(place.root), true);
   assert.equal(say('on')[0], 'Saving to Relay Everything is on for relay-ring.');
   assert.equal(place.store.isOff(place.root), false);
-  assert.deepEqual(say('maybe'), ['Type /relay:saving on, /relay:saving off, or /relay:saving to see which it is.']);
+  assert.deepEqual(say('maybe'), ['Type /relay-saving on, /relay-saving off, or /relay-saving to see which it is.']);
   assert.match(say(undefined, { ...place.env, RELAY_SAVE: '0' }).at(-1), /RELAY_SAVE is 0/);
   forgetComputer(place.env);
-  assert.equal(say(undefined).at(-1), 'This computer is not connected, so no chat is saved now. Type /relay:connect to connect it.');
+  assert.equal(say(undefined).at(-1), 'This computer is not connected, so no chat is saved now. Type /relay-connect to connect it.');
   // As the skill runs it: in the project, with the Relay Everything folder from the env.
   const printed = execFileSync(process.execPath, [bin('saving.mjs'), 'off'], { cwd: place.root, env: { ...process.env, ...place.env }, encoding: 'utf8' });
   assert.match(printed, /^Saving to Relay Everything is off for relay-ring\.\n/);
   assert.equal(place.store.isOff(place.root), true);
 });
 
-test('/relay:saving only looks where it can not write, and says so when asked to change', () => {
+test('/relay-saving only looks where it can not write, and says so when asked to change', () => {
   const place = project();
   place.store.setOff(place.root, true);
   // A look reads the state with no folder made or changed.
@@ -46,14 +46,14 @@ test('/relay:saving only looks where it can not write, and says so when asked to
   const look = run(undefined, { env, cwd: place.root });
   assert.equal(look.code, 0);
   assert.equal(look.lines[0], 'Saving to Relay Everything is on for relay-ring.');
-  assert.equal(run('maybe', { env, cwd: place.root }).lines[0], 'Type /relay:saving on, /relay:saving off, or /relay:saving to see which it is.');
+  assert.equal(run('maybe', { env, cwd: place.root }).lines[0], 'Type /relay-saving on, /relay-saving off, or /relay-saving to see which it is.');
   assert.deepEqual(run('off', { env, cwd: place.root }), { code: 1,
     lines: [`The folder ${env.RELAY_EVERYTHING_HOME} could not be written, so saving did not change.`] });
   assert.equal(run('on', { env: place.env, cwd: place.root }).code, 0);
   assert.equal(place.store.isOff(place.root), false);
 });
 
-test('/relay:saving off in a repository holds in each worktree of it, made before or after, and names the repository', async () => {
+test('/relay-saving off in a repository holds in each worktree of it, made before or after, and names the repository', async () => {
   const place = project();
   const { main, copy } = repoWithWorktree();
   assert.equal(saving(place.store, main, 'off', place.env)[0], 'Saving to Relay Everything is off for WongOS.');
@@ -78,7 +78,7 @@ test('/relay:saving off in a repository holds in each worktree of it, made befor
   assert.equal(older.isOff(copy), false);
 });
 
-test('/relay:saving says when the project last sent a chat: the newest send of its sessions, not another project\'s', async () => {
+test('/relay-saving says when the project last sent a chat: the newest send of its sessions, not another project\'s', async () => {
   const place = project();
   const server = fakeServer();
   record(place.store, place.input);
@@ -95,15 +95,39 @@ test('/relay:saving says when the project last sent a chat: the newest send of i
     ['less than a minute ago', '1 minute ago', '3 hours ago', '3 days ago']);
 });
 
-test('each skill names itself and runs its own script from the plugin\'s folder', () => {
-  for (const [skill, script] of [['connect', 'connect.mjs'], ['ask', 'relay.mjs'], ['save', 'save.mjs'], ['saving', 'saving.mjs'], ['build', 'build.mjs']]) {
+test('each skill is relay-<name> and runs its own script from the project\'s copy', () => {
+  for (const [skill, script] of [['connect', 'bin/connect.mjs'], ['ask', 'bin/relay.mjs'], ['save', 'bin/save.mjs'], ['saving', 'bin/saving.mjs'],
+    ['build', 'bin/build.mjs'], ['memory', 'bin/memory.mjs'], ['update', 'update.mjs']]) {
     const text = read(`skills/${skill}/SKILL.md`);
-    assert.match(text, new RegExp(`^---\\nname: ${skill}\\ndescription: .*Relay Everything`), skill);
-    assert.ok(text.includes(`node "\${CLAUDE_PLUGIN_ROOT}/bin/${script}"`), skill);
-    assert.ok(text.includes('In Codex it is empty: use the folder two levels above this file'), skill);
+    assert.match(text, new RegExp(`^---\\nname: relay-${skill}\\ndescription: .*Relay Everything`), skill);
+    assert.match(text, new RegExp(`/relay-${skill}\\b`), `${skill} names its command`);
+    assert.ok(text.includes(`node "$(git rev-parse --show-toplevel)/.agents/relay/${script}"`), skill);
+    assert.ok(text.includes("Each command runs Relay Everything's copy in this project, `.agents/relay/`."), skill);
     assert.ok(text.includes('**In Codex, run each command here outside the sandbox.** Ask for escalated permissions'), skill);
-    assert.ok(text.length < (skill === 'ask' ? 6000 : 4000), `${skill} stays short`);
+    // The plugin offers the same skills: with no copy in the project, each runs the plugin's own script, and only
+    // `/relay:move`, on the person's ask, installs the copy.
+    for (const gone of ['CLAUDE_PLUGIN_ROOT', '/relay:']) assert.ok(!text.replaceAll('`/relay:move`', '').includes(gone), `${skill} has no ${gone}`);
+    assert.ok(text.includes('Never install the copy unless the person asks'), `${skill} installs nothing unasked`);
+    if (skill !== 'update') {
+      assert.ok(text.includes('When that folder is missing, this is the Relay Everything plugin: in each command, put the folder two levels above '
+        + 'this file in place of `$(git rev-parse --show-toplevel)/.agents/relay`.'), `${skill} runs the plugin's script with no copy`);
+    }
+    if (skill !== 'memory') assert.ok(text.length < (skill === 'ask' ? 6200 : 4000), `${skill} stays short`);
   }
+  // No skill sends the AI to the install page: the copy is installed only when the person asks.
+  for (const entry of readdirSync(new URL('../skills/', import.meta.url))) {
+    assert.ok(!read(`skills/${entry}/SKILL.md`).includes('relayeverything.com/install'), `${entry} does not install unasked`);
+  }
+  assert.match(read('skills/update/SKILL.md'), /there is no copy to update: tell the person that `\/relay:move` moves Relay Everything into this project, and stop\./);
+  // The move skill is the plugin's own: it runs the plugin's install, and the copy leaves it out.
+  const move = read('skills/move/SKILL.md');
+  assert.match(move, /^---\nname: move\ndescription: .*Relay Everything/);
+  for (const part of ['node "${CLAUDE_PLUGIN_ROOT}/install.mjs" --into "$(git rev-parse --show-toplevel)"', 'claude plugin uninstall relay@relay',
+    'codex plugin remove relay@relay', 'Only on a yes']) assert.ok(move.includes(part), part);
+  // The update applies only on a yes, and walks each clash with three choices.
+  const update = read('skills/update/SKILL.md');
+  for (const part of ['update.mjs" check', 'update.mjs" plan', 'update.mjs" show <path>', 'update.mjs" apply --choose <path>=mine',
+    '*keep mine*', "*keep the release's*", '*keep both*', 'Never run `apply` without the person\'s yes']) assert.ok(update.includes(part), part);
   const ask = read('skills/ask/SKILL.md');
   assert.match(ask, /this computer's time zone/);
   // The skill names each command relay.mjs takes, and its usage line names each one the skill lists.
@@ -118,7 +142,7 @@ test('each skill names itself and runs its own script from the plugin\'s folder'
   assert.ok(read('skills/save/SKILL.md').includes('--session "${CLAUDE_SESSION_ID}"'));
 });
 
-test('the hooks run in Claude Code and Codex: no async hook, a short end, and the plugin\'s folder in each command', () => {
+test('the plugin\'s hooks run in Claude Code and Codex: no async hook, a short end, and the plugin\'s folder in each command', () => {
   const { hooks } = JSON.parse(read('hooks/hooks.json'));
   assert.deepEqual(Object.keys(hooks), ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'Stop', 'SessionEnd']);
   const events = { SessionStart: 'session-start', UserPromptSubmit: 'prompt', PreToolUse: 'before-edit', Stop: 'stop', SessionEnd: 'session-end' };
@@ -132,13 +156,14 @@ test('the hooks run in Claude Code and Codex: no async hook, a short end, and th
   // An edit in either app: Claude Code's edit tools, and Codex's apply_patch.
   assert.deepEqual(hooks.PreToolUse[0].matcher.split('|'), ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'apply_patch']);
   const manifest = JSON.parse(read('.claude-plugin/plugin.json'));
-  assert.equal(manifest.version, '0.6.1');
+  assert.equal(manifest.version, '0.7.0');
+  assert.equal(read('VERSION'), '0.8.0\n');
   assert.equal(manifest.userConfig, undefined);
   assert.match(manifest.description, /Claude Code/);
   assert.match(manifest.description, /Codex/);
 });
 
-test('/relay:build maps off, on, now and nothing to its commands', () => {
+test('/relay-build maps off, on, now and nothing to its commands', () => {
   const text = read('skills/build/SKILL.md');
   for (const command of ['status', 'off', 'on', 'now']) assert.ok(text.includes(`bin/build.mjs" ${command}\n`), command);
   assert.match(text, /^argument-hint: "\[off\|on\|now\]"$/m);

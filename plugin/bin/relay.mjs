@@ -11,8 +11,9 @@ import { withSandbox } from '../lib/sandbox.mjs';
 import { api, chatIds, reason } from '../lib/server.mjs';
 import { linksIn, readTopic, TOPIC, topicPages } from '../lib/topics.mjs';
 
-export const CHAT_KEY = "This computer's key only saves chats. Type /relay:connect to connect it again.";
-export const NOT_CONNECTED = 'This computer is not connected to Relay Everything. Type /relay:connect to connect it.';
+export const CHAT_KEY_REFUSAL = "This computer's key only saves chats.";
+export const CHAT_KEY = `${CHAT_KEY_REFUSAL} Type /relay-connect to connect it again.`;
+export const NOT_CONNECTED = 'This computer is not connected to Relay Everything. Type /relay-connect to connect it.';
 const USAGE = 'Commands: me, notes, note <id>, day <YYYY-MM-DD>, health <type>, nights, workouts, places, points <id>, calendar, '
   + 'chats --q <words>, chat <id>, around <note id> or --at <time>, topic <name>, add-note, facts, fact <id>, add-facts, columns, change-columns, '
   + 'tag <fact|note> <id>, db "<sql>" [--params <JSON list>], db --file <path>, db tables. Give fields as --name value, such as --from 2026-11-03 --to 2026-11-04. add-note, add-facts and '
@@ -117,9 +118,10 @@ export const computerZone = () => Intl.DateTimeFormat().resolvedOptions().timeZo
 /** A refusal's line: an old chat key's own, a key's, or the request's. */
 function refused(status, json) {
   const why = reason(json) ?? `It answered ${status}.`;
-  // The server sends an old chat key's refusal as CHAT_KEY itself; a key that is turned off or unknown has its own.
-  if (why === CHAT_KEY) return { key: true, text: CHAT_KEY };
-  if (status === 401 || status === 403) return { key: true, text: `Relay Everything refused this computer's key: ${why} Type /relay:connect to connect again.` };
+  // The server's refusal of an old chat key starts with CHAT_KEY's first sentence; its command can differ by server
+  // version, so only that sentence counts. A key that is turned off or unknown has its own reason.
+  if (why.startsWith(CHAT_KEY_REFUSAL)) return { key: true, text: CHAT_KEY };
+  if (status === 401 || status === 403) return { key: true, text: `Relay Everything refused this computer's key: ${why} Type /relay-connect to connect again.` };
   return { key: false, text: `Relay Everything refused the request: ${why}` };
 }
 

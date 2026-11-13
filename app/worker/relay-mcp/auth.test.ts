@@ -311,7 +311,7 @@ it("opens the web API to a live API key, for its own person, and refuses every o
   expect(await (await v1("me", keys.agent)).json()).toEqual({ device: "Ana's agent", adds: true });
   const refusal = async (response: Response) => [response.status, (await response.json() as { error_description: string }).error_description];
   expect(await refusal(await v1("me", keys.phone))).toEqual([403, "A phone key only sends. Make an API key on your Relay Everything page."]);
-  expect(await refusal(await v1("me", keys.chats))).toEqual([403, "This computer's key only saves chats. Type /relay:connect to connect it again."]);
+  expect(await refusal(await v1("me", keys.chats))).toEqual([403, "This computer's key only saves chats. Type /relay-connect to connect it again."]);
   expect(await refusal(await v1("me", keys.off))).toEqual([403, "This device key is turned off."]);
   expect(await refusal(await v1("me", makeKey("unknown")))).toEqual([403, "This key is on no list of devices."]);
   expect((await v1("me", "rek_short")).status).toBe(401);

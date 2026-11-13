@@ -118,7 +118,7 @@ export async function run({ from, profile, dryRun = false, source, computer, fet
   log(`Source: ${counted(read)}.`);
   if (dryRun) return { ok: true, dryRun: true, read };
   const key = computer ?? readComputer();
-  if (!key) throw new Error('This computer is not connected to Relay Everything. Type /relay:connect first.');
+  if (!key) throw new Error('This computer is not connected to Relay Everything. Type /relay-connect first.');
   const space = spaceClient(key, send);
   const status = await space.send({});
   if (status.imported === 0) {

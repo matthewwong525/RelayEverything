@@ -16,7 +16,7 @@ Home has a large **Home** title, the [sync state](#the-sync-state) under it only
 | | **Health** | *Off*, or when the readings last went and how many wait. [Health](../health/) |
 | | **Calendar** | *Off*, or how many calendars and when the events last went. [Calendar](../calendar/) |
 | | **Photos** | *Off*, or *On* and if photos also go on mobile data. [Photos](../photos/) |
-| **Other connections** | **Connect your AI** | *Let your AI read your notes*. Your computers with the plugin and your **Saved chats**, then the AI connector's address and the AI apps you connected. [Connect your AI](../../connections/connect-your-ai/) |
+| **Other connections** | **Connect your AI** | *Let your AI read your notes*. Your computers with Relay Everything in Claude Code or Codex, and your **Saved chats**, then the AI connector's address and the AI apps you connected. [Connect your AI](../../connections/connect-your-ai/) |
 | | **Email notes** | *Email a note to your own address*. Your two notes addresses, each with **Copy**. [Email notes](../email/) |
 
 Tap **On this phone** or **Other connections** to fold that card away. Tap it again to open it. The phone remembers which cards you folded.

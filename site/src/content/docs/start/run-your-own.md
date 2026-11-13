@@ -34,9 +34,9 @@ The [knowledge web](../../api/knowledge-web/) needs Cloudflare Artifacts, on the
 
 ## Your devices
 
-Sign in on your Relay Everything page with your server's own login. You read and write your notes there. Each Claude Code or Codex computer gets its own key when you type `/relay:connect https://<your-relay-server>`: [Save AI chat transcripts](../../connections/claude-code/#connect-the-computer). For your own script, open **Settings**, then **Account**, and under **Advanced** click **API keys**, then **Add an API key**. A key adds data, and an API key also reads through the web API: [Keys](../../api/keys/#what-a-device-key-reaches).
+Sign in on your Relay Everything page with your server's own login. You read and write your notes there. Each Claude Code or Codex computer gets its own key when you type `/relay-connect https://<your-relay-server>`: [Save AI chat transcripts](../../connections/claude-code/#connect-the-computer). For your own script, open **Settings**, then **Account**, and under **Advanced** click **API keys**, then **Add an API key**. A key adds data, and an API key also reads through the web API: [Keys](../../api/keys/#what-a-device-key-reaches).
 
-The Relay Everything app on a phone signs in only to the shared Relay Everything server, so on your own server you use the page and the plugin. A phone that was already connected to your server keeps sending there.
+The Relay Everything app on a phone signs in only to the shared Relay Everything server, so on your own server you use the page and Relay Everything in your Claude Code or Codex projects. A phone that was already connected to your server keeps sending there.
 
 ## Who can sign in
 
@@ -60,7 +60,7 @@ Ask your AI *update my Relay Everything*. It gets the newest version of Relay Ev
 
 If you made your server when the setup guide was in a top-level `self-host/` folder, the update finds your settings and Cloudflare key there and moves them to `app/self-host/`. You do nothing.
 
-If your server is from before spaces, the update also makes your spaces Worker, `<name>-spaces`, and your own account. It doesn't move your old data: the update removes the old shared tables, and the notes in them. The old keys stop too: connect each computer again with `/relay:connect`, and make each script a new key with **Add an API key**.
+If your server is from before spaces, the update also makes your spaces Worker, `<name>-spaces`, and your own account. It doesn't move your old data: the update removes the old shared tables, and the notes in them. The old keys stop too: connect each computer again with `/relay-connect`, and make each script a new key with **Add an API key**.
 
 ## Remove it
 

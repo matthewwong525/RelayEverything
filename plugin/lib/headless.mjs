@@ -5,12 +5,12 @@ import { basename } from 'node:path';
 /** A build stops after this long; the next day goes on from what it marked read. */
 export const STOP_AFTER = 30 * 60_000;
 
-/** The app the starting chat came from: Codex by its rollout or its own variables, else Claude Code. */
+/** The app the starting chat came from: Codex by its rollout or its thread id, else Claude Code. */
 export function appOf(env, transcript) {
   // The transcript decides first: a person may set CODEX_HOME in a shell that also runs Claude Code.
   const file = basename(String(transcript ?? ''));
   if (file) return file.startsWith('rollout-') ? 'codex' : 'claude';
-  return env.CODEX_THREAD_ID || (env.PLUGIN_ROOT && !env.CLAUDE_PLUGIN_ROOT) ? 'codex' : 'claude';
+  return env.CODEX_THREAD_ID ? 'codex' : 'claude';
 }
 
 /** The child's variables: its own chat is not saved and starts no build. */

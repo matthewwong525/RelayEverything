@@ -1,4 +1,4 @@
-// A computer's way in from Claude Code or Codex: `/relay:connect` sends its secret's SHA-256 and shows a link and code.
+// A computer's way in from Claude Code or Codex: `/relay-connect` sends its secret's SHA-256 and shows a link and code.
 // The person signs in there and clicks Connect; the computer asks every few seconds and gets its own key, once.
 import { callerOf } from "../caller.ts";
 import { apiAddress, makeDevice } from "../device.ts";
@@ -12,7 +12,7 @@ import { answer, NO_STORE, redirect } from "./session.ts";
 
 const LINK_MS = 10 * 60_000;
 const LINK = "/apps/relay/sign-in/computer";
-const AGAIN = "Start again on your computer: type /relay:connect.";
+const AGAIN = "Start again on your computer: type /relay-connect.";
 const USED = `This link was used already, or is too old. ${AGAIN}`;
 /** Short words for the code a person compares: one of these and four digits, such as KITE-4821. */
 const WORDS = ["KITE", "LAKE", "MOON", "PINE", "ROCK", "SAND", "TREE", "WAVE", "BIRD", "FISH", "LEAF", "STAR", "RAIN", "SNOW", "WIND", "FERN",

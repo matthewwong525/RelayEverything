@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// `/relay:save`: sends this chat so far, then the AI's title and summary beside it.
+// `/relay-save`: sends this chat so far, then the AI's title and summary beside it.
 // usage: node save.mjs [--session <id>] < title on the first line, then the summary
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -13,8 +13,8 @@ import { gitTop } from '../lib/transcript.mjs';
 const TITLE_CHARACTERS = 200;
 const SUMMARY_CHARACTERS = 20_000;
 const SEND_WAIT = 15_000;
-export const OFF = 'Saving to Relay Everything is off in this project. To turn it on, type /relay:saving on.';
-export const NOT_CONNECTED = 'This computer is not connected to Relay Everything. Type /relay:connect to connect it.';
+export const OFF = 'Saving to Relay Everything is off in this project. To turn it on, type /relay-saving on.';
+export const NOT_CONNECTED = 'This computer is not connected to Relay Everything. Type /relay-connect to connect it.';
 
 /** The title (the first line) and the summary (the rest) from the text on stdin. */
 export function parseSave(text) {

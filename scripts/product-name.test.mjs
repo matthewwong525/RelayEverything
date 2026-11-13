@@ -58,6 +58,10 @@ const PLACES = [
   'plugin/bin',
   'plugin/build',
   'plugin/hooks/hooks.json',
+  'plugin/hooks/claude.json',
+  'plugin/hooks/codex.json',
+  'plugin/install.mjs',
+  'plugin/update.mjs',
   'plugin/lib',
   'plugin/memory-profile.mjs',
   'plugin/README.md',
@@ -254,7 +258,7 @@ test('Relay Everything, commands, variables and paths pass', () => {
   const page = [
     'Open your Relay Everything page, or your Relay',
     'Everything server.',
-    'Type `/relay:saving off`, or /relay:saving on, or set RELAY_SAVE=0.',
+    'Type `/relay-saving off`, or /relay-saving on, or set RELAY_SAVE=0.',
     'The page is at https://<your-relay-server>/apps/relay/, in [RelayEverything](https://github.com/x/RelayEverything).',
   ].join('\n');
   assert.deepEqual(bareNames('site/src/content/docs/a.md', page), []);

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// `/relay:connect`: connects this computer to Relay Everything by a sign-in link, with no key to copy.
+// `/relay-connect`: connects this computer to Relay Everything by a sign-in link, with no key to copy.
 //   start [server]  asks the server for a link and a code, and starts a waiter that runs on its own for 10 minutes
 //   wait            waits up to 90 seconds for the person to click Connect, then checks for a second connector
 //   status          says whether this computer is connected
@@ -65,7 +65,7 @@ export async function start(server, { env = process.env, fetcher = fetch, waiter
   } catch (error) {
     return { code: 1, lines: [withSandbox(`Relay Everything at ${origin} could not be reached. Check the address and the network, then try again.`, error)] };
   }
-  if (response.status === 429) return { code: 1, lines: ['Relay Everything had too many tries from this network. Wait a few minutes, then type /relay:connect again.'] };
+  if (response.status === 429) return { code: 1, lines: ['Relay Everything had too many tries from this network. Wait a few minutes, then type /relay-connect again.'] };
   const json = await response.json().catch(() => null);
   if (response.status !== 200 || typeof json?.link !== 'string' || typeof json?.words !== 'string') {
     return { code: 1, lines: [`${origin} did not answer as a Relay Everything server does (status ${response.status}). Check the address.`] };
@@ -140,9 +140,9 @@ export async function poll(startedAt, { env = process.env, fetcher = fetch, ever
 }
 
 const ENDS = {
-  expired: 'Nobody clicked Connect in time, so no key was made. Type /relay:connect to start again.',
-  ended: 'The sign-in link ended before this computer got its key. Type /relay:connect to start again.',
-  failed: 'The server sent a key this plugin can not use. Type /relay:connect to start again.',
+  expired: 'Nobody clicked Connect in time, so no key was made. Type /relay-connect to start again.',
+  ended: 'The sign-in link ended before this computer got its key. Type /relay-connect to start again.',
+  failed: 'The server sent a key this plugin can not use. Type /relay-connect to start again.',
 };
 
 /** Waits for the waiter's answer, then names any second Relay Everything connector. */
@@ -161,12 +161,12 @@ export async function wait({ env = process.env, limit = WAIT, every = 1_000, run
     if (!pending) {
       const computer = readComputer(env);
       return computer ? { code: 0, lines: [connectedLine(computer)] }
-        : { code: 1, lines: ['No sign-in link is waiting. Type /relay:connect to start one.'] };
+        : { code: 1, lines: ['No sign-in link is waiting. Type /relay-connect to start one.'] };
     }
     if (pending.result === 'connected') {
       const computer = readComputer(env);
       clear();
-      if (!computer) return { code: 1, lines: ['The key file is gone. Type /relay:connect to start again.'] };
+      if (!computer) return { code: 1, lines: ['The key file is gone. Type /relay-connect to start again.'] };
       return { code: 0, lines: [connectedLine(computer), ...codexHooksLine(env), ...doubles(computer, run)] };
     }
     // Only the waiter writes `expired`: a waiter that died leaves the link `waiting` after it ended.
@@ -190,7 +190,7 @@ const codexHooksLine = env => (env.CODEX_THREAD_ID
 export function status(env = process.env) {
   const computer = readComputer(env);
   const pending = readPending(env);
-  const lines = [computer ? connectedLine(computer) : 'This computer is not connected to Relay Everything. Type /relay:connect to connect it.'];
+  const lines = [computer ? connectedLine(computer) : 'This computer is not connected to Relay Everything. Type /relay-connect to connect it.'];
   if (pending?.result === 'waiting' && pending.startedAt + LINK_LIFE > Date.now()) {
     lines.push(`A sign-in link is waiting for Connect, with the code ${pending.words}.`);
   }
@@ -206,14 +206,14 @@ export function forget(env = process.env) {
 }
 
 export const MEMORY_ON = 'Memory is on. Relay Everything keeps short facts from each chat on this computer, such as what you '
-  + 'decided, prefer and left open, in your own Relay Everything space, and each new chat starts with them. Type /relay:memory off to stop.';
-export const MEMORY_OFF = 'Memory is off. Chats still save to Relay Everything, and your topics still show. Type /relay:memory on to start it.';
+  + 'decided, prefer and left open, in your own Relay Everything space, and each new chat starts with them. Type /relay-memory off to stop.';
+export const MEMORY_OFF = 'Memory is off. Chats still save to Relay Everything, and your topics still show. Type /relay-memory on to start it.';
 
-/** `/relay:memory on|off`, and the setup choice at /relay:connect: keeps the choice in the key file, or says it. */
+/** `/relay-memory on|off`, and the setup choice at /relay-connect: keeps the choice in the key file, or says it. */
 export function remember(choice, { env = process.env, cwd = process.cwd() } = {}) {
   const computer = readComputer(env);
-  if (!computer) return { code: 1, lines: ['This computer is not connected to Relay Everything. Type /relay:connect to connect it.'] };
-  if (choice && choice !== 'on' && choice !== 'off') return { code: 2, lines: ['Type /relay:memory on, /relay:memory off, or /relay:memory to see which it is.'] };
+  if (!computer) return { code: 1, lines: ['This computer is not connected to Relay Everything. Type /relay-connect to connect it.'] };
+  if (choice && choice !== 'on' && choice !== 'off') return { code: 2, lines: ['Type /relay-memory on, /relay-memory off, or /relay-memory to see which it is.'] };
   let now = computer;
   if (choice) {
     try {
@@ -303,7 +303,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(self)) {
           : command === 'status' ? status()
             : command === 'forget' ? forget()
               : command === 'memory' ? remember(value)
-                : { code: 2, lines: ['Type /relay:connect, or give start [server], wait, status, forget or memory [on|off].'] };
+                : { code: 2, lines: ['Type /relay-connect, or give start [server], wait, status, forget or memory [on|off].'] };
     } catch (error) {
       done = { code: 1, lines: [withSandbox('Relay Everything could not finish this step on this computer. Try again in a minute.', error)] };
     }

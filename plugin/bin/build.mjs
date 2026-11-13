@@ -297,7 +297,7 @@ const AGENT = {
 /** What `status` shows: the switch, the last build and how much is still to read, with no network call. */
 export function status({ env = process.env, zone = computerZone() } = {}) {
   const settings = readSettings(env);
-  const said = [settings.off ? 'The daily build is off on this computer. Type /relay:build on to start it again.'
+  const said = [settings.off ? 'The daily build is off on this computer. Type /relay-build on to start it again.'
     : 'The daily build is on for this computer: it starts with the first chat of each day.'];
   const log = lines(join(relayDir(copyOf(env)), 'builds.log'));
   const claim = log.filter(line => !line.split(' ')[1]?.startsWith('done')).at(-1);
@@ -470,7 +470,7 @@ export async function build(args, { env = process.env, input = '', fetcher = fet
   if (command === 'now') {
     if (!readComputer(env)) return { code: 1, text: NOT_CONNECTED };
     start(env, appOf(env));
-    return { code: 0, text: 'A build started on its own. It runs up to 30 minutes. Type /relay:build to see what it did.' };
+    return { code: 0, text: 'A build started on its own. It runs up to 30 minutes. Type /relay-build to see what it did.' };
   }
   if (command === 'run') return run({ env, app: fields.app === 'codex' ? 'codex' : 'claude', fetcher, zone });
   if (!AGENT[command]) return { code: 2, text: USAGE };

@@ -116,3 +116,19 @@ export function web({ format = '# The rules\n' } = {}) {
   git(['clone', '--quiet', '--bare', start, bare], root);
   return bare;
 }
+
+/** The person's own hook, which an install keeps. */
+export const OWN_HOOK = { matcher: 'Bash', hooks: [{ type: 'command', command: 'echo mine' }] };
+
+/** A new git project, with the person's own hook and skill unless `bare`. */
+export function gitProject({ bare = false } = {}) {
+  const root = join(mkdtempSync(join(tmpdir(), 'relay-install-')), 'garden');
+  mkdirSync(root);
+  execFileSync('git', ['init', '--quiet', '-b', 'main'], { cwd: root });
+  if (!bare) {
+    mkdirSync(join(root, '.claude', 'skills', 'notes'), { recursive: true });
+    writeFileSync(join(root, '.claude', 'skills', 'notes', 'SKILL.md'), '---\nname: notes\n---\n');
+    writeFileSync(join(root, '.claude', 'settings.json'), JSON.stringify({ model: 'opus', hooks: { PreToolUse: [OWN_HOOK] } }));
+  }
+  return root;
+}

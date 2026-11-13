@@ -8,7 +8,7 @@ Relay Everything keeps two things that your own AI writes from your chats and no
 - **Your memory**: a table of short facts in your own space, such as *the bike's battery is 500 Wh*. Each fact has topics, called tags, and links to the chat or note it came from. A fact is only added, never changed: a new fact replaces an old one, and the old one stays readable, marked replaced.
 - **Your knowledge web**: one page for each topic, in a git repository that only your computers can reach. A page sums up the live facts on its topic.
 
-A computer connected with the [Relay Everything plugin](../../connections/claude-code/) writes both: once a day, [your own AI builds them](../../connections/claude-code/#your-web-builds-itself) from your chats and notes. Your [AI connector](../../connections/connect-your-ai/) and your API keys read the memory. A phone's key reaches neither.
+A computer connected with [Relay Everything in Claude Code or Codex](../../connections/claude-code/) writes both: once a day, [your own AI builds them](../../connections/claude-code/#your-web-builds-itself) from your chats and notes. Your [AI connector](../../connections/connect-your-ai/) and your API keys read the memory. A phone's key reaches neither.
 
 ## Your memory's columns
 
@@ -22,7 +22,7 @@ A computer can also add topics to a note, and remove them. The note's words stay
 
 ## For people who build their own plugin
 
-Any plugin with a computer's key reaches the memory and the web in the same way. The plugin gets its key from the same sign-in link as the Relay Everything plugin: [The computer's sign-in](../../connections/claude-code/#the-computers-sign-in).
+Any plugin with a computer's key reaches the memory and the web in the same way. The plugin gets its key from the same sign-in link as Relay Everything in Claude Code and Codex: [The computer's sign-in](../../connections/claude-code/#the-computers-sign-in).
 
 1. **Open the web.** `POST /v1/knowledge/access` answers `{ "remote": "…", "token": "…", "expiresAt": "…" }`: your web's git address, and a pass that reads and writes it for one hour. Give the pass to git as a header, never in the address or a file: `git -c http.extraHeader="Authorization: Bearer $TOKEN" clone "$REMOTE"`. A server whose Cloudflare account has no Artifacts answers `501`, `not_set_up`.
 2. **Read the rules.** Read your web's own `FORMAT.md`, and follow it over the default below. Read the columns with `GET /v1/memory/columns`.
@@ -35,7 +35,7 @@ Only a computer's key changes the memory and opens the web: an API key and the A
 
 ### The memory store
 
-The plugin's memory, from WongStack, reaches your memory through its own store routes: `POST /v1/memory/v2/<request>`, such as `facts`, `write`, `digest` or `transcript`, with a computer's key. Give memory the address `<your-relay-server>/v1/memory`. Each fact there has a number, such as `#12`, beside its `f…` id. The store keeps memory's chat transcripts in your space's sealed files, and when it kept none, it gives the saved chat as text. A chat that memory read shows `memory: true` in `GET /v1/chats`, and the daily build skips it. Memory read a chat when it captured the chat, or a fact came from it; a chat that memory has not captured yet shows `memory: false`. An API key, a phone's key and the AI connector get `403` from these routes.
+Relay Everything's memory, from WongStack, reaches your memory through its own store routes: `POST /v1/memory/v2/<request>`, such as `facts`, `write`, `digest` or `transcript`, with a computer's key. Give memory the address `<your-relay-server>/v1/memory`. Each fact there has a number, such as `#12`, beside its `f…` id. The store keeps memory's chat transcripts in your space's sealed files, and when it kept none, it gives the saved chat as text. A chat that memory read shows `memory: true` in `GET /v1/chats`, and the daily build skips it. Memory read a chat when it captured the chat, or a fact came from it; a chat that memory has not captured yet shows `memory: false`. An API key, a phone's key and the AI connector get `403` from these routes.
 
 ### Move a WongStack memory in
 

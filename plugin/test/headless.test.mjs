@@ -27,14 +27,14 @@ test('Codex runs the build in its sandbox, with the network on and only the copy
 });
 
 test('the app is the one the chat started in, and the child saves no chat and starts no build', () => {
-  assert.equal(appOf({ CLAUDE_PLUGIN_ROOT: '/plugin' }, '/home/ana/.claude/projects/x/5d1c.jsonl'), 'claude');
+  assert.equal(appOf({}, '/home/ana/.claude/projects/x/5d1c.jsonl'), 'claude');
   assert.equal(appOf({}, '/home/ana/.codex/sessions/2026/11/10/rollout-2026-11-10T09-00-00-5d1c.jsonl'), 'codex');
   assert.equal(appOf({ CODEX_THREAD_ID: '5d1c' }), 'codex');
   // CODEX_HOME set in the shell does not make a Claude Code chat a Codex one.
-  assert.equal(appOf({ CODEX_HOME: '/home/ana/.codex', CLAUDE_PLUGIN_ROOT: '/plugin' }, '/home/ana/.claude/projects/x/5d1c.jsonl'), 'claude');
+  assert.equal(appOf({ CODEX_HOME: '/home/ana/.codex' }, '/home/ana/.claude/projects/x/5d1c.jsonl'), 'claude');
   assert.equal(appOf({ CODEX_HOME: '/home/ana/.codex' }), 'claude');
-  assert.equal(appOf({ PLUGIN_ROOT: '/plugin' }), 'codex');
-  assert.equal(appOf({ PLUGIN_ROOT: '/plugin', CLAUDE_PLUGIN_ROOT: '/plugin' }), 'claude');
+  // A plugin's folder no longer says which app: the copy runs from the project in both.
+  assert.equal(appOf({ PLUGIN_ROOT: '/plugin' }), 'claude');
   assert.equal(appOf({}), 'claude');
   assert.deepEqual(childEnv({ HOME: '/home/ana', RELAY_SAVE: '1' }), { HOME: '/home/ana', RELAY_SAVE: '0', RELAY_BUILD_RUN: '1' });
 });

@@ -1,41 +1,19 @@
 ---
 title: Save AI chat transcripts
-description: Save each Claude Code and Codex chat to your Relay Everything server with the Relay Everything plugin, ask about your data from the chat, and find your chats on your Relay Everything page.
+description: Save each Claude Code and Codex chat to your Relay Everything server with Relay Everything's copy in your project, ask about your data from the chat, and find your chats on your Relay Everything page.
 ---
 
-The Relay Everything plugin for Claude Code and Codex saves each chat to your Relay Everything server as you talk. You find a chat on the Relay Everything page by a word, and your AI can search it through the [AI connector](../connect-your-ai/). The plugin also lets the AI in the chat read your notes, health, places and calendar, and add a note, when you ask it. Once a day, your own AI builds your knowledge web from your chats and notes.
+Relay Everything's copy in a Claude Code or Codex project saves each chat there to your Relay Everything server as you talk. You find a chat on the Relay Everything page by a word, and your AI can search it through the [AI connector](../connect-your-ai/). It also lets the AI in the chat read your notes, health, places and calendar, and add a note, when you ask it. Once a day, your own AI builds your knowledge web from your chats and notes.
 
-## Install the plugin
+## Install in a project
 
-Do the steps for each app you use. One computer needs one connect, for both apps.
+Paste one prompt into Claude Code or Codex in the project you want saved: [Install in a project](../../install/). Your AI copies Relay Everything into the project, as files you own and can change, and starts the sign-in link. A project with the copy saves its chats; a project with no copy and no plugin saves nothing. Type `/relay-update` to get a newer release, merged with your own edits.
 
-**In Claude Code:**
-
-1. Type these two commands:
-
-   ```text
-   /plugin marketplace add matthewwong525/RelayEverything
-   /plugin install relay@relay
-   ```
-
-2. Start Claude Code again.
-
-**In Codex:**
-
-1. In a terminal, run these two commands:
-
-   ```text
-   codex plugin marketplace add matthewwong525/RelayEverything
-   codex plugin add relay@relay
-   ```
-
-2. Start Codex. It asks you to review the plugin's hooks: pick **Trust all and continue**. Codex runs no hook that you did not trust, and says nothing, so with no trust it saves no chat. To trust the hooks later, type `/hooks` in Codex.
-3. After an update that changes a hook, Codex asks again. Trust the hooks again.
-4. The plugin's commands run outside Codex's sandbox, because in the sandbox they can not reach Relay Everything or write the plugin's folder. When Codex asks to run a plugin command outside the sandbox, approve it.
+In Codex, trust the project's hooks when Codex asks, or with `/hooks`. Codex runs no hook that you did not trust, and says nothing, so with no trust it saves no chat. After an update that changes a hook, Codex asks again. The skills' commands run outside Codex's sandbox, because in the sandbox they can not reach Relay Everything or write this computer's Relay Everything folder. When Codex asks, approve it.
 
 ## Connect the computer
 
-1. Type `/relay:connect` in Claude Code, or `$relay:connect` in Codex. To use [your own Relay Everything server](../../start/run-your-own/), add its address: `/relay:connect https://<your-relay-server>`.
+1. The install starts this when the computer is not connected. Or type `/relay-connect` in Claude Code, or `$relay-connect` in Codex. To use [your own Relay Everything server](../../start/run-your-own/), add its address: `/relay-connect https://<your-relay-server>`.
 2. The AI shows a link and a code, such as `KITE-4821`. Open the link, and sign in to Relay Everything if it asks.
 3. Make sure that the page shows the same code. Then click **Connect**. Connect only a computer that you just started this on. If someone sent you the link, click **Cancel**.
 4. Tell the AI that you clicked **Connect**. It says when the computer is connected.
@@ -43,24 +21,24 @@ Do the steps for each app you use. One computer needs one connect, for both apps
 
 The computer now has its own key, kept in a file that only you can read on that computer: `computer.json` in `~/.config/relay-everything/`, or in the folder that `RELAY_EVERYTHING_HOME` names. It shows under **Claude Code and Codex** in **Connect your AI**, on your Relay Everything page and in the app, with when it last saved a chat. The key saves chats, and reads and adds through the [web API](../../api/connect-a-service/). Each chat from then on is saved. Chats from before the connect are not sent.
 
-If you added the AI connector to Claude Code or Codex before, the connect step names it and how to remove it, because the plugin does the same job. It removes nothing unless you say so.
+If you added the AI connector to Claude Code or Codex before, the connect step names it and how to remove it, because Relay Everything's skills do the same job. It removes nothing unless you say so.
 
 ## Remember things for you
 
-Memory is off until you say yes at `/relay:connect`. Type `/relay:memory on` (`$relay:memory on` in Codex) to turn it on, `/relay:memory off` to turn it off, or `/relay:memory` to see which it is. A computer connected before version 0.6.0 of the plugin has memory off.
+Memory is off until you say yes at `/relay-connect`. Type `/relay-memory on` (`$relay-memory on` in Codex) to turn it on, `/relay-memory off` to turn it off, or `/relay-memory` to see which it is. A computer connected before version 0.6.0 of the Relay Everything plugin has memory off.
 
 - **What it keeps.** When a chat ends, your own AI reads it in the background and keeps short facts: who you are, how you want a job done, what you decided or plan, where to find a thing, and what is still open. It keeps the chat's transcript too, with keys hidden, so a fact can show where it came from.
 - **Where.** The facts and transcripts go to your own space on your Relay Everything server, with the computer's key. They never go to a webhook.
 - **What a chat gets.** A chat starts with your open threads, your newest facts and your topics. A message that names a topic gets its summary. Ask *what did we decide about the charger?*, and the AI searches your memory.
 - **Look-up counts stay on the computer.** Memory counts each look-up in a file on the computer and keeps each count for 30 days. For a question that got no good answer, it also keeps the words of the question. Each chat start deletes counts older than 30 days. The counts never leave the computer.
-- **A project's own memory wins.** A project that has its own memory, such as a WongStack project, keeps its own. There the plugin still saves the chat, and adds no memory and no topics.
+- **A project's own memory wins.** A project that has its own memory, such as a WongStack project, keeps its own. There Relay Everything still saves the chat, and adds no memory and no topics.
 - **One daily job.** Memory starts no daily job of its own. The [daily build](#your-web-builds-itself) stays the one job each day, and it leaves out a chat that memory already read.
 
 Memory stays off in a project with saving off, with `RELAY_SAVE=0`, and in a folder that is not a git project.
 
 ## Ask about your data
 
-Ask in plain words, such as *what did I note about the charger?*, *how did I sleep last week?* or *what was I doing when I wrote the battery note?* The AI reads your Relay Everything data through the plugin. Ask *note that the charger needs a new cable*, and it adds a note.
+Ask in plain words, such as *what did I note about the charger?*, *how did I sleep last week?* or *what was I doing when I wrote the battery note?* The AI reads your Relay Everything data through the `relay-ask` skill. Ask *note that the charger needs a new cable*, and it adds a note.
 
 The AI also reads and adds to your memory of facts, and keeps a copy of your knowledge web on the computer, in `knowledge/` in `~/.config/relay-everything/`: [Memory and knowledge web](../../api/knowledge-web/). It can keep its own tables in [your agents' database](../../api/agents-database/).
 
@@ -101,7 +79,7 @@ Once a day, your own AI builds your memory and your knowledge web on this comput
 
 The build runs in the app the chat started in, Claude Code or Codex, on your own plan: it uses your allowance, as a chat does. It stops after 30 minutes, and the next day goes on from what it read. To use a smaller model for it, set `RELAY_BUILD_MODEL`, such as `RELAY_BUILD_MODEL=haiku`. The build's own chat is not saved.
 
-Type `/relay:build` (`$relay:build` in Codex) to see the last build:
+Type `/relay-build` (`$relay-build` in Codex) to see the last build:
 
 ```text
 The daily build is on for this computer: it starts with the first chat of each day.
@@ -112,21 +90,21 @@ Last build: 2026-11-10 09:14, on Laptop
 Still to read: 31 chats, 220 notes
 ```
 
-`/relay:build off` stops the daily build on this computer, `/relay:build on` starts it again, and `/relay:build now` starts one at once. Facts and topics that a build added stay when you turn it off.
+`/relay-build off` stops the daily build on this computer, `/relay-build on` starts it again, and `/relay-build now` starts one at once. Facts and topics that a build added stay when you turn it off.
 
 ## Save a summary
 
-Type `/relay:save` in Claude Code or `$relay:save` in Codex, or ask *save this to Relay Everything*. The AI writes a title and a summary of what you decided, and keeps it beside the chat.
+Type `/relay-save` in Claude Code or `$relay-save` in Codex, or ask *save this to Relay Everything*. The AI writes a title and a summary of what you decided, and keeps it beside the chat.
 
 ## What is sent
 
-After each answer, the plugin sends the chat's new messages:
+After each answer, the copy sends the chat's new messages:
 
 - each message you typed, and each answer the AI wrote, word for word;
 - one line for each step the AI took, such as `Ran: npm test` or `Read src/app.ts`, never the step's output;
 - the app, the project's folder name (for a git worktree, its main repository's name), the chat's title and the times.
 
-It never sends the AI's thinking, a file's contents, a command's output or a helper's own chat. Before a message leaves your computer, the plugin replaces keys and tokens, and each value of 8 characters or more in the project's `.env` and `.dev.vars`, with `[hidden]`.
+It never sends the AI's thinking, a file's contents, a command's output or a helper's own chat. Before a message leaves your computer, the copy replaces keys and tokens, and each value of 8 characters or more in the project's `.env` and `.dev.vars`, with `[hidden]`.
 
 A send that fails waits on your computer, and the next start of the app sends it.
 
@@ -140,17 +118,18 @@ Your AI can search the chats too: the [AI connector](../connect-your-ai/) has th
 
 ## Turn saving off
 
-- **In one project:** type `/relay:saving off` (`$relay:saving off` in Codex). Type `/relay:saving on` to save again, or `/relay:saving` to see which it is and when the project last sent a chat. A git worktree counts as its main repository, so saving off holds in each workspace copy of the project, new ones too.
+- **In a project without the copy:** nothing is saved, once the Relay Everything plugin is removed.
+- **In one project:** type `/relay-saving off` (`$relay-saving off` in Codex). Type `/relay-saving on` to save again, or `/relay-saving` to see which it is and when the project last sent a chat. A git worktree counts as its main repository, so saving off holds in each workspace copy of the project, new ones too.
 - **For one run:** start the app with `RELAY_SAVE=0`, such as `RELAY_SAVE=0 claude` or `RELAY_SAVE=0 codex`.
 - **On one computer:** click **Disconnect** beside it, in **Connect your AI** on your Relay Everything page. To also delete the key from the computer, ask the AI to *forget the Relay Everything key*.
 
 ## Delete a chat
 
-Open the chat on the Relay Everything page, click **Delete**, then confirm. Relay Everything removes the chat, its messages and the AI's summary. You can't undo it. If the chat is still open, turn saving off first, or the plugin sends it again with your next message.
+Open the chat on the Relay Everything page, click **Delete**, then confirm. Relay Everything removes the chat, its messages and the AI's summary. You can't undo it. If the chat is still open, turn saving off first, or the copy sends it again with your next message.
 
 ## What the server receives
 
-The plugin calls two routes with the computer's key in the header `Authorization: Bearer rek_…`.
+The copy calls two routes with the computer's key in the header `Authorization: Bearer rek_…`.
 
 `POST https://<your-relay-server>/apps/relay/api/chats` adds a chat's new messages:
 
@@ -182,7 +161,7 @@ On the server, the computer's key gets `403` on every other route except `GET ke
 
 ## The computer's sign-in
 
-`/relay:connect` uses three routes, which need no key:
+`/relay-connect` uses three routes, which need no key:
 
 1. `POST https://<your-relay-server>/apps/relay/sign-in/computer/start` with `{ "challenge": "<SHA-256 of a new secret, base64url>", "name": "My laptop" }` answers `{ "link": "…", "words": "KITE-4821" }`. The link lasts 10 minutes.
 2. The person opens the link, signs in, and clicks **Connect**.

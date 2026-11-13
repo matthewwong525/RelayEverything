@@ -137,7 +137,7 @@ test('says when the server has no web, refuses the key, is not connected, or the
   const run = (status, more = {}) => sync({ env, fetcher: passes('/nowhere', status).fetcher, ...more });
   assert.deepEqual(await run(501), { code: 1, lines: [NOT_SET_UP] });
   assert.deepEqual(await run(403), { code: 1,
-    lines: ['Relay Everything refused this computer\'s key: A made-up refusal. Type /relay:connect to connect again.'] });
+    lines: ['Relay Everything refused this computer\'s key: A made-up refusal. Type /relay-connect to connect again.'] });
   assert.deepEqual(await run(200, { env: relayHome({ connected: false }) }), { code: 1, lines: [NOT_CONNECTED] });
   const offline = passes('/nowhere');
   assert.deepEqual(await sync({ env: { ...env, PATH: join(tmpdir(), 'no-git-here') }, fetcher: offline.fetcher }), { code: 1, lines: [NO_GIT] });

@@ -92,7 +92,7 @@ async function askPass(computer, fetcher) {
   if (status === 200 && typeof json?.remote === 'string' && typeof json?.token === 'string') return json;
   if (status === 501) return { line: NOT_SET_UP };
   const why = reason(json) ?? `It answered ${status}.`;
-  if (status === 401 || status === 403) return { line: `Relay Everything refused this computer's key: ${why} Type /relay:connect to connect again.` };
+  if (status === 401 || status === 403) return { line: `Relay Everything refused this computer's key: ${why} Type /relay-connect to connect again.` };
   return { line: `Relay Everything refused the request: ${why}` };
 }
 

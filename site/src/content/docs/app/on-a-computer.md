@@ -118,7 +118,7 @@ Your phone sends your location, health, calendar and photos. In the browser, **L
 
 The **Photos** page also shows how many photos your space holds, with **Delete all photos**: [Delete all photos](../photos/#delete-all-photos).
 
-**Connect your AI** says *Let your AI read your notes*, and has two parts. **Claude Code and Codex** lists each computer with the Relay Everything plugin, with when it last saved a chat and **Disconnect**. Then **Saved chats** opens the chats that the plugin saved, newest first, each with its app. Search them, open one to read it, or delete it: [Read your chats](../../connections/claude-code/#read-your-chats). **Get the plugin** shows how to add it. **Claude, ChatGPT and other AI apps** shows the AI connector's address, with **Copy**, and each AI app you connected, with the day it connected and **Disconnect**: [Connect your AI](../../connections/connect-your-ai/).
+**Connect your AI** says *Let your AI read your notes*, and has two parts. **Claude Code and Codex** lists each computer connected with `/relay-connect`, with when it last saved a chat and **Disconnect**. Then **Saved chats** opens the chats that Relay Everything saved, newest first, each with its app. Search them, open one to read it, or delete it: [Read your chats](../../connections/claude-code/#read-your-chats). **Get the plugin** shows how to add it. **Claude, ChatGPT and other AI apps** shows the AI connector's address, with **Copy**, and each AI app you connected, with the day it connected and **Disconnect**: [Connect your AI](../../connections/connect-your-ai/).
 
 **Email notes** says *Email a note to your own address*, and shows your two notes addresses, each with **Copy**. **New address** replaces the private one: [Email notes](../email/).
 

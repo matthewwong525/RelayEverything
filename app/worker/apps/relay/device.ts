@@ -13,7 +13,7 @@ const reaches = z.enum(["phone", "chats", "api", "agent"])
 type Reaches = z.infer<typeof reaches>;
 // A phone's and a computer's keys come only from their own sign-ins, and a chat-only key no longer from anywhere.
 const addable = z.enum(["api"]).describe("api: an API key for the web API, which reads and adds notes. " +
-  "A phone signs in from the Relay Everything app, and a computer from Claude Code or Codex with /relay:connect.");
+  "A phone signs in from the Relay Everything app, and a computer from Claude Code or Codex with /relay-connect.");
 const device = z.strictObject({ id: z.string(), name: z.string(), reaches, createdAt: z.number(), revokedAt: z.number().nullable() });
 const ERRORS = { not_found: "You have no device with this id." };
 type Row = { id: string; name: string; reaches: Reaches; created_at: number; revoked_at: number | null };

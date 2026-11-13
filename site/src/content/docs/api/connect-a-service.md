@@ -26,7 +26,7 @@ curl https://<your-relay-server>/v1/me \
 
 `GET /v1/me` answers the key's name and whether it may add notes. It reads no data, so it is a safe first call.
 
-An API key works only on the web API. On the Relay Everything server it reaches only `GET key`. A computer's key from the [Relay Everything plugin](../../connections/claude-code/) opens the web API too. A phone's key or an older chat key can't: make an API key for it. To stop a key, click **Turn off** beside it on the **API keys** page. [Keys](../keys/) tells more.
+An API key works only on the web API. On the Relay Everything server it reaches only `GET key`. A computer's key from [Relay Everything in Claude Code or Codex](../../connections/claude-code/) opens the web API too. A phone's key or an older chat key can't: make an API key for it. To stop a key, click **Turn off** beside it on the **API keys** page. [Keys](../keys/) tells more.
 
 ## With your own sign-in
 

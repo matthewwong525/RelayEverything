@@ -35,11 +35,11 @@ Any other address or method answers `403` to a device key. A phone's key can't r
 
 ## A computer's key
 
-A computer's key is for the [Relay Everything plugin for Claude Code and Codex](../../connections/claude-code/). You don't make it on the page: type `/relay:connect` on the computer, then click **Connect** on the page it opens. On the Relay Everything server it reaches only `POST chats`, `POST chat-saves` and `GET key`: it adds chats, but it can't list, read, change or delete them here, or reach a phone's routes. It reads your data and adds notes through the [web API](../connect-a-service/), as an API key does. **Connect your AI** lists it under **Claude Code and Codex**, with **Disconnect** on the web.
+A computer's key is for [Relay Everything in Claude Code and Codex](../../connections/claude-code/). You don't make it on the page: type `/relay-connect` on the computer, then click **Connect** on the page it opens. On the Relay Everything server it reaches only `POST chats`, `POST chat-saves` and `GET key`: it adds chats, but it can't list, read, change or delete them here, or reach a phone's routes. It reads your data and adds notes through the [web API](../connect-a-service/), as an API key does. **Connect your AI** lists it under **Claude Code and Codex**, with **Disconnect** on the web.
 
 ## A chat key
 
-A chat key is the older key of the plugin for Claude Code, made before the computer's key. It reaches only `POST chats`, `POST chat-saves` and `GET key`, and it can't open the web API. To read your data from the chat too, type `/relay:connect` on that computer, then disconnect the old key in **Connect your AI**. A phone's key can't reach the chat routes.
+A chat key is the older key of the plugin for Claude Code, made before the computer's key. It reaches only `POST chats`, `POST chat-saves` and `GET key`, and it can't open the web API. To read your data from the chat too, type `/relay-connect` on that computer, then disconnect the old key in **Connect your AI**. A phone's key can't reach the chat routes.
 
 ## An API key
 

@@ -128,7 +128,7 @@ test('a link that is gone, too old, replaced, or a key that is not one, ends the
   const nothing = () => {};
   await start('https://relay.example.com', { env, fetcher: signIn().fetcher, waiter: nothing });
   assert.equal(await poll(pending(env).startedAt, { env, fetcher: signIn({ keyStatus: 400 }).fetcher, every: 1 }), 'expired');
-  assert.deepEqual(await wait({ env }), { code: 1, lines: ['Nobody clicked Connect in time, so no key was made. Type /relay:connect to start again.'] });
+  assert.deepEqual(await wait({ env }), { code: 1, lines: ['Nobody clicked Connect in time, so no key was made. Type /relay-connect to start again.'] });
   let clock = 0;
   await start('https://relay.example.com', { env, fetcher: signIn().fetcher, waiter: nothing, now: () => clock });
   assert.equal(await poll(0, { env, fetcher: signIn({ waits: 99 }).fetcher, every: 1, now: () => (clock += 4 * 60_000) }), 'expired');
@@ -146,7 +146,7 @@ test('wait stops after its limit while the person has not clicked Connect', asyn
   await start('https://relay.example.com', { env, fetcher: signIn().fetcher, waiter: () => {}, now: () => Date.now() });
   assert.deepEqual(await wait({ env, limit: 20, every: 5 }), { code: 3, lines: ['Not connected yet. When you have clicked Connect, ask me to check again.'] });
   assert.match(status(env).lines[1], /^A sign-in link is waiting for Connect, with the code maple-river-stone\.$/);
-  assert.deepEqual(await wait({ env: relayHome({ connected: false }) }), { code: 1, lines: ['No sign-in link is waiting. Type /relay:connect to start one.'] });
+  assert.deepEqual(await wait({ env: relayHome({ connected: false }) }), { code: 1, lines: ['No sign-in link is waiting. Type /relay-connect to start one.'] });
 });
 
 test('wait says the link ended when the waiter died and left it waiting past its 10 minutes', async () => {
@@ -154,9 +154,9 @@ test('wait says the link ended when the waiter died and left it waiting past its
   await start('https://relay.example.com', { env, fetcher: signIn().fetcher, waiter: () => {}, now: () => 1_000 });
   assert.equal(pending(env).result, 'waiting');
   assert.deepEqual(await wait({ env, now: () => 1_000 + LINK_LIFE }), { code: 1,
-    lines: ['The sign-in link ended before this computer got its key. Type /relay:connect to start again.'] });
+    lines: ['The sign-in link ended before this computer got its key. Type /relay-connect to start again.'] });
   assert.equal(existsSync(join(stateDir(env), 'connect.json')), false);
-  assert.deepEqual(await wait({ env }), { code: 1, lines: ['No sign-in link is waiting. Type /relay:connect to start one.'] });
+  assert.deepEqual(await wait({ env }), { code: 1, lines: ['No sign-in link is waiting. Type /relay-connect to start one.'] });
 });
 
 test('wait still answers when its folder can not be written, and a command line prints one line, not a stack', async () => {
@@ -287,7 +287,7 @@ else process.exit(1);
   }
 });
 
-test('/relay:memory turns memory on and off in the key file, says which it is, and a new connect keeps the choice', async () => {
+test('/relay-memory turns memory on and off in the key file, says which it is, and a new connect keeps the choice', async () => {
   const place = project();
   const { env, root } = place;
   assert.equal(readComputer(env).memory, false);
@@ -299,7 +299,7 @@ test('/relay:memory turns memory on and off in the key file, says which it is, a
   // On, but not in this folder now: it says why.
   place.store.setOff(root, true);
   assert.deepEqual(remember(undefined, { env, cwd: root }).lines,
-    [MEMORY_ON, 'It does not run in this folder now: saving to Relay Everything is off in this project; type /relay:saving on.']);
+    [MEMORY_ON, 'It does not run in this folder now: saving to Relay Everything is off in this project; type /relay-saving on.']);
   place.store.setOff(root, false);
   mkdirSync(join(root, '.claude', 'skills', 'memory'), { recursive: true });
   assert.deepEqual(remember(undefined, { env, cwd: root }).lines, [MEMORY_ON, 'It does not run in this folder now: this project has its own memory.']);

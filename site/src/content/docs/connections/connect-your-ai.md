@@ -13,7 +13,7 @@ You connect each app one time. Each app opens a sign-in page: click **Connect**,
 
 - **The Claude app** (web, desktop or phone): open **Settings → Connectors → Add custom connector**. Type `Relay Everything` as the name and paste the address. Click **Connect**, then sign in. On a new chat, turn Relay Everything on in the tools menu.
 - **ChatGPT**: open **Settings → Apps & Connectors → Advanced settings** and turn on **Developer mode**. Then click **Create**, type `Relay Everything`, paste the address and pick **OAuth** for the sign-in. Click **Create**, then sign in. In a chat, pick Relay Everything from the developer-mode tools.
-- **Claude Code and Codex**: use the [Relay Everything plugin](../claude-code/) instead of the connector. It reads the same data, adds notes and saves your chats, with one `/relay:connect`. If you added the connector before, remove it, so the AI does not see each tool two times.
+- **Claude Code and Codex**: [install Relay Everything in your project](../../install/) instead of the connector. It reads the same data, adds notes and [saves your chats](../claude-code/), with one `/relay-connect` on each computer. If you added the connector before, remove it, so the AI does not see each tool two times.
 
 Then ask, for example: *What did I note on 4 November?*, *What is on my day?*, *When did I last meet Sam?* or *Show me the photos from the trip to Lisbon.*
 

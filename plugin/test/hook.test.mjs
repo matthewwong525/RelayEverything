@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { LINE_CHARACTERS, MOST_TOPICS, NOT_CONNECTED, run } from '../bin/hook.mjs';
+import { inPlugin, LINE_CHARACTERS, MOST_TOPICS, MOVED, NOT_CONNECTED, run } from '../bin/hook.mjs';
 import { build, markTried } from '../bin/build.mjs';
 import { copyOf, forgetComputer } from '../lib/config.mjs';
-import { copy, page, project } from './fake.mjs';
+import { copy, fakeServer, inline, page, project } from './fake.mjs';
 
 const HOOK = fileURLToPath(new URL('../bin/hook.mjs', import.meta.url));
 const RELAY = fileURLToPath(new URL('../bin/relay.mjs', import.meta.url));
@@ -157,4 +157,42 @@ test('the first chat start of the day starts the build on its own, and a second 
   forgetComputer(place.env);
   await begin(place.env, place.input, NOW + 4 * 86_400_000);
   assert.deepEqual(starts, [['sync']]);
+});
+
+test('the plugin steps aside in a project that has the copy, so a chat there is sent once', async () => {
+  const place = project();
+  mkdirSync(join(place.root, '.agents', 'relay'), { recursive: true });
+  writeFileSync(join(place.root, '.agents', 'relay', 'RELEASE'), '0.8.0 relay-v0.8.0\n');
+  const server = fakeServer();
+  // Claude Code gives the plugin's hook its folder, and the project's hook none.
+  const plugin = { ...place.env, CLAUDE_PLUGIN_ROOT: '/cache/relay/0.7.0' };
+  assert.equal(inPlugin(plugin), true);
+  assert.equal(inPlugin({ ...place.env, PLUGIN_ROOT: '/cache/relay/0.7.0' }), true);
+  assert.equal(inPlugin(place.env), false);
+  for (const event of ['session-start', 'prompt', 'before-edit', 'stop', 'session-end']) {
+    assert.equal(await run(event, place.input, { env: plugin, start: inline(server.fetch) }), '', event);
+  }
+  assert.equal(server.calls.length, 0);
+  assert.deepEqual(place.store.sessions(), {});
+  await run('stop', place.input, { env: place.env, start: inline(server.fetch) });
+  assert.equal(server.calls.length, 1);
+  assert.equal(server.chats.size, 1);
+});
+
+test('the plugin says once on each computer that Relay Everything moved, in a project with no copy', async () => {
+  const place = withWeb(WEB);
+  const env = { ...place.env, CLAUDE_PLUGIN_ROOT: '/cache/relay/0.7.0' };
+  const first = JSON.parse(await run('session-start', place.input, { env, start: () => {} }));
+  assert.equal(first.systemMessage, MOVED);
+  assert.match(first.hookSpecificOutput.additionalContext, /^Relay Everything topics/);
+  const second = JSON.parse(await run('session-start', place.input, { env, start: () => {} }));
+  assert.equal(second.systemMessage, undefined);
+  assert.match(MOVED, /Say "move Relay Everything here"/);
+  // Not connected: the move message, once, takes the place of the notice.
+  const away = project(undefined, { connected: false });
+  const awayEnv = { ...away.env, PLUGIN_ROOT: '/cache/relay/0.7.0' };
+  assert.equal(await run('session-start', away.input, { env: awayEnv, start: () => {} }), JSON.stringify({ systemMessage: MOVED }));
+  assert.equal(await run('session-start', away.input, { env: awayEnv, start: () => {} }), '');
+  // The project's own hook still shows the notice, and never the move.
+  assert.equal(await run('session-start', away.input, { env: away.env, start: () => {} }), JSON.stringify({ systemMessage: NOT_CONNECTED }));
 });

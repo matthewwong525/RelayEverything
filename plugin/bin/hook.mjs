@@ -7,8 +7,11 @@
 // which syncs first. `prompt` adds the topics a message names. Otherwise it prints nothing but one notice, once, when
 // this computer is not connected, because a hook's output joins the chat. With memory on, memory's copy adds its own
 // start and topics instead, and `before-edit` adds a folder's facts; a project with its own memory gets neither.
+// The same file runs in a project's copy, `.agents/relay/` with its `RELEASE`, and in the last plugin, 0.7.0. The plugin
+// steps aside in a project that has the copy, so no chat is sent twice, and says once on each computer that it moved.
 import { spawn } from 'node:child_process';
-import { realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { copyOf, openState, readComputer } from '../lib/config.mjs';
 import { appOf } from '../lib/headless.mjs';
@@ -25,7 +28,15 @@ const self = fileURLToPath(import.meta.url);
 // The send a session's end starts runs on its own, outside the hook's time limit, so it can wait for a Stop send.
 export const END_WAIT = 60_000;
 export const NOT_CONNECTED = 'Relay Everything: this computer is not connected, so chats are not saved. '
-  + 'Type /relay:connect to connect it. This shows once.';
+  + 'Type /relay-connect to connect it. This shows once.';
+export const MOVED = 'Relay Everything moved into your projects. Say "move Relay Everything here" to install it in this project. '
+  + 'A project without it saves no chat once the plugin is gone. This shows once.';
+/** True when this file runs from a project's copy, which has `RELEASE`. */
+export const IN_COPY = existsSync(fileURLToPath(new URL('../RELEASE', import.meta.url)));
+/** True when the plugin runs this file: Claude Code and Codex give a plugin's hook its folder, and a project's hook none. */
+export const inPlugin = env => !IN_COPY && Boolean(env.CLAUDE_PLUGIN_ROOT || env.PLUGIN_ROOT);
+/** Whether the project at `cwd` has its own copy of Relay Everything. */
+export const hasCopy = cwd => existsSync(join(gitTop(cwd), '.agents', 'relay', 'RELEASE'));
 /** The most topic lines a start adds, and the longest line. */
 export const MOST_TOPICS = 40;
 export const LINE_CHARACTERS = 80;
@@ -84,7 +95,9 @@ export function record(store, input, now = Date.now()) {
  * runs memory's copy. A session ended by /clear is marked cleared, so the save skill finds the chat that follows.
  */
 export async function run(event, input, { env, fetcher = fetch, start = startSend, wait = END_WAIT, now = Date.now(), zone = computerZone(),
-  memory = runMemory }) {
+  memory = runMemory, plugin = inPlugin(env) }) {
+  // The plugin does nothing where the project's copy runs its own hooks.
+  if (plugin && typeof input?.cwd === 'string' && hasCopy(input.cwd)) return '';
   const mode = () => (typeof input?.cwd === 'string' ? memoryState(env, input.cwd) : 'off');
   if (event === 'before-edit') return mode() === 'on' ? memory('before-edit', input, env) : '';
   // Topics only read this computer's copy, so a project with saving off, or RELAY_SAVE=0, still gets them.
@@ -133,8 +146,10 @@ export async function run(event, input, { env, fetcher = fetch, start = startSen
         markTried(env, now, zone);
         await start(['build', appOf(env, input?.transcript_path)], env);
       } else await start(['sync'], env);
-      return opening();
+      return movedOnce(store, plugin, await opening());
     }
+    // The plugin's move message takes the place of the notice: the copy's sign-in is /relay-connect.
+    if (plugin) return movedOnce(store, plugin, '');
     if (store.marked('not-connected')) return '';
     store.mark('not-connected');
     return JSON.stringify({ systemMessage: NOT_CONNECTED });
@@ -146,6 +161,13 @@ export async function run(event, input, { env, fetcher = fetch, start = startSen
   }
   await closing();
   return '';
+}
+
+/** The plugin's start, with the move message added once on this computer. */
+function movedOnce(store, plugin, printed) {
+  if (!plugin || store.marked('moved')) return printed;
+  store.mark('moved');
+  return JSON.stringify({ systemMessage: MOVED, ...printed ? JSON.parse(printed) : {} });
 }
 
 function startSend(args, env) {

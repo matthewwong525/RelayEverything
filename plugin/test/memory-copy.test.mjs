@@ -36,13 +36,14 @@ test('no copied file imports a file that the copy left out', () => {
 test('the memory skill is memory\'s own, with the plugin\'s command, its on and off, and no link out of the plugin', () => {
   const text = readFileSync(SKILL, 'utf8');
   assert.equal(text, pluginSkill(readFileSync(join(SOURCE, 'SKILL.md'), 'utf8')), AGAIN);
-  assert.match(text, /^---\nname: memory\ndescription: .*Relay Everything/);
-  for (const part of ['node "${CLAUDE_PLUGIN_ROOT}/bin/memory.mjs" <command>', 'node "${CLAUDE_PLUGIN_ROOT}/bin/connect.mjs" memory $ARGUMENTS',
-    '/relay:memory on', 'In Codex it is empty: use the folder two levels above this file',
+  assert.match(text, /^---\nname: relay-memory\ndescription: .*Relay Everything/);
+  for (const part of ['node "$(git rev-parse --show-toplevel)/.agents/relay/bin/memory.mjs" <command>',
+    'node "$(git rev-parse --show-toplevel)/.agents/relay/bin/connect.mjs" memory $ARGUMENTS', '/relay-memory on',
+    "Each command runs Relay Everything's copy in this project",
     '**In Codex, run each command here outside the sandbox.** Ask for escalated permissions', '## Write', '## Background run']) {
     assert.ok(text.includes(part), part);
   }
-  for (const gone of ['.claude/skills/memory', '## Daily tidy', '## Team access', '](../../../']) assert.ok(!text.includes(gone), gone);
+  for (const gone of ['.claude/skills/memory', 'CLAUDE_PLUGIN_ROOT', '## Daily tidy', '## Team access', '](../../../']) assert.ok(!text.includes(gone), gone);
   // Each link the skill keeps lands on a file in the plugin.
   for (const [, target] of text.matchAll(/\]\(([^)#\s]+)(?:#[^)]*)?\)/g)) assert.ok(existsSync(join(dirname(SKILL), target)), target);
 });

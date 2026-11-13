@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// `/relay:memory`'s command: runs memory's own script in `memory/` with Relay Everything's profile, so it reads and
+// `/relay-memory`'s command: runs memory's own script in `memory/` with Relay Everything's profile, so it reads and
 // writes the person's own space. usage: node memory.mjs <command>, as memory's skill lists them.
 import { spawnSync } from 'node:child_process';
 import { memoryEnv, MEMORY_SCRIPT } from '../lib/memory.mjs';

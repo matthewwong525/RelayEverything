@@ -60,7 +60,7 @@ export function apiAddress(text) {
 }
 
 /** The computer's key file as `{ server, key, api, name, memory }`, or null when it is missing or not one this plugin
- *  wrote. `memory` is the person's choice at /relay:connect; a file from before it reads as off. */
+ *  wrote. `memory` is the person's choice at /relay-connect; a file from before it reads as off. */
 export function parseComputer(value) {
   if (value?.relay !== 1 || !KEY.test(value.key ?? '')) return null;
   const server = serverOrigin(value.server);

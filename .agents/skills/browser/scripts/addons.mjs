@@ -1,8 +1,9 @@
 // The add-ons a person asks the agent to add, and 1Password by default: checked Firefox add-ons from Firefox's add-on
 // site, loaded side by side at each start, kept up to date, and removed by name with their stored data.
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { inflateRawSync } from 'node:zlib';
 import { BrowseError, FILES, stopServer } from './browse.mjs';
 
@@ -366,6 +367,19 @@ export async function startArgs({ profile = FILES.profile, now = Date.now() } = 
   });
 }
 
+const OWN_ADDON = fileURLToPath(new URL('../addon/', import.meta.url));
+export const HAND_BACK_GUID = 'hand-back@wongstack';
+
+/** Copies the WongStack add-on, the toolbar's Hand back, out of the repo with this start's port and hand-back key,
+ * and pins its button; its launch flags. It is not in the added list, so `addon status` and `addon remove` skip it. */
+export function handBackArgs({ port, key, profile = FILES.profile, dir = FILES.handBack }) {
+  rmSync(dir, { recursive: true, force: true });
+  cpSync(OWN_ADDON, dir, { recursive: true });
+  writeFileSync(join(dir, 'config.json'), `${JSON.stringify({ port, key })}\n`, { mode: 0o600 });
+  pin(profile, HAND_BACK_GUID);
+  return ['--addon', dir];
+}
+
 /** The add-on whose page `addon open` shows: the newest password manager, else the newest add-on. */
 const shownAddon = list => list.findLast(isPasswordManager) ?? list.at(-1);
 
@@ -405,10 +419,13 @@ export const ADDON_VERBS = {
   logins: [0, async page => console.log(loginLines(await page.logins()).join('\n'))],
   pick: [1, async (page, [number]) => {
     if (!/^[1-9]\d*$/.test(number)) throw new BrowseError('addon pick takes the number addon logins printed before the login');
-    await page.pick(Number(number));
-    console.log('BROWSE_ADDON_PICKED=filled');
+    const { passkey } = await page.pick(Number(number));
+    console.log(`BROWSE_ADDON_PICKED=${passkey ? 'passkey' : 'filled'}`);
   }],
+  close: [0, async page => console.log(`BROWSE_ADDON_CLOSED=${(await page.closeBoxes()).closed ?? 0}`)],
 };
 
-/** The lines `addon logins` prints: each offered login's number and name, else `locked` or `none`. */
-export const loginLines = ({ state, names = [] }) => (state === 'list' ? names.map((name, at) => `BROWSE_ADDON_LOGIN=${at + 1} | ${name}`) : [`BROWSE_ADDON_LOGIN=${state === 'locked' ? 'locked' : 'none'}`]);
+/** The lines `addon logins` prints: each offered login's or passkey's number and name, else `locked` or `none`. */
+export const loginLines = ({ state, names = [] }) => (['list', 'passkey'].includes(state)
+  ? names.map((name, at) => `BROWSE_ADDON_LOGIN=${at + 1} | ${state === 'passkey' ? 'passkey: ' : ''}${name}`)
+  : [`BROWSE_ADDON_LOGIN=${state === 'locked' ? 'locked' : 'none'}`]);

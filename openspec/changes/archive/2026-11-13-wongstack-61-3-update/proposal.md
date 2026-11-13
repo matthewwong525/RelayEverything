@@ -1,6 +1,6 @@
 # Update WongStack to 61.3.0: a bell on each tab that waits on you, emoji chat names, and 1Password passkeys
 
-**Status:** ready-to-ship
+**Status:** shipped
 **Branch:** sync-wongstack-source
 **Open questions:** none
 
@@ -80,3 +80,4 @@ None: this update changes only WongStack's shared tools, and no requirement in `
 - **2026-11-13** — Assumed: run `codex-plugin.mjs` as the last task, as `/wong-sync` asks, because `--check` prints nothing: it removes nothing and adds nothing here.
 - **2026-11-13** — Check: the merge check from `9d63c758` is `clean` with 0 files, because no changed unit is locally adapted.
 - **2026-11-13** — Built inside `/ship`: preflight 23 units at `102e1abb`, all copied by `install-path.mjs` and equal to its output; merge check `clean`; public check, product-name test and the wiki and skills checks pass; a fresh `claude -p` chat ran every hook with exit 0 and named itself with the 🔨 emoji; the install record says 61.3.0, the preflight reports `status: current`, and `codex-plugin.mjs` found no WongStack plugin to remove. The second look found nothing.
+- **2026-11-13** — Archived inside `/ship` at `openspec/changes/archive/2026-11-13-wongstack-61-3-update`, branch `sync-wongstack-source`; CI passed on pull request #130 at `a0278e4`.

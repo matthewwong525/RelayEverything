@@ -14,4 +14,4 @@
 ## 3. Record and save
 
 - [x] 3.1 Set `version` to `61.3.0` and `commit` to `102e1abbe5d7b156d067431b4e166f5c5bb768db` in `.claude/.wong-stack.json`, keeping every other key. Then run `node /root/.cache/wong-stack/WongStack/.claude/skills/wong-sync/scripts/codex-plugin.mjs` in this checkout. Verify: the preflight run again reports `status: current`, and the Codex helper prints that nothing was removed.
-- [ ] 3.2 `/save`, then wait for CI on the pull request. Verify: every check passes.
+- [x] 3.2 `/save`, then wait for CI on the pull request. Verify: every check passes.

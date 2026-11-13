@@ -27,18 +27,14 @@ It keeps your own edits to this folder. When one of your edits and a new change 
 - **People from a chat**: `/access` says who has what, and adds, changes or removes a person after you say yes.
 - **Services**: a list of the keys you may use, a call through the app with your level, and a definition of each call your project uses. Keys reach the app sealed, never in a chat.
 - **A sign-in list kept in step**, when your sign-in wall has one: a person you add can sign in, and a person you remove can not.
+- **One sign-in for your other tools**: your project's own files may use [`signin/computer.mjs`](signin/computer.mjs) to sign this computer in to another tool through your app. Access changes no other tool's files.
 
 ## What it needs
 
 - **A JavaScript server**: Node, Cloudflare Workers, Deno or Bun. Access answers a standard `Request` with a standard `Response`.
 - **A sign-in that tells your server who is asking**: a Cloudflare sign-in wall, or your app's own login. Access never signs people in itself.
 - **A database** for a store that passes the check in [`store/contract.mjs`](store/contract.mjs). Start from [the stand-in store](store/stand-in.mjs).
-- **This folder** at `.claude/skills/access/`, as a real folder, and two files outside it, so an update never touches them: your slots, and `.agents/access/slots.json`, which names them.
-- **For Codex**, one install on each computer, run from your project's folder:
-
-  ```bash
-  codex plugin marketplace add <this project's folder>
-  codex plugin add access@wongstack
-  ```
+- **This folder** at `.claude/skills/access/`, as a real folder, and two files outside it, so an update never touches them: your slots, and `.agents/access/slots.json`, which names them. Its services command links up to `.claude/skills/services/`.
+- **Its start check in your project's settings**, `.claude/settings.json` and `.codex/hooks.json`, so it runs in every chat. The setup guide adds it.
 
 [How WongStack uses Access](https://github.com/matthewwong525/WongStack/blob/main/wiki/stack/employee-access.md) explains people, apps, roles and key levels in full.

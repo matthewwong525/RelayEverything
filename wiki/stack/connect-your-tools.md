@@ -97,7 +97,7 @@ The assistant starts at once. Sign-ins stay in its browser for the next time. On
 5. **`take-key [<ref>] --tool <id>`** takes the key from the page, [seals it and sends it to the app](#how-a-key-reaches-the-app), and prints only `TOOL_<ID> sent, ends in …abcd, goes live at the next publish`. Add `--id` to send a tool's ID as `TOOL_<ID>_ID`. It also saves the key in the primary `app/.dev.vars`, for local runs. A key in the code has its own name, so the person [pastes it in Access](#paste-a-key-in-access).
 6. **`done`** closes the page and any open link. The link says *All done. Go back to the chat.* When the person says *stop* in the chat, run `done --stopped`: the link says *Stopped*. Keys sent stay sent.
 
-When `watch` or `sign-in` prints `HANDOVER_NEEDS=live-view`, or another chat's view is open, follow the [live view's rules](../../.agents/skills/hand-over/references/live-view.md#when-it-opens).
+When `watch` or `sign-in` prints `HANDOVER_NEEDS=live-view`, or another chat's view is open, follow the [live view's rules](../../.agents/skills/browser/skills/hand-over/references/live-view.md#when-it-opens).
 
 Every command reads who holds the browser first:
 

@@ -2,7 +2,7 @@
 // Read-only: `D status` marks it, and the person picks which to close. wiki/development/daily.md#close-finished-chats
 import { realpathSync } from 'node:fs';
 import { git } from './lib/paseo.mjs';
-import { mergedAtTip, ownWorkspace, pullRequest, savedState, worktreeState } from '../../schedule/scripts/tidy.mjs';
+import { mergedAtTip, ownWorkspace, pullRequest, savedState, worktreeState } from '../skills/schedule/scripts/tidy.mjs';
 
 const DEFAULT_BRANCHES = new Set(['main', 'master', 'HEAD']);
 const real = file => { try { return realpathSync(file); } catch { return file; } };

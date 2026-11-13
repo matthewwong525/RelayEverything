@@ -4,7 +4,7 @@
 
 Run [`/improve-code [focus]`](../../.agents/skills/improve-code/SKILL.md) when the code feels harder to change than it should. A focus can name an area, such as `scripts/check-runner`, or an outcome, such as `make the check runner easier to test`.
 
-It works only on how the code is built. A new feature or a wording fix is a normal request: ask for it in plain words. Trouble with memory or the wiki goes to [`/memory:dream-memory`](wiki-dream.md).
+It works only on how the code is built. A new feature or a wording fix is a normal request: ask for it in plain words. Trouble with memory or the wiki goes to [the memory tidy](wiki-dream.md), which runs each day on its own.
 
 Run `/improve-code --audit-only [focus]` for findings and recommendations with no edit, Git change, delivery, saved report, or saved fact. It also names the notes it skipped as memory or wiki ones.
 
@@ -13,7 +13,7 @@ Run `/improve-code --audit-only [focus]` for findings and recommendations with n
 Before it chooses, `/improve-code` loads memory's open [struggle notes](memory.md#how-facts-are-captured), each a `thread` tagged `improve`, and the ideas it [ruled out](#remember-a-no) before. Trouble a real chat recorded comes before a problem found by reading the project alone.
 
 - **A note is evidence, not an order.** The choice still needs proof of value and a way to check the result.
-- **A note about memory or the wiki is skipped.** `/memory:dream-memory` reads the same notes and takes those.
+- **A note about memory or the wiki is skipped.** The daily memory tidy reads the same notes and takes those.
 - **A note closes at publish.** The plan names the note it answers, so the save that publishes the built plan supersedes it. The other notes stay open.
 - **`--audit-only` reads notes and writes none.**
 - **No memory, no stop.** The run says memory was not loaded and chooses from its other evidence.
@@ -79,7 +79,7 @@ Every run ends one of three ways, named in its report:
 
 ## Run it on a cadence
 
-Run [`/schedule every Monday at 9am: /improve-code`](../../.agents/skills/schedule/SKILL.md): it verifies an existing host clock and future-session access before activation ([host schedules](../stack/host-schedules.md)). Each run plans and waits; the schedule grants no permission to build or publish its improvement. [Legacy migration](../stack/legacy-cloud-schedules.md#move-one-job) covers prompts under older skill names.
+Run [`/schedule every Monday at 9am: /improve-code`](../../.agents/skills/schedule/SKILL.md): it verifies an existing host clock and future-session access before activation ([host schedules](../stack/host-schedules.md)). Each run plans and waits; the schedule grants no permission to build or publish its improvement.
 
 A scheduled run has nobody to answer, and its copy of the project is thrown away when it ends. So it saves the plan on its own branch and leaves a note in memory that starts `Improve plan:` and names it; your next chat shows the note. Nothing is built or published until you say yes.
 

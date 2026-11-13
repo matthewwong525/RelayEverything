@@ -52,6 +52,7 @@ Memory is off until you say yes at `/relay:connect`. Type `/relay:memory on` (`$
 - **What it keeps.** When a chat ends, your own AI reads it in the background and keeps short facts: who you are, how you want a job done, what you decided or plan, where to find a thing, and what is still open. It keeps the chat's transcript too, with keys hidden, so a fact can show where it came from.
 - **Where.** The facts and transcripts go to your own space on your Relay Everything server, with the computer's key. They never go to a webhook.
 - **What a chat gets.** A chat starts with your open threads, your newest facts and your topics. A message that names a topic gets its summary. Ask *what did we decide about the charger?*, and the AI searches your memory.
+- **Look-up counts stay on the computer.** Memory counts each look-up in a file on the computer and keeps each count for 30 days. For a question that got no good answer, it also keeps the words of the question. Each chat start deletes counts older than 30 days. The counts never leave the computer.
 - **A project's own memory wins.** A project that has its own memory, such as a WongStack project, keeps its own. There the plugin still saves the chat, and adds no memory and no topics.
 - **One daily job.** Memory starts no daily job of its own. The [daily build](#your-web-builds-itself) stays the one job each day, and it leaves out a chat that memory already read.
 

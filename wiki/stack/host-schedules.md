@@ -16,7 +16,7 @@ You see your schedules behind the *Schedules* button at the top of the Inbox, an
 
 ## With no app
 
-A repo with [Daily](../development/daily.md#the-module) and no company app has no schedule store of its own. `node .claude/skills/schedule/scripts/schedule.mjs store` names the one in use:
+A repo with [Daily](../development/daily.md#the-module) and no company app has no schedule store of its own. `node .claude/skills/daily/skills/schedule/scripts/schedule.mjs store` names the one in use:
 
 - **`paseo`:** each schedule is a [Paseo](https://paseo.sh) schedule on this computer that opens a new chat. Your OK before the save is the approval; there is no OK on each computer. No one is there to answer a permission ask, so it runs with full permissions, as an app schedule does, unless its `run.mode` names another. Paseo can not run a background run, a `check`, `minutes`, a `deny` list, a team copy, or an `until` goal, so `/schedule` refuses each with its reason.
 - **`off`:** with no Paseo either, `/schedule` answers `{ "ok": false, "code": "no-store" }` and says what it needs. For a script, it gives you the crontab line to add.
@@ -61,7 +61,7 @@ Work with a finish line is a schedule with an end. Its plan names the completion
 
 ## How a run works
 
-Before a chat opens, your computer reads the schedule's instructions and progress from the app, checks the version against your approval, and takes the progress claim. The chat's first message is your approved instructions, word for word, so instructions that start with a skill, such as `/news`, run that skill. A short footer follows: what the run may do, when it ends, the progress so far, and the one `finish` command that saves progress, ends a met goal, and gives the claim back ([a run's steps](../../.agents/skills/schedule/references/run.md)). A changed version, an ended schedule, a missing folder, revoked access, or a run still holding the progress blocks the run before any chat opens, and the Inbox shows why, such as *already running*. A pending goal stays scheduled after the session ends. A successful ongoing routine keeps its next run.
+Before a chat opens, your computer reads the schedule's instructions and progress from the app, checks the version against your approval, and takes the progress claim. The chat's first message is your approved instructions, word for word, so instructions that start with a skill, such as `/news`, run that skill. A short footer follows: what the run may do, when it ends, the progress so far, and the one `finish` command that saves progress, ends a met goal, and gives the claim back ([a run's steps](../../.agents/skills/daily/skills/schedule/references/run.md)). A changed version, an ended schedule, a missing folder, revoked access, or a run still holding the progress blocks the run before any chat opens, and the Inbox shows why, such as *already running*. A pending goal stays scheduled after the session ends. A successful ongoing routine keeps its next run.
 
 Automatic contacting requires an agreed recipient, channel, message purpose, frequency, and end condition. It also requires saved progress that prevents overlapping sends. After an uncertain send, the next run checks the service's receipt; it waits for help if the result cannot be resolved. A schedule never grants itself permission to call, pay, refund, or publish code.
 
@@ -86,8 +86,10 @@ WongStack ships one background schedule in [its list](../../.agents/skills/daily
 
 ## Existing schedules
 
-At the update that moves schedules into the app, the assistant moves your old ones right after the update is live: the routines in your daily settings file, the team's routines, timed background jobs, and the `schedules/` files in the repo. It approves each one on your computer, because you approved it when you saved it in the repo. It shows two that look like the same job and asks which to keep. Then it removes the old lists in a small save. Run twice, it moves nothing twice. A teammate's routines move on their own computer, at their next chat.
+An update leaves your old schedule data in place and runs none of it. Nothing moves to the app by itself: you ask the assistant to save what you want to keep.
 
-A Paseo schedule stays in Paseo until you ask to move it. `/schedule move` pauses the Paseo copy and reads it back, saves the app's copy and reads it back, then deletes the Paseo copy. A failure in between leaves Paseo paused and the move pending, never both running. Updates do not move a cloud job, rewrite its prompt, delete secrets, or remove cloud resources. [Legacy migration and teardown](legacy-cloud-schedules.md) explains how to inspect older jobs and move one without duplicate follow-ups.
+- **A `schedules/` file in the repo, a routine in your daily settings file, or a timed job in [your own jobs](../development/daily.md#your-own-jobs)** stays where it is and does not run. While a routine or a timed job is left, [the journal](../development/daily.md#the-journal) says so once a day. Ask the assistant to save each one as a schedule: it shows you the text, saves it in the app after your OK, and then removes the old entry.
+- **A Paseo schedule** stays in Paseo and runs there. Ask to keep it in the app: the assistant pauses the Paseo copy, saves the app's copy and reads it back, then deletes the Paseo copy. The job never runs from both.
+- **An old cloud runner** on Cloudflare stays as it is, with its jobs and its keys. WongStack has no command for it now. Remove its Worker, its AI Gateway, and its keys by hand in the Cloudflare dashboard.
 
 Back to [the Cloudflare stack](README.md), or [development](../development/README.md).

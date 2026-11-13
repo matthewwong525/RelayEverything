@@ -201,7 +201,7 @@ test('memory\'s real start ends in its time limit when the server does not answe
   }
 });
 
-test('the copy\'s chat start with sessions waiting starts their capture on its own, and no daily tidy', async () => {
+test('the copy\'s chat start with sessions waiting starts their capture on its own, no daily tidy, and trims look-up counts to 30 days', async () => {
   const asked = [];
   const server = createServer((request, response) => {
     asked.push(request.url);
@@ -228,12 +228,18 @@ test('the copy\'s chat start with sessions waiting starts their capture on its o
     const state = join(vars.WONG_MEMORY_STATE_DIR, machine);
     mkdirSync(join(state, 'spool'), { recursive: true });
     writeFileSync(join(state, 'spool', '1.json'), '{}');
+    // Look-up counts older than 30 days go at the start, because the plugin runs no daily tidy to trim them.
+    const day = 86_400_000;
+    const old = { at: new Date(Date.now() - 40 * day).toISOString(), command: 'recall', topics: [], facts: [], miss: true, words: 'old question' };
+    const recent = { at: new Date(Date.now() - day).toISOString(), command: 'recall', topics: [], facts: [] };
+    writeFileSync(join(state, 'usage.jsonl'), `${JSON.stringify(old)}\n${JSON.stringify(recent)}\n`);
     const said = await runMemory('session-start', { session_id: SESSION, cwd: root, hook_event_name: 'SessionStart' }, vars);
     assert.ok(asked.includes('/v1/memory/v2/digest'), 'the store answered, so only the setting stops the tidy');
     const context = JSON.parse(said).hookSpecificOutput.additionalContext;
     assert.doesNotMatch(context, /subagent|could not start/);
     assert.deepEqual(JSON.parse(readFileSync(join(state, 'daily.json'), 'utf8')), { off: true });
     assert.ok(existsSync(join(state, 'registry.jsonl')));
+    assert.deepEqual(readFileSync(join(state, 'usage.jsonl'), 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line)), [recent]);
   } finally {
     server.closeAllConnections();
     server.close();

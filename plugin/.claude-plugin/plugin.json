@@ -1,6 +1,6 @@
 {
   "name": "relay",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Relay Everything for Claude Code and Codex: connect this computer by a sign-in link, save each chat to your Relay Everything, remember what you decide when you turn memory on, ask about your topics, notes, health, places, calendar and saved chats, and let your own AI build your knowledge web once a day.",
   "author": { "name": "Matthew Wong" },
   "homepage": "https://relayeverything.com/connections/claude-code/",

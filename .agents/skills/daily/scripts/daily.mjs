@@ -14,7 +14,7 @@ import { repoContext } from './lib/env.mjs';
 import { loadProfile, moduleRepo, readProfile, slotNow, slotResult } from './lib/slot.mjs';
 import { runAddons } from './addons.mjs';
 import { SCHEDULE_LABEL } from './chats.mjs';
-import { BUCKETS, allow, answer, chiefDay, chiefEnv, doneAgent, mark, noteEnd, paseoCli, readBeat, readJson, reply,
+import { BUCKETS, allow, answer, chiefDay, chiefEnv, doneAgent, mark, noteEnd, paseoCli, readBeat, readJson, reask, reply,
   serviceAlive, status, writeJson } from './chief.mjs';
 import { RUN_AGENTS, SETTINGS_DOC, SettingsError, defaultSettings, loadSettings, localDay, settingsFor } from './config.mjs';
 import { addLine, format, newLines, readLines } from './journal.mjs';
@@ -25,7 +25,7 @@ import { handOver } from './waiting-notes.mjs';
 import { DEFAULT_SCHEDULES, alive, codeStamp, dropServeLock, handOff, lineUpOffFile, loadSweeps, lockedBy, morningFile, serveDaily, stopGroup,
   takeServeLock } from './worker.mjs';
 
-const LAUNCHER = fileURLToPath(new URL('../../schedule/scripts/workspace.mjs', import.meta.url));
+const LAUNCHER = fileURLToPath(new URL('../skills/schedule/scripts/workspace.mjs', import.meta.url));
 const REPO = moduleRepo();
 const SELF = fileURLToPath(import.meta.url);
 const KEPT = 400;
@@ -152,7 +152,7 @@ async function launchWorkspace({ destination, title, message, schedule = null })
 // ---------------------------------------------------------------------------
 // start
 
-/** `.agents/skills/news/SKILL.md` is `/news`; a routine's `prompt` replaces it. The move to the app reads it. */
+/** `.agents/skills/news/SKILL.md` is `/news`; a routine's `prompt` replaces it. */
 export const firstMessage = task => task.prompt ?? `/${basename(dirname(task.procedure))}`;
 
 /** What each add-on gets on stdin. */
@@ -199,6 +199,7 @@ const USAGE = `usage: daily.mjs who | start [--dry-run] [--report] | handoff --f
        daily.mjs checkins off | checkins on | lineup off | lineup on
        daily.mjs journal [--new] | journal --line <words> [--run <id>]
        daily.mjs reply --agent <a> --file <text file> --bucket keep-going|pick|person --label <line> [--mark <mark>]
+       daily.mjs reask --agent <a> --mark <mark>
        daily.mjs answer --agent <a> --request <id> --file <text file> --bucket keep-going|pick --label <line>
        daily.mjs allow --agent <a> --request <id> --bucket keep-going --label <line>
        daily.mjs done-agent --agent <a> --proof <text> | note-end --line <words>
@@ -208,10 +209,10 @@ const USAGE = `usage: daily.mjs who | start [--dry-run] [--report] | handoff --f
 const FLAGS = { who: [], start: ['dry-run', 'report'], handoff: ['file'], remind: ['day', 'text'],
   serve: ['agent', 'seconds', 'once', 'dry-run'], ensure: ['agent'], 'checkins off': [], 'checkins on': [], 'lineup off': [], 'lineup on': [],
   journal: ['new', 'line', 'run'], status: [], check: [],
-  reply: ['agent', 'file', 'bucket', 'label', 'mark'], answer: ['agent', 'request', 'file', 'bucket', 'label'], allow: ['agent', 'request', 'bucket', 'label'],
-  'done-agent': ['agent', 'proof'], 'note-end': ['line'], 'line-up': [], map: ['file'],
+  reply: ['agent', 'file', 'bucket', 'label', 'mark'], reask: ['agent', 'mark'], answer: ['agent', 'request', 'file', 'bucket', 'label'],
+  allow: ['agent', 'request', 'bucket', 'label'], 'done-agent': ['agent', 'proof'], 'note-end': ['line'], 'line-up': [], map: ['file'],
   tell: ['agent', 'file', 'now', 'covered-by', 'drop'] };
-const NEEDS = { handoff: ['file'], reply: ['agent', 'file', 'bucket', 'label'],
+const NEEDS = { handoff: ['file'], reply: ['agent', 'file', 'bucket', 'label'], reask: ['agent', 'mark'],
   answer: ['agent', 'request', 'file', 'bucket', 'label'], allow: ['agent', 'request', 'bucket', 'label'], 'done-agent': ['agent', 'proof'],
   'note-end': ['line'], map: ['file'] };
 /** An answer that changed nothing it was asked to change. */
@@ -325,6 +326,7 @@ export function commands({ config, project, stateDir, values, call, env = proces
     },
     status: async () => status({ ...(await chief()), project }),
     reply: async () => reply({ ...(await chief()), ...said(), mark: values.mark }),
+    reask: async () => reask({ ...(await chief()), agent: values.agent, mark: values.mark }),
     answer: async () => answer({ ...(await chief()), ...said(), request: values.request }),
     allow: async () => allow({ ...(await chief()), agent: values.agent, request: values.request, bucket: values.bucket, label: values.label }),
     'done-agent': async () => doneAgent({ ...(await chief()), agent: values.agent, proof: values.proof }),
@@ -444,23 +446,13 @@ export function defaultsFailed({ stateDir, timezone, list = DEFAULT_SCHEDULES, s
   if (!told) addLine({ stateDir, timezone, line: line ?? `Default schedules not set up: ${reason}. Trying again in an hour.`, kind: 'defaults', now: new Date(now) });
 }
 
-const scheduleScript = home => join(home.dir, '..', '..', 'schedule', 'scripts', 'schedule.mjs');
+const scheduleScript = home => join(home.dir, '..', 'skills', 'schedule', 'scripts', 'schedule.mjs');
 
 /** Starts `schedule.mjs <command> --unattended` detached, with the worker's env. */
 function runSchedule(command, { home, env, run }) {
   const child = run(process.execPath, [scheduleScript(home), command, '--unattended'], { cwd: home.repo, detached: true, stdio: 'ignore', env: workerEnv(env) });
   child.on('error', () => {});
   child.unref();
-}
-
-/** Once a day, while the person's file still holds routines, starts the schedule skill's unattended move to the app;
- * false when it did not, or the schedule skill is missing. */
-export function startMoveIn({ home, stateDir, env, now = Date.now(), timezone, run = spawn }) {
-  const marker = join(stateDir, 'move-in.json'), kept = readJson(marker, {}), day = localDay(new Date(now), timezone);
-  if (!existsSync(scheduleScript(home)) || kept.day === day) return false;
-  writeJson(marker, { ...kept, day });
-  runSchedule('move-in', { home, env, run });
-  return true;
 }
 
 /** Starts the unattended add of the default schedules until a try works today; a running or failed try waits an hour
@@ -484,14 +476,11 @@ export function startDefaults({ home, stateDir, env, now = Date.now(), timezone,
  * off, it refuses handed-over runs. With `schedules` false (no store): no defaults, and the worker runs the line-up. */
 export function ensure({ repo = REPO, home = workerHome(repo), env = process.env, agent = RUN_AGENTS[0], schedules = true,
   resolve: settings = () => personSettings({ repo: home.repo }), spawnServe = startServe, root, now = Date.now(), isAlive = alive, kill = stopGroup,
-  code = codeStamp(home.dir), stamped = stamps(home.dir), moveIn = startMoveIn, defaults = startDefaults } = {}) {
+  code = codeStamp(home.dir), stamped = stamps(home.dir), defaults = startDefaults } = {}) {
   if (RUN_FLAGS.some(name => env[name])) return { state: 'run' };
   const { config } = settings();
   if (!config) return { state: 'no-person' };
   const stateDir = stateOf(config, repo, root);
-  if (config.checks?.length) {
-    try { moveIn({ home, stateDir, env, now, timezone: config.timezone }); } catch { /* best effort */ }
-  }
   if (schedules) try { defaults({ home, stateDir, env, now, timezone: config.timezone }); } catch { /* best effort */ }
   if (existsSync(offFile(stateDir))) {
     const refused = waitingRuns(env).length ? takeRuns({ env, project: primaryRoot(repo).primary, emails: config.emails, stateDir, now }) : [];
@@ -541,7 +530,7 @@ export function commandSettings(command, { me, config }) {
  *  `ok` only when each part worked; `store` is `app`, `paseo`, or `off`; a broken profile is `profileError`. */
 export async function check({ config, project, env = process.env, sortStop = null }) {
   const { parts, error } = await readProfile(env);
-  const { findStore } = await import('../../schedule/scripts/schedule.mjs');
+  const { findStore } = await import('../skills/schedule/scripts/schedule.mjs');
   const store = error ? null : await findStore({ env, root: project });
   const lines = [], dir = mkdtempSync(join(tmpdir(), 'daily-check-'));
   try {

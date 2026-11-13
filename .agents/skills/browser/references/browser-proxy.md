@@ -22,7 +22,7 @@ With no saved proxy, the proxy setting sends the browser through a local proxy o
 
 ## Save the proxies
 
-Save each key in the primary worktree's `.env` ([how](../../hand-over/references/key-link.md)). The committed `.env.example` holds only the blank names: a proxy address, login, or home address never goes in a committed file.
+Save each key in the primary worktree's `.env` ([how](../skills/hand-over/references/key-link.md)). The committed `.env.example` holds only the blank names: a proxy address, login, or home address never goes in a committed file.
 
 - `BROWSE_FIRST_PROXY` holds `[http://][login:password@]host:port`. The login is optional.
 - `BROWSE_UPSTREAM_PROXY` holds `[http://]login:password@host:port`. Pick a sticky address in your country, so sites see one address for a session.

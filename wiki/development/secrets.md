@@ -51,11 +51,11 @@ If an ordinary browsing task reaches a token step, stop before taking a picture 
 
 Other browsing, sign-ins, stored credentials, and token management through APIs are unchanged.
 
-**Scheduled credentials.** [Host schedules](../stack/host-schedules.md) use existing host connections. Verify future-session tool/memory scope; keep credentials out of prompts and schedule instructions. Preserve legacy keys until [explicit migration/teardown](../stack/legacy-cloud-schedules.md).
+**Scheduled credentials.** [Host schedules](../stack/host-schedules.md) use existing host connections. Verify future-session tool/memory scope; keep credentials out of prompts and schedule instructions. An old cloud runner's keys stay until you [remove the runner by hand](../stack/host-schedules.md#existing-schedules).
 
 ## Receive a key through a private link
 
-When a task lacks a key, or the person asks for *the key link*, send a private link in the same reply: [the key link](../../.agents/skills/hand-over/references/key-link.md) owns the steps. It writes the primary worktree's file and any seeded [branch copy](#worktrees-and-branch-copies).
+When a task lacks a key, or the person asks for *the key link*, send a private link in the same reply: [the key link](../../.agents/skills/browser/skills/hand-over/references/key-link.md) owns the steps. It writes the primary worktree's file and any seeded [branch copy](#worktrees-and-branch-copies).
 
 ## Worktrees and branch copies
 

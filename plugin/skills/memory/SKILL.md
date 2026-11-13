@@ -25,7 +25,7 @@ When memory is off, a command below says that memory is not set up. Tell the per
 
 ## Use it
 
-The memory convention owns storage/access; [writing facts](../../memory/references/writing-facts.md) owns writing.
+The README owns access; [writing facts](../../memory/references/writing-facts.md) owns writing.
 
 From the repo root:
 
@@ -46,6 +46,7 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/memory.mjs" <command>
 | Topics sharing facts or changes | `related <topic>` |
 | Context for a task across topics | [the recall steps](../../memory/references/recall-helper.md) |
 | The transcript behind a fact | `source <fact-id>` |
+| How is memory used? Topics, facts, questions that found nothing | `usage`; `--days <n>`, `--json` |
 | Tags; fix one, or merge a look-alike (admin) | `tags`; `tag <name> --definition <text>` or `--alias-of <tag>` |
 | Counts, embeddings trigger | `stats` |
 | Close stale threads, add path tags (`put-facts` runs it) | `upkeep` |

@@ -11,12 +11,12 @@ export const LOOP_STEPS = { explore: 'EXPLORE', plan: 'PLAN', 'improve-code': 'P
 /** Another typed repo skill's step: its name in capitals minus `wong-`. */
 export const skillStep = name => name.replace(/^wong-/, '').toUpperCase();
 
-/** Every step word a host name can start with: the loop's and each other skill in the repo's `.claude/skills`. */
+/** Every step word a host name can start with: the loop's and each other skill in the repo's `.claude/skills`, with
+ *  each module's nested command in its `skills/`, such as Daily's `schedule`. */
 export function stepWords(skills = join(moduleRepo(), '.claude', 'skills')) {
-  let names = [];
-  try {
-    names = readdirSync(skills).filter(name => !(name in LOOP_STEPS) && existsSync(join(skills, name, 'SKILL.md')));
-  } catch { /* none */ }
+  const list = dir => { try { return readdirSync(dir).filter(name => existsSync(join(dir, name, 'SKILL.md'))); } catch { return []; } };
+  const names = list(skills).filter(name => !(name in LOOP_STEPS))
+    .flatMap(name => [name, ...list(join(skills, name, 'skills'))]);
   return [...new Set([...STEPS, ...names.map(skillStep)])];
 }
 let leading = null;

@@ -35,9 +35,9 @@ function chatName(cwd, agent) {
   return (folder && readState(folder, agent)) || undefined;
 }
 
-/** `/continue`'s review of a saved branch: `{commit}` pinned to open at, or `{refused, extra}` for work never seen here. */
+/** `/apply`'s pick-up review of a saved branch: `{commit}` pinned to open at, or `{refused, extra}` for work never seen here. */
 async function checkout(branch, cwd, { reviewed = null, dryRun = false } = {}) {
-  const { PickupError, pinBranch, reviewBranch } = await import('../skills/continue/scripts/pickup.mjs');
+  const { PickupError, pinBranch, reviewBranch } = await import('../skills/apply/scripts/pickup.mjs');
   try {
     const review = reviewBranch({ cwd, branch, reviewed, fetch: !dryRun });
     if (review.commits.length) {
@@ -60,6 +60,8 @@ export default {
   chatName,
   // A turn that ends in typed choices is the ask check's: Claude Code sends it back to use the question tool.
   offeredChoices: async (input, agent) => agent === 'claude' && Boolean((await import('../loop/ask-check.mjs')).stopDecision(input)),
+  // A stopped chat whose last words ask the person in text: Daily asks it to put the question on a card.
+  askedInText: async text => { const { endsWithChoices, endsWithQuestion } = await import('../loop/ask-check.mjs'); return endsWithChoices(text) || endsWithQuestion(text); },
   // A background run's own copy of the repo links this computer's company knowledge, so the run saves pages there.
   prepareRun: async dir => { const { linkCopy, place } = await import('../memory/knowledge.mjs'); linkCopy(place(dir)); },
   checkout,

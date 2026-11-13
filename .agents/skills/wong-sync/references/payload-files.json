@@ -18,7 +18,10 @@
     "'exclude' is removed after its directory is walked. mapped folders are copied whole",
     "from a source path to an install path: a module in .claude/plugins/<name>/ lands",
     "in .claude/skills/<name>/. A nested mapped entry wins over its parent's: the loop's",
-    "skills/<name>/ lands in .claude/skills/<name>/, beside .claude/skills/loop/. No folder link ships."
+    "skills/<name>/ lands in .claude/skills/<name>/, beside .claude/skills/loop/. No folder link ships.",
+    "A mapped file entry moves one file: another module's command keeps its folder in the module, and",
+    "only its SKILL.md lands in .claude/skills/<command>/, so the command loads by its bare name in every chat.",
+    "Modules load as plain skills, never plugins; .claude/settings.json and .claude/hooks.json run their hooks."
   ],
   "core": {
     "skillDirs": [
@@ -30,12 +33,11 @@
       "agent-browser"
     ],
     "exclude": [
-      ".claude/plugins/daily/daily/team.md",
-      ".claude/plugins/daily/daily/people"
+      ".claude/plugins/daily/team.md",
+      ".claude/plugins/daily/people"
     ],
     "files": [
       ".claude/settings.json",
-      ".claude-plugin/marketplace.json",
       ".claude/daily/profile.mjs",
       ".claude/hooks.json",
       ".claude/access/slots.json",
@@ -96,8 +98,7 @@
     ],
     "mapped": {
       ".claude/plugins/memory": ".claude/skills/memory",
-      ".claude/plugins/daily/daily": ".claude/skills/daily",
-      ".claude/plugins/daily/schedule": ".claude/skills/schedule",
+      ".claude/plugins/daily": ".claude/skills/daily",
       ".claude/plugins/access": ".claude/skills/access",
       ".claude/plugins/loop": ".claude/skills/loop",
       ".claude/plugins/loop/skills/explore": ".claude/skills/explore",
@@ -106,11 +107,12 @@
       ".claude/plugins/loop/skills/save": ".claude/skills/save",
       ".claude/plugins/loop/skills/ship": ".claude/skills/ship",
       ".claude/plugins/loop/skills/verify": ".claude/skills/verify",
-      ".claude/plugins/loop/skills/continue": ".claude/skills/continue",
       ".claude/plugins/loop/skills/close": ".claude/skills/close",
-      ".claude/plugins/browser/browser": ".claude/skills/browser",
-      ".claude/plugins/browser/hand-over": ".claude/skills/hand-over",
-      ".claude/plugins/browser/shop": ".claude/skills/shop"
+      ".claude/plugins/browser": ".claude/skills/browser",
+      ".claude/plugins/daily/skills/schedule/SKILL.md": ".claude/skills/schedule/SKILL.md",
+      ".claude/plugins/browser/skills/hand-over/SKILL.md": ".claude/skills/hand-over/SKILL.md",
+      ".claude/plugins/browser/skills/shop/SKILL.md": ".claude/skills/shop/SKILL.md",
+      ".claude/plugins/access/skills/services/SKILL.md": ".claude/skills/services/SKILL.md"
     }
   },
   "ui": {

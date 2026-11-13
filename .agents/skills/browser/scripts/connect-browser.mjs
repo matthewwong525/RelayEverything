@@ -8,12 +8,12 @@ import { tmpdir, userInfo } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { client, installed, windowSetting } from './browse.mjs';
-import { setLine, startTurn, watchControl } from '../../hand-over/scripts/hand-over.mjs';
-import { checkView } from '../../hand-over/scripts/view.mjs';
+import { setLine, startTurn, watchControl } from '../skills/hand-over/scripts/hand-over.mjs';
+import { checkView } from '../skills/hand-over/scripts/view.mjs';
 import { isMain, parseCli, usageError } from './lib/cli.mjs';
 import { primaryRoot } from './lib/primary-root.mjs';
 import { slot } from './lib/profile.mjs';
-import { isIgnored } from '../../hand-over/scripts/keys.mjs';
+import { isIgnored } from '../skills/hand-over/scripts/keys.mjs';
 import { findKeys, knownKey, maskKeys, masked } from './mask-keys.mjs';
 
 const USAGE = `usage: connect-browser.mjs <command>
@@ -41,7 +41,7 @@ const REF = /^@?e\d+$/;
 const TOOL = /^[a-z][a-z0-9-]*$/;
 const SIGN_IN = /password|passcode|one-time|verification code|2fa|sign-in code/i;
 const SIGN_IN_PAGE = /password|passcode|sign.?in|log.?in/i;
-const HAND_OVER = join(dirname(fileURLToPath(import.meta.url)), '../../hand-over/scripts/hand-over.mjs');
+const HAND_OVER = join(dirname(fileURLToPath(import.meta.url)), '../skills/hand-over/scripts/hand-over.mjs');
 const WATCH_NOTE = 'The assistant is connecting your tools.';
 const WAIT_MS = 10_000;
 const CLICK_WAITS = 'The person is using the browser in another chat\'s tab, so this click runs when their turn ends. Run `browser.mjs wait-click` in the background with the host\'s longest limit, and take no other step until it ends.';

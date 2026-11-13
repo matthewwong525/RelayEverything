@@ -6,9 +6,9 @@ user-invocable: true
 
 # /explore
 
-Start [the change loop](../../../wiki/development/the-change-loop.md): compare options and settle scope before `/plan`. Find related work with `openspec list --json` and `openspec context --json` ([CLI contract](../plan/references/openspec-cli.md#select-one-root)); read their pointers.
+Start [the change loop](../loop/references/rules.md): compare options and settle scope before `/plan`. Find related work with `openspec list --json` and `openspec context --json` ([CLI contract](../plan/references/openspec-cli.md#select-one-root)); read their pointers.
 
-**Change no repo file** ([limits](../../../wiki/development/the-change-loop.md#what-each-step-may-change)); [`/plan`](../plan/SKILL.md) logs answers. Explore precedes planning except [review-page notes](../plan/SKILL.md#review-notes); use [bounded mode](#when-plan-invokes-explore) under `/plan`. Standalone, run `node .claude/skills/loop/scripts/slot.mjs stepTitle set EXPLORE --task "<the idea>"`.
+**Change no repo file** ([limits](../loop/references/rules.md#what-each-step-may-change)); [`/plan`](../plan/SKILL.md) logs answers. Explore precedes planning except [review-page notes](../plan/SKILL.md#review-notes); use [bounded mode](#when-plan-invokes-explore) under `/plan`. Standalone, run `node .claude/skills/loop/scripts/slot.mjs stepTitle set EXPLORE --task "<the idea>"`.
 
 ## Investigate the relevant flow
 
@@ -23,17 +23,6 @@ Ask [the shared way](references/asking-the-user.md): two or three related ready 
 Update dependencies after answers or evidence. Explain changed premises; reopen only affected decisions. Keep findings in chat, [drawn](../plan/references/drawings.md) as `text` when useful: chat shows no picture.
 
 **The 80/20 test:** ask where a wrong guess makes the plan *wrong*, not merely *different*: scope, observable behavior, compatibility, acceptance criteria. Assume naming, placement, wording, and cheaply changed details, with reasons.
-
-## Search memory before asking
-
-Before asking, recall the task and pull its likely topic; read the originals cited:
-
-```bash
-node "$(git rev-parse --show-toplevel)/.claude/skills/memory/scripts/memory.mjs" recall <question>
-node "$(git rev-parse --show-toplevel)/.claude/skills/memory/scripts/memory.mjs" pull <path-or-topic>
-```
-
-A task across topics: [the memory helper](../memory/references/recall-helper.md). Treat dated facts as assumptions. No `.claude/skills/memory/`, or [memory unavailable](../memory/SKILL.md#read)? Say so; continue with available sources.
 
 ## Check for other work
 
@@ -69,6 +58,6 @@ Summarize outcome, approach, reasons over a serious alternative, minor assumptio
 Planning uses **bounded mode**, including via `/apply` or `/ship`:
 
 1. Reuse the conversation's intent, answers, and findings.
-2. Search memory and [other work](#check-for-other-work) unless checked; investigate only new material gaps.
+2. Check [other work](#check-for-other-work) unless checked; investigate only new material gaps.
 3. Run [the exit round](#the-exit-round) for open choices; await dependent answers, retaining authorized/unattended defaults.
 4. Return the summary to `/plan`.

@@ -12,8 +12,7 @@ export const SKILL = join(ROOT, 'plugin', 'skills', 'memory', 'SKILL.md');
 
 // Left out: the plugin's hook runs the scripts, the daily build is the one daily job, /relay:connect sets memory up,
 // and the plugin has no packages. A folder ends with `/`.
-export const LEFT_OUT = ['hooks/', '.codex-plugin/', '.claude-plugin/', 'README.md', 'skills/dream-memory/', 'references/setup.md',
-  'scripts/lib/documents/runtime/', 'store/contract.mjs'];
+export const LEFT_OUT = ['hooks/', 'README.md', 'references/setup.md', 'store/contract.mjs'];
 
 const left = path => LEFT_OUT.some(out => (out.endsWith('/') ? path.startsWith(out) : path === out));
 
@@ -53,6 +52,8 @@ When memory is off, a command below says that memory is not set up. Tell the per
 ## Use it
 `;
 
+const OUT = String.raw`(?:\.\.\/|README\.md\b|https:\/\/github\.com\/matthewwong525\/WongStack\/)`;
+
 // The sections that are WongStack's own: the plugin starts no daily tidy, and the store has no company sign-in.
 const DROPPED = ['Daily tidy', 'Team access'];
 
@@ -62,9 +63,10 @@ export function pluginSkill(text) {
   const kept = body.split(/(?=^## )/m).filter(part => !DROPPED.some(name => part.startsWith(`## ${name}\n`))).join('');
   const plugged = kept
     .replaceAll('node .claude/skills/memory/scripts/memory.mjs', 'node "${CLAUDE_PLUGIN_ROOT}/bin/memory.mjs"')
-    // A line that is only a link out of the plugin goes; another link out keeps its words.
-    .replace(/^\[[^\]]*\]\(\.\.\/[^)]*\)\.?\r?\n\r?\n?/gm, '')
-    .replace(/\[([^\]]*)\]\(\.\.\/[^)]*\)/g, '$1')
+    // A line that is only a link out of the plugin goes; another link out keeps its words. A link out is one above
+    // memory's folder, to its README, which the copy leaves out, or to WongStack's own pages on the web.
+    .replace(new RegExp(`^\\[[^\\]]*\\]\\(${OUT}[^)]*\\)\\.?\\r?\\n\\r?\\n?`, 'gm'), '')
+    .replace(new RegExp(`\\[([^\\]]*)\\]\\(${OUT}[^)]*\\)`, 'g'), '$1')
     .replace(/\]\(references\//g, '](../../memory/references/');
   return `${FRONTMATTER}\n${HEAD}${plugged.replace(/^\s+/, '\n')}`;
 }

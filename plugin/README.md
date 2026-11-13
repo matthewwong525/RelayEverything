@@ -51,6 +51,7 @@ Memory is off until you say yes at `/relay:connect`. Type `/relay:memory on` to 
 - **Where.** The facts and transcripts go to your own Relay Everything space, with this computer's key. They do not go to a webhook.
 - **What a chat gets.** A chat starts with your open threads, your newest facts and your topics. A message that names a topic gets its summary. Ask *what did we decide about …*, or type `/relay:memory`, to search it.
 - **A project's own memory wins.** In a project that has its own memory, such as a WongStack project (`.claude/skills/memory/` or `.agents/memory/profile.mjs`), Relay Everything's memory stays off. The plugin still saves the chat there, and shows no topics.
+- **Look-up counts stay on this computer.** Memory counts each look-up in a file on this computer and keeps each count for 30 days. For a question that got no good answer, it also keeps the words of the question. Each chat start deletes counts older than 30 days. The counts never leave this computer.
 - **It stays off** where saving is off, with `RELAY_SAVE=0`, and in a folder that is not a git project.
 - **One daily job.** Memory starts no daily job of its own. The daily build stays the one job each day, and it leaves out a chat that memory read.
 

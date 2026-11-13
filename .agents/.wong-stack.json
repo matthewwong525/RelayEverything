@@ -1,6 +1,6 @@
 {
-  "version": "55.2.1",
-  "commit": "a282a4a936bc3b02b671682822bacfe82c255be1",
+  "version": "61.0.0",
+  "commit": "9d63c758a4d72c8ce199865ed1ba26f5d7253ad7",
   "upstream": {
     "repo": "https://github.com/matthewwong525/WongStack",
     "clone": "/root/.cache/wong-stack/WongStack"
@@ -11,7 +11,6 @@
       "plan",
       "apply",
       "save",
-      "continue",
       "ship",
       "close",
       "verify",
@@ -27,7 +26,8 @@
       "wong-sync",
       "agent-browser",
       "reply-link",
-      "access"
+      "access",
+      "services"
     ],
     "access": {
       "teamDomain": "startuptemplate.cloudflareaccess.com",

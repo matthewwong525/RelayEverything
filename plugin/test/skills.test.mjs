@@ -132,7 +132,7 @@ test('the hooks run in Claude Code and Codex: no async hook, a short end, and th
   // An edit in either app: Claude Code's edit tools, and Codex's apply_patch.
   assert.deepEqual(hooks.PreToolUse[0].matcher.split('|'), ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'apply_patch']);
   const manifest = JSON.parse(read('.claude-plugin/plugin.json'));
-  assert.equal(manifest.version, '0.6.0');
+  assert.equal(manifest.version, '0.6.1');
   assert.equal(manifest.userConfig, undefined);
   assert.match(manifest.description, /Claude Code/);
   assert.match(manifest.description, /Codex/);

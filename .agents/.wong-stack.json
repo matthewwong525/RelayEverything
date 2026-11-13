@@ -1,6 +1,6 @@
 {
-  "version": "61.3.0",
-  "commit": "102e1abbe5d7b156d067431b4e166f5c5bb768db",
+  "version": "61.5.0",
+  "commit": "a43bb2affdc367c3f36a5e99bcaea8cd47f1ec7b",
   "upstream": {
     "repo": "https://github.com/matthewwong525/WongStack",
     "clone": "/root/.cache/wong-stack/WongStack"

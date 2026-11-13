@@ -54,7 +54,7 @@ node scripts/import-wongstack-memory.mjs --from <WongStack checkout> --profile <
 node scripts/import-wongstack-memory.mjs --from <WongStack checkout> --profile <old store's profile>
 ```
 
-- **It only reads the source.** It opens the checkout's own memory store, with the profile `--profile` names, else the checkout's own, and sends only read requests. A source that refuses every write still works, so the old store stays as a read-only backup.
+- **It only reads the source.** It opens the checkout's own memory store, with the profile `--profile` names, else the checkout's own, and sends only read requests. A source that refuses every write still works, so the old store stays as a read-only backup. Each read asks for 90 fact numbers, below the 100 that a [D1](https://developers.cloudflare.com/d1/platform/limits/) store takes in one request. It still sends 200 facts at a time to the space.
 - **Numbers stay.** The first run moves the space's own facts above the source's highest number, so fact #628 stays #628. The space refuses that first step when memory has used it already.
 - **Run it again to catch up.** A later run sends no first step. It skips each fact it imported before, adds only the new ones, and gives a new fact a new number when the old one is taken. It prints each changed number.
 - **What comes with each fact:** its date, author, owner, kind, topics, sources and replaced-by link, its chat's session row, the topic definitions, and the transcript, kept as `memory/transcripts/<session id>`.

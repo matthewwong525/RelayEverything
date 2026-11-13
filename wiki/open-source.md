@@ -4,7 +4,7 @@ Relay Everything is one public repository, [matthewwong525/RelayEverything](http
 
 ## What is public, and what is not
 
-Everything in the repository is public: the server and web app in `app/`, the phone app in `mobile/`, the website in `site/`, the Claude Code plugin in [`plugin/`](../plugin/README.md) with its marketplace file in [`.claude-plugin/`](../.claude-plugin/marketplace.json), and the plans and this wiki. A library copied in keeps its own license.
+Everything in the repository is public: the server and web app in `app/`, the phone app in `mobile/`, the website in `site/`, the Claude Code plugin in [`plugin/`](../plugin/README.md) with its marketplace file in [`.claude-plugin/`](../.claude-plugin/marketplace.json), and the plans and this wiki. A library copied in keeps its own license. The marketplace file lists only Relay Everything, never WongStack's modules, because each person who installs Relay Everything sees that list.
 
 These stay in Cloudflare, never in the repository: memory, company knowledge, notes, keys, and health and location data. A plan or wiki page is for anyone to read: write no person's phone number, address, email, health or place in it.
 

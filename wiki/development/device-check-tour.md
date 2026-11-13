@@ -13,7 +13,7 @@ A step can fail on a working app: a slow Mac shows the words after a wait ran ou
 
 ## Extra tour steps
 
-A check can name extra steps from [`flows/`](../../mobile/device-check/flows/), such as `voice-note`, with the input `flows` or `device-check.mjs --flows voice-note`. They run after the fixed steps, in the same Maestro run, with the same second try, pictures and verdict, only on that check. A release runs the fixed steps alone, and a label start has no inputs, so it does too. An unknown name ends the run as *could not check* before the build.
+A check can name extra steps from [`flows/`](../../mobile/device-check/flows/), such as `voice-note`, with the input `flows` or `device-check.mjs --flows voice-note`. They run after the fixed steps, in the same Maestro run, with the same second try, pictures and verdict, only on that check. A release runs the fixed steps alone, and a label start has no inputs, so it does too. An unknown name ends the run as *could not check* before the build. Try a new step once in its own check, with `--flows <name>`, before it gates a change: a step that never passed costs a full check of about 30 minutes to find one wrong match.
 
 A phone change writes a step for its main path when the simulator can show it, and `/verify` names it: [the rule for the phone app](../../.agents/rules/mobile.md) says when. A step stays in `flows/` after its change ships. It joins the fixed tour only by a later choice, because each fixed step adds 1 to 2 minutes to every check and release.
 

@@ -8,9 +8,12 @@ import { readComputer } from '../plugin/lib/config.mjs';
 import { isMain, parseCli, usageError } from './lib-cli.mjs';
 
 const USAGE = 'usage: import-wongstack-memory.mjs --from <WongStack checkout> [--profile <file>] [--dry-run]';
-const CHUNK = 200;
-// A run of empty number ranges this long ends the read, so a store that counts a fact it never gives stops.
-const EMPTY_RANGES = 50;
+// Fact numbers in one read: a D1 store binds at most 100 variables in one query.
+const READ = 90;
+// Facts in one send: the space's import route takes up to 200.
+const SEND = 200;
+// This many empty numbers in a row end the read, so a store that counts a fact it never gives stops.
+const EMPTY_NUMBERS = 10_000;
 // The only requests the import makes of the source: a store that refuses every write still works.
 const READS = ['caller', 'facts', 'tags', 'session', 'transcript', 'stats'];
 
@@ -30,8 +33,9 @@ async function openSource(from, profile) {
 /** Every fact in the source, replaced ones too, read by number ranges until the count reaches the source's total. */
 async function readFacts(source, total) {
   const facts = [];
-  for (let start = 1, empty = 0; facts.length < total && empty < EMPTY_RANGES; start += CHUNK) {
-    const ids = Array.from({ length: CHUNK }, (_, at) => start + at);
+  const emptyRanges = Math.ceil(EMPTY_NUMBERS / READ);
+  for (let start = 1, empty = 0; facts.length < total && empty < emptyRanges; start += READ) {
+    const ids = Array.from({ length: READ }, (_, at) => start + at);
     const [found] = await source.facts([{ ids, all: true, everyone: true, withTags: true }]);
     empty = found.length ? 0 : empty + 1;
     facts.push(...found);
@@ -70,13 +74,13 @@ function spaceClient(computer, send) {
   };
 }
 
-/** The facts in chunks of CHUNK, in number order, each with the sessions it names first; the tags go with the first. */
+/** The facts in chunks of SEND, in number order, each with the sessions it names first; the tags go with the first. */
 function chunks({ who, facts, sessions, tags }) {
   const byId = new Map(sessions.map(row => [row.id, row]));
   const sent = new Set();
   const parts = [];
-  for (let at = 0; at === 0 || at < facts.length; at += CHUNK) {
-    const part = facts.slice(at, at + CHUNK);
+  for (let at = 0; at === 0 || at < facts.length; at += SEND) {
+    const part = facts.slice(at, at + SEND);
     const named = [...new Set(part.map(fact => fact.session_id))].filter(id => byId.has(id) && !sent.has(id));
     for (const id of named) sent.add(id);
     parts.push({ subject: who.subject ?? null, facts: part, sessions: named.map(id => byId.get(id)), tags: at === 0 ? tags : [] });

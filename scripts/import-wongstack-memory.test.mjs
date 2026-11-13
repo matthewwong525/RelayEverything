@@ -25,7 +25,11 @@ function sourceStore() {
       const types = [...new Set(live.map(row => row.type))].sort().map(type => ({ type, n: live.filter(row => row.type === type).length }));
       return { types, totals: { facts: data.facts.length, live: live.length, sessions: data.sessions.size, private: 0 }, consolidations: [] };
     },
-    facts: async queries => queries.map(query => data.facts.filter(row => query.ids.includes(row.id))),
+    // As D1 does, a query that binds more than 100 variables is refused.
+    facts: async queries => queries.map(query => {
+      if (query.ids.length > 100) throw new Error('D1_ERROR: too many SQL variables');
+      return data.facts.filter(row => query.ids.includes(row.id));
+    }),
     tags: async () => data.tags,
     session: async ({ id }) => data.sessions.get(id) ?? null,
     transcript: async ({ factId }) => {
@@ -126,6 +130,17 @@ test('every fact, session, tag and transcript arrives, nothing is written to the
   assert.equal(new TextDecoder().decode(space.transcripts.get(`claude:${'0'.repeat(7)}1`)), '{"type":"assistant"}\n');
   assert.deepEqual(space.calls.filter(call => !call.startsWith('transcript')), ['status', 'start', 'chunk', 'chunk', 'chunk', 'finish']);
   assert.deepEqual(source.writes, []);
+});
+
+test('facts on both sides of a 5,000-number gap all arrive', async () => {
+  const source = sourceStore();
+  for (let id = 1; id <= 100; id += 1) source.fact(id);
+  for (let id = 5101; id <= 5200; id += 1) source.fact(id);
+  const { space, fetch } = relaySpace();
+  const result = await run({ source: source.store, computer: COMPUTER, fetch, log: quiet });
+  assert.equal(result.ok, true, result.differences.join('; '));
+  assert.equal(result.added, 200);
+  assert.deepEqual([space.facts.has(100), space.facts.has(5101), space.facts.has(5200)], [true, true, true]);
 });
 
 test('a second run adds only the source\'s new facts, with a new number where memory took the old one, and links remapped', async () => {

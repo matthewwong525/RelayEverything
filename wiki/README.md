@@ -13,4 +13,4 @@ What your assistant knows about how you work, who is who, and how the project ru
 - [How the Apple Watch app hands notes to the phone](relay-watch.md): the watch's queue, what WatchConnectivity does and doesn't do, why the phone keeps every watch note, and how it writes the words off screen.
 - [The Relay Everything brand](brand.md): the logo, colors, type and rules every screen of the app and the website follow, and when to remake the app icons.
 - [Open source](open-source.md): the public RelayEverything repository, its license, and the check that keeps keys and private notes out.
-- [AI knowledge centers](agent-knowledge-center.md), [wiki style](wiki-style.md), [voice](voice.md), [UX principles](ux-principles.md), [review pages](review-pages.md), [prototypes](prototypes.md), [contributing upstream](contributing.md)
+- [AI knowledge centers](agent-knowledge-center.md), [wiki style](wiki-style.md), [voice](voice.md), [UX principles](ux-principles.md), [design guide](design-guide.md), [review pages](review-pages.md), [prototypes](prototypes.md), [contributing upstream](contributing.md)

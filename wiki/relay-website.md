@@ -17,6 +17,8 @@ The Relay Everything website is Relay Everything's public home page and docs, at
 
 Describe Relay Everything as a way to get your own notes, health and location off your phone and devices, into a place you choose, where your own AI can read them. Do not describe it as a memory platform: Relay Everything has no plugin format, no `relay init` and no access roles, and developers use their own database and tools. A connection that is not built yet shows as *Coming*, with no steps. Say the app keeps notes on the phone by default, and sending to your Relay Everything server is an add-on the person turns on: never say the app syncs everything from the start.
 
+The home page is for conversion: few words and one call to action, with pictures that show the data going to an AI such as ChatGPT or Codex and symbols for what the phone sends. Keep each picture calm. Matthew turned down the 2026-11-08 drafts in turn as *too wordy … too many CTA*, then *too basic*, then *a bit too much going on*. Ask early how many pictures he wants and how many words.
+
 A page's folder can't be named `notes/`: [the public check](open-source.md#the-public-check) refuses any `notes/` folder as private notes, so the notes page is `app/your-notes/`.
 
 No text people read names the ring: it is gone. The notes it sent stay in people's spaces, and a page that must name them calls them *older recorded notes*. [`scripts/product-name.test.mjs`](../scripts/product-name.test.mjs) fails on the word *ring* in any file people read outside the wiki; a quoted value such as `'ring'` and a hyphenated name such as `relay-ring` pass. Call the shape that fills round *New note* a *circle*. An old `/ring/` address opens the home page through `site/public/_redirects`.

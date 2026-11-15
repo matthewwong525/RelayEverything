@@ -6,3 +6,4 @@ appId: com.matthewwong525.relayApp
     visible: "Home"
     timeout: 60000
 - assertVisible: 'Notes(.|\n)*'
+- takeScreenshot: home

@@ -11,3 +11,4 @@ appId: com.matthewwong525.relayApp
     visible: "Appearance"
     timeout: 30000
 - assertVisible: 'Sign in to Relay Everything(.|\n)*'
+- takeScreenshot: settings

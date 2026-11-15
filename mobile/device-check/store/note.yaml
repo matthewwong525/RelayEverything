@@ -10,3 +10,4 @@ appId: com.matthewwong525.relayApp
 - extendedWaitUntil:
     visible: '(.|\n)*Coffee beans for Saturday(.|\n)*'
     timeout: 30000
+- takeScreenshot: note

@@ -10,3 +10,4 @@ appId: com.matthewwong525.relayApp
     visible: "Pinned"
     timeout: 30000
 - assertVisible: 'Groceries(.|\n)*'
+- takeScreenshot: notes

@@ -14,6 +14,7 @@
 		7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */; };
 		5E1A7C0D2F00A00200AA0001 /* RelayIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7C0D2F00A00100AA0001 /* RelayIntents.swift */; };
 		5E1A7B0C2F00000100A1B2C3 /* RelayBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7B0B2F00000100A1B2C3 /* RelayBackground.swift */; };
+		5E1A7D0C2F00000100A1B2C4 /* RelayPaste.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1A7D0B2F00000100A1B2C4 /* RelayPaste.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
@@ -138,6 +139,7 @@
 		7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		5E1A7C0D2F00A00100AA0001 /* RelayIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayIntents.swift; sourceTree = "<group>"; };
 		5E1A7B0B2F00000100A1B2C3 /* RelayBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayBackground.swift; sourceTree = "<group>"; };
+		5E1A7D0B2F00000100A1B2C4 /* RelayPaste.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayPaste.swift; sourceTree = "<group>"; };
 		78E0A7A72DC9AD7400C4905E /* FlutterGeneratedPluginSwiftPackage */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = FlutterGeneratedPluginSwiftPackage; path = Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Flutter/Release.xcconfig; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Flutter/Debug.xcconfig; sourceTree = "<group>"; };
@@ -280,6 +282,7 @@
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
 				5E1A7C0D2F00A00100AA0001 /* RelayIntents.swift */,
 				5E1A7B0B2F00000100A1B2C3 /* RelayBackground.swift */,
+				5E1A7D0B2F00000100A1B2C4 /* RelayPaste.swift */,
 				5E1A7E112F00C00100AA0001 /* ShortcutsInbox.swift */,
 				5E1A7E122F00C00100AA0001 /* RelayWatchReceiver.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
@@ -622,6 +625,7 @@
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,
 				5E1A7C0D2F00A00200AA0001 /* RelayIntents.swift in Sources */,
 				5E1A7B0C2F00000100A1B2C3 /* RelayBackground.swift in Sources */,
+				5E1A7D0C2F00000100A1B2C4 /* RelayPaste.swift in Sources */,
 				5E1A7E112F00C00200AA0001 /* ShortcutsInbox.swift in Sources */,
 				5E1A7E122F00C00200AA0001 /* RelayWatchReceiver.swift in Sources */,
 			);

@@ -7,6 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+// The editor's clipboard reader, for a paste's HTML: flutter_quill marks it experimental; pinned by pubspec.lock.
+// ignore: experimental_member_use
+import 'package:flutter_quill/internal.dart' show ClipboardServiceProvider;
 import 'package:flutter_quill/quill_delta.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -14,8 +17,10 @@ import '../brand.dart';
 import '../data/client_id.dart';
 import '../editor/magnifier.dart';
 import '../editor/markdown.dart';
+import '../editor/paste.dart';
 import '../editor/system_menu.dart';
 import '../relay.dart';
+import '../web/paste.dart';
 import 'back_to.dart';
 import 'days.dart';
 import 'folder.dart' show Opener, openInBrowser;
@@ -70,6 +75,10 @@ final pageKeys = <ShortcutActivator, Intent>{
     SingleActivator(LogicalKeyboardKey.backspace, control: !mac, meta: mac, shift: true): const PageKeyIntent(),
   },
 };
+
+/// The iPhone's own *Paste* hands the clipboard here (`ios/Runner/RelayPaste.swift`): `paste` with `html` and
+/// `plain`, answered true when a note put the words in, else false, and the phone pastes the plain words itself.
+const pasteChannel = MethodChannel('relay/paste');
 
 /// One note's page, as Apple Notes has it: the note to read, and a tap in its words edits it in place. A new note
 /// opens with the keyboard up and a Title first line. Each change is kept on a pause and on leave, with no *Save*.
@@ -140,6 +149,11 @@ class NoteEditorState extends State<NoteEditor> {
   /// A scroll to the caret waits for the frame: one is enough for each frame.
   bool _revealing = false;
   double _inset = 0;
+  /// Stops the browser's paste events reaching this note.
+  late final void Function() _stopPastes;
+
+  /// The note whose words have the cursor: the iPhone's own *Paste* goes there.
+  static NoteEditorState? _pasteTarget;
 
   Relay get relay => widget.relay;
   /// The note's own id, made here for a new note.
@@ -168,7 +182,10 @@ class NoteEditorState extends State<NoteEditor> {
     super.initState();
     // The list as it is now: a voice note's words, or its going, can come between the tap that opens it and this.
     final entry = _current;
-    _controller = QuillController(document: _documentOf(entry), selection: const TextSelection.collapsed(offset: 0));
+    _controller = QuillController(document: _documentOf(entry), selection: const TextSelection.collapsed(offset: 0),
+      // The only way to take the editor's own paste; experimental, pinned by pubspec.lock.
+      // ignore: experimental_member_use
+      config: QuillControllerConfig(clipboardConfig: QuillClipboardConfig(onClipboardPaste: _clipboardPaste)));
     _listen();
     _controller.addListener(_caretMoved);
     _focus.addListener(_focusChanged);
@@ -177,6 +194,8 @@ class NoteEditorState extends State<NoteEditor> {
     _heldBefore = widget.onClose == null ? relay.openNote : null;
     relay.openNote = _id;
     relay.editorWords = _words;
+    pasteChannel.setMethodCallHandler(_pasteCall);
+    _stopPastes = listenPastes(({String? html, required String plain}) => _focus.hasFocus && _paste(html: html, plain: plain));
     if (_stored && _live == null) _gone();
   }
 
@@ -221,6 +240,8 @@ class NoteEditorState extends State<NoteEditor> {
     if (relay.openNote == _id) relay.openNote = _heldBefore;
     if (relay.editorWords == _words) relay.editorWords = null;
     relay.removeListener(_relayChanged);
+    if (_pasteTarget == this) _pasteTarget = null;
+    _stopPastes();
     _changes?.cancel();
     _pause?.cancel();
     _controller.removeListener(_caretMoved);
@@ -235,6 +256,11 @@ class NoteEditorState extends State<NoteEditor> {
   /// The format panel lets go of the cursor, but the person is still editing; the cursor coming back closes it. When
   /// editing ends, an address typed meanwhile becomes a link.
   void _focusChanged() {
+    if (_focus.hasFocus) {
+      _pasteTarget = this;
+    } else if (_pasteTarget == this) {
+      _pasteTarget = null;
+    }
     if (_focus.hasFocus) _formatting = false;
     // A tap in the words while finding edits them, as in Apple Notes: find mode ends, and the tool bar comes back.
     if (_focus.hasFocus && _finding) _endFind();
@@ -346,6 +372,58 @@ class NoteEditorState extends State<NoteEditor> {
     }
     _controller.ignoreFocusOnTextChange = false;
     if (before == _saved) _saved = _controller.document.toDelta();
+  }
+
+  /// The iPhone's own *Paste*: true when the note with the cursor put the words in.
+  static Future<Object?> _pasteCall(MethodCall call) async {
+    if (call.method != 'paste') throw MissingPluginException();
+    final words = call.arguments is Map ? call.arguments as Map : const {};
+    final target = _pasteTarget;
+    if (target == null || !target.mounted || !target._focus.hasFocus) return false;
+    return target._paste(html: words['html'] as String?, plain: words['plain'] as String? ?? '');
+  }
+
+  /// The editor's own paste, from its drawn menu or a keyboard's paste keys: the clipboard's HTML and plain words go
+  /// through [_paste]. It always answers true, so the editor never pastes the page's colours and sizes itself.
+  Future<bool> _clipboardPaste() async {
+    // ignore: experimental_member_use
+    final clipboard = ClipboardServiceProvider.instance;
+    String? html;
+    try {
+      html = await clipboard.getHtmlText() ?? await clipboard.getHtmlFile();
+    } on Exception {
+      html = null;
+    }
+    final plain = (await Clipboard.getData(Clipboard.kTextPlain))?.text ?? '';
+    if (mounted) _paste(html: html, plain: plain);
+    return true;
+  }
+
+  /// Puts a paste at the cursor in one change, so one *Undo* takes it back. A copy from inside the note pastes back with
+  /// its styles; anything else keeps only the styles the note can store ([pastedDelta]). Addresses in it show as links,
+  /// as [withLinks] marks them. True when the paste is handled, even with no words.
+  bool _paste({String? html, required String plain}) {
+    final selection = _controller.selection;
+    if (!selection.isValid) return false;
+    final copied = _controller.pasteDelta;
+    final ({Delta change, int caret})? paste;
+    if (plain.isNotEmpty && plain == _controller.pastePlainText && copied.isNotEmpty) {
+      final change = Delta();
+      if (selection.start > 0) change.retain(selection.start);
+      if (!selection.isCollapsed) change.delete(selection.end - selection.start);
+      for (final op in copied.toList()) {
+        change.push(op);
+      }
+      paste = (change: change, caret: selection.start + copied.toList().fold(0, (sum, op) => sum + (op.length ?? 0)));
+    } else {
+      final pasted = pastedDelta(html: html, plain: plain);
+      paste = pasteChange(_controller.document, selection, pasted.isEmpty ? pasted : withLinks(pasted));
+    }
+    if (paste == null) return true;
+    _controller.compose(paste.change, TextSelection.collapsed(offset: paste.caret), ChangeSource.local);
+    _controller.updateSelection(TextSelection.collapsed(offset: paste.caret), ChangeSource.local);
+    _revealCaret();
+    return true;
   }
 
   void _say(String message) => _messenger?.showSnackBar(SnackBar(content: Text(message)));

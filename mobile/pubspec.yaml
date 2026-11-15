@@ -65,6 +65,8 @@ dependencies:
   # Your calendar: reads the phone's calendars and their events (EventKit, CalendarContract). It never writes.
   device_calendar_plus: ^0.12.0
   flutter_quill: ^11.6.0
+  # A paste's HTML, read into the note's own styles (lib/editor/paste.dart); the version flutter_quill already uses.
+  html: ^0.15.7
   share_plus: ^13.3.1
   # The version and build at the bottom of Settings.
   package_info_plus: ^10.2.2

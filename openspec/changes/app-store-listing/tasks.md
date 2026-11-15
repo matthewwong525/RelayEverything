@@ -16,7 +16,7 @@
 
 - [x] 3.1 Add Maestro flows in `mobile/device-check/store/` that make the sample notes and take Home, a note, search and Settings
 - [x] 3.2 Add `.github/workflows/mobile-store-screenshots.yml` (`workflow_dispatch`, `main` only): jobs for the Pro Max iPhone, the 13-inch iPad and the Apple Watch, reusing the device check's boot, build and open scripts; one artifact `store-screenshots` in deliver's folder layout
-- [ ] 3.3 `/save`, then run the screenshot workflow on the branch's commit (a branch run is allowed to make pictures only), download the artifact into `mobile/ios/fastlane/screenshots/en-CA/`, look at each picture, and confirm the test in 1.4 takes their sizes
+- [x] 3.3 `/save`, then run the screenshot workflow on the branch's commit (a branch run is allowed to make pictures only), download the artifact into `mobile/ios/fastlane/screenshots/en-CA/`, look at each picture, and confirm the test in 1.4 takes their sizes
 
 ## 4. One-time App Store Connect settings (outward, confirm each)
 

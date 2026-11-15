@@ -1,0 +1,171 @@
+# The Mac app (lib/main_mac.dart), for Apple silicon and Intel Macs, by mobile-ci.yml's mode. A branch builds it
+# unsigned, as a file to try in the run, and sends it nowhere. Main and a release sign it with the Developer ID
+# certificate, have Apple check it (notarize), staple Apple's ticket, and keep Relay-Everything-Mac.dmg for
+# mobile-ci.yml, which adds it to the GitHub release. A missing secret skips main's file with a notice, but a release
+# or a release check fails.
+name: Mobile macOS
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: branch, beta, release or release-check, from scripts/app-release.mjs version.
+        required: true
+        type: string
+      version:
+        description: The version name, such as 1.1.0.
+        required: true
+        type: string
+      build:
+        description: The build number, the same for every app of one run.
+        required: true
+        type: string
+    outputs:
+      signed:
+        description: "'true' when this run kept a signed, checked and stapled Relay-Everything-Mac.dmg, else 'false'."
+        value: ${{ jobs.mac.outputs.signed }}
+
+permissions:
+  contents: read
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    outputs:
+      signed: ${{ steps.check.outcome == 'success' }}
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      MODE: ${{ inputs.mode }}
+      VERSION: ${{ inputs.version }}
+      BUILD: ${{ inputs.build }}
+      APP: build/macos/Build/Products/Release/Relay Everything.app
+      DMG: Relay-Everything-Mac.dmg
+    steps:
+      # A branch never signs. Main and a release need the App Store Connect key, for Apple's check, and the Developer
+      # ID certificate.
+      - name: Developer ID certificate and App Store Connect key
+        id: key
+        working-directory: .
+        env:
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          MACOS_DEVID_CERT_P12: ${{ secrets.MACOS_DEVID_CERT_P12 }}
+          MACOS_DEVID_CERT_PASSWORD: ${{ secrets.MACOS_DEVID_CERT_PASSWORD }}
+        run: |
+          if [ "$MODE" = branch ]; then
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          missing=""
+          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 MACOS_DEVID_CERT_P12 MACOS_DEVID_CERT_PASSWORD; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -z "$missing" ]; then
+            echo "sign=true" >> "$GITHUB_OUTPUT"
+          elif [ "$MODE" = release ] || [ "$MODE" = release-check ]; then
+            echo "::error::A release needs the Mac signing secrets: add${missing} to this repository's secrets. See mobile/README.md."
+            exit 1
+          else
+            echo "::notice::No signed Mac app: add${missing} to this repository's secrets (the certificate with node scripts/ios-signing-cert.mjs --mac). See mobile/README.md."
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: inputs.mode == 'branch' || steps.key.outputs.sign == 'true'
+      - uses: subosito/flutter-action@v2
+        if: inputs.mode == 'branch' || steps.key.outputs.sign == 'true'
+        with:
+          flutter-version-file: mobile/pubspec.yaml
+          cache: true
+      # One app for Apple silicon and Intel Macs, as Flutter builds a release by default.
+      - name: Build
+        if: inputs.mode == 'branch' || steps.key.outputs.sign == 'true'
+        run: |
+          flutter pub get
+          flutter build macos -t lib/main_mac.dart --release --build-name="$VERSION" --build-number="$BUILD"
+          test -d "$APP"
+      - name: Zip the app to try
+        if: inputs.mode == 'branch'
+        run: ditto -c -k --keepParent "$APP" "relay-everything-mac-${BUILD}.zip"
+      - name: File to try
+        if: inputs.mode == 'branch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-everything-mac-${{ inputs.build }}
+          path: mobile/relay-everything-mac-${{ inputs.build }}.zip
+          if-no-files-found: error
+      # A keychain of this run only, with the certificate and nothing else: codesign finds the one identity in it.
+      - name: Signing keychain
+        if: steps.key.outputs.sign == 'true'
+        env:
+          MACOS_DEVID_CERT_P12: ${{ secrets.MACOS_DEVID_CERT_P12 }}
+          MACOS_DEVID_CERT_PASSWORD: ${{ secrets.MACOS_DEVID_CERT_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/relay-mac.keychain-db"
+          password=$(openssl rand -base64 24)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          echo "$MACOS_DEVID_CERT_P12" | base64 --decode > "$RUNNER_TEMP/devid.p12"
+          security import "$RUNNER_TEMP/devid.p12" -k "$keychain" -P "$MACOS_DEVID_CERT_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/devid.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          echo "KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+      # The frameworks inside first, then the app with its entitlements, each with the hardened runtime Apple's check
+      # needs. The disk image has the app and a link to Applications, to drag it there.
+      - name: Sign the app and make the disk image
+        if: steps.key.outputs.sign == 'true'
+        run: |
+          identity="Developer ID Application"
+          find "$APP/Contents/Frameworks" -depth \( -name '*.framework' -o -name '*.dylib' \) -print0 |
+            xargs -0 -I{} codesign --force --options runtime --timestamp --keychain "$KEYCHAIN" --sign "$identity" {}
+          codesign --force --options runtime --timestamp --keychain "$KEYCHAIN" --sign "$identity" \
+            --entitlements macos/Runner/Release.entitlements "$APP"
+          codesign --verify --strict --deep --verbose=2 "$APP"
+          stage="$RUNNER_TEMP/dmg"
+          mkdir -p "$stage"
+          ditto "$APP" "$stage/Relay Everything.app"
+          ln -s /Applications "$stage/Applications"
+          hdiutil create -volname "Relay Everything" -srcfolder "$stage" -ov -format UDZO "$DMG"
+          codesign --force --timestamp --keychain "$KEYCHAIN" --sign "$identity" "$DMG"
+      # Apple's check, with the App Store Connect key. A refusal fails the run with Apple's own log, and nothing goes out.
+      - name: Apple's check
+        if: steps.key.outputs.sign == 'true'
+        env:
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          key="$RUNNER_TEMP/AuthKey.p8"
+          echo "$ASC_KEY_P8" | base64 --decode > "$key"
+          auth=(--key "$key" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID")
+          out=$(xcrun notarytool submit "$DMG" "${auth[@]}" --wait --timeout 1h --output-format json) || true
+          echo "$out"
+          id=$(echo "$out" | jq -r '.id // empty')
+          status=$(echo "$out" | jq -r '.status // empty')
+          if [ "$status" != Accepted ]; then
+            if [ -n "$id" ]; then xcrun notarytool log "$id" "${auth[@]}" || true; fi
+            rm -f "$key"
+            echo "::error::Apple did not accept the Mac app (status: ${status:-no answer}). Its log is above. No Mac app goes to the release."
+            exit 1
+          fi
+          rm -f "$key"
+          xcrun stapler staple "$DMG"
+      # Signed, accepted by Gatekeeper and stapled, or the run fails here: only a file that passes is kept.
+      - name: Check the disk image
+        id: check
+        if: steps.key.outputs.sign == 'true'
+        run: node ../scripts/app-release.mjs mac-check --file "$DMG"
+      - name: File for the release
+        if: steps.check.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-everything-mac
+          path: mobile/Relay-Everything-Mac.dmg
+          if-no-files-found: error
+      - name: Remove the signing keychain
+        if: always() && env.KEYCHAIN != ''
+        run: security delete-keychain "$KEYCHAIN" || true

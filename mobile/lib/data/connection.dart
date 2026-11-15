@@ -109,7 +109,14 @@ const appGroup = 'group.com.matthewwong525.relayApp';
 /// simulator build, keeps using the app's own group.
 class KeyVault {
   KeyVault([FlutterSecureStorage? storage, bool? shared])
-    : _storage = storage ?? const FlutterSecureStorage(), _shared = shared ?? Platform.isIOS;
+    : _storage = storage ?? defaultStorage, _shared = shared ?? Platform.isIOS;
+
+  /// On the Mac, the key goes in the login keychain, with no shared group: it needs no keychain entitlement, so the
+  /// app needs no provisioning profile. The Mac app has no share card to share it with.
+  static const macOptions = MacOsOptions(usesDataProtectionKeychain: false);
+
+  /// The app's own store: the phone's options, and [macOptions] on the Mac.
+  static const defaultStorage = FlutterSecureStorage(mOptions: macOptions);
 
   final FlutterSecureStorage _storage;
   /// True on iPhone. Android has one home only, so it never moves anything.

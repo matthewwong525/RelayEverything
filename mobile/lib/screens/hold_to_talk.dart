@@ -62,8 +62,8 @@ class _NewNoteButtonState extends State<NewNoteButton> with SingleTickerProvider
   Widget build(BuildContext context) {
     final brand = brandOf(context);
     final live = _starting || _relay.listening != null;
-    // The browser records no voice: a click only writes.
-    final talks = !_relay.web;
+    // A computer records no voice: a click only writes.
+    final talks = !_relay.desktop;
     return Stack(clipBehavior: Clip.none, children: [
       Semantics(
         label: 'New note',

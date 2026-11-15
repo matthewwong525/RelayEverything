@@ -6,7 +6,9 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { CERTIFICATES_PAGE, LIMIT, NAMES, ascToken, keepable, limitMessage, p12Serial, run, setEnvLine } from './ios-signing-cert.mjs';
+import {
+  ADD_CERTIFICATE_PAGE, CERTIFICATES_PAGE, LIMIT, MAC, NAMES, ascToken, keepable, limitMessage, p12Serial, run, setEnvLine,
+} from './ios-signing-cert.mjs';
 
 const now = Date.parse('2026-11-07T12:00:00Z');
 const cert = (id, type, ends, serial = id) => ({ id, attributes: { certificateType: type, expirationDate: ends, displayName: `cert ${id}`, serialNumber: serial } });
@@ -48,9 +50,10 @@ test('a .env line is replaced in place, or added at the end', () => {
 });
 
 // A stand-in for Apple: it signs the request with its own made-up authority, as Apple's API would.
-function fakeApple(dir, certificates) {
+function fakeApple(dir, certificates, asked = []) {
   spawnSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', join(dir, 'ca.key'), '-out', join(dir, 'ca.pem'), '-days', '2', '-subj', '/CN=Test CA']);
   return async (method, path, body) => {
+    asked.push(method === 'GET' ? path : body.data.attributes.certificateType);
     if (method === 'GET') return { data: certificates };
     writeFileSync(join(dir, 'in.csr'), body.data.attributes.csrContent);
     spawnSync('openssl', ['x509', '-req', '-in', join(dir, 'in.csr'), '-CA', join(dir, 'ca.pem'), '-CAkey', join(dir, 'ca.key'), '-days', '2', '-outform', 'DER', '-out', join(dir, 'out.cer')]);
@@ -114,4 +117,41 @@ test('a full account makes nothing and saves nothing', async () => {
   };
   const line = await run({ env: {}, api, save: () => assert.fail('saved'), log: () => {}, now });
   assert.match(line, /^result=full /);
+});
+
+test('--mac asks Apple for a Developer ID Application certificate and saves it under the Mac names', { skip: !hasOpenssl }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'relay-cert-test-'));
+  try {
+    const saved = {};
+    const asked = [];
+    const line = await run({ env: {}, api: fakeApple(dir, [], asked), save: values => Object.assign(saved, values), log: () => {}, now, kind: MAC });
+    assert.equal(line, 'result=made id=NEWCERT expires=2027-11-07');
+    assert.deepEqual(asked, ['/certificates?filter[certificateType]=DEVELOPER_ID_APPLICATION&limit=200', 'DEVELOPER_ID_APPLICATION']);
+    assert.deepEqual(Object.keys(saved), ['MACOS_DEVID_CERT_P12', 'MACOS_DEVID_CERT_PASSWORD']);
+    assert.match(p12Serial(saved.MACOS_DEVID_CERT_P12, saved.MACOS_DEVID_CERT_PASSWORD, dir), /^[0-9A-F]+$/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('--mac counts only Developer ID certificates against its own limit of five', () => {
+  const iphone = Array.from({ length: LIMIT }, (_, i) => cert(`d${i}`, 'DISTRIBUTION', '2027-06-01T00:00:00Z'));
+  assert.equal(limitMessage(iphone, now, MAC), null);
+  const full = Array.from({ length: 5 }, (_, i) => cert(`m${i}`, 'DEVELOPER_ID_APPLICATION', '2030-06-01T00:00:00Z'));
+  assert.match(limitMessage(full, now, MAC), /5 Developer ID Application certificates, its limit/);
+});
+
+test("Apple's refusal of a Developer ID certificate prints the page to make it by hand and saves nothing", { skip: !hasOpenssl }, async () => {
+  const refuse = async method => {
+    if (method === 'GET') return { data: [] };
+    throw Object.assign(new Error('Apple answered 403: only the Account Holder can create this certificate'), { status: 403 });
+  };
+  const printed = [];
+  const line = await run({ env: {}, api: refuse, save: () => assert.fail('saved'), log: text => printed.push(text), now, kind: MAC });
+  assert.match(line, /^result=refused /);
+  assert.ok(line.includes(ADD_CERTIFICATE_PAGE));
+  assert.match(line, /MACOS_DEVID_CERT_P12 and MACOS_DEVID_CERT_PASSWORD/);
+  assert.deepEqual(printed, [line]);
+  // The iPhone certificate has no hand-made way round: Apple's answer stays a failure.
+  await assert.rejects(run({ env: {}, api: refuse, save: () => assert.fail('saved'), log: () => {}, now }), /403/);
 });

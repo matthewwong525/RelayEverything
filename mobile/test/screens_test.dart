@@ -2782,10 +2782,12 @@ void main() {
     }
     expect(find.descendant(of: find.byType(SettingsScreen), matching: find.byType(Divider)), findsNothing);
     expect(tester.getTopLeft(accountRow).dy, lessThan(tester.getTopLeft(find.text('Appearance')).dy));
-    // The web's Settings lists the same rows, in the same order, less those for the phone alone.
-    expect(SettingsRow.on(web: false),
+    // The web's and the Mac's Settings list the same rows, in the same order, less those for the phone alone. The Mac
+    // shows its version, as no update comes by itself.
+    expect(SettingsRow.on(RelayPlatform.phone),
       [SettingsRow.account, SettingsRow.appearance, SettingsRow.voice, SettingsRow.version]);
-    expect(SettingsRow.on(web: true), [SettingsRow.account, SettingsRow.appearance]);
+    expect(SettingsRow.on(RelayPlatform.web), [SettingsRow.account, SettingsRow.appearance]);
+    expect(SettingsRow.on(RelayPlatform.mac), [SettingsRow.account, SettingsRow.appearance, SettingsRow.version]);
   });
 
   testWidgets('with sending off, a data folder says it works once you sign in, and Sign in opens the sign-in', (tester) async {
@@ -3721,6 +3723,35 @@ void main() {
       tester.semantics.tap(find.semantics.byLabel('Save the voice note'));
       await tester.pump();
       expect(relay.calls, ['voice start', 'voice end']);
+      semantics.dispose();
+    });
+
+    testWidgets('on the Mac, New note has no record action and a hold writes; the note keeps the page keys', (tester) async {
+      final semantics = tester.ensureSemantics();
+      Future<List<int>?> show(RelayPlatform platform) async {
+        relay
+          ..platform = platform
+          ..calls.clear();
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpWidget(RelayApp(relay: relay));
+        await tester.pumpAndSettle();
+        return find.semantics.byLabel('New note').evaluate().single.getSemanticsData().customSemanticsActionIds;
+      }
+      Future<Map<ShortcutActivator, Intent>?> holdKeys() async {
+        await tester.longPress(newNote);
+        await tester.pumpAndSettle();
+        expect(relay.calls, isNot(contains('voice start')));
+        final keys = tester.widget<QuillEditor>(find.byType(QuillEditor)).config.customShortcuts;
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        return keys;
+      }
+
+      expect(await show(RelayPlatform.mac), isEmpty);
+      expect(await holdKeys(), same(pageKeys), reason: 'a long press is a tap: it writes, with the page keys');
+      expect(await show(RelayPlatform.web), isEmpty);
+      expect(await holdKeys(), same(pageKeys));
+      expect(await show(RelayPlatform.phone), isNotEmpty, reason: 'the phone keeps Record a voice note');
       semantics.dispose();
     });
 

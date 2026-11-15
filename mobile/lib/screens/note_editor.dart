@@ -565,7 +565,7 @@ class NoteEditorState extends State<NoteEditor> {
     try {
       picked = await (widget.picker ?? pickWithPhone)(photos: photos);
     } on Exception {
-      return _say(relay.web ? 'The browser did not give the file. Try again.' : 'The phone did not give the file. Try again.');
+      return _say('The ${relay.web ? 'browser' : relay.desktop ? 'Mac' : 'phone'} did not give the file. Try again.');
     }
     if (mounted && picked.isNotEmpty) _save(sendNow: !_focus.hasFocus, files: picked);
   }
@@ -608,6 +608,13 @@ class NoteEditorState extends State<NoteEditor> {
     _save(sendNow: true, files: files);
   }
 
+  /// *Bold* or *Italic* from the Mac's *Format* menu: on the words picked, or on what is typed next, as ⌘B and ⌘I do.
+  void toggleStyle(Attribute attribute) {
+    if (_waiting) return;
+    final on = _controller.getSelectionStyle().attributes.containsKey(attribute.key);
+    _controller.formatSelection(on ? Attribute.clone(attribute, null) : attribute);
+  }
+
   /// The new page takes this one's place, so this page gives the hold back first: the new page then gives it, on
   /// leave, to the note under both, not to this closed one.
   void _compose() {
@@ -634,7 +641,7 @@ class NoteEditorState extends State<NoteEditor> {
   bool _toggleMenu(TextPosition at) {
     final selection = _controller.selection;
     final editor = _editor.currentState?.editableTextKey.currentState;
-    if (relay.web || editor == null || !selection.isCollapsed || at.offset != selection.baseOffset) return false;
+    if (relay.desktop || editor == null || !selection.isCollapsed || at.offset != selection.baseOffset) return false;
     if (editor.selectionOverlay?.toolbar != null) {
       editor.hideToolbar();
     } else if (!QuillSystemMenu.closedJustNow(editor)) {
@@ -692,8 +699,8 @@ class NoteEditorState extends State<NoteEditor> {
                   onStep: _matches.isEmpty ? null : _step)
               : editing
               ? Center(child: FloatingToolBar(onStyles: _styles, onChecklist: _checklist, onAttach: _attachOrNull,
-                  attachMenu: !relay.web))
-              : ReadingBar(onChecklist: _checklist, onAttach: _attachOrNull, onCompose: _compose, attachMenu: !relay.web),
+                  attachMenu: !relay.desktop))
+              : ReadingBar(onChecklist: _checklist, onAttach: _attachOrNull, onCompose: _compose, attachMenu: !relay.desktop),
           )),
         ])),
         if (!widget.pane && _formatting) FormatSheet(controller: _controller, height: _keyboard, onClose: _closeStyles),
@@ -738,7 +745,7 @@ class NoteEditorState extends State<NoteEditor> {
     items: [
       if (_current case final note?)
         note.pinned ? ('Unpin Note', CupertinoIcons.pin_slash, _pin) : ('Pin Note', CupertinoIcons.pin, _pin),
-      // The browser has its own find, Ctrl+F.
+      // The browser has its own find, Ctrl+F; the Mac's ⌘F goes to the notes search, so the Mac keeps this one.
       if (!relay.web && !_waiting) ('Find in Note', CupertinoIcons.search, _openFind),
       ('Copy', CupertinoIcons.doc_on_doc, _copy),
     ],
@@ -789,10 +796,10 @@ class NoteEditorState extends State<NoteEditor> {
               autoFocus: widget.entry == null,
               placeholder: recording != null ? 'No words, only the recording.' : 'What do you want to keep?',
               customStyles: noteStyles(context),
-              customShortcuts: relay.web ? pageKeys : null,
+              customShortcuts: relay.desktop ? pageKeys : null,
               onTapUp: _tapUp,
               contextMenuBuilder: noteContextMenu,
-              quillMagnifierBuilder: relay.web ? null : noteMagnifier,
+              quillMagnifierBuilder: relay.desktop ? null : noteMagnifier,
               // A long press on a link offers Open; it goes to the same browser.
               onLaunchUrl: _openLink,
               // The only way to draw Apple's round checklist circles and dashed lists; pinned by pubspec.lock.

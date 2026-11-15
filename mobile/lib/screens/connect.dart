@@ -109,7 +109,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
 
   /// A key is kept already: the server it sends to, and one tap to send there.
   List<Widget> _kept() => [
-    Text('This phone has a key for ${widget.relay.server ?? 'your server'}.'),
+    Text('This ${widget.relay.device} has a key for ${widget.relay.server ?? 'your server'}.'),
     const SizedBox(height: 16),
     FilledButton(onPressed: () => Navigator.of(context).pop(SendPlace.server), child: const Text('Send to Relay Everything')),
     if (!widget.signInOnly) ...[
@@ -130,8 +130,8 @@ class _ConnectScreenState extends State<ConnectScreen> {
     Text(widget.privateOnly
       ? 'The phone sends your health, places, calendar and photos straight to your server. Relay Everything never gets '
         'them. Your notes still sync through Relay Everything.'
-      : 'Your notes go straight from this phone to your server. You need no account. Health and places go there too '
-        'if you turn them on.'),
+      : 'Your notes go straight from this ${widget.relay.device} to your server. You need no account.'
+        '${widget.relay.platform == RelayPlatform.mac ? '' : ' Health and places go there too if you turn them on.'}'),
     _step(1, "Your webhook's address"),
     TextField(controller: _address, keyboardType: TextInputType.url, autocorrect: false,
       decoration: const InputDecoration(labelText: 'Address', helperText: 'It must start with https://.',
@@ -150,8 +150,8 @@ class _ConnectScreenState extends State<ConnectScreen> {
     _step(4, 'Save'),
     FilledButton(onPressed: _busy ? null : _saveWebhook, child: const Text('Save')),
     const SizedBox(height: 16),
-    Text('The phone sends only while it is on and has signal, so your data comes in groups. Your Relay Everything page '
-      'and your AI can not read it.', style: Theme.of(context).textTheme.bodySmall),
+    Text('The ${widget.relay.device} sends only while it is on and has signal, so your data comes in groups. '
+      'Your Relay Everything page and your AI can not read it.', style: Theme.of(context).textTheme.bodySmall),
     if (!widget.privateOnly) ...[
       const SizedBox(height: 16),
       _quiet('Sign in to Relay Everything instead', () => _pick(false)),
@@ -173,7 +173,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
       _quiet(_noAccount, () => _pick(true), CupertinoIcons.link),
     ],
     const SizedBox(height: 16),
-    Text('Your notes stay on this phone until you sign in.',
+    Text('Your notes stay on this ${widget.relay.device} until you sign in.',
       style: Theme.of(context).textTheme.bodySmall?.copyWith(color: brandOf(context).muted)),
   ];
 }

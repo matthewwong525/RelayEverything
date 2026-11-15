@@ -79,7 +79,7 @@ class WebhooksPage extends StatelessWidget {
             trailing: TextButton(onPressed: () => _test(context), style: quietButton(context), child: const Text('Send a test')),
           ),
           if (relay.webhookProblem case final problem?) ListTile(
-            subtitle: Text(problemLine(problem, DateTime.now(), what: 'Health, places, calendar and photos'),
+            subtitle: Text(problemLine(problem, DateTime.now(), what: 'Health, places, calendar and photos', device: relay.device),
               style: TextStyle(color: danger)),
           ),
         ],

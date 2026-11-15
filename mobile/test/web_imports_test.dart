@@ -21,14 +21,20 @@ String chosen(String plain, String conditions) {
 }
 
 /// Every import and export [entry] reaches inside this app, with the file that names it.
-Map<String, String> reached(String entry) {
+Map<String, String> reached(String entry) => walk(entry).packages;
+
+/// The packages and the app's own files [entry] reaches, each with the file that names it. A browser build takes a
+/// conditional import's web branch, and a [web] false build its plain one. A file in [skip] is reached, but not read.
+({Map<String, String> packages, Map<String, String> files}) walk(String entry, {bool web = true,
+    Set<String> skip = const {}}) {
   final seen = <String, String>{entry: '(entry)'};
   final names = <String, String>{};
   final queue = [entry];
   while (queue.isNotEmpty) {
     final file = queue.removeLast();
+    if (skip.contains(file)) continue;
     for (final match in _directive.allMatches(File(file).readAsStringSync())) {
-      final target = chosen(match[1]!, match[2] ?? '');
+      final target = web ? chosen(match[1]!, match[2] ?? '') : match[1]!;
       final String? path;
       if (target.startsWith('package:relay_app/')) {
         path = 'lib/${target.substring('package:relay_app/'.length)}';
@@ -44,7 +50,7 @@ Map<String, String> reached(String entry) {
       }
     }
   }
-  return names;
+  return (packages: names, files: seen);
 }
 
 void main() {

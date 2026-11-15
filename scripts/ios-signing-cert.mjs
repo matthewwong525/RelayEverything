@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Makes the one Apple Distribution certificate that signs every iPhone build, and stores it where the build reads it.
+// Makes the Apple Distribution certificate that signs every iPhone build, or with --mac the Mac app's Developer ID one.
 // Spec: openspec/specs/relay-app-builds/spec.md. The yearly renewal and the revoke step: wiki/open-source.md#phone-builds.
 import { spawnSync } from 'node:child_process';
 import { createPrivateKey, randomBytes, sign } from 'node:crypto';
@@ -10,26 +10,43 @@ import { isMain, parseCli } from './lib-cli.mjs';
 import { primaryRoot } from '../.claude/skills/memory/scripts/lib/primary-root.mjs';
 import { parseEnv } from '../.claude/skills/memory/scripts/lib/store.mjs';
 
-const USAGE = `usage: node scripts/ios-signing-cert.mjs [--renew]
+const USAGE = `usage: node scripts/ios-signing-cert.mjs [--mac] [--renew]
 
 Reads the App Store Connect key (ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8) from the primary worktree's .env. When the
 saved certificate is still on Apple's account and has more than 30 days left, it keeps it. Else it asks Apple for a
 new Apple Distribution certificate, makes the .p12 with a new password in a temporary folder, and writes
 IOS_DIST_CERT_P12 and IOS_DIST_CERT_PASSWORD to .env and to the repository's GitHub secrets.
 
+--mac     the Developer ID Application certificate that signs the Mac app, written as MACOS_DEVID_CERT_P12 and
+          MACOS_DEVID_CERT_PASSWORD. Apple lets only the Account Holder make one: when Apple refuses the key, it
+          prints the page to make it by hand and exits 1.
 --renew   make a new certificate even when the saved one is still good
 
-Prints one result= line with the certificate id and expiry only: made, kept, full (revoke one first), or failed.`;
+Prints one result= line with the certificate id and expiry only: made, kept, full (revoke one first), refused (make
+it by hand), or failed.`;
 
 export const REPO = 'matthewwong525/RelayEverything';
-export const NAMES = { p12: 'IOS_DIST_CERT_P12', password: 'IOS_DIST_CERT_PASSWORD' };
 const API = 'https://api.appstoreconnect.apple.com/v1';
-// Apple allows a team three distribution certificates; Apple Distribution and the older iOS Distribution share them.
-export const LIMIT = 3;
-const KINDS = ['DISTRIBUTION', 'IOS_DISTRIBUTION'];
+
+// Each certificate: the type Apple makes, the types that count against Apple's limit, and its saved names. A team has
+// three distribution places, shared with the older iOS Distribution, and five Developer ID Application places.
+export const IPHONE = {
+  label: 'distribution', make: 'DISTRIBUTION', counts: ['DISTRIBUTION', 'IOS_DISTRIBUTION'], limit: 3,
+  names: { p12: 'IOS_DIST_CERT_P12', password: 'IOS_DIST_CERT_PASSWORD' }, subject: 'Relay Everything iPhone builds',
+  p12Name: 'Apple Distribution',
+};
+export const MAC = {
+  label: 'Developer ID Application', make: 'DEVELOPER_ID_APPLICATION', counts: ['DEVELOPER_ID_APPLICATION'], limit: 5,
+  names: { p12: 'MACOS_DEVID_CERT_P12', password: 'MACOS_DEVID_CERT_PASSWORD' }, subject: 'Relay Everything Mac builds',
+  p12Name: 'Developer ID Application',
+};
+export const NAMES = IPHONE.names;
+export const LIMIT = IPHONE.limit;
 const RENEW_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const CERTIFICATES_PAGE = 'https://developer.apple.com/account/resources/certificates/list';
+/** Where the Account Holder makes the Developer ID certificate by hand, when Apple refuses the key. */
+export const ADD_CERTIFICATE_PAGE = 'https://developer.apple.com/account/resources/certificates/add';
 
 const b64url = value => Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)).toString('base64url');
 
@@ -41,25 +58,28 @@ export function ascToken({ keyId, issuerId, p8 }, now = Date.now()) {
   return `${head}.${signature.toString('base64url')}`;
 }
 
-/** The distribution certificates that still count against Apple's limit. */
-export const active = (certificates, now = Date.now()) => certificates.filter(({ attributes: a }) =>
-  KINDS.includes(a.certificateType) && Date.parse(a.expirationDate) > now);
+/** The certificates of [kind] that still count against Apple's limit. */
+export const active = (certificates, now = Date.now(), kind = IPHONE) => certificates.filter(({ attributes: a }) =>
+  kind.counts.includes(a.certificateType) && Date.parse(a.expirationDate) > now);
 
 /** Null while there is room for one more; else what the person does on developer.apple.com. */
-export function limitMessage(certificates, now = Date.now()) {
-  const list = active(certificates, now);
-  if (list.length < LIMIT) return null;
+export function limitMessage(certificates, now = Date.now(), kind = IPHONE) {
+  const list = active(certificates, now, kind);
+  if (list.length < kind.limit) return null;
   const names = list.map(({ id, attributes: a }) => `${a.displayName ?? a.name} (${id}, ends ${a.expirationDate.slice(0, 10)})`);
-  return `Apple's account holds ${list.length} distribution certificates, its limit. On ${CERTIFICATES_PAGE}, revoke one that no build uses, then run this again: ${names.join('; ')}`;
+  return `Apple's account holds ${list.length} ${kind.label} certificates, its limit. On ${CERTIFICATES_PAGE}, revoke one that no build uses, then run this again: ${names.join('; ')}`;
 }
+
+/** True when Apple refused to make a certificate for the key's role, as it does for a Developer ID one. */
+export const refusedRole = error => error.status === 403 || /account holder/i.test(error.message ?? '');
 
 // openssl prints whole bytes, so a serial can start with a zero that Apple's list drops.
 const bareSerial = serial => serial.toUpperCase().replace(/^0+/, '');
 
 /** The saved certificate's entry on Apple, when it is there and has more than 30 days left. */
-export function keepable(certificates, serial, now = Date.now()) {
+export function keepable(certificates, serial, now = Date.now(), kind = IPHONE) {
   if (!serial) return null;
-  return active(certificates, now).find(({ attributes: a }) =>
+  return active(certificates, now, kind).find(({ attributes: a }) =>
     a.serialNumber && bareSerial(a.serialNumber) === bareSerial(serial) && Date.parse(a.expirationDate) - now > RENEW_DAYS * DAY_MS) ?? null;
 }
 
@@ -93,18 +113,18 @@ export function p12Serial(p12, password, dir) {
 }
 
 /** A new private key and its certificate request, in `dir`. Returns the request's PEM text. */
-export function makeRequest(dir) {
+export function makeRequest(dir, subject = IPHONE.subject) {
   openssl(['req', '-new', '-newkey', 'rsa:2048', '-nodes', '-keyout', join(dir, 'key.pem'), '-out', join(dir, 'request.csr'),
-    '-subj', '/CN=Relay Everything iPhone builds']);
+    '-subj', `/CN=${subject}`]);
   return readFileSync(join(dir, 'request.csr'), 'utf8');
 }
 
 /** The base64 .p12 of Apple's certificate (base64 DER) and the key in `dir`, locked with `password`. */
-export function makeP12(dir, certificateContent, password) {
+export function makeP12(dir, certificateContent, password, name = IPHONE.p12Name) {
   writeFileSync(join(dir, 'apple.cer'), Buffer.from(certificateContent, 'base64'));
   openssl(['x509', '-inform', 'DER', '-in', join(dir, 'apple.cer'), '-out', join(dir, 'apple.pem')]);
   // SHA1 and 3DES, so the Mac's keychain on the build machine can open the file.
-  openssl(['pkcs12', '-export', '-inkey', join(dir, 'key.pem'), '-in', join(dir, 'apple.pem'), '-name', 'Apple Distribution',
+  openssl(['pkcs12', '-export', '-inkey', join(dir, 'key.pem'), '-in', join(dir, 'apple.pem'), '-name', name,
     '-keypbe', 'PBE-SHA1-3DES', '-certpbe', 'PBE-SHA1-3DES', '-macalg', 'sha1',
     '-out', join(dir, 'signing.p12'), '-passout', 'env:RELAY_P12_PASS'], { RELAY_P12_PASS: password });
   return readFileSync(join(dir, 'signing.p12')).toString('base64');
@@ -119,7 +139,11 @@ export function appleApi(key) {
       body: body && JSON.stringify(body),
     });
     const json = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(`Apple answered ${response.status}: ${json.errors?.[0]?.detail ?? json.errors?.[0]?.title ?? 'no detail'}`);
+    if (!response.ok) {
+      const error = new Error(`Apple answered ${response.status}: ${json.errors?.[0]?.detail ?? json.errors?.[0]?.title ?? 'no detail'}`);
+      error.status = response.status;
+      throw error;
+    }
     return json;
   };
 }
@@ -145,21 +169,30 @@ export function saveValues(envFiles, repo) {
 
 // The whole step, with Apple, the saving and the output passed in. Returns the result= line; `log` gets only
 // that line, so no key, password or certificate reaches the screen.
-export async function run({ env, api, save, ready = () => {}, log, renew = false, now = Date.now() }) {
+export async function run({ env, api, save, ready = () => {}, log, renew = false, now = Date.now(), kind = IPHONE }) {
   const dir = mkdtempSync(join(tmpdir(), 'relay-ios-cert-'));
+  const { names } = kind;
   try {
-    const { data: certificates } = await api('GET', `/certificates?filter[certificateType]=${KINDS.join(',')}&limit=200`);
-    const kept = !renew && keepable(certificates, p12Serial(env[NAMES.p12], env[NAMES.password], dir), now);
+    const { data: certificates } = await api('GET', `/certificates?filter[certificateType]=${kind.counts.join(',')}&limit=200`);
+    const kept = !renew && keepable(certificates, p12Serial(env[names.p12], env[names.password], dir), now, kind);
     let line;
     if (kept) line = `result=kept id=${kept.id} expires=${kept.attributes.expirationDate.slice(0, 10)}`;
-    else if (limitMessage(certificates, now)) line = `result=full ${limitMessage(certificates, now)}`;
+    else if (limitMessage(certificates, now, kind)) line = `result=full ${limitMessage(certificates, now, kind)}`;
     else {
       ready();
-      const csrContent = makeRequest(dir);
-      const { data } = await api('POST', '/certificates', { data: { type: 'certificates', attributes: { certificateType: 'DISTRIBUTION', csrContent } } });
+      const csrContent = makeRequest(dir, kind.subject);
+      let data;
+      try {
+        ({ data } = await api('POST', '/certificates', { data: { type: 'certificates', attributes: { certificateType: kind.make, csrContent } } }));
+      } catch (error) {
+        if (kind !== MAC || !refusedRole(error)) throw error;
+        line = `result=refused Apple lets only the Account Holder make a Developer ID certificate (${error.message}). Make one on ${ADD_CERTIFICATE_PAGE} (Developer ID Application), export it with its key as a .p12, and save it as ${names.p12} and ${names.password} in .env and the GitHub secrets.`;
+        log(line);
+        return line;
+      }
       const password = randomBytes(24).toString('base64url');
-      const p12 = makeP12(dir, data.attributes.certificateContent, password);
-      save({ [NAMES.p12]: p12, [NAMES.password]: password });
+      const p12 = makeP12(dir, data.attributes.certificateContent, password, kind.p12Name);
+      save({ [names.p12]: p12, [names.password]: password });
       line = `result=made id=${data.id} expires=${data.attributes.expirationDate.slice(0, 10)}`;
     }
     log(line);
@@ -176,7 +209,7 @@ function envFiles() {
 }
 
 if (isMain(import.meta.url)) {
-  const { values } = parseCli({ usage: USAGE, options: { renew: { type: 'boolean' } } });
+  const { values } = parseCli({ usage: USAGE, options: { renew: { type: 'boolean' }, mac: { type: 'boolean' } } });
   const files = envFiles();
   // The primary worktree's values win; this worktree's copy fills gaps.
   const env = Object.assign({}, ...files.slice().reverse().map(file => parseEnv(readFileSync(file, 'utf8'))));
@@ -187,8 +220,9 @@ if (isMain(import.meta.url)) {
   }
   const key = { keyId: env.ASC_KEY_ID, issuerId: env.ASC_ISSUER_ID, p8: Buffer.from(env.ASC_KEY_P8, 'base64').toString('utf8') };
   try {
-    const line = await run({ env, api: appleApi(key), save: saveValues(files, REPO), ready: ghReady, log: console.log, renew: values.renew });
-    process.exit(line.startsWith('result=full') ? 1 : 0);
+    const line = await run({ env, api: appleApi(key), save: saveValues(files, REPO), ready: ghReady, log: console.log,
+      renew: values.renew, kind: values.mac ? MAC : IPHONE });
+    process.exit(/^result=(full|refused)/.test(line) ? 1 : 0);
   } catch (error) {
     console.log(`result=failed ${error.message}`);
     process.exit(1);

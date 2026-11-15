@@ -17,6 +17,13 @@ class BackTo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    var onPressed = this.onPressed;
+    // The first page of a part of the Mac's window: back to Home on the phone's pages, else no back.
+    final root = PartRoot.of(context);
+    if (onPressed == null && root != null && !Navigator.of(context).canPop()) {
+      onPressed = root.onBack;
+      if (onPressed == null) return const SizedBox.shrink();
+    }
     return Tooltip(
       message: 'Back',
       child: TextButton.icon(
@@ -27,4 +34,17 @@ class BackTo extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Above a part of the Mac's window that holds the phone's pages, with their own [Navigator]: the first page's [BackTo]
+/// calls [onBack], or shows nothing when it is null. The pages it opens go back as on the phone.
+class PartRoot extends InheritedWidget {
+  const PartRoot({super.key, this.onBack, required super.child});
+
+  final VoidCallback? onBack;
+
+  static PartRoot? of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<PartRoot>();
+
+  @override
+  bool updateShouldNotify(PartRoot oldWidget) => onBack != oldWidget.onBack;
 }

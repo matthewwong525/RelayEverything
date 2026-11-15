@@ -123,6 +123,21 @@ Apple takes one build in beta review at a time. If an earlier build still waits,
 
 Then tag the release, as [Release the app](#release-the-app) says.
 
+## The Mac app
+
+The Mac app is this app, built for macOS from its own entry, [`lib/main_mac.dart`](lib/main_mac.dart). It keeps your notes on the Mac, so they work with no network, and sends them when you sign in from Settings, as a phone does. Its window has the layout of [the web build](#the-web-build): three parts, two, or one as it gets narrower. It has the Mac's menu bar, with *New Note* (⌘N), *Find* (⌘F), *Bold* (⌘B), *Italic* (⌘I) and *Settings…* (⌘,), and it takes files that you drop from Finder on a note.
+
+- **Try it on a Mac:** `flutter run -d macos -t lib/main_mac.dart`.
+- **What it leaves out:** location, health, calendar, photos, the microphone and the speech model. A voice note from a phone shows its words, and a sound file on a note opens in the Mac's own player. [`test/mac_imports_test.dart`](test/mac_imports_test.dart) checks every file the Mac entry reaches, except `lib/controller.dart`, and fails on a phone-only source. [`test/controller_test.dart`](test/controller_test.dart) checks that the controller works with no phone parts.
+- **The key** goes in the Mac's login keychain, with no shared group, so the app needs no provisioning profile. The device shows as *Mac* on your Relay Everything page.
+- **The app** is `com.matthewwong525.relayApp.mac`, named *Relay Everything*, with App Sandbox, network client and the files you pick or drop ([`macos/Runner/Release.entitlements`](macos/Runner/Release.entitlements)). The debug build also has Flutter's two keys for `flutter run`.
+
+**How it is built and signed.** [`mobile-macos.yml`](../.github/workflows/mobile-macos.yml) runs from `mobile-ci.yml`, beside the iPhone build:
+
+- **A branch or pull request** builds the app unsigned and keeps it, zipped, with the run. It sends nothing.
+- **`main` and a release** sign the app with the hardened runtime and a Developer ID Application certificate, send it to Apple's check (notarize) with the App Store Connect key, staple Apple's ticket, and make `Relay-Everything-Mac.dmg`. `node scripts/app-release.mjs mac-check --file Relay-Everything-Mac.dmg` refuses a file that is not signed, checked and stapled. A beta adds the file to its pre-release, and a `v` tag to its release.
+- **The certificate:** `node scripts/ios-signing-cert.mjs --mac` makes it once, and saves `MACOS_DEVID_CERT_P12` and `MACOS_DEVID_CERT_PASSWORD` to `.env` and the GitHub secrets. With them missing, `main` builds no file, with a notice, and a release stops with their names.
+
 ## Where the code is
 
 - `lib/data/`: the settings, the local store (SQLite through drift) that keeps every note, the sender that gives no API client while sending is off, the API client, and the outbox that sends waiting uploads in order.

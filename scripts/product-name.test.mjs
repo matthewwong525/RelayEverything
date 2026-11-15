@@ -34,6 +34,7 @@ const PLACES = [
   'mobile/ios/ShareExtension/ShareViewController.swift',
   'mobile/ios/RelayWatch/Info.plist',
   'mobile/ios/RelayWatchWidget/Info.plist',
+  'mobile/ios/fastlane/metadata',
   'mobile/android/app/src/main/AndroidManifest.xml',
   'mobile/web/index.html',
   'mobile/web/manifest.json',
@@ -112,7 +113,7 @@ export function userFacingFiles(root = ROOT) {
 function kind(path) {
   if (/\.(md|mdx)$/.test(path)) return 'markdown';
   if (/\.(xml|plist|html)$/.test(path)) return 'markup';
-  if (/\.json$/.test(path)) return 'all';
+  if (/\.(json|txt)$/.test(path)) return 'all';
   if (/\.tsx$/.test(path)) return 'jsx';
   if (/\.(ts|mjs|js|cjs)$/.test(path)) return 'js';
   if (/\.dart$/.test(path)) return 'dart';
@@ -242,6 +243,7 @@ test('a bare Relay in a docs page fails, with its file and line', () => {
   const page = '# Start\n\nOpen your Relay page.\n';
   assert.deepEqual(bareNames('site/src/content/docs/start.md', page), ['site/src/content/docs/start.md:3: Open your Relay page.']);
   assert.equal(bareNames('wiki/a.md', "Relay's page").length, 1);
+  assert.equal(bareNames('mobile/ios/fastlane/metadata/en-CA/description.txt', 'Relay keeps your notes.').length, 1);
 });
 
 test('only the Siri short name and its spoken phrases keep a bare Relay', () => {

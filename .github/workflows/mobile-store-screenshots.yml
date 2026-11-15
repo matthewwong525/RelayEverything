@@ -1,0 +1,161 @@
+# The App Store screenshots: the app on the large iPhone and iPad simulators, and the watch app on a watch simulator,
+# with sample notes the run makes itself. It keeps them as the file store-screenshots and sends nothing: a person puts
+# them in mobile/ios/fastlane/screenshots/ (mobile/README.md#the-app-store-page). Starts by hand, or by the label
+# "store screenshots" on a pull request from this repository, as GitHub starts a new workflow by hand only from main.
+name: Mobile store screenshots
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-store-screenshots-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  screens:
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' || (github.event.label.name == 'store screenshots'
+      && github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: macos-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - device: iphone
+            name: '^iPhone .*Pro Max$'
+          - device: ipad
+            name: '^iPad Pro 13-inch'
+    env:
+      APP_ID: com.matthewwong525.relayApp
+      OUT: ${{ github.workspace }}/out
+      STORE_DEVICE: ${{ matrix.device }}
+      DEVICE_NAME: ${{ matrix.name }}
+      MAESTRO_DRIVER_STARTUP_TIMEOUT: "180000"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version-file: mobile/pubspec.yaml
+          cache: true
+
+      - name: Install Maestro
+        env:
+          MAESTRO_VERSION: 2.12.1
+          MAESTRO_SHA256: 54dbb0716425626604973cbb374c585ca30272375d9ce15177a1152765ddd9d7
+        run: |
+          zip="$RUNNER_TEMP/maestro.zip"
+          curl -fsSL -o "$zip" "https://github.com/mobile-dev-inc/maestro/releases/download/cli-$MAESTRO_VERSION/maestro.zip"
+          echo "$MAESTRO_SHA256  $zip" | shasum -a 256 -c -
+          unzip -q "$zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Start the simulator
+        run: |
+          bash mobile/device-check/iphone-boot.sh
+          if [ -f "$OUT/reason.txt" ]; then echo "::error::$(cat "$OUT/reason.txt")"; exit 1; fi
+          echo "Device: $(cat "$OUT/device.txt")"
+
+      - name: Build for the simulator
+        working-directory: mobile
+        run: |
+          set -o pipefail
+          flutter pub get
+          flutter build ios --simulator --debug -d "$DEVICE_UDID" 2>&1 | tee "$OUT/build.log" | tail -n 40
+
+      - name: Open the app
+        run: |
+          bash mobile/device-check/iphone-open.sh
+          if [ -f "$OUT/reason.txt" ]; then echo "::error::$(cat "$OUT/reason.txt")"; exit 1; fi
+
+      - name: Take the screenshots
+        run: bash mobile/device-check/store/store.sh
+
+      - name: Stop the video
+        if: always()
+        run: |
+          [ -f "$RUNNER_TEMP/crashes.pid" ] && { kill "$(cat "$RUNNER_TEMP/crashes.pid")" 2>/dev/null || true; }
+          [ -f "$RUNNER_TEMP/video.pid" ] && { kill -INT "$(cat "$RUNNER_TEMP/video.pid")" 2>/dev/null || true; }
+          exit 0
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: store-screenshots-${{ matrix.device }}
+          path: out/store/
+          if-no-files-found: error
+          retention-days: 14
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: store-log-${{ matrix.device }}
+          path: out/
+          if-no-files-found: warn
+          retention-days: 7
+
+  watch:
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' || (github.event.label.name == 'store screenshots'
+      && github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      OUT: ${{ github.workspace }}/out
+      WATCH_APP_ID: com.matthewwong525.relayApp.watchkitapp
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version-file: mobile/pubspec.yaml
+          cache: true
+
+      - name: Take the watch screenshot
+        working-directory: mobile
+        run: |
+          flutter pub get
+          flutter build ios --simulator --debug --config-only
+          bash device-check/store/watch.sh
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: store-screenshots-watch
+          path: out/store/
+          if-no-files-found: error
+          retention-days: 14
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: store-log-watch
+          path: out/
+          if-no-files-found: warn
+          retention-days: 7
+
+  # One file in deliver's layout, en-CA/<n>_<device>_<screen>.png, ready for mobile/ios/fastlane/screenshots/.
+  merge:
+    needs: [screens, watch]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/upload-artifact/merge@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: store-screenshots
+          pattern: store-screenshots-*
+          delete-merged: true
+          retention-days: 14

@@ -239,6 +239,23 @@ jobs:
           ruby-version: "3.3"
           bundler-cache: true
           working-directory: mobile/ios
+      # The page from the tagged commit goes before the build, so both go live together. A release check sends none.
+      - name: App Store page
+        working-directory: mobile/ios
+        env:
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          missing=""
+          for name in ASC_ISSUER_ID ASC_KEY_ID ASC_KEY_P8; do [ -n "${!name}" ] || missing="$missing $name"; done
+          if [ -n "$missing" ]; then
+            echo "::error::A release needs the App Store Connect key: add$missing to this repository's secrets. See mobile/README.md."
+            exit 1
+          fi
+          check=false
+          if [ "$MODE" = release-check ]; then check=true; fi
+          bundle exec fastlane listing version:"$VERSION" verify_only:"$check"
       - name: App Store review
         working-directory: mobile/ios
         env:

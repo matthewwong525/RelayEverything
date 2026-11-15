@@ -1,0 +1,59 @@
+# The App Store screenshots' sample notes, made up for the pictures, on a fresh install: a meeting note, pinned, a
+# shopping list, a note in the words of a voice note, and a link. Not in the tour: store.sh runs it first.
+appId: com.matthewwong525.relayApp
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 60000
+- tapOn: 'Notes(.|\n)*'
+- tapOn: "New note"
+- extendedWaitUntil:
+    visible: "Done"
+    timeout: 30000
+- inputText: "Team meeting"
+- pressKey: Enter
+- inputText: "Launch plan is on track for Friday."
+- pressKey: Enter
+- inputText: "Maya sends the new pictures. Sam checks the store page."
+- tapOn: "Done"
+# The ⋯ button's tooltip is More.
+- tapOn: "More"
+- tapOn: "Pin Note"
+- tapOn: 'Back(.|\n)*'
+- extendedWaitUntil:
+    visible: "Pinned"
+    timeout: 30000
+- tapOn: "New note"
+- extendedWaitUntil:
+    visible: "Done"
+    timeout: 30000
+- inputText: "Groceries"
+- pressKey: Enter
+- inputText: "Oat milk, eggs, spinach, lemons"
+- pressKey: Enter
+- inputText: "Coffee beans for Saturday"
+- tapOn: "Done"
+- tapOn: 'Back(.|\n)*'
+- tapOn: "New note"
+- extendedWaitUntil:
+    visible: "Done"
+    timeout: 30000
+- inputText: "Idea for the weekend"
+- pressKey: Enter
+- inputText: "Walk the waterfront trail on Saturday morning, then lunch at the market."
+- tapOn: "Done"
+- tapOn: 'Back(.|\n)*'
+- tapOn: "New note"
+- extendedWaitUntil:
+    visible: "Done"
+    timeout: 30000
+- inputText: "Read later"
+- pressKey: Enter
+- inputText: "https://relayeverything.com/"
+- tapOn: "Done"
+- tapOn: 'Back(.|\n)*'
+- extendedWaitUntil:
+    visible: 'Read later(.|\n)*'
+    timeout: 30000

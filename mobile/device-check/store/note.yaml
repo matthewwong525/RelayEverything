@@ -1,0 +1,12 @@
+# The App Store screenshot of one note open, read and not edited, so no keyboard shows.
+appId: com.matthewwong525.relayApp
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 60000
+- tapOn: 'Notes(.|\n)*'
+- tapOn: 'Groceries(.|\n)*'
+- extendedWaitUntil:
+    visible: '(.|\n)*Coffee beans for Saturday(.|\n)*'
+    timeout: 30000

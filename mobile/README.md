@@ -79,7 +79,7 @@ Never commit a key, a keystore, a `.p8` file or a signing profile.
 
 ### Release the app
 
-1. **Before the first release, fill in the App Store page.** In App Store Connect, add the description, screenshots, support and privacy addresses, age rating and privacy answers, and put the final privacy policy at its address. Apple needs them for its first review. Add Apple Watch screenshots too: the build holds a watch app, and App Store Connect refuses review without them. A release changes only the *What's New* text.
+1. **Check the App Store page.** Its words, screenshots, categories and age rating are files in [`ios/fastlane/`](#the-app-store-page), and the release sends them before the build. Before a tag that makes the app send a new kind of data, make the privacy answers in App Store Connect the same as `app_privacy_details.json`.
 2. **Check the steps with no release.** On GitHub, open *Actions*, then *Mobile CI*, then *Run workflow*, and tick `release_check`. Or run `gh workflow run mobile-ci.yml --ref main -f release_check=true`. Start it from `main` only: from a branch, it stops at once, because its build goes to TestFlight. The run does every step of a release with the next beta's version, and its iPhone build goes to TestFlight with the betas. But it sends nothing to App Store review, makes a draft GitHub release and deletes it, and marks no pull request.
 3. **Tag a commit on `main`**, such as `v1.1.0`. On GitHub, open *Releases*, then *Draft a new release*, type the new tag, pick `main`, and publish: the run then adds the `.apk` and the notes to that release, and if the run fails, delete the release. Or run `git tag v1.1.0 origin/main && git push origin v1.1.0`. The tag sets the version. A tag that is not on `main`, is not in this form, or is not higher than the last release stops the run at once, with the reason.
 
@@ -114,14 +114,28 @@ Apple takes one build in beta review at a time. If an earlier build still waits,
 - **The beta description and the privacy link,** under *Test Information*. The privacy link is the website's [Privacy page](https://relayeverything.com/privacy/).
 - **The beta review contact,** under *Test Information*: the person Apple calls about a review. Their email and phone stay in App Store Connect, never in this repository.
 
-**Left before the first App Store version:**
+### The App Store page
 
-- The App Store page: description, keywords, support address and age rating.
-- Screenshots for iPhone, iPad and Apple Watch.
-- Apple's privacy answers.
-- The final privacy policy at its address.
+The App Store page lives in [`ios/fastlane/`](ios/fastlane/), next to the iPhone app. To change the page, change a file and publish it: the next release sends it. You make no change in App Store Connect.
 
-Then tag the release, as [Release the app](#release-the-app) says.
+- **The words:** `metadata/en-CA/` holds the name, subtitle, description, keywords, promotional text, support link, website link and privacy link. `metadata/` holds the copyright line, the two categories, and the note for Apple's reviewer in `review_information/notes.txt`.
+- **The age rating:** `rating.json`, the answers to Apple's age rating questions.
+- **The screenshots:** `screenshots/en-CA/`, plain screens with no added words, for a 6.9-inch iPhone, a 13-inch iPad and an Apple Watch. Apple takes 1 to 10 for each device.
+- **The privacy answers:** `app_privacy_details.json`, in fastlane's format.
+
+[`scripts/app-store-listing.test.mjs`](../scripts/app-store-listing.test.mjs) checks Apple's limits, the links, the categories, the age rating questions and the size of each screenshot. It refuses an email address or a phone number, because the repository is public.
+
+**What a release sends.** Before it submits the build, the release runs fastlane's `listing` lane. It sends the words, screenshots, categories and age rating from the tagged commit, and replaces all the screenshots. A version that is already in review keeps its page. A release check runs `listing verify_only:true`: it checks the screenshots with fastlane's own check, reads App Store Connect, and sends nothing. Apple checks the words, such as a name that another app has, only at the release.
+
+**New screenshots.** Take them again when the app looks different:
+
+1. On GitHub, open *Actions*, then *Mobile store screenshots*, then *Run workflow*. Or put the label *store screenshots* on a pull request. The run makes its own sample notes on a new install, so the pictures show no person's data.
+2. Download the file `store-screenshots` from the run. Put its `en-CA/` pictures in `ios/fastlane/screenshots/en-CA/`, in place of the old ones.
+3. Look at each picture, then publish the change.
+
+**Change the privacy answers.** Apple has no way for a script to set them. When a change makes the app send a new kind of data, change `app_privacy_details.json` in the same change. Then, before the next release tag, open the app's *App Privacy* page in [App Store Connect](https://appstoreconnect.apple.com/), make the answers the same as the file, and publish them.
+
+**Set once by hand in App Store Connect:** the price, free, in all countries; and the reviewer contact, under *App Review Information*. The contact's email and phone stay in App Store Connect, never in this repository.
 
 ## Where the code is
 

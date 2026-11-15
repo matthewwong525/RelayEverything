@@ -232,3 +232,22 @@ test("main's run only starts the public beta, which waits for Apple in its own g
   assert.match(beta, /^ {10}ref: \$\{\{ inputs\.sha \}\}$/m);
   assert.match(beta, /bundle exec fastlane public_beta version:"\$VERSION" build:"\$BUILD" notes:/);
 });
+
+test('a release sends the App Store page before it submits, and a release check only verifies it', () => {
+  const ci = readFileSync(new URL('../.github/workflows/mobile-ci.yml', import.meta.url), 'utf8');
+  const job = ci.split(/^ {2}release:\n/m)[1].split(/^ {2}[a-z][\w-]*:\n/m)[0];
+  const listing = job.indexOf('bundle exec fastlane listing version:"$VERSION" verify_only:"$check"');
+  const submit = job.indexOf('bundle exec fastlane submit ');
+  assert.ok(listing > 0 && submit > listing, 'fastlane listing runs before fastlane submit');
+  const page = job.slice(job.indexOf('- name: App Store page'), job.indexOf('- name: App Store review'));
+  assert.match(page, /if \[ "\$MODE" = release-check \]; then check=true; fi/);
+  const fastfile = readFileSync(new URL('../mobile/ios/fastlane/Fastfile', import.meta.url), 'utf8');
+  const lane = fastfile.split(/^ {2}lane :listing do \|options\|$/m)[1].split(/^ {2}end$/m)[0];
+  for (const option of ['metadata_path: LISTING_METADATA', 'screenshots_path: LISTING_SCREENSHOTS',
+    'app_rating_config_path: LISTING_RATING', 'overwrite_screenshots: true', 'skip_binary_upload: true',
+    'submit_for_review: false', 'force: true']) assert.ok(lane.includes(option), option);
+  assert.ok(lane.indexOf('check_listing(app)') < lane.indexOf('deliver('), 'verify_only stops before deliver');
+  const submitLane = fastfile.split(/^ {2}lane :submit do \|options\|$/m)[1].split(/^ {2}end$/m)[0];
+  assert.match(submitLane, /metadata_path: metadata,/, 'submit keeps its empty metadata folder');
+  assert.match(submitLane, /skip_screenshots: true/);
+});

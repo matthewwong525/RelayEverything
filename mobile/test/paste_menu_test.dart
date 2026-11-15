@@ -1,10 +1,15 @@
+// The editor's clipboard parts are experimental in flutter_quill; pubspec.lock pins them.
+// ignore_for_file: experimental_member_use
+
 import 'package:flutter/cupertino.dart' show CupertinoMagnifier, CupertinoTheme;
-import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import 'package:flutter/foundation.dart' show Uint8List, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+import 'package:flutter_quill/internal.dart' show ClipboardService, ClipboardServiceProvider;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/app.dart';
+import 'package:relay_app/editor/markdown.dart';
 import 'package:relay_app/editor/system_menu.dart';
 import 'package:relay_app/relay.dart' show Entry;
 import 'package:relay_app/screens/note_editor.dart';
@@ -57,6 +62,50 @@ Offset cursorAt(WidgetTester tester) {
 /// The point [dx] points into the line [line], half way down it.
 Offset onLine(WidgetTester tester, String line, double dx) =>
   tester.getTopLeft(find.text(line, findRichText: true)) + Offset(dx, tester.getSize(find.text(line, findRichText: true)).height / 2);
+
+/// The iPhone's own *Paste* hands the app the clipboard's [html] and [plain] words, as RelayPaste.swift sends them;
+/// the app's answer, or null with none.
+Future<Object?> phonePaste(WidgetTester tester, {String? html, required String plain}) async {
+  Object? answer;
+  await tester.binding.defaultBinaryMessenger.handlePlatformMessage(pasteChannel.name,
+    pasteChannel.codec.encodeMethodCall(MethodCall('paste', {'html': html, 'plain': plain})),
+    (data) => answer = data == null ? null : pasteChannel.codec.decodeEnvelope(data));
+  await tester.pump();
+  return answer;
+}
+
+/// The phone's clipboard: plain words for `Clipboard.getData`, and the words `Clipboard.setData` puts there.
+void plainClipboard(WidgetTester tester, String Function() words, {void Function(String)? onCopy}) {
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+    if (call.method == 'Clipboard.getData') return {'text': words()};
+    if (call.method == 'Clipboard.setData') onCopy?.call((call.arguments as Map)['text'] as String);
+    return null;
+  });
+  addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+}
+
+/// A clipboard that holds [html], as a page's copy does.
+class HtmlClipboard extends ClipboardService {
+  HtmlClipboard(this.html);
+
+  final String html;
+
+  @override
+  Future<String?> getHtmlText() async => html;
+  @override
+  Future<String?> getHtmlFile() async => null;
+  @override
+  Future<String?> getMarkdownFile() async => null;
+  @override
+  Future<Uint8List?> getImageFile() async => null;
+  @override
+  Future<Uint8List?> getGifFile() async => null;
+  @override
+  Future<void> copyImage(Uint8List imageBytes) async {}
+}
+
+/// The note's words as it stores them.
+String stored(WidgetTester tester) => deltaToMarkdown(quill(tester).document.toDelta());
 
 /// Whether the phone can show its own menu: iOS 16 and later. The view's media data keeps its value until told.
 void systemMenuOn(WidgetTester tester, bool supported) {
@@ -210,7 +259,8 @@ void main() {
       await tester.pump(QuillSystemMenu.closeWindow);
     }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
-    testWidgets('words the system pastes come in as plain text at the cursor', (tester) async {
+    testWidgets('when the app does not take a paste, the plain words the system pastes come in at the cursor',
+        (tester) async {
       menuCalls(tester);
       await editNote(tester);
       final before = rawEditor(tester).textEditingValue;
@@ -254,6 +304,81 @@ void main() {
     await tester.pump();
     expect(lens, findsNothing);
   }, variant: const TargetPlatformVariant({TargetPlatform.iOS, TargetPlatform.android}));
+
+  group('a paste keeps its formatting', () {
+    const list = '<p>Fresh <b>bread</b></p><ul><li>Jam</li><li><i>Tea</i></li></ul>';
+
+    testWidgets('the iPhone\'s own Paste puts styled words at the cursor and says it did', (tester) async {
+      await editNote(tester);
+      quill(tester).updateSelection(const TextSelection(baseOffset: 43, extentOffset: 51), ChangeSource.local);
+      await tester.pump();
+      expect(await phonePaste(tester, html: list, plain: 'Fresh bread\nJam\nTea'), isTrue);
+      expect(stored(tester), '# Buy milk and eggs\nhttps://example.com/list\nFresh **bread**\n* Jam\n* _Tea_');
+      expect(quill(tester).selection, const TextSelection.collapsed(offset: 43 + 'Fresh bread\nJam\nTea'.length));
+    });
+
+    testWidgets('a few words join the line at the cursor, which keeps its style', (tester) async {
+      await editNote(tester);
+      quill(tester).updateSelection(const TextSelection.collapsed(offset: 4), ChangeSource.local);
+      await tester.pump();
+      expect(await phonePaste(tester, plain: 'oat '), isTrue);
+      expect(stored(tester), '# Buy oat milk and eggs\nhttps://example.com/list\nCall Sam');
+      expect(quill(tester).selection, const TextSelection.collapsed(offset: 8));
+    });
+
+    testWidgets('one Undo takes back the whole paste', (tester) async {
+      await editNote(tester);
+      final before = quill(tester).document.toDelta();
+      quill(tester).updateSelection(const TextSelection(baseOffset: 43, extentOffset: 51), ChangeSource.local);
+      await tester.pump();
+      await phonePaste(tester, plain: '\n## Plan\n- [ ] Call the bank\n- Buy **oat** milk\n');
+      expect(stored(tester), endsWith('list\n## Plan\n- [ ] Call the bank\n- Buy **oat** milk'));
+      quill(tester).undo();
+      await tester.pump();
+      expect(quill(tester).document.toDelta(), before);
+    });
+
+    testWidgets('with no note being edited, the app says no, so the phone pastes the plain words', (tester) async {
+      await editNote(tester);
+      await tester.tap(find.byTooltip('Done'));
+      await tester.pumpAndSettle();
+      expect(editorFocused(tester), isFalse);
+      expect(await phonePaste(tester, html: list, plain: 'Fresh bread'), isFalse);
+      expect(stored(tester), '# $words');
+    });
+
+    testWidgets('a copy from inside the note pastes back with its styles', (tester) async {
+      String? copied;
+      plainClipboard(tester, () => copied ?? '', onCopy: (text) => copied = text);
+      await editNote(tester);
+      final controller = quill(tester);
+      controller.formatText(43, 4, Attribute.bold);
+      controller.updateSelection(const TextSelection(baseOffset: 43, extentOffset: 51), ChangeSource.local);
+      controller.clipboardSelection(true);
+      await tester.pump();
+      expect(copied, 'Call Sam');
+      controller.updateSelection(const TextSelection.collapsed(offset: 17), ChangeSource.local);
+      await tester.pump();
+      expect(await phonePaste(tester, plain: 'Call Sam'), isTrue);
+      expect(stored(tester).split('\n').first, '# Buy milk and eggs**Call** Sam');
+    });
+
+    testWidgets('the app\'s own Paste reads the clipboard\'s HTML and keeps only the note\'s styles', (tester) async {
+      ClipboardServiceProvider.setInstance(HtmlClipboard('<h5 style="color:red">Plan</h5><ol><li>'
+        '<span style="font-size:30px">Wake</span></li></ol>'));
+      addTearDown(ClipboardServiceProvider.setInstanceToDefault);
+      plainClipboard(tester, () => 'Plan\nWake');
+      await editNote(tester, systemMenu: false);
+      quill(tester).updateSelection(const TextSelection(baseOffset: 43, extentOffset: 51), ChangeSource.local);
+      await tester.pump();
+      await rawEditor(tester).pasteText(SelectionChangedCause.keyboard);
+      await tester.pump();
+      expect(stored(tester), '# Buy milk and eggs\nhttps://example.com/list\n### Plan\n1. Wake');
+      quill(tester).undo();
+      await tester.pump();
+      expect(stored(tester), '# $words');
+    });
+  });
 
   testWidgets('where the system menu can\'t show, the app draws its own menu with Paste', (tester) async {
     final calls = menuCalls(tester);

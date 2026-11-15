@@ -34,5 +34,9 @@ import workmanager_apple
       RelayChannels.register(registrar.messenger())
       BackgroundWake.shared.mainMessenger = registrar.messenger()
     }
+    // The iPhone's own Paste keeps a note's formatting (RelayPaste.swift).
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "RelayPaste") {
+      RelayPaste.register(registrar.messenger())
+    }
   }
 }

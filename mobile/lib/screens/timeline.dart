@@ -104,7 +104,8 @@ class _TimelineScreenState extends State<TimelineScreen> {
                 SliverToBoxAdapter(child: NoteFilters(relay: relay, filter: _filter, onFilter: _pick)),
                 if (notes.isEmpty)
                   SliverFillRemaining(hasScrollBody: false,
-                    child: _Empty(folder: _filter, sending: relay.settings.sending, web: relay.web))
+                    child: _Empty(folder: _filter, sending: relay.settings.sending, web: relay.desktop,
+                      device: relay.device))
                 else
                   noteSliver(context, relay, notes, _search.text, back: _title, picker: widget.picker, sharer: widget.sharer,
                     opener: widget.opener, onOpen: widget.onOpen),
@@ -401,12 +402,14 @@ class _SyncDotState extends State<_SyncDot> with SingleTickerProviderStateMixin 
 
 /// An empty folder: what goes in it, above the button that makes it.
 class _Empty extends StatelessWidget {
-  const _Empty({required this.folder, required this.sending, this.web = false});
+  const _Empty({required this.folder, required this.sending, this.web = false, this.device = 'phone'});
 
   final NotesFolder folder;
   final bool sending;
   /// In the browser no hold talks, and voice notes come from the phone.
   final bool web;
+  /// What the notes stay on: *phone*, or *Mac* on the Mac.
+  final String device;
 
   @override
   Widget build(BuildContext context) {
@@ -419,7 +422,7 @@ class _Empty extends StatelessWidget {
         const RelayMark(size: 56),
         Text(title, style: theme.textTheme.titleLarge),
         Text(how, style: muted, textAlign: TextAlign.center),
-        if (!sending) Text('Notes stay on this phone until you sign in, in Settings.', style: muted, textAlign: TextAlign.center),
+        if (!sending) Text('Notes stay on this $device until you sign in, in Settings.', style: muted, textAlign: TextAlign.center),
       ]),
     );
   }

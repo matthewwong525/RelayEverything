@@ -98,7 +98,7 @@ class _AccountPageState extends State<AccountPage> {
         for (final phone in connections.phones) ListTile(
           leading: Icon(CupertinoIcons.device_phone_portrait, color: brand.accentText),
           title: Text(phone.name),
-          subtitle: Text(phone.id == connections.thisDevice ? 'This phone' : sinceLine(phone.since, now)),
+          subtitle: Text(phone.id == connections.thisDevice ? 'This ${relay.device}' : sinceLine(phone.since, now)),
           trailing: phone.id == connections.thisDevice ? null
             : TextButton(onPressed: () => _signOutPhone(context, phone), style: quietButton(context), child: const Text('Sign out')),
         ),
@@ -138,7 +138,7 @@ class _AccountPageState extends State<AccountPage> {
           trailing: TextButton(onPressed: () => _test(context), style: quietButton(context), child: const Text('Send a test')),
         ),
         if (relay.webhookProblem case final problem?) ListTile(
-          subtitle: Text(problemLine(problem, DateTime.now()), style: TextStyle(color: danger)),
+          subtitle: Text(problemLine(problem, DateTime.now(), device: relay.device), style: TextStyle(color: danger)),
         ),
       ]),
       Group(children: [ListTile(
@@ -150,7 +150,7 @@ class _AccountPageState extends State<AccountPage> {
       )]),
       Group(children: [ListTile(
         title: Text('Stop sending', style: TextStyle(color: danger)),
-        subtitle: const Text('New notes stay on this phone. The phone keeps your webhook\'s address and secret.'),
+        subtitle: Text('New notes stay on this ${relay.device}. The ${relay.device} keeps your webhook\'s address and secret.'),
         onTap: () => _stopSending(context),
       )]),
     ];
@@ -174,8 +174,8 @@ class _AccountPageState extends State<AccountPage> {
   /// Asks first, then forgets the key and stops sending, and goes back to Settings, which says *Sign in*.
   Future<void> _signOut(BuildContext context) async {
     if (!await confirmSignOut(context, title: 'Sign out?',
-      body: 'Sending stops and this phone forgets its key. Notes from this phone stay here. Notes from your other phones '
-        'and email leave this phone.')) {
+      body: 'Sending stops and this ${relay.device} forgets its key. Notes from this ${relay.device} stay here. Notes from your '
+        'other phones and email leave this ${relay.device}.')) {
       return;
     }
     await relay.disconnect();
@@ -186,8 +186,9 @@ class _AccountPageState extends State<AccountPage> {
   Future<void> _stopSending(BuildContext context) async {
     final sure = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
       title: const Text('Stop sending?'),
-      content: const Text('New notes stay on this phone. Notes already at your webhook stay there. '
-        'Health, the calendar, location and photos stop.'),
+      // The Mac sends no health, calendar, location or photos, so it has none to stop.
+      content: Text('New notes stay on this ${relay.device}. Notes already at your webhook stay there.'
+        '${relay.platform == RelayPlatform.mac ? '' : ' Health, the calendar, location and photos stop.'}'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
         FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Stop sending')),

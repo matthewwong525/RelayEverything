@@ -148,6 +148,16 @@ jobs:
       build: ${{ needs.plan.outputs.build }}
     secrets: inherit
 
+  # The Mac app, unsigned, as a file to try in the run. It gets no secret: a branch never signs.
+  macos-branch:
+    needs: plan
+    if: ${{ needs.plan.outputs.mode == 'branch' && github.event_name != 'pull_request' }}
+    uses: ./.github/workflows/mobile-macos.yml
+    with:
+      mode: ${{ needs.plan.outputs.mode }}
+      version: ${{ needs.plan.outputs.version }}
+      build: ${{ needs.plan.outputs.build }}
+
   android:
     needs: [plan, flutter]
     if: ${{ needs.plan.outputs.mode != 'branch' && github.event_name != 'pull_request' }}
@@ -170,6 +180,42 @@ jobs:
       version: ${{ needs.plan.outputs.version }}
       build: ${{ needs.plan.outputs.build }}
     secrets: inherit
+
+  # The Mac app signed, checked by Apple and stapled, for the pre-release and the release.
+  macos:
+    needs: [plan, flutter]
+    if: ${{ needs.plan.outputs.mode != 'branch' && github.event_name != 'pull_request' }}
+    uses: ./.github/workflows/mobile-macos.yml
+    with:
+      mode: ${{ needs.plan.outputs.mode }}
+      version: ${{ needs.plan.outputs.version }}
+      build: ${{ needs.plan.outputs.build }}
+    secrets: inherit
+
+  # The Mac app goes with main's Android pre-release, as the web page does. When a newer commit on main changes
+  # mobile/, the Android job sends nothing, and the newer run sends both.
+  macos-beta:
+    needs: [plan, macos, android]
+    if: ${{ needs.plan.outputs.mode == 'beta' && needs.macos.outputs.signed == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: relay-everything-mac
+          path: ${{ runner.temp }}/mac
+      - name: Add the Mac app to the pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: mobile-v${{ needs.plan.outputs.version }}+${{ needs.plan.outputs.build }}
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "$RUNNER_TEMP/mac/Relay-Everything-Mac.dmg" --clobber
+          else
+            echo "::notice::No pre-release $TAG: a newer commit on main changes mobile/, and its own run sends the Mac app."
+          fi
 
   # Main's build that went to TestFlight goes to the public beta; a release never does. This job only starts
   # mobile-public-beta.yml, which waits for Apple in its own group, so main's next run does not wait behind it.
@@ -206,7 +252,7 @@ jobs:
   # Runs only when every check above passed. Each step can run again for the same tag: the App Store review is not sent
   # twice, the GitHub release is edited, and each pull request gets one comment.
   release:
-    needs: [plan, android, ios, tour, web]
+    needs: [plan, android, ios, macos, tour, web]
     if: ${{ needs.plan.outputs.mode == 'release' || needs.plan.outputs.mode == 'release-check' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -296,6 +342,13 @@ jobs:
           else
             gh release create "$TAG" "${files[@]}" --verify-tag --latest --title "$title" --notes-file "$notes"
           fi
+      # The Mac app passed mac-check in its own job, signed, accepted by Apple and stapled: no other file reaches here.
+      - uses: actions/download-artifact@v4
+        with:
+          name: relay-everything-mac
+          path: ${{ runner.temp }}/mac
+      - name: Mac app on the GitHub release
+        run: gh release upload "$TAG" "$RUNNER_TEMP/mac/Relay-Everything-Mac.dmg" --clobber
       - name: Mark the pull requests
         if: ${{ env.MODE == 'release' }}
         run: node scripts/app-release.mjs mark --version "$VERSION" --previous-tag="$PREVIOUS_TAG"

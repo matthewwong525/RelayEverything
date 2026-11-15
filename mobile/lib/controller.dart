@@ -78,10 +78,11 @@ Duration wordsLimitOf(Duration length) => length > const Duration(minutes: 2) ? 
 /// The app's one Relay: notes in the store, and the key in the vault. Notes stay on this phone; while sending is on,
 /// it syncs on open, on a new note, on pull, and every hour in the background.
 class RelayController extends Relay {
-  RelayController({required this.store, required this.vault, required this.places, required this.health,
+  RelayController({required this.store, required this.vault, this.places, this.health,
     RelayApi Function(Connection)? apiFor, http.Client Function()? signInClient, WebAuth? webAuth, DateTime Function()? clock,
     WebhookClient Function(Webhook webhook, String installId)? webhookFor, this.schedule, this.voice, this.native, this.folder,
-    this.opener, this.share, this.calendar, this.photos, this.network, this.motion, Duration Function(Duration length)? wordsLimit})
+    this.opener, this.share, this.calendar, this.photos, this.network, this.motion, Duration Function(Duration length)? wordsLimit,
+    this.platform = RelayPlatform.phone})
     : _sender = Sender(apiFor, signInClient, webhookFor), _webAuth = webAuth ?? phoneWebAuth, _clock = clock ?? DateTime.now,
       _wordsLimit = wordsLimit ?? wordsLimitOf {
     voice?.model.addListener(notifyListeners);
@@ -97,8 +98,12 @@ class RelayController extends Relay {
 
   final Store store;
   final KeyVault vault;
-  final Places places;
-  final HealthSource health;
+  /// Where the phone is, and its health store; with none, as on the Mac, location history and health can not turn on.
+  final Places? places;
+  final HealthSource? health;
+  /// The phone app, or the Mac app, which keeps notes the same way with the computer page's layout.
+  @override
+  final RelayPlatform platform;
   /// The phone's calendars; with none, the calendar can not turn on.
   final CalendarSource? calendar;
   /// Turns the hourly background sync on or off.
@@ -363,7 +368,7 @@ class RelayController extends Relay {
     final verifier = newVerifier();
     final Uri? back;
     try {
-      back = await _webAuth(signInUrl(server, challengeOf(verifier), Platform.isIOS ? 'iPhone' : 'Android phone'));
+      back = await _webAuth(signInUrl(server, challengeOf(verifier), phoneName()));
     } on Exception {
       return 'The sign-in did not open. Try again.';
     }
@@ -606,7 +611,7 @@ class RelayController extends Relay {
   @override
   Future<String?> setHistory(bool on) async {
     if (on && !_settings.sending) return _sendFirst;
-    if (on && !await places.allow(always: true)) return 'Relay Everything may not read your location all the time. Allow it in the phone\'s settings.';
+    if (on && !(await places?.allow(always: true) ?? false)) return 'Relay Everything may not read your location all the time. Allow it in the phone\'s settings.';
     if (on && _settings.locationSend != LocationSend.points) await _askMotion();
     await _saveSettings(_settings.copyWith(history: on));
     if (on) {
@@ -685,7 +690,7 @@ class RelayController extends Relay {
   /// the timeline's pins do not wait for the next round.
   void _startHistory() {
     if (native == null) {
-      _history ??= places.history().listen((point) => store.addPoint(point, send: _settings.locationSend), onError: (_) {});
+      _history ??= places?.history().listen((point) => store.addPoint(point, send: _settings.locationSend), onError: (_) {});
       return;
     }
     _drainTimer ??= Timer.periodic(const Duration(minutes: 1), (_) => unawaited(_drain()));
@@ -703,7 +708,7 @@ class RelayController extends Relay {
     final swift = native;
     if (swift == null || !_settings.history) return;
     try {
-      final moved = await drainPoints(store, swift, name: _settings.sending ? places.nameOf : null, send: _settings.locationSend);
+      final moved = await drainPoints(store, swift, name: _settings.sending ? places?.nameOf : null, send: _settings.locationSend);
       if (moved > 0) await _refreshLocal();
     } on Exception {
       // Swift empties its file as it answers, but the points are in the store before any name lookup, so a failure
@@ -714,7 +719,7 @@ class RelayController extends Relay {
   @override
   Future<String?> setHealth(bool on) async {
     if (on && !_settings.sending) return _sendFirst;
-    if (on && !await health.allow()) return 'Relay Everything may not read your health data. Allow it in the phone\'s health settings.';
+    if (on && !(await health?.allow() ?? false)) return 'Relay Everything may not read your health data. Allow it in the phone\'s health settings.';
     // Health starts from now: the next rounds read new readings, and the last 90 days a week at a time.
     await (on ? startHealth(store, _clock()) : stopHealth(store));
     await _saveSettings(_settings.copyWith(health: on));
@@ -729,7 +734,7 @@ class RelayController extends Relay {
   Future<void> askNewHealthTypes() async {
     if (!_settings.health || await store.get(healthTypes) == askedTypes) return;
     try {
-      await health.allow();
+      await health?.allow();
     } on Exception {
       // The next open does not ask again; the person allows types in the phone's health settings.
     } finally {
@@ -1029,7 +1034,7 @@ class RelayController extends Relay {
   /// One fix of where the phone is now; null when there is none.
   Future<Pin?> _here() async {
     try {
-      return await places.here(name: _settings.sending);
+      return await places?.here(name: _settings.sending);
     } on Exception {
       return null;
     }
@@ -1158,9 +1163,10 @@ class RelayController extends Relay {
     // queues and sends nothing more.
     bool still() => _settings.sending && _settings.place == place && _settings.privatePlace == privatePlace &&
       !(yieldToNotes && (_again || _pull != null));
-    if (still() && _settings.health) {
+    final healthSource = health;
+    if (still() && _settings.health && healthSource != null) {
       try {
-        await syncHealth(store, health, now: _clock());
+        await syncHealth(store, healthSource, now: _clock());
       } on Exception {
         // The health store can be closed for a while, such as on a locked iPhone; the next round reads again.
       }

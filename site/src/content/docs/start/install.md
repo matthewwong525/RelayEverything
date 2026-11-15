@@ -1,9 +1,9 @@
 ---
 title: Install the app
-description: Get the Relay Everything app on an Android phone or an iPhone.
+description: Get the Relay Everything app on an Android phone, an iPhone or a Mac.
 ---
 
-The Relay Everything app runs on Android and on iPhone. Each release is built from [the app's code](https://github.com/matthewwong525/RelayEverything/tree/main/mobile) and tested before it goes out.
+The Relay Everything app runs on Android, on iPhone and on a Mac. Each release is built from [the app's code](https://github.com/matthewwong525/RelayEverything/tree/main/mobile) and tested before it goes out.
 
 ## Android
 
@@ -29,6 +29,16 @@ Until the first App Store release, the iPhone app comes through the public beta 
 3. Tap **Accept**, then **Install**.
 
 TestFlight gets each new build of the app. Apple reviews a new version of the beta first, so a build can take a day to come.
+
+## Mac
+
+1. On the Mac, click [Download for Mac](https://github.com/matthewwong525/RelayEverything/releases/latest/download/Relay-Everything-Mac.dmg).
+2. Open `Relay-Everything-Mac.dmg`.
+3. Drag **Relay Everything** to **Applications**.
+4. Open Relay Everything from **Applications**.
+5. To send your notes, open **Settings** (⌘,) and sign in, as on a phone.
+
+The app is signed and checked by Apple, so it opens with no warning. To update, download and drag the newest file the same way. Your notes and key stay on the Mac. What the Mac app does: [The Mac app](../../app/on-a-computer/#the-mac-app).
 
 ## Next
 

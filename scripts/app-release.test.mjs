@@ -6,8 +6,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  compareVersions, githubNotes, groupNotes, makeGit, markPulls, nextBeta, parseTag, planRun, pubspecVersion,
-  pullNumber, releaseItems, versionLines, whatsNew, writeNotes,
+  MAC_DMG, compareVersions, githubNotes, groupNotes, macCheck, makeGit, markPulls, nextBeta, parseTag, planRun,
+  pubspecVersion, pullNumber, releaseItems, versionLines, whatsNew, writeNotes,
 } from './app-release.mjs';
 
 const REPO = 'matthewwong525/RelayEverything';
@@ -193,15 +193,15 @@ function readJobs(file) {
 
 test("a branch's builds start with the tests, and main's and a release's wait for them", () => {
   const jobs = readJobs('mobile-ci.yml');
-  for (const job of ['android-branch', 'ios-branch']) {
+  for (const job of ['android-branch', 'ios-branch', 'macos-branch']) {
     assert.deepEqual(jobs[job].needs, ['plan'], job);
     assert.match(jobs[job].if, /needs\.plan\.outputs\.mode == 'branch'/, job);
   }
-  for (const job of ['android', 'ios']) {
+  for (const job of ['android', 'ios', 'macos']) {
     assert.deepEqual(jobs[job].needs, ['plan', 'flutter'], job);
     assert.match(jobs[job].if, /needs\.plan\.outputs\.mode != 'branch'/, job);
   }
-  assert.ok(jobs.release.needs.includes('android') && jobs.release.needs.includes('ios'));
+  assert.ok(['android', 'ios', 'macos'].every(job => jobs.release.needs.includes(job)));
 });
 
 test('only a beta from main that went to TestFlight goes to the public beta', () => {
@@ -250,4 +250,53 @@ test('a release sends the App Store page before it submits, and a release check 
   const submitLane = fastfile.split(/^ {2}lane :submit do \|options\|$/m)[1].split(/^ {2}end$/m)[0];
   assert.match(submitLane, /metadata_path: metadata,/, 'submit keeps its empty metadata folder');
   assert.match(submitLane, /skip_screenshots: true/);
+});
+
+test('mac-check passes a signed, accepted and stapled disk image, and names each check it runs', () => {
+  const ran = [];
+  const line = macCheck({ file: `/tmp/out/${MAC_DMG}`, exists: () => true, exec: (command, args) => ran.push([command, ...args].join(' ')) });
+  assert.equal(line, 'result=checked file=Relay-Everything-Mac.dmg');
+  assert.deepEqual(ran, [
+    'codesign --verify --strict --verbose=2 /tmp/out/Relay-Everything-Mac.dmg',
+    'spctl --assess --type open --context context:primary-signature --verbose=2 /tmp/out/Relay-Everything-Mac.dmg',
+    'xcrun stapler validate /tmp/out/Relay-Everything-Mac.dmg',
+  ]);
+});
+
+test('mac-check refuses an unsigned or unstapled file, another name, or no file, with the reason', () => {
+  const failing = command => (cmd, args) => {
+    if (cmd === command) throw Object.assign(new Error('failed'), { stderr: `${args.at(-1)}: rejected\nmore` });
+  };
+  const check = exec => macCheck({ file: MAC_DMG, exists: () => true, exec });
+  assert.throws(() => check(failing('codesign')), /can not go to a release: it is not signed.*\(Relay-Everything-Mac\.dmg: rejected\)$/);
+  assert.throws(() => check(failing('spctl')), /Gatekeeper refuses it/);
+  assert.throws(() => check(failing('xcrun')), /ticket is not stapled/);
+  assert.throws(() => macCheck({ file: 'relay.dmg', exists: () => true, exec: () => assert.fail('ran') }), /must be named Relay-Everything-Mac\.dmg/);
+  assert.throws(() => macCheck({ file: MAC_DMG, exists: () => false, exec: () => assert.fail('ran') }), /is missing/);
+});
+
+test('only a checked Mac disk image reaches the pre-release and the release, and a branch never signs', () => {
+  const ci = readFileSync(new URL('../.github/workflows/mobile-ci.yml', import.meta.url), 'utf8');
+  const jobs = readJobs('mobile-ci.yml');
+  assert.deepEqual(jobs['macos-beta'].needs, ['plan', 'macos', 'android']);
+  assert.match(jobs['macos-beta'].if, /needs\.plan\.outputs\.mode == 'beta' && needs\.macos\.outputs\.signed == 'true'/);
+  const beta = ci.split(/^ {2}macos-beta:\n/m)[1].split(/^ {2}[a-z][\w-]*:\n/m)[0];
+  assert.match(beta, /TAG: mobile-v\$\{\{ needs\.plan\.outputs\.version \}\}\+\$\{\{ needs\.plan\.outputs\.build \}\}/);
+  assert.match(beta, /gh release upload "\$TAG" "\$RUNNER_TEMP\/mac\/Relay-Everything-Mac\.dmg" --clobber/);
+  const branch = ci.split(/^ {2}macos-branch:\n/m)[1].split(/^ {2}[a-z][\w-]*:\n/m)[0];
+  assert.doesNotMatch(branch, /secrets/, 'a branch gets no secret');
+  const release = ci.split(/^ {2}release:\n/m)[1];
+  const steps = [...release.matchAll(/^ {6}- name: (.+)$/gm)].map(match => match[1]);
+  assert.ok(steps.indexOf('Mac app on the GitHub release') > steps.indexOf('GitHub release'), steps.join(', '));
+  assert.ok(steps.indexOf('Mac app on the GitHub release') < steps.indexOf('Mark the pull requests'), steps.join(', '));
+  const mac = readFileSync(new URL('../.github/workflows/mobile-macos.yml', import.meta.url), 'utf8');
+  assert.match(mac, /flutter build macos -t lib\/main_mac\.dart --release --build-name="\$VERSION" --build-number="\$BUILD"/);
+  assert.match(mac, /if \[ "\$MODE" = branch \]; then\n {12}echo "sign=false"/);
+  assert.match(mac, /--options runtime --timestamp/);
+  assert.match(mac, /xcrun notarytool submit "\$DMG"/);
+  assert.match(mac, /xcrun stapler staple "\$DMG"/);
+  const check = mac.indexOf('app-release.mjs mac-check --file "$DMG"');
+  assert.ok(check > mac.indexOf('xcrun stapler staple'), 'the check runs on the stapled file');
+  assert.ok(check < mac.indexOf('name: relay-everything-mac\n'), 'the file is kept only after the check');
+  assert.match(mac, /- name: File for the release\n {8}if: steps\.check\.outcome == 'success'/);
 });

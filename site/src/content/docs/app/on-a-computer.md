@@ -64,7 +64,7 @@ One bar runs along the top, over the notes and the open note. Nothing is at the 
 1. Click **New note**, or press Ctrl+Alt+N (⌘⌥N on a Mac). An empty note opens at the right.
 2. Type. The first line is the note's title.
 
-There is no **Save** button. The words go to your space as you type. To change a note, click it in the list, then click in its words and type. The styles, lists, checklists and links work as on the phone: [Open and change a note](../your-notes/#open-and-change-a-note).
+There is no **Save** button. The words go to your space as you type. To change a note, click it in the list, then click in its words and type. The styles, lists, checklists and links work as on the phone: [Open and change a note](../your-notes/#open-and-change-a-note). A paste with Ctrl+V (⌘V on a Mac) keeps the headings, lists, checklists, quotes, code, and bold, italic, underlined and struck-through words, reads Markdown as formatting, and keeps a link's address. It drops colors, fonts and pictures, as on the phone.
 
 Each change goes everywhere a phone's change goes:
 
@@ -149,6 +149,19 @@ On the phone, **Delete my account**, **Webhooks** and a tap on an AI app or a co
 The phone's own settings, such as the switches for health, places, the calendar and photos, the speech model and **Only to my own webhook**, are only in the app on your phone: [Settings](../settings/).
 
 An old link to a page of Settings still opens the matching page: `/#ai-apps` and `/#chats` open **Connect your AI**, `/#email-notes` opens **Email notes**, `/#webhooks` opens **Webhooks**, `/#devices` and `/#account` open **Account**, and `/#api-keys` opens **API keys**.
+
+## The Mac app
+
+The Mac app is Relay Everything in its own window, with the same layout as the browser. [Install it](../../start/install/#mac), then open **Settings** (⌘,) to sign in.
+
+- **Your notes stay on the Mac.** You read and write them with no network, as on your phone. When you sign in, the Mac sends each change, and gets the changes from your phones and the browser every few minutes and each time you come back to the window.
+- **Settings** opens in the right part, not over your notes. It is the phone's own Settings, with Account and Appearance.
+- **The menu bar** has **New Note** (⌘N), **Find** (⌘F), **Bold** (⌘B), **Italic** (⌘I) and **Settings…** (⌘,).
+- **Drop a file from Finder** on a note to add it. Each file can be up to 25 MB.
+- **It leaves out Location, Health, Calendar and Photos.** Your phone sends them.
+- **Voice notes show their words.** You record voice notes on your phone, and the Mac shows their words. A sound file on a note opens in the Mac's own player.
+
+The Mac shows as *Mac* under **Phones** on your Account page. **Sign out** there stops it at its next request.
 
 ## What the browser keeps
 

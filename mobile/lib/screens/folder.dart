@@ -84,12 +84,12 @@ String photosLine(Relay relay) {
 String hostOf(String? address) => Uri.tryParse(address ?? '')?.host ?? '';
 
 /// What the Account page says about the webhook's last problem: a refused file, an answer that was not 2xx, or none.
-/// [what] names what waits: notes, or the private data that goes only to the webhook.
-String problemLine(WebhookProblem problem, DateTime now, {String what = 'Notes'}) {
+/// [what] names what waits: notes, or the private data that goes only to the webhook. [device] is [Relay.device].
+String problemLine(WebhookProblem problem, DateTime now, {String what = 'Notes', String device = 'phone'}) {
   final at = _when(problem.at, now);
   if (problem.file != null) return '${problem.file} was too large for your receiver ($at), so it was not sent.';
-  if (problem.status == null) return 'No answer from your receiver at $at. $what wait on this phone until it answers.';
-  return 'Your receiver answered ${problem.status} at $at. $what wait on this phone until it takes them.';
+  if (problem.status == null) return 'No answer from your receiver at $at. $what wait on this $device until it answers.';
+  return 'Your receiver answered ${problem.status} at $at. $what wait on this $device until it takes them.';
 }
 
 /// Runs a change and shows why it could not be, if it could not.
@@ -113,7 +113,7 @@ Future<bool> choosePlace(BuildContext context, Relay relay, {bool keepWebhook = 
   if (earlier > 0) {
     if (!context.mounted) return false;
     final choice = await showDialog<bool>(context: context,
-      builder: (context) => _EarlierDialog(count: earlier, place: place, fromWebhook: fromWebhook));
+      builder: (context) => _EarlierDialog(count: earlier, place: place, fromWebhook: fromWebhook, device: relay.device));
     if (choice == null) return false;
     sendEarlier = choice;
   }
@@ -355,9 +355,11 @@ class Group extends StatelessWidget {
 /// Asks whether the notes kept only on this phone go too. *Only new notes* keeps no record, so the next turn-on asks
 /// again. With [fromWebhook], the notes went only to the person's own webhook.
 class _EarlierDialog extends StatelessWidget {
-  const _EarlierDialog({required this.count, required this.place, this.fromWebhook = false});
+  const _EarlierDialog({required this.count, required this.place, this.fromWebhook = false, this.device = 'phone'});
 
   final int count;
+  /// [Relay.device]: *Mac* on the Mac, else *phone*.
+  final String device;
   final SendPlace place;
   final bool fromWebhook;
 
@@ -365,7 +367,7 @@ class _EarlierDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final where = fromWebhook
       ? '${count == 1 ? 'It is' : 'They are'} not on Relay Everything yet.'
-      : '${count == 1 ? 'It was' : 'They were'} only on this phone.';
+      : '${count == 1 ? 'It was' : 'They were'} only on this $device.';
     return AlertDialog(
       title: Text(count == 1 ? 'Send your earlier note too?' : 'Send your $count earlier notes too?'),
       content: Text('$where New notes go to '

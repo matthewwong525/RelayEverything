@@ -29,7 +29,7 @@ enum SettingsPage {
 
   /// The pages Settings' list shows, in the order of [SettingsRow].
   static List<SettingsPage> get listed => [
-    for (final row in SettingsRow.on(web: true)) switch (row) {
+    for (final row in SettingsRow.on(RelayPlatform.web)) switch (row) {
       SettingsRow.account => account,
       SettingsRow.appearance => appearance,
       // The browser shows no phone-only row.

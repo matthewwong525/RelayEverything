@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · mac-app</title>
+<title>Review · 2026-11-15-mac-app</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -452,11 +452,11 @@
 })();
 </script>
 </head>
-<body data-change="mac-app" data-own-back>
+<body data-change="2026-11-15-mac-app" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>mac-app</h1>
+  <h1>2026-11-15-mac-app</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Tap a picture to see it full screen.</span></p>
@@ -521,6 +521,7 @@
 <li class="decision card" id="decision-29" data-note="decision-29" tabindex="0"><p class="meta"><span class="tag asked">asked</span>2026-11-15</p>Asked how publishing handles the check on a real Mac, which needs the signed download from <code>main</code> → chose to check it after publishing; task 5.3 became an after-publishing step.</li>
 <li class="decision card" id="decision-30" data-note="decision-30" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-15</p>Assumed (review): the sign-in page (<i>This Mac has a key</i>, the webhook's <i>straight from this Mac</i> and <i>The Mac sends only while</i>, <i>Your notes stay on this Mac</i>), the webhook's problem line and the <i>Send your earlier notes too?</i> question say <i>Mac</i> on the Mac, through <code>Relay.device</code>; the Mac's webhook line leaves out health and places, which the Mac never sends. The phone's words do not change. <code>mac_shell_test.dart</code> checks the sign-in line.</li>
 <li class="decision card" id="decision-31" data-note="decision-31" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-15</p>Assumed: checkpoint saved with every task built but 5.2, which waits for the pull request's Mac build; the Developer ID certificate is still missing (Apple refused the key), so the Mac build on <code>main</code> skips the signed download until the person adds it.</li>
+<li class="decision card" id="decision-32" data-note="decision-32" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-15</p>Assumed: archived for publishing after the pull request's Mac build passed; the check on a real Mac waits for the first signed build on <code>main</code>, after the Developer ID certificate is saved.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

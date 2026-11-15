@@ -27,7 +27,7 @@
 ## 5. Checks
 
 - [x] 5.1 Run `flutter analyze` and `flutter test` in `mobile/`, `node scripts/public-check.mjs`, and `node scripts/product-name.test.mjs`; all pass
-- [ ] 5.2 `/save`, then see the pull request's Mac build pass on GitHub and download its unsigned app from the run
+- [x] 5.2 `/save`, then see the pull request's Mac build pass on GitHub and download its unsigned app from the run (2026-11-15: run 43757411291, `macos-branch / mac` passed; `relay-everything-mac-329` holds `Relay Everything.app`)
 
 ## After publishing
 

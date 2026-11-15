@@ -14,6 +14,7 @@ import 'package:relay_app/data/attachments.dart';
 import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/sign_in.dart';
 import 'package:relay_app/data/store.dart';
+import 'package:relay_app/data/webhook.dart' show phoneName;
 import 'package:relay_app/relay.dart';
 import 'package:relay_app/sync/health.dart';
 import 'package:relay_app/sync/motion.dart';
@@ -1147,6 +1148,44 @@ void main() {
       expect([relay.settings.photos, photos.asked, scheduled.last], [true, 1, true]);
       expect(await relay.setPhotos(false), isNull);
       expect([relay.settings.photos, await store.get(photosSince)], [false, null]);
+      relay.dispose();
+    });
+  });
+
+  group('on the Mac', () {
+    RelayController mac() => RelayController(store: store, vault: KeyVault(storage), platform: RelayPlatform.mac,
+      apiFor: server.api, signInClient: server.client, webAuth: webAuth.call, clock: () => clock, webhookFor: server.webhook);
+
+    test('the device is named Mac at sign-in and in each message, iPhone on an iPhone', () async {
+      expect([phoneName('macos'), phoneName('ios'), phoneName('android')], ['Mac', 'iPhone', 'Android phone']);
+      final relay = mac();
+      await relay.load();
+      expect(relay.platform, RelayPlatform.mac);
+      expect(relay.desktop, isTrue);
+      expect(relay.web, isFalse);
+      expect(await relay.signIn(defaultServer), isNull);
+      expect(webAuth.opened.single.queryParameters['name'], phoneName());
+      expect(relay.connected, isTrue);
+    });
+
+    test('the key goes in the login keychain, with no shared group', () {
+      expect(KeyVault.macOptions.usesDataProtectionKeychain, isFalse);
+      expect(KeyVault.macOptions.groupId, isNull);
+      expect(KeyVault.defaultStorage.mOptions, KeyVault.macOptions);
+    });
+
+    test('notes are kept with no places and no health, and location history and health say why they stay off', () async {
+      final relay = mac();
+      await relay.load();
+      await relay.addNote('From the Mac');
+      expect(relay.entries.map((entry) => entry.text), contains('From the Mac'));
+      await relay.signIn(defaultServer);
+      await relay.startSending(sendEarlier: true);
+      expect(await relay.setHistory(true), isNotNull);
+      expect(await relay.setHealth(true), isNotNull);
+      expect([relay.settings.history, relay.settings.health], [false, false]);
+      await pumpEventQueue();
+      expect([for (final note in sentNotes()) note['text']], ['From the Mac']);
       relay.dispose();
     });
   });

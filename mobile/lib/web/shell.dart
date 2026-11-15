@@ -3,20 +3,22 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_quill/flutter_quill.dart' show Attribute;
 
 import '../brand.dart';
 import '../data/client_id.dart';
 import '../relay.dart';
 import '../screens/back_to.dart';
-import '../screens/connect_ai.dart' show connectAiLine;
+import '../screens/connect_ai.dart' show ConnectAiPage, connectAiLine;
 import '../screens/days.dart';
-import '../screens/email_notes.dart' show emailNotesLine;
+import '../screens/email_notes.dart' show EmailNotesPage, emailNotesLine;
 import '../screens/folder.dart';
 import '../screens/home.dart';
 import '../screens/note_editor.dart';
 import '../screens/round_button.dart';
+import '../screens/settings.dart' show SettingsScreen;
 import '../screens/timeline.dart';
-import '../screens/transcripts.dart' show savedChatsPart;
+import '../screens/transcripts.dart' show TranscriptsPage, savedChatsPart;
 import 'chats.dart';
 import 'connection_page.dart';
 import 'drops.dart';
@@ -63,6 +65,11 @@ class ChatsPlace extends WebPlace {
   const ChatsPlace();
 }
 
+/// *Settings* on the Mac: the phone's Settings in the right part. The browser opens its own Settings in a dialog.
+class SettingsPlace extends WebPlace {
+  const SettingsPlace();
+}
+
 /// The place an address's part names, such as `email-notes` or the app's own `/email-notes`; null for any other part.
 /// The old Settings pages `ai-apps` and `chats` open *Connect your AI*; the phone's *Read them on the web* opens
 /// `/#saved-chats`.
@@ -73,7 +80,8 @@ WebPlace? placeOfPart(String part) => switch (part.startsWith('/') ? part.substr
   _ => null,
 };
 
-/// The connections the left bar lists under *Other connections*, with their names and icons.
+/// The connections the left bar lists under *Other connections*, with their names and icons. The Mac has none of
+/// them: it reads no health, place, calendar or photo.
 const _connections = [
   (ConnectionKind.location, 'Location', CupertinoIcons.location),
   (ConnectionKind.health, 'Health', CupertinoIcons.heart),
@@ -81,19 +89,22 @@ const _connections = [
   (ConnectionKind.photos, 'Photos', CupertinoIcons.photo),
 ];
 
-/// The Relay Everything page in the browser: three panes when wide, two from [twoPanes], and the phone's pages below
-/// it. It holds the open note in one place, so a resize keeps the note and the words not yet saved.
+/// The Relay Everything page in the browser, and the Mac app's window: three panes when wide, two from [twoPanes], and
+/// the phone's pages below it. It holds the open note in one place, so a resize keeps the note and the words not yet
+/// saved.
 class WebShell extends StatefulWidget {
   const WebShell({super.key, required this.relay, required this.client, this.opener, this.picker, this.sharer, this.drops,
     this.settingsAt, this.placeAt});
 
   final Relay relay;
-  final SpaceClient client;
+  /// The browser's way to the person's space, with the page's cookie. Null on the Mac: there *Connect your AI*, *Email
+  /// notes* and *Settings* are the phone's own pages, over the Mac's key.
+  final SpaceClient? client;
   /// Opens a link; a test passes its own.
   final Opener? opener;
   final FilesPicker? picker;
   final Sharer? sharer;
-  /// Files dropped on the page; the browser's own events when null.
+  /// Files dropped on the page or the window; the browser's own events when null.
   final Stream<List<NewFile>>? drops;
   /// The Settings page the page's address named, such as `#webhooks`: Settings opens on it once the notes show.
   final SettingsPage? settingsAt;
@@ -125,6 +136,9 @@ class WebShellState extends State<WebShell> {
   late final AppLifecycleListener _lifecycle;
 
   Relay get relay => widget.relay;
+  bool get _mac => relay.platform == RelayPlatform.mac;
+  /// The connections the left bar and Home list: none on the Mac.
+  List<(ConnectionKind, String, IconData)> get _kinds => _mac ? const [] : _connections;
   NotesFolder get _folder => switch (_place) { FolderPlace(:final folder) => folder, _ => NotesFolder.all };
 
   @override
@@ -132,7 +146,8 @@ class WebShellState extends State<WebShell> {
     super.initState();
     _drops = (widget.drops ?? fileDrops()).listen(_dropped);
     // Back to the tab, or to the window: the notes changed elsewhere meanwhile show, as the phone reads them on resume.
-    _lifecycle = AppLifecycleListener(onResume: () => unawaited(relay.sync()));
+    // The browser's sync sends and reads; the Mac's sync only sends, so the Mac asks for the read too.
+    _lifecycle = AppLifecycleListener(onResume: () => unawaited(_mac ? relay.pullNotes() : relay.sync()));
     // Home shows its own notices on the phone's pages.
     _notices = relay.notices.listen((message) {
       if (mounted && !_homeShows) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
@@ -177,8 +192,35 @@ class WebShellState extends State<WebShell> {
 
   void _goHome() => setState(() => _home = true);
 
-  Future<void> _settings([SettingsPage first = SettingsPage.account]) =>
-    showSettingsDialog(context, relay: relay, client: widget.client, opener: widget.opener, first: first);
+  Future<void> _settings([SettingsPage first = SettingsPage.account]) async {
+    final client = widget.client;
+    if (client == null) return _go(const SettingsPlace());
+    await showSettingsDialog(context, relay: relay, client: client, opener: widget.opener, first: first);
+  }
+
+  /// *New Note*: ⌘N on the Mac, Ctrl+Alt+N or ⌘⌥N in the browser, and the Mac's *File* menu.
+  void newNote() {
+    if (_place is! FolderPlace) _go(FolderPlace(_folder));
+    openNote(null);
+  }
+
+  /// *Find*: the search field over the notes, from any place. The phone's pages keep their own search field.
+  void find() {
+    if (_narrowNow) return;
+    if (_place is FolderPlace) {
+      _searchFocus.requestFocus();
+    } else {
+      _go(FolderPlace(_folder));
+      WidgetsBinding.instance.addPostFrameCallback((_) => _searchFocus.requestFocus());
+    }
+  }
+
+  /// *Settings…*: ⌘, on the Mac.
+  void settings() => unawaited(_settings());
+
+  /// *Bold* and *Italic* from the Mac's *Format* menu, on the words picked in the open note, as ⌘B and ⌘I do there.
+  void bold() => _editor.currentState?.toggleStyle(Attribute.bold);
+  void italic() => _editor.currentState?.toggleStyle(Attribute.italic);
 
   /// Files dropped on the page join the open note, or start a new one.
   Future<void> _dropped(List<NewFile> files) async {
@@ -198,15 +240,13 @@ class WebShellState extends State<WebShell> {
     final keys = HardwareKeyboard.instance;
     if (event is! KeyDownEvent || !(keys.isControlPressed || keys.isMetaPressed)) return KeyEventResult.ignored;
     final key = event.physicalKey;
-    if (key == PhysicalKeyboardKey.keyN && keys.isAltPressed) {
-      openNote(null);
+    // The browser keeps ⌘N and Ctrl+N for a new window; the Mac app has no other use for ⌘N.
+    if (key == PhysicalKeyboardKey.keyN && (keys.isAltPressed || (_mac && keys.isMetaPressed && !keys.isShiftPressed))) {
+      newNote();
     } else if (key == PhysicalKeyboardKey.keyF && !keys.isAltPressed && !keys.isShiftPressed && !_narrowNow) {
-      if (_place is FolderPlace) {
-        _searchFocus.requestFocus();
-      } else {
-        _go(FolderPlace(_folder));
-        WidgetsBinding.instance.addPostFrameCallback((_) => _searchFocus.requestFocus());
-      }
+      find();
+    } else if (_mac && key == PhysicalKeyboardKey.comma && keys.isMetaPressed) {
+      settings();
     } else if (key == PhysicalKeyboardKey.backspace && keys.isShiftPressed && _open) {
       _editor.currentState?.delete();
     } else {
@@ -239,7 +279,7 @@ class WebShellState extends State<WebShell> {
       _open = true;
       _entry = notes.first;
     }
-    final sidebar = Sidebar(relay: relay, place: _place, onGo: _go, onSettings: _settings);
+    final sidebar = Sidebar(relay: relay, place: _place, onGo: _go, onSettings: _settings, connections: _kinds);
     final menu = three ? null : () => _scaffold.currentState?.openDrawer();
     return Scaffold(
       key: _scaffold,
@@ -256,18 +296,40 @@ class WebShellState extends State<WebShell> {
             VerticalDivider(width: 1, color: brand.line),
             Expanded(child: _open ? _editorOf(pane: true) : _noNote()),
           ],
-          ConnectionPlace(:final kind) => [Expanded(child: _withMenu(menu,
-            ConnectionPage(kind: kind, client: widget.client, opener: widget.opener)))],
-          ConnectAiPlace() => [Expanded(child: _withMenu(menu, _connectAi()))],
-          EmailNotesPlace() => [Expanded(child: _withMenu(menu, WebEmailNotesPage(client: widget.client)))],
-          ChatsPlace() => [Expanded(child: _withMenu(menu, ChatsView(client: widget.client, wide: true, opener: widget.opener)))],
+          _ => [Expanded(child: _withMenu(menu, _pageOf(_place, wide: true)))],
         },
       ]),
     );
   }
 
-  Widget _connectAi() => WebConnectAiPage(client: widget.client, opener: widget.opener,
-    onSavedChats: () => _go(const ChatsPlace()));
+  /// The page a place other than the notes shows: the browser's own, from its [SpaceClient]; on the Mac, the phone's.
+  Widget _pageOf(WebPlace place, {required bool wide}) {
+    final client = widget.client;
+    if (client == null) return _phonePart(place, wide: wide);
+    return switch (place) {
+      ConnectionPlace(:final kind) => ConnectionPage(kind: kind, client: client, opener: widget.opener),
+      ConnectAiPlace() => WebConnectAiPage(client: client, opener: widget.opener, onSavedChats: () => _go(const ChatsPlace())),
+      EmailNotesPlace() => WebEmailNotesPage(client: client),
+      ChatsPlace() => ChatsView(client: client, wide: wide, opener: widget.opener),
+      FolderPlace() || SettingsPlace() => const SizedBox.shrink(),
+    };
+  }
+
+  /// On the Mac, a place shows the phone's own page, with the pages it opens, such as *Saved chats* or the Account
+  /// page, in the same part. Its first page goes back to Home on the phone's pages, and has no back in the wide layout.
+  Widget _phonePart(WebPlace place, {required bool wide}) {
+    final Widget page = switch (place) {
+      ConnectAiPlace() => ConnectAiPage(relay: relay, opener: widget.opener),
+      EmailNotesPlace() => EmailNotesPage(relay: relay),
+      ChatsPlace() => TranscriptsPage(relay: relay, opener: widget.opener),
+      SettingsPlace() => SettingsScreen(relay: relay, opener: widget.opener),
+      FolderPlace() || ConnectionPlace() => const SizedBox.shrink(),
+    };
+    return PartRoot(onBack: wide ? null : _goHome, child: Navigator(
+      key: ValueKey(place.runtimeType),
+      onGenerateInitialRoutes: (_, _) => [MaterialPageRoute<void>(builder: (_) => page)],
+    ));
+  }
 
   String? get _openId => _open ? _editor.currentState?.id ?? _entry?.id : null;
 
@@ -311,7 +373,7 @@ class WebShellState extends State<WebShell> {
     if (_home) {
       return HomeScreen(relay: relay, opener: widget.opener, picker: widget.picker, sharer: widget.sharer, onOpen: openNote,
         onFolder: (folder) => _go(FolderPlace(folder)), onSettings: _settings, otherConnections: [
-          for (final (kind, title, icon) in _connections)
+          for (final (kind, title, icon) in _kinds)
             FolderRow(icon: icon, title: title, onTap: () => _go(ConnectionPlace(kind))),
           FolderRow(icon: CupertinoIcons.sparkles, title: 'Connect your AI', line: connectAiLine,
             onTap: () => _go(const ConnectAiPlace())),
@@ -325,12 +387,11 @@ class WebShellState extends State<WebShell> {
       child: switch (_place) {
         FolderPlace(:final folder) => TimelineScreen(relay: relay, folder: folder, picker: widget.picker, sharer: widget.sharer,
           opener: widget.opener, onOpen: openNote, onBack: _goHome, onFilter: (filter) => setState(() => _place = FolderPlace(filter))),
-        ConnectionPlace(:final kind) => _page(ConnectionPage(kind: kind, client: widget.client, opener: widget.opener)),
-        ConnectAiPlace() => _page(_connectAi()),
-        EmailNotesPlace() => _page(WebEmailNotesPage(client: widget.client)),
+        // The Mac's pages have their own back.
+        _ when widget.client == null => _pageOf(_place, wide: false),
         // The saved chats go back to *Connect your AI*, which opened them.
-        ChatsPlace() => _page(ChatsView(client: widget.client, wide: false, opener: widget.opener),
-          back: 'Connect your AI', onBack: () => _go(const ConnectAiPlace())),
+        ChatsPlace() => _page(_pageOf(_place, wide: false), back: 'Connect your AI', onBack: () => _go(const ConnectAiPlace())),
+        _ => _page(_pageOf(_place, wide: false)),
       },
     );
   }
@@ -345,12 +406,15 @@ class WebShellState extends State<WebShell> {
 /// The left bar: one *Notes* row with its count, as the phone's Home has, *Other connections*, and *Settings* at the
 /// bottom. The notes list's own filters pick voice notes, or notes with photos and files.
 class Sidebar extends StatelessWidget {
-  const Sidebar({super.key, required this.relay, required this.place, required this.onGo, required this.onSettings});
+  const Sidebar({super.key, required this.relay, required this.place, required this.onGo, required this.onSettings,
+    this.connections = _connections});
 
   final Relay relay;
   final WebPlace place;
   final ValueChanged<WebPlace> onGo;
   final VoidCallback onSettings;
+  /// The rows above *Connect your AI*: Location, Health, Calendar and Photos in the browser, none on the Mac.
+  final List<(ConnectionKind, String, IconData)> connections;
 
   @override
   Widget build(BuildContext context) {
@@ -361,6 +425,7 @@ class Sidebar extends StatelessWidget {
       (ConnectionPlace(kind: final a), ConnectionPlace(kind: final b)) => a == b,
       (ConnectAiPlace() || ChatsPlace(), ConnectAiPlace()) => true,
       (EmailNotesPlace(), EmailNotesPlace()) => true,
+      (SettingsPlace(), SettingsPlace()) => true,
       _ => false,
     };
     Widget row(IconData icon, String title, WebPlace? to, {int? count, VoidCallback? onTap}) {
@@ -395,13 +460,13 @@ class Sidebar extends StatelessWidget {
         row(CupertinoIcons.doc_text, 'Notes', const FolderPlace(NotesFolder.all), count: relay.entries.length),
         Padding(padding: const EdgeInsets.fromLTRB(22, 20, 16, 6),
           child: Text('Other connections', style: text.labelLarge?.copyWith(color: brand.muted))),
-        for (final (kind, title, icon) in _connections) row(icon, title, ConnectionPlace(kind)),
+        for (final (kind, title, icon) in connections) row(icon, title, ConnectionPlace(kind)),
         row(CupertinoIcons.sparkles, 'Connect your AI', const ConnectAiPlace()),
         row(CupertinoIcons.envelope, 'Email notes', const EmailNotesPlace()),
       ])),
       Divider(height: 1, color: brand.line),
       const SizedBox(height: 8),
-      row(CupertinoIcons.gear, 'Settings', null, onTap: onSettings),
+      row(CupertinoIcons.gear, 'Settings', const SettingsPlace(), onTap: onSettings),
       const SizedBox(height: 12),
     ]);
   }

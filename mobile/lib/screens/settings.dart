@@ -10,21 +10,22 @@ import 'back_to.dart';
 import 'folder.dart' show Group, Opener, choosePlace, hostOf;
 import 'timeline.dart' show openPage;
 
-/// The rows of Settings, in order, on the phone and in the browser: one list, so a row added later shows on both, or is
-/// marked phone-only on purpose. The browser hears no voice and has no version to show.
+/// The rows of Settings, in order, on the phone, in the browser and on the Mac: one list, so a row added later shows on
+/// each, or is left out of one on purpose. Only the phone hears voice; the browser has no version to show.
 enum SettingsRow {
   account('Account'),
   appearance('Appearance'),
-  voice('Voice notes', phoneOnly: true),
-  version('Version', phoneOnly: true);
+  voice('Voice notes', only: {RelayPlatform.phone}),
+  version('Version', only: {RelayPlatform.phone, RelayPlatform.mac});
 
-  const SettingsRow(this.title, {this.phoneOnly = false});
+  const SettingsRow(this.title, {this.only = const {RelayPlatform.phone, RelayPlatform.web, RelayPlatform.mac}});
 
   final String title;
-  final bool phoneOnly;
+  /// Where the row shows.
+  final Set<RelayPlatform> only;
 
-  /// The rows the phone, or with [web] the browser, shows.
-  static List<SettingsRow> on({required bool web}) => [for (final row in values) if (!web || !row.phoneOnly) row];
+  /// The rows [platform] shows.
+  static List<SettingsRow> on(RelayPlatform platform) => [for (final row in values) if (row.only.contains(platform)) row];
 }
 
 /// The account card first, as the Apple Account card in iPhone Settings, then *Appearance*, and what is about this
@@ -45,7 +46,7 @@ class SettingsScreen extends StatelessWidget {
         builder: (context, _) => CustomScrollView(slivers: [
           SliverAppBar.large(leading: const BackTo('Home'), leadingWidth: BackTo.widthOf('Home'), title: const Text('Settings')),
           SliverPadding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 32), sliver: SliverList.list(children: [
-            for (final row in SettingsRow.on(web: relay.web)) switch (row) {
+            for (final row in SettingsRow.on(relay.platform)) switch (row) {
               SettingsRow.account => AccountCard(relay: relay, opener: opener),
               SettingsRow.appearance => Group(title: row.title, children: [_AppearanceRow(relay: relay)]),
               SettingsRow.voice => Group(title: row.title, children: [_VoiceRow(relay: relay)]),
@@ -75,7 +76,7 @@ class AccountCard extends StatelessWidget {
     final (String title, String line) = switch (state) {
       AccountState.signedIn => (email ?? hostOf(relay.server), 'Signed in'),
       AccountState.webhook => ('My own webhook', hostOf(relay.webhookAddress)),
-      AccountState.signedOut => ('Sign in to Relay Everything', 'Your notes stay on this phone until you sign in.'),
+      AccountState.signedOut => ('Sign in to Relay Everything', 'Your notes stay on this ${relay.device} until you sign in.'),
     };
     return Padding(
       padding: const EdgeInsets.only(top: 12),

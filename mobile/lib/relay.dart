@@ -116,9 +116,9 @@ final ValueListenable<Playback?> noPlayback = ValueNotifier<Playback?>(null);
 
 enum SyncStatus { idle, syncing, synced, offline, refused }
 
-/// Where the app runs: the phone app, or the browser at the person's Relay Everything page. The browser shows no part
-/// that only a phone can do, such as health, places, voice notes or the speech model.
-enum RelayPlatform { phone, web }
+/// Where the app runs: the phone app, the browser at the person's Relay Everything page, or the Mac app. The browser
+/// and the Mac show no part that only a phone can do, such as health, places, voice notes or the speech model.
+enum RelayPlatform { phone, web, mac }
 
 /// When one kind of data, health, places or the calendar, last reached the server, and how many of it wait to send.
 class SendState {
@@ -220,9 +220,14 @@ class Connections {
 
 /// What the screens read and do. The app's controller is one; a test's fake is another.
 abstract class Relay extends ChangeNotifier {
-  /// The phone app, or the browser. A screen hides each phone-only part on the web.
+  /// The phone app, the browser or the Mac. A screen hides each phone-only part on a computer.
   RelayPlatform get platform => RelayPlatform.phone;
+  /// The browser: its own file words, and no key of its own.
   bool get web => platform == RelayPlatform.web;
+  /// A computer, the browser or the Mac: a mouse and keyboard, the page's keys, and no microphone.
+  bool get desktop => platform != RelayPlatform.phone;
+  /// The word for the device the notes stay on: *Mac* on the Mac, else *phone*, as in *this phone*.
+  String get device => platform == RelayPlatform.mac ? 'Mac' : 'phone';
 
   bool get connected;
   String? get server;

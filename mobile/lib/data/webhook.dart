@@ -9,8 +9,13 @@ import 'api.dart';
 import 'connection.dart';
 import 'store.dart';
 
-/// The phone's name in each message. The app reads no phone model, so it is the kind of phone.
-String phoneName() => Platform.isIOS ? 'iPhone' : 'Android phone';
+/// The device's name in each message and at sign-in. The app reads no model, so it is the kind of device: [os] is
+/// `Platform.operatingSystem`.
+String phoneName([String? os]) => switch (os ?? Platform.operatingSystem) {
+  'ios' => 'iPhone',
+  'macos' => 'Mac',
+  _ => 'Android phone',
+};
 
 const _prefix = 'whsec_';
 

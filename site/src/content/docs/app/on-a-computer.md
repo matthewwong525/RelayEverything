@@ -150,6 +150,19 @@ The phone's own settings, such as the switches for health, places, the calendar 
 
 An old link to a page of Settings still opens the matching page: `/#ai-apps` and `/#chats` open **Connect your AI**, `/#email-notes` opens **Email notes**, `/#webhooks` opens **Webhooks**, `/#devices` and `/#account` open **Account**, and `/#api-keys` opens **API keys**.
 
+## The Mac app
+
+The Mac app is Relay Everything in its own window, with the same layout as the browser. [Install it](../../start/install/#mac), then open **Settings** (⌘,) to sign in.
+
+- **Your notes stay on the Mac.** You read and write them with no network, as on your phone. When you sign in, the Mac sends each change, and gets the changes from your phones and the browser every few minutes and each time you come back to the window.
+- **Settings** opens in the right part, not over your notes. It is the phone's own Settings, with Account and Appearance.
+- **The menu bar** has **New Note** (⌘N), **Find** (⌘F), **Bold** (⌘B), **Italic** (⌘I) and **Settings…** (⌘,).
+- **Drop a file from Finder** on a note to add it. Each file can be up to 25 MB.
+- **It leaves out Location, Health, Calendar and Photos.** Your phone sends them.
+- **Voice notes show their words.** You record voice notes on your phone, and the Mac shows their words. A sound file on a note opens in the Mac's own player.
+
+The Mac shows as *Mac* under **Phones** on your Account page. **Sign out** there stops it at its next request.
+
 ## What the browser keeps
 
 The browser keeps no copy of your notes. It reads them from your space each time, and writes each change to your space. It keeps no key and no health or location data. When you sign out, none of your notes stay on the computer. This makes it safe to sign in on a computer that other people use too, if you sign out after.

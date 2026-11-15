@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// The phone app's release steps for .github/workflows/mobile-ci.yml: the run's version, the release notes, and
-// the marks on released pull requests. mobile/README.md says how a release runs.
+// The phone app's release steps for .github/workflows/mobile-ci.yml: the run's version, the release notes, the
+// marks on released pull requests, and the check of the Mac app's disk image. mobile/README.md says how a release runs.
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import { isMain, parseCli, usageError } from './lib-cli.mjs';
 
-const USAGE = `usage: node scripts/app-release.mjs <version|notes|mark> [options]
+const USAGE = `usage: node scripts/app-release.mjs <version|notes|mark|mac-check> [options]
 
 version  Prints mode, version, build, tag and previous_tag as key=value lines for $GITHUB_OUTPUT.
          Takes --ref (GITHUB_REF), --sha (GITHUB_SHA), --event (GITHUB_EVENT_NAME), --build (GITHUB_RUN_NUMBER)
@@ -15,9 +15,13 @@ version  Prints mode, version, build, tag and previous_tag as key=value lines fo
 notes    Writes notes.md (GitHub) and whats-new.txt (App Store) to --out (default .) for --version, from the
          commits that changed mobile/ after --previous-tag up to --to (GITHUB_SHA, else HEAD). --repo
          (GITHUB_REPOSITORY) names the repository for links.
-mark     Labels each pull request in those notes "released" and comments once with the version. Same options.`;
+mark     Labels each pull request in those notes "released" and comments once with the version. Same options.
+mac-check  On a Mac: exits 1 unless --file is Relay-Everything-Mac.dmg, signed, accepted by Gatekeeper as checked by
+         Apple, and stapled. Only a file that passes goes to a GitHub release.`;
 
 const TAG = /^v(\d+)\.(\d+)\.(\d+)$/;
+/** The Mac app's one file on each GitHub release; the website's *Download for Mac* link names it. */
+export const MAC_DMG = 'Relay-Everything-Mac.dmg';
 const WHATS_NEW_LIMIT = 4000;
 const HEADINGS = ['New', 'Fixes', 'Changes'];
 
@@ -215,6 +219,31 @@ export function markPulls({ git, gh = defaultGh, repo, version, previous, to }) 
   return `result=marked prs=${pulls.length} commented=${commented}`;
 }
 
+/** What a Mac disk image passes before a release takes it: a valid signature, Gatekeeper's yes, and Apple's ticket. */
+export const macChecks = file => [
+  { what: 'it is not signed, or its signature is broken', command: 'codesign', args: ['--verify', '--strict', '--verbose=2', file] },
+  { what: 'Gatekeeper refuses it: it is not signed with Developer ID, or Apple did not accept it',
+    command: 'spctl', args: ['--assess', '--type', 'open', '--context', 'context:primary-signature', '--verbose=2', file] },
+  { what: "Apple's ticket is not stapled to it", command: 'xcrun', args: ['stapler', 'validate', file] },
+];
+
+const defaultExec = (command, args) => execFileSync(command, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+
+/** `mac-check`: runs each of [macChecks] through `exec`, and throws with the first reason the file can not go out. */
+export function macCheck({ file, exec = defaultExec, exists = existsSync }) {
+  if (basename(file ?? '') !== MAC_DMG) throw new Error(`the Mac app's file must be named ${MAC_DMG}, not "${basename(file ?? '')}"`);
+  if (!exists(file)) throw new Error(`${file} is missing`);
+  for (const { what, command, args } of macChecks(file)) {
+    try {
+      exec(command, args);
+    } catch (error) {
+      const detail = `${error.stderr ?? ''}`.trim().split('\n')[0];
+      throw new Error(`${MAC_DMG} can not go to a release: ${what}${detail ? ` (${detail})` : ''}`);
+    }
+  }
+  return `result=checked file=${MAC_DMG}`;
+}
+
 function required(values, name) {
   if (!values[name]) usageError(USAGE, `${name} is missing`);
   return values[name];
@@ -236,19 +265,24 @@ if (isMain(import.meta.url)) {
       to: { type: 'string', default: env.GITHUB_SHA || 'HEAD' },
       repo: { type: 'string', default: env.GITHUB_REPOSITORY ?? '' },
       out: { type: 'string', default: '.' },
+      file: { type: 'string' },
     },
   });
   const [command] = positionals;
-  const root = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
-  const git = makeGit(root);
+  // Read only when a command uses git, so mac-check runs on a folder with no history.
+  let top;
+  const root = () => (top ??= execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim());
   const notesArgs = () => ({
-    git, repo: required(values, 'repo'), version: required(values, 'version'), previous: values['previous-tag'], to: values.to,
+    git: makeGit(root()), repo: required(values, 'repo'), version: required(values, 'version'), previous: values['previous-tag'],
+    to: values.to,
   });
   try {
-    if (command === 'version') {
+    if (command === 'mac-check') {
+      console.log(macCheck({ file: required(values, 'file') }));
+    } else if (command === 'version') {
       console.log(versionLines({
-        git, ref: values.ref, sha: values.sha, event: values.event, build: values.build,
-        releaseCheck: values['release-check'] === 'true', pubspecText: readFileSync(join(root, 'mobile/pubspec.yaml'), 'utf8'),
+        git: makeGit(root()), ref: values.ref, sha: values.sha, event: values.event, build: values.build,
+        releaseCheck: values['release-check'] === 'true', pubspecText: readFileSync(join(root(), 'mobile/pubspec.yaml'), 'utf8'),
       }));
     } else if (command === 'notes') {
       console.log(`result=written files=${writeNotes({ ...notesArgs(), out: values.out }).join(',')}`);

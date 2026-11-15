@@ -70,6 +70,8 @@ dependencies:
   package_info_plus: ^10.2.2
   # The browser page: a file dropped on a note is read with the browser's own file API.
   web: ^1.1.2
+  # The Mac app: files dropped from Finder on its window. 0.9 needs a cross_file that share_plus refuses.
+  desktop_drop: ^0.8.0
 
 dev_dependencies:
   flutter_test:

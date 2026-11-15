@@ -70,3 +70,5 @@ Messages from the platform reach Dart in order, so the paste lands before any la
 - **2026-11-15** — Assumed: the HTML is read by our own walker over `package:html`, not `HtmlToDelta`, because a probe of `flutter_quill_delta_from_html` 1.5.3 joined `<p>one</p><p>two</p>` into `onetwo`, read Google Docs' whole copy as one bold line, and joined a `<pre>` block's lines. `html` 0.15.7 is the locked version, so no locked version changes.
 - **2026-11-15** — Assumed: `pasteChange` keeps the cursor line's style beyond the one-line case: an unstyled last line joins the words after the cursor; a paste at a line's end gives that line the last pasted line's style, so lines pasted into a new note's empty Title line do not make the last one a Title; the words before the cursor keep their line's style when the first pasted line has none.
 - **2026-11-15** — Checkpoint: built and reviewed (no findings); local analyze and 842 tests pass; saved so CI's iOS build compiles `RelayPaste.swift` (task 2.4).
+- **2026-11-15** — Task 2.4 ticked: CI's iOS archive of 96943b2 compiled `RelayPaste.swift` (Archive Succeeded).
+- **2026-11-15** — Archive checkpoint: archived for /ship.

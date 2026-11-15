@@ -1,7 +1,7 @@
 # Pasted words keep their formatting
 
-**Status:** built; waiting for the iOS build in CI to compile the iPhone paste
-**Branch:** nervous-catfish
+**Status:** ready-to-ship
+**Branch:** notes-paste-keep-formatting
 **Open questions:** none
 
 ## Why

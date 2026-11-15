@@ -64,7 +64,7 @@ One bar runs along the top, over the notes and the open note. Nothing is at the 
 1. Click **New note**, or press Ctrl+Alt+N (⌘⌥N on a Mac). An empty note opens at the right.
 2. Type. The first line is the note's title.
 
-There is no **Save** button. The words go to your space as you type. To change a note, click it in the list, then click in its words and type. The styles, lists, checklists and links work as on the phone: [Open and change a note](../your-notes/#open-and-change-a-note).
+There is no **Save** button. The words go to your space as you type. To change a note, click it in the list, then click in its words and type. The styles, lists, checklists and links work as on the phone: [Open and change a note](../your-notes/#open-and-change-a-note). A paste with Ctrl+V (⌘V on a Mac) keeps the headings, lists, checklists, quotes, code, and bold, italic, underlined and struck-through words, reads Markdown as formatting, and keeps a link's address. It drops colors, fonts and pictures, as on the phone.
 
 Each change goes everywhere a phone's change goes:
 

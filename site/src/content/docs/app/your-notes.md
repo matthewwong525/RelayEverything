@@ -70,7 +70,17 @@ A web address in the words, such as `https://example.com` or `www.example.com`, 
 
 The page works as in Apple Notes: you change the note in place. Tap the words where you want to type. The cursor goes there and the keyboard comes up. There is no **Save** button: the phone keeps each change as you type, and when you leave the page. You can change a voice note's words too. Its recording stays as it was.
 
-To paste, hold in the words, or tap the blinking cursor. On an iPhone with iOS 16 or later, the iPhone's own menu comes up, with **Paste**, **Copy**, **Cut**, **Select All**, **Look Up** and **Share** as each fits. A second tap on the cursor closes it. **Paste** puts in the words at once, with no *Allow Paste?* question. Pasted words come in as plain text, in the note's own style. While you hold and drag the cursor, a magnifier shows the words under your finger.
+To paste, hold in the words, or tap the blinking cursor. On an iPhone with iOS 16 or later, the iPhone's own menu comes up, with **Paste**, **Copy**, **Cut**, **Select All**, **Look Up** and **Share** as each fits. A second tap on the cursor closes it. **Paste** puts in the words at once, with no *Allow Paste?* question. While you hold and drag the cursor, a magnifier shows the words under your finger.
+
+A paste keeps the formatting that a note can show, as in Notion. Words that you copy from a web page, Notion, Google Docs, Apple Notes, Word or an email come in with their headings, bullet and numbered lists, checklists, quotes, code blocks, and bold, italic, underlined and struck-through words. Colors, fonts, sizes and pictures go: the pasted words take the note's own look. A heading past the third level comes in as a subheading.
+
+- **Markdown becomes formatting.** Words that you copy from ChatGPT, Claude or a text file, such as `## Plan`, `- [ ] Call the bank` or `**now**`, come in as a heading, a checklist item and bold words, not as marks.
+- **A link keeps its address.** A link whose words are not its address, such as *the menu*, comes in as `the menu (https://…)`, so the address stays and shows as a link.
+- **A few words join the line.** Words with no line style go in at the cursor, and the line keeps its own style.
+- **Empty lines stay tidy.** Two or more empty lines in a row become one, and empty lines at the start and the end go.
+- **Undo takes back the whole paste** in one step.
+
+A paste works the same with the iPhone's own **Paste**, the app's own menu on Android, a keyboard's ⌘V or Ctrl+V, and the [web page](../on-a-computer/#write-and-change-notes). Words that you copy from inside a note paste back with their styles.
 
 At the top of the page:
 

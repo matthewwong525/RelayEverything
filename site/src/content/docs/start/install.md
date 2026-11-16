@@ -33,8 +33,8 @@ TestFlight gets each new build of the app. Apple reviews a new version of the be
 ## Mac
 
 1. On the Mac, click [Download for Mac](https://github.com/matthewwong525/RelayEverything/releases/latest/download/Relay-Everything-Mac.dmg).
-2. Open `Relay-Everything-Mac.dmg`.
-3. Drag **Relay Everything** to **Applications**.
+2. Open `Relay-Everything-Mac.dmg`. A Relay Everything window opens, with the app on the left and **Applications** on the right.
+3. Drag **Relay Everything** onto **Applications**, as the arrow shows.
 4. Open Relay Everything from **Applications**.
 5. To send your notes, open **Settings** (⌘,) and sign in, as on a phone.
 

@@ -119,6 +119,8 @@ class MemoryStorage extends Fake implements FlutterSecureStorage {
   final options = <AppleOptions?>[];
   /// When true, the App Group's group answers as in a build with no App Group.
   bool noGroup = false;
+  /// When true, `readAll` throws as the Mac's login keychain does: it refuses a read of all items with their values.
+  bool refuseReadAll = false;
   /// When set, the write after this many writes throws, as when the app stops part way.
   int? stopAfterWrites;
   var _writes = 0;
@@ -133,7 +135,15 @@ class MemoryStorage extends Fake implements FlutterSecureStorage {
   Future<Map<String, String>> readAll({AppleOptions? iOptions, AndroidOptions? aOptions, LinuxOptions? lOptions,
     WebOptions? webOptions, AppleOptions? mOptions, WindowsOptions? wOptions}) async {
     options.add(iOptions);
+    if (refuseReadAll) throw PlatformException(code: 'Unexpected security result code', message: 'Code: -50');
     return Map.of(_home(iOptions));
+  }
+
+  @override
+  Future<String?> read({required String key, AppleOptions? iOptions, AndroidOptions? aOptions, LinuxOptions? lOptions,
+    WebOptions? webOptions, AppleOptions? mOptions, WindowsOptions? wOptions}) async {
+    options.add(iOptions);
+    return _home(iOptions)[key];
   }
 
   @override

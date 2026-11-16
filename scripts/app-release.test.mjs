@@ -299,4 +299,11 @@ test('only a checked Mac disk image reaches the pre-release and the release, and
   assert.ok(check > mac.indexOf('xcrun stapler staple'), 'the check runs on the stapled file');
   assert.ok(check < mac.indexOf('name: relay-everything-mac\n'), 'the file is kept only after the check');
   assert.match(mac, /- name: File for the release\n {8}if: steps\.check\.outcome == 'success'/);
+  // Every disk image is the branded install window, a branch's too, and the app is signed before it goes in.
+  assert.doesNotMatch(mac, /hdiutil create/);
+  assert.match(mac, /pip install dmgbuild==\d+\.\d+\.\d+/);
+  const signed = mac.indexOf('--entitlements macos/Runner/Release.entitlements');
+  assert.ok(signed > 0 && signed < mac.lastIndexOf('macos/dmg/make-dmg.sh "$APP" "$DMG"'), 'the app is signed first');
+  assert.match(mac, /- name: Disk image to try\n {8}if: inputs\.mode == 'branch'\n {8}run: macos\/dmg\/make-dmg\.sh "\$APP" "\$DMG"/);
+  assert.match(mac, /- name: File to try\n(?: {8,}.*\n)*? {10}path: mobile\/Relay-Everything-Mac\.dmg\n/);
 });

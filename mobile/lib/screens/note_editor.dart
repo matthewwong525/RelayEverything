@@ -1,7 +1,8 @@
 import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'package:flutter/cupertino.dart' show CupertinoAlertDialog, CupertinoDialogAction, CupertinoIcons,
+  CupertinoTextField, showCupertinoDialog;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderAbstractViewport;
@@ -18,7 +19,9 @@ import '../data/client_id.dart';
 import '../editor/magnifier.dart';
 import '../editor/markdown.dart';
 import '../editor/paste.dart';
+import '../editor/shortcuts.dart';
 import '../editor/system_menu.dart';
+import '../editor/table.dart';
 import '../relay.dart';
 import '../web/paste.dart';
 import 'back_to.dart';
@@ -116,6 +119,10 @@ class NoteEditorState extends State<NoteEditor> {
   /// words cleared meanwhile still delete the note on leave.
   int _adds = 0;
   late final QuillController _controller;
+  /// The note's tables: the cell in use, and the cell changes still to write.
+  late final NoteTables _tables;
+  /// A space typed after Markdown marks is turning them into the line's style.
+  bool _marking = false;
   late Delta _saved;
   /// The words as last kept: a file added to an unchanged note keeps them as they were.
   late String _savedText = _current?.text ?? '';
@@ -191,6 +198,8 @@ class NoteEditorState extends State<NoteEditor> {
       // The only way to take the editor's own paste; experimental, pinned by pubspec.lock.
       // ignore: experimental_member_use
       config: QuillControllerConfig(clipboardConfig: QuillClipboardConfig(onClipboardPaste: _clipboardPaste)));
+    _controller.onReplaceText = _typed;
+    _tables = NoteTables(_controller)..addListener(_tablesChanged);
     _listen();
     _trash = _controller.readOnly = _inTrash;
     _controller.addListener(_caretMoved);
@@ -235,13 +244,15 @@ class NoteEditorState extends State<NoteEditor> {
   /// The words as they are now: the same as kept, or new ones not yet kept.
   ({String id, String text})? _words() {
     if (_deleted) return null;
+    _tables.flush();
     final delta = _controller.document.toDelta();
-    final text = delta == _saved ? _savedText : deltaToMarkdown(delta);
+    final text = delta == _saved ? _savedText : _markdownOf(delta);
     return (id: _id, text: plainText(text).trim().isEmpty ? '' : text);
   }
 
   @override
   void dispose() {
+    _tables.flush();
     _save(sendNow: true, leaving: true);
     if (relay.openNote == _id) relay.openNote = _heldBefore;
     if (relay.editorWords == _words) relay.editorWords = null;
@@ -251,6 +262,7 @@ class NoteEditorState extends State<NoteEditor> {
     _changes?.cancel();
     _pause?.cancel();
     _controller.removeListener(_caretMoved);
+    _tables.dispose();
     _focus.dispose();
     _find.dispose();
     _findFocus.dispose();
@@ -268,12 +280,47 @@ class NoteEditorState extends State<NoteEditor> {
       _pasteTarget = null;
     }
     if (_focus.hasFocus) _formatting = false;
+    // The note's words took the cursor from a table's cell.
+    if (_focus.hasFocus) _tables.leave();
     // A tap in the words while finding edits them, as in Apple Notes: find mode ends, and the tool bar comes back.
     if (_focus.hasFocus && _finding) _endFind();
     if (_focus.hasFocus) _revealCaret();
-    _typing = _focus.hasFocus || _formatting;
+    _typing = _editing;
     if (!_typing && mounted) _markLinks();
     if (mounted) setState(() {});
+  }
+
+  /// The person edits the note: its words or a table's cell have the cursor, or the Format sheet is open.
+  bool get _editing => _focus.hasFocus || _formatting || _tables.active != null;
+
+  /// A table's cell took the cursor, or gave it up: the page shows the keyboard's bar while a cell has it.
+  void _tablesChanged() {
+    _typing = _editing;
+    if (_tables.active != null && _finding) _endFind();
+    if (mounted) setState(() {});
+  }
+
+  /// A space typed after `#`, `-`, `[]` or another Markdown mark at a line's start gives the line that style, with
+  /// the marks taken away, as the iPhone's keyboard types it. The space goes in first as typed, so one Undo gives the
+  /// marks back. A paste never comes here: it is one change of its own.
+  bool _typed(int index, int length, Object? data) {
+    if (_marking || data != ' ' || length != 0 || index <= 0) return true;
+    final words = _controller.document.toPlainText();
+    if (index >= words.length || !isLineMark(words.substring(words.lastIndexOf('\n', index - 1) + 1, index))) return true;
+    _marking = true;
+    try {
+      _controller.replaceText(index, 0, ' ', TextSelection.collapsed(offset: index + 1));
+      final change = lineMarkChange(_controller.document, index);
+      if (change != null) {
+        _controller.document.history.lastRecorded = 0;
+        final start = change.first.length ?? 0;
+        _controller.compose(change, TextSelection.collapsed(offset: change.first.isRetain ? start : 0),
+          ChangeSource.local);
+      }
+    } finally {
+      _marking = false;
+    }
+    return false;
   }
 
   /// Words that came for a voice note fill the page, once. A kept note gone from the list closes the page.
@@ -326,8 +373,9 @@ class NoteEditorState extends State<NoteEditor> {
   void _save({required bool sendNow, List<NewFile> files = const [], bool leaving = false}) {
     _pause?.cancel();
     if (_deleted || _trash) return;
+    _tables.flush();
     final delta = _controller.document.toDelta();
-    final text = delta == _saved ? _savedText : deltaToMarkdown(delta);
+    final text = delta == _saved ? _savedText : _markdownOf(delta);
     // Blank words, such as only an empty Title line, are kept as none, so a note of files alone is not `#`.
     final empty = plainText(text).trim().isEmpty;
     final changed = delta != _saved || files.isNotEmpty;
@@ -368,17 +416,21 @@ class NoteEditorState extends State<NoteEditor> {
     });
   }
 
+  /// The Markdown of [delta], with its link marks as [_markLinks] puts them, so an edited address that still has its
+  /// old mark is written as its words.
+  String _markdownOf(Delta delta) => deltaToMarkdown(withLinks(delta));
+
   /// Marks the links in the shown note again, as [withLinks] does when the note opens, so an address typed in this
-  /// visit opens too, and an edited one opens what its words now say. The marks change no stored words, because the
-  /// Markdown codec writes no link. A note kept as it is stays kept, so the marks alone never write it back.
+  /// visit opens too, and an edited one opens what its words now say. The marks change no stored words: the Markdown
+  /// codec writes an address with its own link as the bare address. A note kept as it is stays kept, so the marks
+  /// alone never write it back.
   void _markLinks() {
     final before = _controller.document.toDelta();
     if (withLinks(before) == before) return;
     // The marks change no words, so the editor must not bring the keyboard back for them.
     _controller.ignoreFocusOnTextChange = true;
-    _controller.formatText(0, _controller.document.length - 1, const LinkAttribute(null));
-    for (final range in linkRanges(_controller.document.toPlainText())) {
-      _controller.formatText(range.start, range.address.length, LinkAttribute(range.address));
+    for (final (start, length, link) in linkFixes(_controller.document)) {
+      _controller.formatText(start, length, LinkAttribute(link));
     }
     _controller.ignoreFocusOnTextChange = false;
     if (before == _saved) _saved = _controller.document.toDelta();
@@ -421,8 +473,9 @@ class NoteEditorState extends State<NoteEditor> {
       final change = Delta();
       if (selection.start > 0) change.retain(selection.start);
       if (!selection.isCollapsed) change.delete(selection.end - selection.start);
+      // A copied table pastes as a table of its own, so a change in one never goes into the other.
       for (final op in copied.toList()) {
-        change.push(op);
+        change.push(withNewTableId(op));
       }
       paste = (change: change, caret: selection.start + copied.toList().fold(0, (sum, op) => sum + (op.length ?? 0)));
     } else {
@@ -439,6 +492,9 @@ class NoteEditorState extends State<NoteEditor> {
   void _say(String message) => unawaited(showProblemOn(_navigator, message));
 
   void _done() {
+    // A table's cell gives up the cursor too.
+    if (_tables.active != null) FocusManager.instance.primaryFocus?.unfocus();
+    _tables.leave();
     setState(() => _formatting = _typing = false);
     _focus.unfocus();
     _save(sendNow: true);
@@ -459,13 +515,21 @@ class NoteEditorState extends State<NoteEditor> {
   /// *Undo* and *Redo* change the words as typing does, so the save on a pause keeps them; the keyboard stays up.
   Widget _history() => ListenableBuilder(listenable: _controller, builder: (context, _) {
     if (!_controller.hasUndo && !_controller.hasRedo) return const SizedBox.shrink();
-    final undo = _controller.hasUndo ? _controller.undo : null;
+    // A cell's words still waiting go in first, so Undo takes back the last change.
+    void undo() {
+      _tables.flush();
+      _controller.undo();
+    }
+    void redo() {
+      _tables.flush();
+      _controller.redo();
+    }
     return Padding(padding: const EdgeInsets.only(right: 8), child: _controller.hasRedo
       ? ButtonPill(children: [
-          PillIconButton(icon: CupertinoIcons.arrow_uturn_left, tooltip: 'Undo', onPressed: undo),
-          PillIconButton(icon: CupertinoIcons.arrow_uturn_right, tooltip: 'Redo', onPressed: _controller.redo),
+          PillIconButton(icon: CupertinoIcons.arrow_uturn_left, tooltip: 'Undo', onPressed: _controller.hasUndo ? undo : null),
+          PillIconButton(icon: CupertinoIcons.arrow_uturn_right, tooltip: 'Redo', onPressed: redo),
         ])
-      : RoundIconButton(icon: CupertinoIcons.arrow_uturn_left, tooltip: 'Undo', onPressed: undo));
+      : RoundIconButton(icon: CupertinoIcons.arrow_uturn_left, tooltip: 'Undo', onPressed: _controller.hasUndo ? undo : null));
   });
 
   /// ⋯ → *Find in Note*: the find bar takes the keyboard from the words, so typing there changes nothing in the note.
@@ -474,13 +538,18 @@ class NoteEditorState extends State<NoteEditor> {
     _findFocus.requestFocus();
   }
 
-  /// Each match keeps its place in the words as they are: no lowercase copy, whose length can differ, as for *İ*.
+  /// Each match keeps its place in the words as they are: no lowercase copy, whose length can differ, as for *İ*. A
+  /// match in a table's cell selects the table.
   void _findChanged() {
     final words = _find.text;
-    final matches = words.isEmpty ? const <TextRange>[] : [
-      for (final match in RegExp(RegExp.escape(words), caseSensitive: false).allMatches(_controller.document.toPlainText()))
+    final pattern = RegExp(RegExp.escape(words), caseSensitive: false);
+    final matches = words.isEmpty ? <TextRange>[] : [
+      for (final match in pattern.allMatches(_controller.document.toPlainText()))
         TextRange(start: match.start, end: match.end),
-    ];
+      for (final (offset, table) in tablesIn(_controller.document.toDelta()))
+        for (final cell in table.rows.expand((row) => row))
+          for (final _ in pattern.allMatches(cell)) TextRange(start: offset, end: offset + 1),
+    ]..sort((a, b) => a.start - b.start);
     setState(() {
       _matches = matches;
       _match = 0;
@@ -633,11 +702,74 @@ class NoteEditorState extends State<NoteEditor> {
     _save(sendNow: true, files: files);
   }
 
-  /// *Bold* or *Italic* from the Mac's *Format* menu: on the words picked, or on what is typed next, as ⌘B and ⌘I do.
-  void toggleStyle(Attribute attribute) {
+  /// A format item from the computer's keys, its *Text styles* menu or right-click menu, or the Mac's *Format* menu: on
+  /// the words picked or the cursor's line, as Notes does. A table's cell holds plain words, so only *Table* acts
+  /// there.
+  void format(FormatAction action) {
     if (_waiting || _trash) return;
-    final on = _controller.getSelectionStyle().attributes.containsKey(attribute.key);
-    _controller.formatSelection(on ? Attribute.clone(attribute, null) : attribute);
+    if (action == FormatAction.table) return _addTable();
+    if (_tables.active != null) return;
+    if (action == FormatAction.link) return unawaited(_linkBox());
+    Formatter(_controller, keyboardDown: _formatting).run(action, colour: relay.settings.highlightColour);
+  }
+
+  /// *Table*: a table of 2 columns and 2 rows at the cursor, with the cursor in its first cell.
+  void _addTable() {
+    if (_waiting || _trash) return;
+    _typing = true;
+    _tables.insert();
+  }
+
+  /// *Table* → *Convert to text* or *Delete table*: the cursor goes where the table was.
+  void _tableGone(int? at) {
+    if (at == null || !mounted) return;
+    _controller.updateSelection(TextSelection.collapsed(offset: at), ChangeSource.local);
+    _focus.requestFocus();
+  }
+
+  /// *Link*: a box for the address of the words picked, filled from a copied web address. On a link it changes the
+  /// address or takes the link away. With no words picked, the address goes in as its own words.
+  Future<void> _linkBox() async {
+    final selection = _controller.selection;
+    if (_waiting || _trash || _tables.active != null || !selection.isValid) return;
+    final now = _controller.getSelectionStyle().attributes[Attribute.link.key]?.value as String?;
+    final run = now == null ? null : linkRunAt(_controller.document, selection.start);
+    var copied = '';
+    if (now == null) {
+      final clipboard = (await Clipboard.getData(Clipboard.kTextPlain))?.text?.trim() ?? '';
+      if (RegExp(r'^https?://\S+$', caseSensitive: false).hasMatch(clipboard)) copied = clipboard;
+    }
+    if (!mounted) return;
+    final field = TextEditingController(text: now ?? copied);
+    final answer = await showCupertinoDialog<String>(context: context, barrierDismissible: true,
+      builder: (context) => CupertinoAlertDialog(
+        title: Text(now == null ? 'Add Link' : 'Change Link'),
+        content: Padding(padding: const EdgeInsets.only(top: 12), child: CupertinoTextField(controller: field,
+          placeholder: 'Address', autofocus: true, autocorrect: false, keyboardType: TextInputType.url,
+          onSubmitted: (words) => Navigator.pop(context, words))),
+        actions: [
+          CupertinoDialogAction(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          if (now != null) CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(context, ''),
+            child: const Text('Remove Link')),
+          CupertinoDialogAction(isDefaultAction: true, onPressed: () => Navigator.pop(context, field.text),
+            child: const Text('Done')),
+        ],
+      ));
+    if (answer == null || !mounted) return;
+    if (answer.trim().isEmpty) {
+      if (run != null) _controller.formatText(run.start, run.end - run.start, const LinkAttribute(null));
+      return;
+    }
+    final address = linkAddressOf(answer);
+    if (address == null) return _say('That is not a web address. Try again.');
+    if (run != null && selection.isCollapsed) {
+      _controller.formatText(run.start, run.end - run.start, LinkAttribute(address));
+    } else if (selection.isCollapsed) {
+      _controller.replaceText(selection.start, 0, address, TextSelection.collapsed(offset: selection.start + address.length));
+      _controller.formatText(selection.start, address.length, LinkAttribute(address));
+    } else {
+      _controller.formatText(selection.start, selection.end - selection.start, LinkAttribute(address));
+    }
   }
 
   /// The new page takes this one's place, so this page gives the hold back first: the new page then gives it, on
@@ -657,6 +789,7 @@ class NoteEditorState extends State<NoteEditor> {
       unawaited(_askRecover());
       return true;
     }
+    if (isOnTable(context, details.globalPosition)) return true;
     final at = positionOf(details.globalPosition);
     if (_focus.hasFocus || _formatting) return !_formatting && _toggleMenu(at);
     final link = linkAtPosition(_controller.document, at);
@@ -680,7 +813,8 @@ class NoteEditorState extends State<NoteEditor> {
   }
 
   Future<void> _openLink(String link) async {
-    final address = Uri.tryParse(link.contains('://') ? link : 'https://$link');
+    // A mail link or another with its own scheme opens as it is; `www.…` opens on the web.
+    final address = Uri.tryParse(_scheme.hasMatch(link) ? link : 'https://$link');
     if (address == null || !await (widget.opener ?? openInBrowser)(address)) _say(browserProblem);
   }
 
@@ -699,7 +833,7 @@ class NoteEditorState extends State<NoteEditor> {
   @override
   Widget build(BuildContext context) {
     final brand = brandOf(context);
-    final editing = _focus.hasFocus || _formatting;
+    final editing = _editing;
     _measureKeyboard(MediaQuery.viewInsetsOf(context).bottom);
     return Scaffold(
       appBar: widget.pane ? _paneBar(brand) : AppBar(leading: BackTo(widget.back, onPressed: widget.onClose),
@@ -713,8 +847,8 @@ class NoteEditorState extends State<NoteEditor> {
           child: RoundIconButton(icon: CupertinoIcons.checkmark_alt, tooltip: 'Done', onPressed: _done, accent: true)),
         const SizedBox(width: 12),
       ]),
-      body: Column(children: [
-        if (widget.pane && _formatting) FormatSheet(controller: _controller, height: 200, onClose: _closePaneStyles),
+      // A table cell's keys come up to here, past the editor's own keys.
+      body: Focus(focusNode: _tables.keys, child: Column(children: [
         Expanded(child: Stack(children: [
           Positioned.fill(child: ListenableBuilder(listenable: relay, builder: (context, _) => widget.pane
             ? Align(alignment: Alignment.topCenter,
@@ -728,25 +862,48 @@ class NoteEditorState extends State<NoteEditor> {
                   found: _find.text.isEmpty ? null : _matches.isEmpty ? 'No matches' : '${_match + 1} of ${_matches.length}',
                   onStep: _matches.isEmpty ? null : _step)
               : editing
-              ? Center(child: FloatingToolBar(onStyles: _styles, onChecklist: _checklist, onAttach: _attachOrNull,
-                  attachMenu: !relay.desktop))
+              ? _keyboardBar()
               : ReadingBar(onChecklist: _checklist, onAttach: _attachOrNull, onCompose: _compose, attachMenu: !relay.desktop),
           )),
         ])),
-        if (!widget.pane && _formatting) FormatSheet(controller: _controller, height: _keyboard, onClose: _closeStyles),
-      ]),
+        if (!widget.pane && _formatting) FormatSheet(controller: _controller, height: _keyboard, onClose: _closeStyles,
+          colour: relay.settings.highlightColour, onColour: relay.setHighlightColour),
+      ])),
     );
   }
 
-  /// *Aa* in the wide layout: the styles open under the top bar, and the cursor stays in the words.
-  void _paneStyles() => setState(() => _formatting = !_formatting);
+  /// Over the keyboard: the style tools while words are picked, else the scrolling tool bar. In a table's cell only
+  /// *Table*, *Attach* and *Hide keyboard* act: a cell holds plain words.
+  Widget _keyboardBar() => ListenableBuilder(listenable: _controller, builder: (context, _) {
+    if (_focus.hasFocus && !_controller.selection.isCollapsed) {
+      return SelectionToolBar(controller: _controller, colour: relay.settings.highlightColour,
+        onLink: () => unawaited(_linkBox()));
+    }
+    final words = _tables.active == null;
+    return FloatingToolBar(
+      onStyles: words ? _styles : null,
+      onChecklist: words ? _checklist : null,
+      table: _tableButton(),
+      onAttach: _attachOrNull,
+      attachMenu: !relay.desktop,
+      onList: words ? Formatter(_controller).listOf : null,
+      onLink: words ? () => unawaited(_linkBox()) : null,
+      onIndent: words ? Formatter(_controller).indent : null,
+      onHideKeyboard: _done,
+    );
+  });
 
-  void _closePaneStyles() {
-    setState(() => _formatting = false);
-    _focus.requestFocus();
+  Widget _tableButton() => TableButton(onAdd: _waiting || _trash ? null : _addTable, inTable: _tables.active != null,
+    onConvert: () => _tableGone(_tables.convertActive()), onDelete: () => _tableGone(_tables.deleteActive()));
+
+  /// A pick in the computer's *Text styles* menu: the note keeps the cursor.
+  void _pick(FormatAction action) {
+    format(action);
+    if (action != FormatAction.table && action != FormatAction.link) _focus.requestFocus();
   }
 
-  /// The wide layout's one bar: *New note*, then *Aa*, *Checklist* and *Attach*, then *Share* and ⋯, then search.
+  /// The wide layout's one bar: *New note*, then *Aa*, *Checklist*, *Table* and *Attach*, then *Share* and ⋯, then
+  /// search.
   PreferredSizeWidget _paneBar(BrandColors brand) => PreferredSize(
     preferredSize: const Size.fromHeight(64),
     child: SafeArea(bottom: false, child: Padding(
@@ -754,8 +911,11 @@ class NoteEditorState extends State<NoteEditor> {
       child: Row(spacing: 10, children: [
         ButtonPill(children: [PillIconButton(icon: CupertinoIcons.square_pencil, tooltip: 'New note', onPressed: _compose)]),
         ButtonPill(children: [
-          PillIconButton(icon: CupertinoIcons.textformat, tooltip: 'Text styles', onPressed: _waiting || _trash ? null : _paneStyles),
-          PillIconButton(icon: CupertinoIcons.checkmark_circle, tooltip: 'Checklist', onPressed: _waiting || _trash ? null : _checklist),
+          FormatMenu(controller: _controller, onPick: _pick, colour: relay.settings.highlightColour,
+            onColour: relay.setHighlightColour, enabled: !_waiting && !_trash && _tables.active == null),
+          PillIconButton(icon: CupertinoIcons.checkmark_circle, tooltip: 'Checklist',
+            onPressed: _waiting || _trash || _tables.active != null ? null : _checklist),
+          _tableButton(),
           AttachButton(onPick: _attachOrNull, menu: false),
         ]),
         // Search gives up width first, so a narrow pane keeps every tool.
@@ -832,9 +992,15 @@ class NoteEditorState extends State<NoteEditor> {
               autoFocus: widget.entry == null,
               placeholder: recording != null ? 'No words, only the recording.' : 'What do you want to keep?',
               customStyles: noteStyles(context),
-              customShortcuts: relay.desktop ? pageKeys : null,
+              // The format keys only on a computer: a phone's keyboard has no ⌘.
+              customShortcuts: relay.desktop ? {...formatShortcuts(), ...pageKeys} : null,
+              customActions: relay.desktop
+                ? {FormatIntent: CallbackAction<FormatIntent>(onInvoke: (intent) => format(intent.action))}
+                : null,
+              embedBuilders: [TableEmbedBuilder(_tables)],
               onTapUp: _tapUp,
-              contextMenuBuilder: noteContextMenu,
+              contextMenuBuilder: (context, editor) => noteContextMenu(context, editor,
+                format: relay.desktop ? _pick : null),
               quillMagnifierBuilder: relay.desktop ? null : noteMagnifier,
               // A long press on a link offers Open; it goes to the same browser.
               onLaunchUrl: _openLink,
@@ -885,6 +1051,8 @@ DefaultStyles noteStyles(BuildContext context) {
     paragraph: DefaultTextBlockStyle(TextStyle(fontFamily: brandFont, fontSize: 17, height: 1.5, color: ink), HorizontalSpacing.zero,
       VerticalSpacing.zero, VerticalSpacing.zero, null),
     link: TextStyle(color: brand.accentText, decoration: TextDecoration.underline, decorationColor: brand.accentText),
+    // A highlight's colour by its name, as the note keeps it: soft enough to read the words through.
+    palette: {for (final colour in highlightColours) colour: highlightColourOf(colour, Theme.of(context).brightness)},
   );
 }
 
@@ -893,18 +1061,80 @@ DefaultStyles noteStyles(BuildContext context) {
 final _webAddress = RegExp(r'(?:https?://|www\.)[^\s<>"]+', caseSensitive: false);
 final _endPunctuation = RegExp(r'''[.,;:!?)\]}'"]+$''');
 
-/// [delta] with each web address in its words marked as a link, for the page to show. Only the shown note gets the
-/// marks: the Markdown codec writes no link, so the stored words never change, and an old note is never sent again.
-/// Each old mark goes first: the editor's own marks can take a stop at an address's end, and an edited address keeps
-/// the mark of what it was.
+/// [delta] with each web address in its words marked as a link, for the page to show, as [linkFixes] marks them. The
+/// Markdown codec writes an address linked to itself as the bare address, so the stored words never change, and an
+/// old note is never sent again.
 Delta withLinks(Delta delta) {
   final document = Document.fromDelta(delta);
-  document.format(0, document.length - 1, const LinkAttribute(null));
-  for (final range in linkRanges(document.toPlainText())) {
-    document.format(range.start, range.address.length, LinkAttribute(range.address));
+  for (final (start, length, link) in linkFixes(document)) {
+    document.format(start, length, LinkAttribute(link));
   }
   return document.toDelta();
 }
+
+/// The link marks that make [document] show its links: each link on words that hold no web address and are no piece
+/// of the link stays, as `[the menu](…)` does; each other mark goes, as the editor's own marks can take a stop at an
+/// address's end, and an edited address keeps the mark of what it was; then each web address in the words is marked
+/// as itself.
+List<(int, int, String?)> linkFixes(Document document) {
+  final runs = <(int, int, String)>[];
+  var offset = 0;
+  for (final op in document.toDelta().toList()) {
+    final length = op.length ?? 0;
+    final link = op.attributes?[Attribute.link.key];
+    if (link is String && op.data is String) {
+      final last = runs.lastOrNull;
+      if (last != null && last.$3 == link && last.$1 + last.$2 == offset) {
+        runs.last = (last.$1, last.$2 + length, link);
+      } else {
+        runs.add((offset, length, link));
+      }
+    }
+    offset += length;
+  }
+  final words = document.toPlainText();
+  bool keeps((int, int, String) run) {
+    final linked = words.substring(run.$1, run.$1 + run.$2).trim().toLowerCase();
+    // Words that are a piece of their own link were an address: `example.com` left from `https://example.com`. Only
+    // words with a `.` or a `/` can be such a piece, so *menu* linked to `https://example.com/menu` stays a link.
+    final address = run.$3.toLowerCase().replaceFirst(_scheme, '').replaceFirst(RegExp('^//'), '');
+    final piece = linked.isEmpty || (linked.contains(RegExp('[./]')) && address.contains(linked));
+    return linkRanges(linked).isEmpty && !piece;
+  }
+  final kept = [for (final run in runs) if (keeps(run)) run];
+  return [
+    for (final run in runs) if (!kept.contains(run)) (run.$1, run.$2, null),
+    for (final range in linkRanges(words))
+      if (!kept.any((run) => range.start < run.$1 + run.$2 && run.$1 < range.start + range.address.length))
+        (range.start, range.address.length, range.address),
+  ];
+}
+
+/// Where the link at [offset] in [document] starts and ends: the run of words with the same link.
+TextRange? linkRunAt(Document document, int offset) {
+  final link = linkAt(document, offset) ?? linkAt(document, offset - 1);
+  if (link == null) return null;
+  var start = offset, end = offset;
+  while (start > 0 && linkAt(document, start - 1) == link) {
+    start--;
+  }
+  while (linkAt(document, end) == link) {
+    end++;
+  }
+  return TextRange(start: start, end: end);
+}
+
+/// The address a person typed in the *Link* box, as the link keeps it: `example.com` gains `https://`, and an address
+/// with its own scheme, such as `mailto:`, stays. Null for words that are no address.
+String? linkAddressOf(String typed) {
+  final words = typed.trim();
+  if (words.isEmpty || words.contains(RegExp(r'\s'))) return null;
+  if (_scheme.hasMatch(words)) return words;
+  return words.contains('.') ? 'https://$words' : null;
+}
+
+/// A link's own scheme, such as `https:` or `mailto:`; `www.` has none.
+final _scheme = RegExp(r'^[a-z][a-z0-9+.-]*:', caseSensitive: false);
 
 /// Each web address in [words], with where it starts.
 Iterable<({int start, String address})> linkRanges(String words) sync* {

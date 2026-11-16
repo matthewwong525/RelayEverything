@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show TargetPlatform, debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show CustomSemanticsAction, SemanticsAction;
 import 'package:flutter/services.dart';
-import 'package:flutter_quill/flutter_quill.dart' show Attribute, ChangeSource, QuillEditor;
+import 'package:flutter_quill/flutter_quill.dart'
+  show Attribute, BackgroundAttribute, ChangeSource, QuillEditor, QuillRawEditor, QuillRawEditorState;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:relay_app/brand.dart';
@@ -24,7 +26,7 @@ import 'package:relay_app/web/shell.dart';
 import 'package:relay_app/web/web_relay.dart';
 
 import 'fakes.dart' show FakePlayer;
-import 'screens_test.dart' show FakeRelay, quill, type;
+import 'screens_test.dart' show FakeRelay, markdownOf, quill, type;
 import 'web_space_fixture.dart';
 
 const wide = Size(1440, 900);
@@ -151,7 +153,7 @@ void main() {
       expect(find.byType(NotesPane), findsOneWidget);
       expect(editor(tester).id, 'own');
       expect(quill(tester).document.toPlainText(), startsWith('Groceries'));
-      for (final tool in ['New note', 'Text styles', 'Checklist', 'Attach', 'Share', 'More']) {
+      for (final tool in ['New note', 'Text styles', 'Checklist', 'Table', 'Attach', 'Share', 'More']) {
         expect(find.byTooltip(tool), findsOneWidget, reason: tool);
       }
       expect(find.byType(SearchField), findsOneWidget);
@@ -598,6 +600,141 @@ void main() {
       expect(style.containsKey(Attribute.bold.key), isTrue);
       expect(style.containsKey(Attribute.italic.key), isTrue);
       await finish(tester);
+    });
+  });
+
+  group('format tools', () {
+    bool noteFocused(WidgetTester tester) => tester.widget<QuillEditor>(find.byType(QuillEditor)).focusNode.hasFocus;
+
+    Future<void> cursorAt(WidgetTester tester, TextSelection selection) async {
+      await tester.tap(find.byType(QuillEditor));
+      await tester.pump();
+      quill(tester).updateSelection(selection, ChangeSource.local);
+      await tester.pump();
+    }
+
+    testWidgets('Text styles opens a menu under it: a pick styles the line, closes the menu and leaves the cursor',
+        (tester) async {
+      await show(tester, wide);
+      await cursorAt(tester, const TextSelection.collapsed(offset: 14));
+      await tester.tap(find.byTooltip('Text styles'));
+      await tester.pumpAndSettle();
+      for (final item in ['Title', 'Heading', 'Subheading', 'Body', 'Monostyled', 'Bulleted List', 'Dashed List',
+          'Numbered List', 'Block Quote']) {
+        expect(find.widgetWithText(MenuItemButton, item), findsOneWidget, reason: item);
+      }
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Heading'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(MenuItemButton, 'Heading'), findsNothing, reason: 'a pick closes the menu');
+      expect(markdownOf(tester), '# Groceries\n## milk and eggs');
+      expect([noteFocused(tester), quill(tester).selection], [isTrue, const TextSelection.collapsed(offset: 14)]);
+      // The pen takes the colour picked in the menu, and the colour is kept.
+      quill(tester).updateSelection(const TextSelection(baseOffset: 10, extentOffset: 14), ChangeSource.local);
+      await tester.tap(find.byTooltip('Text styles'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Pink'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, contains('highlight pink'));
+      await tester.tap(find.byTooltip('Highlight'));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Groceries\n## <mark class="pink">milk</mark> and eggs');
+      expect(noteFocused(tester), isTrue);
+      await finish(tester);
+    });
+
+    testWidgets("the open Text styles menu moves its ✓ to the line style of the cursor's line", (tester) async {
+      relay.entries = [Entry(id: 'own', text: '# Groceries\n## Dairy\nmilk and eggs', at: now, sent: true)];
+      await show(tester, wide);
+      await cursorAt(tester, const TextSelection.collapsed(offset: 12));
+      await tester.tap(find.byTooltip('Text styles'));
+      await tester.pumpAndSettle();
+      List<String> ticked() => [
+        for (final style in ['Title', 'Heading', 'Subheading', 'Body', 'Monostyled'])
+          if ((tester.widget<MenuItemButton>(find.widgetWithText(MenuItemButton, style)).leadingIcon! as SizedBox).child
+            != null) style,
+      ];
+      expect(ticked(), ['Heading']);
+      quill(tester).updateSelection(const TextSelection.collapsed(offset: 20), ChangeSource.local);
+      await tester.pumpAndSettle();
+      expect(ticked(), ['Body']);
+      quill(tester).updateSelection(const TextSelection.collapsed(offset: 12), ChangeSource.local);
+      await tester.pumpAndSettle();
+      expect(ticked(), ['Heading']);
+      await finish(tester);
+    });
+
+    testWidgets("a colour picked in the Text styles menu recolours the highlight of the words picked", (tester) async {
+      await show(tester, wide);
+      await cursorAt(tester, const TextSelection(baseOffset: 10, extentOffset: 14));
+      quill(tester).formatSelection(const BackgroundAttribute('purple'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Text styles'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Pink'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, contains('highlight pink'));
+      expect(markdownOf(tester), '# Groceries\n<mark class="pink">milk</mark> and eggs');
+      await finish(tester);
+    });
+
+    testWidgets('off a Mac, Ctrl+Alt with a digit made by AltGr styles nothing, so the letter types', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      await show(tester, wide);
+      await cursorAt(tester, const TextSelection.collapsed(offset: 14));
+      // AltGr comes as left Ctrl and right Alt.
+      await press(tester, [LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.altRight], LogicalKeyboardKey.digit2);
+      expect(markdownOf(tester), '# Groceries\nmilk and eggs');
+      await press(tester, [LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.altLeft], LogicalKeyboardKey.digit2);
+      expect(markdownOf(tester), '# Groceries\n## milk and eggs');
+      await finish(tester);
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    for (final mac in [false, true]) {
+      testWidgets('${mac ? '⌘' : 'Ctrl'} with the format keys styles the line and the words picked', (tester) async {
+        if (mac) debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+        final command = mac ? LogicalKeyboardKey.metaLeft : LogicalKeyboardKey.controlLeft;
+        const shift = LogicalKeyboardKey.shiftLeft, alt = LogicalKeyboardKey.altLeft;
+        await show(tester, wide);
+        await cursorAt(tester, const TextSelection.collapsed(offset: 14));
+        await press(tester, [command, shift], LogicalKeyboardKey.keyH);
+        expect(markdownOf(tester), '# Groceries\n## milk and eggs');
+        await press(tester, [command, alt], LogicalKeyboardKey.digit1);
+        expect(markdownOf(tester), '# Groceries\n# milk and eggs');
+        await press(tester, [command, shift], LogicalKeyboardKey.keyB);
+        expect(markdownOf(tester), '# Groceries\nmilk and eggs');
+        await press(tester, [command, shift], LogicalKeyboardKey.digit9);
+        expect(markdownOf(tester), '# Groceries\n1. milk and eggs');
+        await press(tester, [command, shift], LogicalKeyboardKey.digit9);
+        quill(tester).updateSelection(const TextSelection(baseOffset: 10, extentOffset: 14), ChangeSource.local);
+        await press(tester, [command], LogicalKeyboardKey.keyU);
+        await press(tester, [command, shift], LogicalKeyboardKey.keyX);
+        await press(tester, [command, shift], LogicalKeyboardKey.keyE);
+        final style = quill(tester).getSelectionStyle().attributes;
+        expect([style[Attribute.underline.key]?.value, style[Attribute.strikeThrough.key]?.value,
+          style[Attribute.background.key]?.value], [true, true, 'purple']);
+        expect(noteFocused(tester), isTrue);
+        await finish(tester);
+        debugDefaultTargetPlatformOverride = null;
+      });
+    }
+
+    testWidgets('a right-click on words picked offers Bold, Italic, Underline, Strikethrough, Highlight and Link…',
+        (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+      await show(tester, wide);
+      await cursorAt(tester, const TextSelection(baseOffset: 10, extentOffset: 14));
+      tester.state<QuillRawEditorState>(find.byType(QuillRawEditor)).showToolbar();
+      await tester.pumpAndSettle();
+      for (final item in ['Bold', 'Italic', 'Underline', 'Strikethrough', 'Highlight', 'Link…']) {
+        expect(find.text(item), findsOneWidget, reason: item);
+      }
+      await tester.tap(find.text('Bold'));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Groceries\n**milk** and eggs');
+      expect(find.text('Italic'), findsNothing, reason: 'a pick closes the menu');
+      await finish(tester);
+      debugDefaultTargetPlatformOverride = null;
     });
   });
 

@@ -39,11 +39,22 @@ void main() {
       expect(fromHtml('<h2>Two</h2><h4>Four</h4><h6>Six</h6>'), '## Two\n### Four\n### Six');
     });
 
-    test('a link with its own words keeps its address in brackets; a bare address stays as it is', () {
+    test('a link with its own words keeps its words linked; a bare address stays as it is', () {
       expect(fromHtml('<p>See <a href="https://example.com/menu">the menu</a> or '
         '<a href="https://example.com/">example.com</a>, mail <a href="mailto:sam@example.com">Sam</a>, '
         'go <a href="/inside">here</a>.</p>'),
-        'See the menu (https://example.com/menu) or example.com, mail Sam (sam@example.com), go here.');
+        'See [the menu](https://example.com/menu) or example.com, mail [Sam](mailto:sam@example.com), go here.');
+    });
+
+    test('a table pastes as a table, with each cell\'s words', () {
+      final delta = pastedDelta(plain: '', html: '<p>Stops</p><table><thead><tr><th>Stop</th><th>Date</th></tr></thead>'
+        '<tbody><tr><td><b>Toronto</b></td><td>Nov 20</td></tr><tr><td>Ottawa</td></tr></tbody></table><p>End</p>');
+      expect(deltaToMarkdown(delta), 'Stops\n| Stop | Date |\n| --- | --- |\n| Toronto | Nov 20 |\n| Ottawa |  |\nEnd');
+    });
+
+    test('a page laid out in a table, or a table of one cell, pastes as words', () {
+      expect(fromHtml('<table><tr><td><table><tr><td>a</td><td>b</td></tr></table></td></tr></table>'), isNot(contains('|')));
+      expect(fromHtml('<table><tr><td>Only</td></tr></table>'), 'Only');
     });
 
     test('Google Docs\' bold wrapper is not bold, and its spans keep their own weight', () {
@@ -164,6 +175,15 @@ void main() {
       expect(pasteInto(empty, const TextSelection.collapsed(offset: 0), pastedDelta(plain: 'Para one\nPara two')),
         ('Para one\nPara two', 17));
       expect(pasteInto(empty, const TextSelection.collapsed(offset: 0), pastedDelta(plain: 'Only')), ('# Only', 4));
+    });
+
+    test('a Markdown table pasted as plain words is a table on its own line', () {
+      final pasted = pastedDelta(plain: '| a | b |\n| --- | --- |\n| 1 | 2 |');
+      expect(pasted.toList().where((op) => op.data is Map), hasLength(1));
+      expect(pasteInto(note, const TextSelection.collapsed(offset: 4), pasted).$1,
+        '- [ ] Buy \n| a | b |\n| --- | --- |\n| 1 | 2 |\n- [ ] milk\nCall Sam');
+      expect(pasteInto(note, const TextSelection.collapsed(offset: 9), pasted).$1,
+        '- [ ] Buy milk\n| a | b |\n| --- | --- |\n| 1 | 2 |\nCall Sam');
     });
 
     test('nothing to put and nothing selected is no change', () {

@@ -12,8 +12,8 @@ import 'markdown.dart';
 // A paste keeps only the styles a note can store as Markdown, so the page shows what the note keeps.
 
 /// What a paste puts in a note: [html] when it holds words, else [plain] read as Markdown, as a note's own words are.
-/// Only the note's styles stay: headings 1 to 3, lists with their indent, quotes, code blocks, and bold, italic,
-/// underlined and struck words. A link whose words are not its address keeps the address after them in brackets.
+/// Only the note's styles stay: headings 1 to 3, lists with their indent, quotes, code blocks, tables, links on words,
+/// and bold, italic, underlined and struck words.
 /// Runs of empty lines become one, and empty lines at the start and end go. The result has gone to Markdown and back,
 /// so it is what the note stores; it ends with a line break, or is empty when the paste has no words.
 Delta pastedDelta({String? html, required String plain}) {
@@ -43,24 +43,31 @@ Delta pastedDelta({String? html, required String plain}) {
   final wordsBefore = first.offset > 0;
   final nothingAfter = line != null && last.offset >= line.length - 1;
   final lastStyle = lines.last.style;
-  // Whether the last pasted line ends where the cursor's line ends, in place of its own line break.
-  final joinsLast = (lines.length == 1 && lastStyle.isEmpty) || nothingAfter || lastStyle.isEmpty;
+  // Whether the last pasted line ends where the cursor's line ends, in place of its own line break. A table takes a
+  // line of its own, so it never joins the words after the cursor.
+  final joinsLast = lines.last.embed ? nothingAfter
+    : (lines.length == 1 && lastStyle.isEmpty) || nothingAfter || lastStyle.isEmpty;
   final change = Delta();
   if (start > 0) change.retain(start);
   if (end > start) change.delete(end - start);
   var length = 0;
   for (var at = 0; at < lines.length; at++) {
-    for (final (text, marks) in lines[at].runs) {
-      change.insert(text, marks);
-      length += text.length;
+    // Nor does a table join the words before the cursor.
+    if (at == 0 && wordsBefore && lines[at].embed) {
+      change.insert('\n', cursorStyle.isEmpty ? null : cursorStyle);
+      length++;
+    }
+    for (final (data, marks) in lines[at].runs) {
+      change.insert(data, marks);
+      length += data is String ? data.length : 1;
     }
     if (at == lines.length - 1 && joinsLast) break;
     // The words before the cursor stay in their line's style when the first pasted line has none.
-    final style = at == 0 && wordsBefore && lines[at].style.isEmpty ? cursorStyle : lines[at].style;
+    final style = at == 0 && wordsBefore && lines[at].style.isEmpty && !lines[at].embed ? cursorStyle : lines[at].style;
     change.insert('\n', style.isEmpty ? null : style);
     length++;
   }
-  final singleJoin = lines.length == 1 && lastStyle.isEmpty;
+  final singleJoin = lines.length == 1 && lastStyle.isEmpty && !lines.last.embed;
   if (joinsLast && nothingAfter && !singleJoin) {
     final restyle = {for (final key in cursorStyle.keys) if (!lastStyle.containsKey(key)) key: null, ...lastStyle};
     if (restyle.entries.any((entry) => cursorStyle[entry.key] != entry.value)) change.retain(1, restyle);
@@ -69,22 +76,29 @@ Delta pastedDelta({String? html, required String plain}) {
   return (change: change, caret: start + length);
 }
 
-/// One line of a paste: its runs of words, each with its inline styles, and its line style.
+/// One line of a paste: its runs of words, each with its inline styles, and its line style. A table's line holds its
+/// embed alone, as a run whose data is the embed's map.
 class _Line {
   _Line(this.runs, this.style);
 
-  final List<(String, Map<String, dynamic>?)> runs;
+  final List<(Object, Map<String, dynamic>?)> runs;
   final Map<String, dynamic> style;
 
-  String get words => [for (final (text, _) in runs) text].join();
+  String get words => [for (final (text, _) in runs) if (text is String) text].join();
+
+  bool get embed => runs.any((run) => run.$1 is! String);
 }
 
 /// The lines of [delta]; a last line with no line break counts too.
 List<_Line> _linesOf(Delta delta) {
   final lines = <_Line>[];
-  var runs = <(String, Map<String, dynamic>?)>[];
+  var runs = <(Object, Map<String, dynamic>?)>[];
   for (final op in delta.toList()) {
     final data = op.data;
+    if (data is Map) {
+      runs.add((data, null));
+      continue;
+    }
     if (data is! String) continue;
     final parts = data.split('\n');
     for (var at = 0; at < parts.length; at++) {
@@ -110,7 +124,7 @@ Delta _deltaOf(List<_Line> lines) {
 }
 
 /// A line with no words, outside a code block: an empty heading or list item, or spaces read as an indent, is one too.
-bool _blank(_Line line) => line.words.trim().isEmpty && !line.style.containsKey('code-block');
+bool _blank(_Line line) => line.words.trim().isEmpty && !line.embed && !line.style.containsKey('code-block');
 
 /// Runs of empty lines become one, and empty lines at the start and end go.
 List<_Line> _tidy(List<_Line> lines) {
@@ -190,6 +204,7 @@ class _HtmlReader {
   final _lines = <_Line>[];
   var _runs = <(String, Map<String, dynamic>?)>[];
 
+
   List<_Line> read(String source) {
     final document = html_parser.parse(source);
     final root = document.body ?? document.documentElement;
@@ -220,6 +235,7 @@ class _HtmlReader {
     }
     final inner = _marksOf(tag, style, marks);
     if (tag == 'a') return _link(node, inner, block);
+    if (tag == 'table' && !block.code && _table(node)) return;
     if (tag == 'td' || tag == 'th') {
       if (_runs.isNotEmpty) _runs.add((' | ', null));
       return _children(node, inner, block);
@@ -306,19 +322,34 @@ class _HtmlReader {
     _runs = [];
   }
 
-  /// A link whose words are not its address gets the address after them, in brackets, so it is not lost: a note is
-  /// Markdown, with no hidden link.
+  /// A link whose words are not its address keeps its words, linked to the address, as `[words](address)`: a web
+  /// address or a mail address. Words that are the address itself stay as words, which the page shows as a link.
   void _link(dom.Element element, Set<String> marks, _Block block) {
-    final runs = _runs, from = _runs.length;
-    _children(element, marks, block);
     final href = (element.attributes['href'] ?? '').trim();
-    final address = href.toLowerCase().startsWith('mailto:') ? href.substring(7)
-      : RegExp(r'^https?://', caseSensitive: false).hasMatch(href) ? href : null;
-    // A line that ended inside the link leaves its words in a line before.
-    if (address == null || block.code || !identical(runs, _runs)) return;
-    final words = [for (final (text, _) in _runs.sublist(from)) text].join().trim();
-    if (words.isEmpty || _sameAddress(words, address)) return;
-    _runs.add((_runs.last.$1.endsWith(' ') ? '($address)' : ' ($address)', null));
+    final mail = href.toLowerCase().startsWith('mailto:');
+    final address = mail || RegExp(r'^https?://', caseSensitive: false).hasMatch(href) ? href : null;
+    final words = element.text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final linked = address == null || address.contains(RegExp(r'\s')) || block.code || words.isEmpty ||
+        _sameAddress(words, mail ? address.substring(7) : address)
+      ? marks : {...marks, 'link:$address'};
+    _children(element, linked, block);
+  }
+
+  /// A table of rows and cells pastes as a note's table, with each cell's words. A table that holds another, as an
+  /// email lays out its page, or only one cell, is read as the words in it. True when the table was kept.
+  bool _table(dom.Element table) {
+    if (table.querySelector('table') != null) return false;
+    final rows = [
+      for (final row in table.querySelectorAll('tr'))
+        [for (final cell in row.children) if (cell.localName == 'td' || cell.localName == 'th')
+          cell.text.replaceAll(RegExp(r'\s+'), ' ').trim()],
+    ]..removeWhere((row) => row.isEmpty);
+    final columns = rows.fold(0, (widest, row) => max(widest, row.length));
+    if (rows.isEmpty || (rows.length == 1 && columns == 1)) return false;
+    _end(const _Block());
+    final full = [for (final row in rows) [...row, for (var pad = row.length; pad < columns; pad++) '']];
+    _lines.add(_Line([({tableEmbed: NoteTable(full).toJson()}, null)], const {}));
+    return true;
   }
 
   static bool _sameAddress(String words, String address) {
@@ -383,8 +414,7 @@ class _HtmlReader {
     return kept;
   }
 
-  static Map<String, dynamic>? _attributesOf(Set<String> marks) =>
-    marks.isEmpty ? null : {for (final mark in marks) mark: true};
+  static Map<String, dynamic>? _attributesOf(Set<String> marks) => attributesOfMarks(marks);
 
   /// An element's inline style, each property by name.
   static Map<String, String> _styleOf(dom.Element element) => {

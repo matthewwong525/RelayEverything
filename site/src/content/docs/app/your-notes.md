@@ -302,7 +302,7 @@ Hold **New note**: an amber circle fills round it in half a second, and the phon
 
 ## The sync state
 
-The sync state shows only when you can do something about it: when notes wait, or can not go. When all is sent, or sending is off, Home shows no line, also with no signal, and the notes list shows only its count, such as *5 notes*. With a state, the list shows both, such as *5 notes · 2 waiting*. The state is words, not a button.
+The sync state shows only when you can do something about it: when notes wait, or can not go. When all is sent, or sending is off, Home shows no line, also with no signal, and the notes list shows only its count, such as *5 notes*. With a state, the list shows both, such as *5 notes · 2 waiting*. The number counts each waiting note once, with its photos, files and recordings. Health, places and calendar data count on their own folders. The state is words, not a button.
 
 Notes send by themselves: when you make or change a note, when the app opens, and when the phone gets a connection again after it had none. To sync now, pull Home or the notes list down. No button syncs.
 

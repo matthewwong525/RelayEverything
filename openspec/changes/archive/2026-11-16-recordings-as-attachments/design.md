@@ -114,3 +114,4 @@ Reused: `VoicePlayer` (inside the card, without its own `Card`), `_FrostedPill`,
 - **2026-11-16** — Assumed: archived at publish after the web page check passed; the device check could not build the app (GitHub's Mac failed to reach github.com), so the phone scenarios rest on the unit tests.
 - **2026-11-16** — Assumed: the `recording-card` flow taps *Record* until the recording screen opens, and matches *Home* by its start, because the device check tapped *Record* while the speech model was still coming, then missed *Home* under its *1 waiting* line.
 - **2026-11-16** — Assumed: on merging *Delete like Apple Notes*, its store step runs before this one (store version 16), *Copied* shows no message, and a deleted note hides *Record* and its transcript field, because that change removed every toast and makes a deleted note read-only.
+- **2026-11-16** — Asked: the iPhone check failed only on its last line (an exact match of the typed words) → chose fix it more.

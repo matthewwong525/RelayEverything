@@ -200,12 +200,15 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      sent: ${{ steps.send.outputs.sent }}
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: relay-everything-mac
           path: ${{ runner.temp }}/mac
       - name: Add the Mac app to the pre-release
+        id: send
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -213,9 +216,70 @@ jobs:
         run: |
           if gh release view "$TAG" > /dev/null 2>&1; then
             gh release upload "$TAG" "$RUNNER_TEMP/mac/Relay-Everything-Mac.dmg" --clobber
+            echo "sent=true" >> "$GITHUB_OUTPUT"
           else
             echo "::notice::No pre-release $TAG: a newer commit on main changes mobile/, and its own run sends the Mac app."
           fi
+
+  # The Mac app's update feed, after the file is on its own release: main's as a test build, a release's as a release;
+  # a release check writes none. The fixed pre-release mac-updates keeps appcast.xml, the app's feed, and the newest
+  # Relay-Everything-Mac.dmg, the website's download. One run writes the feed at a time, and none is cancelled.
+  mac-feed:
+    needs: [plan, macos-beta, release]
+    if: >-
+      ${{ !cancelled() && ((needs.plan.outputs.mode == 'beta' && needs.macos-beta.outputs.sent == 'true')
+      || (needs.plan.outputs.mode == 'release' && needs.release.result == 'success')) }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: mac-feed
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: read
+    env:
+      MODE: ${{ needs.plan.outputs.mode }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      BUILD: ${{ needs.plan.outputs.build }}
+      PREVIOUS_TAG: ${{ needs.plan.outputs.previous_tag }}
+      TAG: ${{ needs.plan.outputs.mode == 'release' && needs.plan.outputs.tag || format('mobile-v{0}+{1}', needs.plan.outputs.version, needs.plan.outputs.build) }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      # Full history: what is new comes from the commits since the last release.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: relay-everything-mac
+          path: ${{ runner.temp }}/mac
+      - name: Update feed
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          node scripts/app-release.mjs notes --version "$VERSION" --previous-tag="$PREVIOUS_TAG" --out "$RUNNER_TEMP"
+          if ! gh release view mac-updates > /dev/null 2>&1; then
+            gh release create mac-updates --prerelease --latest=false --target "$GITHUB_SHA" --title "Relay Everything for Mac: updates" \
+              --notes "The Mac app's update feed and its newest file. Each version is on its own release."
+          fi
+          mkdir -p "$RUNNER_TEMP/feed"
+          # Only a missing feed starts a new one: a failed download stops here, so a GitHub error never drops releases.
+          assets=$(gh release view mac-updates --json assets --jq '.assets[].name')
+          if grep -qx appcast.xml <<< "$assets"; then
+            gh release download mac-updates --pattern appcast.xml --dir "$RUNNER_TEMP/feed"
+          else
+            echo "No feed yet: this run starts one."
+          fi
+          channel=beta
+          if [ "$MODE" = release ]; then channel=release; fi
+          out=$(node scripts/app-release.mjs mac-feed --file "$RUNNER_TEMP/mac/Relay-Everything-Mac.dmg" \
+            --feed "$RUNNER_TEMP/feed/appcast.xml" --version "$VERSION" --build "$BUILD" --tag "$TAG" --channel "$channel" \
+            --notes "$RUNNER_TEMP/whats-new.txt")
+          echo "$out"
+          files=("$RUNNER_TEMP/feed/appcast.xml")
+          # An older build that finishes late keeps the newer file as the website's download.
+          if [[ "$out" == *newest=true* ]]; then files+=("$RUNNER_TEMP/mac/Relay-Everything-Mac.dmg"); fi
+          gh release upload mac-updates "${files[@]}" --clobber
 
   # Main's build that went to TestFlight goes to the public beta; a release never does. This job only starts
   # mobile-public-beta.yml, which waits for Apple in its own group, so main's next run does not wait behind it.

@@ -93,3 +93,4 @@ The Mac app opens to a black window and never shows a note: it can not read its 
 - **2026-11-16** — Check: `.github/workflows/mobile-macos.yml` signs a branch's copy ad hoc with no hardened runtime, because macOS refuses ad hoc frameworks under it; the copy goes nowhere, and main's and a release's signing keep the hardened runtime.
 - **2026-11-16** — Asked Matthew how the test copy relay-everything-mac-386 went on his Mac → all good: the light install window looks right and the app opens to its notes.
 - **2026-11-16** — Archived at ship: Matthew checked the test copy on a Mac.
+- **2026-11-16** — Took in #141 (the Mac app updates itself), which landed first: the signed step signs Sparkle's helpers, then the frameworks and the app, then makes the dmgbuild image and signs it; the update feed and the website's download give that one file. #141's signing-order test now reads only the signed step, as the branch's ad hoc step comes earlier.

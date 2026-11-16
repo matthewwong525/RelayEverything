@@ -120,6 +120,14 @@ class FakeRelay extends Relay {
     settings = settings.copyWith(highlightColour: colour);
     notifyListeners();
   }
+  @override Future<void> checkForUpdates() async => calls.add('check for updates');
+
+  @override
+  Future<void> setTestBuilds(bool on) async {
+    calls.add('test builds $on');
+    settings = settings.copyWith(testBuilds: on);
+    notifyListeners();
+  }
   @override Future<String?> setHistory(bool on) async { calls.add('history $on'); return problem; }
   @override Future<String?> setHealth(bool on) async { calls.add('health $on'); return problem; }
   @override Future<String?> setPhotos(bool on) async { calls.add('photos $on'); return problem; }
@@ -2977,17 +2985,19 @@ void main() {
     }
     expect(find.text('Relay Everything 1.4.0 (91)'), findsOneWidget);
     expect(tester.getTopLeft(find.text('Relay Everything 1.4.0 (91)')).dy, greaterThan(tester.getTopLeft(find.text('Speech model')).dy));
-    for (final gone in ['Sending', 'Send my notes', 'Health', 'Calendar', 'Location history', 'Send photos on mobile data']) {
+    for (final gone in ['Sending', 'Send my notes', 'Health', 'Calendar', 'Location history', 'Send photos on mobile data',
+      'Updates', 'Check for Updates…', 'Get test builds']) {
       expect(find.text(gone), findsNothing, reason: gone);
     }
     expect(find.descendant(of: find.byType(SettingsScreen), matching: find.byType(Divider)), findsNothing);
     expect(tester.getTopLeft(accountRow).dy, lessThan(tester.getTopLeft(find.text('Appearance')).dy));
-    // The web's and the Mac's Settings list the same rows, in the same order, less those for the phone alone. The Mac
-    // shows its version, as no update comes by itself.
+    // The web's and the Mac's Settings list the same rows, in the same order, less those for the phone alone. Only the
+    // Mac has Updates, beside its version.
     expect(SettingsRow.on(RelayPlatform.phone),
       [SettingsRow.account, SettingsRow.appearance, SettingsRow.voice, SettingsRow.version]);
     expect(SettingsRow.on(RelayPlatform.web), [SettingsRow.account, SettingsRow.appearance]);
-    expect(SettingsRow.on(RelayPlatform.mac), [SettingsRow.account, SettingsRow.appearance, SettingsRow.version]);
+    expect(SettingsRow.on(RelayPlatform.mac),
+      [SettingsRow.account, SettingsRow.appearance, SettingsRow.updates, SettingsRow.version]);
   });
 
   testWidgets('with sending off, a data folder says it works once you sign in, and Sign in opens the sign-in', (tester) async {

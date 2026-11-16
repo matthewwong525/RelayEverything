@@ -32,13 +32,15 @@ TestFlight gets each new build of the app. Apple reviews a new version of the be
 
 ## Mac
 
-1. On the Mac, click [Download for Mac](https://github.com/matthewwong525/RelayEverything/releases/latest/download/Relay-Everything-Mac.dmg).
+1. On the Mac, click [Download for Mac](https://github.com/matthewwong525/RelayEverything/releases/download/mac-updates/Relay-Everything-Mac.dmg).
 2. Open `Relay-Everything-Mac.dmg`. A Relay Everything window opens, with the app on the left and **Applications** on the right.
 3. Drag **Relay Everything** onto **Applications**, as the arrow shows.
 4. Open Relay Everything from **Applications**.
 5. To send your notes, open **Settings** (⌘,) and sign in, as on a phone.
 
-The app is signed and checked by Apple, so it opens with no warning. To update, download and drag the newest file the same way. Your notes and key stay on the Mac. What the Mac app does: [The Mac app](../../app/on-a-computer/#the-mac-app).
+The link always gives the newest signed app, test builds included. The app is signed and checked by Apple, so it opens with no warning.
+
+The app updates itself. When it opens, and once a day, it checks for a new version. When one is ready, a window shows what is new: click **Install Update**, and the app opens again on the new version. Your notes, your sign-in and your settings stay on the Mac. What the Mac app does: [The Mac app](../../app/on-a-computer/#the-mac-app).
 
 ## Next
 

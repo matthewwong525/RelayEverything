@@ -172,6 +172,21 @@ void main() {
       expect(storage.values, isEmpty);
     });
 
+    test('is read name by name, so the Mac\'s login keychain, which refuses a read of all, still gives it back', () async {
+      final storage = MemoryStorage()..refuseReadAll = true;
+      final vault = KeyVault(storage, false);
+      expect(await vault.read(), isNull);
+      expect(await vault.upgrade(), isNull);
+      await vault.save(bearer);
+      expect((await vault.read())!.key, pageKey);
+      expect((await KeyVault(storage, false).upgrade())!.key, pageKey);
+      await vault.saveWebhook(hook);
+      expect((await vault.readWebhook())!.address, hook.address);
+      await vault.forget();
+      expect(await vault.read(), isNull);
+      expect((await vault.readWebhook())!.secret, hook.secret);
+    });
+
     test('Android has one home and never moves the key', () async {
       final storage = MemoryStorage()..values.addAll({'relay.server': bearer.server, 'relay.key': pageKey});
       final vault = KeyVault(storage, false);

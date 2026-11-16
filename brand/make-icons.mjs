@@ -5,7 +5,8 @@
 // It writes brand/icon.svg (the mark on the accent, full bleed: each platform rounds its own corners), brand/logo.svg
 // (the mark beside the wordmark), the website's top-bar marks and its favicon, then draws each
 // picture once at 1024 px with headless Chromium, and sizes it with ImageMagick (`magick`) into every size the iOS
-// AppIcon set lists and every Android density, with the Android adaptive icon and the launch marks. Output is the same
+// AppIcon set lists and every Android density, with the Android adaptive icon, the launch marks and the Mac install
+// window's background (mobile/macos/dmg/background.png and @2x). Output is the same
 // on each run: PNG date chunks are left out. ImageMagick's own SVG renderer drops paths and stroke colors, so
 // Chromium draws: set RELAY_CHROME to its path, or the script finds Playwright's headless shell or a chromium on PATH.
 import { execFileSync } from 'node:child_process';
@@ -25,6 +26,7 @@ const accentText = '#0E7A5A';
 const paper = '#F7F8F4';
 const spark = '#F5A524';
 const ink = '#121614';
+const muted = '#5E6660';
 const dark = { accentText: '#4CC79A', spark: '#FFC24D', ink: '#ECF3EE' };
 
 // The mark's drawing: each path, with its stroke on the path itself (ImageMagick's renderer ignores a stroke set on
@@ -93,6 +95,43 @@ function logo() {
 `;
 }
 
+/** WCAG contrast of two `#RRGGBB` colors. */
+function contrast(a, b) {
+  const lum = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map(c => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
+    .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0);
+  const [high, low] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (high + 0.05) / (low + 0.05);
+}
+// Finder picks the icon names' color from the install window's picture: on a light picture it writes them in black,
+// in dark mode too. So the picture stays light paper, with no band behind the icons, where the app's green icon would
+// sink into the green.
+if (contrast(paper, '#000000') < 4.5) throw new Error(`the install window's paper ${paper} is too dark for Finder's black names`);
+
+/**
+ * The Mac install window's background, 660 by 400 points: the logo at the top, the app (170, 188) and Applications
+ * (490, 188) on paper as mobile/macos/dmg/settings.py places them, an accent arrow between, and the one line.
+ */
+function dmgBackground() {
+  const wordmark = readFileSync(at('brand/logo.svg'), 'utf8').match(/<path class="w"[^>]*\/>/)[0]
+    .replace(' class="w"', '').replace(/ fill="[^"]*"/, '').replace('<path ', `<path fill="${ink}" `);
+  const font = readFileSync(at('mobile/assets/fonts/inter/InterVariable.ttf')).toString('base64');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 400" width="660" height="400">
+  <style>@font-face { font-family: Inter; src: url(data:font/ttf;base64,${font}); }</style>
+  <rect width="660" height="400" fill="${paper}"/>
+  <g transform="translate(197 30) scale(0.75)" fill="none">
+    ${markIn(accentText)}
+    ${wordmark}
+  </g>
+  <g fill="none" stroke="${accent}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M262 188h132"/>
+    <path d="M376 170l20 18-20 18"/>
+  </g>
+  <text x="330" y="350" font-family="Inter" font-size="16" fill="${muted}" text-anchor="middle">Drag Relay Everything to Applications</text>
+</svg>
+`;
+}
+
 /** The headless Chromium that draws the SVGs. */
 function findChrome() {
   if (process.env.RELAY_CHROME) return process.env.RELAY_CHROME;
@@ -138,6 +177,20 @@ function render(picture, size, path, { opaque = false } = {}) {
   const flat = opaque ? ['-background', accent, '-alpha', 'remove', '-alpha', 'off'] : [];
   execFileSync('magick', [draw(picture), '-resize', `${size}x${size}`, ...flat, '-strip',
     '-define', 'png:exclude-chunks=date,time', `${opaque ? 'PNG24' : 'PNG32'}:${at(path)}`]);
+  written.push(path);
+}
+
+/** Draws [text], an SVG of 660 by 400 points, at [scale] as a PNG at [path]: the install window's background. */
+function renderWindow(text, scale, path) {
+  const input = join(work, 'window.svg');
+  const output = join(work, `window-${scale}.png`);
+  writeFileSync(input, text);
+  // The time budget lets the embedded font load before the picture is taken.
+  execFileSync(chrome, ['--headless', '--no-sandbox', '--hide-scrollbars', '--window-size=660,400',
+    `--force-device-scale-factor=${scale}`, '--virtual-time-budget=5000', `--screenshot=${output}`, `file://${input}`],
+    { stdio: 'ignore' });
+  mkdirSync(dirname(at(path)), { recursive: true });
+  execFileSync('magick', [output, '-strip', '-define', 'png:exclude-chunks=date,time', `PNG24:${at(path)}`]);
   written.push(path);
 }
 
@@ -193,6 +246,11 @@ try {
     <color name="launch_paper">${paper}</color>
 </resources>
 `);
+
+  // The Mac install window: Finder shows the @2x picture on a Retina screen.
+  const installWindow = dmgBackground();
+  renderWindow(installWindow, 1, 'mobile/macos/dmg/background.png');
+  renderWindow(installWindow, 2, 'mobile/macos/dmg/background@2x.png');
 } finally {
   rmSync(work, { recursive: true, force: true });
 }

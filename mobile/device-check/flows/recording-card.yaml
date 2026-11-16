@@ -1,7 +1,8 @@
 # A recording in a note: Record in a typed note's bar opens the recording screen, a tap saves, and the recording shows as
-# its own card under the words, with its transcript folded, or No words heard for a quiet simulator microphone. The
-# transcript opens with a tap, and words typed after it stay in the note. Not in the fixed tour: it needs the speech
-# model and a microphone, so a check names it: `--flows recording-card`.
+# its own card under the words. The card shows its transcript folded, No words heard for a quiet simulator microphone,
+# or, on a slow test iPhone, The words did not come with Try again. The transcript opens with a tap, and words typed
+# after it stay in the note. Not in the fixed tour: it needs the speech model and a microphone, so a check names it:
+# `--flows recording-card`.
 appId: com.matthewwong525.relayApp
 ---
 - launchApp
@@ -17,35 +18,41 @@ appId: com.matthewwong525.relayApp
 - tapOn: "Done"
 # With the keyboard down, the bottom bar has Checklist, Attach and Record.
 - tapOn: "Record"
-# With no speech model yet, Record asks to get it first. The note page shows no progress, and Record says the model is
-# still coming until it is in, so tap Record again until the recording screen opens. iOS asks for the microphone the
-# first time.
-- runFlow:
-    when:
-      visible: "Get the speech model?"
-    commands:
-      - tapOn: "Get it"
+# With no speech model yet, Record asks to get it first, and asks again if the model goes missing. The note page shows
+# no progress, and Record says the model is still coming (an alert with OK) until it is in. iOS asks for the microphone
+# the first time. So each pass answers a box that shows, then taps Record. A `runFlow` `when` reads the screen once and
+# does not wait; an optional `tapOn` waits before it gives up, and a wait after the recording screen opens makes the
+# recording long.
 - repeat:
     times: 40
     while:
       notVisible: '(.|\n)*Tap anywhere to save(.|\n)*'
     commands:
-      - tapOn:
-          text: "Record"
-          optional: true
-      - tapOn:
-          text: "Allow|OK"
-          optional: true
+      - runFlow:
+          when:
+            visible: "Get the speech model?"
+          commands:
+            - tapOn: "Get it"
+      - runFlow:
+          when:
+            visible: "Allow"
+          commands:
+            - tapOn: "Allow"
+      - runFlow:
+          when:
+            visible: "OK"
+          commands:
+            - tapOn: "OK"
+      - runFlow:
+          when:
+            visible: "Record"
+          commands:
+            - tapOn: "Record"
       - extendedWaitUntil:
           visible: '(.|\n)*Tap anywhere to save(.|\n)*'
           timeout: 5000
           optional: true
-- tapOn:
-    text: "Allow|OK"
-    optional: true
-- extendedWaitUntil:
-    visible: '(.|\n)*Tap anywhere to save(.|\n)*'
-    timeout: 30000
+# The loop ends only when the recording screen shows, so save at once: a short recording gives the words less to write.
 - tapOn:
     point: "50%,50%"
 - extendedWaitUntil:
@@ -53,9 +60,24 @@ appId: com.matthewwong525.relayApp
     timeout: 30000
 # The note stays open: Record adds to it, so no other page opens.
 - assertVisible: "Fab call"
+# The app gives up on the words at 2 minutes, so 3 minutes always sees an end. Words that did not come show an alert
+# with OK over the note: close it, or the next tap hits the alert.
 - extendedWaitUntil:
     notVisible: "Writing the words…"
-    timeout: 120000
+    timeout: 180000
+# The alert comes just after the card changes, so give it a moment to show. The recording has ended, so this wait
+# makes it no longer.
+- extendedWaitUntil:
+    visible: "OK"
+    timeout: 3000
+    optional: true
+- runFlow:
+    when:
+      visible: "OK"
+    commands:
+      - tapOn: "OK"
+# Match the card's own words: the alert's title is only "The words did not come".
+- assertVisible: '(.|\n)*(Transcript|No words heard|The words did not come\. Your recording is safe)(.|\n)*'
 - takeScreenshot: recording-card
 # A transcript opens with a tap; a quiet recording shows No words heard in its place.
 - runFlow:
@@ -65,6 +87,12 @@ appId: com.matthewwong525.relayApp
       - tapOn: 'Transcript(.|\n)*'
       - assertVisible: "Copy transcript"
       - takeScreenshot: recording-transcript-open
+# A late alert can still come; on the note page only an alert shows OK.
+- runFlow:
+    when:
+      visible: "OK"
+    commands:
+      - tapOn: "OK"
 - tapOn: "Fab call"
 - extendedWaitUntil:
     visible: "Done"

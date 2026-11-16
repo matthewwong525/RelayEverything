@@ -289,6 +289,8 @@ abstract class Relay extends ChangeNotifier {
   Future<String?> setServer(String server);
   /// *System*, *Light* or *Dark*: the app's look, which the phone keeps.
   Future<void> setAppearance(Appearance appearance);
+  /// The colour of the note's highlight pen, one of `highlightColours`, which the phone keeps.
+  Future<void> setHighlightColour(String colour);
   Future<String?> setHistory(bool on);
   Future<String?> setHealth(bool on);
   /// Turns the calendar on, after the phone's permission, or off, which drops what of it did not go.

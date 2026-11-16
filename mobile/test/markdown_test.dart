@@ -4,6 +4,13 @@ import 'package:flutter_quill/quill_delta.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/editor/markdown.dart';
 
+/// Every key in [delta]'s attributes.
+Set<String> keysOf(Delta delta) => {for (final op in delta.toList()) ...?op.attributes?.keys};
+
+/// The table in [markdown], which holds one.
+NoteTable markdownTable(String markdown) =>
+  NoteTable.fromEmbed(markdownToDelta(markdown).toList().firstWhere((op) => op.data is Map).data! as Map)!;
+
 void main() {
   group('each style comes back byte for byte', () {
     const notes = {
@@ -131,9 +138,131 @@ void main() {
     expect(deltaToMarkdown(delta), 'Buy **fresh** milk');
   });
 
-  test('a link or a colour pasted in keeps its words', () {
+  test('a link pasted in keeps its words and its link; a colour goes', () {
     final delta = Delta()..insert('site', {'link': 'https://example.com', 'color': '#f00'})..insert('\n');
-    expect(deltaToMarkdown(delta), 'site');
+    expect(deltaToMarkdown(delta), '[site](https://example.com)');
+  });
+
+  group('highlight', () {
+    for (final colour in highlightColours) {
+      test('$colour comes back byte for byte and reads as its colour', () {
+        final markdown = 'Book the <mark class="$colour">hall</mark> today';
+        expect(deltaToMarkdown(markdownToDelta(markdown)), markdown);
+        expect(markdownToDelta(markdown).toList()[1].attributes, {'background': colour});
+      });
+    }
+
+    test('a highlight beside and around bold words', () {
+      for (final markdown in ['**Book** <mark class="pink">the hall</mark>', '<mark class="green">**now**</mark> then',
+          '<mark class="blue">a **b** c</mark>']) {
+        expect(deltaToMarkdown(markdownToDelta(markdown)), markdown, reason: markdown);
+      }
+      final delta = Delta()..insert('hall', {'background': 'pink', 'bold': true})..insert('\n');
+      expect(deltaToMarkdown(delta), '<mark class="pink">**hall**</mark>');
+      expect(markdownToDelta(deltaToMarkdown(delta)), delta);
+    });
+
+    test('a mark with another class, or none, stays as words', () {
+      for (final markdown in ['<mark class="red">x</mark>', '<mark>x</mark>', 'a <mark class="pink">b']) {
+        expect(markdownToDelta(markdown), Delta()..insert('$markdown\n'), reason: markdown);
+        expect(deltaToMarkdown(markdownToDelta(markdown)), markdown);
+      }
+    });
+
+    test('a colour the note has no name for is not written', () {
+      final delta = Delta()..insert('hall', {'background': '#ff0000'})..insert('\n');
+      expect(deltaToMarkdown(delta), 'hall');
+    });
+  });
+
+  group('links on words', () {
+    test('read as a link and written back the same', () {
+      for (final markdown in ['See [the menu](https://example.com/menu) now', 'Mail [Sam](mailto:sam@example.com)',
+          '[**bold** words](https://example.com)', 'A [wiki page](https://en.wikipedia.org/wiki/Bread_(food)).']) {
+        expect(deltaToMarkdown(markdownToDelta(markdown)), markdown, reason: markdown);
+      }
+      expect(markdownToDelta('[the menu](https://example.com/menu)').toList().first.attributes,
+        {'link': 'https://example.com/menu'});
+    });
+
+    test('an address shown as a link to itself writes no brackets', () {
+      final delta = Delta()
+        ..insert('Open ')
+        ..insert('https://example.com/a', {'link': 'https://example.com/a'})
+        ..insert('\n');
+      expect(deltaToMarkdown(delta), 'Open https://example.com/a');
+    });
+
+    test('brackets that are not a link stay as words', () {
+      for (final markdown in ['[x] (y)', '[ x](y)', '[x](a b)', 'f[1](2', '- [ ] Eggs']) {
+        expect(deltaToMarkdown(markdownToDelta(markdown)), markdown, reason: markdown);
+        expect(keysOf(markdownToDelta(markdown)), isNot(contains('link')), reason: markdown);
+      }
+    });
+  });
+
+  group('tables', () {
+    test('a table from Claude, with alignment marks and its own spacing, comes back byte for byte', () {
+      const markdown = 'Trip\n\n| Stop    | Date   |\n|:--------|-------:|\n| Toronto | Nov 20 |\n| Ottawa  | Nov 22 |\n\nDone';
+      final delta = markdownToDelta(markdown);
+      final table = NoteTable.fromEmbed(delta.toList().firstWhere((op) => op.data is Map).data! as Map)!;
+      expect(table.rows, [['Stop', 'Date'], ['Toronto', 'Nov 20'], ['Ottawa', 'Nov 22']]);
+      expect(deltaToMarkdown(delta), markdown);
+      expect(plainText(markdown), 'Trip\n\nStop\tDate\nToronto\tNov 20\nOttawa\tNov 22\n\nDone');
+    });
+
+    test('a changed cell writes the plain form', () {
+      final table = NoteTable.fromJson(markdownTable('| Stop | Date |\n|:--|--:|\n| Toronto | Nov 20 |').toJson())!;
+      final changed = table.withRows([['Stop', 'Date'], ['Toronto', 'Nov 21']]);
+      final delta = Delta()..insert({tableEmbed: changed.toJson()})..insert('\n');
+      expect(deltaToMarkdown(delta), '| Stop | Date |\n| --- | --- |\n| Toronto | Nov 21 |');
+    });
+
+    test('a pipe in a cell is kept as \\|', () {
+      final table = NoteTable([['a', 'b'], ['x | y', 'z']]);
+      final markdown = deltaToMarkdown(Delta()..insert({tableEmbed: table.toJson()})..insert('\n'));
+      expect(markdown, '| a | b |\n| --- | --- |\n| x \\| y | z |');
+      expect(markdownTable(markdown).rows, [['a', 'b'], ['x | y', 'z']]);
+    });
+
+    test('two tables one after the other open as two tables again, byte for byte', () {
+      final first = NoteTable([['Day', 'Train'], ['Mon', '9:00']]);
+      final second = NoteTable([['Name', 'Seat'], ['Sam', '4A']]);
+      final delta = Delta()
+        ..insert({tableEmbed: first.toJson()})
+        ..insert('\n')
+        ..insert({tableEmbed: second.toJson()})
+        ..insert('\n');
+      final markdown = deltaToMarkdown(delta);
+      expect(markdown, '| Day | Train |\n| --- | --- |\n| Mon | 9:00 |\n| Name | Seat |\n| --- | --- |\n| Sam | 4A |');
+      final tables = [
+        for (final op in markdownToDelta(markdown).toList())
+          if (op.data case final Map<dynamic, dynamic> embed) NoteTable.fromEmbed(embed)!.rows,
+      ];
+      expect(tables, [first.rows, second.rows]);
+      expect(deltaToMarkdown(markdownToDelta(markdown)), markdown);
+      const fromClaude = '| Stop | Date |\n|:--|--:|\n| Toronto | Nov 20 |\n|  A  | B |\n| - | - |\n| c | d |';
+      expect(deltaToMarkdown(markdownToDelta(fromClaude)), fromClaude);
+    });
+
+    test('a body row of - cells stays a row of the same table', () {
+      const markdown = '| Day | Train |\n| --- | --- |\n| Mon | 9:00 |\n| Tue | Bus |\n| - | - |';
+      final tables = [
+        for (final op in markdownToDelta(markdown).toList())
+          if (op.data case final Map<dynamic, dynamic> embed) NoteTable.fromEmbed(embed)!.rows,
+      ];
+      expect(tables, [
+        [['Day', 'Train'], ['Mon', '9:00'], ['Tue', 'Bus'], ['-', '-']],
+      ]);
+      expect(deltaToMarkdown(markdownToDelta(markdown)), markdown);
+    });
+
+    test('a line of pipes that is not a table stays words', () {
+      for (final markdown in ['| a | b |', '| a | b |\n| x | y |', '| a | b |\n| --- |', 'a | b\n--- | ---']) {
+        expect(markdownToDelta(markdown).toList().every((op) => op.data is String), isTrue, reason: markdown);
+        expect(deltaToMarkdown(markdownToDelta(markdown)), markdown, reason: markdown);
+      }
+    });
   });
 
   test('with title, a first line with no style shows as a Title, and only that', () {

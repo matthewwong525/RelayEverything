@@ -1,6 +1,6 @@
 ---
 title: Notes
-description: Home and its folders, one notes list with filters and pinned notes, read, search, find, pin and change the notes you write on your phone, as in Apple Notes, with text styles, checklists, photos and files, and open them on a computer.
+description: Home and its folders, one notes list with filters and pinned notes, read, search, find, pin and change the notes you write on your phone, as in Apple Notes, with text styles, highlights, links, tables, checklists, photos and files, and open them on a computer.
 ---
 
 The Relay Everything app opens on **Home**, a screen of folders. Your notes are the first folder. The app shows the notes that you type or say into this phone, and keeps them on the phone. Once you sign in to Relay Everything, it also shows the notes from your other phones, email, Claude Code, Codex and your AI apps: [Your notes on every phone](#your-notes-on-every-phone).
@@ -68,6 +68,8 @@ The page shows the date alone at the top. It shows no tag and nothing about send
 
 A web address in the words, such as `https://example.com` or `www.example.com`, shows in green and underlined. Tap it to open it in the phone's browser. This works for an address that you typed or pasted as plain text too. While you type, a tap on a link puts the cursor there, as in Apple Notes. The note's words do not change: the link shows only on the phone.
 
+To put a link on words, such as *the menu*, select them and tap **Link**. A box asks for the address. If you copied a web address, the box shows it already. Tap **Done**. The words show as a link, and the note keeps them as `[the menu](https://example.com/menu)`. Put the cursor in a link and tap **Link** to change its address, or tap **Remove Link** to take the link away. An address that is not a web address shows *That is not a web address. Try again.*
+
 The page works as in Apple Notes: you change the note in place. Tap the words where you want to type. The cursor goes there and the keyboard comes up. There is no **Save** button: the phone keeps each change as you type, and when you leave the page. On a voice note, your words go under the recording's card: the page says *Add notes…* until you type. To fix a word that the phone wrote, open the transcript and type in it: [Read the transcript](../voice-notes/#read-the-transcript). The recording stays as it was.
 
 To add a recording, tap the **mic** in the bar at the bottom, or in the bar over the keyboard: [Add a recording to a note](../voice-notes/#add-a-recording-to-a-note).
@@ -77,7 +79,8 @@ To paste, hold in the words, or tap the blinking cursor. On an iPhone with iOS 1
 A paste keeps the formatting that a note can show, as in Notion. Words that you copy from a web page, Notion, Google Docs, Apple Notes, Word or an email come in with their headings, bullet and numbered lists, checklists, quotes, code blocks, and bold, italic, underlined and struck-through words. Colors, fonts, sizes and pictures go: the pasted words take the note's own look. A heading past the third level comes in as a subheading.
 
 - **Markdown becomes formatting.** Words that you copy from ChatGPT, Claude or a text file, such as `## Plan`, `- [ ] Call the bank` or `**now**`, come in as a heading, a checklist item and bold words, not as marks.
-- **A link keeps its address.** A link whose words are not its address, such as *the menu*, comes in as `the menu (https://…)`, so the address stays and shows as a link.
+- **A link keeps its words.** A link whose words are not its address, such as *the menu*, comes in as those words, linked to the address.
+- **A table stays a table.** A table from a web page, Google Docs, Notion or a Markdown table from Claude comes in as a [table](#tables).
 - **A few words join the line.** Words with no line style go in at the cursor, and the line keeps its own style.
 - **Empty lines stay tidy.** Two or more empty lines in a row become one, and empty lines at the start and the end go.
 - **Undo takes back the whole paste** in one step.
@@ -91,7 +94,11 @@ At the top of the page:
 - **Share** and **⋯**, in a round button at the right. **⋯** opens a menu under it with **Pin Note** (or **Unpin Note**), [**Find in Note**](#find-in-a-note), **Copy**, which copies the words without their style marks, and **Delete**.
 - **✓**, while you type, closes the keyboard. The change stays.
 
-While you type, a round bar floats just above the keyboard: **Aa** for [text styles](#text-styles-and-checklists), the checklist button, and the paperclip to [add photos and files](#add-photos-and-files). With the keyboard closed, a bar at the bottom holds the checklist button, the paperclip, and the round compose button, which starts a new note.
+While you type, a bar floats just above the keyboard, as wide as the screen. It shows **Aa** for [text styles](#text-styles-and-checklists), the checklist button, **Table** to add a [table](#tables), the paperclip to [add photos and files](#add-photos-and-files), and on a phone the **mic** to [add a recording](../voice-notes/#add-a-recording-to-a-note). Swipe the bar to the left for more: bulleted list, numbered list, **Link**, indent less, indent more, and **Hide keyboard**, which closes the keyboard as **✓** does. Part of the next button shows at the edge while more buttons are out of view.
+
+While you select words, the bar changes to the style bar: **B**, **I**, **U**, **S**, **Highlight**, **Link** and **Lists**, which opens bulleted, dashed and numbered lists. A button is lit when the selected words have its style. Tap a lit button to take the style away. When the selection goes, the bar changes back.
+
+With the keyboard closed, a bar at the bottom holds the checklist button, the paperclip, and the round compose button, which starts a new note.
 
 When you type at the end of a long note, the page scrolls so that the line you type stays above the bar.
 
@@ -121,22 +128,33 @@ Find a word in an open note, as in Apple Notes:
 3. Tap the down arrow, or return, for the next match, and the up arrow for the one before. After the last match, the first one comes again.
 4. Tap **✓** to close the bar. The note's words do not change.
 
-**Find in Note** is on the phone only. It shows on a voice note after the phone writes its words. On a computer, use the browser's own find.
+**Find in Note** also finds words in a [table](#tables)'s cells: the match selects the table. **Find in Note** is on the phone only. It shows on a voice note after the phone writes its words. On a computer, use the browser's own find.
 
 ## Text styles and checklists
 
-Tap **Aa** while you type. A panel comes up in place of the keyboard:
+Tap **Aa** while you type. The **Format** panel comes up in place of the keyboard, in groups as in Apple Notes. The style of the line and of the selected words is lit. Tap **✕** to get the keyboard back.
 
 | Style | What it does |
 |---|---|
-| **Title**, **Heading**, **Subheading**, **Body** | Sets the size of the line the cursor is on. The first line of a new note starts as a **Title**. |
+| **Title**, **Heading**, **Subheading**, **Body** | Sets the size of the line the cursor is on. Each shows in its own look. The first line of a new note starts as a **Title**. |
 | **Monostyled** | Shows the line in a font with letters of one width, as for code. |
 | **B**, **I**, **U**, **S** | Makes the words you selected bold, italic, underlined or struck through. |
+| **Highlight** | Puts a color behind the words you selected. Tap it again to take the color away. Tap the color dot beside it to pick **Purple**, **Pink**, **Orange**, **Green** or **Blue**. The phone keeps the color you picked for the next time. |
 | Bulleted, dashed and numbered lists | Starts a list. Tap return on an empty item to end the list. |
 | Block quote | Shows the line as a quote, with a bar at its left. |
 | Indent in and out | Moves a line, or a list item, in or out by one step. |
 
 Tap the checklist button to make the line a checklist item, with a round circle at its left. One tap on the circle ticks the item, in green. Another tap clears it. The circle works with the keyboard closed too, so you can tick items as you shop.
+
+You can also type Markdown marks at the start of a line, as in Apple Notes. Type the marks, then a space: the marks go and the line takes the style. Tap **Undo** to get the marks back as words. A paste is not changed in this way.
+
+| Type at the start of a line | The line becomes |
+|---|---|
+| `# `, `## `, `### ` | A title, a heading or a subheading |
+| `* ` or `- ` | A bulleted or a dashed list |
+| `1. ` | A numbered list |
+| `[] ` | A checklist item |
+| `> ` | A block quote |
 
 The page shows each style as it looks. Inside, the note keeps its styles as plain Markdown marks, so your Relay Everything page, your AI and your webhooks read them as normal text:
 
@@ -146,12 +164,32 @@ The page shows each style as it looks. Inside, the note keeps its styles as plai
 | Monostyled | A code block: a line of three backticks before it and after it |
 | Bold, italic, struck through | `**words**`, `_words_` (`*part*` of a word), `~~words~~` |
 | Underline | `<u>words</u>` |
+| Highlight | `<mark class="pink">words</mark>`, with the color's name |
+| A link on words | `[words](https://example.com)`. An address that is its own words stays as it is. |
+| A table | A Markdown table: a line of cells between `\|` marks for each row, with a `\| --- \|` line under the first row |
 | Bulleted, dashed and numbered lists | `* `, `- ` and `1. ` at the start of the line |
 | Checklist | `- [ ] ` open, `- [x] ` ticked |
 | Block quote | `> ` at the start of the line |
 | Indent | Two spaces for each step in |
 
 Your notes list shows the first line and the start of the rest without these marks. A note that you wrote before styles came opens with the same words, and its first line shows as a title. It does not change until you change it.
+
+## Tables
+
+A note can hold a table, as in Apple Notes.
+
+1. Tap **Table** on the bar over the keyboard. A table of 2 columns and 2 rows comes in at the cursor, with the cursor in its first cell.
+2. Type in the cell. The first row shows in bold.
+3. Tap return to go to the cell below. Return in the last row adds a row. On a computer, Tab goes to the next cell and Shift+Tab to the one before.
+
+A wide table scrolls to the side. While a cell has the cursor, a handle shows above its column and one at the left of its row:
+
+- The column handle: **Add column before**, **Add column after** and **Delete column**.
+- The row handle: **Add row above**, **Add row below** and **Delete row**.
+
+With the cursor in a table, tap **Table** for **Convert to text**, which makes each row a line with a tab between the cells, or **Delete table**. **Undo** takes back each change, also a word typed in a cell. A cell holds plain words: the text styles do not work in a cell.
+
+The note keeps a table as a Markdown table, so your AI and your webhooks read it as one. A table that Claude or another app wrote keeps its own marks, such as `:---:` for a centered column, until you change one of its cells.
 
 ## Delete a note
 

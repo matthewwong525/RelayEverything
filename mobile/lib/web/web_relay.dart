@@ -650,6 +650,12 @@ class WebRelay extends Relay {
     notifyListeners();
   }
 
+  @override
+  Future<void> setHighlightColour(String colour) async {
+    _settings = _settings.copyWith(highlightColour: colour);
+    notifyListeners();
+  }
+
   @override Set<String> get folded => _folded;
 
   @override

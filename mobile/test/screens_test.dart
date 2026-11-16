@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/cupertino.dart' show CupertinoAlertDialog, CupertinoDialogAction, CupertinoIcons;
+import 'package:flutter/cupertino.dart' show CupertinoAlertDialog, CupertinoDialogAction, CupertinoIcons, CupertinoTextField;
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +12,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:relay_app/app.dart';
 import 'package:relay_app/brand.dart';
 import 'package:relay_app/editor/markdown.dart';
+import 'package:relay_app/editor/shortcuts.dart' show FormatIntent, formatShortcuts;
+import 'package:relay_app/editor/table.dart' show NoteTableView, cellPause;
 import 'package:relay_app/relay.dart';
 import 'package:relay_app/screens/connect.dart';
 import 'package:relay_app/screens/connect_ai.dart' show ConnectAiPage, computerLine;
@@ -22,7 +24,7 @@ import 'package:relay_app/screens/note_bars.dart';
 import 'package:relay_app/screens/note_blocks.dart' show RecordingCard, VoicePlayer, WavePainter;
 import 'package:relay_app/screens/note_editor.dart';
 import 'package:relay_app/screens/recently_deleted.dart' show RecentlyDeletedScreen, keepLine;
-import 'package:relay_app/screens/round_button.dart' show ButtonPill;
+import 'package:relay_app/screens/round_button.dart' show ButtonPill, PillIconButton;
 import 'package:relay_app/screens/settings.dart' show SettingsRow, SettingsScreen;
 import 'package:relay_app/screens/timeline.dart' show FoldHeader, SyncLine, TimelineScreen, TitleBar;
 import 'package:relay_app/screens/transcripts.dart' show CommandBox, TranscriptsPage;
@@ -110,6 +112,12 @@ class FakeRelay extends Relay {
   Future<void> setAppearance(Appearance appearance) async {
     calls.add('appearance ${appearance.name}');
     settings = settings.copyWith(appearance: appearance);
+    notifyListeners();
+  }
+  @override
+  Future<void> setHighlightColour(String colour) async {
+    calls.add('highlight $colour');
+    settings = settings.copyWith(highlightColour: colour);
     notifyListeners();
   }
   @override Future<String?> setHistory(bool on) async { calls.add('history $on'); return problem; }
@@ -1807,7 +1815,7 @@ void main() {
       await tester.tap(find.byTooltip('Close'));
       await tester.pumpAndSettle();
       expect(find.byType(FormatSheet), findsNothing);
-      expect(find.byType(FloatingToolBar), findsOneWidget);
+      expect(find.byType(SelectionToolBar), findsOneWidget, reason: 'the words are still picked');
       expect(editorFocused(tester), isTrue);
     });
 
@@ -2147,6 +2155,46 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
       expect(relay.calls, ['edit # Links\nGo example.com now\nSee https://example.com /path']);
+    });
+
+    testWidgets('a word linked to an address that holds it stays a link when the note is saved', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Food\nSee the menu', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay, opener: (_) async => true));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Food'));
+      await tester.pumpAndSettle();
+      await tester.tapAt(tester.getTopLeft(find.text('Food', findRichText: true)) + const Offset(10, 8));
+      await tester.pump();
+      final controller = quill(tester);
+      final menu = controller.document.toPlainText().indexOf('menu');
+      controller.formatText(menu, 4, const LinkAttribute('https://example.com/menu'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Done'));
+      await tester.pumpAndSettle();
+      expect(linkAt(quill(tester).document, menu + 1), 'https://example.com/menu');
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['edit # Food\nSee the [menu](https://example.com/menu)']);
+    });
+
+    testWidgets('a link whose words are in its address, as GitHub or an email name, keeps its link when saved',
+        (tester) async {
+      const links = 'See [GitHub](https://github.com) and [Sam](mailto:sam@example.com)';
+      relay.entries = [Entry(id: 'n1', text: 'Links\n$links', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay, opener: (_) async => true));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Links'));
+      await tester.pumpAndSettle();
+      final document = quill(tester).document;
+      final words = document.toPlainText();
+      expect([linkAt(document, words.indexOf('GitHub') + 1), linkAt(document, words.indexOf('Sam') + 1)],
+        ['https://github.com', 'mailto:sam@example.com']);
+      await tester.tap(find.byTooltip('Checklist'));
+      await tester.pumpAndSettle();
+      await type(tester, 'Eggs');
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['edit # Links\n$links\n- [ ] Eggs']);
     });
 
     testWidgets('a tap on the right half of a link\'s last letter opens it; one on the space before it does not', (tester) async {
@@ -3974,6 +4022,8 @@ void main() {
       await tester.tap(find.byType(QuillEditor));
       await tester.pumpAndSettle();
       expect(find.byTooltip('Record'), findsOneWidget, reason: 'the bar over the keyboard');
+      final left = [for (final tool in ['Attach', 'Record', 'Bulleted list']) tester.getRect(find.byTooltip(tool)).left];
+      expect(left, [for (final x in [...left]..sort()) x], reason: 'Record comes right after Attach');
       await tester.tap(find.byTooltip('Record'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
@@ -4094,10 +4144,16 @@ void main() {
         return keys;
       }
 
+      // The page keys, and the format keys with them.
+      void hasPageKeys(Map<ShortcutActivator, Intent>? keys) {
+        expect({for (final key in pageKeys.keys) key: keys?[key]}, pageKeys,
+          reason: 'a long press is a tap: it writes, with the page keys');
+        expect(keys!.values.whereType<FormatIntent>(), hasLength(formatShortcuts().length));
+      }
       expect(await show(RelayPlatform.mac), isEmpty);
-      expect(await holdKeys(), same(pageKeys), reason: 'a long press is a tap: it writes, with the page keys');
+      hasPageKeys(await holdKeys());
       expect(await show(RelayPlatform.web), isEmpty);
-      expect(await holdKeys(), same(pageKeys));
+      hasPageKeys(await holdKeys());
       expect(await show(RelayPlatform.phone), isNotEmpty, reason: 'the phone keeps Record a voice note');
       semantics.dispose();
     });
@@ -4330,6 +4386,329 @@ void main() {
       await tester.tap(find.text('Not now'));
       await tester.pumpAndSettle();
       expect(relay.calls, ['ask model', 'not now']);
+    });
+  });
+
+  group('the note page tools and tables', () {
+    /// Opens the note [text] from Notes, its title [title].
+    Future<void> openNote(WidgetTester tester, String title, String text) async {
+      relay.entries = [Entry(id: 'n1', text: text, at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text(title).first);
+      await tester.pumpAndSettle();
+    }
+
+    /// Gives the note the keyboard, with [selection].
+    Future<void> edit(WidgetTester tester, TextSelection selection) async {
+      tester.widget<QuillEditor>(find.byType(QuillEditor)).focusNode.requestFocus();
+      await tester.pump();
+      quill(tester).updateSelection(selection, ChangeSource.local);
+      await tester.pumpAndSettle();
+    }
+
+    /// Whether the button with [tooltip] is lit.
+    bool lit(WidgetTester tester, String tooltip) => tester.widget<PillIconButton>(
+      find.ancestor(of: find.byTooltip(tooltip), matching: find.byType(PillIconButton))).selected;
+
+    final cells = find.descendant(of: find.byType(NoteTableView), matching: find.byType(TextField));
+
+    bool cellFocused(WidgetTester tester, int index) => tester.widget<TextField>(cells.at(index)).focusNode!.hasFocus;
+
+    List<String> cellWords(WidgetTester tester) =>
+      [for (final cell in cells.evaluate()) (cell.widget as TextField).controller!.text];
+
+    /// A pick in a menu that a button opens.
+    Future<void> pickIn(WidgetTester tester, String tooltip, String item) async {
+      await tester.tap(find.byTooltip(tooltip));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, item));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the bar over the keyboard shows its first four tools on a 375-point screen, a swipe shows the rest, and '
+      'it sits 6 points over the keyboard with the caret above it', (tester) async {
+      tester.view
+        ..physicalSize = const Size(375, 812)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await openNote(tester, 'Shop', 'Shop\nEggs');
+      await edit(tester, const TextSelection.collapsed(offset: 9));
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      await tester.pumpAndSettle();
+      final bar = tester.getRect(find.byType(FloatingToolBar));
+      expect(bar.bottom, 812 - 300 - 6);
+      for (final tool in ['Text styles', 'Checklist', 'Table', 'Attach']) {
+        final button = tester.getRect(find.byTooltip(tool));
+        expect([button.left >= bar.left, button.right <= bar.right], [true, true], reason: tool);
+      }
+      expect(find.byTooltip('Indent more').hitTestable(), findsNothing);
+      await tester.drag(find.byType(FloatingToolBar), const Offset(-600, 0));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Indent more').hitTestable(), findsOneWidget);
+      expect(find.byTooltip('Hide keyboard').hitTestable(), findsOneWidget);
+      final editor = tester.allRenderObjects.whereType<RenderEditor>().first;
+      final caret = editor.getLocalRectForCaret(quill(tester).selection.extent);
+      expect(editor.localToGlobal(caret.bottomLeft).dy, lessThanOrEqualTo(bar.top));
+      await tester.tap(find.byTooltip('Hide keyboard'));
+      await tester.pumpAndSettle();
+      expect([editorFocused(tester), find.byType(ReadingBar).evaluate().length], [false, 1]);
+    });
+
+    testWidgets('words picked swap the bar for the style bar, lit for their style, and Lists makes a numbered list',
+        (tester) async {
+      await openNote(tester, 'Shop', 'Shop\n**Eggs** and milk');
+      await edit(tester, const TextSelection.collapsed(offset: 7));
+      expect([find.byType(FloatingToolBar), find.byType(SelectionToolBar)], [findsOneWidget, findsNothing]);
+      quill(tester).updateSelection(const TextSelection(baseOffset: 5, extentOffset: 9), ChangeSource.local);
+      await tester.pumpAndSettle();
+      expect([find.byType(FloatingToolBar), find.byType(SelectionToolBar)], [findsNothing, findsOneWidget]);
+      expect([for (final tool in ['Bold', 'Italic', 'Underline', 'Strikethrough', 'Highlight', 'Link']) lit(tester, tool)],
+        [true, false, false, false, false, false]);
+      await tester.tap(find.byTooltip('Italic'));
+      await tester.pumpAndSettle();
+      expect([lit(tester, 'Bold'), lit(tester, 'Italic')], [true, true]);
+      await tester.tap(find.byTooltip('Bold'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Italic'));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Shop\nEggs and milk');
+      await pickIn(tester, 'Lists', 'Numbered List');
+      expect(markdownOf(tester), '# Shop\n1. Eggs and milk');
+      expect(lit(tester, 'Lists'), isTrue);
+      quill(tester).updateSelection(const TextSelection.collapsed(offset: 7), ChangeSource.local);
+      await tester.pumpAndSettle();
+      expect([find.byType(FloatingToolBar), find.byType(SelectionToolBar)], [findsOneWidget, findsNothing]);
+    });
+
+    testWidgets('the Format sheet lights the chip of each line style, and the pen highlights in the colour picked',
+        (tester) async {
+      await openNote(tester, 'Shop', 'Shop\nEggs and milk');
+      await edit(tester, const TextSelection.collapsed(offset: 7));
+      await tester.tap(find.byTooltip('Text styles'));
+      await tester.pumpAndSettle();
+      bool chip(String label) => tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, label)).selected;
+      const styles = ['Title', 'Heading', 'Subheading', 'Body', 'Monostyled'];
+      for (final style in [...styles, 'Body']) {
+        await tester.tap(find.widgetWithText(ChoiceChip, style));
+        await tester.pumpAndSettle();
+        expect([for (final other in styles) chip(other)], [for (final other in styles) other == style], reason: style);
+      }
+      expect(markdownOf(tester), '# Shop\nEggs and milk');
+      quill(tester).updateSelection(const TextSelection(baseOffset: 5, extentOffset: 9), ChangeSource.local);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Highlight colour'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Purple'), findsOneWidget);
+      await tester.tap(find.byTooltip('Pink'));
+      await tester.pumpAndSettle();
+      expect([relay.calls, relay.settings.highlightColour], [['highlight pink'], 'pink']);
+      await tester.tap(find.byTooltip('Highlight'));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Shop\n<mark class="pink">Eggs</mark> and milk');
+      expect(lit(tester, 'Highlight'), isTrue);
+      await tester.tap(find.byTooltip('Highlight'));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Shop\nEggs and milk');
+    });
+
+    testWidgets('Link fills in a copied web address, and on a link changes or takes it away', (tester) async {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.getData') return {'text': 'https://example.com/menu'};
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+      await openNote(tester, 'Shop', 'Shop\nSee the menu');
+      final start = quill(tester).document.toPlainText().indexOf('the menu');
+      await edit(tester, TextSelection(baseOffset: start, extentOffset: start + 8));
+      await tester.tap(find.byTooltip('Link'));
+      await tester.pumpAndSettle();
+      expect(find.text('Add Link'), findsOneWidget);
+      final field = find.byType(CupertinoTextField);
+      expect(tester.widget<CupertinoTextField>(field).controller!.text, 'https://example.com/menu');
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Shop\nSee [the menu](https://example.com/menu)');
+      await edit(tester, TextSelection.collapsed(offset: start + 2));
+      await tester.tap(find.byTooltip('Link'));
+      await tester.pumpAndSettle();
+      expect(find.text('Change Link'), findsOneWidget);
+      expect(tester.widget<CupertinoTextField>(field).controller!.text, 'https://example.com/menu');
+      await tester.enterText(field, 'example.com/food');
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Shop\nSee [the menu](https://example.com/food)');
+      await edit(tester, TextSelection.collapsed(offset: start + 2));
+      await tester.tap(find.byTooltip('Link'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove Link'));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Shop\nSee the menu');
+      await edit(tester, TextSelection(baseOffset: start, extentOffset: start + 3));
+      await tester.tap(find.byTooltip('Link'));
+      await tester.pumpAndSettle();
+      await tester.enterText(field, 'not an address');
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(find.text('That is not a web address'), findsOneWidget);
+      expect(find.text('Try again.'), findsOneWidget);
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Shop\nSee the menu');
+    });
+
+    testWidgets('Markdown marks typed at the start of a line give it their style, and one Undo gives the marks back',
+        (tester) async {
+      await openNote(tester, 'Shop', 'Shop');
+      await edit(tester, const TextSelection.collapsed(offset: 4));
+      const marks = {
+        '#': '# x', '##': '## x', '###': '### x', '-': '- x', '*': '* x', '1.': '1. x', '[]': '- [ ] x', '>': '> x',
+      };
+      for (final MapEntry(key: mark, value: line) in marks.entries) {
+        await type(tester, '\n');
+        for (final letter in [...mark.split(''), ' ', 'x']) {
+          await type(tester, letter);
+        }
+        expect(markdownOf(tester).split('\n').last, line, reason: mark);
+        expect(quill(tester).document.toPlainText(), endsWith('\nx\n'), reason: 'the marks of $mark go');
+      }
+      await type(tester, '\n');
+      await type(tester, '#');
+      await type(tester, ' ');
+      expect(quill(tester).document.toDelta().last.attributes, {'header': 1});
+      await tester.pump(const Duration(seconds: 2));
+      await tester.tap(find.byTooltip('Undo'));
+      await tester.pumpAndSettle();
+      expect(quill(tester).document.toPlainText(), endsWith('\n# \n'));
+      expect(quill(tester).document.toDelta().last.attributes?['header'], isNull);
+      // A paste is one change: its marks stay words.
+      await type(tester, '\n');
+      await type(tester, '# x');
+      expect(quill(tester).document.toPlainText(), endsWith('\n# x\n'));
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('no format key acts on the phone', (tester) async {
+      await openNote(tester, 'Shop', 'Shop\nEggs');
+      await edit(tester, const TextSelection.collapsed(offset: 7));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Shop\nEggs');
+    });
+
+    testWidgets('Table adds 2 by 2 with the cursor in its first cell; typing in a cell is kept as Markdown and one Undo '
+      'takes it back', (tester) async {
+      await openNote(tester, 'Plan', 'Plan\nDays');
+      await edit(tester, const TextSelection.collapsed(offset: 9));
+      await tester.tap(find.byTooltip('Table'));
+      await tester.pumpAndSettle();
+      expect(cells, findsNWidgets(4));
+      expect([cellFocused(tester, 0), editorFocused(tester)], [true, false]);
+      expect([find.byType(FloatingToolBar), find.byTooltip('Done')], everyElement(findsOneWidget),
+        reason: 'a cell with the cursor is editing');
+      await tester.enterText(cells.at(0), 'Day');
+      await tester.pump(cellPause);
+      await tester.pump();
+      expect(markdownOf(tester), '# Plan\nDays\n| Day |  |\n| --- | --- |\n|  |  |\n');
+      await tester.tap(find.byTooltip('Undo'));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Plan\nDays\n|  |  |\n| --- | --- |\n|  |  |\n');
+      expect(cellWords(tester), ['', '', '', '']);
+      await tester.tap(find.byTooltip('Done'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ReadingBar), findsOneWidget);
+      expect(relay.calls.last, 'edit # Plan\nDays\n|  |  |\n| --- | --- |\n|  |  |\n');
+    });
+
+    testWidgets('in a table, Return goes to the cell below and adds a row at the end, and Tab and Shift+Tab step through '
+      'the cells', (tester) async {
+      await openNote(tester, 'Plan', 'Plan\n| Day | Train |\n| --- | --- |\n| Mon | 9:00 |');
+      await tester.tap(cells.at(0));
+      await tester.pumpAndSettle();
+      expect(cellFocused(tester, 0), isTrue);
+      await tester.testTextInput.receiveAction(TextInputAction.next);
+      await tester.pumpAndSettle();
+      expect(cellFocused(tester, 2), isTrue);
+      await tester.testTextInput.receiveAction(TextInputAction.next);
+      await tester.pumpAndSettle();
+      expect(cells, findsNWidgets(6));
+      expect(cellFocused(tester, 4), isTrue);
+      expect(cellWords(tester), ['Day', 'Train', 'Mon', '9:00', '', '']);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      expect(cellFocused(tester, 5), isTrue);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pumpAndSettle();
+      expect(cellFocused(tester, 4), isTrue);
+      await tester.tap(find.byTooltip('Done'));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets("a cell's handles add and delete columns and rows, and every row keeps its words", (tester) async {
+      await openNote(tester, 'Plan', 'Plan\n| Day | Train |\n| --- | --- |\n| Mon | 9:00 |');
+      expect([find.byTooltip('Column'), find.byTooltip('Row')], everyElement(findsNothing));
+      await tester.tap(cells.at(0));
+      await tester.pumpAndSettle();
+      expect([find.byTooltip('Column'), find.byTooltip('Row')], everyElement(findsOneWidget));
+      await pickIn(tester, 'Column', 'Add column after');
+      expect(cellWords(tester), ['Day', '', 'Train', 'Mon', '', '9:00']);
+      await pickIn(tester, 'Column', 'Delete column');
+      expect(cellWords(tester), ['Day', 'Train', 'Mon', '9:00']);
+      // Delete leaves the cursor in the next column or row; the first cell takes it back.
+      await tester.tap(cells.at(0));
+      await tester.pumpAndSettle();
+      await pickIn(tester, 'Column', 'Add column before');
+      expect(cellWords(tester), ['', 'Day', 'Train', '', 'Mon', '9:00']);
+      await pickIn(tester, 'Column', 'Delete column');
+      expect(cellWords(tester), ['Day', 'Train', 'Mon', '9:00']);
+      await pickIn(tester, 'Row', 'Add row below');
+      expect(cellWords(tester), ['Day', 'Train', '', '', 'Mon', '9:00']);
+      await pickIn(tester, 'Row', 'Delete row');
+      expect(cellWords(tester), ['Day', 'Train', 'Mon', '9:00']);
+      await tester.tap(cells.at(0));
+      await tester.pumpAndSettle();
+      await pickIn(tester, 'Row', 'Add row above');
+      expect(cellWords(tester), ['', '', 'Day', 'Train', 'Mon', '9:00']);
+      await pickIn(tester, 'Row', 'Delete row');
+      expect(cellWords(tester), ['Day', 'Train', 'Mon', '9:00']);
+      expect(markdownOf(tester), '# Plan\n| Day | Train |\n| --- | --- |\n| Mon | 9:00 |');
+      await tester.tap(find.byTooltip('Done'));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Table in a table converts it to lines of words split by tabs, or deletes it', (tester) async {
+      await openNote(tester, 'Plan', 'Plan\n| Day | Train |\n| --- | --- |\n| Mon | 9:00 |\nEnd');
+      await tester.tap(cells.at(0));
+      await tester.pumpAndSettle();
+      await pickIn(tester, 'Table', 'Convert to text');
+      expect(quill(tester).document.toPlainText(), 'Plan\nDay\tTrain\nMon\t9:00\nEnd\n');
+      expect(editorFocused(tester), isTrue);
+      await tester.tap(find.byTooltip('Undo'));
+      await tester.pumpAndSettle();
+      expect(cells, findsNWidgets(4));
+      await tester.tap(cells.at(3));
+      await tester.pumpAndSettle();
+      await pickIn(tester, 'Table', 'Delete table');
+      expect(quill(tester).document.toPlainText(), 'Plan\nEnd\n');
+      expect(cells, findsNothing);
+    });
+
+    testWidgets('Find in Note also finds words in table cells', (tester) async {
+      await openNote(tester, 'Trip', 'Trip\n| Day | Train |\n| --- | --- |\n| Mon | train 9 |\nno train back');
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Find in Note'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.descendant(of: find.byType(FindBar), matching: find.byType(TextField)), 'train');
+      await tester.pumpAndSettle();
+      expect(find.text('1 of 3'), findsOneWidget);
+      expect(quill(tester).selection, const TextSelection(baseOffset: 5, extentOffset: 6), reason: 'the table is picked');
     });
   });
 }

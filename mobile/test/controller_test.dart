@@ -461,7 +461,7 @@ void main() {
       expect(jsonDecode(on.encode()), {'sending': true, 'history': true, 'health': true, 'calendar': false,
         'calendarsOff': [], 'mode': 'battery', 'place': 'server',
         'photos': false, 'photosOnMobileData': false, 'appearance': 'system',
-        'locationSend': 'all'});
+        'locationSend': 'all', 'highlightColour': 'purple'});
       final back = Settings.decode(on.encode(), hasKey: false);
       expect([back.sending, back.health], [true, true]);
     });
@@ -526,6 +526,18 @@ void main() {
       expect(reopened.settings.appearance, Appearance.light);
     });
 
+    test('a picked highlight colour is kept on the phone and read again on the next start', () async {
+      expect(const Settings().highlightColour, 'purple');
+      expect(Settings.decode(jsonEncode({'sending': false}), hasKey: false).highlightColour, 'purple');
+      final relay = controller();
+      await relay.load();
+      await relay.setHighlightColour('pink');
+      expect(relay.settings.highlightColour, 'pink');
+      final reopened = controller();
+      await reopened.load();
+      expect(reopened.settings.highlightColour, 'pink');
+    });
+
     test('keep the calendar and the calendars turned off, and sending off forces the calendar off', () {
       const on = Settings(sending: true, calendar: true, calendarsOff: {'holidays', 'birthdays'});
       final back = Settings.decode(on.encode(), hasKey: true);
@@ -557,7 +569,7 @@ void main() {
       expect(jsonDecode((await store.get('settings'))!), {'sending': false, 'history': false, 'health': false,
         'calendar': false, 'calendarsOff': [], 'mode': 'battery', 'place': 'server',
         'photos': false, 'photosOnMobileData': false, 'appearance': 'system',
-        'locationSend': 'all'});
+        'locationSend': 'all', 'highlightColour': 'purple'});
     });
 
     test('turn each on only with its permission, and schedule the hourly sync only while sending', () async {
@@ -580,7 +592,7 @@ void main() {
       expect(jsonDecode((await store.get('settings'))!), {'sending': true, 'history': false, 'health': true,
         'calendar': false, 'calendarsOff': [], 'mode': 'battery', 'place': 'server',
         'photos': false, 'photosOnMobileData': false, 'appearance': 'system',
-        'locationSend': 'all'});
+        'locationSend': 'all', 'highlightColour': 'purple'});
       expect(places.asked, [true, true]);
       // Each change started a sync; the last round ends before the store closes.
       await relay.settled();

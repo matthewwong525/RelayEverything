@@ -588,8 +588,12 @@ class Store extends GeneratedDatabase {
     }
   });
 
-  /// Waiting uploads.
-  Future<int> waiting() async => (await _rows('SELECT count(*) AS n FROM outbox')).single.read<int>('n');
+  /// Waiting notes: each note with anything waiting to send counts once, with its changes, pin, delete, recover and
+  /// files. Health, places, calendar and photo batches do not count: their pages count them.
+  Future<int> waiting() async => (await _rows(
+    "SELECT count(DISTINCT coalesce(json_extract(body, '\$.clientId'), json_extract(body, '\$.noteClientId'))) AS n "
+    'FROM outbox WHERE route IN (?, ?, ?, ?, ?, ?)', ['notes', noteUpdate, notePin, noteDelete, noteRecover, 'attachment'],
+  )).single.read<int>('n');
 
   Future<void> done(int id) => _run('DELETE FROM outbox WHERE id = ?', [id]);
 

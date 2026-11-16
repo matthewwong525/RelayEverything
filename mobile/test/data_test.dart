@@ -462,7 +462,8 @@ void main() {
       expect((batches.first.first as Map)['at'], 1793797200000);
       expect((batches.first.first as Map).containsKey('place'), isFalse);
       await store.queuePoints();
-      expect(await store.waiting(), 3);
+      // Points are no waiting note.
+      expect([(await store.outbox()).length, await store.waiting()], [3, 0]);
     });
 
     test('upgrades a first-version phone: sent notes keep a send time, and a note that waited for its pin is queued', () async {

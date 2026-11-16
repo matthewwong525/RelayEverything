@@ -37,6 +37,30 @@ void main() {
 
   Future<LocalNote> kept(String id) async => (await store.notes()).singleWhere((note) => note.clientId == id);
 
+  group('the waiting count', () {
+    Attachment file(String id) => Attachment(id: id, name: '$id.jpg', type: 'image/jpeg', size: 10, path: 'attachments/$id.jpg');
+
+    test('counts a note once, with its files and a change', () async {
+      await store.addNote(LocalNote(clientId: 'n1', text: 'Buy milk', createdAt: at, attachments: [file('f1'), file('f2')]), send: true);
+      await store.enqueue(noteUpdate, {'clientId': 'n1', 'text': 'Buy oat milk', 'editedAt': 1});
+      expect((await store.outbox()).length, greaterThan(2));
+      expect(await store.waiting(), 1);
+    });
+
+    test('counts two notes as two', () async {
+      await store.addNote(note('n1'), send: true);
+      await store.addNote(note('n2'), send: true);
+      expect(await store.waiting(), 2);
+    });
+
+    test('does not count health, places or calendar data', () async {
+      await store.enqueue('health', {'samples': []});
+      await store.enqueue(staysRoute, {'stays': []});
+      await store.enqueue('calendar', {'events': []});
+      expect([(await store.outbox()).length, await store.waiting()], [3, 0]);
+    });
+  });
+
   group('a change to a note', () {
     test('not sent yet changes its waiting upload, and sends as one new note', () async {
       await store.addNote(note('n1'), send: true);

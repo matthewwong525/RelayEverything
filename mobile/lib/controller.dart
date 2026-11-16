@@ -46,6 +46,10 @@ const motionAskedKey = 'motion.asked';
 /// The `state` key set once a first voice note starts, so *New note* stops showing *Hold to talk*.
 const holdTipKey = 'holdTipSeen';
 
+/// The `state` key set once, at the load that moved to Relay Everything a phone that sent health and places only to its
+/// own webhook: Home then says so once, and clearing it removes the key.
+const throughServerKey = 'notice.throughServer';
+
 /// After a sync, the names are read again only this long after the last read: they change only on the person's page.
 const _namesEvery = Duration(minutes: 10);
 
@@ -152,6 +156,7 @@ class RelayController extends Relay {
   DateTime? _namesAt;
   Set<String> _folded = const {};
   bool _holdTipSeen = false;
+  bool _throughServer = false;
   Future<void>? _syncing;
   /// A pull of notes asked for and not yet read, and the one reading now; [pullNotes] ends with them.
   Completer<void>? _pull, _reading;
@@ -189,18 +194,12 @@ class RelayController extends Relay {
   @override Connections? get connections => _connections;
   @override Set<String> get folded => _folded;
   @override bool get holdTipSeen => _holdTipSeen;
-  @override bool get privateWebhookMissing => _settings.sending && _settings.place == SendPlace.server &&
-    _settings.privateTo == SendPlace.webhook && _webhook == null;
+  @override bool get throughServerNotice => _throughServer;
 
   Outbound? get _api => _sender.api(_settings, connection: _connection, webhook: _webhook, installId: _installId);
 
-  /// The client for health, points, the calendar and photos: the notes' own, the webhook, or null while they wait.
-  Outbound? get _privateApi =>
-    _sender.privateApi(_settings, connection: _connection, webhook: _webhook, installId: _installId);
-
-  /// Moves what waits to where [settings] sends notes and private data, in one step.
-  Future<void> _moveOutbox(Settings settings) =>
-    store.moveOutbox(destinationOf(settings.place), private: destinationOf(settings.privatePlace));
+  /// Moves what waits to where [settings] sends, in one step.
+  Future<void> _moveOutbox(Settings settings) => store.moveOutbox(destinationOf(settings.place));
 
   /// True when [place] has what it sends with: a key for the server, or a webhook's address and secret.
   bool _ready(SendPlace place) => place == SendPlace.server ? _connection != null : _webhook != null;
@@ -215,15 +214,14 @@ class RelayController extends Relay {
     final saved = await store.get(settingsKey);
     _settings = Settings.decode(saved, hasKey: _connection != null);
     // A phone that lost its key or webhook, such as from a restore, can not send: sending reads as off until set again.
-    // A lost webhook for private data alone leaves sending on: notes still go, private data waits, never to the server,
-    // and the Account page asks for the webhook again.
     if (_settings.sending && !_ready(_settings.place)) _settings = _settings.copyWith(sending: false);
+    // A phone that sent health, places, the calendar and photos only to its own webhook now sends them to Relay
+    // Everything, with what waits: Home says so once. The flag goes first, as the save below drops the old choice.
+    if (_settings.sending && Settings.hadPrivateWebhook(saved)) await store.set(throughServerKey, 'true');
     // The first version's settings, read once by the upgrade rule, are saved in today's shape.
     if (_settings.encode() != saved) await store.set(settingsKey, _settings.encode());
-    if (await store.destination() != destinationOf(_settings.place) ||
-        await store.privateDestination() != destinationOf(_settings.privatePlace)) {
-      await _moveOutbox(_settings);
-    }
+    if (await store.outboxMoves(destinationOf(_settings.place))) await _moveOutbox(_settings);
+    _throughServer = await store.get(throughServerKey) != null;
     await store.remove(_oldTimeline);
     _connections = Connections.decode(await store.get(connectionsKey));
     _folded = {for (final header in jsonDecode(await store.get(foldedKey) ?? '[]') as List) if (header is String) header};
@@ -423,15 +421,13 @@ class RelayController extends Relay {
   }
 
   /// Moves what waits to [place] in one step, so nothing goes to the place left. A round sending there stops at its next
-  /// upload, and a new round starts after it. From the webhook to the server with [privateTo] the webhook, private data
-  /// stays where it went, so the calendar's sent list stays too.
+  /// upload, and a new round starts after it.
   @override
-  Future<String?> startSending({required bool sendEarlier, SendPlace? place, SendPlace? privateTo}) async {
+  Future<String?> startSending({required bool sendEarlier, SendPlace? place}) async {
     final to = place ?? _settings.place;
     if (!_ready(to)) return to == SendPlace.server ? 'Connect a key first.' : 'Set your webhook first.';
-    if (privateTo == SendPlace.webhook && _webhook == null) return 'Set your webhook first.';
     final fromWebhook = _fromWebhook(to);
-    final next = _settings.copyWith(sending: true, place: to, privateTo: privateTo);
+    final next = _settings.copyWith(sending: true, place: to);
     await _moveOutbox(next);
     if (sendEarlier) await store.queueEarlier(fromWebhook: fromWebhook);
     // A pin made while sending was off goes now: no pull would bring that note back to send it.
@@ -449,18 +445,12 @@ class RelayController extends Relay {
     unawaited(running == null ? sync() : running.then((_) => sync()));
   }
 
-  /// Health, places, the calendar and photos go to [place] from now on, with what of them waits. The webhook needs its
-  /// address and secret kept first, and picking it again after the phone lost it sends what waited. Back to the server,
-  /// the calendar's whole window goes there.
   @override
-  Future<String?> setPrivatePlace(SendPlace place) async {
-    if (place == SendPlace.webhook && _webhook == null) return 'Set your webhook first.';
-    final next = _settings.copyWith(privateTo: place);
-    await _moveOutbox(next);
-    await _saveSettings(next);
-    await _refreshLocal();
-    _syncAfter();
-    return null;
+  Future<void> dismissThroughServerNotice() async {
+    if (!_throughServer) return;
+    _throughServer = false;
+    notifyListeners();
+    await store.remove(throughServerKey);
   }
 
   @override
@@ -1099,9 +1089,9 @@ class RelayController extends Relay {
       while (true) {
         _again = false;
         final emptied = await _notesPart();
-        // Also when the notes could not go: private data may go to another place, the person's own webhook. Then no
-        // round follows, so a call that came does not stop it.
-        await _privatePart(yieldToNotes: emptied);
+        // Also when the notes could not go, such as after a note turned down holds the rest: then no round follows, so a
+        // call that came does not stop it.
+        await _dataPart(yieldToNotes: emptied);
         if (!emptied || !_settings.sending) break;
         if (_again || _pull != null) continue;
         final namesAt = _namesAt;
@@ -1126,7 +1116,7 @@ class RelayController extends Relay {
     notifyListeners();
     final place = _settings.place;
     // A switch of place while the round runs stops it at its next upload; a new round follows.
-    final result = await flush(store, api, clock: _clock, private: false, folder: folder,
+    final result = await flush(store, api, clock: _clock, notes: true, folder: folder,
       keepGoing: () => _settings.sending && _settings.place == place);
     _status = switch (result.failure) { Failure.refused => SyncStatus.refused, null => SyncStatus.synced, _ => SyncStatus.offline };
     // The stop's own state wins.
@@ -1155,14 +1145,13 @@ class RelayController extends Relay {
   /// The second part of a round: health, the calendar, the points, stays and trips, their uploads, and photos. It never
   /// changes the line on Home, which is about notes; a failure here waits for a later round. With [yieldToNotes], it
   /// stops at its next read or upload while a note or a pull waits, so they go first in the next round.
-  Future<void> _privatePart({required bool yieldToNotes}) async {
+  Future<void> _dataPart({required bool yieldToNotes}) async {
     final api = _api;
     if (api == null) return;
-    final place = _settings.place, privatePlace = _settings.privatePlace;
-    // Sending can turn off, either place can change, and a note or a pull can come while it runs: from then on it reads,
+    final place = _settings.place;
+    // Sending can turn off, the place can change, and a note or a pull can come while it runs: from then on it reads,
     // queues and sends nothing more.
-    bool still() => _settings.sending && _settings.place == place && _settings.privatePlace == privatePlace &&
-      !(yieldToNotes && (_again || _pull != null));
+    bool still() => _settings.sending && _settings.place == place && !(yieldToNotes && (_again || _pull != null));
     final healthSource = health;
     if (still() && _settings.health && healthSource != null) {
       try {
@@ -1189,23 +1178,20 @@ class RelayController extends Relay {
       }
     }
     if (still() && _settings.locationSend != LocationSend.stays) await store.queuePoints();
-    // Private data to where the person picked: the same server as the notes, or their own webhook, flushed apart so a
-    // receiver that is down holds back no note. With no webhook kept it waits on the phone, and never goes to the server.
-    final privateApi = _privateApi;
-    final apart = privateApi != null && privateApi.destination != api.destination;
-    final private = privateApi == null || !still() ? const FlushResult()
-      : await flush(store, privateApi, clock: _clock, keepGoing: still, folder: folder, private: apart ? null : true);
+    // To the same place as the notes, after them, so an upload here that fails holds back no note.
+    final data = !still() ? const FlushResult()
+      : await flush(store, api, clock: _clock, keepGoing: still, folder: folder, notes: false);
     // New photos, as in the background round: after the outbox, so a photo waiting for Wi-Fi holds back nothing else.
     // A refused photo with a key that still answers, such as on an older server with no photos, comes back as null.
     Failure? photoFailure;
     final library = photos;
     final kind = network;
     if (still() && _settings.photos && library != null && kind != null) {
-      photoFailure = await syncPhotos(store, privateApi, library, kind, settings: _settings, send: private.failure == null,
+      photoFailure = await syncPhotos(store, api, library, kind, settings: _settings, send: data.failure == null,
         now: _clock(), keepGoing: () async => _settings.photos && still());
     }
     // A turned-off key refuses the notes too, so Home says so, though no note waited; any other failure here waits.
-    if (!apart && (private.failure ?? photoFailure) == Failure.refused) _status = SyncStatus.refused;
+    if ((data.failure ?? photoFailure) == Failure.refused) _status = SyncStatus.refused;
     if (!_settings.sending) _status = SyncStatus.idle;
     await _refreshLocal();
   }

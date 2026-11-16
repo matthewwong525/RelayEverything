@@ -45,9 +45,9 @@ New `.github/workflows/mobile-store-screenshots.yml` (`workflow_dispatch`, `main
 
 Health, Location and Photos folders stay out of the screenshots: a simulator has no real data, and we must show no person's real data.
 
-### Privacy answers: a file plus one browser pass
+### Privacy answers: a file plus one pass by hand
 
-The App Store Connect API has no App Privacy endpoints; fastlane's `upload_app_privacy_details_to_app_store` needs an Apple ID session, which CI does not have. So `mobile/ios/fastlane/app_privacy_details.json` (fastlane's format) is the record, and the answers are set once in App Store Connect through the browser signed in as Matthew. All data *linked to the user*, *App Functionality* only, *not used for tracking*:
+The App Store Connect API has no App Privacy endpoints; fastlane's `upload_app_privacy_details_to_app_store` needs an Apple ID session, which CI does not have. So `mobile/ios/fastlane/app_privacy_details.json` (fastlane's format) is the record, and the answers are set once by hand in App Store Connect (Matthew, in Safari). All data *linked to the user*, *App Functionality* only, *not used for tracking*:
 
 | Apple category | Why |
 |---|---|

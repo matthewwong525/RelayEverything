@@ -20,8 +20,8 @@
 
 ## 4. One-time App Store Connect settings (outward, confirm each)
 
-- [ ] 4.1 (outward) Through the API: price free in all territories, and the reviewer contact from the memory store (never the repo)
-- [ ] 4.2 (outward) In the browser signed in as Matthew: set the App Privacy answers to match `app_privacy_details.json`, and publish them
+- [x] 4.1 (outward) Through the API: price free in all territories, and the reviewer contact from the memory store (never the repo)
+- [x] 4.2 (outward) Set the App Privacy answers to match `app_privacy_details.json`, and publish them (Matthew set them in Safari, because App Store Connect's pages stay blank in the shared browser)
 
 ## 5. Docs
 
@@ -30,9 +30,8 @@
 
 ## 6. Checks
 
-- [ ] 6.1 `node --test scripts/app-store-listing.test.mjs scripts/app-release.test.mjs`, `node scripts/product-name.test.mjs`, `node scripts/public-check.mjs`
-- [ ] 6.2 `/save`, then after the publish run the release check from `main` (`gh workflow run mobile-ci.yml --ref main -f release_check=true`) and confirm `deliver` verifies the page with no error
+- [x] 6.1 `node --test scripts/app-store-listing.test.mjs scripts/app-release.test.mjs`, `node scripts/product-name.test.mjs`, `node scripts/public-check.mjs`
 
 ## After the publish
 
-`/ship` reports the release check's result and tells Matthew the app is ready for `v1.0.0`. It runs `node scripts/publish-relay-site.mjs` and `node scripts/publish-relay-server.mjs` only if `site/` or `app/` changed.
+Run the release check from `main` (`gh workflow run mobile-ci.yml --ref main -f release_check=true`) and confirm `deliver` verifies the page with no error. `/ship` reports the release check's result and tells Matthew the app is ready for `v1.0.0`. It runs `node scripts/publish-relay-site.mjs` and `node scripts/publish-relay-server.mjs` only if `site/` or `app/` changed.

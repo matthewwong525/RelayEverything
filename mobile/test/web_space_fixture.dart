@@ -45,6 +45,9 @@ class TinyRelay extends Relay {
   RelayPlatform get platform => RelayPlatform.web;
 
   @override
+  List<Entry> get deleted => const [];
+
+  @override
   Future<void> setAppearance(Appearance appearance) async {
     calls.add('appearance ${appearance.name}');
     settings = settings.copyWith(appearance: appearance);

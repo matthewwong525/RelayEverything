@@ -295,7 +295,8 @@ export type TagChange = { add?: string[]; remove?: string[] };
 /** Adds and removes a fact's or a note's topics as the device, each kept with it; the words never change. A fact
  *  keeps at least one topic. Null when no such fact or note is in the space. */
 export async function changeTags(db: Db, deviceId: string, kind: "fact" | "note", id: string, { add = [], remove = [] }: TagChange) {
-  const [table, own, records] = kind === "fact" ? ["relay_memory_tags", "fact_id", "relay_memory"] : ["relay_note_tags", "note_id", "relay_notes"];
+  const [table, own, records] = kind === "fact" ? ["relay_memory_tags", "fact_id", "relay_memory"]
+    : ["relay_note_tags", "note_id", "(SELECT id FROM relay_notes WHERE deleted_at IS NULL)"];
   if (!await db.prepare(`SELECT 1 AS found FROM ${records} WHERE id = ?`).bind(id).first()) return null;
   const adding = [...new Set(add.map(tagOf))];
   const removing = [...new Set(remove.map(tagOf))];

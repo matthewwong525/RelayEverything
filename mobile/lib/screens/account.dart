@@ -143,8 +143,8 @@ class _AccountPageState extends State<AccountPage> {
       ]),
       Group(children: [ListTile(
         title: const Text('Sign in to Relay Everything'),
-        subtitle: const Text('Sync your notes with your page, your AI and your other phones. Health, places, calendar and '
-          'photos still go only to your webhook.'),
+        subtitle: const Text('Sync your notes with your page, your AI and your other phones. Everything then goes '
+          'through Relay Everything: add your webhook on your page to keep getting it.'),
         trailing: const Icon(CupertinoIcons.chevron_forward),
         onTap: () => _signIn(context),
       )]),
@@ -156,19 +156,20 @@ class _AccountPageState extends State<AccountPage> {
     ];
   }
 
-  /// The sign-in, with the webhook kept for private data. Once signed in, the page shows the account, and a message says
-  /// the webhook gets no notes from the phone until the person adds it on their page.
+  /// The sign-in alone. Once signed in, everything goes to Relay Everything, the page shows the account, and a message
+  /// says the webhook gets nothing from the phone until the person adds it on their page. The phone keeps the webhook's
+  /// address and secret, for a later *Sign out*.
   Future<void> _signIn(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
-    if (!await choosePlace(context, relay, keepWebhook: true)) return;
+    final navigator = Navigator.maybeOf(context, rootNavigator: true);
+    if (!await choosePlace(context, relay, signInOnly: true)) return;
     unawaited(relay.refreshConnections());
-    messenger.showSnackBar(const SnackBar(content: Text('Signed in. To get your notes at your webhook too, add it under '
-      'Webhooks on your Relay Everything page.')));
+    unawaited(showProblemOn(navigator, 'Signed in. To keep getting everything at your webhook, add it under Webhooks '
+      'on your Relay Everything page.'));
   }
 
   Future<void> _test(BuildContext context) async {
     final answer = await relay.testWebhook(relay.webhookAddress ?? '', relay.webhookSecret ?? '');
-    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(answer)));
+    if (context.mounted) unawaited(showProblem(context, answer));
   }
 
   /// Asks first, then forgets the key and stops sending, and goes back to Settings, which says *Sign in*.

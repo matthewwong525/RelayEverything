@@ -1,6 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
-import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'package:flutter/cupertino.dart' show CupertinoAlertDialog, CupertinoDialogAction, CupertinoIcons, CupertinoTextField;
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +12,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:relay_app/app.dart';
 import 'package:relay_app/brand.dart';
 import 'package:relay_app/editor/markdown.dart';
+import 'package:relay_app/editor/shortcuts.dart' show FormatIntent, formatShortcuts;
+import 'package:relay_app/editor/table.dart' show NoteTableView, cellPause;
 import 'package:relay_app/relay.dart';
 import 'package:relay_app/screens/connect.dart';
 import 'package:relay_app/screens/connect_ai.dart' show ConnectAiPage, computerLine;
@@ -20,7 +23,8 @@ import 'package:relay_app/screens/folder.dart';
 import 'package:relay_app/screens/note_bars.dart';
 import 'package:relay_app/screens/note_blocks.dart' show VoicePlayer, WavePainter;
 import 'package:relay_app/screens/note_editor.dart';
-import 'package:relay_app/screens/round_button.dart' show ButtonPill;
+import 'package:relay_app/screens/recently_deleted.dart' show RecentlyDeletedScreen, keepLine;
+import 'package:relay_app/screens/round_button.dart' show ButtonPill, PillIconButton;
 import 'package:relay_app/screens/settings.dart' show SettingsRow, SettingsScreen;
 import 'package:relay_app/screens/timeline.dart' show FoldHeader, SyncLine, TimelineScreen, TitleBar;
 import 'package:relay_app/screens/transcripts.dart' show CommandBox, TranscriptsPage;
@@ -110,6 +114,12 @@ class FakeRelay extends Relay {
     settings = settings.copyWith(appearance: appearance);
     notifyListeners();
   }
+  @override
+  Future<void> setHighlightColour(String colour) async {
+    calls.add('highlight $colour');
+    settings = settings.copyWith(highlightColour: colour);
+    notifyListeners();
+  }
   @override Future<String?> setHistory(bool on) async { calls.add('history $on'); return problem; }
   @override Future<String?> setHealth(bool on) async { calls.add('health $on'); return problem; }
   @override Future<String?> setPhotos(bool on) async { calls.add('photos $on'); return problem; }
@@ -133,25 +143,20 @@ class FakeRelay extends Relay {
   }
 
   @override
-  Future<String?> startSending({required bool sendEarlier, SendPlace? place, SendPlace? privateTo}) async {
-    calls.add('start $sendEarlier${place == SendPlace.webhook ? ' webhook' : ''}'
-      '${privateTo == null ? '' : ' private ${privateTo.name}'}');
-    settings = settings.copyWith(sending: true, place: place, privateTo: privateTo);
+  Future<String?> startSending({required bool sendEarlier, SendPlace? place}) async {
+    calls.add('start $sendEarlier${place == SendPlace.webhook ? ' webhook' : ''}');
+    settings = settings.copyWith(sending: true, place: place);
     notifyListeners();
     return null;
   }
 
-  @override bool privateWebhookMissing = false;
+  @override bool throughServerNotice = false;
 
   @override
-  Future<String?> setPrivatePlace(SendPlace place) async {
-    calls.add('private ${place.name}');
-    if (problem == null) {
-      settings = settings.copyWith(privateTo: place);
-      privateWebhookMissing = false;
-      notifyListeners();
-    }
-    return problem;
+  Future<void> dismissThroughServerNotice() async {
+    calls.add('dismiss notice');
+    throughServerNotice = false;
+    notifyListeners();
   }
 
   @override String? webhookAddress;
@@ -229,45 +234,49 @@ class FakeRelay extends Relay {
     return null;
   }
 
-  /// A sent note is deleted everywhere, with *Undo*, as the controller does; a note never sent is dropped.
+  /// A sent note is deleted for good everywhere, as the controller does; a note never sent is dropped. Neither goes to
+  /// *Recently Deleted*.
   @override
   Future<Emptied> dropEmptyNote(String id) async {
     calls.add('drop $id');
     final kept = entries.where((entry) => entry.id != id || entry.files.isNotEmpty || entry.voice).toList();
     if (kept.length == entries.length) return Emptied.kept;
-    for (final entry in entries) {
-      if (entry.id == id && entry.sent) deleted[id] = entry;
-    }
+    final sent = entries.any((entry) => entry.id == id && entry.sent);
     entries = kept;
     notifyListeners();
-    return deleted.containsKey(id) ? Emptied.deleting : Emptied.dropped;
+    return sent ? Emptied.deleted : Emptied.dropped;
   }
 
-  /// The notes deleted and not yet undone, so that [undoDelete] puts each back.
-  final deleted = <String, Entry>{};
+  /// *Recently Deleted*, newest delete first.
+  @override List<Entry> deleted = [];
 
   @override
   Future<void> deleteNote(String id) async {
     calls.add('delete $id');
     for (final entry in entries) {
-      if (entry.id == id) deleted[id] = entry;
+      if (entry.id == id) deleted = [deletedCopy(entry, DateTime.now()), ...deleted];
     }
     entries = [for (final entry in entries) if (entry.id != id) entry];
+    deletedNow(id);
     notifyListeners();
   }
 
   @override
-  Future<void> undoDelete(String id) async {
-    calls.add('undo $id');
-    final entry = deleted.remove(id);
-    if (entry != null) entries = [...entries, entry]..sort((a, b) => b.at.compareTo(a.at));
+  Future<void> recover(String id) async {
+    calls.add('recover $id');
+    for (final entry in deleted) {
+      if (entry.id == id) entries = [...entries, deletedCopy(entry, null)]..sort((a, b) => b.at.compareTo(a.at));
+    }
+    deleted = [for (final entry in deleted) if (entry.id != id) entry];
     notifyListeners();
   }
 
   @override
-  Future<void> endUndo(String id) async {
-    calls.add('end $id');
-    deleted.remove(id);
+  Future<void> deleteForever(String id) async {
+    calls.add('forever $id');
+    deleted = [for (final entry in deleted) if (entry.id != id) entry];
+    entries = [for (final entry in entries) if (entry.id != id) entry];
+    notifyListeners();
   }
 
   /// Pins at once, as the controller does: the note keeps its words and its time.
@@ -392,6 +401,12 @@ class FakeRelay extends Relay {
 
 final now = DateTime.now();
 
+/// [entry] in *Recently Deleted* since [at], or out of it for null.
+Entry deletedCopy(Entry entry, DateTime? at) => Entry(id: entry.id, text: entry.text, at: entry.at, sent: entry.sent,
+  waiting: entry.waiting, voice: entry.voice, writing: entry.writing, failed: entry.failed, why: entry.why,
+  noWords: entry.noWords, recording: entry.recording, length: entry.length, files: entry.files, from: entry.from,
+  pinned: entry.pinned, deletedAt: at);
+
 /// [entry], pinned or not.
 Entry pinnedCopy(Entry entry, bool pinned) => Entry(id: entry.id, text: entry.text, at: entry.at, sent: entry.sent,
   waiting: entry.waiting, voice: entry.voice, writing: entry.writing, failed: entry.failed, why: entry.why,
@@ -429,6 +444,16 @@ Future<void> openFolder(WidgetTester tester, String title) async {
   await Scrollable.ensureVisible(tester.element(row), alignment: 0.5);
   await tester.pumpAndSettle();
   await tester.tap(row);
+  await tester.pumpAndSettle();
+}
+
+/// The alert that shows the problem [message]: its title, the first sentence without its full stop.
+Finder problem(String message) =>
+  find.descendant(of: find.byType(CupertinoAlertDialog), matching: find.text(problemParts(message).$1));
+
+/// Taps *OK* on the problem alert.
+Future<void> closeProblem(WidgetTester tester) async {
+  await tester.tap(find.widgetWithText(CupertinoDialogAction, 'OK'));
   await tester.pumpAndSettle();
 }
 
@@ -614,10 +639,9 @@ void main() {
     expect(accountLines(tester), ['app.relayeverything.com', 'Signed in']);
     relay
       ..connections = const Connections(email: 'you@example.com', webhooks: ['Zapier'])
-      ..settings = relay.settings.copyWith(privateTo: SendPlace.webhook)
       ..changed();
     await tester.pump();
-    // Private data to the webhook adds no line.
+    // Webhooks on the page add no line.
     expect(accountLines(tester), ['you@example.com', 'Signed in']);
   });
 
@@ -792,10 +816,10 @@ void main() {
       ConnectedDevice(id: 'd-laptop', name: 'Laptop', computer: true, since: DateTime(now.year, 11, 8)),
     ]);
 
-  void signedIn({SendPlace privateTo = SendPlace.server}) => relay
+  void signedIn() => relay
     ..connected = true
     ..server = 'https://relay.example.com'
-    ..settings = Settings(sending: true, health: true, privateTo: privateTo)
+    ..settings = const Settings(sending: true, health: true)
     ..connections = family();
 
   testWidgets('the Account page shows the email with Sign out, the phones, Advanced and Delete my account, in that order',
@@ -841,7 +865,7 @@ void main() {
     await tester.tap(delete);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    expect(find.text('The browser did not open. Try again.'), findsOneWidget);
+    expect([find.text('The browser did not open'), find.text('Try again.')], everyElement(findsOneWidget));
     expect(relay.calls, isEmpty);
   });
 
@@ -893,118 +917,42 @@ void main() {
     expect(relay.entries, hasLength(1));
   });
 
-  group('Webhooks, and where health, places, calendar and photos go', () {
-    const note = 'What already went to Relay Everything stays on your page. Your AI apps and your page show none of this '
-      'from now on.';
-    const only = 'Only to my own webhook';
-    bool on(WidgetTester tester) => switchOf(tester, only).value;
-
+  group('Webhooks, and one place for everything', () {
     Future<void> openWebhooks(WidgetTester tester) async {
       await openAccount(tester);
       await tester.tap(find.text('Webhooks'));
       await tester.pumpAndSettle();
     }
 
-    testWidgets('Webhooks says it is for developers, lists the names, opens the page, and holds the switch, off',
-        (tester) async {
+    testWidgets('Webhooks says it is for developers, lists the names, opens the page, and holds no switch', (tester) async {
       tallScreen(tester);
       final opened = <Uri>[];
       signedIn();
+      relay
+        ..webhookAddress = 'https://db.example.com/relay'
+        ..webhookSecret = 'whsec_kept';
       await tester.pumpWidget(RelayApp(relay: relay, opener: (address) async {
         opened.add(address);
         return true;
       }));
       await openWebhooks(tester);
       expect(find.byType(WebhooksPage), findsOneWidget);
-      expect(find.textContaining('For developers.'), findsOneWidget);
-      expect(find.textContaining('You do not need it to use Relay Everything.'), findsOneWidget);
+      expect(find.text('For developers. Your own server gets a copy of your notes, and of what else you tick for it, as '
+        'they arrive. You do not need it to use Relay Everything.'), findsOneWidget);
       expect([find.text('My database'), find.text('Zapier')], everyElement(findsOneWidget));
-      expect(find.text('Health, places, calendar and photos'), findsOneWidget);
-      expect(find.text('Straight from this phone. Relay Everything never gets them.'), findsOneWidget);
-      expect(on(tester), isFalse);
-      expect([find.text(note), find.text('Webhook'), find.byType(FilledButton)], [findsNothing, findsNothing, findsNothing]);
+      // A webhook kept on the phone, for a later Sign out, shows nowhere here, and no choice of where data goes.
+      expect([find.byType(SwitchListTile), find.text('Health, places, calendar and photos'), find.text('Webhook'),
+        find.text('db.example.com'), find.text('Send a test'), find.byType(FilledButton)], everyElement(findsNothing));
       await tester.tap(find.text('Add or change on your Relay Everything page'));
       await tester.pumpAndSettle();
       expect(opened, [Uri.parse('https://relay.example.com/#webhooks')]);
       expect(relay.calls, isEmpty);
     });
 
-    testWidgets('the switch with no webhook kept opens the setup; back changes nothing, Save turns it on, and off sends to '
-        'Relay Everything', (tester) async {
-      tallScreen(tester);
-      signedIn();
-      await tester.pumpWidget(RelayApp(relay: relay));
-      await openWebhooks(tester);
-      await tester.tap(find.text(only));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('Your notes still sync through Relay Everything.'), findsOneWidget);
-      expect(find.text('Sign in to Relay Everything instead'), findsNothing);
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-      expect([relay.calls, on(tester), relay.settings.privateTo], [isEmpty, isFalse, SendPlace.server]);
-      await tester.tap(find.text(only));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.widgetWithText(TextField, 'Address'), 'https://db.example.com/relay');
-      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-      await tester.pumpAndSettle();
-      // No earlier-notes question and no whole-webhook sending: notes still go to Relay Everything.
-      expect(relay.calls, ['webhook https://db.example.com/relay ${relay.webhookSecret}', 'private webhook']);
-      expect([relay.settings.place, relay.settings.privateTo, on(tester)], [SendPlace.server, SendPlace.webhook, isTrue]);
-      expect([find.text('db.example.com'), find.text(note)], [findsOneWidget, findsOneWidget]);
-      await tester.tap(find.widgetWithText(TextButton, 'Send a test'));
-      await tester.pump();
-      await tester.pump();
-      expect(find.text('Your receiver answered 204. It works.'), findsOneWidget);
-      expect(find.byType(FilledButton), findsNothing);
-      // Off: one tap, with no question, and what waits goes to Relay Everything.
-      await tester.tap(find.text(only));
-      await tester.pumpAndSettle();
-      expect([relay.calls.last, on(tester), find.text(note)], ['private server', isFalse, findsNothing]);
-    });
-
-    testWidgets('with a webhook kept, the switch moves at once, and its last failure shows', (tester) async {
-      tallScreen(tester);
-      signedIn();
-      relay
-        ..webhookAddress = 'https://db.example.com/relay'
-        ..webhookSecret = 'whsec_kept';
-      await tester.pumpWidget(RelayApp(relay: relay));
-      await openWebhooks(tester);
-      await tester.tap(find.text(only));
-      await tester.pumpAndSettle();
-      expect([relay.calls, on(tester)], [['private webhook'], isTrue]);
-      final at = DateTime.now();
-      relay
-        ..webhookProblem = WebhookProblem(at: at, status: 503)
-        ..changed();
-      await tester.pumpAndSettle();
-      expect(find.text(problemLine(relay.webhookProblem!, at, what: 'Health, places, calendar and photos')), findsOneWidget);
-      expect(problemLine(WebhookProblem(at: DateTime(2026, 11, 6, 9, 5), status: 503), DateTime(2026, 11, 6),
-        what: 'Health, places, calendar and photos'),
-        'Your receiver answered 503 at 09:05. Health, places, calendar and photos wait on this phone until it takes them.');
-    });
-
-    testWidgets('a webhook the phone lost asks to set it again, and its setup opens from there', (tester) async {
-      tallScreen(tester);
-      signedIn(privateTo: SendPlace.webhook);
-      relay.privateWebhookMissing = true;
-      await tester.pumpWidget(RelayApp(relay: relay));
-      await openWebhooks(tester);
-      expect([find.text('Set your webhook again'), find.text('Webhook')], [findsOneWidget, findsNothing]);
-      expect(find.textContaining('Your health, places, calendar and photos wait here until you do.'), findsOneWidget);
-      await tester.tap(find.text('Set your webhook again'));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.widgetWithText(TextField, 'Address'), 'https://db.example.com/relay');
-      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-      await tester.pumpAndSettle();
-      expect(relay.calls.last, 'private webhook');
-      expect([find.text('Set your webhook again'), find.text('db.example.com')], [findsNothing, findsOneWidget]);
-    });
-
     testWidgets('no switch signed out, and the no-account webhook page has no Webhooks row', (tester) async {
       tallScreen(tester);
       await tester.pumpWidget(MaterialApp(home: WebhooksPage(relay: relay)));
-      expect([find.text(only), find.text('Health, places, calendar and photos')], everyElement(findsNothing));
+      expect([find.byType(SwitchListTile), find.text('Health, places, calendar and photos')], everyElement(findsNothing));
       expect(find.text('Add or change on your Relay Everything page'), findsOneWidget);
       relay
         ..settings = const Settings(sending: true, place: SendPlace.webhook)
@@ -1017,27 +965,83 @@ void main() {
         everyElement(findsOneWidget));
     });
 
-    testWidgets('the folders say their data goes to your webhook', (tester) async {
+    testWidgets('signed in with a webhook kept, the folders say Sent, never to your webhook', (tester) async {
       tallScreen(tester);
-      signedIn(privateTo: SendPlace.webhook);
+      signedIn();
       final at = DateTime.now();
       relay
         ..settings = relay.settings.copyWith(history: true, calendar: true, photos: true)
+        ..webhookAddress = 'https://db.example.com/relay'
         ..healthSent = SendState(at: at, waiting: 3)
         ..pointsSent = SendState(at: at)
         ..calendarSent = SendState(at: at, waiting: 1);
       final time = '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
       await tester.pumpWidget(RelayApp(relay: relay));
-      for (final (folder, line) in [('Health', 'Sent to your webhook $time · 3 readings waiting'),
-          ('Location', 'Sent to your webhook $time · none waiting'),
-          ('Calendar', 'Sent to your webhook $time · 1 event waiting'),
-          ('Photos', 'Sends new photos, with when and where you took them, to your webhook.')]) {
+      for (final (folder, line) in [('Health', 'Sent $time · 3 readings waiting'),
+          ('Location', 'Sent $time · none waiting'),
+          ('Calendar', 'Sent $time · 1 event waiting'),
+          ('Photos', 'Sends new photos, with when and where you took them, so your AI can see them.')]) {
         await openFolder(tester, folder);
         expect(find.text(line), findsOneWidget, reason: folder);
+        expect(find.textContaining('to your webhook'), findsNothing, reason: folder);
         await tester.pageBack();
         await tester.pumpAndSettle();
       }
-      expect(sentLine(SendState(at: at), 'reading', at), 'Sent $time · none waiting');
+    });
+
+    const moved = 'Everything now goes through Relay Everything';
+
+    testWidgets('a phone moved from its own webhook says so once, and OK clears it', (tester) async {
+      tallScreen(tester);
+      signedIn();
+      relay.throughServerNotice = true;
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.pumpAndSettle();
+      expect(find.text(moved), findsOneWidget);
+      expect(find.text('This phone no longer sends health, places, calendar and photos straight to your webhook. They '
+        'go to Relay Everything, then to each webhook you tick for them on your page.'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Open Webhooks'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, 'OK'));
+      await tester.pumpAndSettle();
+      expect([find.text(moved), find.byType(WebhooksPage)], [findsNothing, findsNothing]);
+      expect([relay.calls, relay.throughServerNotice], [['dismiss notice'], isFalse]);
+      // A new start of the app shows it no more.
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.pumpAndSettle();
+      expect(find.text(moved), findsNothing);
+    });
+
+    testWidgets('Open Webhooks clears the message and opens Webhooks', (tester) async {
+      tallScreen(tester);
+      signedIn();
+      relay.throughServerNotice = true;
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Open Webhooks'));
+      await tester.pumpAndSettle();
+      expect([find.text(moved), find.byType(WebhooksPage)], [findsNothing, findsOneWidget]);
+      expect([relay.calls, relay.throughServerNotice], [['dismiss notice'], isFalse]);
+    });
+
+    testWidgets('a tap outside the message clears it too', (tester) async {
+      tallScreen(tester);
+      signedIn();
+      relay.throughServerNotice = true;
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.pumpAndSettle();
+      expect(find.text(moved), findsOneWidget);
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+      expect([find.text(moved), find.byType(WebhooksPage)], [findsNothing, findsNothing]);
+      expect([relay.calls, relay.throughServerNotice], [['dismiss notice'], isFalse]);
+    });
+
+    testWidgets('no message on a phone that never had its own webhook for them', (tester) async {
+      signedIn();
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await tester.pumpAndSettle();
+      expect([find.text(moved), find.byType(AlertDialog)], everyElement(findsNothing));
     });
   });
 
@@ -1066,48 +1070,202 @@ void main() {
     expect(paper(), BrandColors.dark.paper);
   });
 
-  testWidgets('a swipe to the left deletes a note at once, and Undo in the bar brings it back', (tester) async {
+  testWidgets('a swipe to the left moves a note to Recently Deleted at once, with no message', (tester) async {
     relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now), Entry(id: 'n2', text: 'Call Sam', at: now)];
     await tester.pumpWidget(RelayApp(relay: relay));
+    expect(find.widgetWithText(ListTile, 'Recently Deleted'), findsNothing);
     await openFolder(tester, 'Notes');
     await tester.drag(find.text('Buy milk'), const Offset(-500, 0));
     await tester.pumpAndSettle();
     expect(relay.calls, ['delete n1']);
-    expect([find.text('Buy milk'), find.text('Call Sam'), find.text('Note deleted')], [findsNothing, findsOneWidget, findsOneWidget]);
-    await tester.tap(find.text('Undo'));
+    expect([find.text('Buy milk'), find.text('Call Sam'), find.text('Note deleted'), find.text('Undo')],
+      [findsNothing, findsOneWidget, findsNothing, findsNothing]);
+    await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(relay.calls, ['delete n1', 'undo n1']);
-    expect(find.text('Buy milk'), findsOneWidget);
+    final row = find.widgetWithText(ListTile, 'Recently Deleted');
+    expect([row, find.descendant(of: row, matching: find.text('1'))], everyElement(findsOneWidget));
   });
 
-  testWidgets('the delete runs only once the Undo bar has closed, its five seconds counted from when it is in', (tester) async {
-    relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now), Entry(id: 'n2', text: 'Call Sam', at: now)];
-    await tester.pumpWidget(RelayApp(relay: relay));
-    await openFolder(tester, 'Notes');
-    await tester.drag(find.text('Buy milk'), const Offset(-500, 0));
-    for (var frame = 0; frame < 100 && relay.calls.isEmpty; frame++) {
-      await tester.pump(const Duration(milliseconds: 10));
-    }
-    expect(relay.calls, ['delete n1']);
-    // Five seconds after the delete, the bar that slid in after it has had less than its five seconds: Undo still shows.
-    for (var step = 0; step < 50; step++) {
-      await tester.pump(const Duration(milliseconds: 100));
-    }
-    expect([relay.calls, find.text('Undo').evaluate().length], [['delete n1'], 1]);
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester.pumpAndSettle();
-    expect([relay.calls, find.text('Undo').evaluate()], [['delete n1', 'end n1'], isEmpty]);
+  group('Recently Deleted', () {
+    setUp(() {
+      relay.entries = [Entry(id: 'n2', text: 'Call Sam', at: now)];
+      relay.deleted = [Entry(id: 'n1', text: 'Buy milk', at: now, deletedAt: now),
+        Entry(id: 'n3', text: 'Old list', at: now.subtract(const Duration(days: 3)),
+          deletedAt: now.subtract(const Duration(days: 2)))];
+    });
+
+    testWidgets('lists the notes by the day each was deleted, under the 30-day line, with no New note', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Recently Deleted');
+      expect(find.byType(RecentlyDeletedScreen), findsOneWidget);
+      expect([find.text('2 notes'), find.text(keepLine), find.text('Today'), find.text('Previous 7 days'),
+        find.text('Buy milk'), find.text('Old list')], everyElement(findsOneWidget));
+      expect([newNote, find.text('Call Sam')], everyElement(findsNothing));
+    });
+
+    testWidgets('a swipe shows Recover, which brings the note back, and Delete, which asks first', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Recently Deleted');
+      await tester.drag(find.text('Buy milk'), const Offset(-300, 0));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Recover'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['recover n1']);
+      expect([find.text('Buy milk'), find.text('1 note')], [findsNothing, findsOneWidget]);
+      expect(relay.entries.map((entry) => entry.id), containsAll(['n1', 'n2']));
+      await tester.drag(find.text('Old list'), const Offset(-300, 0));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+      expect(find.text('Delete this note?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(CupertinoDialogAction, 'Cancel'));
+      await tester.pumpAndSettle();
+      expect([relay.calls, find.text('Old list').evaluate().length], [['recover n1'], 1]);
+      await tester.drag(find.text('Old list'), const Offset(-300, 0));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(CupertinoDialogAction, 'Delete'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['recover n1', 'forever n3']);
+      expect(relay.deleted, isEmpty);
+    });
+
+    testWidgets('a screen reader has Recover and Delete on each row', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Recently Deleted');
+      expect(tester.getSemantics(find.text('Buy milk')), isSemantics(customActions: [
+        const CustomSemanticsAction(label: 'Recover'), const CustomSemanticsAction(label: 'Delete')]));
+      tester.semantics.performAction(find.semantics.byLabel(RegExp('Buy milk')), SemanticsAction.customAction,
+        args: CustomSemanticsAction.getIdentifier(const CustomSemanticsAction(label: 'Recover')));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['recover n1']);
+      semantics.dispose();
+    });
+
+    testWidgets('⋯ has Recover All, and Delete All in red, which asks first', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Recently Deleted');
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      final items = tester.widgetList<MenuItemButton>(find.byType(MenuItemButton)).toList();
+      expect([for (final item in items) (item.child! as Text).data], ['Recover All', 'Delete All']);
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Delete All'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete 2 notes?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(CupertinoDialogAction, 'Delete All'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['forever n1', 'forever n3']);
+      expect([find.text('No notes'), find.text('Buy milk')], [findsOneWidget, findsNothing]);
+    });
+
+    testWidgets('⋯ → Recover All brings every note back, and the Home row goes', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Recently Deleted');
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Recover All'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['recover n1', 'recover n3']);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(ListTile, 'Recently Deleted'), findsNothing);
+    });
+
+    testWidgets('a deleted note opens to read only, and a tap in its words asks to recover it', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Recently Deleted');
+      await tester.tap(find.text('Buy milk'));
+      await tester.pumpAndSettle();
+      expect(find.byType(NoteEditor), findsOneWidget);
+      expect(quill(tester).readOnly, isTrue);
+      expect([find.byType(ReadingBar), find.byType(NewNoteButton)], everyElement(findsNothing));
+      await tester.tap(find.byType(QuillEditor));
+      await tester.pumpAndSettle();
+      expect([find.text("Recently deleted notes can't be edited."), find.text("To edit this note, you'll need to recover it.")],
+        everyElement(findsOneWidget));
+      await tester.tap(find.widgetWithText(CupertinoDialogAction, 'Recover'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['recover n1']);
+      expect(quill(tester).readOnly, isFalse);
+      expect(find.byType(ReadingBar), findsOneWidget);
+    });
+
+    testWidgets('⋯ on a deleted note has Recover, and Delete asks, then closes the page', (tester) async {
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Recently Deleted');
+      await tester.tap(find.text('Buy milk'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      final items = tester.widgetList<MenuItemButton>(find.byType(MenuItemButton)).toList();
+      expect([for (final item in items) (item.child! as Text).data], ['Recover', 'Copy', 'Delete']);
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Delete'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(CupertinoDialogAction, 'Delete'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['forever n1']);
+      expect([find.byType(NoteEditor), find.text('Buy milk')], everyElement(findsNothing));
+      expect(find.byType(RecentlyDeletedScreen), findsOneWidget);
+    });
   });
 
-  testWidgets('a second delete closes the first bar, and the first delete runs once it is gone', (tester) async {
-    relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now), Entry(id: 'n2', text: 'Call Sam', at: now)];
-    await tester.pumpWidget(RelayApp(relay: relay));
-    await openFolder(tester, 'Notes');
-    await tester.drag(find.text('Buy milk'), const Offset(-500, 0));
-    await tester.pumpAndSettle();
-    await tester.drag(find.text('Call Sam'), const Offset(-500, 0));
-    await tester.pumpAndSettle();
-    expect([relay.calls, find.text('Note deleted').evaluate().length], [['delete n1', 'delete n2', 'end n1'], 1]);
+  group('a shake', () {
+    Future<void> shake(WidgetTester tester) async {
+      await tester.binding.defaultBinaryMessenger.handlePlatformMessage('relay/shake',
+        const StandardMethodCodec().encodeMethodCall(const MethodCall('shake')), (_) {});
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('after a delete asks Undo Delete Note, and Undo brings the note back', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now), Entry(id: 'n2', text: 'Call Sam', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.drag(find.text('Buy milk'), const Offset(-500, 0));
+      await tester.pumpAndSettle();
+      await shake(tester);
+      expect(find.text('Undo Delete Note'), findsOneWidget);
+      await tester.tap(find.widgetWithText(CupertinoDialogAction, 'Undo'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['delete n1', 'recover n1']);
+      expect([find.text('Buy milk'), find.text('Undo Delete Note')], [findsOneWidget, findsNothing]);
+      await shake(tester);
+      expect(find.byType(CupertinoAlertDialog), findsNothing);
+    });
+
+    testWidgets('Cancel keeps the note in Recently Deleted', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await relay.deleteNote('n1');
+      await tester.pumpAndSettle();
+      await shake(tester);
+      await tester.tap(find.widgetWithText(CupertinoDialogAction, 'Cancel'));
+      await tester.pumpAndSettle();
+      expect([relay.calls, relay.deleted.length], [['delete n1'], 1]);
+    });
+
+    testWidgets('with no delete, or while words are typed, shows nothing', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await shake(tester);
+      expect(find.byType(CupertinoAlertDialog), findsNothing);
+      await relay.deleteNote('n1');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      await shake(tester);
+      expect(find.byType(CupertinoAlertDialog), findsNothing);
+    });
+  });
+
+  test('no SnackBar is left in the app: a problem is an alert', () {
+    final bars = [
+      for (final file in Directory('lib').listSync(recursive: true).whereType<File>())
+        if (file.path.endsWith('.dart') && file.readAsStringSync().contains('SnackBar')) file.path,
+    ];
+    expect(bars, isEmpty);
   });
 
   /// The heading a note's row shows under: *Pinned* or its day.
@@ -1202,7 +1360,7 @@ void main() {
       args: CustomSemanticsAction.getIdentifier(const CustomSemanticsAction(label: 'Delete')));
     await tester.pumpAndSettle();
     expect(relay.calls, ['delete n2']);
-    expect([find.text('Buy milk'), find.text('Call Sam'), find.text('Note deleted')], [findsOneWidget, findsNothing, findsOneWidget]);
+    expect([find.text('Buy milk'), find.text('Call Sam'), find.text('Note deleted')], [findsOneWidget, findsNothing, findsNothing]);
     semantics.dispose();
   });
 
@@ -1462,7 +1620,7 @@ void main() {
       expect([find.text('Buy milk'), find.text('Call Sam')], [findsNothing, findsOneWidget]);
     });
 
-    testWidgets('a sent note emptied is deleted on leave, with Note deleted and Undo on the list', (tester) async {
+    testWidgets('a sent note emptied is deleted for good on leave, with no message and not in Recently Deleted', (tester) async {
       relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now, sent: true), Entry(id: 'n2', text: 'Call Sam', at: now)];
       await tester.pumpWidget(RelayApp(relay: relay));
       await openFolder(tester, 'Notes');
@@ -1474,10 +1632,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(relay.calls, ['drop n1']);
       expect([find.text('Buy milk'), find.text('Call Sam'), find.text('Note deleted'), find.text('Undo')],
-        [findsNothing, findsOneWidget, findsOneWidget, findsOneWidget]);
-      await tester.tap(find.text('Undo'));
-      await tester.pumpAndSettle();
-      expect([relay.calls, find.text('Buy milk').evaluate().length], [['drop n1', 'undo n1'], 1]);
+        [findsNothing, findsOneWidget, findsNothing, findsNothing]);
+      expect(relay.deleted, isEmpty);
     });
 
     testWidgets('a voice note emptied keeps its recording, with no words', (tester) async {
@@ -1523,6 +1679,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(relay.calls, ['note  + big.mov (later)']);
       expect(find.textContaining('over 25 MB'), findsOneWidget);
+      await closeProblem(tester);
       relay.keepsNothing = null;
       await type(tester, 'Buy milk');
       await tester.pump(const Duration(seconds: 2));
@@ -1646,7 +1803,7 @@ void main() {
       await tester.tap(find.byTooltip('Close'));
       await tester.pumpAndSettle();
       expect(find.byType(FormatSheet), findsNothing);
-      expect(find.byType(FloatingToolBar), findsOneWidget);
+      expect(find.byType(SelectionToolBar), findsOneWidget, reason: 'the words are still picked');
       expect(editorFocused(tester), isTrue);
     });
 
@@ -1763,7 +1920,8 @@ void main() {
       expect(relay.calls, isEmpty);
     });
 
-    testWidgets('⋯ → Delete, last in the menu, closes the page and deletes the note, with Undo on the list', (tester) async {
+    testWidgets('⋯ → Delete, last in the menu, closes the page and moves the note to Recently Deleted, with no message',
+      (tester) async {
       relay.entries = [Entry(id: 'n1', text: 'Buy milk', at: now), Entry(id: 'n2', text: 'Call Sam', at: now)];
       await tester.pumpWidget(RelayApp(relay: relay));
       await openFolder(tester, 'Notes');
@@ -1778,11 +1936,8 @@ void main() {
       expect(find.byType(NoteEditor), findsNothing);
       expect(relay.calls, ['delete n1']);
       expect([find.text('Buy milk'), find.text('Call Sam'), find.text('Note deleted'), find.text('Undo')],
-        [findsNothing, findsOneWidget, findsOneWidget, findsOneWidget]);
-      await tester.tap(find.text('Undo'));
-      await tester.pumpAndSettle();
-      expect(relay.calls, ['delete n1', 'undo n1']);
-      expect(find.text('Buy milk'), findsOneWidget);
+        [findsNothing, findsOneWidget, findsNothing, findsNothing]);
+      expect(relay.deleted.map((entry) => entry.id), ['n1']);
     });
 
     testWidgets('⋯ → Delete on a new note not kept yet keeps nothing and deletes nothing', (tester) async {
@@ -1988,6 +2143,46 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
       expect(relay.calls, ['edit # Links\nGo example.com now\nSee https://example.com /path']);
+    });
+
+    testWidgets('a word linked to an address that holds it stays a link when the note is saved', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Food\nSee the menu', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay, opener: (_) async => true));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Food'));
+      await tester.pumpAndSettle();
+      await tester.tapAt(tester.getTopLeft(find.text('Food', findRichText: true)) + const Offset(10, 8));
+      await tester.pump();
+      final controller = quill(tester);
+      final menu = controller.document.toPlainText().indexOf('menu');
+      controller.formatText(menu, 4, const LinkAttribute('https://example.com/menu'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Done'));
+      await tester.pumpAndSettle();
+      expect(linkAt(quill(tester).document, menu + 1), 'https://example.com/menu');
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['edit # Food\nSee the [menu](https://example.com/menu)']);
+    });
+
+    testWidgets('a link whose words are in its address, as GitHub or an email name, keeps its link when saved',
+        (tester) async {
+      const links = 'See [GitHub](https://github.com) and [Sam](mailto:sam@example.com)';
+      relay.entries = [Entry(id: 'n1', text: 'Links\n$links', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay, opener: (_) async => true));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Links'));
+      await tester.pumpAndSettle();
+      final document = quill(tester).document;
+      final words = document.toPlainText();
+      expect([linkAt(document, words.indexOf('GitHub') + 1), linkAt(document, words.indexOf('Sam') + 1)],
+        ['https://github.com', 'mailto:sam@example.com']);
+      await tester.tap(find.byTooltip('Checklist'));
+      await tester.pumpAndSettle();
+      await type(tester, 'Eggs');
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['edit # Links\n$links\n- [ ] Eggs']);
     });
 
     testWidgets('a tap on the right half of a link\'s last letter opens it; one on the space before it does not', (tester) async {
@@ -2315,7 +2510,7 @@ void main() {
     await openFolder(tester, 'Health');
     await tester.tap(find.widgetWithText(SwitchListTile, 'Health'));
     await tester.pump();
-    expect(find.text('Relay Everything may not read your health data.'), findsOneWidget);
+    expect(problem('Relay Everything may not read your health data.'), findsOneWidget);
     expect(relay.calls, ['history true', 'health true']);
   });
 
@@ -2381,7 +2576,7 @@ void main() {
       await openPhotos(tester);
       await tester.tap(photosSwitch);
       await tester.pump();
-      expect(find.text(denied), findsOneWidget);
+      expect(problem(denied), findsOneWidget);
       expect([relay.calls, switchOf(tester, 'Photos').value], [['photos true'], isFalse]);
       expect(find.text('Stop sending photos?'), findsNothing);
     });
@@ -2418,7 +2613,7 @@ void main() {
       await tester.tap(find.text('Open my page'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      expect(find.text('The browser did not open. Try again.'), findsOneWidget);
+      expect([find.text('The browser did not open'), find.text('Try again.')], everyElement(findsOneWidget));
       expect([opened, relay.calls], [hasLength(2), ['photos false']]);
     });
 
@@ -2478,7 +2673,7 @@ void main() {
     await tester.tap(find.text('Only stays and trips'));
     await tester.pumpAndSettle();
     expect([relay.calls, group().groupValue], [['send stays'], LocationSend.stays]);
-    expect(find.text('The points still waiting on this phone were dropped.'), findsOneWidget);
+    expect(problem('The points still waiting on this phone were dropped.'), findsOneWidget);
   });
 
   testWidgets('says when health and places last went, and how many wait', (tester) async {
@@ -2556,7 +2751,7 @@ void main() {
     expect(find.text(secret), findsOneWidget);
     await tester.tap(find.text('Copy'));
     await tester.pump();
-    expect([copied, find.text('Secret copied.').evaluate().length], [[secret], 1]);
+    expect([copied, find.text('Secret copied.').evaluate().length], [[secret], 0]);
     await tester.enterText(find.widgetWithText(TextField, 'Address'), 'https://db.example.com/relay');
     await tester.tap(find.text('Send a test'));
     await tester.pumpAndSettle();
@@ -2574,9 +2769,10 @@ void main() {
   });
 
   group('signing in from the webhook Account page', () {
-    const offer = 'Sync your notes with your page, your AI and your other phones. Health, places, calendar and photos still '
-      'go only to your webhook.';
-    const told = 'Signed in. To get your notes at your webhook too, add it under Webhooks on your Relay Everything page.';
+    const offer = 'Sync your notes with your page, your AI and your other phones. Everything then goes through Relay '
+      'Everything: add your webhook on your page to keep getting it.';
+    const told = 'Signed in. To keep getting everything at your webhook, add it under Webhooks on your Relay Everything '
+      'page.';
     void webhookOnly() => relay
       ..server = 'https://relay.example.com'
       ..settings = const Settings(sending: true, place: SendPlace.webhook, health: true)
@@ -2599,8 +2795,8 @@ void main() {
         Theme.of(tester.element(stop)).colorScheme.error);
     });
 
-    testWidgets('signs in, asks about the notes sent to the webhook, keeps the webhook for private data, and says how to get '
-        'notes there', (tester) async {
+    testWidgets('signs in, says everything then goes to Relay Everything, asks about the notes sent to the webhook, keeps '
+        'the webhook on the phone, and says how to get everything there', (tester) async {
       tallScreen(tester);
       webhookOnly();
       relay.earlier = 12;
@@ -2611,7 +2807,9 @@ void main() {
       await tester.pumpAndSettle();
       // Only the sign-in: the phone sends to the webhook already.
       expect([find.widgetWithText(FilledButton, 'Sign in'), find.text("Don't want an account? Use your own webhook")], [findsOneWidget, findsNothing]);
-      expect(find.textContaining('Health, places, calendar and photos still go only to your webhook.'), findsOneWidget);
+      expect(find.text('Sign in to keep your notes the same on all your devices, and let your AI read them. This phone '
+        'then sends everything to Relay Everything, health, places, calendar and photos too. To keep getting them at '
+        'your webhook, add it on your Relay Everything page.'), findsOneWidget);
       await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
       await tester.pumpAndSettle();
       expect(find.text('Send your 12 earlier notes too?'), findsOneWidget);
@@ -2619,17 +2817,18 @@ void main() {
         findsOneWidget);
       await tester.tap(find.text('Send them'));
       await tester.pumpAndSettle();
-      expect(relay.calls, ['sign in https://app.relayeverything.com', 'start true private webhook']);
+      expect(relay.calls, ['sign in https://app.relayeverything.com', 'start true']);
       expect(relay.earlierTo, SendPlace.server);
-      expect([relay.settings.place, relay.settings.privateTo, relay.settings.privatePlace],
-        [SendPlace.server, SendPlace.webhook, SendPlace.webhook]);
-      // The signed-in page and the message; Webhooks shows Only to my own webhook on, with the webhook kept.
-      expect([find.text('Sign out'), find.text('Webhooks'), find.text(told)], everyElement(findsOneWidget));
+      expect(relay.settings.place, SendPlace.server);
+      // The phone keeps the webhook, for a later Sign out.
+      expect([relay.webhookAddress, relay.webhookSecret], ['https://db.example.com/relay', 'whsec_kept']);
+      // The signed-in page and the message; Webhooks holds no switch.
+      expect([find.text('Sign out'), find.text('Webhooks'), problem(told)], everyElement(findsOneWidget));
       expect(relay.refreshes, greaterThan(asked));
+      await closeProblem(tester);
       await tester.tap(find.text('Webhooks'));
       await tester.pumpAndSettle();
-      expect(switchOf(tester, 'Only to my own webhook').value, isTrue);
-      expect(find.text('db.example.com'), findsOneWidget);
+      expect([find.byType(SwitchListTile), find.text('db.example.com')], everyElement(findsNothing));
     });
 
     testWidgets('a closed sign-in, or back, changes nothing', (tester) async {
@@ -2649,8 +2848,8 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
       expect(relay.calls, ['sign in https://app.relayeverything.com']);
-      expect([relay.settings.place, relay.settings.privateTo], [SendPlace.webhook, SendPlace.server]);
-      expect([find.text(offer), find.text(told), find.text('Send your 3 earlier notes too?')],
+      expect(relay.settings.place, SendPlace.webhook);
+      expect([find.text(offer), problem(told), find.text('Send your 3 earlier notes too?')],
         [findsOneWidget, findsNothing, findsNothing]);
     });
 
@@ -2673,7 +2872,7 @@ void main() {
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
       expect([relay.calls, relay.settings.place], [isEmpty, SendPlace.webhook]);
-      expect([find.text(offer), find.text(told)], [findsOneWidget, findsNothing]);
+      expect([find.text(offer), problem(told)], [findsOneWidget, findsNothing]);
     });
   });
 
@@ -2722,7 +2921,8 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, 'Send a test'));
     await tester.pump();
     await tester.pump();
-    expect(find.text('Your receiver answered 401. Check that it has this secret.'), findsOneWidget);
+    expect(problem('Your receiver answered 401. Check that it has this secret.'), findsOneWidget);
+    await closeProblem(tester);
     final at = DateTime.now();
     relay
       ..webhookProblem = WebhookProblem(at: at, status: 503)
@@ -3004,7 +3204,7 @@ void main() {
         everyElement(findsNothing));
       await tester.tap(find.widgetWithText(TextButton, 'Copy'));
       await tester.pump();
-      expect([copied, find.text('Copied.').evaluate().length], [['https://mcp.relayeverything.com'], 1]);
+      expect([copied, find.text('Copied.').evaluate().length], [['https://mcp.relayeverything.com'], 0]);
       await tester.tap(find.text('Get the plugin'));
       await tester.pumpAndSettle();
       expect(opened, [Uri.parse('https://relayeverything.com/connections/claude-code/')]);
@@ -3119,7 +3319,7 @@ void main() {
       opens = false;
       await tester.tap(read);
       await tester.pump();
-      expect(find.text('The browser did not open. Try again.'), findsOneWidget);
+      expect([find.text('The browser did not open'), find.text('Try again.')], everyElement(findsOneWidget));
       expect(relay.calls, isEmpty);
     });
 
@@ -3154,7 +3354,7 @@ void main() {
         matching: find.text('Copy')));
       await tester.pump();
       expect(copied, ['notes-k7q2m9@in.example.com']);
-      expect(find.text('Copied.'), findsOneWidget);
+      expect(find.text('Copied.'), findsNothing);
       expect(relay.calls, isEmpty);
     });
 
@@ -3273,7 +3473,7 @@ void main() {
         ..notice('No speech heard. Nothing was saved.');
       await tester.pumpAndSettle();
       expect([find.byType(NoteEditor), find.byType(TimelineScreen)], [findsNothing, findsOneWidget]);
-      expect(find.text('No speech heard. Nothing was saved.'), findsOneWidget);
+      expect(problem('No speech heard. Nothing was saved.'), findsOneWidget);
       expect(relay.calls, ['voice start', 'voice end']);
     });
 
@@ -3502,7 +3702,7 @@ void main() {
       await tester.pumpWidget(RelayApp(relay: relay));
       await holdNewNote(tester);
       await tapAnywhere(tester);
-      expect([find.text('Listening'), find.text('The voice note did not save.')], [findsNothing, findsOneWidget]);
+      expect([find.text('Listening'), problem('The voice note did not save.')], [findsNothing, findsOneWidget]);
       expect(relay.calls, ['voice start', 'voice end']);
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.byType(NoteEditor), findsNothing);
@@ -3513,7 +3713,7 @@ void main() {
       await tester.pumpWidget(RelayApp(relay: relay));
       await holdNewNote(tester);
       await tapAnywhere(tester);
-      expect(find.text('Too short to keep. Nothing was saved.'), findsOneWidget);
+      expect(problem('Too short to keep. Nothing was saved.'), findsOneWidget);
       expect(relay.calls, ['voice start', 'voice end']);
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.byType(NoteEditor), findsNothing);
@@ -3561,7 +3761,7 @@ void main() {
       relay.notice('No speech heard. Nothing was saved.');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      expect(find.text('No speech heard. Nothing was saved.'), findsOneWidget);
+      expect(problem('No speech heard. Nothing was saved.'), findsOneWidget);
     });
 
     testWidgets('a note whose words failed says so in the list; its page says the recording is safe and why, keeps the player, and Try again writes them again', (tester) async {
@@ -3588,7 +3788,7 @@ void main() {
       relay.notice('The words did not come. Tap Try again on the note.');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      expect(find.text('The words did not come. Tap Try again on the note.'), findsOneWidget);
+      expect(problem('The words did not come. Tap Try again on the note.'), findsOneWidget);
     });
 
     testWidgets('a failed note with no reason shows no Why line', (tester) async {
@@ -3747,10 +3947,16 @@ void main() {
         return keys;
       }
 
+      // The page keys, and the format keys with them.
+      void hasPageKeys(Map<ShortcutActivator, Intent>? keys) {
+        expect({for (final key in pageKeys.keys) key: keys?[key]}, pageKeys,
+          reason: 'a long press is a tap: it writes, with the page keys');
+        expect(keys!.values.whereType<FormatIntent>(), hasLength(formatShortcuts().length));
+      }
       expect(await show(RelayPlatform.mac), isEmpty);
-      expect(await holdKeys(), same(pageKeys), reason: 'a long press is a tap: it writes, with the page keys');
+      hasPageKeys(await holdKeys());
       expect(await show(RelayPlatform.web), isEmpty);
-      expect(await holdKeys(), same(pageKeys));
+      hasPageKeys(await holdKeys());
       expect(await show(RelayPlatform.phone), isNotEmpty, reason: 'the phone keeps Record a voice note');
       semantics.dispose();
     });
@@ -3983,6 +4189,329 @@ void main() {
       await tester.tap(find.text('Not now'));
       await tester.pumpAndSettle();
       expect(relay.calls, ['ask model', 'not now']);
+    });
+  });
+
+  group('the note page tools and tables', () {
+    /// Opens the note [text] from Notes, its title [title].
+    Future<void> openNote(WidgetTester tester, String title, String text) async {
+      relay.entries = [Entry(id: 'n1', text: text, at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text(title).first);
+      await tester.pumpAndSettle();
+    }
+
+    /// Gives the note the keyboard, with [selection].
+    Future<void> edit(WidgetTester tester, TextSelection selection) async {
+      tester.widget<QuillEditor>(find.byType(QuillEditor)).focusNode.requestFocus();
+      await tester.pump();
+      quill(tester).updateSelection(selection, ChangeSource.local);
+      await tester.pumpAndSettle();
+    }
+
+    /// Whether the button with [tooltip] is lit.
+    bool lit(WidgetTester tester, String tooltip) => tester.widget<PillIconButton>(
+      find.ancestor(of: find.byTooltip(tooltip), matching: find.byType(PillIconButton))).selected;
+
+    final cells = find.descendant(of: find.byType(NoteTableView), matching: find.byType(TextField));
+
+    bool cellFocused(WidgetTester tester, int index) => tester.widget<TextField>(cells.at(index)).focusNode!.hasFocus;
+
+    List<String> cellWords(WidgetTester tester) =>
+      [for (final cell in cells.evaluate()) (cell.widget as TextField).controller!.text];
+
+    /// A pick in a menu that a button opens.
+    Future<void> pickIn(WidgetTester tester, String tooltip, String item) async {
+      await tester.tap(find.byTooltip(tooltip));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, item));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the bar over the keyboard shows its first four tools on a 375-point screen, a swipe shows the rest, and '
+      'it sits 6 points over the keyboard with the caret above it', (tester) async {
+      tester.view
+        ..physicalSize = const Size(375, 812)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await openNote(tester, 'Shop', 'Shop\nEggs');
+      await edit(tester, const TextSelection.collapsed(offset: 9));
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      await tester.pumpAndSettle();
+      final bar = tester.getRect(find.byType(FloatingToolBar));
+      expect(bar.bottom, 812 - 300 - 6);
+      for (final tool in ['Text styles', 'Checklist', 'Table', 'Attach']) {
+        final button = tester.getRect(find.byTooltip(tool));
+        expect([button.left >= bar.left, button.right <= bar.right], [true, true], reason: tool);
+      }
+      expect(find.byTooltip('Indent more').hitTestable(), findsNothing);
+      await tester.drag(find.byType(FloatingToolBar), const Offset(-600, 0));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Indent more').hitTestable(), findsOneWidget);
+      expect(find.byTooltip('Hide keyboard').hitTestable(), findsOneWidget);
+      final editor = tester.allRenderObjects.whereType<RenderEditor>().first;
+      final caret = editor.getLocalRectForCaret(quill(tester).selection.extent);
+      expect(editor.localToGlobal(caret.bottomLeft).dy, lessThanOrEqualTo(bar.top));
+      await tester.tap(find.byTooltip('Hide keyboard'));
+      await tester.pumpAndSettle();
+      expect([editorFocused(tester), find.byType(ReadingBar).evaluate().length], [false, 1]);
+    });
+
+    testWidgets('words picked swap the bar for the style bar, lit for their style, and Lists makes a numbered list',
+        (tester) async {
+      await openNote(tester, 'Shop', 'Shop\n**Eggs** and milk');
+      await edit(tester, const TextSelection.collapsed(offset: 7));
+      expect([find.byType(FloatingToolBar), find.byType(SelectionToolBar)], [findsOneWidget, findsNothing]);
+      quill(tester).updateSelection(const TextSelection(baseOffset: 5, extentOffset: 9), ChangeSource.local);
+      await tester.pumpAndSettle();
+      expect([find.byType(FloatingToolBar), find.byType(SelectionToolBar)], [findsNothing, findsOneWidget]);
+      expect([for (final tool in ['Bold', 'Italic', 'Underline', 'Strikethrough', 'Highlight', 'Link']) lit(tester, tool)],
+        [true, false, false, false, false, false]);
+      await tester.tap(find.byTooltip('Italic'));
+      await tester.pumpAndSettle();
+      expect([lit(tester, 'Bold'), lit(tester, 'Italic')], [true, true]);
+      await tester.tap(find.byTooltip('Bold'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Italic'));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Shop\nEggs and milk');
+      await pickIn(tester, 'Lists', 'Numbered List');
+      expect(markdownOf(tester), '# Shop\n1. Eggs and milk');
+      expect(lit(tester, 'Lists'), isTrue);
+      quill(tester).updateSelection(const TextSelection.collapsed(offset: 7), ChangeSource.local);
+      await tester.pumpAndSettle();
+      expect([find.byType(FloatingToolBar), find.byType(SelectionToolBar)], [findsOneWidget, findsNothing]);
+    });
+
+    testWidgets('the Format sheet lights the chip of each line style, and the pen highlights in the colour picked',
+        (tester) async {
+      await openNote(tester, 'Shop', 'Shop\nEggs and milk');
+      await edit(tester, const TextSelection.collapsed(offset: 7));
+      await tester.tap(find.byTooltip('Text styles'));
+      await tester.pumpAndSettle();
+      bool chip(String label) => tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, label)).selected;
+      const styles = ['Title', 'Heading', 'Subheading', 'Body', 'Monostyled'];
+      for (final style in [...styles, 'Body']) {
+        await tester.tap(find.widgetWithText(ChoiceChip, style));
+        await tester.pumpAndSettle();
+        expect([for (final other in styles) chip(other)], [for (final other in styles) other == style], reason: style);
+      }
+      expect(markdownOf(tester), '# Shop\nEggs and milk');
+      quill(tester).updateSelection(const TextSelection(baseOffset: 5, extentOffset: 9), ChangeSource.local);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Highlight colour'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Purple'), findsOneWidget);
+      await tester.tap(find.byTooltip('Pink'));
+      await tester.pumpAndSettle();
+      expect([relay.calls, relay.settings.highlightColour], [['highlight pink'], 'pink']);
+      await tester.tap(find.byTooltip('Highlight'));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Shop\n<mark class="pink">Eggs</mark> and milk');
+      expect(lit(tester, 'Highlight'), isTrue);
+      await tester.tap(find.byTooltip('Highlight'));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Shop\nEggs and milk');
+    });
+
+    testWidgets('Link fills in a copied web address, and on a link changes or takes it away', (tester) async {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.getData') return {'text': 'https://example.com/menu'};
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+      await openNote(tester, 'Shop', 'Shop\nSee the menu');
+      final start = quill(tester).document.toPlainText().indexOf('the menu');
+      await edit(tester, TextSelection(baseOffset: start, extentOffset: start + 8));
+      await tester.tap(find.byTooltip('Link'));
+      await tester.pumpAndSettle();
+      expect(find.text('Add Link'), findsOneWidget);
+      final field = find.byType(CupertinoTextField);
+      expect(tester.widget<CupertinoTextField>(field).controller!.text, 'https://example.com/menu');
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Shop\nSee [the menu](https://example.com/menu)');
+      await edit(tester, TextSelection.collapsed(offset: start + 2));
+      await tester.tap(find.byTooltip('Link'));
+      await tester.pumpAndSettle();
+      expect(find.text('Change Link'), findsOneWidget);
+      expect(tester.widget<CupertinoTextField>(field).controller!.text, 'https://example.com/menu');
+      await tester.enterText(field, 'example.com/food');
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Shop\nSee [the menu](https://example.com/food)');
+      await edit(tester, TextSelection.collapsed(offset: start + 2));
+      await tester.tap(find.byTooltip('Link'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove Link'));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Shop\nSee the menu');
+      await edit(tester, TextSelection(baseOffset: start, extentOffset: start + 3));
+      await tester.tap(find.byTooltip('Link'));
+      await tester.pumpAndSettle();
+      await tester.enterText(field, 'not an address');
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(find.text('That is not a web address'), findsOneWidget);
+      expect(find.text('Try again.'), findsOneWidget);
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Shop\nSee the menu');
+    });
+
+    testWidgets('Markdown marks typed at the start of a line give it their style, and one Undo gives the marks back',
+        (tester) async {
+      await openNote(tester, 'Shop', 'Shop');
+      await edit(tester, const TextSelection.collapsed(offset: 4));
+      const marks = {
+        '#': '# x', '##': '## x', '###': '### x', '-': '- x', '*': '* x', '1.': '1. x', '[]': '- [ ] x', '>': '> x',
+      };
+      for (final MapEntry(key: mark, value: line) in marks.entries) {
+        await type(tester, '\n');
+        for (final letter in [...mark.split(''), ' ', 'x']) {
+          await type(tester, letter);
+        }
+        expect(markdownOf(tester).split('\n').last, line, reason: mark);
+        expect(quill(tester).document.toPlainText(), endsWith('\nx\n'), reason: 'the marks of $mark go');
+      }
+      await type(tester, '\n');
+      await type(tester, '#');
+      await type(tester, ' ');
+      expect(quill(tester).document.toDelta().last.attributes, {'header': 1});
+      await tester.pump(const Duration(seconds: 2));
+      await tester.tap(find.byTooltip('Undo'));
+      await tester.pumpAndSettle();
+      expect(quill(tester).document.toPlainText(), endsWith('\n# \n'));
+      expect(quill(tester).document.toDelta().last.attributes?['header'], isNull);
+      // A paste is one change: its marks stay words.
+      await type(tester, '\n');
+      await type(tester, '# x');
+      expect(quill(tester).document.toPlainText(), endsWith('\n# x\n'));
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('no format key acts on the phone', (tester) async {
+      await openNote(tester, 'Shop', 'Shop\nEggs');
+      await edit(tester, const TextSelection.collapsed(offset: 7));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Shop\nEggs');
+    });
+
+    testWidgets('Table adds 2 by 2 with the cursor in its first cell; typing in a cell is kept as Markdown and one Undo '
+      'takes it back', (tester) async {
+      await openNote(tester, 'Plan', 'Plan\nDays');
+      await edit(tester, const TextSelection.collapsed(offset: 9));
+      await tester.tap(find.byTooltip('Table'));
+      await tester.pumpAndSettle();
+      expect(cells, findsNWidgets(4));
+      expect([cellFocused(tester, 0), editorFocused(tester)], [true, false]);
+      expect([find.byType(FloatingToolBar), find.byTooltip('Done')], everyElement(findsOneWidget),
+        reason: 'a cell with the cursor is editing');
+      await tester.enterText(cells.at(0), 'Day');
+      await tester.pump(cellPause);
+      await tester.pump();
+      expect(markdownOf(tester), '# Plan\nDays\n| Day |  |\n| --- | --- |\n|  |  |\n');
+      await tester.tap(find.byTooltip('Undo'));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Plan\nDays\n|  |  |\n| --- | --- |\n|  |  |\n');
+      expect(cellWords(tester), ['', '', '', '']);
+      await tester.tap(find.byTooltip('Done'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ReadingBar), findsOneWidget);
+      expect(relay.calls.last, 'edit # Plan\nDays\n|  |  |\n| --- | --- |\n|  |  |\n');
+    });
+
+    testWidgets('in a table, Return goes to the cell below and adds a row at the end, and Tab and Shift+Tab step through '
+      'the cells', (tester) async {
+      await openNote(tester, 'Plan', 'Plan\n| Day | Train |\n| --- | --- |\n| Mon | 9:00 |');
+      await tester.tap(cells.at(0));
+      await tester.pumpAndSettle();
+      expect(cellFocused(tester, 0), isTrue);
+      await tester.testTextInput.receiveAction(TextInputAction.next);
+      await tester.pumpAndSettle();
+      expect(cellFocused(tester, 2), isTrue);
+      await tester.testTextInput.receiveAction(TextInputAction.next);
+      await tester.pumpAndSettle();
+      expect(cells, findsNWidgets(6));
+      expect(cellFocused(tester, 4), isTrue);
+      expect(cellWords(tester), ['Day', 'Train', 'Mon', '9:00', '', '']);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      expect(cellFocused(tester, 5), isTrue);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pumpAndSettle();
+      expect(cellFocused(tester, 4), isTrue);
+      await tester.tap(find.byTooltip('Done'));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets("a cell's handles add and delete columns and rows, and every row keeps its words", (tester) async {
+      await openNote(tester, 'Plan', 'Plan\n| Day | Train |\n| --- | --- |\n| Mon | 9:00 |');
+      expect([find.byTooltip('Column'), find.byTooltip('Row')], everyElement(findsNothing));
+      await tester.tap(cells.at(0));
+      await tester.pumpAndSettle();
+      expect([find.byTooltip('Column'), find.byTooltip('Row')], everyElement(findsOneWidget));
+      await pickIn(tester, 'Column', 'Add column after');
+      expect(cellWords(tester), ['Day', '', 'Train', 'Mon', '', '9:00']);
+      await pickIn(tester, 'Column', 'Delete column');
+      expect(cellWords(tester), ['Day', 'Train', 'Mon', '9:00']);
+      // Delete leaves the cursor in the next column or row; the first cell takes it back.
+      await tester.tap(cells.at(0));
+      await tester.pumpAndSettle();
+      await pickIn(tester, 'Column', 'Add column before');
+      expect(cellWords(tester), ['', 'Day', 'Train', '', 'Mon', '9:00']);
+      await pickIn(tester, 'Column', 'Delete column');
+      expect(cellWords(tester), ['Day', 'Train', 'Mon', '9:00']);
+      await pickIn(tester, 'Row', 'Add row below');
+      expect(cellWords(tester), ['Day', 'Train', '', '', 'Mon', '9:00']);
+      await pickIn(tester, 'Row', 'Delete row');
+      expect(cellWords(tester), ['Day', 'Train', 'Mon', '9:00']);
+      await tester.tap(cells.at(0));
+      await tester.pumpAndSettle();
+      await pickIn(tester, 'Row', 'Add row above');
+      expect(cellWords(tester), ['', '', 'Day', 'Train', 'Mon', '9:00']);
+      await pickIn(tester, 'Row', 'Delete row');
+      expect(cellWords(tester), ['Day', 'Train', 'Mon', '9:00']);
+      expect(markdownOf(tester), '# Plan\n| Day | Train |\n| --- | --- |\n| Mon | 9:00 |');
+      await tester.tap(find.byTooltip('Done'));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Table in a table converts it to lines of words split by tabs, or deletes it', (tester) async {
+      await openNote(tester, 'Plan', 'Plan\n| Day | Train |\n| --- | --- |\n| Mon | 9:00 |\nEnd');
+      await tester.tap(cells.at(0));
+      await tester.pumpAndSettle();
+      await pickIn(tester, 'Table', 'Convert to text');
+      expect(quill(tester).document.toPlainText(), 'Plan\nDay\tTrain\nMon\t9:00\nEnd\n');
+      expect(editorFocused(tester), isTrue);
+      await tester.tap(find.byTooltip('Undo'));
+      await tester.pumpAndSettle();
+      expect(cells, findsNWidgets(4));
+      await tester.tap(cells.at(3));
+      await tester.pumpAndSettle();
+      await pickIn(tester, 'Table', 'Delete table');
+      expect(quill(tester).document.toPlainText(), 'Plan\nEnd\n');
+      expect(cells, findsNothing);
+    });
+
+    testWidgets('Find in Note also finds words in table cells', (tester) async {
+      await openNote(tester, 'Trip', 'Trip\n| Day | Train |\n| --- | --- |\n| Mon | train 9 |\nno train back');
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(MenuItemButton, 'Find in Note'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.descendant(of: find.byType(FindBar), matching: find.byType(TextField)), 'train');
+      await tester.pumpAndSettle();
+      expect(find.text('1 of 3'), findsOneWidget);
+      expect(quill(tester).selection, const TextSelection(baseOffset: 5, extentOffset: 6), reason: 'the table is picked');
     });
   });
 }

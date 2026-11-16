@@ -53,10 +53,8 @@ class TranscriptsPage extends StatelessWidget {
 
   /// The saved chats on the person's Relay Everything page, in the phone's browser.
   Future<void> _read(BuildContext context, String server) async {
-    final messenger = ScaffoldMessenger.of(context);
-    if (!await (opener ?? openInBrowser)(Uri.parse('$server/#$savedChatsPart'))) {
-      messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
-    }
+    final navigator = Navigator.maybeOf(context, rootNavigator: true);
+    if (!await (opener ?? openInBrowser)(Uri.parse('$server/#$savedChatsPart'))) await showProblemOn(navigator, browserProblem);
   }
 }
 

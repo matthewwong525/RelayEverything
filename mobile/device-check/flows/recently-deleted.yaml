@@ -1,0 +1,77 @@
+# Recently Deleted: a swipe to the left moves a note there with no message, Home shows a Recently Deleted row while it
+# holds a note, the note opens to read only, and a swipe there shows Recover, which brings the note back to Notes.
+appId: com.matthewwong525.relayApp
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 60000
+# No note was deleted yet, so Home has no Recently Deleted row.
+- assertNotVisible: 'Recently Deleted(.|\n)*'
+- tapOn: 'Notes(.|\n)*'
+- tapOn: "New note"
+- extendedWaitUntil:
+    visible: "Done"
+    timeout: 30000
+- inputText: "Dentist on Friday"
+- tapOn: "Done"
+- tapOn: 'Back(.|\n)*'
+- extendedWaitUntil:
+    visible: 'Dentist on Friday(.|\n)*'
+    timeout: 30000
+# A full swipe to the left moves the note to Recently Deleted. No message and no Undo bar show. A swipe from the
+# note's words starts at their middle, at the left of the row, and moves too little for a delete, so this one runs
+# across the whole row: the only row, under *Today*, at 38% of the screen's height on the check's iPhone.
+- swipe:
+    start: 90%, 38%
+    end: 5%, 38%
+    duration: 300
+- extendedWaitUntil:
+    notVisible: 'Dentist on Friday(.|\n)*'
+    timeout: 10000
+- assertNotVisible: "Undo"
+- takeScreenshot: deleted-no-message
+# The back button's label joins its tooltip, Back, and the page it names, Home.
+- tapOn: 'Back(.|\n)*'
+- extendedWaitUntil:
+    visible: 'Recently Deleted(.|\n)*'
+    timeout: 30000
+- takeScreenshot: home-recently-deleted
+- tapOn: 'Recently Deleted(.|\n)*'
+- assertVisible: 'Notes are available here for 30 days(.|\n)*'
+- assertVisible: 'Dentist on Friday(.|\n)*'
+- takeScreenshot: recently-deleted
+# A deleted note opens to read only: a tap on its words asks to recover it first.
+- tapOn: 'Dentist on Friday(.|\n)*'
+- extendedWaitUntil:
+    notVisible: 'Notes are available here for 30 days(.|\n)*'
+    timeout: 30000
+# The note page is open: a tap in its words shows the alert.
+- tapOn: "Dentist on Friday"
+- extendedWaitUntil:
+    visible: "Recently deleted notes can't be edited."
+    timeout: 30000
+- takeScreenshot: recover-alert
+- tapOn: "Cancel"
+- tapOn: 'Back(.|\n)*'
+# A short swipe to the left shows Recover and Delete; Recover brings the note back.
+- swipe:
+    from:
+      text: 'Dentist on Friday(.|\n)*'
+    direction: LEFT
+- extendedWaitUntil:
+    visible: "Recover"
+    timeout: 10000
+- takeScreenshot: recently-deleted-swipe
+- tapOn: "Recover"
+- extendedWaitUntil:
+    visible: "No notes"
+    timeout: 10000
+- tapOn: 'Back(.|\n)*'
+- extendedWaitUntil:
+    visible: 'Notes(.|\n)*'
+    timeout: 30000
+- assertNotVisible: 'Recently Deleted(.|\n)*'
+- tapOn: 'Notes(.|\n)*'
+- assertVisible: 'Dentist on Friday(.|\n)*'

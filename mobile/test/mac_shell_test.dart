@@ -21,7 +21,7 @@ import 'package:relay_app/screens/timeline.dart' show TimelineScreen;
 import 'package:relay_app/screens/transcripts.dart' show TranscriptsPage;
 import 'package:relay_app/web/shell.dart';
 
-import 'screens_test.dart' show FakeRelay, quill;
+import 'screens_test.dart' show FakeRelay, markdownOf, quill;
 
 const wide = Size(1200, 900);
 const middle = Size(800, 800);
@@ -267,6 +267,19 @@ void main() {
       await finish(tester);
     });
 
+    testWidgets("Undo from the Edit menu and ⌘Z bring back the last deleted note while no words are typed", (tester) async {
+      await show(tester, wide);
+      await relay.deleteNote('voice');
+      await relay.deleteNote('own');
+      await tester.pumpAndSettle();
+      expect(inSidebar('Recently Deleted'), findsOneWidget);
+      await select(tester, 'Undo');
+      expect(relay.calls.last, 'recover own');
+      await press(tester, [LogicalKeyboardKey.metaLeft], LogicalKeyboardKey.keyZ);
+      expect([relay.calls.last, relay.deleted, inSidebar('Recently Deleted')], ['recover voice', isEmpty, findsNothing]);
+      await finish(tester);
+    });
+
     testWidgets('New Note from the menu and ⌘N both start a new note, from any place', (tester) async {
       await show(tester, wide);
       await tester.tap(inSidebar('Settings'));
@@ -330,6 +343,52 @@ void main() {
       expect(style.containsKey(Attribute.italic.key), isFalse);
       await finish(tester);
     });
+
+    testWidgets('the Format menu has each format item with its keys, and Title styles the line', (tester) async {
+      await show(tester, wide);
+      final format = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar)).menus.whereType<PlatformMenu>()
+        .singleWhere((menu) => menu.label == 'Format');
+      expect([
+        for (final group in format.menus.cast<PlatformMenuItemGroup>())
+          for (final item in group.members) item.label,
+      ], ['Bold', 'Italic', 'Underline', 'Strikethrough', 'Highlight', 'Title', 'Heading', 'Subheading', 'Body',
+        'Monostyled', 'Bulleted List', 'Dashed List', 'Numbered List', 'Checklist', 'Mark as Ticked', 'Block Quote',
+        'Indent More', 'Indent Less', 'Link…', 'Table']);
+      final keys = {
+        'Bold': (LogicalKeyboardKey.keyB, false, false),
+        'Underline': (LogicalKeyboardKey.keyU, false, false),
+        'Strikethrough': (LogicalKeyboardKey.keyX, true, false),
+        'Highlight': (LogicalKeyboardKey.keyE, true, false),
+        'Title': (LogicalKeyboardKey.keyT, true, false),
+        'Heading': (LogicalKeyboardKey.keyH, true, false),
+        'Subheading': (LogicalKeyboardKey.keyJ, true, false),
+        'Body': (LogicalKeyboardKey.keyB, true, false),
+        'Monostyled': (LogicalKeyboardKey.keyM, true, false),
+        'Bulleted List': (LogicalKeyboardKey.digit7, true, false),
+        'Dashed List': (LogicalKeyboardKey.digit8, true, false),
+        'Numbered List': (LogicalKeyboardKey.digit9, true, false),
+        'Checklist': (LogicalKeyboardKey.keyL, true, false),
+        'Mark as Ticked': (LogicalKeyboardKey.keyU, true, false),
+        'Block Quote': (LogicalKeyboardKey.quoteSingle, false, false),
+        'Indent More': (LogicalKeyboardKey.bracketRight, false, false),
+        'Indent Less': (LogicalKeyboardKey.bracketLeft, false, false),
+        'Link…': (LogicalKeyboardKey.keyK, false, false),
+        'Table': (LogicalKeyboardKey.keyT, false, true),
+      };
+      for (final MapEntry(key: label, value: (key, shift, alt)) in keys.entries) {
+        final shortcut = menuItem(tester, label).shortcut! as SingleActivator;
+        expect([shortcut.trigger, shortcut.meta, shortcut.control, shortcut.shift, shortcut.alt], [key, true, false, shift, alt],
+          reason: label);
+      }
+      await tester.tap(find.byType(QuillEditor));
+      await tester.pump();
+      quill(tester).updateSelection(const TextSelection.collapsed(offset: 14), ChangeSource.local);
+      await select(tester, 'Title');
+      expect(markdownOf(tester), '# Groceries\n# milk and eggs');
+      await select(tester, 'Body');
+      expect(markdownOf(tester), '# Groceries\nmilk and eggs');
+      await finish(tester);
+    });
   });
 
   testWidgets('the sign-in says Mac, not phone', (tester) async {
@@ -353,7 +412,8 @@ void main() {
       await show(tester, wide);
       drops.add(const [NewFile(path: '/Users/sam/Movies/trip.mov', name: 'trip.mov', size: 26 * 1024 * 1024)]);
       await tester.pumpAndSettle();
-      expect(find.text('trip.mov is over 25 MB, so it was not added.'), findsOneWidget);
+      // An alert: the one sentence is its title.
+      expect(find.text('trip.mov is over 25 MB, so it was not added'), findsOneWidget);
       await finish(tester);
     });
 

@@ -61,21 +61,14 @@ The phone SHALL count a message as sent only after a 2xx answer. On any other an
 - **WHEN** the receiver answers 413 to a note's file
 - **THEN** that file is dropped, Settings says so, and the next items still go
 
-### Requirement: Private data can go only to the webhook while notes sync
+### Requirement: A signed-in phone sends to no webhook itself
 
-Signed in to Relay Everything, the person SHALL be able to choose that health samples, location points, calendar events and new photos go only to their own webhook, straight from the phone. With that choice on, the phone SHALL send none of them to Relay Everything, and SHALL still send notes, their files and a note's pinned place to Relay Everything. The choice SHALL be off by default. Notes and private data SHALL each keep their own order, and a failure on one side SHALL NOT hold back the other. When the webhook is missing or does not answer, private data SHALL wait on the phone and SHALL NOT go to Relay Everything instead. Data that reached Relay Everything before the choice SHALL stay there.
+Signed in to Relay Everything, the phone SHALL send notes, their files, health, location points, stays and trips, calendar events and photos only to Relay Everything, and SHALL send nothing to any webhook itself. Relay Everything SHALL send each kind on only to the webhooks the person ticked for it. The phone SHALL keep its own webhook's address and secret while signed in, and SHALL use them again only after the person signs out and picks their own webhook. A phone that had *Only to my own webhook* on before the update SHALL send its waiting and later health, places, calendar and photos to Relay Everything, and SHALL show one message, once, that says so and opens *Webhooks*.
 
-#### Scenario: Notes sync, health goes to the webhook
+#### Scenario: Signed in with a webhook kept
+- **WHEN** a signed-in person whose phone keeps a webhook writes a note and has health and photos on
+- **THEN** the note, the health samples and the photos reach Relay Everything, and the phone's receiver gets no message from the phone
 
-- **WHEN** a signed-in person picks *Only my own webhook* with health and location history on, then writes a note
-- **THEN** the note reaches Relay Everything, the receiver gets `health.samples` and `location.points` messages, and no health sample or location point reaches Relay Everything
-
-#### Scenario: The webhook is down
-
-- **WHEN** the receiver answers 503 for a day while the choice is on
-- **THEN** notes still reach Relay Everything, every waiting health sample, point, event and photo stays on the phone in order, and none of them goes to Relay Everything
-
-#### Scenario: The webhook is gone after a restore
-
-- **WHEN** the phone has the choice on but no longer holds the webhook's address and secret
-- **THEN** private data waits on the phone, nothing private goes to Relay Everything, and the Account page asks the person to set the webhook again
+#### Scenario: A phone that had the choice on
+- **WHEN** a phone that sent health only to its own webhook updates, with 40 health samples waiting, and opens
+- **THEN** the 40 samples and later ones go to Relay Everything, one message says that everything now goes through Relay Everything, and the message does not show again

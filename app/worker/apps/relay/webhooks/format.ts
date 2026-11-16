@@ -1,4 +1,4 @@
-// Format v1 of what a webhook receives: one envelope, eleven types; mobile/lib/data/webhook.dart builds it too. The
+// Format v1 of what a webhook receives: one envelope, twelve types; mobile/lib/data/webhook.dart builds it too. The
 // source of the public site/public/webhooks/v1.schema.json, which takes fields and values it does not list.
 import { z } from "zod";
 import { HEALTH_TYPES, type HealthType } from "../queries.ts";
@@ -90,7 +90,12 @@ export const message = z.discriminatedUnion("type", [
     "The phone that sent a note changed its words: the note with its latest words, after its note.created. Update the note's row by its id. It has no audio."),
   envelope("note.deleted", z.strictObject({ note: z.strictObject({
     id: z.string().describe("The deleted note's id, as its note.created gave it."), deleted_at: iso.describe("When it was deleted.") }) }),
-    "A note was deleted on a phone, with its files and recording: delete the note's row and its files by its id. It can't be undone."),
+    "A note was deleted: it waits in Recently Deleted for 30 days, then goes for good with its files and recording, with no further message. "
+    + "Delete or hide the note's row and its files by its id. A note.recovered follows if it comes back."),
+  envelope("note.recovered", z.strictObject({ note: note.extend({ audio, edited_at: iso.optional().describe("When a phone last changed the note."),
+    attachments }) }),
+    "A note came back from Recently Deleted, after its note.deleted: the whole note, as it is now. Add or show the note's row again by its id; "
+    + "each file's bytes follow in its own note.file."),
   envelope("health.samples", z.strictObject({ samples: z.array(sample).min(1).max(BATCH) }), "Health samples, in the order Relay Everything stored them."),
   envelope("health.nights", z.strictObject({ nights: z.array(night).min(1).max(BATCH) }),
     "Nights the phone grouped from its sleep readings, one per app or watch, new or changed, in the order Relay Everything stored them. A night can come again as the watch writes more of it: upsert by its id."),
@@ -111,7 +116,7 @@ type Message = z.infer<typeof message>;
 
 /** Each row as Relay's tables hold it, with its device's name. */
 export type NoteRow = { id: string; source: "ring" | "typed"; text: string; recorded_at: number; created_at: number; device_id: string;
-  device_name: string; audio_key: string | null; edited_at?: number | null };
+  device_name: string; audio_key: string | null; edited_at?: number | null; deleted_at?: number | null };
 export type AttachmentRow = { id: string; name: string; content_type: string; size: number };
 export type HealthRow = { id: number; device_id: string; device_name: string; type: HealthType;
   start_at: number; end_at: number; value: number; unit: string; source: string;
@@ -142,10 +147,11 @@ const wrap = <Built extends Message>(type: Built["type"], data: Built["data"], a
 const filesOf = (files: AttachmentRow[]) => files.length
   ? { attachments: files.map(({ id, name, content_type, size }) => ({ id, name, content_type, size })) } : {};
 
+const recording = (audio: string | null) => audio === null ? null : { content_type: "audio/mp4" as const, base64: audio };
+
 /** A new note; `audio` is its recording in base64, or null. `files` are listed only when there are some. */
 export const noteCreated = (row: NoteRow, audio: string | null, at: number, files: AttachmentRow[] = []) =>
-  wrap("note.created", { note: { ...noteOf(row), audio: audio === null ? null : { content_type: "audio/mp4", base64: audio },
-    ...filesOf(files) } }, at);
+  wrap("note.created", { note: { ...noteOf(row), audio: recording(audio), ...filesOf(files) } }, at);
 
 /** One file of a note, with `base64` empty: the sender writes the bytes into the body, so no long string is made. */
 export const noteFile = (row: AttachmentRow, noteId: string, at: number) => wrap<Extract<Message, { type: "note.file" }>>("note.file", { note_id: noteId,
@@ -155,8 +161,12 @@ export const noteFile = (row: AttachmentRow, noteId: string, at: number) => wrap
 export const noteUpdated = (row: NoteRow, at: number, files: AttachmentRow[] = []) => wrap("note.updated", { note: { ...noteOf(row),
   ...row.edited_at ? { edited_at: isoOf(row.edited_at) } : {}, ...filesOf(files) } }, at);
 
-/** A deleted note: the row is gone, so the message holds only its id and when it went. */
+/** A deleted note: the message holds only its id and when it went. */
 export const noteDeleted = (id: string, at: number) => wrap("note.deleted", { note: { id, deleted_at: isoOf(at) } }, at);
+
+/** A note back from Recently Deleted, whole: its recording in base64 or null, `edited_at` if any, and its files. */
+export const noteRecovered = (row: NoteRow, audio: string | null, at: number, files: AttachmentRow[] = []) => wrap("note.recovered", {
+  note: { ...noteOf(row), audio: recording(audio), ...row.edited_at ? { edited_at: isoOf(row.edited_at) } : {}, ...filesOf(files) } }, at);
 
 const workoutOf = (row: HealthRow) => row.type === "workout"
   ? { kind: row.kind ?? null, distance: row.distance ?? null, calories: row.calories ?? null } : {};

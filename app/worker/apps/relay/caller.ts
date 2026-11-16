@@ -13,8 +13,8 @@ export const SESSION_COOKIE = "__Host-relay_session";
 /** A browser keeps a `__Host-` cookie only from https, so a local run on http uses the plain name. */
 export const sessionCookie = (url: URL) => url.protocol === "https:" ? SESSION_COOKIE : "relay_session";
 
-/** A key's reach: POST and `GET key`; a phone also reads `GET connections` (names and addresses) and its notes and
- *  files, changes, pins or deletes any note, and signs out a phone. `GET chats` and a send share an address. */
+/** A key's reach: POST and `GET key`; a phone also reads `GET connections` (names, addresses), its notes and files,
+ *  changes, pins, deletes or recovers any note, and signs out a phone. `GET chats` and a send share an address. */
 const REACH: Record<Reach, { routes: RegExp; refusal: string }> = {
   phone: { routes: /^\/apps\/relay\/api\/(?:notes|attachments|health|nights|locations|stays|calendar|photos)$/, refusal: "A device key can only send to Relay Everything." },
   chats: { routes: /^\/apps\/relay\/api\/(?:chats|chat-saves)$/, refusal: "A chat key can only send chats." },
@@ -24,6 +24,7 @@ const REACH: Record<Reach, { routes: RegExp; refusal: string }> = {
 const KEY_CHECK = "/apps/relay/api/key";
 const NOTES = "/apps/relay/api/notes";
 const PIN = "/apps/relay/api/notes/pin";
+const RECOVER = "/apps/relay/api/notes/recover";
 /** A phone's reads: its account's email, names and notes addresses, and its notes, files and old ring recordings. */
 const PHONE_READS = /^\/apps\/relay\/api\/(?:connections|notes|attachment|audio)$/;
 /** A phone signs out a lost phone; the route refuses a computer or an API key. */
@@ -34,7 +35,7 @@ export function reaches(reach: Reach, method: string, pathname: string): boolean
   if (method === "GET") return pathname === KEY_CHECK || (reach === "phone" && PHONE_READS.test(pathname));
   if (method === "PATCH" || method === "DELETE") return reach === "phone" && pathname === NOTES;
   if (method === "PUT") return reach === "phone" && pathname === PIN;
-  return method === "POST" && (REACH[reach].routes.test(pathname) || (reach === "phone" && pathname === SIGN_OUT));
+  return method === "POST" && (REACH[reach].routes.test(pathname) || (reach === "phone" && (pathname === SIGN_OUT || pathname === RECOVER)));
 }
 
 type KeyRow = { person_id: string; email: string; device_id: string; reaches: Reach; revoked_at: number | null };

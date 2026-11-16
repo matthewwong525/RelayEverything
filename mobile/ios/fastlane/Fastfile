@@ -300,10 +300,13 @@ end
 def check_listing(app)
   require "deliver"
   locale = app.primary_locale
-  unless File.directory?(File.join(LISTING_METADATA, locale))
-    UI.user_error!("App Store Connect's primary language is #{locale}, but #{LISTING_METADATA} has no #{locale} folder.")
+  # Lane code runs inside fastlane/, but actions such as deliver run from the folder above, where these paths start.
+  shots = Dir.chdir("..") do
+    unless File.directory?(File.join(LISTING_METADATA, locale))
+      UI.user_error!("App Store Connect's primary language is #{locale}, but #{LISTING_METADATA} has no #{locale} folder.")
+    end
+    Deliver::Loader.load_app_screenshots(LISTING_SCREENSHOTS, false)
   end
-  shots = Deliver::Loader.load_app_screenshots(LISTING_SCREENSHOTS, false)
   missing = listing_devices.reject { |_, types| shots.any? { |shot| types.include?(shot.display_type) } }.keys
   UI.user_error!("The App Store page has no screenshots for #{missing.join(', ')}.") unless missing.empty?
   busy = app.get_app_store_versions(filter: { platform: "IOS" }).find do |found|

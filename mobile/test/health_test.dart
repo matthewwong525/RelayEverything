@@ -180,10 +180,11 @@ void main() {
       expect(await store.sentAt(sentHealth), evening);
     });
 
-    test('follows the private place: only my own webhook gets health.nights, and the server nothing', () async {
+    test('go where the phone sends: with no account, only its own webhook gets health.nights, and the server nothing',
+        () async {
       final store = memoryStore();
       addTearDown(store.close);
-      await store.moveOutbox(relayServer, private: ownWebhook);
+      await store.moveOutbox(ownWebhook);
       await store.queueNights([body]);
       expect([for (final item in await store.outbox()) item.destination], [ownWebhook]);
       final server = FakeServer((_) => http.Response('', 204));
@@ -192,6 +193,21 @@ void main() {
       final message = jsonDecode(server.requests.single.body) as Map;
       expect([server.requests.single.url.toString(), message['type'], await store.sentAt(sentHealth)],
         [hook.address, 'health.nights', evening]);
+    });
+
+    test('signed in, an old second place for them moves to the server with the notes', () async {
+      final store = memoryStore();
+      addTearDown(store.close);
+      await store.set('outbox.private', ownWebhook);
+      // As an older build left it: the nights waiting for the webhook.
+      await store.enqueue('nights', {'nights': [body]}, destination: ownWebhook);
+      expect([for (final item in await store.outbox()) item.destination], [ownWebhook]);
+      await store.moveOutbox(relayServer);
+      expect([for (final item in await store.outbox()) item.destination], [relayServer]);
+      expect(await store.get('outbox.private'), isNull);
+      final server = FakeServer((_) => FakeServer.json({'received': 1, 'changed': 1}));
+      expect((await flush(store, server.api(connection), clock: () => evening)).sent, 1);
+      expect(server.routes, ['nights']);
     });
   });
 }

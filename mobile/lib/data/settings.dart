@@ -26,7 +26,7 @@ class Settings {
   const Settings({this.sending = false, bool history = false, bool health = false,
     bool calendar = false, this.calendarsOff = const {}, this.mode = LocationMode.battery, this.place = SendPlace.server,
     this.privateTo = SendPlace.server, bool photos = false, bool photosOnMobileData = false,
-    this.appearance = Appearance.system, this.locationSend = LocationSend.all})
+    this.appearance = Appearance.system, this.locationSend = LocationSend.all, this.highlightColour = 'purple'})
     : history = sending && history, health = sending && health, calendar = sending && calendar,
       photos = sending && photos, photosOnMobileData = sending && photos && photosOnMobileData;
 
@@ -50,6 +50,9 @@ class Settings {
   final Appearance appearance;
   /// What location history sends. Settings from before there was a choice read as [LocationSend.all].
   final LocationSend locationSend;
+  /// The colour the note's highlight pen draws, one of `highlightColours`: kept, so it stays the same after the app
+  /// closes, as in Apple Notes. Settings from before there was a choice read as purple.
+  final String highlightColour;
 
   /// Location history makes stays and trips.
   bool get stays => history && locationSend != LocationSend.points;
@@ -60,18 +63,19 @@ class Settings {
 
   Settings copyWith({bool? sending, bool? history, bool? health, bool? calendar, Set<String>? calendarsOff,
     LocationMode? mode, SendPlace? place, SendPlace? privateTo, bool? photos, bool? photosOnMobileData,
-    Appearance? appearance, LocationSend? locationSend}) => Settings(
+    Appearance? appearance, LocationSend? locationSend, String? highlightColour}) => Settings(
     sending: sending ?? this.sending,
     history: history ?? this.history, health: health ?? this.health, calendar: calendar ?? this.calendar,
     calendarsOff: calendarsOff ?? this.calendarsOff, mode: mode ?? this.mode, place: place ?? this.place,
     privateTo: privateTo ?? this.privateTo, photos: photos ?? this.photos,
     photosOnMobileData: photosOnMobileData ?? this.photosOnMobileData,
-    appearance: appearance ?? this.appearance, locationSend: locationSend ?? this.locationSend);
+    appearance: appearance ?? this.appearance, locationSend: locationSend ?? this.locationSend,
+    highlightColour: highlightColour ?? this.highlightColour);
 
   String encode() => jsonEncode({'sending': sending, 'history': history, 'health': health,
     'calendar': calendar, 'calendarsOff': (calendarsOff.toList()..sort()), 'mode': mode.name, 'place': place.name,
     'privateTo': privateTo.name, 'photos': photos, 'photosOnMobileData': photosOnMobileData, 'appearance': appearance.name,
-    'locationSend': locationSend.name});
+    'locationSend': locationSend.name, 'highlightColour': highlightColour});
 
   /// Reads saved settings. Settings from before sending was a switch, or none on a phone with a key, come from the
   /// first version, which sent everything: that install keeps sending on, so nothing it set up stops. Settings from
@@ -93,6 +97,7 @@ class Settings {
       photosOnMobileData: json['photosOnMobileData'] as bool? ?? false,
       appearance: Appearance.values.asNameMap()[json['appearance']] ?? Appearance.system,
       locationSend: LocationSend.values.asNameMap()[json['locationSend']] ?? LocationSend.all,
+      highlightColour: json['highlightColour'] as String? ?? 'purple',
     );
   }
 }

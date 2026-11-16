@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_quill/flutter_quill.dart' show Attribute;
 
 import '../brand.dart';
 import '../data/client_id.dart';
+import '../editor/shortcuts.dart' show FormatAction;
 import '../relay.dart';
 import '../screens/back_to.dart';
 import '../screens/connect_ai.dart' show ConnectAiPage, connectAiLine;
@@ -218,9 +218,8 @@ class WebShellState extends State<WebShell> {
   /// *Settings…*: ⌘, on the Mac.
   void settings() => unawaited(_settings());
 
-  /// *Bold* and *Italic* from the Mac's *Format* menu, on the words picked in the open note, as ⌘B and ⌘I do there.
-  void bold() => _editor.currentState?.toggleStyle(Attribute.bold);
-  void italic() => _editor.currentState?.toggleStyle(Attribute.italic);
+  /// An item of the Mac's *Format* menu, on the words picked or the cursor's line in the open note, as its key does.
+  void format(FormatAction action) => _editor.currentState?.format(action);
 
   /// Files dropped on the page join the open note, or start a new one.
   Future<void> _dropped(List<NewFile> files) async {
@@ -235,7 +234,7 @@ class WebShellState extends State<WebShell> {
     if (added != null) openNote(added);
   }
 
-  /// New note, search and delete; bold and italic are the editor's own. The editor passes these keys up to here.
+  /// New note, search and delete; the format keys are the editor's own. The editor passes these keys up to here.
   KeyEventResult _key(FocusNode _, KeyEvent event) {
     final keys = HardwareKeyboard.instance;
     if (event is! KeyDownEvent || !(keys.isControlPressed || keys.isMetaPressed)) return KeyEventResult.ignored;

@@ -52,8 +52,9 @@ One bar runs along the top, over the notes and the open note. Nothing is at the 
 | Button | What it does |
 |---|---|
 | **New note** | Opens a new, empty note at the right. |
-| **Aa** | Sets the text style. [Text styles and checklists](../your-notes/#text-styles-and-checklists) |
+| **Aa** | Opens a menu under it: **B**, **I**, **U**, **S**, **Highlight** and its colors, then each line style and list in its own look, with ✓ at the current one, then **Block Quote**. A click styles the note, closes the menu, and the cursor stays in the note. [Text styles and checklists](../your-notes/#text-styles-and-checklists) |
 | The checklist button | Makes the line a checklist item. |
+| **Table** | Adds a table at the cursor. In a table, it offers **Convert to text** and **Delete table**. [Tables](../your-notes/#tables) |
 | The paperclip | Adds photos or files to the open note. [Add photos and files](#add-photos-and-files) |
 | **Share** | Shares the open note. |
 | **⋯** | Opens the note's menu, with **Pin Note** (or **Unpin Note**), **Copy** and **Delete**, as on the phone. A pinned note shows first, in the **Pinned** group: [Pin a note](../your-notes/#pin-a-note) |
@@ -64,7 +65,7 @@ One bar runs along the top, over the notes and the open note. Nothing is at the 
 1. Click **New note**, or press Ctrl+Alt+N (⌘⌥N on a Mac). An empty note opens at the right.
 2. Type. The first line is the note's title.
 
-There is no **Save** button. The words go to your space as you type. To change a note, click it in the list, then click in its words and type. The styles, lists, checklists and links work as on the phone: [Open and change a note](../your-notes/#open-and-change-a-note). A paste with Ctrl+V (⌘V on a Mac) keeps the headings, lists, checklists, quotes, code, and bold, italic, underlined and struck-through words, reads Markdown as formatting, and keeps a link's address. It drops colors, fonts and pictures, as on the phone.
+There is no **Save** button. The words go to your space as you type. To change a note, click it in the list, then click in its words and type. The styles, lists, checklists and links work as on the phone: [Open and change a note](../your-notes/#open-and-change-a-note). A paste with Ctrl+V (⌘V on a Mac) keeps the headings, lists, checklists, quotes, code, and bold, italic, underlined and struck-through words, reads Markdown as formatting, and keeps a link on its words and a table. It drops colors, fonts and pictures, as on the phone. A right-click on selected words also offers **Bold**, **Italic**, **Underline**, **Strikethrough**, **Highlight** and **Link…**.
 
 Each change goes everywhere a phone's change goes:
 
@@ -96,9 +97,20 @@ The note leaves the list, and a bar says **Note deleted**, with **Undo**. Click 
 |---|---|---|
 | Start a new note | Ctrl+Alt+N | ⌘⌥N |
 | Search | Ctrl+F | ⌘F |
-| Make words bold | Ctrl+B | ⌘B |
-| Make words italic | Ctrl+I | ⌘I |
+| Bold, italic, underline | Ctrl+B, Ctrl+I, Ctrl+U | ⌘B, ⌘I, ⌘U |
+| Strikethrough | Ctrl+Shift+X | ⌘⇧X |
+| Highlight | Ctrl+Shift+E | ⌘⇧E |
+| Title, Heading, Subheading, Body | Ctrl+Shift+T, H, J, B, or Ctrl+Alt+1, 2, 3, 0 | ⌘⇧T, H, J, B, or ⌘⌥1, 2, 3, 0 |
+| Monostyled | Ctrl+Shift+M | ⌘⇧M |
+| Bulleted, dashed, numbered list | Ctrl+Shift+7, 8, 9 | ⌘⇧7, 8, 9 |
+| Checklist, tick an item | Ctrl+Shift+L, Ctrl+Shift+U | ⌘⇧L, ⌘⇧U |
+| Block quote | Ctrl+' | ⌘' |
+| Indent more, indent less | Ctrl+], Ctrl+[ | ⌘], ⌘[ |
+| Link | Ctrl+K | ⌘K |
+| Table | Ctrl+Alt+T | ⌘⌥T |
 | Delete the open note | Ctrl+Shift+Backspace | ⌘⇧Backspace |
+
+The browser keeps some keys for itself. In Chrome, Ctrl+Shift+T opens a closed tab again, so use Ctrl+Alt+1 for a title there. You can also type Markdown marks at the start of a line, such as `## `: [Text styles and checklists](../your-notes/#text-styles-and-checklists)
 
 You can select and copy the words of a note with the mouse.
 
@@ -156,7 +168,7 @@ The Mac app is Relay Everything in its own window, with the same layout as the b
 
 - **Your notes stay on the Mac.** You read and write them with no network, as on your phone. When you sign in, the Mac sends each change, and gets the changes from your phones and the browser every few minutes and each time you come back to the window.
 - **Settings** opens in the right part, not over your notes. It is the phone's own Settings, with Account and Appearance.
-- **The menu bar** has **New Note** (⌘N), **Find** (⌘F), **Bold** (⌘B), **Italic** (⌘I) and **Settings…** (⌘,).
+- **The menu bar** has **New Note** (⌘N), **Find** (⌘F) and **Settings…** (⌘,), and a **Format** menu with each item of the [keyboard keys](#keyboard-keys), as Notes on a Mac has it.
 - **Drop a file from Finder** on a note to add it. Each file can be up to 25 MB.
 - **It leaves out Location, Health, Calendar and Photos.** Your phone sends them.
 - **Voice notes show their words.** You record voice notes on your phone, and the Mac shows their words. A sound file on a note opens in the Mac's own player.

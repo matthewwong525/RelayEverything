@@ -41,9 +41,9 @@ The **Calendar** folder shows when the events last went, such as *Sent 10:42 · 
 
 ## Where your events go
 
-Your events go where your health and places go. With **My own webhook**, the phone sends them straight to your receiver as [`calendar.events`](../../connections/your-database/#send-from-the-phone), and your server gets none. When you change the place, the phone sends the whole window to the new place.
+Your events go where your notes go. With **My own webhook** and no account, the phone sends them straight to your receiver as [`calendar.events`](../../connections/your-database/#send-from-the-phone), and your server gets none. When you change the place, the phone sends the whole window to the new place.
 
-Signed in to Relay Everything, you can also turn on **Only to my own webhook** in **Webhooks**, under **Advanced** on the **Account** page. Your notes still sync through Relay Everything, and your events go only to your receiver as `calendar.events`. The **Calendar** folder then says *Sent to your webhook* and the time. When you turn it off again, the phone sends the whole window to Relay Everything. [Settings](../settings/#health-places-calendar-and-photos-only-to-your-webhook)
+Signed in to Relay Everything, your events always go to Relay Everything, and the phone sends none to a webhook itself. To get them at your own database, tick **Calendar** for it on your Relay Everything page. To keep them off Relay Everything, use the app with no account: [Settings](../settings/#keep-your-data-off-relay-everything)
 
 With **Relay Everything**, your events go only to your own space on your server. From there:
 

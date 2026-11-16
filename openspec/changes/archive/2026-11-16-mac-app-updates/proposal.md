@@ -1,6 +1,6 @@
 # The Mac app updates itself, and the website's Mac download works
 
-**Status:** building
+**Status:** ready-to-ship
 **Branch:** mac-app-updates
 **Open questions:** none
 
@@ -80,3 +80,4 @@ None.
 - **2026-11-16** — Check: `.github/workflows/mobile-macos.yml` signs Sparkle's helpers before the frameworks; no check is loosened, because `mac-check` now also refuses a helper that another team signed.
 - **2026-11-16** — Assumed: the install-and-update test on a Mac moves out of the tasks to *After publishing*, because it needs the `main` run and a second test build, which come only after the publish; the branch run's Mac build is the check before it.
 - **2026-11-16** — Saved for the branch run: the build and its review are done; the branch run's Mac build checks Sparkle, `Updater.swift` and the Xcode project, which this host can't build.
+- **2026-11-16** — Archived for publishing: the branch run passed, the Mac build with Sparkle included; one flaky voice-note test passed on its re-run.

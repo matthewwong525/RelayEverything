@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · mac-app-updates</title>
+<title>Review · 2026-11-16-mac-app-updates</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -452,11 +452,11 @@
 })();
 </script>
 </head>
-<body data-change="mac-app-updates" data-own-back>
+<body data-change="2026-11-16-mac-app-updates" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>mac-app-updates</h1>
+  <h1>2026-11-16-mac-app-updates</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Tap a picture to see it full screen.</span></p>
@@ -505,6 +505,7 @@
 <li class="decision card" id="decision-17" data-note="decision-17" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-16</p>Check: <code>.github/workflows/mobile-macos.yml</code> signs Sparkle's helpers before the frameworks; no check is loosened, because <code>mac-check</code> now also refuses a helper that another team signed.</li>
 <li class="decision card" id="decision-18" data-note="decision-18" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-16</p>Assumed: the install-and-update test on a Mac moves out of the tasks to <i>After publishing</i>, because it needs the <code>main</code> run and a second test build, which come only after the publish; the branch run's Mac build is the check before it.</li>
 <li class="decision card" id="decision-19" data-note="decision-19" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-16</p>Saved for the branch run: the build and its review are done; the branch run's Mac build checks Sparkle, <code>Updater.swift</code> and the Xcode project, which this host can't build.</li>
+<li class="decision card" id="decision-20" data-note="decision-20" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-16</p>Archived for publishing: the branch run passed, the Mac build with Sparkle included; one flaky voice-note test passed on its re-run.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

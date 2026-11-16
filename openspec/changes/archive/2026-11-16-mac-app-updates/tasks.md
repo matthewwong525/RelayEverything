@@ -25,7 +25,7 @@
 ## 5. Checks
 
 - [x] 5.1 Run the Flutter tests, the script tests, `node scripts/public-check.mjs` and `scripts/product-name.test.mjs`. Verify: all pass.
-- [ ] 5.2 `/save`, and the branch run's Mac build passes with Sparkle inside the app. Verify: the run's *Mac* job is green.
+- [x] 5.2 `/save`, and the branch run's Mac build passes with Sparkle inside the app. Verify: the run's *Mac* job is green.
 
 ## After publishing (not a build task)
 

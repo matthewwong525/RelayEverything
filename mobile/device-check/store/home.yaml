@@ -1,0 +1,9 @@
+# The App Store screenshot of Home, with the sample notes.
+appId: com.matthewwong525.relayApp
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 60000
+- assertVisible: 'Notes(.|\n)*'
+- takeScreenshot: home

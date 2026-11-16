@@ -1,0 +1,30 @@
+Relay Everything keeps your notes, and sends them only where you want.
+
+Write a note, say it, or share it from any app. It stays on your phone. You need no account and no signal, and the app sends nothing until you turn on sending.
+
+WRITE AND SAY
+- Type a note. The first line is its title.
+- Hold New note and talk. The phone writes the words itself, with no server. The recording stays on your phone.
+- Share a web page, text, photos or a file from any app.
+- On Apple Watch, open the app and talk. The note goes to your iPhone.
+- Ask Siri, or use Apple Shortcuts, to add a note or start a voice note.
+
+FIND
+- One list holds every note, newest first. Pin the notes you use most.
+- Search finds the words in your notes and the names of their files, with no signal.
+
+SEND, WHEN YOU WANT
+Sign in when you want more. Each note then goes to your own space on Relay Everything, or to your own webhook with no account. The AI apps you connect can then read your notes.
+
+With sending on, you can also send:
+- Steps, heart rate, sleep and workouts from Apple Health
+- A history of the places you go
+- Your calendar
+- The new photos you take
+
+Each one stays off until you turn it on, and the phone asks you first. You can send health, places, calendar and photos only to your own webhook, and never to Relay Everything.
+
+YOUR DATA
+- No ads and no tracking.
+- Delete your account from the app at any time.
+- The code is open source, under the MIT license.

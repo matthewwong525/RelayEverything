@@ -3,6 +3,7 @@
 import { spaceOf, vouch, type Files, type PersonSpace, type SpaceEnv } from "../space.ts";
 import { MINUTE, type Db, type Env } from "../store.ts";
 import { ownerOf, type Entry, type KindId, type WithFile } from "../kinds.ts";
+import { purgeDue } from "../recently-deleted.ts";
 import { checkAddress } from "./address.ts";
 import { BEHIND, TAKES } from "./log.ts";
 import { base64, signedHeaders } from "./sign.ts";
@@ -216,13 +217,20 @@ export async function run(env: Env, space: PersonSpace, id: string): Promise<Wai
   }
 }
 
-/** The queue's consumer, only on a Worker with SPACES: each message names a webhook and its person, whose space it
- *  opens. A message from before spaces names no person and is dropped. A run that fails on our side tries again. */
+/** One message's work: a webhook's run, or the space alarm's purge of Recently Deleted. */
+async function handle(env: Env, { webhook, person, purge }: { webhook?: unknown; person?: unknown; purge?: unknown }): Promise<Wait> {
+  if (typeof person !== "string") return null;
+  const space = () => spaceOf(env as SpaceEnv, vouch("queue", person));
+  if (purge === true) await purgeDue(space());
+  return typeof webhook === "string" ? run(env, space(), webhook) : null;
+}
+
+/** The queue's consumer, only on a Worker with SPACES: each message names a person, whose space it opens, and a
+ *  webhook or a purge. A message from before spaces names no person and is dropped. A failed run tries again. */
 export async function consume(batch: MessageBatch, env: Env) {
   for (const message of batch.messages) {
-    const { webhook, person } = (message.body ?? {}) as { webhook?: unknown; person?: unknown };
     try {
-      const wait = typeof webhook === "string" && typeof person === "string" ? await run(env, spaceOf(env as SpaceEnv, vouch("queue", person)), webhook) : null;
+      const wait = await handle(env, (message.body ?? {}) as Record<string, unknown>);
       if (wait === null) message.ack();
       else message.retry({ delaySeconds: wait });
     } catch (error) {

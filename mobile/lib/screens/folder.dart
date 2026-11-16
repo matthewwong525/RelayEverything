@@ -1,4 +1,6 @@
-import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'dart:async';
+
+import 'package:flutter/cupertino.dart' show CupertinoAlertDialog, CupertinoDialogAction, CupertinoIcons, showCupertinoDialog;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -19,12 +21,63 @@ Future<bool> openInBrowser(Uri address) async {
   }
 }
 
-/// [part] of the person's Relay Everything page, such as `#webhooks`, in the phone's browser, and a message if the
+/// What shows when the browser did not open an address.
+const browserProblem = 'The browser did not open. Try again.';
+
+/// A problem's words as an alert gives them: the first sentence, without its full stop, is the title, and the rest is
+/// under it, or null.
+(String, String?) problemParts(String message) {
+  final words = message.trim();
+  final first = RegExp(r'^(.+?[.!?])(?:\s+|$)', dotAll: true).firstMatch(words);
+  if (first == null) return (words, null);
+  final title = first.group(1)!;
+  final rest = words.substring(first.end).trim();
+  return (title.endsWith('.') ? title.substring(0, title.length - 1) : title, rest.isEmpty ? null : rest);
+}
+
+/// Shows a problem as an alert in the middle of the screen, with *OK*, as Apple Notes does: never a bar at the bottom,
+/// which would cover *Search* and *New note*.
+Future<void> showProblem(BuildContext context, String message) =>
+  showProblemOn(Navigator.maybeOf(context, rootNavigator: true), message);
+
+/// [showProblem] for a caller whose own page may close before the problem comes, such as the note page: it takes the
+/// app's navigator before the wait.
+Future<void> showProblemOn(NavigatorState? navigator, String message) async {
+  if (navigator == null || !navigator.mounted) return;
+  final (title, content) = problemParts(message);
+  await showCupertinoDialog<void>(context: navigator.context, builder: (context) => CupertinoAlertDialog(
+    title: Text(title),
+    content: content == null ? null : Text(content),
+    actions: [
+      CupertinoDialogAction(isDefaultAction: true, onPressed: () => Navigator.pop(context), child: const Text('OK')),
+    ],
+  ));
+}
+
+/// An alert that asks: [title], [message], *Cancel*, and [action] in bold, or in red when [destructive]. True when the
+/// person picks [action].
+Future<bool> askAlert(BuildContext context, {required String title, String? message, required String action,
+  bool destructive = false}) async {
+  final danger = brandOf(context).danger;
+  final picked = await showCupertinoDialog<bool>(context: context, builder: (context) => CupertinoAlertDialog(
+    title: Text(title),
+    content: message == null ? null : Text(message),
+    actions: [
+      CupertinoDialogAction(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+      CupertinoDialogAction(isDefaultAction: !destructive, isDestructiveAction: destructive,
+        textStyle: destructive ? TextStyle(color: danger) : null,
+        onPressed: () => Navigator.pop(context, true), child: Text(action)),
+    ],
+  ));
+  return picked ?? false;
+}
+
+/// [part] of the person's Relay Everything page, such as `#webhooks`, in the phone's browser, and a problem if the
 /// browser did not open. A test passes its own [opener].
 Future<void> openRelayPage(BuildContext context, Relay relay, String part, {Opener? opener}) async {
-  final messenger = ScaffoldMessenger.of(context);
+  final navigator = Navigator.maybeOf(context, rootNavigator: true);
   if (!await (opener ?? openInBrowser)(Uri.parse('${relay.server ?? defaultServer}/$part'))) {
-    messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
+    await showProblemOn(navigator, browserProblem);
   }
 }
 
@@ -95,7 +148,7 @@ String problemLine(WebhookProblem problem, DateTime now, {String what = 'Notes',
 /// Runs a change and shows why it could not be, if it could not.
 Future<void> apply(BuildContext context, Future<String?> change) async {
   final problem = await change;
-  if (problem != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(problem)));
+  if (problem != null && context.mounted) unawaited(showProblem(context, problem));
 }
 
 /// *Sign in*: sets up where to send, a key or the person's own webhook. Then asks about the notes that never went, and
@@ -120,7 +173,7 @@ Future<bool> choosePlace(BuildContext context, Relay relay, {bool keepWebhook = 
   if (!context.mounted) return false;
   final problem = await relay.startSending(sendEarlier: sendEarlier, place: place,
     privateTo: keepWebhook ? SendPlace.webhook : null);
-  if (problem != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(problem)));
+  if (problem != null && context.mounted) unawaited(showProblem(context, problem));
   return problem == null;
 }
 
@@ -322,10 +375,8 @@ class PhotosPage extends StatelessWidget {
     if (choice == _PhotosChoice.stop) return apply(context, relay.setPhotos(false));
     if (choice == _PhotosChoice.openPage) {
       // Photos stay on: the person deletes what was sent on the page, then can come back and turn them off.
-      final messenger = ScaffoldMessenger.of(context);
-      if (!await (opener ?? openInBrowser)(Uri.parse('$server/'))) {
-        messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
-      }
+      final navigator = Navigator.maybeOf(context, rootNavigator: true);
+      if (!await (opener ?? openInBrowser)(Uri.parse('$server/'))) await showProblemOn(navigator, browserProblem);
     }
   }
 }

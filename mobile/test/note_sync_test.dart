@@ -91,7 +91,7 @@ void main() {
       await store.applyPulled([pulledNote('s1'), pulledNote('s2')]);
       final server = FakeServer((_) => notesPage([{'id': 's1', 'clientId': null, 'deleted': true}], next: 3));
       await syncNotes(store, Sender(server.api), settings: _on, connection: bearer);
-      expect(server.requests.single.url.queryParameters, {'since': '0', 'limit': '100', 'deleted': '1'});
+      expect(server.requests.single.url.queryParameters, {'since': '0', 'limit': '100', 'deleted': '1', 'trash': '1'});
       expect([[for (final note in await store.notes()) note.clientId], await store.get(noteSyncSeq)], [['srv:s2'], '3']);
     });
 
@@ -131,17 +131,19 @@ void main() {
       expect((await store.notes()).firstWhere((note) => note.clientId == 'srv:s1').text, 'One');
     });
 
-    test('keeps its place for a note deleted elsewhere while marked deleted here, so after Undo the next pull deletes it',
+    test('moves a note moved to Recently Deleted elsewhere, and deletes for good one there that was deleted for good',
         () async {
-      await store.applyPulled([pulledNote('s1')]);
-      await store.markDeleted('srv:s1', DateTime(2026, 11, 5));
-      final server = FakeServer((_) => notesPage([{'id': 's1', 'clientId': null, 'deleted': true}], next: 3));
+      await store.applyPulled([pulledNote('s1'), pulledNote('s2')]);
+      await store.deleteNote('srv:s2', DateTime(2026, 11, 5));
+      for (final item in await store.outbox()) {
+        await store.done(item.id);
+      }
+      final server = FakeServer((_) => notesPage([{...pulledNote('s1'), 'deletedAt': DateTime(2026, 11, 6).millisecondsSinceEpoch},
+        {'id': 's2', 'clientId': null, 'deleted': true}], next: 3));
       await syncNotes(store, Sender(server.api), settings: _on, connection: bearer);
-      expect([await store.get(noteSyncSeq), await store.hasNote('srv:s1')], [null, isTrue]);
-      await store.undoDelete('srv:s1');
-      await syncNotes(store, Sender(server.api), settings: _on, connection: bearer);
-      expect([server.requests.last.url.queryParameters['since'], await store.get(noteSyncSeq), await store.notes()],
-        ['0', '3', isEmpty]);
+      expect([await store.get(noteSyncSeq), await store.notes(),
+        [for (final note in await store.deletedNotes()) (note.clientId, note.deletedAt)]],
+        ['3', isEmpty, [('srv:s1', DateTime(2026, 11, 6))]]);
     });
   });
 
@@ -191,7 +193,7 @@ void main() {
       expect([for (final entry in relay.entries) entry.text], ['Flight moved to 9:40']);
       deleted = true;
       await _pullAll(relay);
-      expect(relay.entries, isEmpty);
+      expect([relay.entries, relay.deleted], [isEmpty, isEmpty]);
     });
 
     test('a first pull of several pages shows each page in the list as it lands', () async {

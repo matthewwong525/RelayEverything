@@ -45,15 +45,14 @@ class EmailNotesParts extends StatelessWidget {
     ]);
   }
 
+  /// Copies [text] with no message, as a copy shows nothing; only a copy that did not work says so.
   Future<void> _copy(BuildContext context, String text) async {
-    final messenger = ScaffoldMessenger.of(context);
-    var copied = true;
+    final navigator = Navigator.maybeOf(context, rootNavigator: true);
     try {
       await (copy ?? (text) => Clipboard.setData(ClipboardData(text: text)))(text);
     } on Exception {
-      copied = false;
+      await showProblemOn(navigator, 'Copy did not work. Select the text and copy it.');
     }
-    messenger.showSnackBar(SnackBar(content: Text(copied ? 'Copied.' : 'Copy did not work. Select the text and copy it.')));
   }
 }
 

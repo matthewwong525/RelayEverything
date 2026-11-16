@@ -64,15 +64,17 @@ class WebhookClient implements Outbound {
   Map<String, dynamic> get _device => {'id': installId, 'name': deviceName};
 
   /// The v1 message for one waiting upload, the same each time it is built. [bytes] are an `attachment`'s file. Null
-  /// for a batch with no rows, and for a pin, which changes no note: neither needs a message.
+  /// for a batch with no rows, for a pin, which changes no note, and for a delete for good of a note the webhook already
+  /// heard was deleted: none needs a message.
   Map<String, dynamic>? message(OutboxItem item, [List<int>? bytes]) {
-    if (item.route == notePin) return null;
+    if (item.route == notePin || (item.route == noteDelete && item.body['moved'] == true)) return null;
     final body = item.body;
     final (String type, Map<String, dynamic> data) = switch (item.route) {
       'notes' => ('note.created', {'note': _note(body)}),
       noteUpdate => ('note.updated', {'note': _note(body)
         ..remove('audio')..['edited_at'] = _iso(body['editedAt'] ?? item.createdAt.millisecondsSinceEpoch)}),
       noteDelete => ('note.deleted', {'note': {'id': body['clientId'], 'deleted_at': _iso(item.createdAt.millisecondsSinceEpoch)}}),
+      noteRecover => ('note.recovered', {'note': _note(body)}),
       'attachment' => ('note.file', {'note_id': body['noteClientId'], 'file': {'id': body['id'], 'name': body['name'],
         'content_type': _type(body['type']), 'size': bytes!.length, 'base64': base64.encode(bytes)}}),
       'health' => ('health.samples', {'samples': [for (final sample in body['samples'] as List) _sample(sample as Map)]}),

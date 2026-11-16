@@ -93,7 +93,7 @@ While you type, a round bar floats just above the keyboard: **Aa** for [text sty
 
 When you type at the end of a long note, the page scrolls so that the line you type stays above the bar.
 
-If you leave a note with no words and no files, the app deletes it, as Apple Notes does. A note that your server has, or that is on its way to it, is deleted everywhere, with **Undo**, as when you [delete a note](#delete-a-note). A voice note keeps its recording.
+If you leave a note with no words and no files, the app deletes it for good, as Apple Notes does: [Delete a note](#delete-a-note). A voice note keeps its recording.
 
 ## Pin a note
 
@@ -158,11 +158,28 @@ Delete a note in one of two ways:
 - In the notes list, swipe the note's row to the left. A swipe to the right [pins the note](#pin-a-note) and deletes nothing.
 - On the note's page, tap **⋯**, then **Delete**, the last item, in red. The page closes.
 
-The note leaves the list at once, and the bar at the bottom says **Note deleted**, with **Undo**. Tap **Undo** in the next 5 seconds to get the note back as it was. After that, the phone deletes the note, its files and its recording. With a screen reader, each note's row has a **Delete** action.
+The note leaves the list at once and goes to **Recently Deleted** for 30 days, with its files and its recording. The app shows no message. After 30 days, the note goes for good. With a screen reader, each note's row has a **Delete** action.
 
-With sending on, the delete then goes everywhere: your server deletes the note, its files and its recording, and your page, your AI and your other phones no longer show it. Each of your webhooks gets one [`note.deleted`](../../connections/your-database/#notedeleted) message. You can delete any note, also one from email or another phone. After the 5 seconds you can't undo it.
+To undo the last delete:
 
-A delete made with no signal goes on the next sync. With sending off, a note that your server has keeps its delete on the phone, and the delete goes when you turn sending on again, so the note does not come back. A note that never went is deleted from the phone only.
+- **iPhone:** shake the phone. The app asks **Undo Delete Note**. Tap **Undo**, and the note goes back to its place. A shake while you type undoes your typing, as before.
+- **Mac and your Relay Everything page:** press ⌘Z (Ctrl+Z on Windows) when you are not typing in a note.
+- **Android:** there is no shake undo. Recover the note from **Recently Deleted**.
+
+With sending on, the delete goes everywhere: your page and your other phones show the note in **Recently Deleted** at their next sync, and your AI apps no longer find it. Each of your webhooks gets one [`note.deleted`](../../connections/your-database/#notedeleted) message. You can delete any note, also one from email or another phone. A delete made with no signal goes on the next sync. With sending off, the delete stays on this phone until you turn sending on again, so the note does not come back.
+
+If you leave a note with no words and no files, the app deletes it for good, as Apple Notes does: it has nothing to keep, so it does not go to **Recently Deleted**.
+
+### Recently Deleted
+
+While it holds notes, Home shows a **Recently Deleted** row under **Notes**, with its count. Tap it to see the deleted notes, newest delete first.
+
+- **Recover** a note: swipe its row to the left, then tap **Recover**. The note goes back to **Notes**, on every phone and on your page. Each of your webhooks gets one [`note.recovered`](../../connections/your-database/#noterecovered) message.
+- **Delete** a note for good: swipe its row to the left, then tap **Delete**. The app asks first, because you can't undo it.
+- **⋯** has **Recover All** and **Delete All**. **Delete All** asks first, because you can't undo it.
+- Tap a note to read it. You can't change a deleted note: a tap in its words asks you to recover it first.
+
+A note deleted for good goes with its files and its recording, from your server, your page and every phone.
 
 ## Change a sent note
 
@@ -181,7 +198,7 @@ New notes and changes come in when you open the app, when you come back to it, w
 Notes go first. Each time, the phone sends your notes, then gets the new notes. Only then does it send [health](../health/), [places](../location/), the [calendar](../calendar/) and [photos](../photos/). A note that you write while they send goes before the rest. If a health, place, calendar or photo upload fails, your notes still go and come in. That data waits on the phone and goes on a later sync.
 
 - **Edit anywhere.** Change a note on one phone, and your other phones, your page and your AI get the new words at their next sync. Each of your webhooks gets one [`note.updated`](../../connections/your-database/#noteupdated) message.
-- **Delete anywhere.** Delete a note on one phone, and it goes from your other phones at their next sync, and from your page and your AI: [Delete a note](#delete-a-note). A note open on another phone stays until you leave it, then goes.
+- **Delete anywhere.** Delete a note on one phone, and it goes to **Recently Deleted** on your other phones at their next sync, and on your page. Your AI no longer finds it: [Delete a note](#delete-a-note). A note open on another phone stays until you leave it, then goes.
 - **The newer change wins.** If two phones change the same note before they sync, the change made later stays on every phone and on your page, even when the older change arrives last.
 - **Files on tap.** A note from somewhere else lists its files by name and size. Tap one to download it and open it. Only that file downloads, so the phone uses no space or data for files you never open. You add files only to the notes you wrote on this phone.
 - **Voice recordings stay on their phone.** A voice note from another phone shows its words with no recording. An older recorded note's recording downloads and opens on tap, as a file does.

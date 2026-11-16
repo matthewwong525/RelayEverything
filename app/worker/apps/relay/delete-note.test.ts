@@ -23,9 +23,9 @@ const SECRET = "whsec_dGVzdC1vbmx5LXNlY3JldC1mb3ItdGhlLXNlbmRlcg==";
 afterEach(() => { vi.unstubAllGlobals(); });
 const log = () => rows("relay_outbox").map(row => [row.kind, row.ref]);
 
-it("deletes any note in the space by id, with its files and recording, and logs one note.deleted", async () => {
+it("deletes any note in the space for good by id, with its files and recording, and logs one note.deleted", async () => {
   emailed();
-  expect(await call(phone, "DELETE", "notes", { id: "n-mail" })).toEqual({ status: 200, json: { id: "n-mail", deleted: true } });
+  expect(await call(phone, "DELETE", "notes", { id: "n-mail", forever: "true" })).toEqual({ status: 200, json: { id: "n-mail", deleted: true } });
   expect(rows("relay_notes").map(row => row.id)).toEqual(["n-other"]);
   expect(rows("relay_attachments").map(row => row.id)).toEqual(["f-other"]);
   expect([...bucket.objects.keys()]).toEqual([files.other]);
@@ -37,12 +37,12 @@ it("deletes any note in the space by id, with its files and recording, and logs 
   expect(log().filter(([kind]) => kind === "note.deleted")).toHaveLength(1);
 });
 
-it("deletes a phone's own note by its clientId, and only that phone's", async () => {
+it("moves a phone's own note to Recently Deleted by its clientId, and only that phone's", async () => {
   await call(phone, "POST", "notes", { clientId: "note-delete-01", text: "Buy milk", createdAt: NOW - MINUTE });
   expect((await call(ipad, "DELETE", "notes", { clientId: "note-delete-01" })).status).toBe(404);
   const { json } = await call(phone, "DELETE", "notes", { clientId: "note-delete-01" });
-  expect(json).toEqual({ id: expect.any(String), deleted: true });
-  expect(rows("relay_notes")).toEqual([]);
+  expect(json).toEqual({ id: expect.any(String), deleted: true, deletedAt: NOW });
+  expect(rows("relay_notes")).toEqual([expect.objectContaining({ id: json.id, deleted_at: NOW })]);
   expect(log()).toEqual([["note.created", json.id], ["note.deleted", json.id]]);
 });
 

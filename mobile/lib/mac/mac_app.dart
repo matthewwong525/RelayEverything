@@ -16,7 +16,7 @@ final _dark = brandTheme(Brightness.dark);
 /// What the Mac's menu bar does: each item calls the window's own action for its key, so a menu and a key do the
 /// same thing.
 typedef MacActions = ({VoidCallback newNote, VoidCallback find, VoidCallback bold, VoidCallback italic,
-  VoidCallback settings});
+  VoidCallback settings, VoidCallback undo});
 
 /// The Mac's menu bar, each item with its key. The window takes each key first, so a key never runs twice; a menu item
 /// acts on a click.
@@ -44,7 +44,7 @@ List<PlatformMenuItem> macMenus(MacActions actions) {
     ...menu('File', [item('New Note', LogicalKeyboardKey.keyN, actions.newNote)]),
     ...menu('Edit', [
       ...group([
-        item('Undo', LogicalKeyboardKey.keyZ, () => _edit(const UndoTextIntent(SelectionChangedCause.keyboard))),
+        item('Undo', LogicalKeyboardKey.keyZ, actions.undo),
         PlatformMenuItem(label: 'Redo', shortcut: const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true),
           onSelected: () => _edit(const RedoTextIntent(SelectionChangedCause.keyboard))),
       ]),
@@ -63,6 +63,11 @@ List<PlatformMenuItem> macMenus(MacActions actions) {
     ...menu('Window', provided([PlatformProvidedMenuItemType.minimizeWindow, PlatformProvidedMenuItemType.zoomWindow,
       PlatformProvidedMenuItemType.toggleFullScreen, PlatformProvidedMenuItemType.arrangeWindowsInFront])),
   ];
+}
+
+/// *Edit* → *Undo*: the last delete when no words are being typed and one is left to undo, else the typing.
+void undoOr(bool Function()? undoDelete) {
+  if (!(undoDelete?.call() ?? false)) _edit(const UndoTextIntent(SelectionChangedCause.keyboard));
 }
 
 /// An *Edit* item: the same step its key takes in the field or note that has the cursor.
@@ -98,6 +103,7 @@ class MacAppState extends State<MacApp> {
     bold: () => _shell.currentState?.bold(),
     italic: () => _shell.currentState?.italic(),
     settings: () => _shell.currentState?.settings(),
+    undo: () => undoOr(_shell.currentState?.undoDelete),
   );
 
   @override

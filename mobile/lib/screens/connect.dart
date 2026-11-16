@@ -75,10 +75,8 @@ class _ConnectScreenState extends State<ConnectScreen> {
     if (problem == null) Navigator.of(context).pop(SendPlace.webhook);
   }
 
-  Future<void> _copySecret() async {
-    await widget.copy(_secret.text.trim());
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Secret copied.')));
-  }
+  /// Copies the secret, with no message: the person sees it in the field.
+  Future<void> _copySecret() => widget.copy(_secret.text.trim());
 
   @override
   Widget build(BuildContext context) {

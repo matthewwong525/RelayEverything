@@ -108,6 +108,6 @@ class WebhooksPage extends StatelessWidget {
 
   Future<void> _test(BuildContext context) async {
     final answer = await relay.testWebhook(relay.webhookAddress ?? '', relay.webhookSecret ?? '');
-    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(answer)));
+    if (context.mounted) await showProblem(context, answer);
   }
 }

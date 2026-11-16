@@ -3,7 +3,7 @@ title: Your own database
 description: Add a webhook, and your Relay Everything server or your phone sends each new note, and the health, calendar, location and photos you pick, to an address you own, in one signed format.
 ---
 
-A webhook copies what your Relay Everything server stores in your space to an address you own, such as a small receiver beside your database. Your server sends each new note there a few seconds after it gets it, then each of its files in a [`note.file`](#notefile) message. When a phone changes a note, the note goes again as [`note.updated`](#noteupdated), and when a phone deletes it, as [`note.deleted`](#notedeleted). Health, calendar, location and photos go only if you tick them.
+A webhook copies what your Relay Everything server stores in your space to an address you own, such as a small receiver beside your database. Your server sends each new note there a few seconds after it gets it, then each of its files in a [`note.file`](#notefile) message. When a phone changes a note, the note goes again as [`note.updated`](#noteupdated). When a phone deletes it, it goes as [`note.deleted`](#notedeleted), and when you recover it from *Recently Deleted*, as [`note.recovered`](#noterecovered). Health, calendar, location and photos go only if you tick them.
 
 Your data lives in your own space: one Durable Object with its own SQLite database, in the spaces Worker (`relay-everything-spaces`, or `<name>-spaces` on [your own server](../../start/run-your-own/)). The server's D1 database holds only the list of accounts: each person, their sign-ins and sessions, and a fingerprint of each key. Each webhook belongs to one person's space, and it sends only that person's data.
 
@@ -66,6 +66,7 @@ Every message is a `POST` with a JSON body in one envelope:
 | `note.created` | A note reaches your server. | `note`, with its words, time, device, recording, and the names of its files |
 | `note.updated` | A phone changes a note, from any device or way in. Always after the note's `note.created`. | `note`, with its latest words, without `audio` |
 | `note.deleted` | A phone deletes a note, from any device or way in. Always after the note's `note.created`. | `note`: its `id` and `deleted_at` |
+| `note.recovered` | You recover a note from *Recently Deleted*. Always after the note's `note.deleted`. | `note`, all of it, as in `note.created` |
 | `health.samples` | A phone sends health samples. | `samples`: up to 500 |
 | `health.nights` | A phone sends new or changed nights of sleep. | `nights`: up to 500, each with its stages |
 | `location.points` | A phone sends location points. | `points`: up to 500 |
@@ -168,7 +169,7 @@ The words keep their styles as Markdown marks, such as `#` for a title, `- [ ]` 
 
 ### `note.deleted`
 
-Relay Everything sends `note.deleted` when a phone deletes a note. Any signed-in phone can delete any note in your space, also one from email. Your server deletes the note, its files and its recording, and sends the delete to every active webhook. A phone that sends to your own webhook sends it there itself. It always comes after the note's `note.created`.
+Relay Everything sends `note.deleted` when a phone deletes a note. Any signed-in phone can delete any note in your space, also one from email. Your server moves the note to *Recently Deleted* for 30 days and sends the delete to every active webhook. After 30 days, or when you delete it from *Recently Deleted*, your server deletes the note, its files and its recording, and sends no other message. A phone that sends to your own webhook sends it there itself. It always comes after the note's `note.created`.
 
 ```json
 {
@@ -184,7 +185,33 @@ Relay Everything sends `note.deleted` when a phone deletes a note. Any signed-in
 }
 ```
 
-`id` is the same `id` as in the note's `note.created`. Delete the note's row by it, with its files. `deleted_at` is when the note was deleted. A delete can come again, as any message can, so a delete of a note you do not have is not a fault: answer `2xx`. A receiver that ignores `note.deleted` keeps working: it keeps the note.
+`id` is the same `id` as in the note's `note.created`. Delete the note's row by it, with its files, or hide it. `deleted_at` is when the note was deleted. A delete can come again, as any message can, so a delete of a note you do not have is not a fault: answer `2xx`. A receiver that ignores `note.deleted` keeps working: it keeps the note.
+
+### `note.recovered`
+
+Relay Everything sends `note.recovered` when you recover a note from *Recently Deleted*. It holds the whole note, as `note.created` does, with its words as they are now. Then each of the note's files comes again in its own [`note.file`](#notefile). A phone that sends to your own webhook sends it there itself. It always comes after the note's `note.deleted`.
+
+```json
+{
+  "version": 1,
+  "type": "note.recovered",
+  "timestamp": "2026-11-05T09:30:00.000Z",
+  "data": {
+    "note": {
+      "id": "a0000000-0000-4000-8000-000000000002",
+      "source": "typed",
+      "text": "# Small things to buy\n- [x] Lemons\n- [ ] Green tea",
+      "recorded_at": "2026-11-04T14:01:00.000Z",
+      "created_at": "2026-11-04T14:01:02.000Z",
+      "device": { "id": "d0000000-0000-4000-8000-000000000001", "name": "Android phone" },
+      "audio": null,
+      "edited_at": "2026-11-04T15:20:00.000Z"
+    }
+  }
+}
+```
+
+Save the note's row again by its `id`, as for `note.created`. `edited_at` is when a phone last changed the note; a note never changed has none. A receiver that ignores `note.recovered` keeps working: the note is missing there if it deleted it at `note.deleted`.
 
 ### `health.samples`
 

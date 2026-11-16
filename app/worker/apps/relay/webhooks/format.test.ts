@@ -3,8 +3,8 @@ import { Webhook } from "standardwebhooks";
 import { afterEach, expect, it, vi } from "vitest";
 import { z } from "zod";
 import * as format from "./format.ts";
-import { calendarEvents, healthNights, healthSamples, jsonSchema, locationPoints, locationStays, message, noteCreated, noteDeleted, noteFile, noteUpdated, photoCreated,
-  webhookTest, type NoteRow } from "./format.ts";
+import { calendarEvents, healthNights, healthSamples, jsonSchema, locationPoints, locationStays, message, noteCreated, noteDeleted, noteFile, noteRecovered,
+  noteUpdated, photoCreated, webhookTest, type NoteRow } from "./format.ts";
 import { base64, newSecret, signedHeaders } from "./sign.ts";
 
 const schemaFile = new URL("../../../../../site/public/webhooks/v1.schema.json", import.meta.url);
@@ -172,13 +172,25 @@ it("sends a changed note with its latest words, the time of the change and its f
   expect(plain.data).not.toHaveProperty("note.audio");
 });
 
+it("sends a recovered note whole, as note.created does, with its last edit and its files", () => {
+  const pdf = { id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 245_760 };
+  const back = noteRecovered({ ...ring, edited_at: AT + 60_000 }, base64(new Uint8Array([0, 0, 0, 24])), AT + 120_000, [pdf]);
+  expect(message.parse(back)).toEqual(back);
+  expect(back).toMatchObject({ type: "note.recovered", timestamp: "2026-11-04T14:03:02.000Z", data: { note: { id: ring.id,
+    text: ring.text, audio: { content_type: "audio/mp4", base64: "AAAAGA==" }, edited_at: "2026-11-04T14:02:02.000Z", attachments: [pdf] } } });
+  const plain = noteRecovered(typed, null, AT);
+  expect(plain.data).toMatchObject({ note: { audio: null } });
+  expect(plain.data).not.toHaveProperty("note.edited_at");
+  expect(plain.data).not.toHaveProperty("note.attachments");
+});
+
 it("takes a note's file with its bytes, which the server and the phone both send", () => {
   const file = { version: 1, type: "note.file", timestamp: "2026-11-04T14:01:02.000Z", data: { note_id: typed.id,
     file: { id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 4, base64: "AAAAGA==" } } };
   expect(message.parse(file)).toEqual(file);
   expect(() => message.parse({ ...file, data: { ...file.data, file: { ...file.data.file, base64: undefined } } })).toThrow();
   expect(Object.keys(format).sort()).toEqual(["calendarEvents", "healthNights", "healthSamples", "jsonSchema", "locationPoints", "locationStays", "message", "noteCreated",
-    "noteDeleted", "noteFile", "noteUpdated", "photoCreated", "webhookTest"]);
+    "noteDeleted", "noteFile", "noteRecovered", "noteUpdated", "photoCreated", "webhookTest"]);
 });
 
 // The phone writes these from mobile/test/webhook_test.dart: one of each message it builds, signed with a fixed secret.
@@ -187,7 +199,7 @@ const fixtures = new URL("../../../../../mobile/test/fixtures/webhook/", import.
 it("takes each message the phone builds, and its signature passes the server's own signing", async () => {
   const names = readdirSync(fixtures).filter(name => name.endsWith(".json")).sort();
   expect(names).toEqual(["calendar.events.json", "health.nights.json", "health.samples.json", "location.points.json", "location.stays.json", "note.created.json", "note.deleted.json",
-    "note.file.json", "note.updated.json", "photo.created.json", "webhook.test.json"]);
+    "note.file.json", "note.recovered.json", "note.updated.json", "photo.created.json", "webhook.test.json"]);
   for (const name of names) {
     const { secret, headers, body } = JSON.parse(readFileSync(new URL(name, fixtures), "utf8")) as
       { secret: string; headers: Record<string, string>; body: string };

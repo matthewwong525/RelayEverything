@@ -142,10 +142,11 @@ class RelayController extends Relay {
   /// The phone's network as it last changed; null until it does.
   Link? _link;
   Timer? _drainTimer;
-  /// Each deleted note's *Undo* time, by note id: when it ends, the delete runs.
-  final _deletes = <String, Timer>{};
-  /// Notes deleted and not yet back: the list leaves them out at once, before the store has the mark.
-  final _hidden = <String>{};
+  List<Entry> _deleted = const [];
+  /// Notes whose delete the store is still writing: the list leaves them out at once, before the store has it.
+  final _moving = <String>{};
+  /// When this run last deleted for good the notes past their 30 days in *Recently Deleted*.
+  DateTime? _purgedAt;
   SendState _healthSent = const SendState(), _pointsSent = const SendState(), _calendarSent = const SendState();
   List<PhoneCalendar> _calendars = const [];
   Connections? _connections;
@@ -175,6 +176,7 @@ class RelayController extends Relay {
   @override bool get connected => _connection != null;
   @override String? get server => _connection?.server;
   @override List<Entry> get entries => _entries;
+  @override List<Entry> get deleted => _deleted;
   @override SyncStatus get status => _status;
   @override int get waiting => _waiting;
   @override Settings get settings => _settings;
@@ -233,16 +235,6 @@ class RelayController extends Relay {
     if (watch && _settings.history) _startHistory();
     if (watch) await _watchMotion();
     if (watch) _watchNetwork();
-    // A close during a delete's Undo time left its mark: the delete runs when that time ends, and goes at the next send.
-    // A mark from another window, such as the share card's, still in its time is left to that window's timer too.
-    for (final (id, at) in await store.marked()) {
-      final left = at.add(deleteAfter).difference(_clock());
-      if (left <= Duration.zero) {
-        await store.deleteNote(id);
-      } else {
-        _deletes[id] ??= Timer(left, () => unawaited(_finishDelete(id)));
-      }
-    }
     _root = (await folder?.call())?.path;
     // A shortcut that ran while the app could not answer, or the Apple Watch, left its note in the inbox.
     await drainShortcutsInbox();
@@ -321,7 +313,7 @@ class RelayController extends Relay {
     length: note.durationMs == null ? null : Duration(milliseconds: note.durationMs!),
     files: [for (final file in note.attachments) EntryFile(id: file.id, name: file.name, type: file.type, size: file.size,
       path: file.path.isEmpty ? '' : fullPath(file.path))],
-    from: note.mine ? null : note.device ?? 'elsewhere', pinned: note.pinned);
+    from: note.mine ? null : note.device ?? 'elsewhere', pinned: note.pinned, deletedAt: note.deletedAt);
 
   /// The app's support folder, once [load] has read it.
   String? get filesRoot => _root;
@@ -331,13 +323,20 @@ class RelayController extends Relay {
 
   /// The list shows this phone's notes and those a pull brought, newest first.
   Future<void> _refreshLocal() async {
+    // At the start, and once a day while the app stays open: a note 30 days in *Recently Deleted* goes for good.
+    final now = _clock();
+    if (_purgedAt == null || now.difference(_purgedAt!) >= const Duration(days: 1)) {
+      _purgedAt = now;
+      await store.purgeDeleted(now);
+    }
     final notes = await store.notes();
+    _deleted = [for (final note in await store.deletedNotes()) _entryOfLocal(note)];
     _waiting = await store.waiting();
     _healthSent = SendState(at: await store.sentAt(sentHealth), waiting: await store.waitingReadings());
     _pointsSent = SendState(at: await store.sentAt(sentPoints), waiting: await store.waitingPoints());
     _problem = _problemOf(await store.get(webhookProblemKey));
     _calendarSent = SendState(at: await store.sentAt(sentCalendar), waiting: await store.waitingEvents());
-    _entries = [for (final note in notes) if (!_hidden.contains(note.clientId)) _entryOfLocal(note)];
+    _entries = [for (final note in notes) if (!_moving.contains(note.clientId)) _entryOfLocal(note)];
     notifyListeners();
   }
 
@@ -849,8 +848,8 @@ class RelayController extends Relay {
   Future<Emptied> dropEmptyNote(String id) async {
     if (!await store.isBare(id)) return Emptied.kept;
     if (!await store.dropEmptyNote(id)) {
-      await deleteNote(id);
-      return Emptied.deleting;
+      await deleteForever(id);
+      return Emptied.deleted;
     }
     await _refreshLocal();
     notifyListeners();
@@ -860,45 +859,30 @@ class RelayController extends Relay {
   @override
   Future<void> deleteNote(String id) async {
     // Before any wait: a swiped row must leave the list in the same frame.
-    _hidden.add(id);
+    _moving.add(id);
     _entries = [for (final entry in _entries) if (entry.id != id) entry];
     notifyListeners();
-    // Only for when no bar closes, such as after a close: the bar's end runs the delete through [endUndo]. Set before
-    // the wait, so a bar that closes while the mark is written still finds it.
-    _deletes.remove(id)?.cancel();
-    _deletes[id] = Timer(deleteAfter, () => unawaited(_finishDelete(id)));
-    await store.markDeleted(id, _clock());
-    // An Undo, or the bar's end, while the mark was written ran after it.
-    if (!_hidden.contains(id)) return;
+    final moved = await store.deleteNote(id, _clock());
+    _moving.remove(id);
+    if (moved) deletedNow(id);
     await _refreshLocal();
-    notifyListeners();
+    if (moved) unawaited(sync());
   }
 
   @override
-  Future<void> endUndo(String id) async {
-    final timer = _deletes.remove(id);
-    if (timer == null) return;
-    timer.cancel();
-    await _finishDelete(id);
+  Future<void> recover(String id) async {
+    if (!await store.recover(id)) return;
+    await _refreshLocal();
+    unawaited(sync());
   }
 
   @override
-  Future<void> undoDelete(String id) async {
-    _deletes.remove(id)?.cancel();
-    _hidden.remove(id);
-    await store.undoDelete(id);
-    await _refreshLocal();
+  Future<void> deleteForever(String id) async {
+    _deleted = [for (final entry in _deleted) if (entry.id != id) entry];
     notifyListeners();
-  }
-
-  /// The *Undo* time ended: the note goes from the phone, and its delete with the next send.
-  Future<void> _finishDelete(String id) async {
-    _deletes.remove(id);
-    await store.deleteNote(id);
-    _hidden.remove(id);
+    final queued = await store.deleteForever(id);
     await _refreshLocal();
-    notifyListeners();
-    await sync();
+    if (queued) unawaited(sync());
   }
 
   /// Keeps each file's own copy, with [problem] and a line for each file the phone could not read.
@@ -924,7 +908,7 @@ class RelayController extends Relay {
     bool point = true, bool sendNow = true}) async {
     final id = clientId ?? newClientId();
     if (await store.hasNote(id)) {
-      return Kept((await store.notes()).firstWhere((note) => note.clientId == id), null);
+      return Kept([...await store.notes(), ...await store.deletedNotes()].firstWhere((note) => note.clientId == id), null);
     }
     final check = checkFiles(const [], files);
     final (attachments, problems) = await _keepFiles(check.kept, check.problem);
@@ -948,7 +932,7 @@ class RelayController extends Relay {
     DateTime? createdAt, bool point = true, bool fromWatch = false}) async {
     final id = clientId ?? newClientId();
     if (await store.hasNote(id)) {
-      return Kept((await store.notes()).firstWhere((note) => note.clientId == id), null);
+      return Kept([...await store.notes(), ...await store.deletedNotes()].firstWhere((note) => note.clientId == id), null);
     }
     final root = _root ?? (await folder?.call())?.path;
     final source = File('$root/$recording');
@@ -1524,10 +1508,6 @@ class RelayController extends Relay {
     _history?.cancel();
     _links?.cancel();
     _drainTimer?.cancel();
-    // A delete still in its Undo time keeps its mark: the next start runs it.
-    for (final timer in _deletes.values) {
-      timer.cancel();
-    }
     voice?.model.removeListener(notifyListeners);
     super.dispose();
   }

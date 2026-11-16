@@ -16,7 +16,7 @@ final _dark = brandTheme(Brightness.dark);
 /// What the Mac's menu bar does: each item calls the window's own action for its key, so a menu and a key do the
 /// same thing.
 typedef MacActions = ({VoidCallback newNote, VoidCallback find, VoidCallback bold, VoidCallback italic,
-  VoidCallback settings});
+  VoidCallback settings, VoidCallback checkForUpdates});
 
 /// The Mac's menu bar, each item with its key. The window takes each key first, so a key never runs twice; a menu item
 /// acts on a click.
@@ -35,6 +35,7 @@ List<PlatformMenuItem> macMenus(MacActions actions) {
   return [
     ...menu('Relay Everything', [
       ...provided([PlatformProvidedMenuItemType.about]),
+      ...group([PlatformMenuItem(label: 'Check for Updates…', onSelected: actions.checkForUpdates)]),
       ...group([item('Settings…', LogicalKeyboardKey.comma, actions.settings)]),
       ...group(provided([PlatformProvidedMenuItemType.servicesSubmenu])),
       ...group(provided([PlatformProvidedMenuItemType.hide, PlatformProvidedMenuItemType.hideOtherApplications,
@@ -98,6 +99,7 @@ class MacAppState extends State<MacApp> {
     bold: () => _shell.currentState?.bold(),
     italic: () => _shell.currentState?.italic(),
     settings: () => _shell.currentState?.settings(),
+    checkForUpdates: () => unawaited(widget.relay.checkForUpdates()),
   );
 
   @override

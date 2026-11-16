@@ -15,6 +15,7 @@ import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/sign_in.dart';
 import 'package:relay_app/data/store.dart';
 import 'package:relay_app/data/webhook.dart' show phoneName;
+import 'package:relay_app/mac/updates.dart';
 import 'package:relay_app/relay.dart';
 import 'package:relay_app/sync/health.dart';
 import 'package:relay_app/sync/motion.dart';
@@ -26,6 +27,15 @@ import 'package:whisper_cpp_flutter_plus/whisper_cpp_flutter_plus.dart' show Whi
 import 'fakes.dart';
 
 final now = DateTime.fromMillisecondsSinceEpoch(1793797200000);
+
+/// The Mac's updater, with no Sparkle: it records each call.
+class _FakeUpdates implements MacUpdates {
+  final calls = <String>[];
+
+  @override Future<void> check() async => calls.add('check');
+  @override Future<void> checkInBackground() async => calls.add('background');
+  @override Future<void> setTestBuilds(bool on) async => calls.add('test builds $on');
+}
 
 void main() {
   late Store store;
@@ -457,7 +467,7 @@ void main() {
       expect(jsonDecode(on.encode()), {'sending': true, 'history': true, 'health': true, 'calendar': false,
         'calendarsOff': [], 'mode': 'battery', 'place': 'server', 'privateTo': 'server',
         'photos': false, 'photosOnMobileData': false, 'appearance': 'system',
-        'locationSend': 'all'});
+        'locationSend': 'all', 'testBuilds': false});
       final back = Settings.decode(on.encode(), hasKey: false);
       expect([back.sending, back.health], [true, true]);
     });
@@ -518,6 +528,20 @@ void main() {
       expect(reopened.settings.appearance, Appearance.light);
     });
 
+    test("Get test builds is off by default, tells the Mac's updater, and is read again on the next start", () async {
+      expect([const Settings().testBuilds, Settings.decode(jsonEncode({'sending': false}), hasKey: false).testBuilds],
+        [false, false]);
+      final updates = _FakeUpdates();
+      final relay = RelayController(store: store, vault: KeyVault(storage), platform: RelayPlatform.mac, updates: updates);
+      await relay.load();
+      await relay.checkForUpdates();
+      await relay.setTestBuilds(true);
+      expect([updates.calls, relay.settings.testBuilds], [['check', 'test builds true'], true]);
+      final reopened = RelayController(store: store, vault: KeyVault(storage), platform: RelayPlatform.mac);
+      await reopened.load();
+      expect(reopened.settings.testBuilds, isTrue);
+    });
+
     test('keep the calendar and the calendars turned off, and sending off forces the calendar off', () {
       const on = Settings(sending: true, calendar: true, calendarsOff: {'holidays', 'birthdays'});
       final back = Settings.decode(on.encode(), hasKey: true);
@@ -549,7 +573,7 @@ void main() {
       expect(jsonDecode((await store.get('settings'))!), {'sending': false, 'history': false, 'health': false,
         'calendar': false, 'calendarsOff': [], 'mode': 'battery', 'place': 'server', 'privateTo': 'server',
         'photos': false, 'photosOnMobileData': false, 'appearance': 'system',
-        'locationSend': 'all'});
+        'locationSend': 'all', 'testBuilds': false});
     });
 
     test('turn each on only with its permission, and schedule the hourly sync only while sending', () async {
@@ -572,7 +596,7 @@ void main() {
       expect(jsonDecode((await store.get('settings'))!), {'sending': true, 'history': false, 'health': true,
         'calendar': false, 'calendarsOff': [], 'mode': 'battery', 'place': 'server', 'privateTo': 'server',
         'photos': false, 'photosOnMobileData': false, 'appearance': 'system',
-        'locationSend': 'all'});
+        'locationSend': 'all', 'testBuilds': false});
       expect(places.asked, [true, true]);
       // Each change started a sync; the last round ends before the store closes.
       await relay.settled();

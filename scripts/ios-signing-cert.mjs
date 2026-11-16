@@ -203,7 +203,7 @@ export async function run({ env, api, save, ready = () => {}, log, renew = false
 }
 
 /** The .env files this computer keeps: the primary worktree's, and this worktree's own copy when it has one. */
-function envFiles() {
+export function envFiles() {
   const { root, primary } = primaryRoot();
   return [...new Set([primary, root])].map(dir => join(dir, '.env')).filter(existsSync);
 }

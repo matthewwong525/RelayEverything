@@ -270,6 +270,10 @@ abstract class Relay extends ChangeNotifier {
   Future<String?> setServer(String server);
   /// *System*, *Light* or *Dark*: the app's look, which the phone keeps.
   Future<void> setAppearance(Appearance appearance);
+  /// *Check for Updates…* on the Mac: its own update window. Nothing elsewhere: the stores and the server update those.
+  Future<void> checkForUpdates() async {}
+  /// *Get test builds* on the Mac, kept in [settings]; nothing elsewhere.
+  Future<void> setTestBuilds(bool on) async {}
   Future<String?> setHistory(bool on);
   Future<String?> setHealth(bool on);
   /// Turns the calendar on, after the phone's permission, or off, which drops what of it did not go.

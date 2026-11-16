@@ -32,8 +32,8 @@ enum SettingsPage {
     for (final row in SettingsRow.on(RelayPlatform.web)) switch (row) {
       SettingsRow.account => account,
       SettingsRow.appearance => appearance,
-      // The browser shows no phone-only row.
-      SettingsRow.voice || SettingsRow.version => throw StateError('${row.name} is phone-only'),
+      // The browser shows no phone-only or Mac-only row.
+      SettingsRow.voice || SettingsRow.updates || SettingsRow.version => throw StateError('${row.name} is not in the browser'),
     },
   ];
 

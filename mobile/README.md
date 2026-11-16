@@ -79,7 +79,7 @@ Never commit a key, a keystore, a `.p8` file or a signing profile.
 
 ### Release the app
 
-1. **Before the first release, fill in the App Store page.** In App Store Connect, add the description, screenshots, support and privacy addresses, age rating and privacy answers, and put the final privacy policy at its address. Apple needs them for its first review. Add Apple Watch screenshots too: the build holds a watch app, and App Store Connect refuses review without them. A release changes only the *What's New* text.
+1. **Check the App Store page.** Its words, screenshots, categories and age rating are files in [`ios/fastlane/`](#the-app-store-page), and the release sends them before the build. Before a tag that makes the app send a new kind of data, make the privacy answers in App Store Connect the same as `app_privacy_details.json`.
 2. **Check the steps with no release.** On GitHub, open *Actions*, then *Mobile CI*, then *Run workflow*, and tick `release_check`. Or run `gh workflow run mobile-ci.yml --ref main -f release_check=true`. Start it from `main` only: from a branch, it stops at once, because its build goes to TestFlight. The run does every step of a release with the next beta's version, and its iPhone build goes to TestFlight with the betas. But it sends nothing to App Store review, makes a draft GitHub release and deletes it, and marks no pull request.
 3. **Tag a commit on `main`**, such as `v1.1.0`. On GitHub, open *Releases*, then *Draft a new release*, type the new tag, pick `main`, and publish: the run then adds the `.apk` and the notes to that release, and if the run fails, delete the release. Or run `git tag v1.1.0 origin/main && git push origin v1.1.0`. The tag sets the version. A tag that is not on `main`, is not in this form, or is not higher than the last release stops the run at once, with the reason.
 
@@ -114,20 +114,35 @@ Apple takes one build in beta review at a time. If an earlier build still waits,
 - **The beta description and the privacy link,** under *Test Information*. The privacy link is the website's [Privacy page](https://relayeverything.com/privacy/).
 - **The beta review contact,** under *Test Information*: the person Apple calls about a review. Their email and phone stay in App Store Connect, never in this repository.
 
-**Left before the first App Store version:**
+### The App Store page
 
-- The App Store page: description, keywords, support address and age rating.
-- Screenshots for iPhone, iPad and Apple Watch.
-- Apple's privacy answers.
-- The final privacy policy at its address.
+The App Store page lives in [`ios/fastlane/`](ios/fastlane/), next to the iPhone app. To change the page, change a file and publish it: the next release sends it. You make no change in App Store Connect.
 
-Then tag the release, as [Release the app](#release-the-app) says.
+- **The words:** `metadata/en-CA/` holds the name, subtitle, description, keywords, promotional text, support link, website link and privacy link. `metadata/` holds the copyright line, the two categories, and the note for Apple's reviewer in `review_information/notes.txt`.
+- **The age rating:** `rating.json`, the answers to Apple's age rating questions.
+- **The screenshots:** `screenshots/en-CA/`, plain screens with no added words, for a 6.9-inch iPhone, a 13-inch iPad and an Apple Watch. Apple takes 1 to 10 for each device.
+- **The privacy answers:** `app_privacy_details.json`, in fastlane's format.
+
+[`scripts/app-store-listing.test.mjs`](../scripts/app-store-listing.test.mjs) checks Apple's limits, the links, the categories, the age rating questions and the size of each screenshot. It refuses an email address or a phone number, because the repository is public.
+
+**What a release sends.** Before it submits the build, the release runs fastlane's `listing` lane. It sends the words, screenshots, categories and age rating from the tagged commit, and replaces all the screenshots. A version that is already in review keeps its page. A release check runs `listing verify_only:true`: it checks the screenshots with fastlane's own check, reads App Store Connect, and sends nothing. Apple checks the words, such as a name that another app has, only at the release.
+
+**New screenshots.** Take them again when the app looks different:
+
+1. On GitHub, open *Actions*, then *Mobile store screenshots*, then *Run workflow*. Or put the label *store screenshots* on a pull request. The run makes its own sample notes on a new install, so the pictures show no person's data.
+2. Download the file `store-screenshots` from the run. Put its `en-CA/` pictures in `ios/fastlane/screenshots/en-CA/`, in place of the old ones.
+3. Look at each picture, then publish the change.
+
+**Change the privacy answers.** Apple has no way for a script to set them. When a change makes the app send a new kind of data, change `app_privacy_details.json` in the same change. Then, before the next release tag, open the app's *App Privacy* page in [App Store Connect](https://appstoreconnect.apple.com/), make the answers the same as the file, and publish them.
+
+**Set once by hand in App Store Connect:** the price, free, in all countries; and the reviewer contact, under *App Review Information*. The contact's email and phone stay in App Store Connect, never in this repository.
 
 ## The Mac app
 
 The Mac app is this app, built for macOS from its own entry, [`lib/main_mac.dart`](lib/main_mac.dart). It keeps your notes on the Mac, so they work with no network, and sends them when you sign in from Settings, as a phone does. Its window has the layout of [the web build](#the-web-build): three parts, two, or one as it gets narrower. It has the Mac's menu bar, with *Check for Updates…*, *New Note* (⌘N), *Find* (⌘F), *Bold* (⌘B), *Italic* (⌘I) and *Settings…* (⌘,), and it takes files that you drop from Finder on a note.
 
-- **Try it on a Mac:** `flutter run -d macos -t lib/main_mac.dart`.
+- **Try it on a Mac:** `flutter run -d macos -t lib/main_mac.dart`. The app needs macOS 12 or newer.
+- **Sync:** the app gets new notes every 5 minutes, when the network comes back, and when its window gets focus again.
 - **What it leaves out:** location, health, calendar, photos, the microphone and the speech model. A voice note from a phone shows its words, and a sound file on a note opens in the Mac's own player. [`test/mac_imports_test.dart`](test/mac_imports_test.dart) checks every file the Mac entry reaches, except `lib/controller.dart`, and fails on a phone-only source. [`test/controller_test.dart`](test/controller_test.dart) checks that the controller works with no phone parts.
 - **The key** goes in the Mac's login keychain, with no shared group, so the app needs no provisioning profile. The device shows as *Mac* on your Relay Everything page.
 - **The app** is `com.matthewwong525.relayApp.mac`, named *Relay Everything*, with App Sandbox, network client, the files you pick or drop, and Sparkle's two installer names (`…-spks`, `…-spki`) written out in full, because the build signs with the file as it is ([`macos/Runner/Release.entitlements`](macos/Runner/Release.entitlements)). The debug build also has Flutter's two keys for `flutter run`.
@@ -142,13 +157,14 @@ The Mac app is this app, built for macOS from its own entry, [`lib/main_mac.dart
 
 - **A branch or pull request** builds the app unsigned and keeps it, zipped, with the run. It sends nothing.
 - **`main` and a release** sign the app with the hardened runtime and a Developer ID Application certificate, Sparkle's helpers first, send it to Apple's check (notarize) with the App Store Connect key, staple Apple's ticket, and make `Relay-Everything-Mac.dmg`. `node scripts/app-release.mjs mac-check --file Relay-Everything-Mac.dmg` refuses a file that is not signed, checked and stapled, or whose Sparkle helpers another team signed. A beta adds the file to its pre-release, and a `v` tag to its release.
-- **The certificate:** `node scripts/ios-signing-cert.mjs --mac` makes it once, and saves `MACOS_DEVID_CERT_P12` and `MACOS_DEVID_CERT_PASSWORD` to `.env` and the GitHub secrets. With them missing, `main` builds no file, with a notice, and a release stops with their names.
+- **The certificate:** Apple lets only the Account Holder make a Developer ID Application certificate, so `node scripts/ios-signing-cert.mjs --mac` with the App Store Connect key gets `result=refused` and names the page where the Account Holder makes it by hand. Export it with its key as a `.p12`, and save it as `MACOS_DEVID_CERT_P12` and `MACOS_DEVID_CERT_PASSWORD` in `.env` and the GitHub secrets. With them missing, `main` builds no file, with a notice, and a release stops with their names.
 
 ## Where the code is
 
 - `lib/data/`: the settings, the local store (SQLite through drift) that keeps every note, the sender that gives no API client while sending is off, the API client, and the outbox that sends waiting uploads in order.
 - `lib/sync/`: health, location, photos and the hourly background sync, which run only while sending is on. On an iPhone, `native.dart` and `wake.dart` talk to `ios/Runner/RelayBackground.swift`, which keeps places and wakes the closed app for Health and places.
 - `lib/voice/`: voice notes: the speech model's download, the recorder, and the words, written by whisper.cpp on the phone.
+- `lib/editor/`: the note editor's own parts. `paste.dart` keeps the headings, lists, bold and links of pasted words, from web pages, Notion, Google Docs and Markdown from ChatGPT. The Mac app and the web page use the same editor, so they need no paste code of their own.
 - `lib/shortcuts/`: the Apple Shortcuts bridge. `ios/Runner/RelayIntents.swift` has the actions; they talk to the app's Dart code on the `relay/shortcuts` channel, in the open app or in a hidden engine that runs `shortcutsMain`. A note the app could not take in time waits in `shortcuts-inbox/`, and the app keeps it on its next open.
 - `lib/screens/`: Home with its folders, search, the Settings gear and *New note*; the notes list with its day groups; the Location, Health, Calendar and Photos pages; the recording screen, the note page, new note, settings with its account card, the Account page, sign-in, Connect your AI and Email notes. The note page's tool bar and find bar float over the page's bottom edge, and the editor scrolls the cursor only to that edge, under the bar. So on each move of the cursor the page scrolls it, after the frame, to above the bar (`barRoom`). Do not use the editor's `scrollBottomInset` for this: flutter_quill 11.6 adds it over the cursor too, so a cursor that moves up goes under the page's top edge.
 - `test/`: unit tests for the store, outbox, API, sync, voice notes and Shortcuts, widget tests for each screen, and a test that no screen or job calls the network while sending is off.

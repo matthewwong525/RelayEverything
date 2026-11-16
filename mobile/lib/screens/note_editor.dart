@@ -27,6 +27,7 @@ import '../web/paste.dart';
 import 'back_to.dart';
 import 'days.dart';
 import 'folder.dart' show Opener, askAlert, browserProblem, openInBrowser, showProblemOn;
+import 'hold_to_talk.dart' show recordFromShortcut;
 import 'more_menu.dart';
 import 'note_bars.dart';
 import 'note_blocks.dart';
@@ -140,8 +141,6 @@ class NoteEditorState extends State<NoteEditor> {
   bool _deleted = false;
   /// The note is in *Recently Deleted*: it opens to read only, and a tap in its words asks to recover it.
   bool _trash = false;
-  /// A voice note still writing its words, or one whose words failed: the page shows that until the words come.
-  late bool _waiting = _wordsMissing(_current);
   bool _formatting = false;
   /// Set with the keyboard, or at once when a button brings it up, so the edit that comes first waits for a pause.
   late bool _typing = widget.entry == null;
@@ -169,22 +168,20 @@ class NoteEditorState extends State<NoteEditor> {
   /// The note's own id, made here for a new note.
   String get id => _id;
 
-  static bool _wordsMissing(Entry? entry) => entry != null && (entry.writing || entry.failed);
-
   /// The kept note has no file and no recording, so blank words leave nothing in it.
   bool get _bare {
     final note = _current;
-    return note != null && note.files.isEmpty && note.recording == null && !note.voice;
+    return note != null && note.files.isEmpty && note.recordings.isEmpty;
   }
 
-  /// The note as the list has it now, so words still being written fill in here too.
+  /// The note as the list has it now, so a recording's words still being written fill in here too.
   Entry? get _current => _stored ? _live ?? widget.entry : null;
 
   /// The note in the list or in *Recently Deleted* now, or null when the phone no longer has it.
   Entry? get _live {
     final opened = widget.entry;
     return [...relay.entries, ...relay.deleted].where((other) => other.id == _id &&
-      (_id.isNotEmpty || (other.at == opened?.at && other.voice == opened?.voice))).firstOrNull;
+      (_id.isNotEmpty || (other.at == opened?.at && other.recordings.isEmpty == opened?.recordings.isEmpty))).firstOrNull;
   }
 
   bool get _inTrash => _stored && relay.deleted.any((entry) => entry.id == _id);
@@ -192,7 +189,7 @@ class NoteEditorState extends State<NoteEditor> {
   @override
   void initState() {
     super.initState();
-    // The list as it is now: a voice note's words, or its going, can come between the tap that opens it and this.
+    // The list as it is now: a voice note's going can come between the tap that opens it and this.
     final entry = _current;
     _controller = QuillController(document: _documentOf(entry), selection: const TextSelection.collapsed(offset: 0),
       // The only way to take the editor's own paste; experimental, pinned by pubspec.lock.
@@ -323,20 +320,16 @@ class NoteEditorState extends State<NoteEditor> {
     return false;
   }
 
-  /// Words that came for a voice note fill the page, once. A kept note gone from the list closes the page.
+  /// A recording made into a new note keeps it, so the next save edits it. A kept note gone from the list closes the
+  /// page.
   void _relayChanged() {
+    if (!_stored && !_deleted && _adds == 0 && relay.entries.any((entry) => entry.id == _id)) _stored = true;
     if (_stored && !_deleted && _live == null) return _gone();
     // Deleted or recovered, here or on another device: the words lock or open.
     if (_inTrash != _trash) {
       setState(() => _trash = _controller.readOnly = _inTrash);
       if (_trash) _focus.unfocus();
     }
-    final note = _current;
-    if (!_waiting || note == null || note.writing || note.failed) return;
-    _controller.document = _documentOf(note);
-    _savedText = note.text;
-    _listen();
-    setState(() => _waiting = false);
   }
 
   /// The note left the phone, such as a voice note with no speech or one deleted on another phone: leaving keeps
@@ -706,7 +699,7 @@ class NoteEditorState extends State<NoteEditor> {
   /// the words picked or the cursor's line, as Notes does. A table's cell holds plain words, so only *Table* acts
   /// there.
   void format(FormatAction action) {
-    if (_waiting || _trash) return;
+    if (_trash) return;
     if (action == FormatAction.table) return _addTable();
     if (_tables.active != null) return;
     if (action == FormatAction.link) return unawaited(_linkBox());
@@ -715,7 +708,7 @@ class NoteEditorState extends State<NoteEditor> {
 
   /// *Table*: a table of 2 columns and 2 rows at the cursor, with the cursor in its first cell.
   void _addTable() {
-    if (_waiting || _trash) return;
+    if (_trash) return;
     _typing = true;
     _tables.insert();
   }
@@ -731,7 +724,7 @@ class NoteEditorState extends State<NoteEditor> {
   /// address or takes the link away. With no words picked, the address goes in as its own words.
   Future<void> _linkBox() async {
     final selection = _controller.selection;
-    if (_waiting || _trash || _tables.active != null || !selection.isValid) return;
+    if (_trash || _tables.active != null || !selection.isValid) return;
     final now = _controller.getSelectionStyle().attributes[Attribute.link.key]?.value as String?;
     final run = now == null ? null : linkRunAt(_controller.document, selection.start);
     var copied = '';
@@ -830,6 +823,18 @@ class NoteEditorState extends State<NoteEditor> {
   /// nor does a note in *Recently Deleted*.
   AttachPick? get _attachOrNull => _current?.from == null && !_trash ? _attach : null;
 
+  /// *Record* shows only on a phone, and for a note made here and not in *Recently Deleted*, as *Attach* does.
+  VoidCallback? get _recordOrNull => !relay.desktop && _current?.from == null && !_trash ? _record : null;
+
+  /// *Record*: the recording screen opens over the note, and the recording joins it after its words. The words typed
+  /// so far are kept first, so a new note with words is kept before the recording joins it.
+  Future<void> _record() async {
+    _focus.unfocus();
+    _save(sendNow: false);
+    await _writing;
+    if (mounted) await recordFromShortcut(context, relay, into: _id);
+  }
+
   @override
   Widget build(BuildContext context) {
     final brand = brandOf(context);
@@ -854,7 +859,7 @@ class NoteEditorState extends State<NoteEditor> {
             ? Align(alignment: Alignment.topCenter,
                 child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 760), child: _page(context, brand)))
             : _page(context, brand))),
-          if (!widget.pane && !_waiting && !_formatting && !_trash) Positioned(left: 16, right: 16, bottom: 0, child: SafeArea(
+          if (!widget.pane && !_formatting && !_trash) Positioned(left: 16, right: 16, bottom: 0, child: SafeArea(
             top: false,
             minimum: EdgeInsets.only(bottom: editing || _finding ? 6 : 12),
             child: _finding
@@ -863,7 +868,8 @@ class NoteEditorState extends State<NoteEditor> {
                   onStep: _matches.isEmpty ? null : _step)
               : editing
               ? _keyboardBar()
-              : ReadingBar(onChecklist: _checklist, onAttach: _attachOrNull, onCompose: _compose, attachMenu: !relay.desktop),
+              : ReadingBar(onChecklist: _checklist, onAttach: _attachOrNull, onCompose: _compose, attachMenu: !relay.desktop,
+                  onRecord: _recordOrNull),
           )),
         ])),
         if (!widget.pane && _formatting) FormatSheet(controller: _controller, height: _keyboard, onClose: _closeStyles,
@@ -890,10 +896,11 @@ class NoteEditorState extends State<NoteEditor> {
       onLink: words ? () => unawaited(_linkBox()) : null,
       onIndent: words ? Formatter(_controller).indent : null,
       onHideKeyboard: _done,
+      onRecord: _recordOrNull,
     );
   });
 
-  Widget _tableButton() => TableButton(onAdd: _waiting || _trash ? null : _addTable, inTable: _tables.active != null,
+  Widget _tableButton() => TableButton(onAdd: _trash ? null : _addTable, inTable: _tables.active != null,
     onConvert: () => _tableGone(_tables.convertActive()), onDelete: () => _tableGone(_tables.deleteActive()));
 
   /// A pick in the computer's *Text styles* menu: the note keeps the cursor.
@@ -912,9 +919,9 @@ class NoteEditorState extends State<NoteEditor> {
         ButtonPill(children: [PillIconButton(icon: CupertinoIcons.square_pencil, tooltip: 'New note', onPressed: _compose)]),
         ButtonPill(children: [
           FormatMenu(controller: _controller, onPick: _pick, colour: relay.settings.highlightColour,
-            onColour: relay.setHighlightColour, enabled: !_waiting && !_trash && _tables.active == null),
+            onColour: relay.setHighlightColour, enabled: !_trash && _tables.active == null),
           PillIconButton(icon: CupertinoIcons.checkmark_circle, tooltip: 'Checklist',
-            onPressed: _waiting || _trash || _tables.active != null ? null : _checklist),
+            onPressed: _trash || _tables.active != null ? null : _checklist),
           _tableButton(),
           AttachButton(onPick: _attachOrNull, menu: false),
         ]),
@@ -942,17 +949,26 @@ class NoteEditorState extends State<NoteEditor> {
       if (_current case final note?)
         note.pinned ? ('Unpin Note', CupertinoIcons.pin_slash, _pin) : ('Pin Note', CupertinoIcons.pin, _pin),
       // The browser has its own find, Ctrl+F; the Mac's ⌘F goes to the notes search, so the Mac keeps this one.
-      if (!relay.web && !_waiting) ('Find in Note', CupertinoIcons.search, _openFind),
+      if (!relay.web) ('Find in Note', CupertinoIcons.search, _openFind),
       ('Copy', CupertinoIcons.doc_on_doc, _copy),
     ],
     destructive: ('Delete', CupertinoIcons.trash, _delete),
     builder: (context, toggle) => PillIconButton(icon: CupertinoIcons.ellipsis, tooltip: 'More', onPressed: toggle),
   ));
 
+  /// The note's page: the date, the recording the voice note started with, the words, then each picture, file and added
+  /// recording in the order added.
   Widget _page(BuildContext context, BrandColors brand) {
     final note = _current;
     final muted = TextStyle(fontSize: 13, color: brand.muted);
-    final recording = note?.recording;
+    final recordings = note?.recordings ?? const <EntryRecording>[];
+    final files = note?.files ?? const <EntryFile>[];
+    // A note in *Recently Deleted* reads only: its transcripts too.
+    final editable = !relay.desktop && note?.from == null && !_trash;
+    Widget card(EntryRecording recording) => RecordingCard(key: ValueKey(recording.id.isEmpty ? recording.recording : recording.id),
+      relay: relay, recording: recording, editable: editable);
+    Widget added(EntryRecording recording) => Padding(padding: const EdgeInsets.only(top: 14), child: card(recording));
+    final below = recordings.where((recording) => !recording.top);
     return SingleChildScrollView(
       controller: _scroll,
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 120),
@@ -960,58 +976,41 @@ class NoteEditorState extends State<NoteEditor> {
         // The date alone: nothing about sending, and no tag.
         Text(_when(context, note?.at ?? DateTime.now(), note?.from), style: muted, textAlign: TextAlign.center),
         const SizedBox(height: 14),
-        if (recording != null) Padding(padding: const EdgeInsets.only(bottom: 14),
-          child: VoicePlayer(relay: relay, recording: recording, length: note?.length)),
-        // Words typed with a recording, such as a shortcut's label, show while its own words are written.
-        if (note != null && note.text.isNotEmpty && (note.writing || note.failed)) ...[
-          Text(plainText(note.text), style: const TextStyle(fontFamily: brandFont, fontSize: 17, height: 1.5)),
-          const SizedBox(height: 14),
-        ],
-        if (note != null && note.writing) ...[
-          Text('Writing the words…', style: TextStyle(color: brand.muted)),
-          const SizedBox(height: 8),
-          const LinearProgressIndicator(),
-        ] else if (note != null && note.failed) ...[
-          Text('The words did not come. Your recording is safe.', style: TextStyle(color: brand.muted)),
-          // The reason, small and muted: the person sees it only on a note that failed.
-          if (note.why != null) ...[
-            const SizedBox(height: 4),
-            Text('Why: ${note.why}', style: muted),
-          ],
-          const SizedBox(height: 8),
-          Align(alignment: Alignment.centerLeft,
-            child: FilledButton(onPressed: relay.writeWordsAgain, child: const Text('Try again'))),
-        ] else
-          QuillEditor(
-            key: _editor,
-            controller: _controller,
-            focusNode: _focus,
-            scrollController: _scroll,
-            config: QuillEditorConfig(
-              scrollable: false,
-              autoFocus: widget.entry == null,
-              placeholder: recording != null ? 'No words, only the recording.' : 'What do you want to keep?',
-              customStyles: noteStyles(context),
-              // The format keys only on a computer: a phone's keyboard has no ⌘.
-              customShortcuts: relay.desktop ? {...formatShortcuts(), ...pageKeys} : null,
-              customActions: relay.desktop
-                ? {FormatIntent: CallbackAction<FormatIntent>(onInvoke: (intent) => format(intent.action))}
-                : null,
-              embedBuilders: [TableEmbedBuilder(_tables)],
-              onTapUp: _tapUp,
-              contextMenuBuilder: (context, editor) => noteContextMenu(context, editor,
-                format: relay.desktop ? _pick : null),
-              quillMagnifierBuilder: relay.desktop ? null : noteMagnifier,
-              // A long press on a link offers Open; it goes to the same browser.
-              onLaunchUrl: _openLink,
-              // The only way to draw Apple's round checklist circles and dashed lists; pinned by pubspec.lock.
-              // ignore: experimental_member_use
-              customLeadingBlockBuilder: (_, config) => _leading(config, brand),
-            ),
+        for (final recording in recordings.where((recording) => recording.top))
+          Padding(padding: const EdgeInsets.only(bottom: 12), child: card(recording)),
+        QuillEditor(
+          key: _editor,
+          controller: _controller,
+          focusNode: _focus,
+          scrollController: _scroll,
+          config: QuillEditorConfig(
+            scrollable: false,
+            autoFocus: widget.entry == null,
+            placeholder: recordings.any((recording) => recording.top) ? 'Add notes…' : 'What do you want to keep?',
+            customStyles: noteStyles(context),
+            // The format keys only on a computer: a phone's keyboard has no ⌘.
+            customShortcuts: relay.desktop ? {...formatShortcuts(), ...pageKeys} : null,
+            customActions: relay.desktop
+              ? {FormatIntent: CallbackAction<FormatIntent>(onInvoke: (intent) => format(intent.action))}
+              : null,
+            embedBuilders: [TableEmbedBuilder(_tables)],
+            onTapUp: _tapUp,
+            contextMenuBuilder: (context, editor) => noteContextMenu(context, editor,
+              format: relay.desktop ? _pick : null),
+            quillMagnifierBuilder: relay.desktop ? null : noteMagnifier,
+            // A long press on a link offers Open; it goes to the same browser.
+            onLaunchUrl: _openLink,
+            // The only way to draw Apple's round checklist circles and dashed lists; pinned by pubspec.lock.
+            // ignore: experimental_member_use
+            customLeadingBlockBuilder: (_, config) => _leading(config, brand),
           ),
-        for (final file in note?.files ?? const <EntryFile>[])
+        ),
+        for (final (index, file) in files.indexed) ...[
+          for (final recording in below.where((recording) => recording.filesBefore == index)) added(recording),
           Padding(padding: const EdgeInsets.only(top: 14),
             child: file.picture && file.ready ? NotePicture(file: file, relay: relay) : NoteFileRow(file: file, relay: relay)),
+        ],
+        for (final recording in below.where((recording) => recording.filesBefore >= files.length)) added(recording),
       ]),
     );
   }

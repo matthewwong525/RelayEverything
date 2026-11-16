@@ -41,9 +41,11 @@ function pageBefore(text: string | undefined, end: number): { before: number; be
   return Number(before) < end ? { before: Number(before), beforeId } : { before: end };
 }
 
-/** A note as the caller reads it: a title, as ChatGPT's search looks for, and the time in the zone. */
-const shown = (note: Note, timezone: string) =>
-  ({ ...note, title: note.text.slice(0, 80) || "A recorded note with no words", recordedAt: local(note.recordedAt, timezone) });
+/** A note as the caller reads it: a title, as ChatGPT's search looks for, and the time in the zone. A voice note's
+ *  title is its recording's words. */
+const shown = (note: Note, timezone: string) => ({ ...note,
+  title: (note.text || note.attachments.find(file => file.transcript)?.transcript || "").slice(0, 80) || "A recorded note with no words",
+  recordedAt: local(note.recordedAt, timezone) });
 
 async function notes(db: Db, page: Parameters<typeof notePage>[1], timezone: string) {
   const found = await notePage(db, page);

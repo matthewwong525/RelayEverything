@@ -1,0 +1,77 @@
+# A recording in a note: Record in a typed note's bar opens the recording screen, a tap saves, and the recording shows as
+# its own card under the words, with its transcript folded, or No words heard for a quiet simulator microphone. The
+# transcript opens with a tap, and words typed after it stay in the note. Not in the fixed tour: it needs the speech
+# model and a microphone, so a check names it: `--flows recording-card`.
+appId: com.matthewwong525.relayApp
+---
+- launchApp
+# Home's label can carry a line under it, such as "1 waiting", so match its start.
+- extendedWaitUntil:
+    visible: 'Home(.|\n)*'
+    timeout: 60000
+- tapOn: "New note"
+- extendedWaitUntil:
+    visible: "Done"
+    timeout: 30000
+- inputText: "Fab call"
+- tapOn: "Done"
+# With the keyboard down, the bottom bar has Checklist, Attach and Record.
+- tapOn: "Record"
+# With no speech model yet, Record asks to get it first. The note page shows no progress, and Record says the model is
+# still coming until it is in, so tap Record again until the recording screen opens. iOS asks for the microphone the
+# first time.
+- runFlow:
+    when:
+      visible: "Get the speech model?"
+    commands:
+      - tapOn: "Get it"
+- repeat:
+    times: 40
+    while:
+      notVisible: '(.|\n)*Tap anywhere to save(.|\n)*'
+    commands:
+      - tapOn:
+          text: "Record"
+          optional: true
+      - tapOn:
+          text: "Allow|OK"
+          optional: true
+      - extendedWaitUntil:
+          visible: '(.|\n)*Tap anywhere to save(.|\n)*'
+          timeout: 5000
+          optional: true
+- tapOn:
+    text: "Allow|OK"
+    optional: true
+- extendedWaitUntil:
+    visible: '(.|\n)*Tap anywhere to save(.|\n)*'
+    timeout: 30000
+- tapOn:
+    point: "50%,50%"
+- extendedWaitUntil:
+    notVisible: '(.|\n)*Tap anywhere to save(.|\n)*'
+    timeout: 30000
+# The note stays open: Record adds to it, so no other page opens.
+- assertVisible: "Fab call"
+- extendedWaitUntil:
+    notVisible: "Writing the words…"
+    timeout: 120000
+- takeScreenshot: recording-card
+# A transcript opens with a tap; a quiet recording shows No words heard in its place.
+- runFlow:
+    when:
+      visible: 'Transcript(.|\n)*'
+    commands:
+      - tapOn: 'Transcript(.|\n)*'
+      - assertVisible: "Copy transcript"
+      - takeScreenshot: recording-transcript-open
+- tapOn: "Fab call"
+- extendedWaitUntil:
+    visible: "Done"
+    timeout: 30000
+- pressKey: Enter
+- inputText: "Ask about the second board"
+- tapOn: "Done"
+# The note's lines join into one label, such as "Fab call\nAsk about the second board", so match the words inside it.
+- assertVisible: '(.|\n)*Ask about the second board(.|\n)*'
+- takeScreenshot: recording-card-notes

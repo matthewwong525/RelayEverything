@@ -39,11 +39,12 @@ List<(String, List<Entry>)> groupByDay(List<Entry> entries, DateTime now, {DateT
   return groups;
 }
 
-/// Search on the phone: true when [entry]'s words or a file name hold [query], in any case.
+/// Search on the phone: true when [entry]'s words, a recording's transcript or a file name hold [query], in any case.
 bool entryMatches(Entry entry, String query) {
   final words = query.trim().toLowerCase();
   if (words.isEmpty) return true;
-  return [plainText(entry.text), for (final file in entry.files) file.name]
+  return [plainText(entry.text), for (final recording in entry.recordings) ?recording.transcript,
+    for (final file in entry.files) file.name]
     .any((part) => part.toLowerCase().contains(words));
 }
 
@@ -61,10 +62,10 @@ enum NotesFolder {
   final String title;
 }
 
-/// True when [entry] is in [folder]: every note is in *All*, a voice note in *Voice*, and a note with a photo or a
-/// file in *Photos and files*. A link alone is not a file: a typed note with a link is still a typed note.
+/// True when [entry] is in [folder]: every note is in *All*, a note with a recording in *Voice*, and a note with a
+/// photo or another file in *Photos and files*. A link alone is not a file: a typed note with a link is still a typed note.
 bool entryIn(NotesFolder folder, Entry entry) => switch (folder) {
   NotesFolder.all => true,
-  NotesFolder.voice => entry.voice,
+  NotesFolder.voice => entry.recordings.isNotEmpty,
   NotesFolder.files => entry.files.isNotEmpty,
 };

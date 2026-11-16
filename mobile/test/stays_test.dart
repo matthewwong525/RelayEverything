@@ -500,8 +500,10 @@ void main() {
           "CREATE TABLE outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, destination TEXT NOT NULL DEFAULT 'relay-server', "
             'route TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL)',
           'CREATE TABLE notes (client_id TEXT PRIMARY KEY, body TEXT NOT NULL, words_pending INTEGER NOT NULL DEFAULT 0, '
-            'pinning INTEGER NOT NULL DEFAULT 0, sent_at INTEGER, queued INTEGER NOT NULL DEFAULT 0, server_id TEXT, '
-            'deleting_at INTEGER)',
+            "pinning INTEGER NOT NULL DEFAULT 0, sent_at INTEGER, queued INTEGER NOT NULL DEFAULT 0, kind TEXT NOT NULL DEFAULT 'typed', "
+            'audio_path TEXT, duration_ms INTEGER, server_id TEXT, device TEXT, mine INTEGER NOT NULL DEFAULT 1, deleting_at INTEGER)',
+          'CREATE TABLE attachments (id TEXT PRIMARY KEY, note_client_id TEXT NOT NULL, name TEXT, type TEXT, size INTEGER, '
+            'path TEXT, sent_at INTEGER)',
           'CREATE TABLE points (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
           'CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
         ]) {

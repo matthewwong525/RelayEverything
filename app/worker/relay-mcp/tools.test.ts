@@ -342,6 +342,21 @@ it("titles a note with no words, and lets a database fault through as an error, 
   client = await connect(seeded().SPACES);
 });
 
+it("finds a voice note by its recording's words, titled by them, with the transcript and never the sound", async () => {
+  const { sql, SPACES } = seeded();
+  sql.exec(`INSERT INTO relay_notes (id, device_id, source, client_id, text, recorded_at, created_at) VALUES
+    ('${ID(9)}', 'd0000000-0000-4000-8000-000000000002', 'typed', 'voice-01', '', 1793900000000, 0);
+    INSERT INTO relay_attachments (id, note_id, name, content_type, size, file_key, transcript, length_ms, top, created_at) VALUES
+    ('rec-0000001', '${ID(9)}', 'Recording.wav', 'audio/wav', 9, 'people/ana/attachments/rec-0000001', 'Order the brass hinges.', 4200, 1, 0)`);
+  client = await connect(SPACES);
+  const found = await ask("search", { query: "BRASS" });
+  expect(ids(found)).toEqual([ID(9)]);
+  expect(found.notes[0]).toMatchObject({ text: "", title: "Order the brass hinges.", attachments: [{ id: "rec-0000001",
+    type: "audio/wav", ready: true, transcript: "Order the brass hinges.", lengthMs: 4200, top: true }] });
+  expect(JSON.stringify(found)).not.toContain("people/ana");
+  client = await connect(seeded().SPACES);
+});
+
 it("reads only the grant's own person's space, and asks an app from before spaces to connect again", async () => {
   const { SPACES } = seeded();
   const ben = await connect(SPACES, { personId: BEN });

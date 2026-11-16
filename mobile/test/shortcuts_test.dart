@@ -11,6 +11,7 @@ import 'package:relay_app/app.dart';
 import 'package:relay_app/controller.dart';
 import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/store.dart';
+import 'package:relay_app/relay.dart' show Entry, EntryRecording;
 import 'package:relay_app/screens/note_blocks.dart' show VoicePlayer;
 import 'package:relay_app/shortcuts/bridge.dart';
 import 'package:relay_app/shortcuts/inbox.dart';
@@ -138,6 +139,17 @@ void main() {
       expect(await texts({}), hasLength(3));
       expect(server.requests, isEmpty);
     });
+
+    test('finds a voice note by its transcript', () async {
+      final relay = controller();
+      await relay.load();
+      await relay.store.addVoiceNote(LocalNote(clientId: 'v' * 32, text: '', createdAt: now, kind: NoteKind.voice,
+        wordsPending: true, attachments: [const Attachment(id: 'r1', name: 'Recording.wav', type: 'audio/wav', size: 4,
+          path: 'attachments/r1.wav', lengthMs: 1000, wordsPending: true, top: true)]));
+      await relay.store.setTranscript('r1', 'Call the fab', send: false, at: now);
+      final found = await ShortcutsBridge(relay).handle(const MethodCall('get', {'query': 'the fab'})) as List;
+      expect([for (final note in found) (note as Map)['id']], ['v' * 32]);
+    });
   });
 
   group('the inbox', () {
@@ -212,13 +224,21 @@ void main() {
     /// folder.
     String recorded(String id) => given(id, 'voice.wav', [82, 73, 70, 70]);
 
+    /// The kept recordings, by file name: each is kept at `attachments/<id>.wav` on its note.
     List<String> recordings() => [
-      if (Directory('${folder.path}/voice').existsSync())
-        for (final file in Directory('${folder.path}/voice').listSync()) file.uri.pathSegments.last,
+      for (final kept in ['voice', 'attachments'])
+        if (Directory('${folder.path}/$kept').existsSync())
+          for (final file in Directory('${folder.path}/$kept').listSync()) file.uri.pathSegments.last,
     ];
 
-    test('with the app closed, it is kept as a voice note with the typed words, and the next open writes its words after them',
-      () async {
+    /// The one recording of [entry].
+    EntryRecording only(Entry entry) => entry.recordings.single;
+
+    /// The file name [entry]'s recording is kept by.
+    String wav(Entry entry) => '${only(entry).id}.wav';
+
+    test('with the app closed, it is kept as a voice note with the typed words as its text, and the next open writes its '
+      'transcript', () async {
       // The background engine has no speech parts.
       final engine = controller();
       await engine.load();
@@ -227,17 +247,18 @@ void main() {
         'id': id, 'text': ' Note @ 7:07 PM ', 'createdAt': now.millisecondsSinceEpoch, 'files': <Object?>[],
         'recording': {'path': recorded(id), 'durationMs': 12000},
       })) as Map;
-      expect([note['id'], note['text'], note['kind'], note['files']], [id, 'Note @ 7:07 PM', 'voice', isEmpty]);
       final waiting = engine.entries.single;
-      expect([waiting.voice, waiting.writing, waiting.text, waiting.length, waiting.recording],
-        [true, true, 'Note @ 7:07 PM', const Duration(seconds: 12), 'voice/$id.wav']);
+      expect([note['id'], note['text'], note['kind'], [for (final file in note['files'] as List) file['name']]],
+        [id, 'Note @ 7:07 PM', 'voice', ['Recording.wav']]);
+      expect([only(waiting).writing, waiting.text, only(waiting).length, only(waiting).recording, waiting.files],
+        [true, 'Note @ 7:07 PM', const Duration(seconds: 12), 'attachments/${wav(waiting)}', isEmpty]);
       final relay = app();
       await relay.load();
       await relay.wordsWritten();
       final written = relay.entries.single;
-      expect([written.voice, written.writing, written.text],
-        [true, false, 'Note @ 7:07 PM\nCall the plumber about the kitchen tap']);
-      expect([transcriber.heard, recordings()], [['$id.wav'], ['$id.wav']]);
+      expect([only(written).writing, written.text, only(written).transcript],
+        [false, 'Note @ 7:07 PM', 'Call the plumber about the kitchen tap']);
+      expect([transcriber.heard, recordings()], [[wav(written)], [wav(written)]]);
       expect(File('${folder.path}/$inboxFolder/$id/voice.wav').existsSync(), isFalse);
       expect(server.requests, isEmpty);
     });
@@ -274,8 +295,9 @@ void main() {
       await relay.wordsWritten();
       await bridge.handle(MethodCall('add', request));
       await relay.wordsWritten();
-      expect([for (final entry in relay.entries) (entry.voice, entry.text)], [(true, 'Call the plumber about the kitchen tap')]);
-      expect(transcriber.heard, ['$id.wav']);
+      expect([for (final entry in relay.entries) (entry.text, only(entry).transcript)],
+        [('', 'Call the plumber about the kitchen tap')]);
+      expect(transcriber.heard, [wav(relay.entries.single)]);
     });
 
     test('with no speech, typed words keep the note and its recording; with none, the note goes', () async {
@@ -289,14 +311,14 @@ void main() {
       await bridge.handle(MethodCall('add', {'id': bare, 'recording': {'path': recorded(bare), 'durationMs': 2000}}));
       await relay.wordsWritten();
       final kept = relay.entries.single;
-      expect([kept.voice, kept.writing, kept.failed, kept.text, kept.recording],
-        [true, false, false, 'Note @ 7:07 PM', 'voice/$labelled.wav']);
-      expect(recordings(), ['$labelled.wav']);
+      expect([kept.id, only(kept).noWords, only(kept).writing, only(kept).failed, kept.text, only(kept).recording],
+        [labelled, true, false, false, 'Note @ 7:07 PM', 'attachments/${wav(kept)}']);
+      expect(recordings(), [wav(kept)]);
       await pumpEventQueue();
       expect(notices, ['No speech heard. Nothing was saved.']);
     });
 
-    test('with sending and location history on, the note goes once, with its words after the typed ones, and no place',
+    test('with sending and location history on, the note goes once, with the typed words and its transcript, and no place',
       () async {
       server = FakeServer();
       final relay = app();
@@ -318,8 +340,8 @@ void main() {
       final sent = [
         for (final request in server.requests) if (request.url.path.endsWith('notes')) jsonDecode(request.body) as Map,
       ];
-      expect([for (final note in sent) (note['clientId'], note['text'], note.containsKey('place'))],
-        [(id, 'Note @ 7:07 PM\nCall the plumber', false)]);
+      expect([for (final note in sent) (note['clientId'], note['text'], note.containsKey('place'),
+        (note['attachments'] as List).single['transcript'])], [(id, 'Note @ 7:07 PM', false, 'Call the plumber')]);
       expect(relay.entries.single.sent, isTrue);
     });
 
@@ -334,9 +356,9 @@ void main() {
       await relay.load();
       await relay.wordsWritten();
       final entry = relay.entries.single;
-      expect([entry.voice, entry.text, entry.at, entry.recording],
-        [true, 'Note @ 6:07 PM\nCall the plumber about the kitchen tap', made, 'voice/$id.wav']);
-      expect(recordings(), ['$id.wav']);
+      expect([entry.text, only(entry).transcript, entry.at, only(entry).recording],
+        ['Note @ 6:07 PM', 'Call the plumber about the kitchen tap', made, 'attachments/${wav(entry)}']);
+      expect(recordings(), [wav(entry)]);
       expect(Directory('${folder.path}/shortcuts-inbox').listSync(), isEmpty);
     });
 
@@ -361,15 +383,15 @@ void main() {
       await bridge.handle(const MethodCall('inboxChanged'));
       await relay.wordsWritten();
       final entry = relay.entries.single;
-      expect([entry.voice, entry.text, entry.at, entry.length, places.named],
-        [true, 'Call the plumber about the kitchen tap', DateTime.fromMillisecondsSinceEpoch(1793790000000),
+      expect([entry.text, only(entry).transcript, entry.at, only(entry).length, places.named],
+        ['', 'Call the plumber about the kitchen tap', DateTime.fromMillisecondsSinceEpoch(1793790000000),
           const Duration(milliseconds: 4200), isEmpty]);
       // The watch hands the same note again when its kept answer was lost: the phone keeps no second one.
       handOverWatchNote();
       await bridge.handle(const MethodCall('inboxChanged'));
       await relay.wordsWritten();
-      expect(await store.notes(), hasLength(1));
-      expect([transcriber.heard, recordings()], [['$id.wav'], ['$id.wav']]);
+      expect([(await store.notes()).single.clientId, relay.entries.single.id], [id, id]);
+      expect([transcriber.heard, recordings()], [[wav(entry)], [wav(entry)]]);
       expect(Directory('${folder.path}/$inboxFolder').listSync(), isEmpty);
       expect(server.requests, isEmpty);
     });
@@ -386,10 +408,11 @@ void main() {
         await pumpEventQueue();
       }
       await pumpEventQueue();
-      expect([transcriber.heard, answered, relay.entries.single.writing], [hasLength(1), false, true]);
+      expect([transcriber.heard, answered, only(relay.entries.single).writing], [hasLength(1), false, true]);
       held.complete('Call the plumber about the kitchen tap');
       await answer;
-      expect([relay.entries.single.text, relay.entries.single.writing], ['Call the plumber about the kitchen tap', false]);
+      expect([only(relay.entries.single).transcript, only(relay.entries.single).writing],
+        ['Call the plumber about the kitchen tap', false]);
     });
 
     test('from the Apple Watch, the note is marked from the watch, also when the app opens again; Add a note is not',
@@ -437,7 +460,7 @@ void main() {
       await during;
       await relay.wordsWritten();
       expect([for (final note in await store.notes()) note.clientId], unorderedEquals([first, second]));
-      expect(recordings(), unorderedEquals(['$first.wav', '$second.wav']));
+      expect(recordings(), unorderedEquals([for (final entry in relay.entries) wav(entry)]));
       expect(Directory('${folder.path}/$inboxFolder').listSync(), isEmpty);
     });
 
@@ -455,10 +478,10 @@ void main() {
       await relay.load();
       await relay.wordsWritten();
       expect(recorder.swept, isTrue);
-      expect(recordings(), ['$id.wav']);
       final entry = relay.entries.single;
-      expect([entry.voice, entry.text, entry.recording],
-        [true, 'Note @ 7:07 PM\nCall the plumber about the kitchen tap', 'voice/$id.wav']);
+      expect(recordings(), [wav(entry)]);
+      expect([entry.text, only(entry).transcript, only(entry).recording],
+        ['Note @ 7:07 PM', 'Call the plumber about the kitchen tap', 'attachments/${wav(entry)}']);
     });
 
     test('a recording with a photo stays plain files, as Swift gives it, and so does one with a stray recording too',
@@ -475,7 +498,8 @@ void main() {
         'files': [{'path': given(other, '1-tap.png', [3]), 'name': 'tap.png', 'type': 'image/png'}],
         'recording': {'path': recorded(other), 'durationMs': 1000}}));
       await relay.wordsWritten();
-      expect([for (final entry in relay.entries) '${entry.voice} ${entry.text}: ${entry.files.map((file) => file.name).join(', ')}'],
+      expect([for (final entry in relay.entries)
+        '${entry.recordings.isNotEmpty} ${entry.text}: ${entry.files.map((file) => file.name).join(', ')}'],
         unorderedEquals(['false Kitchen: Recording.m4a, tap.png', 'false Both: tap.png']));
       expect(transcriber.heard, isEmpty);
     });

@@ -8,7 +8,10 @@ import { time } from "./store.ts";
 const PAGE = 50;
 
 export const file = z.strictObject({ id: z.string(), name: z.string(), type: z.string(), size: z.number(),
-  ready: z.boolean().describe("True once the phone has sent the file: then GET attachment opens it.") });
+  ready: z.boolean().describe("True once the phone has sent the file: then GET attachment opens it."),
+  transcript: z.string().nullable().describe("A recording's words, as the phone wrote them; null for any other file or while it has none."),
+  lengthMs: z.number().nullable().describe("A recording's length in ms; null for any other file."),
+  top: z.boolean().describe("True for the recording the note started with, shown above the note's words.") });
 const timelineNote = z.strictObject({ id: z.string(), source: z.enum(["ring", "typed"]), text: z.string(), recordedAt: z.number(),
   device: z.string(), audio: z.boolean(), attachments: z.array(file).describe("The note's files, oldest first.") });
 

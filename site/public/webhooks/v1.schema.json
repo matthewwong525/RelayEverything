@@ -37,7 +37,7 @@
                 },
                 "text": {
                   "type": "string",
-                  "description": "The words: a typed note, or an older recorded note's transcription."
+                  "description": "The words the person typed or gave, or an older recorded note's transcription. A voice note's spoken words are its recording's transcript, in attachments: its text can be empty."
                 },
                 "recorded_at": {
                   "type": "string",
@@ -93,7 +93,7 @@
                   "description": "An older recorded note's recording, or null for a typed note or an older recorded note with words only."
                 },
                 "attachments": {
-                  "description": "The note's files: each one's name, type and size, never its bytes; each file's bytes follow in its own note.file. Only a note with files has this list.",
+                  "description": "The note's files: each one's name, type and size, and a recording's transcript and length, never its bytes; each file's bytes follow in its own note.file. Only a note with files has this list.",
                   "minItems": 1,
                   "maxItems": 10,
                   "type": "array",
@@ -117,6 +117,23 @@
                         "minimum": 0,
                         "maximum": 9007199254740991,
                         "description": "In bytes."
+                      },
+                      "transcript": {
+                        "description": "Only on a recording: the words the phone wrote from it, the note's spoken words; null while it has none.",
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "length_ms": {
+                        "description": "Only on a recording: how long it is, in milliseconds. A file with a length is a recording.",
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
                       }
                     },
                     "required": [
@@ -188,7 +205,7 @@
                 },
                 "text": {
                   "type": "string",
-                  "description": "The words: a typed note, or an older recorded note's transcription."
+                  "description": "The words the person typed or gave, or an older recorded note's transcription. A voice note's spoken words are its recording's transcript, in attachments: its text can be empty."
                 },
                 "recorded_at": {
                   "type": "string",
@@ -226,7 +243,7 @@
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
                 },
                 "attachments": {
-                  "description": "The note's files: each one's name, type and size, never its bytes; each file's bytes follow in its own note.file. Only a note with files has this list.",
+                  "description": "The note's files: each one's name, type and size, and a recording's transcript and length, never its bytes; each file's bytes follow in its own note.file. Only a note with files has this list.",
                   "minItems": 1,
                   "maxItems": 10,
                   "type": "array",
@@ -250,6 +267,23 @@
                         "minimum": 0,
                         "maximum": 9007199254740991,
                         "description": "In bytes."
+                      },
+                      "transcript": {
+                        "description": "Only on a recording: the words the phone wrote from it, the note's spoken words; null while it has none.",
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "length_ms": {
+                        "description": "Only on a recording: how long it is, in milliseconds. A file with a length is a recording.",
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
                       }
                     },
                     "required": [
@@ -282,7 +316,7 @@
         "timestamp",
         "data"
       ],
-      "description": "The phone that sent a note changed its words: the note with its latest words, after its note.created. Update the note's row by its id. It has no audio."
+      "description": "The phone that sent a note changed its words, or a recording's transcript: the note with its latest words and files, after its note.created. Update the note's row by its id. It has no audio."
     },
     {
       "type": "object",
@@ -373,7 +407,7 @@
                 },
                 "text": {
                   "type": "string",
-                  "description": "The words: a typed note, or an older recorded note's transcription."
+                  "description": "The words the person typed or gave, or an older recorded note's transcription. A voice note's spoken words are its recording's transcript, in attachments: its text can be empty."
                 },
                 "recorded_at": {
                   "type": "string",
@@ -435,7 +469,7 @@
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
                 },
                 "attachments": {
-                  "description": "The note's files: each one's name, type and size, never its bytes; each file's bytes follow in its own note.file. Only a note with files has this list.",
+                  "description": "The note's files: each one's name, type and size, and a recording's transcript and length, never its bytes; each file's bytes follow in its own note.file. Only a note with files has this list.",
                   "minItems": 1,
                   "maxItems": 10,
                   "type": "array",
@@ -459,6 +493,23 @@
                         "minimum": 0,
                         "maximum": 9007199254740991,
                         "description": "In bytes."
+                      },
+                      "transcript": {
+                        "description": "Only on a recording: the words the phone wrote from it, the note's spoken words; null while it has none.",
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "length_ms": {
+                        "description": "Only on a recording: how long it is, in milliseconds. A file with a length is a recording.",
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
                       }
                     },
                     "required": [

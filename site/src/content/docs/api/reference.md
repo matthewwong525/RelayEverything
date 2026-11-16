@@ -33,6 +33,9 @@ Send the input as a JSON body.
 | `attachments[].name` | string | yes | The file's name, such as `warranty.pdf`. |
 | `attachments[].type` | string | yes | The file's content type, such as `application/pdf`; empty when the phone does not know it. |
 | `attachments[].size` | integer | yes | The file's size in bytes, up to 25 MB. |
+| `attachments[].transcript` | string or null | no | Only a recording: the words the phone wrote from it, or null while it has none. A change to it changes the note. |
+| `attachments[].lengthMs` | integer | no | Only a recording: how long it is, in ms. A file with a length is a recording. |
+| `attachments[].top` | boolean | no | True for the recording the note started with, shown above the note's words. |
 
 ### Output
 
@@ -45,7 +48,7 @@ Send the input as a JSON body.
 
 `PATCH /apps/relay/api/notes` · `relay.notes-edit` · writes · called by a signed-in person or a phone key
 
-Change the words of any note in your space, and list the files added since to a note this device sent. The page changes notes as your space's Web device. The newer change wins: a change made before the note's last one gets 409. A note in Recently Deleted gets 409 with the code `deleted`. Webhooks get it as note.updated.
+Change the words or a recording's transcript of any note in your space, and list the files added since to a note this device sent. The page changes notes as your space's Web device. The newer change wins: a change made before the note's last one gets 409. A note in Recently Deleted gets 409 with the code `deleted`. Webhooks get it as note.updated.
 
 ### Input
 
@@ -56,11 +59,14 @@ Send the input as a JSON body.
 | `id` | string | no | The server's id for the note, as GET notes gives it: any note in your space. |
 | `clientId` | string | no | Or the device's own id for a note it sent, as POST notes sent it. |
 | `text` | string | yes | What the note says now, in place of its words before. It can be empty only when the note has files. |
-| `attachments` | array of object | no | All of the note's files now, up to 10. A file the server lacks is added: send its bytes after, with POST attachments. |
+| `attachments` | array of object | no | All of the note's files now, up to 10. A file the server lacks is added: send its bytes after, with POST attachments. A known recording takes its new transcript and length. |
 | `attachments[].id` | string | yes | The phone's own id for the file: its upload names it. |
 | `attachments[].name` | string | yes | The file's name, such as `warranty.pdf`. |
 | `attachments[].type` | string | yes | The file's content type, such as `application/pdf`; empty when the phone does not know it. |
 | `attachments[].size` | integer | yes | The file's size in bytes, up to 25 MB. |
+| `attachments[].transcript` | string or null | no | Only a recording: the words the phone wrote from it, or null while it has none. A change to it changes the note. |
+| `attachments[].lengthMs` | integer | no | Only a recording: how long it is, in ms. A file with a length is a recording. |
+| `attachments[].top` | boolean | no | True for the recording the note started with, shown above the note's words. |
 | `editedAt` | integer | no | When the device made the change, in Unix ms; now when left out. A later time is taken as now. |
 
 ### Output
@@ -68,7 +74,7 @@ Send the input as a JSON body.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `id` | string | yes |  |
-| `updated` | boolean | yes | False when the words were the same and no file was new. |
+| `updated` | boolean | yes | False when the words and transcripts were the same and no file was new. |
 
 ### Errors
 
@@ -207,6 +213,9 @@ Send the input as query parameters.
 | `notes[].attachments[].type` | string | yes |  |
 | `notes[].attachments[].size` | number | yes |  |
 | `notes[].attachments[].ready` | boolean | yes | True once the phone has sent the file: then GET attachment opens it. |
+| `notes[].attachments[].transcript` | string or null | yes | A recording's words, as the phone wrote them; null for any other file or while it has none. |
+| `notes[].attachments[].lengthMs` | number or null | yes | A recording's length in ms; null for any other file. |
+| `notes[].attachments[].top` | boolean | yes | True for the recording the note started with, shown above the note's words. |
 | `notes[].pinned` | boolean | yes | True when the note is pinned to the top of the notes list. |
 | `notes[].pinChangedAt` | number or null | yes | When the note's pin last changed, in Unix ms; null when never. |
 | `notes[].deletedAt` | number or null | yes | When the note moved to Recently Deleted, in Unix ms; null for a note not deleted. It goes for good 30 days after. |
@@ -446,6 +455,9 @@ Send the input as query parameters.
 | `notes[].attachments[].type` | string | yes |  |
 | `notes[].attachments[].size` | number | yes |  |
 | `notes[].attachments[].ready` | boolean | yes | True once the phone has sent the file: then GET attachment opens it. |
+| `notes[].attachments[].transcript` | string or null | yes | A recording's words, as the phone wrote them; null for any other file or while it has none. |
+| `notes[].attachments[].lengthMs` | number or null | yes | A recording's length in ms; null for any other file. |
+| `notes[].attachments[].top` | boolean | yes | True for the recording the note started with, shown above the note's words. |
 | `next` | number or null | yes |  |
 | `nextId` | string or null | yes |  |
 

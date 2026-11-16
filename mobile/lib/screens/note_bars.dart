@@ -173,6 +173,11 @@ class AttachButton extends StatelessWidget {
   }
 }
 
+/// *Record*: the microphone, which records into the open note. Null [onRecord] shows none, as in the browser, on the
+/// Mac, on a note from elsewhere and on a deleted note.
+Widget? _recordButton(VoidCallback? onRecord) => onRecord == null ? null
+  : PillIconButton(icon: CupertinoIcons.mic, tooltip: 'Record', onPressed: onRecord);
+
 /// *Table*: a new table at the cursor, or, with the cursor in a table, *Convert to text* and *Delete table*.
 class TableButton extends StatelessWidget {
   const TableButton({super.key, required this.onAdd, this.inTable = false, this.onConvert, this.onDelete});
@@ -212,12 +217,13 @@ class _ScrollingBar extends StatelessWidget {
   })));
 }
 
-/// Over the keyboard while the person edits, as wide as the screen: *Text styles*, *Checklist*, *Table* and *Attach*,
-/// then, by a swipe, *Bulleted list*, *Numbered list*, *Link*, *Indent less*, *Indent more* and *Hide keyboard*. A
-/// null action shows its button off, as the styles are in a table's cell.
+/// Over the keyboard while the person edits, as wide as the screen: *Text styles*, *Checklist*, *Table*, *Attach* and,
+/// on a phone, *Record*, then, by a swipe, *Bulleted list*, *Numbered list*, *Link*, *Indent less*, *Indent more* and
+/// *Hide keyboard*. A null action shows its button off, as the styles are in a table's cell.
 class FloatingToolBar extends StatelessWidget {
   const FloatingToolBar({super.key, required this.onStyles, required this.onChecklist, required this.table,
-    required this.onAttach, this.attachMenu = true, this.onList, this.onLink, this.onIndent, this.onHideKeyboard});
+    required this.onAttach, this.attachMenu = true, this.onList, this.onLink, this.onIndent, this.onHideKeyboard,
+    this.onRecord});
 
   final VoidCallback? onStyles;
   final VoidCallback? onChecklist;
@@ -230,6 +236,8 @@ class FloatingToolBar extends StatelessWidget {
   final VoidCallback? onLink;
   final void Function(bool more)? onIndent;
   final VoidCallback? onHideKeyboard;
+  /// *Record*, on a phone only.
+  final VoidCallback? onRecord;
 
   @override
   Widget build(BuildContext context) {
@@ -240,6 +248,7 @@ class FloatingToolBar extends StatelessWidget {
       PillIconButton(icon: CupertinoIcons.checkmark_circle, tooltip: 'Checklist', onPressed: onChecklist),
       table,
       AttachButton(onPick: onAttach, menu: attachMenu),
+      ?_recordButton(onRecord),
       PillIconButton(icon: CupertinoIcons.list_bullet, tooltip: 'Bulleted list',
         onPressed: list == null ? null : () => list('bullet')),
       PillIconButton(icon: CupertinoIcons.list_number, tooltip: 'Numbered list',
@@ -293,16 +302,18 @@ class SelectionToolBar extends StatelessWidget {
   });
 }
 
-/// At the bottom while the person reads: *Checklist* and *Attach* in a pill, and the round compose button.
+/// At the bottom while the person reads: *Checklist*, *Attach* and, on a phone, *Record* in a pill, and the round
+/// compose button.
 class ReadingBar extends StatelessWidget {
   const ReadingBar({super.key, required this.onChecklist, required this.onAttach, required this.onCompose,
-    this.attachMenu = true});
+    this.attachMenu = true, this.onRecord});
 
   final VoidCallback onChecklist;
   final AttachPick? onAttach;
   final VoidCallback onCompose;
   /// *Attach* opens *Photos* and *Files*; false in the browser.
   final bool attachMenu;
+  final VoidCallback? onRecord;
 
   @override
   Widget build(BuildContext context) => Row(children: [
@@ -310,6 +321,7 @@ class ReadingBar extends StatelessWidget {
     _FrostedPill(children: [
       PillIconButton(icon: CupertinoIcons.checkmark_circle, tooltip: 'Checklist', onPressed: onChecklist),
       AttachButton(onPick: onAttach, menu: attachMenu),
+      ?_recordButton(onRecord),
     ]),
     const Spacer(),
     AccentGlow(child: RoundIconButton(icon: CupertinoIcons.square_pencil, tooltip: 'New note', onPressed: onCompose,

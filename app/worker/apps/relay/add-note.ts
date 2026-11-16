@@ -4,15 +4,16 @@ import type { Db, PersonSpace } from "./space.ts";
 import { wake } from "./webhooks/send.ts";
 
 export type TypedNote = { clientId: string; text: string; createdAt: number; lat?: number; lon?: number; accuracy?: number; place?: string;
-  attachments?: { id: string; name: string; type: string; size: number }[] };
+  attachments?: { id: string; name: string; type: string; size: number; transcript?: string | null; lengthMs?: number; top?: boolean }[] };
 
 type NoteFile = NonNullable<TypedNote["attachments"]>[number];
 
 /** The statement that lists files on the device's note by `clientId`, none for no files; a file listed before stays. */
 export const addFiles = (db: Db, deviceId: string, clientId: string, files: NoteFile[]) => files.length
-  ? [db.prepare(`INSERT INTO relay_attachments (id, note_id, name, content_type, size, created_at)
+  ? [db.prepare(`INSERT INTO relay_attachments (id, note_id, name, content_type, size, transcript, length_ms, top, created_at)
       SELECT json_extract(f.value, '$.id'), n.id, json_extract(f.value, '$.name'), json_extract(f.value, '$.type'),
-        json_extract(f.value, '$.size'), ? FROM json_each(?) f, relay_notes n WHERE n.device_id = ? AND n.client_id = ?
+        json_extract(f.value, '$.size'), json_extract(f.value, '$.transcript'), json_extract(f.value, '$.lengthMs'),
+        coalesce(json_extract(f.value, '$.top'), 0), ? FROM json_each(?) f, relay_notes n WHERE n.device_id = ? AND n.client_id = ?
       ON CONFLICT (id) DO NOTHING`).bind(Date.now(), JSON.stringify(files), deviceId, clientId)] : [];
 
 /** The statement that keeps a new note's place as one location point of its device at the note's time, none for no

@@ -21,6 +21,7 @@ import notePlaces from "../../schema/space-migrations/0017_note_places.sql";
 import notePins from "../../schema/space-migrations/0018_note_pins.sql";
 import memoryStore from "../../schema/space-migrations/0019_memory_store.sql";
 import recentlyDeleted from "../../schema/space-migrations/0020_recently_deleted.sql";
+import recordingTranscripts from "../../schema/space-migrations/0021_recording_transcripts.sql";
 import { FIRST_END, KEEP_DELETED } from "./apps/relay/recently-deleted.ts";
 import type { Row, Sql, SqlValue } from "./apps/relay/space.ts";
 import { BEHIND } from "./apps/relay/webhooks/log.ts";
@@ -32,7 +33,7 @@ export const MIGRATIONS: readonly [string, string][] = [["0001_relay", relay], [
   ["0010_note_edits", noteEdits], ["0011_note_sync", noteSync], ["0012_note_deletes", noteDeletes],
   ["0013_stays", stays], ["0014_nights", nights], ["0015_agent_devices", agentDevices], ["0016_memory", memory],
   ["0017_note_places", notePlaces], ["0018_note_pins", notePins], ["0019_memory_store", memoryStore],
-  ["0020_recently_deleted", recentlyDeleted]];
+  ["0020_recently_deleted", recentlyDeleted], ["0021_recording_transcripts", recordingTranscripts]];
 /** A staging space ran a migration first under an older name, before another change took its number. */
 const RAN_AS: Readonly<Record<string, string>> = { "0010_note_edits": "0008_note_edits" };
 

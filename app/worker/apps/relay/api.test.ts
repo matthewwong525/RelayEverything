@@ -95,6 +95,18 @@ it("stores location points once, and gives no stored ring note a place from them
   expect((await call(matthew, "POST", "locations", { points })).status).toBe(403);
 });
 
+it("stores a voice note's recording as one of its files, with its transcript, length and top, and gives them back", async () => {
+  const wav = { id: "rec-wav-0001", name: "Recording.wav", type: "audio/wav", size: 9, transcript: "Order more TL3312 switches", lengthMs: 4200, top: true };
+  const failed = { ...wav, id: "rec-wav-0002", transcript: null, lengthMs: 900, top: false };
+  const pdf = { id: "file-pdf-0001", name: "warranty.pdf", type: "application/pdf", size: 3 };
+  expect((await call(phone, "POST", "notes", typed("note-0001", { text: "", attachments: [wav, failed, pdf] }))).json.added).toBe(true);
+  expect((await call(matthew, "GET", "timeline")).json.notes[0]).toMatchObject({ text: "", attachments: [{ ...wav, ready: false },
+    { ...failed, ready: false }, { ...pdf, ready: false, transcript: null, lengthMs: null, top: false }] });
+  for (const wrong of [{ ...wav, transcript: "a".repeat(100_001) }, { ...wav, lengthMs: -1 }, { ...wav, top: "yes" }]) {
+    expect((await call(phone, "POST", "notes", typed("note-0002", { attachments: [wrong] }))).status, JSON.stringify(wrong)).toBe(400);
+  }
+});
+
 it("reads the timeline newest first, a page at a time, for the site page, and refuses a device key", async () => {
   ringNote("aaaaaaaa-0000-4000-8000-000000000001", NOW - 3 * MINUTE);
   await call(phone, "POST", "notes", typed("note-0001", { createdAt: NOW - 2 * MINUTE, lat: 43.65, lon: -79.38 }));

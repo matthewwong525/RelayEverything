@@ -47,7 +47,7 @@ The same sign-in opens the web API, for your own scripts and services: [Connect 
 
 When an app uses a tool, the answer goes to that app's company: Anthropic for Claude, OpenAI for ChatGPT. Their own terms then apply to it. An answer can hold a note's words, its time, the place name and coordinates, the device name, health totals, nights of sleep with their stages, workouts, calendar events with their people, a chat's messages, and a photo with its time and place.
 
-An answer never holds a recording, a device key, or a device's or delivery's id. The app gets only what a tool answers for one question, not a copy of your data.
+An answer never holds a recording's sound, a device key, or a device's or delivery's id. It gives a recording's transcript, with the note's files. The app gets only what a tool answers for one question, not a copy of your data.
 
 ## See what is connected
 

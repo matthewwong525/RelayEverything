@@ -14,6 +14,7 @@ import 'mac/mac_app.dart';
 import 'mac/updates.dart';
 import 'relay.dart';
 import 'sync/photos.dart' show PhoneNetwork;
+import 'voice/playback.dart';
 
 /// How often the open Mac app reads the notes changed elsewhere, besides each return to the window and each return of
 /// the network.
@@ -29,7 +30,8 @@ Future<void> main() async {
   registerBrandLicenses();
   const updates = MacUpdates();
   final relay = RelayController(store: Store(driftDatabase(name: 'relay')), vault: KeyVault(), platform: RelayPlatform.mac,
-    folder: getApplicationSupportDirectory, opener: openWithMac, network: PhoneNetwork(), updates: updates);
+    folder: getApplicationSupportDirectory, opener: openWithMac, network: PhoneNetwork(), player: SoundPlayer(),
+    updates: updates);
   await relay.load();
   runApp(MacApp(relay: relay));
   WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(updates.checkInBackground()));

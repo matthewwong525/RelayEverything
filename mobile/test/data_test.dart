@@ -16,6 +16,18 @@ import 'package:relay_app/data/store.dart';
 import 'fakes.dart';
 
 final at = DateTime.fromMillisecondsSinceEpoch(1793797200000);
+final later = at.add(const Duration(minutes: 5));
+
+/// A new recording, its words not written yet, kept at `attachments/<id>.wav`.
+Attachment recording(String id, {bool top = true}) => Attachment(id: id, name: 'Recording.wav', type: 'audio/wav', size: 10,
+  path: 'attachments/$id.wav', lengthMs: 12000, wordsPending: true, top: top);
+
+/// Takes away version 16's recording columns, so a store made now reads as an older one.
+void dropRecordingColumns(void Function(String sql) execute) {
+  for (final column in ['length_ms', 'transcript', 'words_pending', 'top', 'ready', 'here_only']) {
+    execute('ALTER TABLE attachments DROP COLUMN $column');
+  }
+}
 
 void main() {
   group('a key', () {
@@ -500,44 +512,120 @@ void main() {
         db.execute('PRAGMA user_version = 3');
       }));
       addTearDown(old.close);
-      expect([for (final kept in await old.notes()) (kept.clientId, kept.kind, kept.audioPath, kept.durationMs, kept.wordsPending)],
-        [('local', NoteKind.typed, null, null, false), ('sent', NoteKind.typed, null, null, false)]);
+      expect([for (final kept in await old.notes()) (kept.clientId, kept.kind, kept.attachments.length, kept.wordsPending)],
+        [('local', NoteKind.typed, 0, false), ('sent', NoteKind.typed, 0, false)]);
       expect(await old.earlierCount(), 1);
       expect(await old.pendingWords(), isEmpty);
     });
 
-    test('keeps a voice note with no words and no upload until its words land', () async {
-      final voice = LocalNote(clientId: 'v', text: '', createdAt: at, kind: NoteKind.voice, audioPath: 'voice/v.wav', durationMs: 12000);
-      await store.addVoiceNote(voice);
+    test('keeps a voice note with no words and no upload until its recording\'s words land', () async {
+      await store.addVoiceNote(LocalNote(clientId: 'v', text: '', createdAt: at, kind: NoteKind.voice, attachments: [recording('r')]));
       final kept = (await store.notes()).single;
-      expect([kept.kind, kept.audioPath, kept.durationMs, kept.wordsPending, kept.text], [NoteKind.voice, 'voice/v.wav', 12000, true, '']);
+      final file = kept.attachments.single;
+      expect([kept.kind, kept.wordsPending, kept.text, file.recording, file.transcript, file.wordsPending, file.top,
+        file.path], [NoteKind.voice, true, '', true, null, true, true, 'attachments/r.wav']);
       // Not an earlier note: *Send them* can not send it with no words.
       expect([await store.earlierCount(), (await store.outbox()).length], [0, 0]);
-      expect([for (final note in await store.pendingWords()) note.clientId], ['v']);
-      expect(await store.setWords('v', 'Order more switches', send: true), isTrue);
-      expect(await store.setWords('v', 'Again', send: true), isFalse);
-      // The upload is a typed note's body: the words, never the recording.
-      expect((await store.outbox()).single.body, {'clientId': 'v', 'text': 'Order more switches', 'createdAt': at.millisecondsSinceEpoch});
+      expect([for (final (note, file) in await store.pendingWords()) (note.clientId, file.id)], [('v', 'r')]);
+      expect(await store.setTranscript('r', 'Order more switches', send: true, at: at), isTrue);
+      expect(await store.setTranscript('r', 'Order more switches', send: true, at: at), isFalse);
+      // The note's text stays empty: the words go as the recording's transcript, and its bytes follow.
+      final outbox = await store.outbox();
+      expect([for (final item in outbox) item.route], ['notes', 'attachment']);
+      expect(outbox.first.body, {'clientId': 'v', 'text': '', 'createdAt': at.millisecondsSinceEpoch, 'attachments': [
+        {'id': 'r', 'name': 'Recording.wav', 'type': 'audio/wav', 'size': 10, 'lengthMs': 12000,
+          'transcript': 'Order more switches', 'top': true}]});
       expect([(await store.notes()).single.wordsPending, (await store.notes()).single.queued], [false, true]);
       expect(await store.pendingWords(), isEmpty);
     });
 
-    test('a voice note with typed words puts them first, and goes once it has its words', () async {
+    test('a voice note with given words keeps them as its text, and goes once its recording has words', () async {
       await store.addVoiceNote(LocalNote(clientId: 'v', text: 'Note @ 7:07 PM', createdAt: at, kind: NoteKind.voice,
-        audioPath: 'voice/v.wav'));
+        attachments: [recording('r')]));
       expect(await store.outbox(), isEmpty);
-      expect(await store.setWords('v', 'Call the plumber', send: true), isTrue);
-      expect((await store.outbox()).single.body,
-        {'clientId': 'v', 'text': 'Note @ 7:07 PM\nCall the plumber', 'createdAt': at.millisecondsSinceEpoch});
+      expect(await store.setTranscript('r', 'Call the plumber', send: true, at: at), isTrue);
+      final body = (await store.outbox()).first.body;
+      expect([body['text'], (body['attachments'] as List).single['transcript']], ['Note @ 7:07 PM', 'Call the plumber']);
     });
 
     test('a voice note given words with sending off stays only here, and counts as earlier', () async {
-      await store.addVoiceNote(LocalNote(clientId: 'v', text: '', createdAt: at, kind: NoteKind.voice, audioPath: 'voice/v.wav'));
-      expect(await store.setWords('v', 'Words', send: false), isTrue);
+      await store.addVoiceNote(LocalNote(clientId: 'v', text: '', createdAt: at, kind: NoteKind.voice, attachments: [recording('r')]));
+      expect(await store.setTranscript('r', 'Words', send: false, at: at), isTrue);
       expect([await store.earlierCount(), (await store.outbox()).length], [1, 0]);
-      await store.addVoiceNote(LocalNote(clientId: 'silent', text: '', createdAt: at, kind: NoteKind.voice, audioPath: 'voice/silent.wav'));
+      await store.addVoiceNote(LocalNote(clientId: 'silent', text: '', createdAt: at, kind: NoteKind.voice,
+        attachments: [recording('s')]));
       await store.dropNote('silent');
       expect([for (final note in await store.notes()) note.clientId], ['v']);
+      expect(await store.attachmentsOf('silent'), isEmpty);
+    });
+
+    test('a note with two recordings waits for both, then goes once with both transcripts', () async {
+      await store.addVoiceNote(LocalNote(clientId: 'v', text: '', createdAt: at, kind: NoteKind.voice, attachments: [recording('r1')]));
+      expect(await store.addRecording('v', recording('r2', top: false)), isTrue);
+      expect(await store.setTranscript('r2', 'Second', send: true, at: at), isTrue);
+      expect([await store.outbox(), (await store.notes()).single.wordsPending], [isEmpty, true]);
+      expect(await store.setTranscript('r1', 'First', send: true, at: at), isTrue);
+      final outbox = await store.outbox();
+      expect([for (final item in outbox) item.route], ['notes', 'attachment', 'attachment']);
+      expect([for (final file in outbox.first.body['attachments'] as List) (file['id'], file['transcript'], file['top'])],
+        [('r1', 'First', true), ('r2', 'Second', null)]);
+    });
+
+    test('a recording added to a sent note sends one change and its bytes once its words land', () async {
+      await store.addNote(note('n1'), send: true);
+      await flush(store, FakeServer().api(connection), clock: () => at);
+      expect(await store.addRecording('n1', recording('r', top: false)), isTrue);
+      expect(await store.outbox(), isEmpty);
+      // A typed change meanwhile waits too: the note goes once, with both.
+      expect(await store.editNote('n1', 'Buy oat milk', send: true, at: later), isTrue);
+      expect(await store.outbox(), isEmpty);
+      expect(await store.setTranscript('r', 'And bread', send: true, at: later), isTrue);
+      final outbox = await store.outbox();
+      expect([for (final item in outbox) item.route], [noteUpdate, 'attachment']);
+      expect([outbox.first.body['text'], (outbox.first.body['attachments'] as List).single['transcript']],
+        ['Buy oat milk', 'And bread']);
+    });
+
+    test('a corrected transcript of a sent note goes as one change; the same words change nothing', () async {
+      await store.addVoiceNote(LocalNote(clientId: 'v', text: '', createdAt: at, kind: NoteKind.voice, attachments: [recording('r')]));
+      expect(await store.setTranscript('r', 'Call the fab', send: true, at: at), isTrue);
+      await flush(store, FakeServer().api(connection), clock: () => at);
+      expect(await store.outbox(), isEmpty);
+      expect(await store.setTranscript('r', 'Call the fab', send: true, at: later, edit: true), isFalse);
+      expect(await store.setTranscript('r', 'Call the lab', send: true, at: later, edit: true), isTrue);
+      final change = (await store.outbox()).single;
+      expect([change.route, change.body['editedAt'], (change.body['attachments'] as List).single['transcript']],
+        [noteUpdate, later.millisecondsSinceEpoch, 'Call the lab']);
+      expect([(await store.notes()).single.editedAt, (await store.attachmentsOf('v')).single.transcript],
+        [later, 'Call the lab']);
+    });
+
+    test('a transcript edit while the words are still written, or of a plain file, changes nothing', () async {
+      await store.addVoiceNote(LocalNote(clientId: 'v', text: '', createdAt: at, kind: NoteKind.voice, attachments: [recording('r')]));
+      expect(await store.setTranscript('r', 'Mine', send: true, at: at, edit: true), isFalse);
+      const file = Attachment(id: 'f1', name: 'a.pdf', type: 'application/pdf', size: 1, path: 'attachments/f1');
+      await store.addNote(LocalNote(clientId: 'n', text: 'Ticket', createdAt: at, attachments: const [file]));
+      expect(await store.setTranscript('f1', 'Words', send: true, at: at), isFalse);
+    });
+
+    test('failed words let the note go with no transcript, and the recording waits for words again', () async {
+      await store.addVoiceNote(LocalNote(clientId: 'v', text: '', createdAt: at, kind: NoteKind.voice, attachments: [recording('r')]));
+      expect(await store.setTranscript('r', null, send: true, at: at), isTrue);
+      final body = (await store.outbox()).first.body;
+      expect((body['attachments'] as List).single['transcript'], isNull);
+      expect([for (final (note, file) in await store.pendingWords()) (note.clientId, file.id)], [('v', 'r')]);
+      expect(await store.setTranscript('r', 'Later words', send: true, at: later), isTrue);
+      expect(((await store.outbox()).first.body['attachments'] as List).single['transcript'], 'Later words');
+      expect(await store.pendingWords(), isEmpty);
+    });
+
+    test('takes no recording past the file limit, or into a note that is gone', () async {
+      await store.addNote(LocalNote(clientId: 'n', text: 'Full', createdAt: at, attachments: [
+        for (var index = 0; index < 10; index++)
+          Attachment(id: 'f$index', name: 'f$index.pdf', type: 'application/pdf', size: 1, path: 'attachments/f$index')]));
+      expect(await store.addRecording('n', recording('r')), isFalse);
+      expect(await store.addRecording('gone', recording('r2')), isFalse);
+      expect([(await store.attachmentsOf('n')).length, (await store.notes()).single.wordsPending], [10, false]);
     });
 
     QueuedPhoto photo(String id, int minute, {double? lat, double? lon}) => QueuedPhoto(clientId: id, assetId: 'asset-$id',
@@ -716,6 +804,8 @@ void main() {
     test('upgrades a phone from before files: every note stays, with no files, and new notes take files', () async {
       driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
       addTearDown(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = false);
+      // The voice note's recording is gone, so the move keeps its words and attaches nothing.
+      final folder = tempFolder();
       final old = Store(NativeDatabase.memory(setup: (db) {
         for (final statement in [
           "CREATE TABLE outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, destination TEXT NOT NULL DEFAULT 'relay-server', "
@@ -734,7 +824,7 @@ void main() {
           ['sent', body('sent'), 'local', body('local'), 'voice', body('voice')]);
         db.execute("INSERT INTO outbox (route, body, created_at) VALUES ('notes', ?, 3)", [body('voice')]);
         db.execute('PRAGMA user_version = 4');
-      }));
+      }), folder: () async => folder);
       addTearDown(old.close);
       expect([for (final kept in await old.notes()) (kept.clientId, kept.kind, kept.sentAt != null, kept.attachments.length)],
         [('voice', NoteKind.voice, false, 0), ('local', NoteKind.typed, false, 0), ('sent', NoteKind.typed, true, 0)]);
@@ -829,12 +919,14 @@ void main() {
         await made.get('x');
         await made.close();
         final old = Store(NativeDatabase(file, setup: (db) {
-          if (db.userVersion != 15) return;
-          // Version 13 added the source column, version 14 the pin columns, and version 15 named deleting_at deleted_at.
+          if (db.userVersion != 16) return;
+          // Version 13 added the source column, version 14 the pin columns, version 15 named deleting_at deleted_at, and
+          // version 16 added the recording columns.
           for (final column in ['source', 'pinned_at', 'pin_changed_at', 'pin_unsent']) {
             db.execute('ALTER TABLE notes DROP COLUMN $column');
           }
           db.execute('ALTER TABLE notes RENAME COLUMN deleted_at TO deleting_at');
+          dropRecordingColumns(db.execute);
           db.execute('INSERT INTO state VALUES (?, ?)',
             [settingsKey, jsonEncode({'sending': true, 'history': history, 'locationSend': 'points'})]);
           db.execute('INSERT INTO notes (client_id, body, created_at, sent_at, queued, pinning) VALUES '
@@ -874,28 +966,30 @@ void main() {
     test('upgrades a phone from version 12: its notes are not from the watch, and a watch note keeps its mark', () async {
       driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
       addTearDown(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = false);
-      final file = File('${tempFolder().path}/relay.db');
+      final folder = tempFolder();
+      final file = File('${folder.path}/relay.db');
       final made = Store(NativeDatabase(file));
       await made.get('x');
       await made.close();
       final old = Store(NativeDatabase(file, setup: (db) {
-        if (db.userVersion != 15) return;
+        if (db.userVersion != 16) return;
         for (final column in ['source', 'pinned_at', 'pin_changed_at', 'pin_unsent']) {
           db.execute('ALTER TABLE notes DROP COLUMN $column');
         }
         db.execute('ALTER TABLE notes RENAME COLUMN deleted_at TO deleting_at');
+        dropRecordingColumns(db.execute);
         db.execute("INSERT INTO notes (client_id, body, created_at, kind, audio_path, duration_ms) VALUES (?, ?, 1, 'voice', ?, 3000)",
           ['old', jsonEncode(note('old').toJson()), 'voice/old.wav']);
         db.execute('PRAGMA user_version = 12');
-      }));
+      }), folder: () async => folder);
       addTearDown(old.close);
       expect([for (final kept in await old.notes()) (kept.clientId, kept.fromWatch)], [('old', false)]);
-      await old.addVoiceNote(LocalNote(clientId: 'w', text: '', createdAt: at, kind: NoteKind.voice, audioPath: 'voice/w.wav',
-        durationMs: 2000, fromWatch: true));
-      expect(await old.setWords('w', '', send: false), isTrue);
+      await old.addVoiceNote(LocalNote(clientId: 'w', text: '', createdAt: at, kind: NoteKind.voice, fromWatch: true,
+        attachments: [recording('r')]));
+      expect(await old.setTranscript('r', '', send: false, at: at), isTrue);
       final watch = (await old.notes()).firstWhere((kept) => kept.clientId == 'w');
-      expect([watch.fromWatch, watch.noWords, watch.queued, await old.earlierCount(), await old.earlierCount(fromWebhook: true)],
-        [true, true, false, 1, 1]);
+      expect([watch.fromWatch, watch.attachments.single.transcript, watch.queued, await old.earlierCount(),
+        await old.earlierCount(fromWebhook: true)], [true, '', false, 2, 2]);
     });
 
     test('keeps small values by name', () async {

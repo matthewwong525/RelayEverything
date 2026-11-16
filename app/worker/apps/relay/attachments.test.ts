@@ -42,14 +42,15 @@ it("keeps a file of a type it can't read as plain bytes", async () => {
 
 it("seals each listed file once, shows it as waiting until it comes, and opens it for its person", async () => {
   await note();
-  expect(await timelineFiles()).toEqual([{ ...files[0], ready: false }, { ...files[1], ready: false }]);
+  const plain = { transcript: null, lengthMs: null, top: false };
+  expect(await timelineFiles()).toEqual([{ ...files[0], ready: false, ...plain }, { ...files[1], ready: false, ...plain }]);
   expect(await (await upload(phone, "file-pdf-0001", PDF)).json()).toEqual({ ok: true, added: true });
   expect(await (await upload(phone, "file-pdf-0001", PDF)).json()).toEqual({ ok: true, added: false });
   expect(bucket.put).toHaveBeenCalledOnce();
   const name = `people/${ANA}/attachments/file-pdf-0001`;
   expect(rows("relay_attachments")[0].file_key).toBe(name);
   expect(Buffer.from(bucket.objects.get(name)!).includes(Buffer.from(PDF))).toBe(false);
-  expect(await timelineFiles()).toEqual([{ ...files[0], ready: true }, { ...files[1], ready: false }]);
+  expect(await timelineFiles()).toEqual([{ ...files[0], ready: true, ...plain }, { ...files[1], ready: false, ...plain }]);
 
   const pdf = await open(matthew, "file-pdf-0001");
   expect(pdf.status).toBe(200);

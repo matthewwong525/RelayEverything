@@ -12,19 +12,17 @@ export type Span = [number, number];
 // A note has no place: relay_notes keeps its place columns empty (0017_note_places.sql); a reader finds places by time.
 type Row = { id: string; source: "ring" | "typed"; text: string; recorded_at: number; device: string; audio: number; files: string };
 
-/** A note's file: `ready` once the phone has sent its bytes, which GET attachment then opens. */
-export type NoteFile = { id: string; name: string; type: string; size: number; ready: boolean };
+/** A note's file: `ready` once the phone has sent its bytes, which GET attachment opens. A recording has a length. */
+export type NoteFile = { id: string; name: string; type: string; size: number; ready: boolean; transcript: string | null; lengthMs: number | null; top: boolean };
 
-const shaped = (row: Row) => ({ id: row.id, source: row.source, text: row.text, recordedAt: row.recorded_at, device: row.device,
-  audio: row.audio === 1,
-  attachments: (JSON.parse(row.files) as (Omit<NoteFile, "ready"> & { ready: number })[]).map(file => ({ ...file, ready: file.ready === 1 })) });
+const shaped = (row: Row) => ({ id: row.id, source: row.source, text: row.text, recordedAt: row.recorded_at, device: row.device, audio: row.audio === 1,
+  attachments: (JSON.parse(row.files) as (Omit<NoteFile, "ready" | "top"> & { ready: number; top: number })[]).map(file => ({ ...file, ready: file.ready === 1, top: file.top === 1 })) });
 
 export type Note = ReturnType<typeof shaped>;
 
 const FILES = `(SELECT json_group_array(json_object('id', a.id, 'name', a.name, 'type', a.content_type, 'size', a.size,
-  'ready', a.file_key IS NOT NULL)) FROM (SELECT * FROM relay_attachments WHERE note_id = n.id ORDER BY rowid) a) AS files`;
-const COLUMNS = `n.id, n.source, n.text, n.recorded_at, d.name AS device, n.audio_key IS NOT NULL AS audio,
-  ${FILES}`;
+  'ready', a.file_key IS NOT NULL, 'transcript', a.transcript, 'lengthMs', a.length_ms, 'top', a.top)) FROM (SELECT * FROM relay_attachments WHERE note_id = n.id ORDER BY rowid) a) AS files`;
+const COLUMNS = `n.id, n.source, n.text, n.recorded_at, d.name AS device, n.audio_key IS NOT NULL AS audio, ${FILES}`;
 const NOTE = `SELECT ${COLUMNS} FROM relay_notes n JOIN relay_devices d ON d.id = n.device_id`;
 
 export type NoteFilter = { before?: number; beforeId?: string; after?: number; source?: "ring" | "typed"; words?: string[]; tag?: string; limit: number };
@@ -32,6 +30,8 @@ export type NoteFilter = { before?: number; beforeId?: string; after?: number; s
 /** LIKE's own characters, escaped, so a word matches as typed. */
 const escaped = (word: string) => word.replace(/[\\%_]/g, "\\$&");
 const like = (word: string) => `%${escaped(word)}%`;
+/** A word in the note's text or in one of its recordings' transcripts: bind like(word) twice. */
+const NOTE_WORD = `(n.text LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM relay_attachments a WHERE a.note_id = n.id AND a.transcript LIKE ? ESCAPE '\\'))`;
 
 /** A topic and its parts: `bike` finds `bike` and `bike/charging`, never `biker`. Bind tagValues(tag) after it. */
 export const tagged = (table: "relay_memory_tags" | "relay_note_tags", own: "fact_id" | "note_id", key: string) =>
@@ -42,10 +42,10 @@ export const tagValues = (tag: string) => [tag, `${escaped(tag)}/%`];
 export async function notePage(db: Db, filter: NoteFilter) {
   const { before = Number.MAX_SAFE_INTEGER, beforeId = "", after = 0, source, words = [], tag, limit } = filter;
   const where = ["(n.recorded_at < ? OR (n.recorded_at = ? AND n.id < ?))", "n.recorded_at >= ?", "n.deleted_at IS NULL",
-    ...source ? ["n.source = ?"] : [], ...words.map(() => "n.text LIKE ? ESCAPE '\\'"),
+    ...source ? ["n.source = ?"] : [], ...words.map(() => NOTE_WORD),
     ...tag === undefined ? [] : [tagged("relay_note_tags", "note_id", "n.id")]];
   const { results } = await db.prepare(`${NOTE} WHERE ${where.join(" AND ")} ORDER BY n.recorded_at DESC, n.id DESC LIMIT ?`)
-    .bind(before, before, beforeId, after, ...source ? [source] : [], ...words.map(like), ...tag === undefined ? [] : tagValues(tag), limit + 1).all<Row>();
+    .bind(before, before, beforeId, after, ...source ? [source] : [], ...words.flatMap(word => [like(word), like(word)]), ...tag === undefined ? [] : tagValues(tag), limit + 1).all<Row>();
   const page = results.slice(0, limit);
   // Two notes can share a time, so a page ends at a time and an id: the next page starts just after both.
   const last = results.length > limit ? page.at(-1)! : null;

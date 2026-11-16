@@ -1,9 +1,9 @@
 ---
 title: Voice notes
-description: Hold New note in the Relay Everything app, let go, talk, and tap anywhere to save. The phone writes your words itself, and your voice never leaves the phone.
+description: Hold New note in the Relay Everything app, let go, talk, and tap anywhere to save. The phone writes your words itself, as the recording's transcript, and your own notes go under it.
 ---
 
-Hold **New note** in the Relay Everything app, let go, talk, and tap anywhere to save. The note opens at once, and its words fill in a few seconds later. The phone writes the words itself, with no signal and no server. Your voice never leaves the phone.
+Hold **New note** in the Relay Everything app, let go, talk, and tap anywhere to save. The note opens with the recording at the top, and its transcript fills in a few seconds later. The phone writes the words itself, with no signal and no server. Your own notes go under the recording, apart from what you said. With sending on, the recording goes to your space like a file, sealed.
 
 ## Make a voice note
 
@@ -18,11 +18,17 @@ The bars use the sound level only to draw the screen. The app keeps none of it a
 
 A tap shorter than half a second opens the **New note** page to type, and records nothing. If you let go before the circle closes, it empties.
 
-When you tap to save, the note opens. It shows **Writing the words…**, then its words fill in. Tap the back button to go to the page you were on. In your notes, the note's row shows a microphone and the recording's length. Tap **Voice** above your notes to see only voice notes.
+When you tap to save, the note opens with the recording's card at the top. The card says **Writing the words…**, then the transcript fills in. Under the card, the page says *Add notes…*: tap there to type your own notes. Tap the back button to go to the page you were on. In your notes, the note's row shows a microphone and the recording's length, then your own words, or the start of the transcript when you typed none. Tap **Voice** above your notes to see only the notes with a recording.
 
 A note saves by itself after 5 minutes: the screen says *Saves by itself at 5:00*. Then it does not open: it shows at the top of your notes.
 
-A recording you give to **Add a note** in Apple Shortcuts becomes a voice note too, with your typed words first. [A voice note from Record audio](../shortcuts/#a-voice-note-from-record-audio)
+A recording you give to **Add a note** in Apple Shortcuts becomes a voice note too: your words are the note's text, and the spoken words are the recording's transcript. [A voice note from Record audio](../shortcuts/#a-voice-note-from-record-audio)
+
+## Add a recording to a note
+
+To add a recording to a note you have open, tap the **mic** in the bar at the bottom of the note, or in the bar over the keyboard. The same full screen opens as for a held **New note**: talk, then tap anywhere to save, or tap the **X** to keep nothing. The new recording goes at the bottom of the note, after your words, with the photos and files, in the order you added them. Only the recording a voice note starts with sits at the top. A recording with no words heard stays in the note.
+
+A note holds up to 10 files, and each recording counts as one. The mic shows on a phone only, and not on a note from another phone, from email or in **Recently Deleted**. The Relay Everything page and the Mac app record nothing.
 
 The first time you hold **New note**, the phone asks for the microphone. If you said no, allow the microphone for Relay Everything in the phone's settings.
 
@@ -42,15 +48,15 @@ Under **Saved**, the watch shows **Sending to your iPhone**, then **On your iPho
 
 When your iPhone is not near, the note waits on the watch. The watch shows how many notes wait, such as **1 note waits for your iPhone**. The watch deletes its copy only after the iPhone keeps the note, so a note is never kept twice. If the watch can not save a recording, it says **Not saved**.
 
-If the iPhone finds no words in a watch recording, it keeps the note: it shows **Voice note** with **No words heard**, and you can play it. Such a note stays on the phone and is not sent. If you write words in it, it is sent as any other note.
+If the iPhone finds no words in a watch recording, it keeps the note: it shows **Voice note** with **No words heard**, and you can play it. With sending on, it goes to your space with its recording and no transcript.
 
-The same rules apply: a recording shorter than 1 second keeps nothing, and a note saves by itself after 5 minutes. A watch note keeps no place. The watch sends nothing to a server: only the iPhone does, with sending on.
+The same rules apply: a recording shorter than 1 second keeps nothing, and a note saves by itself after 5 minutes. A watch note keeps no place. The watch sends nothing to a server: only the iPhone does, with sending on, the recording too.
 
 ## When the words do not come
 
-If the phone can not write the words, or they take longer than 2 minutes (or the recording's length, if it is longer), the note shows **The words did not come** in your notes. Open it, and it says **The words did not come. Your recording is safe.** A small line under it gives the reason, such as *Why: the speech engine stopped (code -6).* or *Why: the phone took more than 2 minutes.* The reason stays on the phone. The app tells you once. The note keeps its recording, and its player still works.
+If the phone can not write the words, or they take longer than 2 minutes (or the recording's length, if it is longer), the note shows **The words did not come** in your notes. Open it, and the recording's card says **The words did not come. Your recording is safe.** A small line under it gives the reason, such as *Why: the speech engine stopped (code -6).* or *Why: the phone took more than 2 minutes.* The reason stays on the phone. The app tells you once. The note keeps its recording, and its player still works.
 
-Tap **Try again** on the open note to write the words again. When you come back to the app, or open it again, it also tries again by itself. A note that failed does not stop the next note: the next note gets its words.
+Tap **Try again** on the card to write the words again. With sending on, a note waits on the phone until its recordings' words are written or have failed. A failed recording goes with no transcript, and its transcript follows when **Try again** writes it. When you come back to the app, or open it again, it also tries again by itself. A note that failed does not stop the next note: the next note gets its words.
 
 ## Get the speech model
 
@@ -72,26 +78,36 @@ The app keeps nothing from:
 
 - A press on **New note** shorter than half a second. It opens the **New note** page, and a bump in your pocket makes no voice note.
 - A note you throw away with the **X**.
-- A recording with no words in it. The note's page closes, and the app says **No speech heard**. A watch note with no words stays: see [From your Apple Watch](#from-your-apple-watch).
+- A new voice note with no words in it. The note's page closes, and the app says **No speech heard**. A watch note with no words stays: see [From your Apple Watch](#from-your-apple-watch). A recording with no words that you add with the mic stays in its note too.
 
 ## Play a note back
 
-Tap a voice note in your notes to open it. The player is under the date, as in Apple's Voice Memos:
+Tap a voice note in your notes to open it. The recording's card is under the date, as in Apple's Voice Memos, with the player at its top:
 
 - Tap **Play** (▶) to hear the recording, and **Pause** to stop it. Each voice note plays in the same player, so a new one stops the one before.
 - The sound waves show the recording. The part you heard is green. A recording from Shortcuts that is not a WAV file shows a plain line in place of the waves.
 - Tap or drag on the waves to go to that part. A tap on a stopped recording plays it from there.
 - The time shows how far it played and the length, such as *0:12 / 0:42*. When it is stopped, it shows the length alone.
 
-With a screen reader, swipe up or down on the waves to go 5 seconds forward or back. The recording stays on this phone.
+With a screen reader, swipe up or down on the waves to go 5 seconds forward or back.
 
-The phone does not back up recordings to iCloud or Google. When you move to a new phone, the recordings stay behind: your voice notes come with their words, and **Play** says the recording is not on this phone.
+## Read the transcript
+
+Under the player, the **Transcript** row shows the first 2 lines of what you said. Tap it to see all of the words, with a copy button. The copy shows no message. Tap it again to fold them.
+
+To fix a wrong word, open the transcript and type in it. The phone keeps the change as a change of the note, and with sending on, it goes to your space, your other phones and your webhooks. A note in **Recently Deleted** reads only: [recover it](../your-notes/#recently-deleted) first.
+
+## Where your recording goes
+
+The phone does not back up recordings to iCloud or Google. With sending on, each recording goes to your space like a file, sealed, after its words are written. Then you can play it on your other phones, on your [Relay Everything page and in the Mac app](../on-a-computer/#voice-notes). Your other phones show the transcript at once and get the sound when you tap **Play**. With sending off, the recording stays on this phone only.
+
+On the first open after the update that made recordings files, each earlier voice note moves to this shape: its words become its recording's transcript, and its own text is empty. With sending on, the recordings of your earlier voice notes go to your space too. A note sent before you last signed in is an earlier device's note, and your space takes no file for it: its words go back to its text, and its recording stays only on this phone, with no transcript. This can't be undone.
 
 ## Where your voice goes
 
 | What | Where |
 |---|---|
-| The recording | This phone only. It is never sent, and phone backups leave it out. A watch recording goes only to your paired iPhone. |
-| The words | This phone. With sending on, they go to your Relay Everything server, the same as a typed note. |
+| The recording | This phone, and phone backups leave it out. With sending on, also your space on your Relay Everything server, sealed, as a file on the note. A watch recording goes first to your paired iPhone. |
+| The transcript | This phone. With sending on, also your space, with its recording. |
 
-On your server and in other places that read it, a voice note shows as a typed note. A note goes to your server only when it has its words. [Privacy](../../privacy/)
+The phone writes the words itself: no speech service on a network hears your voice. Your AI apps and the web API read a recording's transcript, never its sound. Your webhooks get the transcript with the note, and the sound as a file: [A voice note](../../connections/your-database/#a-voice-note). [Privacy](../../privacy/)

@@ -10,14 +10,19 @@ import 'store.dart';
 enum Failure { refused, rejected, offline }
 
 class ApiException implements Exception {
-  const ApiException(this.failure, this.status);
+  const ApiException(this.failure, this.status, [this.code]);
 
   final Failure failure;
   final int? status;
+  /// The server's reason for a refused body, such as `not_own`; null when it gave none.
+  final String? code;
 
   @override
-  String toString() => 'ApiException($failure, $status)';
+  String toString() => 'ApiException($failure, $status, $code)';
 }
+
+/// The server's reason when a change adds files to a note another device sent.
+const notOwn = 'not_own';
 
 /// Where the outbox and the photos send: the Relay Everything server, or the person's own webhook. Each call throws
 /// [ApiException]: [Failure.rejected] drops the upload, and any other failure stops the round with it kept.
@@ -67,12 +72,12 @@ class RelayApi implements Outbound {
   /// A sent note's newest words, edit time and the file list the store gave it, by its server `id` once a pull saved one,
   /// else by its `clientId`. A 404 (no such note, or an old server) or a 409 (a newer change is kept) is dropped; the
   /// pull then takes it. A 400 with files, as when a new key made this phone another device, goes once more without
-  /// them, so the words still land.
+  /// them, so the words still land; with no words it can not land, so it is dropped and [Store.keepHere] keeps them.
   Future<void> _change(Map<String, dynamic> body) async {
     try {
       await _patchNote(body, withFiles: true);
     } on ApiException catch (error) {
-      if (error.status != 400 || body['attachments'] == null) rethrow;
+      if (error.status != 400 || body['attachments'] == null || (body['text'] as String? ?? '').trim().isEmpty) rethrow;
       await _patchNote(body, withFiles: false);
     }
   }
@@ -218,6 +223,16 @@ class RelayApi implements Outbound {
   Future<Map<String, dynamic>> _call(Future<http.Response> Function() send, {Set<int> rejected = const {400, 413},
     Duration timeout = _timeout}) => _answer(send, rejected: rejected, timeout: timeout);
 
+  /// The `error.code` of a JSON refusal, or null.
+  static String? _codeOf(String body) {
+    try {
+      final json = jsonDecode(body);
+      return json is Map && json['error'] is Map ? (json['error'] as Map)['code'] as String? : null;
+    } on FormatException {
+      return null;
+    }
+  }
+
   static Future<Map<String, dynamic>> _answer(Future<http.Response> Function() send, {Set<int> rejected = const {400, 413},
     Duration timeout = _timeout}) async {
     final http.Response response;
@@ -232,7 +247,7 @@ class RelayApi implements Outbound {
     if (status == 401 || status == 403 || (status >= 300 && status < 400) || (status == 200 && !json)) {
       throw ApiException(Failure.refused, status);
     }
-    if (rejected.contains(status)) throw ApiException(Failure.rejected, status);
+    if (rejected.contains(status)) throw ApiException(Failure.rejected, status, _codeOf(response.body));
     if (status != 200) throw ApiException(Failure.offline, status);
     return jsonDecode(response.body) as Map<String, dynamic>;
   }

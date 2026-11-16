@@ -101,10 +101,12 @@ Every message is a `POST` with a JSON body in one envelope:
 
 ### A note's files
 
-A note from the phone can hold up to 10 files, such as photos and PDFs. Only a note with files has an `attachments` list in its `note.created` message. A note without files gets the message above, with no `attachments` field.
+A note from the phone can hold up to 10 files, such as photos, PDFs and recordings. Only a note with files has an `attachments` list in its `note.created` message. A note without files gets the message above, with no `attachments` field.
 
 ```json
 "attachments": [
+  { "id": "7c2e9a41b3d84f06a1e5c8d2b6f04a93", "name": "Recording.wav", "content_type": "audio/wav", "size": 1344044,
+    "transcript": "Call the PCB fab about the second batch.", "length_ms": 42000 },
   { "id": "3f9c2a7be1d04c58a6f0b2e4d7c91a05", "name": "warranty.pdf", "content_type": "application/pdf", "size": 245760 }
 ]
 ```
@@ -115,6 +117,16 @@ A note from the phone can hold up to 10 files, such as photos and PDFs. Only a n
 | `name` | The file's name, such as `warranty.pdf` |
 | `content_type` | Its type, such as `application/pdf` or `image/jpeg` |
 | `size` | Its size in bytes, up to 25 MB |
+| `transcript` | Only on a recording: the words the phone wrote from it, or `null` while it has none |
+| `length_ms` | Only on a recording: its length in milliseconds. A file with `length_ms` is a recording. |
+
+### A voice note
+
+A voice note's spoken words are the `transcript` of its recording, not the note's `text`. The note's `text` holds only the words you typed or gave, so a new voice note has an empty `text`. A note can hold more than one recording, each with its own `transcript`. The recording's sound comes in its own [`note.file`](#notefile), as any file does.
+
+A receiver that read a voice note's words from `text` must read each recording's `transcript` now. Version 1 can still change before the public release: [When the format changes](#when-the-format-changes).
+
+When the phone writes a recording's words after the note went, or you correct a word in a transcript, the note comes again as [`note.updated`](#noteupdated) with the new `transcript`.
 
 The message holds no file bytes, because a file can be too big for one message. Each file comes after it, in its own `note.file` message. From your server, that message goes when the file's bytes reach your space, which can be some time after the note.
 
@@ -141,7 +153,7 @@ Files that your server stored before it sent `note.file` go once to each webhook
 
 ### `note.updated`
 
-Relay Everything sends `note.updated` when a phone changes a note's words, or adds a file to a note it sent. With [your notes on every phone](../../app/your-notes/#your-notes-on-every-phone), any signed-in phone can change any note, also one from email, and your server sends each change, from any phone, to every active webhook. A phone that sends to your own webhook sends it there itself. It always comes after the note's `note.created`. Each new file then comes in its own [`note.file`](#notefile).
+Relay Everything sends `note.updated` when a phone changes a note's words or a recording's transcript, or adds a file to a note it sent. With [your notes on every phone](../../app/your-notes/#your-notes-on-every-phone), any signed-in phone can change any note, also one from email, and your server sends each change, from any phone, to every active webhook. A phone that sends to your own webhook sends it there itself. It always comes after the note's `note.created`. Each new file then comes in its own [`note.file`](#notefile).
 
 ```json
 {
@@ -163,7 +175,7 @@ Relay Everything sends `note.updated` when a phone changes a note's words, or ad
 }
 ```
 
-It holds the same `note` as `note.created`, with its latest words and without `audio`. `edited_at` is when the phone changed the note; an older `note.updated` has none. When two phones change a note, the change with the later `edited_at` is the one your server keeps, and only it sends. `attachments` lists all the note's files, as in `note.created`, and only a note with files has it. Update the note's row by its `id`, and keep its stored `audio`. A changed note has the same `id`, `recorded_at` and `created_at`.
+It holds the same `note` as `note.created`, with its latest words and without `audio`. `edited_at` is when the phone changed the note; an older `note.updated` has none. When two phones change a note, the change with the later `edited_at` is the one your server keeps, and only it sends. `attachments` lists all the note's files, as in `note.created`, with each recording's latest `transcript`, and only a note with files has it. Update the note's row by its `id`, and keep its stored `audio`. A changed note has the same `id`, `recorded_at` and `created_at`.
 
 The words keep their styles as Markdown marks, such as `#` for a title, `- [ ]` and `- [x]` for a checklist, and `<u>…</u>` for underline. A receiver that ignores `note.updated` keeps working: it keeps the words from `note.created`.
 
@@ -390,7 +402,7 @@ const payload = new Webhook(process.env.RELAY_WEBHOOK_SECRET).verify(body, heade
 - Answer with a `2xx` status within 15 seconds. Relay Everything does not follow a redirect.
 - After any other answer, Relay Everything tries the same message again after 30 s, 2 min, 10 min, 30 min, 1 h, 2 h, 4 h, 6 h and 8 h: about a day. Then the card shows **Failing**, with the last answer and how many items wait. If a send is lost, your space wakes itself every 15 minutes while it has a webhook, and sends what waits. **Try again now** sends them all, in order, from where it stopped.
 - A retry can send a message you already saved, when your answer was lost. Its id and body are the same. So save each note, point and event by its `id`, as an upsert. Save a health sample by its device, type, start, end and source: a phone from before an update gave it another `id`.
-- From your server, accept bodies up to 34 MB. An older recorded note's recording is about 100 KB a minute, a file is up to 25 MB, a photo is up to 3 MB, and base64 makes each a third larger. To accept less, answer `413` to a `note.file` or a `photo.created` that is too large.
+- From your server, accept bodies up to 34 MB. An older recorded note's recording is about 100 KB a minute, a voice note's recording about 2 MB a minute, a file is up to 25 MB, a photo is up to 3 MB, and base64 makes each a third larger. To accept less, answer `413` to a `note.file` or a `photo.created` that is too large.
 
 ## When the format changes
 
@@ -426,7 +438,9 @@ CREATE TABLE relay_note_attachments (
   note_id uuid NOT NULL REFERENCES relay_notes (id),
   name text NOT NULL,
   content_type text NOT NULL,
-  size bigint NOT NULL
+  size bigint NOT NULL,
+  transcript text,
+  length_ms bigint
 );
 CREATE TABLE relay_note_files (
   id text PRIMARY KEY,
@@ -519,11 +533,11 @@ CREATE TABLE relay_location_points (
 );
 ```
 
-A note has no place, so `lat`, `lon` and `place` in `relay_notes` stay empty. They stay in the table for a database that saved notes with a place before. Save a note with `INSERT ... ON CONFLICT (id) DO UPDATE`, and keep the stored `audio` when a `note.updated` has none. On a `note.deleted`, delete the note's rows in `relay_note_files` and `relay_note_attachments` by `note_id`, then its row in `relay_notes` by `id`. Save each of a note's `attachments` by its `id` too, and a `note.file` in `relay_note_files`. A file listed in `attachments` that has no row in `relay_note_files` did not come, such as one your receiver skipped.
+A note has no place, so `lat`, `lon` and `place` in `relay_notes` stay empty. They stay in the table for a database that saved notes with a place before. Save a note with `INSERT ... ON CONFLICT (id) DO UPDATE`, and keep the stored `audio` when a `note.updated` has none. On a `note.deleted`, delete the note's rows in `relay_note_files` and `relay_note_attachments` by `note_id`, then its row in `relay_notes` by `id`. Save each of a note's `attachments` by its `id` too, as an upsert, so a `note.updated` keeps a recording's new `transcript`, and a `note.file` in `relay_note_files`. A file listed in `attachments` that has no row in `relay_note_files` did not come, such as one your receiver skipped.
 
 ## An example receiver
 
-[`receiver.mjs`](../../webhooks/receiver.mjs) is about 100 lines of Node with no packages. It checks each signature and saves notes, their files, samples, workouts, nights, points, stays and trips, calendar events and photos in a SQLite file, so it needs no database server. It keeps one sample for each device, type, start, end and source. It keeps a message of a type it does not know in its `other_messages` table, by its `webhook-id`, and answers `204`. It needs Node 22.13 or later.
+[`receiver.mjs`](../../webhooks/receiver.mjs) is about 100 lines of Node with no packages. It checks each signature and saves notes, their files, each recording's transcript and length, samples, workouts, nights, points, stays and trips, calendar events and photos in a SQLite file, so it needs no database server. It keeps one sample for each device, type, start, end and source. It keeps a message of a type it does not know in its `other_messages` table, by its `webhook-id`, and answers `204`. It needs Node 22.13 or later.
 
 ```bash
 curl -O https://relayeverything.com/webhooks/receiver.mjs

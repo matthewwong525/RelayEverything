@@ -69,18 +69,21 @@ class ShortcutsBridge {
     return {...noteMap(note), if (kept.problem != null) 'message': kept.problem};
   }
 
-  /// `{limit, query, since}` → this phone's notes, newest first: at most [limit], holding [query], made at or after
-  /// [since]. It reads only the phone.
+  /// `{limit, query, since}` → this phone's notes, newest first: at most [limit], holding [query] in their words or a
+  /// recording's transcript, made at or after [since]. It reads only the phone.
   Future<List<Map<String, Object?>>> get(Map<String, dynamic> arguments) async {
     final limit = arguments['limit'] is int ? (arguments['limit'] as int).clamp(1, 1000) : 10;
     final query = arguments['query'] is String ? (arguments['query'] as String).trim().toLowerCase() : '';
     final since = arguments['since'] is int ? DateTime.fromMillisecondsSinceEpoch(arguments['since'] as int) : null;
     return [
       for (final note in await relay.store.notes())
-        if ((since == null || !note.createdAt.isBefore(since)) && (query.isEmpty || note.text.toLowerCase().contains(query)))
+        if ((since == null || !note.createdAt.isBefore(since)) && (query.isEmpty || _holds(note, query)))
           noteMap(note),
     ].take(limit).toList();
   }
+
+  static bool _holds(LocalNote note, String query) => [note.text, for (final file in note.attachments) ?file.transcript]
+    .any((words) => words.toLowerCase().contains(query));
 
   /// A note as Swift reads it into `RelayNoteEntity`.
   Map<String, Object?> noteMap(LocalNote note) => {

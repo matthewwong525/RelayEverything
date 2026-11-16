@@ -1528,10 +1528,15 @@ void main() {
       return relay.endVoiceNote();
     }
 
+    /// The kept recordings, by file name: each moves from `voice/` to `attachments/<id>.wav` once saved.
     List<String> recordings() => [
-      if (Directory('${folder.path}/voice').existsSync())
-        for (final file in Directory('${folder.path}/voice').listSync()) file.uri.pathSegments.last,
+      for (final kept in ['voice', 'attachments'])
+        if (Directory('${folder.path}/$kept').existsSync())
+          for (final file in Directory('${folder.path}/$kept').listSync()) file.uri.pathSegments.last,
     ];
+
+    /// The one recording of [entry].
+    EntryRecording only(Entry entry) => entry.recordings.single;
 
     test('in airplane mode: the note shows at once, its words fill in, and no request leaves the phone', () async {
       server = noNetwork();
@@ -1542,16 +1547,19 @@ void main() {
       expect(await hold(relay, const Duration(seconds: 12)), isNull);
       expect(relay.listening, isNull);
       final shown = relay.entries.single;
-      expect([shown.voice, shown.writing, shown.text, shown.length, shown.at], [true, true, '', const Duration(seconds: 12), now]);
+      expect([only(shown).writing, only(shown).top, shown.text, only(shown).length, shown.at, shown.files],
+        [true, true, '', const Duration(seconds: 12), now, isEmpty]);
       transcriber.hold!.complete('Ask the fab if the flex stiffener can be 0.2 mm');
       await relay.wordsWritten();
       final written = relay.entries.single;
-      expect([written.voice, written.writing, written.text], [true, false, 'Ask the fab if the flex stiffener can be 0.2 mm']);
+      expect([only(written).writing, only(written).transcript, written.text],
+        [false, 'Ask the fab if the flex stiffener can be 0.2 mm', '']);
       expect(recordings(), [transcriber.heard.single]);
+      expect(only(written).recording, 'attachments/${transcriber.heard.single}');
       expect([server.requests, models.requests, await store.outbox()], [isEmpty, isEmpty, isEmpty]);
       // The recording plays from this phone.
-      await relay.play(written.recording!);
-      expect(player.played, ['${folder.path}/voice/${transcriber.heard.single}']);
+      await relay.play(only(written).recording);
+      expect(player.played, ['${folder.path}/attachments/${transcriber.heard.single}']);
     });
 
     test('reads a recording\'s sound waves from its WAV, none from an m4a, and flat ones from silence', () async {
@@ -1596,13 +1604,16 @@ void main() {
       expect((await store.pendingWords()), hasLength(1));
       relay.dispose();
       // A recording the close cut off while the button was still held has no note: it is deleted.
-      await File('${folder.path}/voice/stray.wav').writeAsBytes([1]);
+      // It was cut off before this open; a recording made since the open is never stray.
+      (await File('${folder.path}/voice/stray.wav').writeAsBytes([1]))
+        .setLastModifiedSync(DateTime.now().subtract(const Duration(minutes: 1)));
       // The next open of the app has its own transcriber: the closed one still holds the first words.
       transcriber = FakeTranscriber();
       final reopened = voiceController();
       await reopened.load();
       await reopened.wordsWritten();
-      expect([for (final entry in reopened.entries) (entry.text, entry.writing)], [('Ask the fab if the flex stiffener can be 0.2 mm', false)]);
+      expect([for (final entry in reopened.entries) (only(entry).transcript, only(entry).writing)],
+        [('Ask the fab if the flex stiffener can be 0.2 mm', false)]);
       expect(recordings(), hasLength(1));
       expect(recordings(), isNot(contains('stray.wav')));
     });
@@ -1613,7 +1624,7 @@ void main() {
       transcriber.hold = Completer();
       await hold(relay, const Duration(seconds: 4));
       relay.dispose();
-      Directory('${folder.path}/voice').deleteSync(recursive: true);
+      Directory('${folder.path}/attachments').deleteSync(recursive: true);
       final reopened = voiceController();
       await reopened.load();
       await reopened.wordsWritten();
@@ -1631,12 +1642,12 @@ void main() {
       await relay.keepRecording('', recording: 'shortcuts-inbox/$id/voice.wav', durationMs: 6000, clientId: id, point: false,
         fromWatch: true);
       relay.dispose();
-      Directory('${folder.path}/voice').deleteSync(recursive: true);
+      Directory('${folder.path}/attachments').deleteSync(recursive: true);
       transcriber = FakeTranscriber();
       final reopened = voiceController(files: true);
       await reopened.load();
       await reopened.wordsWritten();
-      expect([for (final entry in reopened.entries) (entry.id, entry.noWords, entry.writing)], [(id, true, false)]);
+      expect([for (final entry in reopened.entries) (entry.id, only(entry).noWords, only(entry).writing)], [(id, true, false)]);
       expect(notices, isEmpty);
     });
 
@@ -1656,6 +1667,7 @@ void main() {
       relay.dispose();
       final reopened = voiceController();
       await reopened.load();
+      await reopened.wordsWritten();
       expect(reopened.holdTipSeen, isTrue);
     });
 
@@ -1761,7 +1773,7 @@ void main() {
       expect(notices, ['No speech heard. Nothing was saved.']);
     });
 
-    test('a watch recording with no words stays, with its recording, unsent and with no notice; words typed in send it',
+    test('a watch recording with no words stays and goes with its recording and an empty transcript, with no notice',
       () async {
       await KeyVault(storage).save(connection);
       await store.set('settings', jsonEncode({'sending': true, 'history': false}));
@@ -1779,20 +1791,24 @@ void main() {
       await relay.wordsWritten();
       await relay.settled();
       final entry = relay.entries.single;
-      expect([entry.voice, entry.noWords, entry.writing, entry.failed, entry.text, entry.recording, entry.waiting],
-        [true, true, false, false, '', 'voice/$id.wav', false]);
-      expect([recordings(), notices, await store.outbox(), sentNotes(), await store.earlierCount()],
-        [['$id.wav'], isEmpty, isEmpty, isEmpty, 0]);
+      final file = transcriber.heard.single;
+      expect([only(entry).noWords, only(entry).writing, only(entry).failed, entry.text, only(entry).recording, entry.waiting],
+        [true, false, false, '', 'attachments/$file', false]);
+      expect([recordings(), notices, await store.outbox(), await store.earlierCount()], [[file], isEmpty, isEmpty, 0]);
+      final sent = sentNotes().single;
+      expect([sent['clientId'], sent['text'], sent['attachments']], [id, '', [{'id': only(entry).id, 'name': 'Recording.wav',
+        'type': 'audio/wav', 'size': 4, 'lengthMs': 6000, 'transcript': '', 'top': true}]]);
+      expect(server.routes, contains('attachments'));
       // The next open does not write it again.
       relay.dispose();
       final reopened = voiceController(files: true);
       await reopened.load();
       await reopened.wordsWritten();
-      expect([transcriber.heard, reopened.entries.single.noWords], [['$id.wav'], true]);
+      expect([transcriber.heard, only(reopened.entries.single).noWords], [[file], true]);
       await reopened.editNote(id, 'Buy flour');
       await reopened.settled();
-      expect([for (final note in sentNotes()) (note['clientId'], note['text'])], [(id, 'Buy flour')]);
-      expect(reopened.entries.single.noWords, isFalse);
+      expect([for (final note in sentNotes()) (note['clientId'], note['text'])], [(id, ''), (id, 'Buy flour')]);
+      expect(only(reopened.entries.single).noWords, isTrue);
     });
 
     test('a microphone that does not stop says so, closes the card and keeps nothing; Cancel then does no harm', () async {
@@ -1818,6 +1834,7 @@ void main() {
     test('a refused microphone says where to allow it, and records nothing', () async {
       final relay = voiceController();
       await relay.load();
+      await relay.wordsWritten();
       microphone.allowed = false;
       expect(await relay.startVoiceNote(), contains('microphone'));
       expect(await relay.endVoiceNote(), isNull);
@@ -1834,7 +1851,7 @@ void main() {
       expect([relay.listening, relay.entries, recordings()], [null, isEmpty, isEmpty]);
       expect(await hold(relay, const Duration(seconds: 2)), isNull);
       await relay.wordsWritten();
-      expect(relay.entries.single.text, isNotEmpty);
+      expect(only(relay.entries.single).transcript, isNotEmpty);
     });
 
     test('a note restored to a new phone has no recording: Play says so', () async {
@@ -1842,8 +1859,8 @@ void main() {
       await relay.load();
       await hold(relay, const Duration(seconds: 2));
       await relay.wordsWritten();
-      final recording = relay.entries.single.recording!;
-      Directory('${folder.path}/voice').deleteSync(recursive: true);
+      final recording = only(relay.entries.single).recording;
+      Directory('${folder.path}/attachments').deleteSync(recursive: true);
       await relay.play(recording);
       await pumpEventQueue();
       expect([player.played, notices], [isEmpty, ['This recording is not on this phone.']]);
@@ -1855,16 +1872,16 @@ void main() {
       transcriber.error = Exception('engine');
       await hold(relay, const Duration(seconds: 2));
       await relay.wordsWritten();
-      final failed = relay.entries.single;
-      expect([failed.writing, failed.failed, failed.recording, recordings()], [false, true, isNotNull, hasLength(1)]);
+      final failed = only(relay.entries.single);
+      expect([failed.writing, failed.failed, failed.transcript, recordings()], [false, true, null, hasLength(1)]);
       await pumpEventQueue();
       expect(notices, ['The words did not come. Tap Try again on the note.']);
       transcriber.error = null;
       final reopened = voiceController();
       await reopened.load();
       await reopened.wordsWritten();
-      expect([reopened.entries.single.writing, reopened.entries.single.failed], [false, false]);
-      expect(reopened.entries.single.text, isNotEmpty);
+      expect([only(reopened.entries.single).writing, only(reopened.entries.single).failed], [false, false]);
+      expect(only(reopened.entries.single).transcript, isNotEmpty);
     });
 
     test('an Error, not only an Exception, leaves no note on Writing the words, and the notice shows once', () async {
@@ -1876,7 +1893,7 @@ void main() {
       clock = clock.add(const Duration(seconds: 10));
       await hold(relay, const Duration(seconds: 2));
       await relay.wordsWritten();
-      expect([for (final entry in relay.entries) (entry.writing, entry.failed)], [(false, true), (false, true)]);
+      expect([for (final entry in relay.entries) (only(entry).writing, only(entry).failed)], [(false, true), (false, true)]);
       expect(await store.pendingWords(), hasLength(2));
       await pumpEventQueue();
       expect(notices, ['The words did not come. Tap Try again on the note.']);
@@ -1898,8 +1915,8 @@ void main() {
       await relay.wordsWritten();
       expect(limits, [const Duration(seconds: 3)]);
       expect(transcriber.cancelled, 1);
-      expect([relay.entries.single.writing, relay.entries.single.failed], [false, true]);
-      expect(relay.entries.single.why, startsWith('the phone took more than'));
+      expect([only(relay.entries.single).writing, only(relay.entries.single).failed], [false, true]);
+      expect(only(relay.entries.single).why, startsWith('the phone took more than'));
       await pumpEventQueue();
       expect(notices, ['The words did not come. Tap Try again on the note.']);
     });
@@ -1916,15 +1933,15 @@ void main() {
       transcriber.error = StateError('engine');
       await hold(relay, const Duration(seconds: 2));
       await relay.wordsWritten();
-      expect(relay.entries.single.failed, isTrue);
+      expect(only(relay.entries.single).failed, isTrue);
       transcriber.error = null;
       transcriber.hold = Completer();
       await relay.writeWordsAgain();
-      expect([relay.entries.single.writing, relay.entries.single.failed], [true, false]);
+      expect([only(relay.entries.single).writing, only(relay.entries.single).failed], [true, false]);
       transcriber.hold!.complete('Order more TL3312 switches');
       await relay.wordsWritten();
       final written = relay.entries.single;
-      expect([written.text, written.writing, written.failed], ['Order more TL3312 switches', false, false]);
+      expect([only(written).transcript, only(written).writing, only(written).failed], ['Order more TL3312 switches', false, false]);
       expect(transcriber.heard, hasLength(2));
       expect(transcriber.heard.toSet(), hasLength(1));
       await pumpEventQueue();
@@ -1950,11 +1967,11 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 100));
       expect(transcriber.cancelled, 0);
       expect(transcriber.heard, hasLength(1));
-      expect([for (final entry in relay.entries) (entry.writing, entry.failed)], [(true, false), (true, false)]);
+      expect([for (final entry in relay.entries) (only(entry).writing, only(entry).failed)], [(true, false), (true, false)]);
       first.complete('Order more TL3312 switches');
       await relay.wordsWritten();
       expect(transcriber.heard, hasLength(2));
-      expect([for (final entry in relay.entries) (entry.text, entry.writing, entry.failed)], [
+      expect([for (final entry in relay.entries) (only(entry).transcript, only(entry).writing, only(entry).failed)], [
         ('Ask the fab if the flex stiffener can be 0.2 mm', false, false),
         ('Order more TL3312 switches', false, false),
       ]);
@@ -1974,11 +1991,14 @@ void main() {
       await pumpEventQueue();
       clock = clock.add(const Duration(seconds: 10));
       await hold(relay, const Duration(seconds: 3));
-      // Past both limits: the first's, then the second's, which starts when the first passes its own.
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      // Past both limits: the first's, then the second's, which starts when the first passes its own. A busy machine
+      // can take longer than the limits, so it waits for both to fail, up to 5 seconds.
+      for (var tries = 0; tries < 50 && !relay.entries.every((entry) => only(entry).failed); tries++) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
       expect(transcriber.cancelled, 1);
       expect(transcriber.heard, hasLength(1));
-      expect([for (final entry in relay.entries) (entry.writing, entry.failed)], [(false, true), (false, true)]);
+      expect([for (final entry in relay.entries) (only(entry).writing, only(entry).failed)], [(false, true), (false, true)]);
       // The stuck job ends at last: the second note, past its limit, never starts its own job.
       stuck.complete('Order more TL3312 switches');
       await relay.wordsWritten();
@@ -2008,7 +2028,7 @@ void main() {
       held.complete('Order more TL3312 switches');
       await relay.wordsWritten();
       expect(transcriber.heard, [failed, writing, failed]);
-      expect([for (final entry in relay.entries) (entry.writing, entry.failed)], [(false, false), (false, false)]);
+      expect([for (final entry in relay.entries) (only(entry).writing, only(entry).failed)], [(false, false), (false, false)]);
     });
 
     test('a failed note keeps its reason: the time limit, the speech engine\'s code, or any other error', () async {
@@ -2024,13 +2044,13 @@ void main() {
         clock = clock.add(const Duration(seconds: 10));
         await hold(relay, const Duration(seconds: 2));
         await relay.wordsWritten();
-        expect([relay.entries.first.failed, relay.entries.first.why], [true, why]);
+        expect([only(relay.entries.first).failed, only(relay.entries.first).why], [true, why]);
       }
       // The words come on Try again: the reason goes with the failed mark.
       transcriber.error = null;
       await relay.writeWordsAgain();
       await relay.wordsWritten();
-      expect([for (final entry in relay.entries) (entry.failed, entry.why)], everyElement((false, null)));
+      expect([for (final entry in relay.entries) (only(entry).failed, only(entry).why)], everyElement((false, null)));
       expect(server.requests, isEmpty);
     });
 
@@ -2040,12 +2060,12 @@ void main() {
       transcriber.error = const WhisperException('whisper_full failed with code -6');
       await hold(relay, const Duration(seconds: 2));
       await relay.wordsWritten();
-      expect(relay.entries.single.failed, isTrue);
+      expect(only(relay.entries.single).failed, isTrue);
       transcriber.error = null;
       await relay.resume();
       await relay.wordsWritten();
       final written = relay.entries.single;
-      expect([written.text, written.writing, written.failed, written.why],
+      expect([only(written).transcript, only(written).writing, only(written).failed, only(written).why],
         ['Ask the fab if the flex stiffener can be 0.2 mm', false, false, null]);
       expect(transcriber.heard, hasLength(2));
       await pumpEventQueue();
@@ -2066,13 +2086,13 @@ void main() {
         await pumpEventQueue();
       }
       expect(transcriber.heard, hasLength(3));
-      expect(relay.entries.single.failed, isTrue);
+      expect(only(relay.entries.single).failed, isTrue);
       expect(notices, ['The words did not come. Tap Try again on the note.']);
       clock = clock.add(const Duration(seconds: 10));
       await hold(relay, const Duration(seconds: 3));
       await relay.wordsWritten();
       await pumpEventQueue();
-      expect([for (final entry in relay.entries) entry.failed], [true, true]);
+      expect([for (final entry in relay.entries) only(entry).failed], [true, true]);
       expect(notices, List.filled(2, 'The words did not come. Tap Try again on the note.'));
     });
 
@@ -2097,7 +2117,7 @@ void main() {
       held.complete('Order more TL3312 switches');
       await relay.wordsWritten();
       expect(transcriber.heard, [failed, writing, failed]);
-      expect([for (final entry in relay.entries) (entry.writing, entry.failed)], [(false, false), (false, false)]);
+      expect([for (final entry in relay.entries) (only(entry).writing, only(entry).failed)], [(false, false), (false, false)]);
     });
 
     test('a note after a failed note gets its words', () async {
@@ -2110,9 +2130,9 @@ void main() {
       clock = clock.add(const Duration(seconds: 10));
       await hold(relay, const Duration(seconds: 3));
       await relay.wordsWritten();
-      expect([for (final entry in relay.entries) (entry.text, entry.failed)], [
+      expect([for (final entry in relay.entries) (only(entry).transcript, only(entry).failed)], [
         ('Ask the fab if the flex stiffener can be 0.2 mm', false),
-        ('', true),
+        (null, true),
       ]);
     });
 
@@ -2132,7 +2152,7 @@ void main() {
       expect([relay.speechModel, models.requests.length], [ModelState.ready, 1]);
       await hold(relay, const Duration(seconds: 2));
       await relay.wordsWritten();
-      expect(relay.entries.single.text, isNotEmpty);
+      expect(only(relay.entries.single).transcript, isNotEmpty);
     });
 
     test('a damaged download is deleted, voice notes stay off, and the app offers to try again', () async {
@@ -2157,8 +2177,8 @@ void main() {
         [ModelState.missing, 1, false]);
     });
 
-    test('with sending on, the server gets the words and the time, never the recording', () async {
-      final relay = voiceController();
+    test('with sending on, the server gets the note, its recording and its transcript, and no words in its text', () async {
+      final relay = voiceController(files: true);
       await relay.load();
       expect(await relay.connect(code), isNull);
       await relay.startSending(sendEarlier: false);
@@ -2168,15 +2188,157 @@ void main() {
       await relay.wordsWritten();
       await pumpEventQueue();
       final sent = sentNotes().single;
-      expect(sent.keys, unorderedEquals(['clientId', 'text', 'createdAt']));
-      expect([sent['text'], sent['createdAt']], ['Ask the fab if the flex stiffener can be 0.2 mm', said]);
-      for (final request in server.requests) {
-        expect(request.body, isNot(contains('.wav')));
-      }
+      final file = only(relay.entries.single);
+      expect(sent.keys, unorderedEquals(['clientId', 'text', 'createdAt', 'attachments']));
+      expect([sent['text'], sent['createdAt'], sent['attachments']], ['', said, [{'id': file.id, 'name': 'Recording.wav',
+        'type': 'audio/wav', 'size': 4, 'lengthMs': 12000, 'transcript': 'Ask the fab if the flex stiffener can be 0.2 mm',
+        'top': true}]]);
+      // The sound goes after its note, as any file's bytes do.
+      final upload = server.requests.where((request) => request.url.path.endsWith('attachments')).single;
+      expect([upload.headers['X-Attachment-Id'], upload.headers['Content-Type'], upload.bodyBytes], [file.id, 'audio/wav',
+        [82, 73, 70, 70]]);
       // This phone still shows it as a voice note it can play, now sent.
       await relay.sync();
-      expect([for (final entry in relay.entries) (entry.text, entry.voice, entry.sent, entry.recording != null)],
-        [(sent['text'], true, true, true)]);
+      expect([for (final entry in relay.entries) (entry.text, entry.sent, only(entry).recording)],
+        [('', true, 'attachments/${file.id}.wav')]);
+    });
+
+    /// Records into note [id] for [length], as *Record* in a note's bars does.
+    Future<String?> record(RelayController relay, String id, Duration length) async {
+      final problem = await relay.startVoiceNote(into: id);
+      if (problem != null) return problem;
+      clock = clock.add(length);
+      return relay.endVoiceNote();
+    }
+
+    /// Sending on, with the server's calls cleared.
+    Future<RelayController> sending() async {
+      await KeyVault(storage).save(connection);
+      await store.set('settings', jsonEncode({'sending': true, 'history': false}));
+      final relay = voiceController(files: true);
+      await relay.load();
+      await relay.settled();
+      server.requests.clear();
+      return relay;
+    }
+
+    test('Record in a note: a second recording joins it after its words, and the note goes once both have words', () async {
+      final relay = await sending();
+      final first = transcriber.hold = Completer();
+      await hold(relay, const Duration(seconds: 4));
+      final id = relay.entries.single.id;
+      await pumpEventQueue();
+      transcriber.hold = null;
+      clock = clock.add(const Duration(seconds: 10));
+      expect(await record(relay, id, const Duration(seconds: 3)), isNull);
+      await pumpEventQueue();
+      // The second recording's words wait behind the first's, and the note waits for both.
+      expect([relay.entries.single.recordings.length, sentNotes(), await store.outbox()], [2, isEmpty, isEmpty]);
+      first.complete('Call the fab');
+      await relay.wordsWritten();
+      await relay.settled();
+      final entry = relay.entries.single;
+      expect([for (final recording in entry.recordings) (recording.transcript, recording.top, recording.length)], [
+        ('Call the fab', true, const Duration(seconds: 4)),
+        ('Ask the fab if the flex stiffener can be 0.2 mm', false, const Duration(seconds: 3)),
+      ]);
+      final sent = sentNotes().single;
+      expect([sent['clientId'], sent['text']], [id, '']);
+      expect([for (final file in sent['attachments'] as List) (file['id'], file['transcript'], file['lengthMs'], file['top'])], [
+        (entry.recordings.first.id, 'Call the fab', 4000, true),
+        (entry.recordings.last.id, 'Ask the fab if the flex stiffener can be 0.2 mm', 3000, null),
+      ]);
+      expect([for (final request in server.requests) if (request.url.path.endsWith('attachments'))
+        request.headers['X-Attachment-Id']], [for (final recording in entry.recordings) recording.id]);
+    });
+
+    test('a recording only in the person\'s space shows its words at once, downloads on play, and plays; one still on the '
+      'other phone is not ready', () async {
+      final relay = await sending();
+      Map<String, dynamic> recording(String id, String words, {required bool ready}) => {'id': id, 'name': 'Recording.wav',
+        'type': 'audio/wav', 'size': 4, 'ready': ready, 'lengthMs': 6000, 'transcript': words, 'top': id == 'r1'};
+      server.answer = (request) => switch (request.url.path) {
+        '/apps/relay/api/notes' when request.method == 'GET' => notesPage([pulledNote('s1', text: '', device: 'iPhone',
+          files: [recording('r1', 'Call the fab', ready: true), recording('r2', 'Order switches', ready: false)])], next: 1),
+        '/apps/relay/api/attachment' => http.Response('RIFF', 200, headers: {'content-type': 'audio/wav'}),
+        _ => FakeServer.ok(request),
+      };
+      await relay.pullNotes();
+      await relay.settled();
+      List<(String, bool, String?, bool)> shown() => [for (final recording in relay.entries.single.recordings)
+        (recording.recording, recording.ready, recording.transcript, recording.writing)];
+      expect(shown(), [('r1', true, 'Call the fab', false), ('r2', false, 'Order switches', false)]);
+      List<String?> downloads() => [for (final request in server.requests)
+        if (request.url.path.endsWith('/attachment')) request.url.queryParameters['id']];
+      expect([downloads(), player.played], [isEmpty, isEmpty]);
+      await relay.play('r1');
+      expect([downloads(), player.played.single, File(player.played.single).readAsStringSync()],
+        [['r1'], '${folder.path}/attachments/r1.wav', 'RIFF']);
+      expect(shown().first, ('attachments/r1.wav', true, 'Call the fab', false));
+      // The copy on the phone plays the next time, with no second download.
+      await relay.play(relay.entries.single.recordings.first.recording);
+      expect([downloads(), player.played], [['r1'], hasLength(2)]);
+    });
+
+    test('Record in a note with 10 files says so and records nothing', () async {
+      final relay = voiceController();
+      await relay.load();
+      await relay.wordsWritten();
+      await store.addNote(LocalNote(clientId: 'full', text: 'Parts', createdAt: now, attachments: [
+        for (var i = 0; i < 10; i++) Attachment(id: 'f$i', name: 'part-$i.pdf', type: 'application/pdf', size: 1, path: ''),
+      ]));
+      expect(await record(relay, 'full', const Duration(seconds: 3)),
+        'This note holds 10 files already. Nothing was recorded.');
+      expect([relay.listening, microphone.calls, recordings(), (await store.attachmentsOf('full')).length],
+        [null, isEmpty, isEmpty, 10]);
+    });
+
+    test('Record in a new note not kept yet makes it, with the recording after its words', () async {
+      final relay = voiceController();
+      await relay.load();
+      await relay.wordsWritten();
+      final id = 'n' * 32;
+      expect(await record(relay, id, const Duration(seconds: 2)), isNull);
+      await relay.wordsWritten();
+      final entry = relay.entries.single;
+      expect([entry.id, entry.text, only(entry).top, only(entry).transcript],
+        [id, '', false, 'Ask the fab if the flex stiffener can be 0.2 mm']);
+      expect((await store.notes()).single.kind, NoteKind.typed);
+    });
+
+    test('Record in a note with no speech keeps the recording, with No words heard and no notice', () async {
+      final relay = voiceController();
+      await relay.load();
+      await relay.wordsWritten();
+      await relay.addNote('Shopping', id: 'm' * 32);
+      transcriber.answer = '';
+      expect(await record(relay, 'm' * 32, const Duration(seconds: 2)), isNull);
+      await relay.wordsWritten();
+      final entry = relay.entries.single;
+      expect([entry.text, only(entry).noWords, only(entry).top, recordings(), notices],
+        ['Shopping', true, false, hasLength(1), isEmpty]);
+    });
+
+    test('a corrected transcript is kept and goes to the server as a change of the note', () async {
+      final relay = await sending();
+      await hold(relay, const Duration(seconds: 4));
+      await relay.wordsWritten();
+      await relay.settled();
+      final file = only(relay.entries.single);
+      server.requests.clear();
+      clock = clock.add(const Duration(minutes: 1));
+      await relay.editTranscript(file.id, 'Ask the fab if the flex stiffener can be 0.3 mm ');
+      await relay.settled();
+      expect(only(relay.entries.single).transcript, 'Ask the fab if the flex stiffener can be 0.3 mm');
+      final change = server.requests.where((request) => request.url.path.endsWith('notes')).single;
+      final body = jsonDecode(change.body) as Map<String, dynamic>;
+      expect([change.method, body['text'], body['editedAt'], [for (final file in body['attachments'] as List) file['transcript']]],
+        ['PATCH', '', clock.millisecondsSinceEpoch, ['Ask the fab if the flex stiffener can be 0.3 mm']]);
+      // The same words again change nothing.
+      server.requests.clear();
+      await relay.editTranscript(file.id, 'Ask the fab if the flex stiffener can be 0.3 mm');
+      await relay.settled();
+      expect(server.requests, isEmpty);
     });
 
     test('words not written yet: the note waits on the phone, skips *Send them*, and is sent only when it has words', () async {
@@ -2192,11 +2354,12 @@ void main() {
       await relay.startSending(sendEarlier: true);
       await pumpEventQueue();
       expect([for (final note in sentNotes()) note['text']], ['Typed while off']);
-      expect(relay.entries.first.writing, isTrue);
+      expect(only(relay.entries.first).writing, isTrue);
       transcriber.hold!.complete('Order more TL3312 switches');
       await relay.wordsWritten();
       await pumpEventQueue();
-      expect([for (final note in sentNotes()) note['text']], ['Typed while off', 'Order more TL3312 switches']);
+      expect([for (final note in sentNotes()) (note['text'], (note['attachments'] as List?)?.single['transcript'])],
+        [('Typed while off', null), ('', 'Order more TL3312 switches')]);
       expect(await relay.earlierNotes(), 0);
     });
   });

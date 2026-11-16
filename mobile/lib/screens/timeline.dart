@@ -508,25 +508,30 @@ class _DayGroup extends StatelessWidget {
   }
 }
 
-/// A note's first line: its words' first line, or what stands for it while it has no words.
+/// A note's first line: its typed words' first line, else the start of its first transcript, or what stands for it
+/// while it has neither.
 String noteTitle(Entry entry) {
   final first = plainText(entry.text).trim().split('\n').first.trim();
   if (first.isNotEmpty) return first;
-  if (entry.writing) return 'Writing the words…';
-  if (entry.failed) return 'The words did not come';
+  final recording = entry.recordings.firstOrNull;
+  if (recording?.transcript case final words? when words.trim().isNotEmpty) return words.trim();
+  if (recording?.writing ?? false) return 'Writing the words…';
+  if (recording?.failed ?? false) return 'The words did not come';
   if (entry.files.isNotEmpty) return entry.files.first.name;
-  return entry.voice ? 'Voice note' : '';
+  return recording != null ? 'Voice note' : '';
 }
 
 /// What follows the time on a row: the rest of the words, or else the file names the title does not show.
 String _preview(Entry entry) {
   final rest = plainText(entry.text).trim().split('\n').skip(1).map((line) => line.trim()).where((line) => line.isNotEmpty).join(' ');
   if (rest.isNotEmpty || entry.text.trim().isNotEmpty) return rest;
+  if (entry.recordings.firstOrNull?.noWords ?? false) return 'No words heard';
+  if (entry.recordings.isNotEmpty) return entry.files.map((file) => file.name).join(', ');
   return entry.files.skip(1).map((file) => file.name).join(', ');
 }
 
-/// One note in its day's card: the first line in bold; then the time, a microphone and the length for a voice note, where
-/// a note from elsewhere came from, and the rest of the words, or *No words heard* for a watch note with none. No tag:
+/// One note in its day's card: the first line in bold; then the time, a microphone and the first recording's length, where
+/// a note from elsewhere came from, and the rest of the words, or *No words heard* for a recording with none. No tag:
 /// only a note that waits says so, *Waiting to send*. A first picture shows small at the right. A tap opens it; a swipe
 /// to the left, or a screen reader's *Delete*, moves it to *Recently Deleted* with no message; a swipe to the right, or
 /// *Pin*, pins or unpins it. In *Recently Deleted* a swipe to the left shows *Recover* and *Delete* in its place.
@@ -548,6 +553,7 @@ class _NoteRow extends StatelessWidget {
     final muted = TextStyle(fontSize: 13, color: brand.muted);
     final send = sendState(entry);
     final picture = entry.files.where((file) => file.picture && file.ready).firstOrNull;
+    final recording = entry.recordings.firstOrNull;
     final row = Material(color: selected ? brand.accentSoft : Colors.transparent, child: InkWell(
       onTap: onTap,
       child: Padding(
@@ -558,16 +564,16 @@ class _NoteRow extends StatelessWidget {
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight(650))),
             Text.rich(TextSpan(children: [
               TextSpan(text: rowTime(context, entry.at, DateTime.now()), style: TextStyle(fontWeight: FontWeight.w500, color: brand.ink)),
-              if (entry.voice) ...[
+              if (recording != null) ...[
                 const TextSpan(text: '  '),
                 WidgetSpan(alignment: PlaceholderAlignment.middle,
                   child: Icon(CupertinoIcons.mic_fill, size: 14, color: brand.accentText, semanticLabel: 'Voice note')),
-                if (entry.length case final length?) TextSpan(text: ' ${clockOf(length)}'),
+                if (recording.length case final length?) TextSpan(text: ' ${clockOf(length)}'),
               ],
               if (entry.from != null) TextSpan(text: ' · ${entry.from}'),
-              TextSpan(text: '  ${entry.noWords ? 'No words heard' : _preview(entry)}'),
+              TextSpan(text: '  ${_preview(entry)}'),
             ]), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, color: brand.muted)),
-            if (entry.writing) const Padding(padding: EdgeInsets.symmetric(vertical: 4), child: LinearProgressIndicator()),
+            if (entry.recordings.any((recording) => recording.writing)) const Padding(padding: EdgeInsets.symmetric(vertical: 4), child: LinearProgressIndicator()),
             if (send != null) Text(send, style: muted),
           ])),
           if (picture != null) _Thumbnail(file: picture),

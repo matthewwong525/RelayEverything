@@ -13,7 +13,8 @@ const device = z.strictObject({
   .describe("The phone or other device that sent the item.");
 const note = z.strictObject({
   id: z.string().describe("The note's id, the same in every message about this note: a UUID, or the phone's own note id when the phone sends to its own webhook."),
-  source: z.enum(["ring", "typed"]), text: z.string().describe("The words: a typed note, or an older recorded note's transcription."),
+  source: z.enum(["ring", "typed"]),
+  text: z.string().describe("The words the person typed or gave, or an older recorded note's transcription. A voice note's spoken words are its recording's transcript, in attachments: its text can be empty."),
   recorded_at: iso, created_at: iso.describe("When Relay Everything stored it."), device,
 }).describe("A note has no place: a webhook ticked for location gets where you were as location points, found by the note's time.");
 const audio = z.strictObject({ content_type: z.literal("audio/mp4"), base64: z.string() }).nullable()
@@ -22,8 +23,13 @@ const attachment = z.strictObject({
   id: z.string().describe("The file's id, from the phone that sent it."), name: z.string().describe("The file's name, such as warranty.pdf."),
   content_type: z.string().describe("Such as application/pdf."), size: z.number().int().min(0).describe("In bytes."),
 });
-const attachments = z.array(attachment).min(1).max(10).optional()
-  .describe("The note's files: each one's name, type and size, never its bytes; each file's bytes follow in its own note.file. Only a note with files has this list.");
+const listed = attachment.extend({
+  transcript: z.string().nullable().optional()
+    .describe("Only on a recording: the words the phone wrote from it, the note's spoken words; null while it has none."),
+  length_ms: z.number().int().min(0).optional().describe("Only on a recording: how long it is, in milliseconds. A file with a length is a recording."),
+});
+const attachments = z.array(listed).min(1).max(10).optional()
+  .describe("The note's files: each one's name, type and size, and a recording's transcript and length, never its bytes; each file's bytes follow in its own note.file. Only a note with files has this list.");
 const ownId = "Unique in this Relay Everything server, or on the phone when the phone sends to its own webhook.";
 const sample = z.strictObject({
   id: z.number().int().describe(ownId), device, type: z.enum(HEALTH_TYPES).meta(GROWS),
@@ -87,7 +93,7 @@ const envelope = <Type extends string, Data extends z.ZodType>(type: Type, data:
 export const message = z.discriminatedUnion("type", [
   envelope("note.created", z.strictObject({ note: note.extend({ audio, attachments }) }), "A note reached Relay Everything."),
   envelope("note.updated", z.strictObject({ note: note.extend({ edited_at: iso.optional().describe("When the phone that sent the note changed it."), attachments }) }),
-    "The phone that sent a note changed its words: the note with its latest words, after its note.created. Update the note's row by its id. It has no audio."),
+    "The phone that sent a note changed its words, or a recording's transcript: the note with its latest words and files, after its note.created. Update the note's row by its id. It has no audio."),
   envelope("note.deleted", z.strictObject({ note: z.strictObject({
     id: z.string().describe("The deleted note's id, as its note.created gave it."), deleted_at: iso.describe("When it was deleted.") }) }),
     "A note was deleted: it waits in Recently Deleted for 30 days, then goes for good with its files and recording, with no further message. "
@@ -117,7 +123,8 @@ type Message = z.infer<typeof message>;
 /** Each row as Relay's tables hold it, with its device's name. */
 export type NoteRow = { id: string; source: "ring" | "typed"; text: string; recorded_at: number; created_at: number; device_id: string;
   device_name: string; audio_key: string | null; edited_at?: number | null; deleted_at?: number | null };
-export type AttachmentRow = { id: string; name: string; content_type: string; size: number };
+export type AttachmentRow = { id: string; name: string; content_type: string; size: number; transcript?: string | null;
+  length_ms?: number | null };
 export type HealthRow = { id: number; device_id: string; device_name: string; type: HealthType;
   start_at: number; end_at: number; value: number; unit: string; source: string;
   kind?: string | null; distance?: number | null; calories?: number | null };
@@ -144,8 +151,11 @@ const noteOf = (row: NoteRow) => ({ id: row.id, source: row.source, text: row.te
 const wrap = <Built extends Message>(type: Built["type"], data: Built["data"], at: number) =>
   ({ version: 1, type, timestamp: isoOf(at), data }) as Built;
 
-const filesOf = (files: AttachmentRow[]) => files.length
-  ? { attachments: files.map(({ id, name, content_type, size }) => ({ id, name, content_type, size })) } : {};
+/** A recording, the one file with a length, also gives its transcript and length. */
+const listedOf = ({ id, name, content_type, size, transcript, length_ms }: AttachmentRow) => ({ id, name, content_type, size,
+  ...length_ms === null || length_ms === undefined ? {} : { transcript: transcript ?? null, length_ms } });
+
+const filesOf = (files: AttachmentRow[]) => files.length ? { attachments: files.map(listedOf) } : {};
 
 const recording = (audio: string | null) => audio === null ? null : { content_type: "audio/mp4" as const, base64: audio };
 

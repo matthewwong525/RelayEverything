@@ -48,7 +48,8 @@ void main() {
       ..settings = const Settings(sending: true)
       ..entries = [
         Entry(id: 'own', text: '# Groceries\nmilk and eggs', at: now, sent: true),
-        Entry(id: 'voice', text: 'Call the dentist at 3', at: now.subtract(const Duration(hours: 1)), sent: true, voice: true,
+        Entry(id: 'voice', text: 'Call the dentist at 3', at: now.subtract(const Duration(hours: 1)), sent: true,
+          recordings: const [EntryRecording(recording: 'https://relay.example.com/v1/notes/voice/recording', top: true)],
           from: 'iPhone'),
         Entry(id: 'link', text: 'Read https://example.com/post', at: now.subtract(const Duration(days: 1)), sent: true,
           from: 'Email'),
@@ -201,8 +202,9 @@ void main() {
     });
 
     testWidgets('a voice note with its recording shows the player, a plain line in the browser, and plays it', (tester) async {
-      relay.entries = [Entry(id: 'voice', text: 'Call the dentist at 3', at: now, sent: true, voice: true, from: 'iPhone',
-        recording: 'https://relay.example.com/v1/notes/voice/recording', length: const Duration(seconds: 8))];
+      relay.entries = [Entry(id: 'voice', text: 'Call the dentist at 3', at: now, sent: true, from: 'iPhone',
+        recordings: const [EntryRecording(recording: 'https://relay.example.com/v1/notes/voice/recording',
+          length: Duration(seconds: 8), top: true)])];
       await show(tester, wide);
       expect(editor(tester).id, 'voice');
       final waves = find.descendant(of: find.byKey(const ValueKey('waves')), matching: find.byType(CustomPaint));
@@ -212,6 +214,29 @@ void main() {
       await tester.pump();
       expect(relay.calls, contains('play https://relay.example.com/v1/notes/voice/recording'));
       expect(find.descendant(of: find.byType(VoicePlayer), matching: find.byTooltip('Pause')), findsOneWidget);
+      await finish(tester);
+    });
+
+    testWidgets('a recording from the phone shows its transcript in its card, Still on your phone until its sound comes, '
+        'and the page shows no Record', (tester) async {
+      relay.entries = [Entry(id: 'voice', text: '', at: now, sent: true, from: 'iPhone', recordings: const [
+        EntryRecording(id: 'r1', recording: '', ready: false, transcript: 'Call the dentist at 3', length: Duration(seconds: 8),
+          top: true)])];
+      await show(tester, wide);
+      final card = find.byType(RecordingCard);
+      expect([find.descendant(of: card, matching: find.text('Still on your phone')),
+        find.descendant(of: card, matching: find.text('Call the dentist at 3'))], everyElement(findsOneWidget));
+      expect([find.byType(VoicePlayer), find.byTooltip('Record')], everyElement(findsNothing));
+      relay
+        ..entries = [Entry(id: 'voice', text: '', at: now, sent: true, from: 'iPhone', recordings: const [
+          EntryRecording(id: 'r1', recording: 'https://relay.example.com/apps/relay/api/attachment?id=r1',
+            transcript: 'Call the dentist at 3', length: Duration(seconds: 8), top: true)])]
+        ..changed();
+      await tester.pumpAndSettle();
+      expect([find.text('Still on your phone'), find.byType(VoicePlayer)], [findsNothing, findsOneWidget]);
+      await tester.tap(find.descendant(of: find.byType(VoicePlayer), matching: find.byTooltip('Play')));
+      await tester.pump();
+      expect(relay.calls, contains('play https://relay.example.com/apps/relay/api/attachment?id=r1'));
       await finish(tester);
     });
 
@@ -461,7 +486,7 @@ void main() {
     addTearDown(player.dispose);
     final web = WebRelay(client: space.client, player: player, lastSend: (_, _, [_]) {});
     await web.start();
-    expect(web.entries.single.length, isNull, reason: 'the server sends no length');
+    expect(web.entries.single.recordings.single.length, isNull, reason: 'the server sends no length');
     tester.view
       ..physicalSize = wide
       ..devicePixelRatio = 1;
@@ -503,7 +528,7 @@ void main() {
     addTearDown(player.dispose);
     final web = WebRelay(client: space.client, player: player, lastSend: (_, _, [_]) {});
     await web.start();
-    expect(web.entries.single.length, isNull, reason: 'the server sends no length');
+    expect(web.entries.single.recordings.single.length, isNull, reason: 'the server sends no length');
     tester.view
       ..physicalSize = wide
       ..devicePixelRatio = 1;

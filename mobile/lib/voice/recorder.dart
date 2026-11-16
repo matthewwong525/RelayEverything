@@ -74,8 +74,8 @@ class VoiceRecorder {
   final Microphone microphone;
   /// The app's support folder.
   final Future<Directory> Function() folder;
-  /// Keeps a kept recording out of iCloud backup, because a recording never leaves the phone. Android leaves `voice/`
-  /// out by `res/xml/backup_rules.xml` and `data_extraction_rules.xml`.
+  /// Keeps a kept recording out of iCloud backup; the mark stays when it moves to `attachments/`. Android leaves
+  /// `voice/` and `attachments/` out by `res/xml/backup_rules.xml` and `data_extraction_rules.xml`.
   final Future<void> Function(File file)? excludeFromBackup;
   final DateTime Function() _clock;
   final Timer Function(Duration, void Function()) _timer;

@@ -8,6 +8,7 @@ import 'package:relay_app/data/sender.dart';
 import 'package:relay_app/data/settings.dart';
 import 'package:relay_app/data/store.dart';
 import 'package:relay_app/screens/hold_to_talk.dart';
+import 'package:relay_app/screens/note_blocks.dart';
 import 'package:relay_app/screens/note_editor.dart';
 import 'package:relay_app/sync/background.dart';
 import 'package:relay_app/voice/model.dart';
@@ -164,15 +165,17 @@ void main() {
     await tester.pumpAndSettle();
     expect([for (final request in models.requests) request.url], [modelUrl]);
     expect(models.requests.single.headers.keys.map((key) => key.toLowerCase()), isNot(contains(startsWith('cf-access'))));
-    // Hold, let go, talk, tap the screen: the note's page opens, the words are written there, and go nowhere.
+    // Hold, let go, talk, tap the screen: the note's page opens, the transcript is written there, and goes nowhere.
     await holdUntilListening(tester, () => relay.listening != null);
     expect(find.text('Listening'), findsOneWidget);
     clock = clock.add(const Duration(seconds: 10));
     await tester.tapAt(const Offset(200, 150));
-    await until(tester, () => relay.entries.any((entry) => entry.voice && !entry.writing));
+    await until(tester, () => relay.entries.any((entry) => entry.recordings.any((recording) => !recording.writing)));
     await tester.pumpAndSettle();
     expect(find.byType(NoteEditor), findsOneWidget);
-    expect(quill(tester).document.toPlainText(), 'Ask the fab if the flex stiffener can be 0.2 mm\n');
+    expect(quill(tester).document.toPlainText().trim(), isEmpty);
+    expect(find.descendant(of: find.byType(RecordingCard), matching: find.text('Ask the fab if the flex stiffener can be 0.2 mm')),
+      findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('Ask the fab if the flex stiffener can be 0.2 mm'), findsOneWidget);
@@ -217,9 +220,11 @@ void main() {
     await holdUntilListening(tester, () => relay.listening != null);
     clock = clock.add(const Duration(seconds: 4));
     await tester.tapAt(const Offset(200, 150));
-    await until(tester, () => relay.entries.any((entry) => !entry.writing));
+    await until(tester, () => relay.entries.any((entry) => entry.recordings.any((recording) => !recording.writing)));
     await tester.pumpAndSettle();
-    expect(quill(tester).document.toPlainText(), 'Ask the fab if the flex stiffener can be 0.2 mm\n');
+    expect(quill(tester).document.toPlainText().trim(), isEmpty);
+    expect(find.descendant(of: find.byType(RecordingCard), matching: find.text('Ask the fab if the flex stiffener can be 0.2 mm')),
+      findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('Ask the fab if the flex stiffener can be 0.2 mm'), findsOneWidget);

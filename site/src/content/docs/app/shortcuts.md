@@ -28,14 +28,14 @@ The action's line reads *Add Note with Files to Relay Everything*. Tap **Note** 
 
 ### A recording becomes a voice note
 
-Give **Add a note** one recording, such as the **Recorded Audio** from **Record audio**, and the note is a voice note. Its row shows a microphone and its length, its page shows the [player](../voice-notes/#play-a-note-back) under the date, and the phone writes its words itself, as for a voice note you hold **New note** for. [Voice notes](../voice-notes/)
+Give **Add a note** one recording, such as the **Recorded Audio** from **Record audio**, and the note is a voice note. Its row shows a microphone and its length, its page shows the recording's [card](../voice-notes/#play-a-note-back) under the date, and the phone writes its transcript itself, as for a voice note you hold **New note** for. [Voice notes](../voice-notes/)
 
-- **Your words go first.** Give words with the recording, such as *Note @ 7:07 PM*, and the note starts with them. The written words of the recording follow on the next line.
+- **Your words are the note's text.** Give words with the recording, such as *Note @ 7:07 PM*, and they are the note's own words. The written words of the recording are its transcript, on its card.
 - **The words are written in the open app.** When the app is closed, the voice note waits on the phone, and the phone writes its words the next time you open Relay Everything.
 - **No speech, no new words.** A recording with no speech keeps your words and the recording. With no words of yours either, the note is not kept, and the app says **No speech heard**.
 - **Other files stay files.** A recording given with other files, or a recording the phone can not read, is kept as a plain file.
 
-With sending on, the voice note goes to your space once its words are written. The recording stays on the phone.
+With sending on, the voice note goes to your space with its recording once its words are written.
 
 If the app takes more than 20 seconds to answer, the action says *Saved. It shows when you open Relay Everything.* The note is safe. It shows in your notes, and goes on to your server, the next time you open the app.
 
@@ -73,7 +73,7 @@ The actions follow your sign-in on the [Account](../settings/#account) row in Se
 | Sending | Add a note | Get notes | Start a voice note |
 |---|---|---|---|
 | Off | Kept on the phone. The app makes no network call. | Reads the phone. Sends nothing. | Kept on the phone. |
-| On | Kept on the phone, and sent to your space at once, with its files. A recording's note goes once its words are written; the recording stays on the phone. | Reads the phone. Sends nothing. | Kept on the phone; its words go to your space. |
+| On | Kept on the phone, and sent to your space at once, with its files. A recording's note goes with its recording once its words are written. | Reads the phone. Sends nothing. | Kept on the phone; it goes to your space with its recording and transcript. |
 
 Your server sends a note on to your webhooks with each file's name, type and size, not the file. When the phone has no account and sends to [your own webhook](../../connections/your-database/#send-from-the-phone), the note and its files go there, not to your space. [Privacy](../../privacy/)
 

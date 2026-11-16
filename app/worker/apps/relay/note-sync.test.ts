@@ -42,7 +42,7 @@ it("gives each note's sync fields, with mine true only for the calling phone's o
   const [ownId, otherId] = rows("relay_notes").map(row => row.id);
   expect(json.notes).toEqual([
     { id: ownId, clientId: "note-sync-01", mine: true, source: "typed", text: "Note 1", recordedAt: NOW - MINUTE, editedAt: null,
-      device: "Android phone", audio: false, attachments: [{ ...PDF, ready: false }], pinned: false, pinChangedAt: null,
+      device: "Android phone", audio: false, attachments: [{ ...PDF, ready: false, transcript: null, lengthMs: null, top: false }], pinned: false, pinChangedAt: null,
       deletedAt: null },
     { id: otherId, clientId: "note-sync-02", mine: false, source: "typed", text: "Changed", recordedAt: NOW - 2 * MINUTE,
       editedAt: NOW - MINUTE, device: "iPad", audio: false, attachments: [], pinned: false, pinChangedAt: null, deletedAt: null },
@@ -93,4 +93,15 @@ it("gives a pinned note again, once, with its pin and the time of the pin change
   await call(ipad, "PUT", "notes/pin", { id: rows("relay_notes")[0].id as string, pinned: true, at: NOW - MINUTE });
   const pulled = (await sync(phone, next)).json as unknown as { notes: Record<string, unknown>[] };
   expect(pulled.notes).toEqual([expect.objectContaining({ text: "Note 1", pinned: true, pinChangedAt: NOW - MINUTE })]);
+});
+
+it("gives a recording with its transcript, and the note again once its transcript is written", async () => {
+  const wav = { id: "rec-wav-0001", name: "Recording.wav", type: "audio/wav", size: 9, transcript: null, lengthMs: 4200, top: true };
+  await send(phone, 1, { text: "", attachments: [wav] });
+  type Pulled = { next: number; notes: { attachments: unknown[] }[] };
+  const first = (await sync(ipad)).json as unknown as Pulled;
+  expect(first.notes[0].attachments).toEqual([{ ...wav, ready: false }]);
+  await call(phone, "PATCH", "notes", { clientId: "note-sync-01", text: "", attachments: [{ ...wav, transcript: "Call the fab." }] });
+  const next = (await sync(ipad, first.next)).json as unknown as Pulled;
+  expect(next.notes.map(note => note.attachments)).toEqual([[{ ...wav, transcript: "Call the fab.", ready: false }]]);
 });

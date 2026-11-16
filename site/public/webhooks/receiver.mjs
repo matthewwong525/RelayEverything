@@ -24,6 +24,7 @@ db.exec(`
     lat REAL, lon REAL, name TEXT, address TEXT, event TEXT, source TEXT, mode TEXT, km REAL, PRIMARY KEY (device_id, id));
   CREATE TABLE IF NOT EXISTS files (id TEXT PRIMARY KEY, note_id TEXT, name TEXT, content_type TEXT, size INTEGER,
     bytes BLOB);
+  CREATE TABLE IF NOT EXISTS recordings (id TEXT PRIMARY KEY, note_id TEXT, transcript TEXT, length_ms INTEGER);
   CREATE TABLE IF NOT EXISTS calendar_events (id INTEGER PRIMARY KEY, device_id TEXT, key TEXT, status TEXT, calendar TEXT,
     title TEXT, start TEXT, "end" TEXT, all_day INTEGER, location TEXT, notes TEXT, url TEXT, people TEXT);
   CREATE TABLE IF NOT EXISTS photos (id TEXT PRIMARY KEY, device_id TEXT, device_name TEXT, taken_at TEXT, lat REAL,
@@ -62,7 +63,11 @@ const file = db.prepare(`INSERT INTO files VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT
   name = excluded.name, content_type = excluded.content_type, size = excluded.size, bytes = excluded.bytes`);
 const event = db.prepare('INSERT OR REPLACE INTO calendar_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
 const photo = db.prepare('INSERT OR REPLACE INTO photos VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+// A recording's transcript and length, in their own table, so a database made before them still takes files.
+const recording = db.prepare(`INSERT INTO recordings VALUES (?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET
+  transcript = excluded.transcript, length_ms = excluded.length_ms`);
 const dropFiles = db.prepare('DELETE FROM files WHERE note_id = ?');
+const dropRecordings = db.prepare('DELETE FROM recordings WHERE note_id = ?');
 const dropNote = db.prepare('DELETE FROM notes WHERE id = ?');
 // The same webhook-id again is a retry: it keeps the first row.
 const other = db.prepare('INSERT OR IGNORE INTO other_messages VALUES (?, ?, ?, ?)');
@@ -70,14 +75,15 @@ const other = db.prepare('INSERT OR IGNORE INTO other_messages VALUES (?, ?, ?, 
 function saveNote({ note: { id, source, text, recorded_at, created_at, device, audio, attachments = [] } }) {
   note.run(id, source, text, recorded_at, created_at, device.id, device.name, audio ? Buffer.from(audio.base64, 'base64') : null);
   attachments.forEach(f => listed.run(f.id, id, f.name, f.content_type, f.size));
+  attachments.filter(f => f.length_ms !== undefined).forEach(f => recording.run(f.id, id, f.transcript ?? null, f.length_ms));
 }
 
-// One way to save each type this receiver knows. A note.updated holds a changed note's latest words; a note.deleted
-// deletes the note and its files, and a note.recovered saves it again, its files' bytes after in their note.file.
+// One way to save each type this receiver knows. A note.updated holds a changed note's latest words and transcripts; a
+// note.deleted deletes the note and its files, and a note.recovered saves it again, its files' bytes after in their note.file.
 const handlers = {
   'note.created': saveNote,
   'note.updated': saveNote,
-  'note.deleted': ({ note: { id } }) => { dropFiles.run(id); dropNote.run(id); },
+  'note.deleted': ({ note: { id } }) => { dropFiles.run(id); dropRecordings.run(id); dropNote.run(id); },
   'note.recovered': saveNote,
   'note.file': ({ note_id, file: f }) => file.run(f.id, note_id, f.name, f.content_type, f.size, Buffer.from(f.base64, 'base64')),
   'health.samples': ({ samples }) => samples.forEach(s => {

@@ -210,6 +210,22 @@ it("keeps at most 500 of a long trip's points, evenly, with the first and the la
   expect(await rangePoints(session(), NOW, NOW + 3120 * MIN)).toEqual({ total, points });
 });
 
+it("finds a note by its words or its recordings' transcripts, every word in either, with each file's transcript", async () => {
+  typed("aaaaaaaa-0000-4000-8000-000000000001", "Lamp: next steps", NOW);
+  typed("aaaaaaaa-0000-4000-8000-000000000002", "Brass hinges", NOW - 1);
+  typed("aaaaaaaa-0000-4000-8000-000000000003", "Nothing here", NOW - 2);
+  db.sql.exec(`INSERT INTO relay_attachments (id, note_id, name, content_type, size, transcript, length_ms, top, created_at) VALUES
+    ('rec-0001', 'aaaaaaaa-0000-4000-8000-000000000001', 'Recording.wav', 'audio/wav', 9, 'Order the BRASS 50% hinges.', 4200, 1, 0),
+    ('pdf-0001', 'aaaaaaaa-0000-4000-8000-000000000003', 'brass.pdf', 'application/pdf', 9, NULL, NULL, 0, 0)`);
+  const found = async (words: string[]) => (await notePage(session(), { words, limit: 10 })).notes.map(note => note.text);
+  expect(await found(["brass"])).toEqual(["Lamp: next steps", "Brass hinges"]);
+  expect(await found(["lamp", "hinges"])).toEqual(["Lamp: next steps"]);
+  expect(await found(["50%"])).toEqual(["Lamp: next steps"]);
+  expect(await found(["5_%"])).toEqual([]);
+  expect((await noteById(session(), "aaaaaaaa-0000-4000-8000-000000000001"))?.attachments).toEqual([{ id: "rec-0001", name: "Recording.wav",
+    type: "audio/wav", size: 9, ready: false, transcript: "Order the BRASS 50% hinges.", lengthMs: 4200, top: true }]);
+});
+
 it("reads one note by its id, and null for an id it lacks", async () => {
   typed("aaaaaaaa-0000-4000-8000-000000000001", "Order more switches", NOW);
   expect((await noteById(session(), "aaaaaaaa-0000-4000-8000-000000000001"))?.text).toBe("Order more switches");

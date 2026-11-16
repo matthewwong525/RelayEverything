@@ -42,21 +42,31 @@ class ButtonPill extends StatelessWidget {
   );
 }
 
-/// A button inside a [ButtonPill]: its icon alone, on the pill's own fill.
+/// A button inside a [ButtonPill]: its icon alone, on the pill's own fill. A [selected] button, such as *Bold* on bold
+/// words, sits on the soft accent.
 class PillIconButton extends StatelessWidget {
-  const PillIconButton({super.key, required this.icon, required this.tooltip, required this.onPressed});
+  const PillIconButton({super.key, required this.icon, required this.tooltip, required this.onPressed,
+    this.selected = false});
 
   final IconData icon;
   final String tooltip;
   final VoidCallback? onPressed;
+  final bool selected;
 
   @override
-  Widget build(BuildContext context) => IconButton(
-    tooltip: tooltip,
-    onPressed: onPressed,
-    iconSize: 22,
-    constraints: BoxConstraints.tight(const Size.square(44)),
-    color: brandOf(context).ink,
-    icon: Icon(icon),
-  );
+  Widget build(BuildContext context) {
+    final brand = brandOf(context);
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      iconSize: 22,
+      constraints: BoxConstraints.tight(const Size.square(44)),
+      color: brand.ink,
+      // Only a lit button is a toggle: a screen reader says *selected* for it.
+      isSelected: selected ? true : null,
+      selectedIcon: Icon(icon, color: brand.accentText),
+      style: selected ? IconButton.styleFrom(backgroundColor: brand.accentSoft) : null,
+      icon: Icon(icon),
+    );
+  }
 }

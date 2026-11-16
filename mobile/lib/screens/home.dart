@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../brand.dart';
 import '../relay.dart';
@@ -11,8 +12,10 @@ import 'email_notes.dart';
 import 'folder.dart';
 import 'hold_to_talk.dart';
 import 'note_editor.dart';
+import 'recently_deleted.dart';
 import 'settings.dart';
 import 'timeline.dart';
+import 'webhooks.dart';
 
 export 'folder.dart' show Opener;
 
@@ -22,7 +25,7 @@ export 'folder.dart' show Opener;
 /// voice note* from Shortcuts.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.relay, this.opener, this.picker, this.sharer,
-    this.voiceRequests, this.onOpen, this.onFolder, this.onSettings, this.otherConnections});
+    this.voiceRequests, this.onOpen, this.onFolder, this.onDeleted, this.onSettings, this.otherConnections});
 
   final Relay relay;
   /// Opens the Relay Everything page; a test passes its own.
@@ -36,6 +39,8 @@ class HomeScreen extends StatefulWidget {
   /// In the browser, the layout holds what opens: a note, or a new one for null, the notes list, and Settings.
   final NoteOpener? onOpen;
   final ValueChanged<NotesFolder>? onFolder;
+  /// Opens *Recently Deleted* where the browser's layout holds it.
+  final VoidCallback? onDeleted;
   final VoidCallback? onSettings;
   /// In the browser: the rows of *Other connections*, in place of *On this phone* and the phone's own *Other
   /// connections*.
@@ -58,14 +63,34 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Such as *No speech heard*, which comes after the words are written.
+    // Such as *No speech heard*, which comes after the words are written: an alert, never a bar at the bottom.
     _notices = relay.notices.listen((message) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      if (mounted) unawaited(showProblem(context, message));
     });
+    // A shake on the iPhone undoes the last delete, after it asks.
+    shakeChannel.setMethodCallHandler(_shake);
     _voice = widget.voiceRequests?.listen((_) => _record());
     relay.addListener(_showListening);
     // The account's email and names, for Settings' Account row and the Account page.
     relay.refreshConnections();
+    if (relay.throughServerNotice) WidgetsBinding.instance.addPostFrameCallback((_) => _tellThroughServer());
+  }
+
+  /// Once, after an update moved to Relay Everything what this phone sent only to its own webhook: says so, and *Open
+  /// Webhooks* opens the page that adds the webhook. Every way out clears it, so it never shows again.
+  Future<void> _tellThroughServer() async {
+    if (!mounted || !relay.throughServerNotice) return;
+    final open = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+      title: const Text('Everything now goes through Relay Everything'),
+      content: Text('This ${relay.device} no longer sends health, places, calendar and photos straight to your '
+        'webhook. They go to Relay Everything, then to each webhook you tick for them on your page.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('OK')),
+        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Open Webhooks')),
+      ],
+    ));
+    await relay.dismissThroughServerNotice();
+    if (open == true && mounted) _open(WebhooksPage(relay: relay, opener: widget.opener));
   }
 
   /// Starts one voice note, or asks for the model once, however many times the shortcut ran.
@@ -104,8 +129,16 @@ class _HomeScreenState extends State<HomeScreen> {
       back: onHome ? 'Home' : 'Back'));
   }
 
+  Future<Object?> _shake(MethodCall call) async {
+    if (call.method != 'shake') throw MissingPluginException();
+    // The runner waits for no answer: the alert stays open until the person taps.
+    if (mounted) unawaited(askUndoDelete(context, relay));
+    return null;
+  }
+
   @override
   void dispose() {
+    shakeChannel.setMethodCallHandler(null);
     relay.removeListener(_showListening);
     _listening?.remove();
     _voice?.cancel();
@@ -174,6 +207,11 @@ class _HomeScreenState extends State<HomeScreen> {
         FolderRow(icon: CupertinoIcons.doc_text, title: 'Notes', count: relay.entries.length,
           onTap: () => widget.onFolder != null ? widget.onFolder!(NotesFolder.all) : _open(TimelineScreen(relay: relay,
             picker: widget.picker, sharer: widget.sharer, opener: widget.opener))),
+        // Only while it holds a note, as in Apple Notes.
+        if (relay.deleted.isNotEmpty)
+          FolderRow(icon: CupertinoIcons.trash, title: RecentlyDeletedScreen.title, count: relay.deleted.length,
+            onTap: widget.onDeleted ?? () => _open(RecentlyDeletedScreen(relay: relay, picker: widget.picker,
+              sharer: widget.sharer, opener: widget.opener))),
       ]),
       if (widget.otherConnections case final rows?) ..._section('Other connections', rows)
       else ...[..._section('On this phone', [

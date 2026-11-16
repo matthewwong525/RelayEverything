@@ -52,8 +52,9 @@ One bar runs along the top, over the notes and the open note. Nothing is at the 
 | Button | What it does |
 |---|---|
 | **New note** | Opens a new, empty note at the right. |
-| **Aa** | Sets the text style. [Text styles and checklists](../your-notes/#text-styles-and-checklists) |
+| **Aa** | Opens a menu under it: **B**, **I**, **U**, **S**, **Highlight** and its colors, then each line style and list in its own look, with ✓ at the current one, then **Block Quote**. A click styles the note, closes the menu, and the cursor stays in the note. [Text styles and checklists](../your-notes/#text-styles-and-checklists) |
 | The checklist button | Makes the line a checklist item. |
+| **Table** | Adds a table at the cursor. In a table, it offers **Convert to text** and **Delete table**. [Tables](../your-notes/#tables) |
 | The paperclip | Adds photos or files to the open note. [Add photos and files](#add-photos-and-files) |
 | **Share** | Shares the open note. |
 | **⋯** | Opens the note's menu, with **Pin Note** (or **Unpin Note**), **Copy** and **Delete**, as on the phone. A pinned note shows first, in the **Pinned** group: [Pin a note](../your-notes/#pin-a-note) |
@@ -64,7 +65,7 @@ One bar runs along the top, over the notes and the open note. Nothing is at the 
 1. Click **New note**, or press Ctrl+Alt+N (⌘⌥N on a Mac). An empty note opens at the right.
 2. Type. The first line is the note's title.
 
-There is no **Save** button. The words go to your space as you type. To change a note, click it in the list, then click in its words and type. The styles, lists, checklists and links work as on the phone: [Open and change a note](../your-notes/#open-and-change-a-note). A paste with Ctrl+V (⌘V on a Mac) keeps the headings, lists, checklists, quotes, code, and bold, italic, underlined and struck-through words, reads Markdown as formatting, and keeps a link's address. It drops colors, fonts and pictures, as on the phone.
+There is no **Save** button. The words go to your space as you type. To change a note, click it in the list, then click in its words and type. The styles, lists, checklists and links work as on the phone: [Open and change a note](../your-notes/#open-and-change-a-note). A paste with Ctrl+V (⌘V on a Mac) keeps the headings, lists, checklists, quotes, code, and bold, italic, underlined and struck-through words, reads Markdown as formatting, and keeps a link on its words and a table. It drops colors, fonts and pictures, as on the phone. A right-click on selected words also offers **Bold**, **Italic**, **Underline**, **Strikethrough**, **Highlight** and **Link…**.
 
 Each change goes everywhere a phone's change goes:
 
@@ -88,7 +89,7 @@ A picture shows in its note. Another file shows as a row with its name and size:
 
 Open the note, click **⋯**, then **Delete**. Or press Ctrl+Shift+Backspace (⌘⇧Backspace on a Mac).
 
-The note leaves the list, and a bar says **Note deleted**, with **Undo**. Click **Undo** to get the note back, as on the phone. When the bar goes, or when you sign out or close the tab, your space deletes the note, its files and its recording, and your phones remove it at their next sync. [Delete a note](../your-notes/#delete-a-note)
+The note leaves the list and goes to **Recently Deleted** for 30 days. Press Ctrl+Z (⌘Z on a Mac) when you are not typing in a note to undo the last delete. Your phones show the note in **Recently Deleted** at their next sync. To recover a note, or delete it for good, open **Recently Deleted** in the left bar: [Recently Deleted](../your-notes/#recently-deleted)
 
 ## Keyboard keys
 
@@ -96,9 +97,21 @@ The note leaves the list, and a bar says **Note deleted**, with **Undo**. Click 
 |---|---|---|
 | Start a new note | Ctrl+Alt+N | ⌘⌥N |
 | Search | Ctrl+F | ⌘F |
-| Make words bold | Ctrl+B | ⌘B |
-| Make words italic | Ctrl+I | ⌘I |
+| Bold, italic, underline | Ctrl+B, Ctrl+I, Ctrl+U | ⌘B, ⌘I, ⌘U |
+| Strikethrough | Ctrl+Shift+X | ⌘⇧X |
+| Highlight | Ctrl+Shift+E | ⌘⇧E |
+| Title, Heading, Subheading, Body | Ctrl+Shift+T, H, J, B, or Ctrl+Alt+1, 2, 3, 0 | ⌘⇧T, H, J, B, or ⌘⌥1, 2, 3, 0 |
+| Monostyled | Ctrl+Shift+M | ⌘⇧M |
+| Bulleted, dashed, numbered list | Ctrl+Shift+7, 8, 9 | ⌘⇧7, 8, 9 |
+| Checklist, tick an item | Ctrl+Shift+L, Ctrl+Shift+U | ⌘⇧L, ⌘⇧U |
+| Block quote | Ctrl+' | ⌘' |
+| Indent more, indent less | Ctrl+], Ctrl+[ | ⌘], ⌘[ |
+| Link | Ctrl+K | ⌘K |
+| Table | Ctrl+Alt+T | ⌘⌥T |
 | Delete the open note | Ctrl+Shift+Backspace | ⌘⇧Backspace |
+| Undo the last delete, when you are not typing | Ctrl+Z | ⌘Z |
+
+The browser keeps some keys for itself. In Chrome, Ctrl+Shift+T opens a closed tab again, so use Ctrl+Alt+1 for a title there. You can also type Markdown marks at the start of a line, such as `## `: [Text styles and checklists](../your-notes/#text-styles-and-checklists)
 
 You can select and copy the words of a note with the mouse.
 
@@ -146,7 +159,7 @@ Your computers and AI apps are not in Settings: they are in **Connect your AI**,
 
 On the phone, **Delete my account**, **Webhooks** and a tap on an AI app or a computer open this page in the phone's browser, at the matching page.
 
-The phone's own settings, such as the switches for health, places, the calendar and photos, the speech model and **Only to my own webhook**, are only in the app on your phone: [Settings](../settings/).
+The phone's own settings, such as the switches for health, places, the calendar and photos, and the speech model, are only in the app on your phone: [Settings](../settings/).
 
 An old link to a page of Settings still opens the matching page: `/#ai-apps` and `/#chats` open **Connect your AI**, `/#email-notes` opens **Email notes**, `/#webhooks` opens **Webhooks**, `/#devices` and `/#account` open **Account**, and `/#api-keys` opens **API keys**.
 
@@ -156,7 +169,7 @@ The Mac app is Relay Everything in its own window, with the same layout as the b
 
 - **Your notes stay on the Mac.** You read and write them with no network, as on your phone. When you sign in, the Mac sends each change, and gets the changes from your phones and the browser every few minutes and each time you come back to the window.
 - **Settings** opens in the right part, not over your notes. It is the phone's own Settings, with Account, Appearance and Updates.
-- **The menu bar** has **Check for Updates…**, **New Note** (⌘N), **Find** (⌘F), **Bold** (⌘B), **Italic** (⌘I) and **Settings…** (⌘,).
+- **The menu bar** has **Check for Updates…**, **New Note** (⌘N), **Find** (⌘F) and **Settings…** (⌘,), and a **Format** menu with each item of the [keyboard keys](#keyboard-keys), as Notes on a Mac has it.
 - **It updates itself.** When it opens, and once a day, it checks for a new version, and asks before it installs one. To check now, click **Check for Updates…** in the **Relay Everything** menu or in **Settings**. Each update is signed, and the app installs only an update with the correct signature.
 - **Get test builds**, in **Settings** under **Updates**, also gets each new test build, which can have bugs. It is off, so you get only full releases. When you turn it off again, the app keeps its version until a newer full release comes.
 - **Drop a file from Finder** on a note to add it. Each file can be up to 25 MB.

@@ -1,16 +1,40 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart' show CupertinoLocalizations;
+import 'package:flutter/material.dart' show AdaptiveTextSelectionToolbar;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 
+import 'shortcuts.dart';
+
 /// The note editor's text menu: the iPhone's own where iOS can show it (iOS 16 and later, while the keyboard is
-/// attached), else the editor's drawn copy. The system's *Paste* needs no *Allow Paste?* question.
-Widget noteContextMenu(BuildContext context, QuillRawEditorState editor) =>
-  SystemContextMenu.isSupported(context) && editor.hasConnection
-  ? QuillSystemMenu(editor: editor)
-  : QuillRawEditorConfig.defaultContextMenuBuilder(context, editor);
+/// attached), else the editor's drawn copy. The system's *Paste* needs no *Allow Paste?* question. With [format], as on
+/// a computer, selected words also offer *Bold*, *Italic*, *Underline*, *Strikethrough*, *Highlight* and *Link…*.
+Widget noteContextMenu(BuildContext context, QuillRawEditorState editor, {void Function(FormatAction)? format}) {
+  if (SystemContextMenu.isSupported(context) && editor.hasConnection) return QuillSystemMenu(editor: editor);
+  final pick = format;
+  if (pick == null || editor.textEditingValue.selection.isCollapsed) {
+    return QuillRawEditorConfig.defaultContextMenuBuilder(context, editor);
+  }
+  ContextMenuButtonItem item(String label, FormatAction action) => ContextMenuButtonItem(label: label, onPressed: () {
+    editor.hideToolbar();
+    pick(action);
+  });
+  return TextFieldTapRegion(child: AdaptiveTextSelectionToolbar.buttonItems(
+    anchors: editor.contextMenuAnchors,
+    buttonItems: [
+      ...editor.contextMenuButtonItems,
+      for (final (label, action) in formatMenuItems) item(label, action),
+    ],
+  ));
+}
+
+/// The format items of the computer's right-click menu on selected words.
+const formatMenuItems = [
+  ('Bold', FormatAction.bold), ('Italic', FormatAction.italic), ('Underline', FormatAction.underline),
+  ('Strikethrough', FormatAction.strikethrough), ('Highlight', FormatAction.highlight), ('Link…', FormatAction.link),
+];
 
 /// The iPhone's own text menu for a Quill editor, as Flutter's `SystemContextMenu` shows it for a `TextField`, whose
 /// factory needs an `EditableTextState` that Quill does not have.

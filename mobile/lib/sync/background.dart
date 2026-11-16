@@ -66,9 +66,8 @@ Motion phoneMotion() => Platform.isIOS ? PhoneMotion() : AndroidMotion();
 /// engine has no calendar, does not hold the round back.
 /// It sends notes to the place the settings name: the server with [connection], or the person's own [webhook], which
 /// needs no key. With [pull], it then reads the notes changed elsewhere, after the notes' flush emptied. Only then it
-/// reads and sends health, points, stays and trips, the calendar and photos, to [Settings.privatePlace]: the same place,
-/// or only the webhook, flushed apart after the notes, so one place that fails holds back nothing for the other. With no
-/// webhook for them, they wait on the phone and never go to the server. After the points, the timeline step makes stays
+/// reads and sends health, points, stays and trips, the calendar and photos, to the same place, flushed after the notes,
+/// so an upload of them that fails holds back no note. After the points, the timeline step makes stays
 /// and trips from them, with [motion] for the mode, unless the person picked *Only points*; with *Only stays and trips*
 /// no point is queued. The photo step runs after the outbox, so a photo waiting for Wi-Fi holds back nothing else; it
 /// runs only with [photos] and [network] given.
@@ -76,10 +75,9 @@ Future<bool> backgroundRound(Store store, {required Connection? connection, Webh
   required Sender sender, NativeBackground? native, Places? places, DateTime? now, Future<Directory> Function()? folder,
   ShareGroup? share, CalendarSource? calendar, PhotoSource? photos, Network? network, Motion? motion, bool pull = false}) async {
   final settings = Settings.decode(await store.get(settingsKey), hasKey: connection != null);
-  final installId = settings.privatePlace == SendPlace.webhook ? await store.installId() : null;
-  final api = sender.api(settings, connection: connection, webhook: webhook, installId: installId);
+  final api = sender.api(settings, connection: connection, webhook: webhook,
+    installId: settings.place == SendPlace.webhook ? await store.installId() : null);
   if (api == null) return true;
-  final privateApi = sender.privateApi(settings, connection: connection, webhook: webhook, installId: installId);
   if (share != null && folder != null) {
     try {
       final group = await share.folder();
@@ -89,7 +87,7 @@ Future<bool> backgroundRound(Store store, {required Connection? connection, Webh
     }
   }
   // The notes first, then the notes changed elsewhere: a short wake gets them through before the rest.
-  final notes = await flush(store, api, folder: folder, private: false);
+  final notes = await flush(store, api, folder: folder, notes: true);
   // Only after the notes' uploads emptied, so this phone's own changes are on the server before it reads.
   var pulled = true;
   if (pull && notes.failure == null) {
@@ -127,24 +125,20 @@ Future<bool> backgroundRound(Store store, {required Connection? connection, Webh
     }
   }
   if (settings.locationSend != LocationSend.stays) await store.queuePoints();
-  // Private data to its place: the notes' server, flushed after the notes, or its own webhook, so one place that fails
-  // holds back nothing for the other. With no client for it, such as a webhook lost in a restore, it waits; that is no
-  // failure of the round, as no retry can send it before the person sets it.
-  final apart = privateApi != null && privateApi.destination != api.destination;
-  final private = privateApi == null ? const FlushResult()
-    : await flush(store, privateApi, folder: folder, private: apart ? null : true);
+  // To the same place as the notes, after them, so an upload here that fails holds back no note.
+  final data = await flush(store, api, folder: folder, notes: false);
   Failure? failure;
   if (photos != null && network != null && settings.photos) {
     // The app can turn photos off while this round runs: it reads the switch again before each photo.
-    failure = await syncPhotos(store, privateApi, photos, network, settings: settings, send: private.failure == null,
+    failure = await syncPhotos(store, api, photos, network, settings: settings, send: data.failure == null,
       now: now, keepGoing: () async {
         final now = Settings.decode(await store.get(settingsKey), hasKey: true);
-        return now.photos && now.place == settings.place && now.privatePlace == settings.privatePlace;
+        return now.photos && now.place == settings.place;
       });
   }
   // A refused photo from a key that still answers, such as on an older server with no photos, comes back as null; a
   // turned-off key fails the round, as for the notes.
-  return notes.failure == null && pulled && private.failure == null && read && failure == null;
+  return notes.failure == null && pulled && data.failure == null && read && failure == null;
 }
 
 /// Turns the hourly round on while sending and history, health, the calendar or photos are on, and off otherwise.

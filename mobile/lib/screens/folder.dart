@@ -1,4 +1,6 @@
-import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'dart:async';
+
+import 'package:flutter/cupertino.dart' show CupertinoAlertDialog, CupertinoDialogAction, CupertinoIcons, showCupertinoDialog;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -19,12 +21,63 @@ Future<bool> openInBrowser(Uri address) async {
   }
 }
 
-/// [part] of the person's Relay Everything page, such as `#webhooks`, in the phone's browser, and a message if the
+/// What shows when the browser did not open an address.
+const browserProblem = 'The browser did not open. Try again.';
+
+/// A problem's words as an alert gives them: the first sentence, without its full stop, is the title, and the rest is
+/// under it, or null.
+(String, String?) problemParts(String message) {
+  final words = message.trim();
+  final first = RegExp(r'^(.+?[.!?])(?:\s+|$)', dotAll: true).firstMatch(words);
+  if (first == null) return (words, null);
+  final title = first.group(1)!;
+  final rest = words.substring(first.end).trim();
+  return (title.endsWith('.') ? title.substring(0, title.length - 1) : title, rest.isEmpty ? null : rest);
+}
+
+/// Shows a problem as an alert in the middle of the screen, with *OK*, as Apple Notes does: never a bar at the bottom,
+/// which would cover *Search* and *New note*.
+Future<void> showProblem(BuildContext context, String message) =>
+  showProblemOn(Navigator.maybeOf(context, rootNavigator: true), message);
+
+/// [showProblem] for a caller whose own page may close before the problem comes, such as the note page: it takes the
+/// app's navigator before the wait.
+Future<void> showProblemOn(NavigatorState? navigator, String message) async {
+  if (navigator == null || !navigator.mounted) return;
+  final (title, content) = problemParts(message);
+  await showCupertinoDialog<void>(context: navigator.context, builder: (context) => CupertinoAlertDialog(
+    title: Text(title),
+    content: content == null ? null : Text(content),
+    actions: [
+      CupertinoDialogAction(isDefaultAction: true, onPressed: () => Navigator.pop(context), child: const Text('OK')),
+    ],
+  ));
+}
+
+/// An alert that asks: [title], [message], *Cancel*, and [action] in bold, or in red when [destructive]. True when the
+/// person picks [action].
+Future<bool> askAlert(BuildContext context, {required String title, String? message, required String action,
+  bool destructive = false}) async {
+  final danger = brandOf(context).danger;
+  final picked = await showCupertinoDialog<bool>(context: context, builder: (context) => CupertinoAlertDialog(
+    title: Text(title),
+    content: message == null ? null : Text(message),
+    actions: [
+      CupertinoDialogAction(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+      CupertinoDialogAction(isDefaultAction: !destructive, isDestructiveAction: destructive,
+        textStyle: destructive ? TextStyle(color: danger) : null,
+        onPressed: () => Navigator.pop(context, true), child: Text(action)),
+    ],
+  ));
+  return picked ?? false;
+}
+
+/// [part] of the person's Relay Everything page, such as `#webhooks`, in the phone's browser, and a problem if the
 /// browser did not open. A test passes its own [opener].
 Future<void> openRelayPage(BuildContext context, Relay relay, String part, {Opener? opener}) async {
-  final messenger = ScaffoldMessenger.of(context);
+  final navigator = Navigator.maybeOf(context, rootNavigator: true);
   if (!await (opener ?? openInBrowser)(Uri.parse('${relay.server ?? defaultServer}/$part'))) {
-    messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
+    await showProblemOn(navigator, browserProblem);
   }
 }
 
@@ -40,17 +93,13 @@ String _when(DateTime at, DateTime now) {
   return today ? time : '${at.day}/${at.month} $time';
 }
 
-/// What a folder's switch says about sending: *Sent 14:05 · 3 waiting*, with the date when it was not today. With
-/// [webhook], as when private data goes to the person's own webhook: *Sent to your webhook 14:05 · 3 waiting*.
-String sentLine(SendState state, String what, DateTime now, {bool webhook = false}) {
+/// What a folder's switch says about sending: *Sent 14:05 · 3 waiting*, with the date when it was not today.
+String sentLine(SendState state, String what, DateTime now) {
   final at = state.at;
   final waiting = switch (state.waiting) { 0 => 'none waiting', 1 => '1 $what waiting', final n => '$n ${what}s waiting' };
   if (at == null) return 'Not sent yet · $waiting';
-  return 'Sent ${webhook ? 'to your webhook ' : ''}${_when(at, now)} · $waiting';
+  return 'Sent ${_when(at, now)} · $waiting';
 }
-
-/// True when health, places, the calendar and photos go to the person's own webhook.
-bool _toWebhook(Relay relay) => relay.settings.privatePlace == SendPlace.webhook;
 
 /// The short form a Home row shows: *Sent 14:05*, and *3 waiting* only when some wait.
 String _sentShort(SendState state, DateTime now) =>
@@ -84,28 +133,27 @@ String photosLine(Relay relay) {
 String hostOf(String? address) => Uri.tryParse(address ?? '')?.host ?? '';
 
 /// What the Account page says about the webhook's last problem: a refused file, an answer that was not 2xx, or none.
-/// [what] names what waits: notes, or the private data that goes only to the webhook. [device] is [Relay.device].
-String problemLine(WebhookProblem problem, DateTime now, {String what = 'Notes', String device = 'phone'}) {
+/// [device] is [Relay.device].
+String problemLine(WebhookProblem problem, DateTime now, {String device = 'phone'}) {
   final at = _when(problem.at, now);
   if (problem.file != null) return '${problem.file} was too large for your receiver ($at), so it was not sent.';
-  if (problem.status == null) return 'No answer from your receiver at $at. $what wait on this $device until it answers.';
-  return 'Your receiver answered ${problem.status} at $at. $what wait on this $device until it takes them.';
+  if (problem.status == null) return 'No answer from your receiver at $at. Notes wait on this $device until it answers.';
+  return 'Your receiver answered ${problem.status} at $at. Notes wait on this $device until it takes them.';
 }
 
 /// Runs a change and shows why it could not be, if it could not.
 Future<void> apply(BuildContext context, Future<String?> change) async {
   final problem = await change;
-  if (problem != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(problem)));
+  if (problem != null && context.mounted) unawaited(showProblem(context, problem));
 }
 
 /// *Sign in*: sets up where to send, a key or the person's own webhook. Then asks about the notes that never went, and
 /// turns sending on there, in the same step. The Account row in Settings and a folder's *Sign in* both start here. With
-/// [keepWebhook], the webhook Account page's *Sign in to Relay Everything* starts here too: it offers only the sign-in,
-/// and health, places, the calendar and photos stay on the person's own webhook, as *Only to my own webhook*. True once
-/// sending starts; a closed sign-in or question changes nothing.
-Future<bool> choosePlace(BuildContext context, Relay relay, {bool keepWebhook = false}) async {
+/// [signInOnly], as from a phone that sends to its own webhook, it offers only the sign-in; then everything goes to
+/// Relay Everything. True once sending starts; a closed sign-in or question changes nothing.
+Future<bool> choosePlace(BuildContext context, Relay relay, {bool signInOnly = false}) async {
   final place = await Navigator.of(context).push(MaterialPageRoute<SendPlace>(
-    builder: (_) => ConnectScreen(relay: relay, signInOnly: keepWebhook)));
+    builder: (_) => ConnectScreen(relay: relay, signInOnly: signInOnly)));
   if (place == null || !context.mounted) return false;
   final fromWebhook = relay.settings.place == SendPlace.webhook && place == SendPlace.server;
   final earlier = await relay.earlierNotes(to: place);
@@ -118,9 +166,8 @@ Future<bool> choosePlace(BuildContext context, Relay relay, {bool keepWebhook = 
     sendEarlier = choice;
   }
   if (!context.mounted) return false;
-  final problem = await relay.startSending(sendEarlier: sendEarlier, place: place,
-    privateTo: keepWebhook ? SendPlace.webhook : null);
-  if (problem != null && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(problem)));
+  final problem = await relay.startSending(sendEarlier: sendEarlier, place: place);
+  if (problem != null && context.mounted) unawaited(showProblem(context, problem));
   return problem == null;
 }
 
@@ -183,7 +230,7 @@ class LocationPage extends StatelessWidget {
       return [
         Group(children: [SwitchListTile(
           title: const Text('Location history'),
-          subtitle: Text(settings.history ? sentLine(relay.pointsSent, 'point', DateTime.now(), webhook: _toWebhook(relay))
+          subtitle: Text(settings.history ? sentLine(relay.pointsSent, 'point', DateTime.now())
             : 'Where you go, also while the app is closed.'),
           value: settings.history,
           onChanged: settings.sending ? (on) => apply(context, relay.setHistory(on)) : null,
@@ -229,7 +276,7 @@ class HealthPage extends StatelessWidget {
       return [
         Group(children: [SwitchListTile(
           title: const Text('Health'),
-          subtitle: Text(settings.health ? sentLine(relay.healthSent, 'reading', DateTime.now(), webhook: _toWebhook(relay)) : 'Steps, heart rate, sleep and more.'),
+          subtitle: Text(settings.health ? sentLine(relay.healthSent, 'reading', DateTime.now()) : 'Steps, heart rate, sleep and more.'),
           value: settings.health,
           onChanged: settings.sending ? (on) => apply(context, relay.setHealth(on)) : null,
         )]),
@@ -252,7 +299,7 @@ class CalendarPage extends StatelessWidget {
       return [
         Group(children: [SwitchListTile(
           title: const Text('Calendar'),
-          subtitle: Text(settings.calendar ? sentLine(relay.calendarSent, 'event', DateTime.now(), webhook: _toWebhook(relay)) : 'Your phone\'s calendars.'),
+          subtitle: Text(settings.calendar ? sentLine(relay.calendarSent, 'event', DateTime.now()) : 'Your phone\'s calendars.'),
           value: settings.calendar,
           onChanged: settings.sending ? (on) => apply(context, relay.setCalendar(on)) : null,
         )]),
@@ -286,7 +333,7 @@ class PhotosPage extends StatelessWidget {
         Group(children: [
           SwitchListTile(
             title: const Text('Photos'),
-            subtitle: Text(_toWebhook(relay) && settings.sending
+            subtitle: Text(settings.place == SendPlace.webhook && settings.sending
               ? 'Sends new photos, with when and where you took them, to your webhook.'
               : 'Sends new photos, with when and where you took them, so your AI can see them.'),
             value: settings.photos,
@@ -322,10 +369,8 @@ class PhotosPage extends StatelessWidget {
     if (choice == _PhotosChoice.stop) return apply(context, relay.setPhotos(false));
     if (choice == _PhotosChoice.openPage) {
       // Photos stay on: the person deletes what was sent on the page, then can come back and turn them off.
-      final messenger = ScaffoldMessenger.of(context);
-      if (!await (opener ?? openInBrowser)(Uri.parse('$server/'))) {
-        messenger.showSnackBar(const SnackBar(content: Text('The browser did not open. Try again.')));
-      }
+      final navigator = Navigator.maybeOf(context, rootNavigator: true);
+      if (!await (opener ?? openInBrowser)(Uri.parse('$server/'))) await showProblemOn(navigator, browserProblem);
     }
   }
 }

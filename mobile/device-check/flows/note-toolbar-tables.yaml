@@ -1,0 +1,53 @@
+# The note's tool bar and tables: a swipe shows the bar's other tools, words picked swap it for the style bar, Bold
+# styles them, and Table adds a table with the cursor in its first cell, where Return goes to the cell below.
+appId: com.matthewwong525.relayApp
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 60000
+- tapOn: 'Notes(.|\n)*'
+- tapOn: "New note"
+- extendedWaitUntil:
+    visible: "Done"
+    timeout: 30000
+- inputText: "Plan"
+- pressKey: Enter
+- inputText: "Milk and eggs"
+# The bar's buttons have no words: Maestro finds each by its tooltip.
+- assertVisible: "Text styles"
+- assertVisible: "Table"
+- swipe:
+    from: "Attach"
+    direction: LEFT
+- extendedWaitUntil:
+    visible: "Indent more"
+    timeout: 10000
+- takeScreenshot: note-toolbar-swiped
+- doubleTapOn: '(.|\n)*Milk(.|\n)*'
+# On the simulator a double tap can show the iPhone's own menu with only *Select All* and pick no word: then pick all.
+- runFlow:
+    when:
+      visible: "Select All"
+    commands:
+      - tapOn: "Select All"
+- extendedWaitUntil:
+    visible: "Lists"
+    timeout: 10000
+- takeScreenshot: note-selection-bar
+- tapOn: "Bold"
+- tapOn: '(.|\n)*eggs(.|\n)*'
+- extendedWaitUntil:
+    visible: "Table"
+    timeout: 10000
+- tapOn: "Table"
+- inputText: "Day"
+- pressKey: Enter
+- inputText: "Mon"
+- takeScreenshot: note-table
+- tapOn: "Done"
+- tapOn: 'Back(.|\n)*'
+- extendedWaitUntil:
+    visible: '(.|\n)*Plan(.|\n)*'
+    timeout: 30000

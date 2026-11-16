@@ -41,7 +41,7 @@ export const tagValues = (tag: string) => [tag, `${escaped(tag)}/%`];
 /** A page of notes, newest first, from `after` up to `before`, holding every word in `words` in any case. */
 export async function notePage(db: Db, filter: NoteFilter) {
   const { before = Number.MAX_SAFE_INTEGER, beforeId = "", after = 0, source, words = [], tag, limit } = filter;
-  const where = ["(n.recorded_at < ? OR (n.recorded_at = ? AND n.id < ?))", "n.recorded_at >= ?",
+  const where = ["(n.recorded_at < ? OR (n.recorded_at = ? AND n.id < ?))", "n.recorded_at >= ?", "n.deleted_at IS NULL",
     ...source ? ["n.source = ?"] : [], ...words.map(() => "n.text LIKE ? ESCAPE '\\'"),
     ...tag === undefined ? [] : [tagged("relay_note_tags", "note_id", "n.id")]];
   const { results } = await db.prepare(`${NOTE} WHERE ${where.join(" AND ")} ORDER BY n.recorded_at DESC, n.id DESC LIMIT ?`)
@@ -53,30 +53,29 @@ export async function notePage(db: Db, filter: NoteFilter) {
 }
 
 export async function noteById(db: Db, id: string): Promise<Note | null> {
-  const row = await db.prepare(`${NOTE} WHERE n.id = ?`).bind(id).first<Row>();
+  const row = await db.prepare(`${NOTE} WHERE n.id = ? AND n.deleted_at IS NULL`).bind(id).first<Row>();
   return row && shaped(row);
 }
 
 type SyncRow = Row & { seq: number; deleted: number; note_id: string; deleted_client_id: string | null; client_id: string | null;
-  edited_at: number | null; device_id: string; pinned_at: number | null; pin_changed_at: number | null };
-// A deleted note's row has no note to join: it reads as its ids alone.
+  edited_at: number | null; device_id: string; pinned_at: number | null; pin_changed_at: number | null; deleted_at: number | null };
+// A note deleted for good has no row to join: it reads as its ids alone. One in Recently Deleted keeps deleted_at.
 const SYNCED = `SELECT c.seq, c.deleted, c.note_id, c.client_id AS deleted_client_id, n.client_id, n.edited_at, n.device_id, n.pinned_at, n.pin_changed_at,
-  ${COLUMNS}
-  FROM relay_note_changes c
-  LEFT JOIN relay_notes n ON n.id = c.note_id LEFT JOIN relay_devices d ON d.id = n.device_id`;
+  n.deleted_at, ${COLUMNS} FROM relay_note_changes c LEFT JOIN relay_notes n ON n.id = c.note_id LEFT JOIN relay_devices d ON d.id = n.device_id`;
 
 /** The timeline's note, and what a phone needs to sync it: its id, whether it sent it, its last change and pin. */
-const synced = (row: SyncRow, deviceId: string | null) =>
-  ({ ...shaped(row), clientId: row.client_id, mine: row.device_id === deviceId, editedAt: row.edited_at,
-    pinned: row.pinned_at !== null, pinChangedAt: row.pin_changed_at });
+const synced = (row: SyncRow, deviceId: string | null) => ({ ...shaped(row), clientId: row.client_id, mine: row.device_id === deviceId,
+  editedAt: row.edited_at, pinned: row.pinned_at !== null, pinChangedAt: row.pin_changed_at, deletedAt: row.deleted_at });
 
-/** The notes changed after change number `since`, oldest change first; `next` is the page's last number. With
- *  `deleted`, a deleted note comes as `{ id, clientId, deleted: true }`; without it, as an older phone asks, none. */
-export async function noteChanges(db: Db, since: number, limit: number, deviceId: string | null, deleted = false) {
+/** The notes changed after change number `since`, oldest change first; `next` is the page's last number. A note gone
+ *  for good, or in Recently Deleted for an older build (no `trash`), comes as its ids with `deleted`, else as none. */
+export async function noteChanges(db: Db, since: number, limit: number, deviceId: string | null, deleted = false, trash = false) {
   const { results } = await db.prepare(`${SYNCED} WHERE c.seq > ? AND (c.deleted = 0 OR ?) ORDER BY c.seq LIMIT ?`)
     .bind(since, deleted ? 1 : 0, limit + 1).all<SyncRow>();
   const page = results.slice(0, limit);
-  return { notes: page.map(row => row.deleted ? { id: row.note_id, clientId: row.deleted_client_id, deleted: true as const } : synced(row, deviceId)),
+  const gone = (row: SyncRow) => row.deleted === 1 || (row.deleted_at !== null && !trash);
+  return { notes: page.filter(row => deleted || !gone(row)).map(row => gone(row) ? { id: row.note_id,
+    clientId: row.deleted ? row.deleted_client_id : row.client_id, deleted: true as const } : synced(row, deviceId)),
     next: page.at(-1)?.seq ?? since, more: results.length > limit };
 }
 
@@ -180,7 +179,8 @@ const DAY_WORKOUTS = 50;
 export async function daySummary(db: Db, from: number, to: number) {
   const spans: Span[] = [[from, to]];
   const [notes, [steps], [sleep], [heart], [workouts], more, bloodPressure, places, events, nights, items] = await Promise.all([
-    db.prepare("SELECT COUNT(*) AS count FROM relay_notes WHERE recorded_at >= ? AND recorded_at < ?").bind(from, to).first<{ count: number }>(),
+    db.prepare("SELECT COUNT(*) AS count FROM relay_notes WHERE recorded_at >= ? AND recorded_at < ? AND deleted_at IS NULL").bind(from, to)
+      .first<{ count: number }>(),
     healthBuckets(db, "steps", spans), healthBuckets(db, "sleep", spans), healthBuckets(db, "heart_rate", spans),
     healthBuckets(db, "workout", spans), dayHealth(db, spans), pressures(db, from, to),
     dayPlaces(db, from, to),

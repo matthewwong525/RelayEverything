@@ -42,9 +42,10 @@ it("gives each note's sync fields, with mine true only for the calling phone's o
   const [ownId, otherId] = rows("relay_notes").map(row => row.id);
   expect(json.notes).toEqual([
     { id: ownId, clientId: "note-sync-01", mine: true, source: "typed", text: "Note 1", recordedAt: NOW - MINUTE, editedAt: null,
-      device: "Android phone", audio: false, attachments: [{ ...PDF, ready: false }], pinned: false, pinChangedAt: null },
+      device: "Android phone", audio: false, attachments: [{ ...PDF, ready: false }], pinned: false, pinChangedAt: null,
+      deletedAt: null },
     { id: otherId, clientId: "note-sync-02", mine: false, source: "typed", text: "Changed", recordedAt: NOW - 2 * MINUTE,
-      editedAt: NOW - MINUTE, device: "iPad", audio: false, attachments: [], pinned: false, pinChangedAt: null },
+      editedAt: NOW - MINUTE, device: "iPad", audio: false, attachments: [], pinned: false, pinChangedAt: null, deletedAt: null },
   ]);
   expect((await page(ipad)).notes.map(note => note.mine)).toEqual([false, true]);
   // The page reads the same feed, and owns none of it.
@@ -60,15 +61,15 @@ it("gives a phone key only its own person's notes, and refuses a chat key", asyn
   expect((await sync(null)).status).toBe(401);
 });
 
-it("gives a deleted note as its id alone, once, to a phone that asks, and leaves it out for one that doesn't", async () => {
+it("gives a note deleted for good as its id alone, once, to a phone that asks, and leaves it out for one that doesn't", async () => {
   for (const index of [1, 2, 3]) await send(phone, index);
   const { next } = await page(phone);
   const [kept, gone] = rows("relay_notes").map(row => row.id as string);
   // Added and deleted between two pulls: one deleted id, after the notes before it.
   await send(phone, 4);
   const added = rows("relay_notes").find(row => row.client_id === "note-sync-04")!.id;
-  await call(phone, "DELETE", "notes", { clientId: "note-sync-04" });
-  await call(ipad, "DELETE", "notes", { id: gone });
+  await call(phone, "DELETE", "notes", { clientId: "note-sync-04", forever: "true" });
+  await call(ipad, "DELETE", "notes", { id: gone, forever: "true" });
   await call(ipad, "PATCH", "notes", { id: kept, text: "Kept" });
   const pulled = (await sync(phone, next, undefined, true)).json as unknown as { notes: Record<string, unknown>[] };
   expect(pulled.notes).toEqual([{ id: added, clientId: "note-sync-04", deleted: true }, { id: gone, clientId: "note-sync-02", deleted: true },

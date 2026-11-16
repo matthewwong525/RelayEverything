@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/app.dart';
 import 'package:relay_app/editor/markdown.dart';
 import 'package:relay_app/editor/system_menu.dart';
+import 'package:relay_app/editor/table.dart' show NoteTableView, cellPause;
 import 'package:relay_app/relay.dart' show Entry;
 import 'package:relay_app/screens/note_editor.dart';
 
@@ -361,6 +362,45 @@ void main() {
       await tester.pump();
       expect(await phonePaste(tester, plain: 'Call Sam'), isTrue);
       expect(stored(tester).split('\n').first, '# Buy milk and eggs**Call** Sam');
+    });
+
+    testWidgets('a table copied in the note pastes as a table of its own: a cell typed in the copy leaves the first',
+        (tester) async {
+      String? copied;
+      plainClipboard(tester, () => copied ?? '', onCopy: (text) => copied = text);
+      relay.entries = [Entry(id: 'n1', text: 'Plan\n| Day | Train |\n| --- | --- |\n| Mon | 9:00 |\nEnd\n', at: now)];
+      systemMenuOn(tester, true);
+      await tester.pumpWidget(RelayApp(relay: relay, opener: (_) async => true));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Plan').first);
+      await tester.pumpAndSettle();
+      await tester.tapAt(onLine(tester, 'End', 10));
+      await tester.pump(const Duration(seconds: 1));
+      expect(editorFocused(tester), isTrue);
+      final controller = quill(tester);
+      // The table and its line: one embed and a line break, after `Plan\n`.
+      controller.updateSelection(const TextSelection(baseOffset: 5, extentOffset: 7), ChangeSource.local);
+      controller.clipboardSelection(true);
+      await tester.pump();
+      // The empty last line.
+      final end = controller.document.length - 1;
+      controller.updateSelection(TextSelection.collapsed(offset: end), ChangeSource.local);
+      await tester.pump();
+      expect(await phonePaste(tester, plain: copied!), isTrue);
+      await tester.pumpAndSettle();
+      final cells = find.descendant(of: find.byType(NoteTableView), matching: find.byType(TextField));
+      expect(cells, findsNWidgets(8));
+      await tester.tap(cells.at(4));
+      await tester.pumpAndSettle();
+      await tester.enterText(cells.at(4), 'Week');
+      await tester.pump(cellPause);
+      await tester.pumpAndSettle();
+      expect(stored(tester), '# Plan\n| Day | Train |\n| --- | --- |\n| Mon | 9:00 |\nEnd\n'
+        '| Week | Train |\n| --- | --- |\n| Mon | 9:00 |\n');
+      expect([for (final cell in cells.evaluate()) (cell.widget as TextField).controller!.text],
+        ['Day', 'Train', 'Mon', '9:00', 'Week', 'Train', 'Mon', '9:00']);
+      await tester.tap(find.byTooltip('Done'));
+      await tester.pumpAndSettle();
     });
 
     testWidgets('the app\'s own Paste reads the clipboard\'s HTML and keeps only the note\'s styles', (tester) async {

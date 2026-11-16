@@ -291,9 +291,9 @@ void main() {
       await store.addNote(note('n1'), send: true);
       expect([await store.isBare('n1'), await store.dropEmptyNote('n1')], [isTrue, isFalse]);
       expect([for (final kept in await store.notes()) kept.clientId], ['n1']);
-      expect(await store.deleteNote('n1'), isTrue);
+      expect(await store.deleteNote('n1', at), isTrue);
       final outbox = await store.outbox();
-      expect([[for (final item in outbox) item.route], outbox.single.body], [[noteDelete], {'clientId': 'n1'}]);
+      expect([[for (final item in outbox) item.route], outbox.last.body], [['notes', noteDelete], {'clientId': 'n1'}]);
     });
 
     test('already sent stays for a delete everywhere, as the server has it', () async {
@@ -321,47 +321,136 @@ void main() {
   });
 
   group('a deleted note', () {
-    test('marked is hidden from the list, the count and earlier notes, and Undo brings it back as it was', () async {
+    test('moves to Recently Deleted: it leaves the list, the count and earlier notes, and Recover brings it back as it was',
+        () async {
       await store.addNote(note('n1'));
       await store.addNote(note('n2', 'Call Sam'));
-      await store.markDeleted('n1', at);
-      expect([[for (final kept in await store.notes()) kept.clientId], await store.earlierCount()], [['n2'], 1]);
-      expect(await store.marked(), [('n1', at)]);
-      await store.undoDelete('n1');
-      expect([[for (final kept in await store.notes()) kept.clientId]..sort(), await store.earlierCount(), await store.marked()],
-        [['n1', 'n2'], 2, isEmpty]);
+      expect(await store.deleteNote('n1', at), isTrue);
+      expect([[for (final kept in await store.notes()) kept.clientId], await store.earlierCount(), await store.outbox()],
+        [['n2'], 1, isEmpty]);
+      expect([for (final kept in await store.deletedNotes()) (kept.clientId, kept.text, kept.deletedAt)], [('n1', 'Buy milk', at)]);
+      expect([await store.deleteNote('n1', later), await store.deleteNote('gone', at)], [false, false]);
+      expect(await store.recover('n1'), isTrue);
+      expect([[for (final kept in await store.notes()) kept.clientId]..sort(), await store.earlierCount(), await store.deletedNotes(),
+        await store.outbox()], [['n1', 'n2'], 2, isEmpty, isEmpty]);
+      expect(await store.recover('n1'), isFalse);
     });
 
-    test('never sent goes from the phone with its files and queues nothing', () async {
+    test('in Recently Deleted keeps the newest delete first', () async {
+      await store.addNote(note('n1'));
+      await store.addNote(note('n2'));
+      await store.deleteNote('n2', at);
+      await store.deleteNote('n1', later);
+      expect([for (final kept in await store.deletedNotes()) kept.clientId], ['n1', 'n2']);
+    });
+
+    test('never sent, deleted for good, goes from the phone with its files and queues nothing', () async {
       final copy = await store.photoFile('attachments/f1.pdf');
       await copy.parent.create(recursive: true);
       await copy.writeAsString('pdf');
       const file = Attachment(id: 'f1', name: 'a.pdf', type: 'application/pdf', size: 3, path: 'attachments/f1.pdf');
       await store.addNote(LocalNote(clientId: 'n1', text: 'Ticket', createdAt: at, attachments: const [file]));
-      expect(await store.deleteNote('n1'), isFalse);
-      expect([await store.notes(), await store.outbox(), await store.attachmentsOf('n1'), await copy.exists()],
-        [isEmpty, isEmpty, isEmpty, false]);
-      expect(await store.deleteNote('gone'), isFalse);
+      await store.deleteNote('n1', at);
+      expect(await copy.exists(), isTrue);
+      expect(await store.deleteForever('n1'), isFalse);
+      expect([await store.notes(), await store.deletedNotes(), await store.outbox(), await store.attachmentsOf('n1'),
+        await copy.exists()], [isEmpty, isEmpty, isEmpty, isEmpty, false]);
+      expect(await store.deleteForever('gone'), isFalse);
     });
 
-    test('sent queues one note.delete by its server id, and its waiting change and files go', () async {
+    test('sent queues one note.delete by its server id and keeps its files; Recover queues a note.recover instead', () async {
       await store.addNote(note('n1'), send: true);
       await flush(store, FakeServer().api(connection), clock: () => at);
       await store.applyPulled([pulledNote('s1', clientId: 'n1', mine: true, text: 'Buy milk', recordedAt: at)]);
       const file = Attachment(id: 'f1', name: 'a.pdf', type: 'application/pdf', size: 1, path: 'attachments/f1');
       await store.editNote('n1', 'Buy oat milk', files: const [file], send: true, at: later);
-      expect([for (final item in await store.outbox()) item.route], [noteUpdate, 'attachment']);
-      expect(await store.deleteNote('n1'), isTrue);
+      expect(await store.deleteNote('n1', later), isTrue);
+      var outbox = await store.outbox();
+      expect([[for (final item in outbox) item.route], outbox.last.body], [[noteUpdate, 'attachment', noteDelete],
+        {'clientId': 'n1', 'id': 's1'}]);
+      expect([for (final kept in await store.deletedNotes()) (kept.clientId, kept.text, kept.attachments.length)],
+        [('n1', 'Buy oat milk', 1)]);
+      expect(await store.recover('n1'), isTrue);
+      outbox = await store.outbox();
+      expect([for (final item in outbox) item.route], [noteUpdate, 'attachment', noteRecover]);
+      expect(outbox.last.body, {'clientId': 'n1', 'text': 'Buy oat milk', 'createdAt': at.millisecondsSinceEpoch,
+        'attachments': [{'id': 'f1', 'name': 'a.pdf', 'type': 'application/pdf', 'size': 1}], 'id': 's1'});
+      expect([for (final kept in await store.notes()) kept.clientId], ['n1']);
+    });
+
+    test('recovered for the person\'s own webhook queues each file kept here after the note.recover', () async {
+      const kept = Attachment(id: 'f1', name: 'a.pdf', type: 'application/pdf', size: 1, path: 'attachments/f1.pdf');
+      const gone = Attachment(id: 'f2', name: 'b.pdf', type: 'application/pdf', size: 1, path: '');
+      await store.moveOutbox(ownWebhook);
+      await store.addNote(LocalNote(clientId: 'n1', text: 'Ticket', createdAt: at, attachments: const [kept, gone]), send: true);
+      for (final item in await store.outbox()) {
+        await store.done(item.id);
+      }
+      await store.noteSent('n1', at);
+      await store.deleteNote('n1', at);
+      await store.done((await store.outbox()).single.id);
+      expect(await store.recover('n1'), isTrue);
       final outbox = await store.outbox();
-      expect([[for (final item in outbox) item.route], outbox.single.body], [[noteDelete], {'clientId': 'n1', 'id': 's1'}]);
-      expect([await store.notes(), await store.attachmentsOf('n1'), await store.waiting()], [isEmpty, isEmpty, 1]);
+      expect([for (final item in outbox) (item.route, item.destination)], [(noteRecover, ownWebhook), ('attachment', ownWebhook)]);
+      expect(outbox.last.body, kept.upload('n1'));
+    });
+
+    test('recovered for Relay Everything queues no file, as the server sends its own copies', () async {
+      const kept = Attachment(id: 'f1', name: 'a.pdf', type: 'application/pdf', size: 1, path: 'attachments/f1.pdf');
+      await store.addNote(LocalNote(clientId: 'n1', text: 'Ticket', createdAt: at, attachments: const [kept]), send: true);
+      for (final item in await store.outbox()) {
+        await store.done(item.id);
+      }
+      await store.noteSent('n1', at);
+      await store.deleteNote('n1', at);
+      await store.recover('n1');
+      expect([for (final item in await store.outbox()) item.route], [noteRecover]);
     });
 
     test('with its upload still waiting queues a note.delete by its clientId, as the upload may be on its way', () async {
       await store.addNote(note('n1'), send: true);
-      expect(await store.deleteNote('n1'), isTrue);
+      expect(await store.deleteNote('n1', at), isTrue);
       final outbox = await store.outbox();
-      expect([[for (final item in outbox) item.route], outbox.single.body], [[noteDelete], {'clientId': 'n1'}]);
+      expect([[for (final item in outbox) item.route], outbox.last.body], [['notes', noteDelete], {'clientId': 'n1'}]);
+    });
+
+    test('deleted for good queues one forever delete in place of its waiting move, and one after its move went', () async {
+      await store.addNote(note('n1'), send: true);
+      await store.addNote(note('n2'), send: true);
+      for (final item in await store.outbox()) {
+        await store.done(item.id);
+      }
+      await store.noteSent('n1', at);
+      await store.noteSent('n2', at);
+      await store.deleteNote('n1', at);
+      await store.deleteNote('n2', at);
+      // n2's move went, so a webhook heard of it: the forever delete carries moved, and sends it no second message.
+      await store.done((await store.outbox()).last.id);
+      expect([await store.deleteForever('n1'), await store.deleteForever('n2')], [true, true]);
+      expect([for (final item in await store.outbox()) [item.route, item.body]], [
+        [noteDelete, {'clientId': 'n1', 'forever': true}],
+        [noteDelete, {'clientId': 'n2', 'forever': true, 'moved': true}],
+      ]);
+      expect([await store.notes(), await store.deletedNotes()], [isEmpty, isEmpty]);
+    });
+
+    test('after 30 days in Recently Deleted goes for good, with its files; a move that never went goes as a forever delete',
+        () async {
+      final copy = await store.photoFile('attachments/f1.pdf');
+      await copy.parent.create(recursive: true);
+      await copy.writeAsString('pdf');
+      const file = Attachment(id: 'f1', name: 'a.pdf', type: 'application/pdf', size: 3, path: 'attachments/f1.pdf');
+      await store.addNote(LocalNote(clientId: 'n1', text: 'Ticket', createdAt: at, attachments: const [file]));
+      await store.addNote(note('n2'), send: true);
+      await store.addNote(note('n3'));
+      await store.deleteNote('n1', at);
+      await store.deleteNote('n2', at);
+      await store.deleteNote('n3', later);
+      expect(await store.purgeDeleted(at.add(const Duration(days: 29))), 0);
+      expect(await store.purgeDeleted(at.add(const Duration(days: 30))), 2);
+      expect([for (final kept in await store.deletedNotes()) kept.clientId], ['n3']);
+      expect([for (final item in await store.outbox()) [item.route, item.body]], [[noteDelete, {'clientId': 'n2', 'forever': true}]]);
+      expect([await store.attachmentsOf('n1'), await copy.exists()], [isEmpty, false]);
     });
 
     test('from elsewhere, pulled as deleted, goes with its files, and an unknown id changes nothing', () async {
@@ -384,24 +473,34 @@ void main() {
       expect([await store.notes(), await store.outbox()], [isEmpty, isEmpty]);
     });
 
-    test('pulled as deleted while open in the editor, or marked deleted here, stays for now', () async {
+    test('pulled as deleted for good goes from Recently Deleted too, but the note open in the editor stays for now', () async {
       await store.applyPulled([pulledNote('s1'), pulledNote('s2')]);
-      await store.markDeleted('srv:s2', at);
+      await store.deleteNote('srv:s2', at);
       expect(await store.applyPulled([{'id': 's1', 'clientId': null, 'deleted': true}, {'id': 's2', 'clientId': null, 'deleted': true}],
         editing: 'srv:s1'), isFalse);
-      expect([for (final kept in await store.notes()) kept.clientId], ['srv:s1']);
-      expect(await store.marked(), [('srv:s2', at)]);
+      expect([[for (final kept in await store.notes()) kept.clientId], await store.deletedNotes(), await store.outbox()],
+        [['srv:s1'], isEmpty, isEmpty]);
     });
 
-    test('pulled as deleted while marked here holds the sync place, so after Undo the next pull deletes it', () async {
-      await store.applyPulled([pulledNote('s1'), pulledNote('s2')]);
-      await store.markDeleted('srv:s1', at);
-      final gone = {'id': 's1', 'clientId': null, 'deleted': true};
-      expect(await store.applyPulled([gone]), isFalse);
-      expect(await store.marked(), [('srv:s1', at)]);
-      await store.undoDelete('srv:s1');
-      expect(await store.applyPulled([gone]), isTrue);
-      expect([[for (final kept in await store.notes()) kept.clientId], await store.marked()], [['srv:s2'], isEmpty]);
+    test('pulled with a delete time moves to Recently Deleted here, and back when recovered elsewhere; a move here that waits wins',
+        () async {
+      final moved = {...pulledNote('s1'), 'deletedAt': at.millisecondsSinceEpoch};
+      final back = {...pulledNote('s1'), 'deletedAt': null};
+      await store.applyPulled([moved]);
+      expect([await store.notes(), [for (final kept in await store.deletedNotes()) (kept.clientId, kept.deletedAt)]],
+        [isEmpty, [('srv:s1', at)]]);
+      await store.applyPulled([back]);
+      expect([[for (final kept in await store.notes()) kept.clientId], await store.deletedNotes()], [['srv:s1'], isEmpty]);
+      await store.deleteNote('srv:s1', later);
+      await store.applyPulled([back]);
+      expect([await store.notes(), [for (final kept in await store.deletedNotes()) (kept.clientId, kept.deletedAt)]],
+        [isEmpty, [('srv:s1', later)]]);
+      // A server older than Recently Deleted says nothing of it: nothing changes.
+      await store.applyPulled([pulledNote('s2')]);
+      await store.deleteNote('srv:s2', at);
+      await store.done((await store.outbox()).last.id);
+      await store.applyPulled([pulledNote('s2')]);
+      expect([for (final kept in await store.deletedNotes()) kept.clientId], ['srv:s1', 'srv:s2']);
     });
   });
 
@@ -579,7 +678,7 @@ void main() {
       await store.addNote(note('n2'), send: true);
       await flush(store, FakeServer().api(connection), clock: () => at);
       await store.pinNote('n2', true, send: true, at: later);
-      await store.deleteNote('n2');
+      await store.deleteForever('n2');
       expect([for (final item in await store.outbox()) item.route], [noteDelete]);
     });
   });
@@ -676,9 +775,50 @@ void main() {
     expect(await old.get(noteSyncSeq), isNull);
     // Version 14 added the pin.
     expect([await old.pinNote('kept', true, send: false, at: at), (await old.notes()).single.pinned], [true, true]);
-    await old.markDeleted('kept', at);
-    expect(await old.notes(), isEmpty);
-    expect(await old.deleteNote('kept'), isTrue);
+    expect(await old.deleteNote('kept', at), isTrue);
+    expect([await old.notes(), [for (final kept in await old.deletedNotes()) kept.clientId]], [isEmpty, ['kept']]);
+  });
+
+  test('upgrades a phone from version 14: a note marked deleted lands in Recently Deleted, and a waiting delete stays for good',
+      () async {
+    driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+    addTearDown(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = false);
+    final old = Store(NativeDatabase.memory(setup: (db) {
+      for (final statement in [
+        "CREATE TABLE outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, destination TEXT NOT NULL DEFAULT 'relay-server', "
+          'route TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL)',
+        'CREATE TABLE notes (client_id TEXT PRIMARY KEY, body TEXT NOT NULL, created_at INTEGER NOT NULL, sent_at INTEGER, '
+          "queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0, kind TEXT NOT NULL DEFAULT 'typed', "
+          'audio_path TEXT, duration_ms INTEGER, words_pending INTEGER NOT NULL DEFAULT 0, edited_at INTEGER, '
+          'server_id TEXT, device TEXT, mine INTEGER NOT NULL DEFAULT 1, edit_unsent INTEGER NOT NULL DEFAULT 0, '
+          'deleting_at INTEGER, source TEXT, pinned_at INTEGER, pin_changed_at INTEGER, pin_unsent INTEGER NOT NULL DEFAULT 0)',
+        'CREATE UNIQUE INDEX notes_server_id ON notes (server_id)',
+        'CREATE TABLE points (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
+        'CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+        'CREATE TABLE attachments (id TEXT PRIMARY KEY, note_client_id TEXT NOT NULL, name TEXT, type TEXT, size INTEGER, '
+          'path TEXT, sent_at INTEGER)',
+        'CREATE TABLE calendar_sent (key TEXT PRIMARY KEY, hash TEXT NOT NULL)',
+        'CREATE TABLE photos (client_id TEXT PRIMARY KEY, asset_id TEXT NOT NULL, taken_at INTEGER NOT NULL, lat REAL, lon REAL, '
+          'width INTEGER NOT NULL, height INTEGER NOT NULL, path TEXT NOT NULL, created_at INTEGER NOT NULL)',
+        'CREATE TABLE track (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
+        'CREATE TABLE motions (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
+      ]) {
+        db.execute(statement);
+      }
+      db.execute('INSERT INTO notes (client_id, body, created_at, sent_at, queued, server_id, deleting_at) VALUES (?, ?, 1, 2, 1, ?, ?)',
+        ['marked', jsonEncode(note('marked').toJson()), 's1', at.millisecondsSinceEpoch]);
+      db.execute('INSERT INTO notes (client_id, body, created_at) VALUES (?, ?, 1)', ['kept', jsonEncode(note('kept').toJson())]);
+      db.execute("INSERT INTO outbox (route, body, created_at) VALUES ('$noteDelete', ?, 1)",
+        [jsonEncode({'clientId': 'gone', 'id': 's9'})]);
+      db.execute('PRAGMA user_version = 14');
+    }));
+    addTearDown(old.close);
+    expect([[for (final kept in await old.notes()) kept.clientId],
+      [for (final kept in await old.deletedNotes()) (kept.clientId, kept.deletedAt)]], [['kept'], [('marked', at)]]);
+    expect([for (final item in await old.outbox()) [item.route, item.body]], [
+      [noteDelete, {'clientId': 'gone', 'id': 's9', 'forever': true}],
+      [noteDelete, {'clientId': 'marked', 'id': 's1'}],
+    ]);
   });
 
   group('earlier notes from your own webhook', () {
@@ -716,34 +856,36 @@ void main() {
       expect([await store.outbox(), await store.earlierCount(fromWebhook: true)], [isEmpty, 1]);
     });
 
-    test('a note with a server id, one from elsewhere, or one being deleted never counts', () async {
+    test('a note with a server id, one from elsewhere, or one in Recently Deleted never counts', () async {
       await sentToWebhook('n1', at);
       await store.applyPulled([pulledNote('s1', clientId: 'n1', mine: true, text: 'Note n1', recordedAt: at)]);
       await store.applyPulled([pulledNote('s2')]);
       await sentToWebhook('n2', at);
-      await store.markDeleted('n2', later);
+      await store.deleteNote('n2', later);
       expect(await store.earlierCount(fromWebhook: true), 0);
       await store.queueEarlier(fromWebhook: true);
-      expect(await store.outbox(), isEmpty);
+      // Only the move waits: the webhook heard of the note, so it hears of its delete.
+      expect([for (final item in await store.outbox()) item.route], [noteDelete]);
     });
   });
 
-  group('two destinations', () {
+  group('one destination', () {
     List<(String, String)> rows(List<OutboxItem> items) => [for (final item in items) (item.route, item.destination)];
 
-    test('a health row and a note row queued with different places get different destinations', () async {
-      await store.moveOutbox(relayServer, private: ownWebhook);
+    test('every row takes the one destination, whatever its route', () async {
+      await store.moveOutbox(ownWebhook);
       await store.enqueue('notes', {'clientId': 'a'});
       await store.enqueue('health', {'samples': []});
       await store.enqueue('locations', {'points': []});
       await store.enqueue('calendar', {'events': [], 'removed': []});
       await store.enqueue('attachment', {'id': 'f1'});
-      expect([await store.destination(), await store.privateDestination()], [relayServer, ownWebhook]);
-      expect(rows(await store.outbox()), [('notes', relayServer), ('health', ownWebhook), ('locations', ownWebhook),
-        ('calendar', ownWebhook), ('attachment', relayServer)]);
+      expect({for (final (_, destination) in rows(await store.outbox())) destination}, {ownWebhook});
+      expect(await store.outboxMoves(ownWebhook), isFalse);
+      expect(await store.outboxMoves(relayServer), isTrue);
     });
 
-    test('a route filter lists only the notes\' own uploads, or only the private ones, each oldest first', () async {
+    test('a route filter lists only the notes\' own uploads, or only health, places and the calendar, each oldest first',
+        () async {
       await store.enqueue('health', {'samples': []});
       await store.enqueue('notes', {'clientId': 'a'});
       await store.enqueue('locations', {'points': []});
@@ -753,56 +895,60 @@ void main() {
       await store.enqueue(noteDelete, {'clientId': 'b'});
       await store.enqueue('attachment', {'id': 'f1'});
       List<String> routes(List<OutboxItem> items) => [for (final item in items) item.route];
-      expect(routes(await store.outbox(private: false)), ['notes', noteUpdate, noteDelete, 'attachment']);
-      expect(routes(await store.outbox(private: true)), ['health', 'locations', staysRoute, 'calendar']);
+      expect(routes(await store.outbox(notes: true)), ['notes', noteUpdate, noteDelete, 'attachment']);
+      expect(routes(await store.outbox(notes: false)), ['health', 'locations', staysRoute, 'calendar']);
       expect((await store.outbox()).length, 8);
-      expect(await store.outbox(destination: ownWebhook, private: false), isEmpty);
-      expect(routes(await store.outbox(destination: relayServer, private: false)).first, 'notes');
+      expect(await store.outbox(destination: ownWebhook, notes: true), isEmpty);
+      expect(routes(await store.outbox(destination: relayServer, notes: true)).first, 'notes');
     });
 
-    test('a move of only the private place leaves note rows and drops what the calendar sent', () async {
-      await store.enqueue('notes', {'clientId': 'a'});
-      await store.enqueue('health', {'samples': [{'type': 'steps'}]});
-      await store.queueCalendar([{'events': [], 'removed': []}], {'work:a:1': 'hash'}, const []);
-      await store.moveOutbox(relayServer, private: ownWebhook);
-      expect(rows(await store.outbox()), [('notes', relayServer), ('health', ownWebhook)]);
-      expect(await store.calendarSent(), isEmpty);
-      // The same place again keeps what the calendar sent.
-      await store.queueCalendar([{'events': [], 'removed': []}], {'work:b:1': 'hash'}, const []);
-      await store.moveOutbox(relayServer, private: ownWebhook);
-      expect(await store.calendarSent(), {'work:b:1': 'hash'});
-      // A move of the notes alone keeps the private rows where they are.
-      await store.moveOutbox(ownWebhook, private: ownWebhook);
-      expect(rows(await store.outbox()), [('notes', ownWebhook), ('health', ownWebhook), ('calendar', ownWebhook)]);
-      expect(await store.calendarSent(), {'work:b:1': 'hash'});
-    });
-
-    test('a move of the private place forgets when health, points and the calendar last sent', () async {
+    test('a store that sent health, places and the calendar only to the webhook moves them to Relay Everything in order, '
+        'drops what the calendar sent, and forgets the second place', () async {
+      // As an older build left it: notes to the server, the rest to the webhook.
+      await store.set('outbox.destination', relayServer);
+      await store.set('outbox.private', ownWebhook);
       final at = DateTime(2026, 11, 9, 9).millisecondsSinceEpoch.toString();
       for (final key in [sentHealth, sentPoints, sentCalendar]) {
         await store.set(key, at);
       }
-      // The same place again keeps the times.
-      await store.moveOutbox(relayServer, private: relayServer);
-      expect([for (final key in [sentHealth, sentPoints, sentCalendar]) await store.sentAt(key)],
-        everyElement(isNotNull));
-      // A move of the notes alone keeps them too.
-      await store.moveOutbox(ownWebhook, private: relayServer);
-      expect(await store.sentAt(sentHealth), isNotNull);
-      await store.moveOutbox(relayServer, private: ownWebhook);
+      await store.enqueue('health', {'samples': [{'type': 'steps'}]}, destination: ownWebhook);
+      await store.enqueue('notes', {'clientId': 'a'}, destination: relayServer);
+      await store.enqueue('locations', {'points': [{'lat': 1.0, 'lon': 2.0}]}, destination: ownWebhook);
+      await store.enqueue(staysRoute, {'stays': []}, destination: ownWebhook);
+      await store.queueCalendar([{'events': [], 'removed': []}], {'work:a:1': 'hash'}, const []);
+      expect(await store.outboxMoves(relayServer), isTrue);
+      await store.moveOutbox(relayServer);
+      // The calendar's waiting rows and its sent list go: the next read sends the whole window to Relay Everything.
+      expect(rows(await store.outbox()), [('health', relayServer), ('notes', relayServer), ('locations', relayServer),
+        (staysRoute, relayServer)]);
+      expect(await store.calendarSent(), isEmpty);
       expect([for (final key in [sentHealth, sentPoints, sentCalendar]) await store.sentAt(key)], [null, null, null]);
+      expect([await store.get('outbox.private'), await store.destination()], [null, relayServer]);
+      // A point queued with no id gets one, as before.
+      final points = (await store.outbox()).firstWhere((item) => item.route == 'locations').body['points'] as List;
+      expect((points.single as Map)['id'], isNotNull);
+      expect(await store.outboxMoves(relayServer), isFalse);
+      // New rows of every route take the one destination.
+      await store.enqueue('health', {'samples': []});
+      expect((await store.outbox()).last.destination, relayServer);
     });
 
-    test('a store from before the private place sends private rows where notes go', () async {
-      await store.set('outbox.destination', ownWebhook);
-      expect([await store.destination(), await store.privateDestination()], [ownWebhook, ownWebhook]);
-      await store.enqueue('health', {'samples': []});
-      await store.enqueue('notes', {'clientId': 'a'});
-      expect(rows(await store.outbox()), [('health', ownWebhook), ('notes', ownWebhook)]);
-      // A move with one place moves both, as before.
+    test('a move to the same place keeps what the calendar sent and when each last sent', () async {
+      final at = DateTime(2026, 11, 9, 9).millisecondsSinceEpoch.toString();
+      for (final key in [sentHealth, sentPoints, sentCalendar]) {
+        await store.set(key, at);
+      }
+      await store.queueCalendar([{'events': [], 'removed': []}], {'work:a:1': 'hash'}, const []);
       await store.moveOutbox(relayServer);
-      expect([await store.privateDestination(), {for (final item in await store.outbox()) item.destination}],
-        [relayServer, {relayServer}]);
+      expect(await store.calendarSent(), {'work:a:1': 'hash'});
+      expect([for (final key in [sentHealth, sentPoints, sentCalendar]) await store.sentAt(key)], everyElement(isNotNull));
+      // A second place that matched the notes' one, from an older build, goes with no loss.
+      await store.set('outbox.private', relayServer);
+      await store.moveOutbox(relayServer);
+      expect([await store.calendarSent(), await store.get('outbox.private')], [{'work:a:1': 'hash'}, null]);
+      // A real move forgets them.
+      await store.moveOutbox(ownWebhook);
+      expect([await store.calendarSent(), await store.sentAt(sentHealth)], [isEmpty, null]);
     });
   });
 }

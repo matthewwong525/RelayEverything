@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../brand.dart';
+import '../editor/shortcuts.dart';
 import '../relay.dart';
 import '../screens/folder.dart' show Opener;
 import '../screens/note_editor.dart' show FilesPicker, Sharer;
@@ -15,8 +16,8 @@ final _dark = brandTheme(Brightness.dark);
 
 /// What the Mac's menu bar does: each item calls the window's own action for its key, so a menu and a key do the
 /// same thing.
-typedef MacActions = ({VoidCallback newNote, VoidCallback find, VoidCallback bold, VoidCallback italic,
-  VoidCallback settings, VoidCallback checkForUpdates});
+typedef MacActions = ({VoidCallback newNote, VoidCallback find, void Function(FormatAction action) format,
+  VoidCallback settings, VoidCallback undo, VoidCallback checkForUpdates});
 
 /// The Mac's menu bar, each item with its key. The window takes each key first, so a key never runs twice; a menu item
 /// acts on a click.
@@ -45,7 +46,7 @@ List<PlatformMenuItem> macMenus(MacActions actions) {
     ...menu('File', [item('New Note', LogicalKeyboardKey.keyN, actions.newNote)]),
     ...menu('Edit', [
       ...group([
-        item('Undo', LogicalKeyboardKey.keyZ, () => _edit(const UndoTextIntent(SelectionChangedCause.keyboard))),
+        item('Undo', LogicalKeyboardKey.keyZ, actions.undo),
         PlatformMenuItem(label: 'Redo', shortcut: const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true),
           onSelected: () => _edit(const RedoTextIntent(SelectionChangedCause.keyboard))),
       ]),
@@ -57,13 +58,24 @@ List<PlatformMenuItem> macMenus(MacActions actions) {
       ]),
       ...group([item('Find', LogicalKeyboardKey.keyF, actions.find)]),
     ]),
+    // The same items and keys as the note page's format keys, from one list, so the two can not drift.
     ...menu('Format', [
-      item('Bold', LogicalKeyboardKey.keyB, actions.bold),
-      item('Italic', LogicalKeyboardKey.keyI, actions.italic),
+      for (final members in formatItems)
+        PlatformMenuItemGroup(members: [
+          for (final format in members)
+            PlatformMenuItem(label: format.label,
+              shortcut: SingleActivator(format.key, meta: true, shift: format.shift, alt: format.alt),
+              onSelected: () => actions.format(format.action)),
+        ]),
     ]),
     ...menu('Window', provided([PlatformProvidedMenuItemType.minimizeWindow, PlatformProvidedMenuItemType.zoomWindow,
       PlatformProvidedMenuItemType.toggleFullScreen, PlatformProvidedMenuItemType.arrangeWindowsInFront])),
   ];
+}
+
+/// *Edit* → *Undo*: the last delete when no words are being typed and one is left to undo, else the typing.
+void undoOr(bool Function()? undoDelete) {
+  if (!(undoDelete?.call() ?? false)) _edit(const UndoTextIntent(SelectionChangedCause.keyboard));
 }
 
 /// An *Edit* item: the same step its key takes in the field or note that has the cursor.
@@ -96,9 +108,9 @@ class MacAppState extends State<MacApp> {
   late final MacActions actions = (
     newNote: () => _shell.currentState?.newNote(),
     find: () => _shell.currentState?.find(),
-    bold: () => _shell.currentState?.bold(),
-    italic: () => _shell.currentState?.italic(),
+    format: (action) => _shell.currentState?.format(action),
     settings: () => _shell.currentState?.settings(),
+    undo: () => undoOr(_shell.currentState?.undoDelete),
     checkForUpdates: () => unawaited(widget.relay.checkForUpdates()),
   );
 

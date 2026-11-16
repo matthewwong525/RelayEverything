@@ -27,11 +27,12 @@ String dayGroup(DateTime at, DateTime now) {
   return at.year == now.year ? month : '$month ${at.year}';
 }
 
-/// [entries], newest first, cut into runs that share a [dayGroup].
-List<(String, List<Entry>)> groupByDay(List<Entry> entries, DateTime now) {
+/// [entries], newest first, cut into runs that share a [dayGroup] of their time, or of [day] when given, such as the
+/// day a note was deleted.
+List<(String, List<Entry>)> groupByDay(List<Entry> entries, DateTime now, {DateTime Function(Entry entry)? day}) {
   final groups = <(String, List<Entry>)>[];
   for (final entry in entries) {
-    final name = dayGroup(entry.at, now);
+    final name = dayGroup(day?.call(entry) ?? entry.at, now);
     if (groups.isEmpty || groups.last.$1 != name) groups.add((name, []));
     groups.last.$2.add(entry);
   }

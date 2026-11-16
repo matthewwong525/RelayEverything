@@ -27,7 +27,7 @@ A kind whose message carries a file's bytes, as `note.file` and `photo.created` 
 - Read the bytes in its `build` through `files.open`, and return `{ message, bytes }` with the message's `base64` empty, the `WithFile` shape in [`kinds.ts`](../app/worker/apps/relay/kinds.ts). [`send.ts`](../app/worker/apps/relay/webhooks/send.ts) writes the bytes into one byte array, and a `413` answer skips the message and names its file on the card.
 - The route stores the row before the file, so the log row comes first. `build` answers "wait" while the file can still be saving, and "skip" when the row is gone or the file never came.
 - Mark the kind `sensitive` when its data shows where a person was, as health, places, the calendar and photos do.
-- The phone's own webhook mode sends the same message from [`mobile/lib/data/webhook.dart`](../mobile/lib/data/webhook.dart), and `mobile/test/webhook_test.dart` writes it to the fixtures that [`format.test.ts`](../app/worker/apps/relay/webhooks/format.test.ts) and the example receiver's test read.
+- The phone's own webhook mode, with no account, sends the same message from [`mobile/lib/data/webhook.dart`](../mobile/lib/data/webhook.dart), and `mobile/test/webhook_test.dart` writes it to the fixtures that [`format.test.ts`](../app/worker/apps/relay/webhooks/format.test.ts) and the example receiver's test read.
 
 ## Rules for a new message
 

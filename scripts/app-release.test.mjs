@@ -249,6 +249,9 @@ test('a release sends the App Store page before it submits, and a release check 
     'app_rating_config_path: LISTING_RATING', 'overwrite_screenshots: true', 'skip_binary_upload: true',
     'submit_for_review: false', 'force: true']) assert.ok(lane.includes(option), option);
   assert.ok(lane.indexOf('check_listing(app)') < lane.indexOf('deliver('), 'verify_only stops before deliver');
+  const check = fastfile.split(/^def check_listing\(app\)$/m)[1].split(/^end$/m)[0];
+  const chdir = check.indexOf('Dir.chdir("..") do');
+  assert.ok(chdir > 0 && chdir < check.indexOf('LISTING_'), 'check_listing reads the page files from mobile/ios, as deliver does');
   const submitLane = fastfile.split(/^ {2}lane :submit do \|options\|$/m)[1].split(/^ {2}end$/m)[0];
   assert.match(submitLane, /metadata_path: metadata,/, 'submit keeps its empty metadata folder');
   assert.match(submitLane, /skip_screenshots: true/);

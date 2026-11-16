@@ -61,17 +61,17 @@ After the update, a phone that already sent health SHALL read the last 90 days o
 - **WHEN** a run from 30 days ago is on the server with its minutes only
 - **THEN** after the redo reaches that week, the server's row has its kind, distance and calories, and the day's workout count is the same
 
-### Requirement: Nights and workouts go where health goes
+### Requirement: Nights and workouts go where the phone sends
 
-Nights and workout details SHALL go where the phone's health goes: to the person's Relay Everything space and from there only to webhooks ticked for *Health*, or, when the person picked their own webhook for health, only there. A resend that changes nothing SHALL wake no webhook. Health that goes only to the person's own webhook SHALL not reach the server.
+Nights and workout details SHALL go where the phone's health goes: while signed in, to the person's Relay Everything space and from there only to webhooks ticked for *Health*; with no account, straight to the person's own webhook. A resend that changes nothing SHALL wake no webhook.
 
 #### Scenario: A webhook not ticked for Health
 - **WHEN** a night arrives and the person has one webhook ticked for *Health* and one not
 - **THEN** only the ticked webhook gets the night
 
-#### Scenario: Only my own webhook
-- **WHEN** the person picked *Only my own webhook* for health
-- **THEN** the night and the full workout go straight to their webhook, and the server gets neither
+#### Scenario: No account, own webhook
+- **WHEN** a phone with no account sends to its own webhook
+- **THEN** the night and the full workout go straight to that webhook, and no server gets them
 
 ### Requirement: The AI and the API read nights and workouts
 

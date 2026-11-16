@@ -60,7 +60,7 @@ void main() {
     }
     await tester.tap(find.text('Webhooks'));
     await tester.pumpAndSettle();
-    for (final title in ['Webhooks', 'Health, places, calendar and photos', 'Only to my own webhook']) {
+    for (final title in ['Webhooks']) {
       expectOneLine(tester, title);
     }
     await tester.pageBack();

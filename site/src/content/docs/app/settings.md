@@ -32,13 +32,14 @@ Signed in, tap the card to open the **Account** page:
 
 With your own webhook and no account, the card opens an **Account** page with the webhook's address and **Send a test**, the last answer that was not `2xx` or a file too large for your receiver, **Sign in to Relay Everything**, and **Stop sending** in red. **Stop sending** asks first. It keeps the webhook's address and secret on the phone, so you can send there again with no new secret.
 
-### Sign in and keep your webhook
+### Sign in from your own webhook
 
-On the webhook Account page, tap **Sign in to Relay Everything** to sync your notes with your page, your AI and your other phones. It opens the same **Sign in** as the account card, with no **Don't want an account? Use your own webhook**. After you sign in:
+On the webhook Account page, tap **Sign in to Relay Everything** to sync your notes with your page, your AI and your other phones. It opens the same **Sign in** as the account card, with no **Don't want an account? Use your own webhook**. It says that the phone then sends everything to Relay Everything. After you sign in:
 
-- Your notes go to Relay Everything. Health, places, calendar and photos still go only to your webhook, as with [**Only to my own webhook**](#health-places-calendar-and-photos-only-to-your-webhook). **Webhooks** on the Account page shows that switch on.
+- Your notes, health, places, calendar and photos all go to Relay Everything. The phone sends nothing more to your webhook itself.
 - If notes already went to your webhook, the app asks *Send your 12 earlier notes too?*: *They are not on Relay Everything yet.* **Send them** puts them on your page, oldest first, with their files. **Only new notes** leaves them only at your webhook.
-- Your webhook gets no more notes from the phone. To get your notes there too, add it under **Webhooks** on your Relay Everything page, and the server sends them on. A short message at the bottom of the screen says so. [Your own database](../../connections/your-database/)
+- To keep getting everything at your webhook, add it under **Webhooks** on your Relay Everything page, and tick health, places, calendar and photos. The server then sends them on. A short message at the bottom of the screen says so. [Your own database](../../connections/your-database/)
+- The phone keeps your webhook's address and secret. After **Sign out**, **Don't want an account? Use your own webhook** finds them filled in.
 
 Go back from **Sign in**, or close the sign-in, to change nothing: the phone still sends everything to your webhook.
 
@@ -50,25 +51,14 @@ On the **Account** page, under **Advanced**, tap **Webhooks**. It is for develop
 
 - The names of the webhooks you added, such as *My database*.
 - **Add or change on your Relay Everything page**, which opens **Webhooks** there. [Your own database](../../connections/your-database/)
-- Signed in, the switch **Only to my own webhook**, for health, places, calendar and photos. It is off at first. [Below](#health-places-calendar-and-photos-only-to-your-webhook)
 
-Everything else goes to Relay Everything.
+It holds no choice of where your data goes. Signed in, the phone sends everything to Relay Everything, and never to a webhook itself. Relay Everything sends each webhook your notes, and what else you tick for it.
 
-### Health, places, calendar and photos only to your webhook
+### Keep your data off Relay Everything
 
-Signed in, you can keep your personal data off Relay Everything and still sync your notes. On the **Account** page, under **Advanced**, open **Webhooks** and turn on **Only to my own webhook**:
+To keep your health, places, calendar and photos off Relay Everything, use the app with no account: tap **Don't want an account? Use your own webhook** on **Sign in**. The phone then sends everything straight to [your own webhook](../../connections/your-database/#send-from-the-phone), and nothing to Relay Everything. Signed in, everything goes through Relay Everything.
 
-- The phone sends health samples, location points, calendar events and new photos straight to [your own webhook](../../connections/your-database/#send-from-the-phone). Relay Everything never gets them.
-- Your notes and their files still sync through Relay Everything. A note keeps no place: where you made it is a location point, and goes to your webhook.
-- With no webhook on the phone, the switch first opens the webhook's setup: [the four steps](../../connections/your-database/#send-from-the-phone). Go back to change nothing. A webhook you added on your Relay Everything page does not count, because the server never gives its secret to a phone.
-- **Webhooks** then shows the webhook's address, **Send a test**, and its last failure, if any.
-- What already went to Relay Everything stays in your space. To delete it, [delete your account](../../start/sign-up/#delete-your-account), or [delete all photos](../photos/#delete-all-photos).
-
-A phone that sends everything to your webhook gets here in one step: [sign in and keep your webhook](#sign-in-and-keep-your-webhook).
-
-What you give up: your AI apps show none of your health, places, calendar or photos from then on. Nothing retries for you on a server: when the phone is off or offline, the data waits for the phone's next round. A receiver that is down holds back only this data; your notes still sync, and the other way round.
-
-If the phone loses the webhook, such as after a restore, the data waits on the phone and never goes to Relay Everything. **Webhooks** shows **Set your webhook again**. Turn off **Only to my own webhook** to send them to Relay Everything again, with what waits; the calendar sends its whole window. **Sign out** keeps your choice and the webhook.
+Before, a signed-in phone could send health, places, calendar and photos only to your own webhook. That choice is gone. A phone that had it on sends them, with what waited, to Relay Everything after the update. The next time you open the app, a message says *Everything now goes through Relay Everything*. Tap **Open Webhooks** to go to **Webhooks**, or **OK**. The message shows once. To keep getting them at your webhook, add it on your Relay Everything page and tick them. What goes to Relay Everything stays in your space until you delete it: [delete your account](../../start/sign-up/#delete-your-account), or [delete all photos](../photos/#delete-all-photos).
 
 ## Appearance
 
@@ -99,9 +89,9 @@ Each has its own folder under **On this phone** on Home. Its row on Home says *O
 | **Location** | **Location history**: keeps a point each 100 m you move, so you can see where you went. On an iPhone, **How often** holds **Save battery** and **Every 100 m**. [Location](../location/#location-history) |
 | **Health** | **Health**: sends steps, heart rate, sleep, workouts, weight, blood pressure and more every hour, and the last 90 days the first time. [Health](../health/) |
 | **Calendar** | **Calendar**: sends the events of your phone's calendars, the last 90 days and the next 90 days, then each change. Under **Calendars**, a switch for each calendar turns that one off. [Calendar](../calendar/) |
-| **Photos** | **Photos**: sends the new photos you take, with when and where you took them, to where your health and places go: your server, so your AI can see them, or your own webhook. **Send photos on mobile data** is off at first: photos wait for Wi-Fi. Its row on Home says *Off*, *On · Wi-Fi only* or *On · Wi-Fi and mobile data*. [Photos](../photos/) |
+| **Photos** | **Photos**: sends the new photos you take, with when and where you took them, to where your notes go: your server, so your AI can see them, or, with no account, your own webhook. **Send photos on mobile data** is off at first: photos wait for Wi-Fi. Its row on Home says *Off*, *On · Wi-Fi only* or *On · Wi-Fi and mobile data*. [Photos](../photos/) |
 
-Each works only once you sign in. Signed out, its switch is dim, and the page says, for example, *Health works once you sign in. Nothing leaves this phone until you do.* Tap **Sign in** to open the same sign-in as the [account card](#account). Once you sign in, the Location, Health and Calendar switches say when they last sent, and how many wait. With **Only to my own webhook**, they say *Sent to your webhook* and the time. When you change where they go, they say *Not sent yet* until the new place gets data.
+Each works only once you sign in. Signed out, its switch is dim, and the page says, for example, *Health works once you sign in. Nothing leaves this phone until you do.* Tap **Sign in** to open the same sign-in as the [account card](#account). Once you sign in, the Location, Health and Calendar switches say when they last sent, and how many wait. When you change where they go, they say *Not sent yet* until the new place gets data.
 
 The key, and your webhook's address and secret, stay in the iPhone Keychain or the Android Keystore, never in the app's own files.
 

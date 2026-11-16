@@ -75,7 +75,7 @@ The actions follow your sign-in on the [Account](../settings/#account) row in Se
 | Off | Kept on the phone. The app makes no network call. | Reads the phone. Sends nothing. | Kept on the phone. |
 | On | Kept on the phone, and sent to your space at once, with its files. A recording's note goes with its recording once its words are written. | Reads the phone. Sends nothing. | Kept on the phone; it goes to your space with its recording and transcript. |
 
-Your server sends a note on to your webhooks with each file's name, type and size, not the file. When the phone sends to [your own webhook](../../connections/your-database/#send-from-the-phone), the note and its files go there, not to your space. [Privacy](../../privacy/)
+Your server sends a note on to your webhooks with each file's name, type and size, not the file. When the phone has no account and sends to [your own webhook](../../connections/your-database/#send-from-the-phone), the note and its files go there, not to your space. [Privacy](../../privacy/)
 
 ## Recipes
 

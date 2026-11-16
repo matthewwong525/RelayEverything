@@ -653,15 +653,15 @@ class WebRelay extends Relay {
   @override Future<String?> setPhotos(bool on) async => onlyOnPhone;
   @override Future<String?> setPhotosOnMobileData(bool on) async => onlyOnPhone;
   @override Future<int> earlierNotes({SendPlace? to}) async => 0;
-  @override Future<String?> startSending({required bool sendEarlier, SendPlace? place, SendPlace? privateTo}) async => onlyOnPhone;
+  @override Future<String?> startSending({required bool sendEarlier, SendPlace? place}) async => onlyOnPhone;
   @override String? get webhookAddress => null;
   @override String? get webhookSecret => null;
   @override WebhookProblem? get webhookProblem => null;
   @override String newWebhookSecret() => '';
   @override Future<String?> saveWebhook(String address, String secret) async => onlyOnPhone;
   @override Future<String> testWebhook(String address, String secret) async => onlyOnPhone;
-  @override Future<String?> setPrivatePlace(SendPlace place) async => onlyOnPhone;
-  @override bool get privateWebhookMissing => false;
+  @override bool get throughServerNotice => false;
+  @override Future<void> dismissThroughServerNotice() async {}
   @override Future<void> stopSending() async {}
   @override ModelState get speechModel => ModelState.missing;
   @override double get modelProgress => 0;

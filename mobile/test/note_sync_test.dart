@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -224,7 +225,7 @@ void main() {
     setUp(() => storage = MemoryStorage());
 
     RelayController relayFor(FakeServer server, {Directory? folder, FileOpener? opener}) => RelayController(store: store,
-      vault: KeyVault(storage), places: FakePlaces(), health: FakeHealth(), apiFor: server.api,
+      vault: KeyVault(storage), places: FakePlaces(), health: FakeHealth(), apiFor: server.api, webhookFor: server.webhook,
       folder: folder == null ? null : () async => folder, opener: opener);
 
     Future<void> sendToServer(RelayController relay) async {
@@ -243,6 +244,62 @@ void main() {
       expect([for (final request in server.requests) (request.method, request.url.path.split('/').last)],
         [('POST', 'notes'), ('GET', 'notes'), ('GET', 'connections')]);
       expect([for (final entry in relay.entries) entry.from], containsAll([null, 'Email']));
+    });
+
+    test('sign-in sends this device\'s notes, then pulls the notes from elsewhere, with no wait for a return or a timer',
+        () async {
+      final server = FakeServer((request) => _isPull(request) ? notesPage([pulledNote('s1')], next: 1) : FakeServer.ok(request));
+      final relay = relayFor(server);
+      await KeyVault(storage).save(bearer);
+      await relay.load();
+      await relay.addNote('Buy milk', sendNow: false);
+      expect(server.requests, isEmpty);
+      expect(await relay.startSending(sendEarlier: true, place: SendPlace.server), isNull);
+      await relay.settled();
+      final calls = [for (final request in server.requests) (request.method, request.url.path.split('/').last)];
+      expect(calls.where((call) => call == ('GET', 'notes')), hasLength(1));
+      expect(calls, contains(('POST', 'notes')));
+      expect(calls.indexOf(('POST', 'notes')), lessThan(calls.indexOf(('GET', 'notes'))));
+      expect([for (final entry in relay.entries) entry.text], containsAll(['Buy milk', 'Flight moved to 9:40']));
+    });
+
+    test('sign-in while a webhook round runs and its notes do not all go still pulls once, after that round', () async {
+      final server = FakeServer((request) => request.url.host == 'db.example.com' ? FakeServer.json({}, 503)
+        : _isPull(request) ? notesPage([pulledNote('s1')], next: 1) : FakeServer.ok(request));
+      final relay = relayFor(server);
+      await KeyVault(storage).save(bearer);
+      await relay.load();
+      await relay.addNote('Buy milk', sendNow: false);
+      expect(await relay.saveWebhook(hook.address, fixtureSecret), isNull);
+      server.hold = Completer();
+      expect(await relay.startSending(sendEarlier: true, place: SendPlace.webhook), isNull);
+      await pumpEventQueue();
+      // The webhook round holds open its note upload, so the move to the server comes while it runs.
+      expect([for (final request in server.requests) request.url.host], ['db.example.com']);
+      expect(await relay.startSending(sendEarlier: false, place: SendPlace.server), isNull);
+      // The webhook is down: the running round's notes part does not empty, and the round ends with no read.
+      server.hold!.complete();
+      await relay.settled();
+      // The server round starts after the webhook round ends.
+      await pumpEventQueue();
+      await relay.settled();
+      final calls = [for (final request in server.requests) (request.method, request.url.path.split('/').last)];
+      expect(calls.where((call) => call == ('GET', 'notes')), hasLength(1));
+      expect(calls, contains(('POST', 'notes')));
+      expect(calls.lastIndexOf(('POST', 'notes')), lessThan(calls.indexOf(('GET', 'notes'))));
+      expect([for (final entry in relay.entries) entry.text], containsAll(['Buy milk', 'Flight moved to 9:40']));
+    });
+
+    test('sending to the own webhook reads no notes', () async {
+      final server = FakeServer(FakeServer.ok);
+      final relay = relayFor(server);
+      await relay.load();
+      await relay.addNote('Buy milk', sendNow: false);
+      expect(await relay.saveWebhook(hook.address, fixtureSecret), isNull);
+      expect(await relay.startSending(sendEarlier: true, place: SendPlace.webhook), isNull);
+      await relay.settled();
+      expect(server.requests, isNotEmpty);
+      expect(server.requests.where(_isPull), isEmpty);
     });
 
     test('a note deleted on another phone leaves the list at the next pull', () async {

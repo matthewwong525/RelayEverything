@@ -449,7 +449,15 @@ class RelayController extends Relay {
     // The photos waiting on this phone go to the new place too, as the outbox does.
     await _saveSettings(next);
     await _refreshLocal();
-    _syncAfter();
+    // The server round reads the notes from elsewhere after it sends these, such as right after sign-in; a webhook has
+    // none. The pull is asked in the round after the one running: that round may end with no read, such as when the move
+    // stopped its notes part.
+    final running = _syncing;
+    if (to == SendPlace.server) {
+      unawaited(running == null ? pullNotes() : running.then((_) => pullNotes()));
+    } else {
+      _syncAfter();
+    }
     return null;
   }
 

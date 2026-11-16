@@ -6,9 +6,11 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  MAC_DMG, compareVersions, githubNotes, groupNotes, macCheck, makeGit, markPulls, nextBeta, parseTag, planRun,
-  pubspecVersion, pullNumber, releaseItems, versionLines, whatsNew, writeNotes,
+  FEED_KEEP, MAC_DMG, SPARKLE_HELPERS, addToFeed, compareVersions, feedItem, githubNotes, groupNotes, macCheck, macFeed,
+  makeGit, markPulls, minimumMacos, nextBeta, parseTag, planRun, pubspecVersion, pullNumber, releaseItems, versionLines,
+  whatsNew, writeNotes,
 } from './app-release.mjs';
+import { edSignature } from './sparkle-key.mjs';
 
 const REPO = 'matthewwong525/RelayEverything';
 const TAGS = ['mobile-v1.0.0+96', 'v1.0.0', 'v1.1.0', 'v1.9.0'];
@@ -255,27 +257,124 @@ test('a release sends the App Store page before it submits, and a release check 
   assert.match(submitLane, /skip_screenshots: true/);
 });
 
-test('mac-check passes a signed, accepted and stapled disk image, and names each check it runs', () => {
+const MOUNT = '/tmp/relay-dmg';
+const APP = `${MOUNT}/Relay Everything.app`;
+
+/** A Mac whose every file is signed by `team`, but the helpers named in `teams`; `failing` names a command that fails. */
+const fakeMac = ({ ran = [], team = 'TEAM123456', teams = {}, failing } = {}) => (command, args) => {
+  ran.push([command, ...args].join(' '));
+  if (command === failing) throw Object.assign(new Error('failed'), { stderr: `${args.at(-1)}: rejected\nmore` });
+  if (command !== 'codesign' || args[0] !== '--display') return '';
+  const path = args.at(-1);
+  const own = Object.entries(teams).find(([helper]) => path.endsWith(helper))?.[1] ?? team;
+  return `Executable=${path}\nTeamIdentifier=${own}\n`;
+};
+const check = exec => macCheck({ file: MAC_DMG, exists: () => true, exec, mount: () => MOUNT });
+
+test('mac-check passes a signed, accepted and stapled disk image whose Sparkle helpers have its team, and names each check', () => {
   const ran = [];
-  const line = macCheck({ file: `/tmp/out/${MAC_DMG}`, exists: () => true, exec: (command, args) => ran.push([command, ...args].join(' ')) });
+  const line = macCheck({ file: `/tmp/out/${MAC_DMG}`, exists: () => true, exec: fakeMac({ ran }), mount: () => MOUNT });
   assert.equal(line, 'result=checked file=Relay-Everything-Mac.dmg');
-  assert.deepEqual(ran, [
+  assert.deepEqual(ran.slice(0, 5), [
     'codesign --verify --strict --verbose=2 /tmp/out/Relay-Everything-Mac.dmg',
     'spctl --assess --type open --context context:primary-signature --verbose=2 /tmp/out/Relay-Everything-Mac.dmg',
     'xcrun stapler validate /tmp/out/Relay-Everything-Mac.dmg',
+    `hdiutil attach /tmp/out/Relay-Everything-Mac.dmg -nobrowse -readonly -noautoopen -mountpoint ${MOUNT}`,
+    `codesign --display --verbose=2 ${APP}`,
   ]);
+  for (const helper of SPARKLE_HELPERS) {
+    assert.ok(ran.includes(`codesign --verify --strict --deep --verbose=2 ${APP}/${helper}`), helper);
+    assert.ok(ran.includes(`codesign --display --verbose=2 ${APP}/${helper}`), helper);
+  }
+  assert.equal(ran.at(-1), `hdiutil detach ${MOUNT} -force`);
 });
 
 test('mac-check refuses an unsigned or unstapled file, another name, or no file, with the reason', () => {
-  const failing = command => (cmd, args) => {
-    if (cmd === command) throw Object.assign(new Error('failed'), { stderr: `${args.at(-1)}: rejected\nmore` });
-  };
-  const check = exec => macCheck({ file: MAC_DMG, exists: () => true, exec });
-  assert.throws(() => check(failing('codesign')), /can not go to a release: it is not signed.*\(Relay-Everything-Mac\.dmg: rejected\)$/);
-  assert.throws(() => check(failing('spctl')), /Gatekeeper refuses it/);
-  assert.throws(() => check(failing('xcrun')), /ticket is not stapled/);
+  assert.throws(() => check(fakeMac({ failing: 'codesign' })), /can not go to a release: it is not signed.*\(Relay-Everything-Mac\.dmg: rejected\)$/);
+  assert.throws(() => check(fakeMac({ failing: 'spctl' })), /Gatekeeper refuses it/);
+  assert.throws(() => check(fakeMac({ failing: 'xcrun' })), /ticket is not stapled/);
   assert.throws(() => macCheck({ file: 'relay.dmg', exists: () => true, exec: () => assert.fail('ran') }), /must be named Relay-Everything-Mac\.dmg/);
   assert.throws(() => macCheck({ file: MAC_DMG, exists: () => false, exec: () => assert.fail('ran') }), /is missing/);
+});
+
+test("mac-check refuses an app whose Sparkle helper another team or no one signed, and still detaches the image", () => {
+  for (const other of ['SPARKLE999', 'not set']) {
+    const ran = [];
+    assert.throws(() => check(fakeMac({ ran, teams: { 'Autoupdate': other } })),
+      /can not go to a release: Sparkle's Autoupdate is not signed by the app's team TEAM123456$/);
+    assert.equal(ran.at(-1), `hdiutil detach ${MOUNT} -force`);
+  }
+  const broken = (command, args) => {
+    if (args[0] === '--verify' && args.at(-1).endsWith('Installer.xpc')) throw Object.assign(new Error('failed'), { stderr: 'invalid signature' });
+    return fakeMac()(command, args);
+  };
+  assert.throws(() => check(broken), /Sparkle's Installer\.xpc is not signed, or its signature is broken \(invalid signature\)/);
+  assert.throws(() => check(fakeMac({ team: 'not set' })), /not signed by the app's team \(none\)/);
+});
+
+// A fixed seed (RFC 8032's first test key), so the signature is known.
+const SEED = Buffer.from('9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60', 'hex').toString('base64');
+const item = (build, channel = 'beta') => feedItem({ version: '1.4.1', build, url: `https://example.com/${build}.dmg`, length: 3,
+  signature: 'c2ln', channel, notes: 'New', minimum: '12.0', date: new Date(Date.UTC(2026, 10, 16, 12)) });
+const builds = xml => [...xml.matchAll(/<sparkle:version>(\d+)</g)].map(match => Number(match[1]));
+
+test("mac-feed signs the disk image in Sparkle's form and writes the item, starting a feed when none exists", () => {
+  const dir = mkdtempSync(join(tmpdir(), 'mac-feed-'));
+  try {
+    const file = join(dir, MAC_DMG);
+    const notes = join(dir, 'whats-new.txt');
+    const feed = join(dir, 'appcast.xml');
+    writeFileSync(file, 'a disk image');
+    writeFileSync(notes, 'New\n- Check for Updates <in> the menu (#140)\n');
+    const line = macFeed({ file, feed, notes, version: '1.4.1', build: '130', tag: 'mobile-v1.4.1+130', channel: 'beta',
+      repo: REPO, seed: SEED, minimum: '12.0', date: new Date(Date.UTC(2026, 10, 16, 12)) });
+    assert.equal(line, 'result=written items=1 newest=true');
+    const xml = readFileSync(feed, 'utf8');
+    assert.match(xml, /^<\?xml version="1\.0" encoding="utf-8"\?>\n<rss version="2\.0" xmlns:sparkle="http:\/\/www\.andymatuschak\.org\/xml-namespaces\/sparkle">/);
+    const signature = edSignature(SEED, Buffer.from('a disk image'));
+    assert.ok(xml.includes(`<enclosure url="https://github.com/${REPO}/releases/download/mobile-v1.4.1%2B130/${MAC_DMG}" `
+      + `length="12" type="application/octet-stream" sparkle:edSignature="${signature}"/>`), xml);
+    for (const part of ['<sparkle:version>130</sparkle:version>', '<sparkle:shortVersionString>1.4.1</sparkle:shortVersionString>',
+      '<sparkle:minimumSystemVersion>12.0</sparkle:minimumSystemVersion>', '<sparkle:channel>beta</sparkle:channel>',
+      '<pubDate>Mon, 16 Nov 2026 12:00:00 GMT</pubDate>',
+      '<description sparkle:format="plain-text"><![CDATA[New\n- Check for Updates <in> the menu (#140)]]></description>']) {
+      assert.ok(xml.includes(part), part);
+    }
+    assert.throws(() => macFeed({ file, feed, notes, version: '1.4.1', build: '131', tag: 't', channel: 'beta', repo: REPO, minimum: '12.0' }),
+      /SPARKLE_ED_PRIVATE_KEY is missing/);
+    assert.throws(() => macFeed({ file, feed, notes, version: '1.4.1', build: '131', tag: 't', channel: 'test', repo: REPO, seed: SEED }),
+      /--channel must be release or beta/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a release item has no channel, and a test build is beta', () => {
+  assert.doesNotMatch(item(130, 'release'), /sparkle:channel/);
+  assert.match(item(130, 'beta'), /<sparkle:channel>beta<\/sparkle:channel>/);
+});
+
+test('an 11th item drops the oldest of its own channel only, newest first', () => {
+  let xml = addToFeed('', item(1, 'release')).xml;
+  for (let build = 2; build <= FEED_KEEP + 1; build++) xml = addToFeed(xml, item(build)).xml;
+  assert.deepEqual(builds(xml), [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1], 'ten test builds and the release');
+  xml = addToFeed(xml, item(12)).xml;
+  assert.deepEqual(builds(xml), [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 1], 'the oldest test build goes; the release stays');
+});
+
+test('a run again for one build replaces its item, and an older build is not the newest', () => {
+  let feed = addToFeed('', item(130));
+  feed = addToFeed(feed.xml, item(130, 'release'));
+  assert.deepEqual([builds(feed.xml), feed.newest], [[130], true]);
+  assert.doesNotMatch(feed.xml, /sparkle:channel/);
+  feed = addToFeed(feed.xml, item(129));
+  assert.deepEqual([builds(feed.xml), feed.newest], [[130, 129], false]);
+});
+
+test("the feed's minimum macOS is the Runner's deployment target", () => {
+  const pbxproj = readFileSync(new URL('../mobile/macos/Runner.xcodeproj/project.pbxproj', import.meta.url), 'utf8');
+  assert.match(minimumMacos(pbxproj), /^\d+\.\d+$/);
+  assert.throws(() => minimumMacos(''), /no MACOSX_DEPLOYMENT_TARGET/);
 });
 
 test('only a checked Mac disk image reaches the pre-release and the release, and a branch never signs', () => {
@@ -302,4 +401,28 @@ test('only a checked Mac disk image reaches the pre-release and the release, and
   assert.ok(check > mac.indexOf('xcrun stapler staple'), 'the check runs on the stapled file');
   assert.ok(check < mac.indexOf('name: relay-everything-mac\n'), 'the file is kept only after the check');
   assert.match(mac, /- name: File for the release\n {8}if: steps\.check\.outcome == 'success'/);
+});
+
+test("the update feed follows main's sent test build and a release, never a release check, one run at a time", () => {
+  const ci = readFileSync(new URL('../.github/workflows/mobile-ci.yml', import.meta.url), 'utf8');
+  const job = ci.split(/^ {2}mac-feed:\n/m)[1].split(/^ {2}[a-z][\w-]*:\n/m)[0];
+  assert.deepEqual(readJobs('mobile-ci.yml')['mac-feed'].needs, ['plan', 'macos-beta', 'release']);
+  assert.match(job, /needs\.plan\.outputs\.mode == 'beta' && needs\.macos-beta\.outputs\.sent == 'true'/);
+  assert.match(job, /needs\.plan\.outputs\.mode == 'release' && needs\.release\.result == 'success'/);
+  assert.doesNotMatch(job, /release-check/, 'a release check writes no feed');
+  assert.match(job, /^ {4}concurrency:\n {6}group: mac-feed\n {6}cancel-in-progress: false$/m);
+  assert.match(job, /gh release create mac-updates --prerelease --latest=false/);
+  assert.match(job, /app-release\.mjs mac-feed .*\n.*--channel "\$channel"/);
+  assert.match(job, /gh release upload mac-updates "\$\{files\[@\]\}" --clobber/);
+  assert.match(job, /SPARKLE_ED_PRIVATE_KEY: \$\{\{ secrets\.SPARKLE_ED_PRIVATE_KEY \}\}/);
+  const beta = ci.split(/^ {2}macos-beta:\n/m)[1].split(/^ {2}[a-z][\w-]*:\n/m)[0];
+  assert.match(beta, /--clobber\n {12}echo "sent=true" >> "\$GITHUB_OUTPUT"/, 'sent only when the file reached its pre-release');
+});
+
+test("Sparkle's helpers are signed inside out before the frameworks, and the Downloader keeps its entitlements", () => {
+  const mac = readFileSync(new URL('../.github/workflows/mobile-macos.yml', import.meta.url), 'utf8');
+  const order = ['XPCServices/Installer.xpc"', 'XPCServices/Downloader.xpc"', '/Autoupdate"', '/Updater.app"',
+    "-name '*.framework'", '--entitlements macos/Runner/Release.entitlements'].map(part => mac.indexOf(part));
+  assert.ok(order.every((at, n) => at > 0 && (n === 0 || at > order[n - 1])), order.join(', '));
+  assert.match(mac, /--preserve-metadata=entitlements "\$sparkle\/XPCServices\/Downloader\.xpc"/);
 });

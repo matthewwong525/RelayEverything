@@ -170,8 +170,10 @@ An old link to a page of Settings still opens the matching page: `/#ai-apps` and
 The Mac app is Relay Everything in its own window, with the same layout as the browser. [Install it](../../start/install/#mac), then open **Settings** (⌘,) to sign in.
 
 - **Your notes stay on the Mac.** You read and write them with no network, as on your phone. When you sign in, the Mac sends each change, and gets the changes from your phones and the browser every few minutes and each time you come back to the window.
-- **Settings** opens in the right part, not over your notes. It is the phone's own Settings, with Account and Appearance.
-- **The menu bar** has **New Note** (⌘N), **Find** (⌘F) and **Settings…** (⌘,), and a **Format** menu with each item of the [keyboard keys](#keyboard-keys), as Notes on a Mac has it.
+- **Settings** opens in the right part, not over your notes. It is the phone's own Settings, with Account, Appearance and Updates.
+- **The menu bar** has **Check for Updates…**, **New Note** (⌘N), **Find** (⌘F) and **Settings…** (⌘,), and a **Format** menu with each item of the [keyboard keys](#keyboard-keys), as Notes on a Mac has it.
+- **It updates itself.** When it opens, and once a day, it checks for a new version, and asks before it installs one. To check now, click **Check for Updates…** in the **Relay Everything** menu or in **Settings**. Each update is signed, and the app installs only an update with the correct signature.
+- **Get test builds**, in **Settings** under **Updates**, also gets each new test build, which can have bugs. It is off, so you get only full releases. When you turn it off again, the app keeps its version until a newer full release comes.
 - **Drop a file from Finder** on a note to add it. Each file can be up to 25 MB.
 - **It leaves out Location, Health, Calendar and Photos.** Your phone sends them.
 - **Recordings play.** A recording from your phone shows as its card with its transcript, and plays from your space, as in the browser: [Voice notes](#voice-notes). The Mac records nothing. Any other sound file on a note opens in the Mac's own player.

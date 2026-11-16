@@ -9,6 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:relay_app/data/files.dart' show checkFiles;
 import 'package:relay_app/mac/drops.dart';
 import 'package:relay_app/mac/mac_app.dart';
+import 'package:relay_app/mac/updates.dart';
 import 'package:relay_app/relay.dart';
 import 'package:relay_app/screens/connect.dart' show ConnectScreen;
 import 'package:relay_app/screens/connect_ai.dart' show ConnectAiPage;
@@ -405,6 +406,54 @@ void main() {
       await select(tester, 'Body');
       expect(markdownOf(tester), '# Groceries\nmilk and eggs');
       await finish(tester);
+    });
+  });
+
+  group('updates', () {
+    testWidgets('Check for Updates… sits in the app menu after About, before Settings…, with no key, and checks',
+        (tester) async {
+      await show(tester, wide);
+      final appMenu = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar)).menus.first as PlatformMenu;
+      final groups = [for (final group in appMenu.menus.whereType<PlatformMenuItemGroup>())
+        [for (final item in group.members) item.label]];
+      expect(groups.indexWhere((labels) => labels.contains('Check for Updates…')),
+        lessThan(groups.indexWhere((labels) => labels.contains('Settings…'))));
+      expect(menuItem(tester, 'Check for Updates…').shortcut, isNull);
+      await select(tester, 'Check for Updates…');
+      expect(relay.calls, ['check for updates']);
+      await finish(tester);
+    });
+
+    testWidgets('Settings has Updates between Appearance and the version: Check for Updates… checks, and Get test '
+        'builds turns on and stays on', (tester) async {
+      await show(tester, wide);
+      await tester.tap(inSidebar('Settings'));
+      await tester.pumpAndSettle();
+      final top = [for (final text in ['Appearance', 'Updates', 'Relay Everything 1.4.0 (1)']) tester.getTopLeft(find.text(text)).dy];
+      expect(top, orderedEquals([...top]..sort()));
+      await tester.tap(find.text('Check for Updates…'));
+      await tester.pumpAndSettle();
+      SwitchListTile testBuilds() => tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, 'Get test builds'));
+      expect(testBuilds().value, isFalse, reason: 'off by default: only full releases');
+      await tester.tap(find.text('Get test builds'));
+      await tester.pumpAndSettle();
+      expect(relay.calls, ['check for updates', 'test builds true']);
+      expect(testBuilds().value, isTrue);
+      await finish(tester);
+    });
+
+    test("MacUpdates calls Sparkle's channel by name", () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      const channel = MethodChannel('relay/updates');
+      final calls = <String>[];
+      final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        ..setMockMethodCallHandler(channel, (call) async => calls.add('${call.method} ${call.arguments}'));
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      const updates = MacUpdates();
+      await updates.check();
+      await updates.checkInBackground();
+      await updates.setTestBuilds(true);
+      expect(calls, ['check null', 'checkInBackground null', 'setTestBuilds true']);
     });
   });
 

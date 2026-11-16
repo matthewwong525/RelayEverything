@@ -89,7 +89,7 @@ void main() {
       expect(find.byKey(ValueKey('settings-${page.name}')), SettingsPage.listed.contains(page) ? findsOneWidget : findsNothing,
         reason: page.title);
     }
-    for (final gone in ['Devices', 'AI apps', 'Email notes']) {
+    for (final gone in ['Devices', 'AI apps', 'Email notes', 'Updates', 'Check for Updates…', 'Get test builds']) {
       expect(find.text(gone), findsNothing, reason: gone);
     }
     expect(find.text('you@example.com'), findsOneWidget);

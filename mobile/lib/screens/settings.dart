@@ -11,11 +11,13 @@ import 'folder.dart' show Group, Opener, choosePlace, hostOf;
 import 'timeline.dart' show openPage;
 
 /// The rows of Settings, in order, on the phone, in the browser and on the Mac: one list, so a row added later shows on
-/// each, or is left out of one on purpose. Only the phone hears voice; the browser has no version to show.
+/// each, or is left out of one on purpose. Only the phone hears voice, only the Mac app updates itself, and the browser
+/// has no version to show.
 enum SettingsRow {
   account('Account'),
   appearance('Appearance'),
   voice('Voice notes', only: {RelayPlatform.phone}),
+  updates('Updates', only: {RelayPlatform.mac}),
   version('Version', only: {RelayPlatform.phone, RelayPlatform.mac});
 
   const SettingsRow(this.title, {this.only = const {RelayPlatform.phone, RelayPlatform.web, RelayPlatform.mac}});
@@ -50,6 +52,14 @@ class SettingsScreen extends StatelessWidget {
               SettingsRow.account => AccountCard(relay: relay, opener: opener),
               SettingsRow.appearance => Group(title: row.title, children: [_AppearanceRow(relay: relay)]),
               SettingsRow.voice => Group(title: row.title, children: [_VoiceRow(relay: relay)]),
+              // As the app menu's item; with *Get test builds* off, the Mac app offers only full releases.
+              SettingsRow.updates => Group(title: row.title, children: [
+                ListTile(title: const Text('Check for Updates…'), onTap: relay.checkForUpdates,
+                  trailing: Icon(CupertinoIcons.chevron_forward, size: 18, color: brandOf(context).muted)),
+                SwitchListTile(title: const Text('Get test builds'),
+                  subtitle: const Text('New versions come before they are released. They can have bugs.'),
+                  value: relay.settings.testBuilds, onChanged: relay.setTestBuilds),
+              ]),
               SettingsRow.version => const _Version(),
             },
           ])),

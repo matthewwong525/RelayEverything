@@ -114,12 +114,19 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
           echo "KEYCHAIN=$keychain" >> "$GITHUB_ENV"
-      # The frameworks inside first, then the app with its entitlements, each with the hardened runtime Apple's check
-      # needs. The disk image has the app and a link to Applications, to drag it there.
+      # Inside out, each with the hardened runtime Apple's check needs: Sparkle's helpers first, as Sparkle's docs order
+      # them, with the Downloader keeping its own entitlements; then the frameworks, then the app with its entitlements.
+      # The disk image has the app and a link to Applications, to drag it there.
       - name: Sign the app and make the disk image
         if: steps.key.outputs.sign == 'true'
         run: |
           identity="Developer ID Application"
+          sign=(codesign --force --options runtime --timestamp --keychain "$KEYCHAIN" --sign "$identity")
+          sparkle="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
+          "${sign[@]}" "$sparkle/XPCServices/Installer.xpc"
+          "${sign[@]}" --preserve-metadata=entitlements "$sparkle/XPCServices/Downloader.xpc"
+          "${sign[@]}" "$sparkle/Autoupdate"
+          "${sign[@]}" "$sparkle/Updater.app"
           find "$APP/Contents/Frameworks" -depth \( -name '*.framework' -o -name '*.dylib' \) -print0 |
             xargs -0 -I{} codesign --force --options runtime --timestamp --keychain "$KEYCHAIN" --sign "$identity" {}
           codesign --force --options runtime --timestamp --keychain "$KEYCHAIN" --sign "$identity" \
@@ -154,7 +161,8 @@ jobs:
           fi
           rm -f "$key"
           xcrun stapler staple "$DMG"
-      # Signed, accepted by Gatekeeper and stapled, or the run fails here: only a file that passes is kept.
+      # Signed, accepted by Gatekeeper and stapled, with Sparkle's helpers signed by the same team, or the run fails here:
+      # only a file that passes is kept.
       - name: Check the disk image
         id: check
         if: steps.key.outputs.sign == 'true'

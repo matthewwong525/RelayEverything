@@ -33,9 +33,9 @@ Start from the newest main. The *Delete like Apple Notes* change (Recently Delet
 ## 5. App Store
 
 - [x] 5.1 Add an `AUDIO_DATA` entry (`APP_FUNCTIONALITY`, `DATA_LINKED_TO_YOU`, no tracking) to `mobile/ios/fastlane/app_privacy_details.json` (on main since PR #136). Verify: the file is valid JSON and lists `AUDIO_DATA` once.
-- [ ] 5.2 The person adds *Audio Data* (App Functionality, linked to the person, not used for tracking) in App Store Connect's App Privacy page before the next release. Name this step in the build's report.
+- [x] 5.2 The person adds *Audio Data* (App Functionality, linked to the person, not used for tracking) in App Store Connect's App Privacy page before the next release. Name this step in the build's report.
 
 ## 6. Checks
 
 - [x] 6.1 Run `flutter analyze` and `flutter test` in `mobile/`, and `npm test` and `npm run lint` in `app/`; all pass.
-- [ ] 6.2 Run `/save`; on its preview, open a note with two recordings on the web page, play one, and read its transcript.
+- [x] 6.2 Run `/save`; on its preview, open a note with two recordings on the web page, play one, and read its transcript.

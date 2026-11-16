@@ -1,6 +1,6 @@
 # Recordings go in a note like files, each with its own transcript
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** audio-note-transcript-layout
 **Open questions:** none
 

@@ -1211,6 +1211,25 @@ void main() {
       expect(relay.connected, isTrue);
     });
 
+    test('opens with a saved key and webhook though the login keychain refuses a read of all', () async {
+      storage.refuseReadAll = true;
+      final first = mac();
+      await first.load();
+      expect(first.connected, isFalse);
+      first.dispose();
+      await KeyVault(storage).save(bearer);
+      final relay = mac();
+      await relay.load();
+      expect(relay.connected, isTrue);
+      relay.dispose();
+      await KeyVault(storage).forget();
+      await KeyVault(storage).saveWebhook(hook);
+      final own = mac();
+      await own.load();
+      expect([own.connected, own.webhookAddress], [false, hook.address]);
+      own.dispose();
+    });
+
     test('the key goes in the login keychain, with no shared group', () {
       expect(KeyVault.macOptions.usesDataProtectionKeychain, isFalse);
       expect(KeyVault.macOptions.groupId, isNull);

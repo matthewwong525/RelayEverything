@@ -401,6 +401,17 @@ test('only a checked Mac disk image reaches the pre-release and the release, and
   assert.ok(check > mac.indexOf('xcrun stapler staple'), 'the check runs on the stapled file');
   assert.ok(check < mac.indexOf('name: relay-everything-mac\n'), 'the file is kept only after the check');
   assert.match(mac, /- name: File for the release\n {8}if: steps\.check\.outcome == 'success'/);
+  // Every disk image is the branded install window, a branch's too, and the app is signed before it goes in.
+  assert.doesNotMatch(mac, /hdiutil create/);
+  assert.match(mac, /pip install dmgbuild==\d+\.\d+\.\d+/);
+  const signed = mac.indexOf('--entitlements macos/Runner/Release.entitlements');
+  assert.ok(signed > 0 && signed < mac.lastIndexOf('macos/dmg/make-dmg.sh "$APP" "$DMG"'), 'the app is signed first');
+  // A branch's copy signs every part ad hoc with no hardened runtime, or macOS refuses its frameworks and it never opens.
+  const branchDmg = mac.match(/- name: Disk image to try\n {8}if: inputs\.mode == 'branch'\n {8}run: \|\n((?: {10}.*\n)+)/)?.[1] ?? '';
+  assert.match(branchDmg, /codesign --force --sign - --entitlements macos\/Runner\/Release\.entitlements "\$APP"/);
+  assert.doesNotMatch(branchDmg, /--options runtime/);
+  assert.match(branchDmg, /macos\/dmg\/make-dmg\.sh "\$APP" "\$DMG"\n$/);
+  assert.match(mac, /- name: File to try\n(?: {8,}.*\n)*? {10}path: mobile\/Relay-Everything-Mac\.dmg\n/);
 });
 
 test("the update feed follows main's sent test build and a release, never a release check, one run at a time", () => {
@@ -420,7 +431,9 @@ test("the update feed follows main's sent test build and a release, never a rele
 });
 
 test("Sparkle's helpers are signed inside out before the frameworks, and the Downloader keeps its entitlements", () => {
-  const mac = readFileSync(new URL('../.github/workflows/mobile-macos.yml', import.meta.url), 'utf8');
+  // The signed step only: a branch's ad hoc step signs its frameworks earlier in the file.
+  const mac = readFileSync(new URL('../.github/workflows/mobile-macos.yml', import.meta.url), 'utf8')
+    .split('- name: Sign the app and make the disk image')[1];
   const order = ['XPCServices/Installer.xpc"', 'XPCServices/Downloader.xpc"', '/Autoupdate"', '/Updater.app"',
     "-name '*.framework'", '--entitlements macos/Runner/Release.entitlements'].map(part => mac.indexOf(part));
   assert.ok(order.every((at, n) => at > 0 && (n === 0 || at > order[n - 1])), order.join(', '));

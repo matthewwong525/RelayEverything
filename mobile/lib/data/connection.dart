@@ -142,13 +142,24 @@ class KeyVault {
       final connection = _parse(await _readShared());
       if (connection != null) return connection;
     }
-    return _parse(await _storage.readAll(iOptions: iOptions));
+    return _parse(await _readNames(iOptions));
+  }
+
+  /// Every name the vault owns that is saved with [options], each read by itself, never all at once: the Mac's login
+  /// keychain refuses a read of all items with their values (`errSecParam`, -50), and the vault needs only its own names.
+  Future<Map<String, String>> _readNames(IOSOptions options) async {
+    final values = <String, String>{};
+    for (final name in const [..._names, _webhookAddress, _webhookSecret]) {
+      final value = await _storage.read(key: name, iOptions: options);
+      if (value != null) values[name] = value;
+    }
+    return values;
   }
 
   /// The shared items, or none when this build has no App Group.
   Future<Map<String, String>> _readShared() async {
     try {
-      return await _storage.readAll(iOptions: sharedOptions);
+      return await _readNames(sharedOptions);
     } on PlatformException {
       return const {};
     }
@@ -167,7 +178,7 @@ class KeyVault {
   /// next open finds the new items and deletes what is left of the old. Elsewhere, and with no App Group, it saves the
   /// old items again with [iOptions], so a locked-phone wake can read them. Returns the key, as [read] does.
   Future<Connection?> upgrade() async {
-    final old = await _storage.readAll(iOptions: iOptions);
+    final old = await _readNames(iOptions);
     if (_shared) {
       // Whole shared items only: a stop part way through a move leaves a part, which is moved again.
       final moved = _parse(await _readShared());
@@ -249,7 +260,7 @@ class KeyVault {
 
   /// The person's own webhook, kept in the app's own group: the share card never sends to it.
   Future<Webhook?> readWebhook() async {
-    final values = await _storage.readAll(iOptions: iOptions);
+    final values = await _readNames(iOptions);
     final address = values[_webhookAddress], secret = values[_webhookSecret];
     return address == null || secret == null ? null : Webhook(address: address, secret: secret);
   }

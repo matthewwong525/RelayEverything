@@ -1,5 +1,6 @@
 # The Mac app (lib/main_mac.dart), for Apple silicon and Intel Macs, by mobile-ci.yml's mode. A branch builds it
-# unsigned, as a file to try in the run, and sends it nowhere. Main and a release sign it with the Developer ID
+# unsigned, as a disk image to try in the run, and sends it nowhere. Every disk image opens as the branded install
+# window that mobile/macos/dmg/make-dmg.sh makes with dmgbuild. Main and a release sign it with the Developer ID
 # certificate, have Apple check it (notarize), staple Apple's ticket, and keep Relay-Everything-Mac.dmg for
 # mobile-ci.yml, which adds it to the GitHub release. A missing secret skips main's file with a notice, but a release
 # or a release check fails.
@@ -86,15 +87,31 @@ jobs:
           flutter pub get
           flutter build macos -t lib/main_mac.dart --release --build-name="$VERSION" --build-number="$BUILD"
           test -d "$APP"
-      - name: Zip the app to try
+      # dmgbuild writes the install window's layout with no Finder, so it runs on a build machine with no person.
+      - uses: actions/setup-python@v5
+        if: inputs.mode == 'branch' || steps.key.outputs.sign == 'true'
+        with:
+          python-version: '3.12'
+      - name: dmgbuild
+        if: inputs.mode == 'branch' || steps.key.outputs.sign == 'true'
+        run: pip install dmgbuild==1.6.7
+      # The same disk image as a release's, unsigned, so the install window can be checked before it goes out.
+      # Every part signed ad hoc, frameworks first, with no hardened runtime: with it, macOS refuses the frameworks
+      # ("different Team IDs") and the copy to try never opens.
+      - name: Disk image to try
         if: inputs.mode == 'branch'
-        run: ditto -c -k --keepParent "$APP" "relay-everything-mac-${BUILD}.zip"
+        run: |
+          find "$APP/Contents/Frameworks" -depth \( -name '*.framework' -o -name '*.dylib' \) -print0 |
+            xargs -0 -I{} codesign --force --sign - {}
+          codesign --force --sign - --entitlements macos/Runner/Release.entitlements "$APP"
+          codesign --verify --strict --deep --verbose=2 "$APP"
+          macos/dmg/make-dmg.sh "$APP" "$DMG"
       - name: File to try
         if: inputs.mode == 'branch'
         uses: actions/upload-artifact@v4
         with:
           name: relay-everything-mac-${{ inputs.build }}
-          path: mobile/relay-everything-mac-${{ inputs.build }}.zip
+          path: mobile/Relay-Everything-Mac.dmg
           if-no-files-found: error
       # A keychain of this run only, with the certificate and nothing else: codesign finds the one identity in it.
       - name: Signing keychain
@@ -116,7 +133,7 @@ jobs:
           echo "KEYCHAIN=$keychain" >> "$GITHUB_ENV"
       # Inside out, each with the hardened runtime Apple's check needs: Sparkle's helpers first, as Sparkle's docs order
       # them, with the Downloader keeping its own entitlements; then the frameworks, then the app with its entitlements.
-      # The disk image has the app and a link to Applications, to drag it there.
+      # The disk image has the app and a link to Applications, to drag it there, and is signed after.
       - name: Sign the app and make the disk image
         if: steps.key.outputs.sign == 'true'
         run: |
@@ -132,11 +149,7 @@ jobs:
           codesign --force --options runtime --timestamp --keychain "$KEYCHAIN" --sign "$identity" \
             --entitlements macos/Runner/Release.entitlements "$APP"
           codesign --verify --strict --deep --verbose=2 "$APP"
-          stage="$RUNNER_TEMP/dmg"
-          mkdir -p "$stage"
-          ditto "$APP" "$stage/Relay Everything.app"
-          ln -s /Applications "$stage/Applications"
-          hdiutil create -volname "Relay Everything" -srcfolder "$stage" -ov -format UDZO "$DMG"
+          macos/dmg/make-dmg.sh "$APP" "$DMG"
           codesign --force --timestamp --keychain "$KEYCHAIN" --sign "$identity" "$DMG"
       # Apple's check, with the App Store Connect key. A refusal fails the run with Apple's own log, and nothing goes out.
       - name: Apple's check

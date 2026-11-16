@@ -5,7 +5,7 @@ description: Sign in from the app's Settings to give the phone its own key, so i
 
 The Relay Everything app keeps your notes on the phone, with no key. To send them to your Relay Everything account, you sign in, and the phone gets its own key. Signing in starts sending in the same step. You need an account first: [Sign up](../sign-up/).
 
-To send straight to your own database, with no account and nothing on Relay Everything, tap **Don't want an account? Use your own webhook** on the **Sign in** screen: [Send from the phone](../../connections/your-database/#send-from-the-phone).
+To send straight to your own database, with no account and nothing on Relay Everything, tap **Don't want an account? Use your own webhook** on the **Sign in** screen: [Send from the phone](../../connections/your-database/#send-from-the-phone). Signed in, everything the phone sends goes through Relay Everything, and from there to the webhooks you add on your page.
 
 ## Connect by signing in
 

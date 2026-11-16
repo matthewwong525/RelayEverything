@@ -728,22 +728,23 @@ void main() {
     });
   });
 
-  group('two destinations', () {
+  group('one destination', () {
     List<(String, String)> rows(List<OutboxItem> items) => [for (final item in items) (item.route, item.destination)];
 
-    test('a health row and a note row queued with different places get different destinations', () async {
-      await store.moveOutbox(relayServer, private: ownWebhook);
+    test('every row takes the one destination, whatever its route', () async {
+      await store.moveOutbox(ownWebhook);
       await store.enqueue('notes', {'clientId': 'a'});
       await store.enqueue('health', {'samples': []});
       await store.enqueue('locations', {'points': []});
       await store.enqueue('calendar', {'events': [], 'removed': []});
       await store.enqueue('attachment', {'id': 'f1'});
-      expect([await store.destination(), await store.privateDestination()], [relayServer, ownWebhook]);
-      expect(rows(await store.outbox()), [('notes', relayServer), ('health', ownWebhook), ('locations', ownWebhook),
-        ('calendar', ownWebhook), ('attachment', relayServer)]);
+      expect({for (final (_, destination) in rows(await store.outbox())) destination}, {ownWebhook});
+      expect(await store.outboxMoves(ownWebhook), isFalse);
+      expect(await store.outboxMoves(relayServer), isTrue);
     });
 
-    test('a route filter lists only the notes\' own uploads, or only the private ones, each oldest first', () async {
+    test('a route filter lists only the notes\' own uploads, or only health, places and the calendar, each oldest first',
+        () async {
       await store.enqueue('health', {'samples': []});
       await store.enqueue('notes', {'clientId': 'a'});
       await store.enqueue('locations', {'points': []});
@@ -753,56 +754,60 @@ void main() {
       await store.enqueue(noteDelete, {'clientId': 'b'});
       await store.enqueue('attachment', {'id': 'f1'});
       List<String> routes(List<OutboxItem> items) => [for (final item in items) item.route];
-      expect(routes(await store.outbox(private: false)), ['notes', noteUpdate, noteDelete, 'attachment']);
-      expect(routes(await store.outbox(private: true)), ['health', 'locations', staysRoute, 'calendar']);
+      expect(routes(await store.outbox(notes: true)), ['notes', noteUpdate, noteDelete, 'attachment']);
+      expect(routes(await store.outbox(notes: false)), ['health', 'locations', staysRoute, 'calendar']);
       expect((await store.outbox()).length, 8);
-      expect(await store.outbox(destination: ownWebhook, private: false), isEmpty);
-      expect(routes(await store.outbox(destination: relayServer, private: false)).first, 'notes');
+      expect(await store.outbox(destination: ownWebhook, notes: true), isEmpty);
+      expect(routes(await store.outbox(destination: relayServer, notes: true)).first, 'notes');
     });
 
-    test('a move of only the private place leaves note rows and drops what the calendar sent', () async {
-      await store.enqueue('notes', {'clientId': 'a'});
-      await store.enqueue('health', {'samples': [{'type': 'steps'}]});
-      await store.queueCalendar([{'events': [], 'removed': []}], {'work:a:1': 'hash'}, const []);
-      await store.moveOutbox(relayServer, private: ownWebhook);
-      expect(rows(await store.outbox()), [('notes', relayServer), ('health', ownWebhook)]);
-      expect(await store.calendarSent(), isEmpty);
-      // The same place again keeps what the calendar sent.
-      await store.queueCalendar([{'events': [], 'removed': []}], {'work:b:1': 'hash'}, const []);
-      await store.moveOutbox(relayServer, private: ownWebhook);
-      expect(await store.calendarSent(), {'work:b:1': 'hash'});
-      // A move of the notes alone keeps the private rows where they are.
-      await store.moveOutbox(ownWebhook, private: ownWebhook);
-      expect(rows(await store.outbox()), [('notes', ownWebhook), ('health', ownWebhook), ('calendar', ownWebhook)]);
-      expect(await store.calendarSent(), {'work:b:1': 'hash'});
-    });
-
-    test('a move of the private place forgets when health, points and the calendar last sent', () async {
+    test('a store that sent health, places and the calendar only to the webhook moves them to Relay Everything in order, '
+        'drops what the calendar sent, and forgets the second place', () async {
+      // As an older build left it: notes to the server, the rest to the webhook.
+      await store.set('outbox.destination', relayServer);
+      await store.set('outbox.private', ownWebhook);
       final at = DateTime(2026, 11, 9, 9).millisecondsSinceEpoch.toString();
       for (final key in [sentHealth, sentPoints, sentCalendar]) {
         await store.set(key, at);
       }
-      // The same place again keeps the times.
-      await store.moveOutbox(relayServer, private: relayServer);
-      expect([for (final key in [sentHealth, sentPoints, sentCalendar]) await store.sentAt(key)],
-        everyElement(isNotNull));
-      // A move of the notes alone keeps them too.
-      await store.moveOutbox(ownWebhook, private: relayServer);
-      expect(await store.sentAt(sentHealth), isNotNull);
-      await store.moveOutbox(relayServer, private: ownWebhook);
+      await store.enqueue('health', {'samples': [{'type': 'steps'}]}, destination: ownWebhook);
+      await store.enqueue('notes', {'clientId': 'a'}, destination: relayServer);
+      await store.enqueue('locations', {'points': [{'lat': 1.0, 'lon': 2.0}]}, destination: ownWebhook);
+      await store.enqueue(staysRoute, {'stays': []}, destination: ownWebhook);
+      await store.queueCalendar([{'events': [], 'removed': []}], {'work:a:1': 'hash'}, const []);
+      expect(await store.outboxMoves(relayServer), isTrue);
+      await store.moveOutbox(relayServer);
+      // The calendar's waiting rows and its sent list go: the next read sends the whole window to Relay Everything.
+      expect(rows(await store.outbox()), [('health', relayServer), ('notes', relayServer), ('locations', relayServer),
+        (staysRoute, relayServer)]);
+      expect(await store.calendarSent(), isEmpty);
       expect([for (final key in [sentHealth, sentPoints, sentCalendar]) await store.sentAt(key)], [null, null, null]);
+      expect([await store.get('outbox.private'), await store.destination()], [null, relayServer]);
+      // A point queued with no id gets one, as before.
+      final points = (await store.outbox()).firstWhere((item) => item.route == 'locations').body['points'] as List;
+      expect((points.single as Map)['id'], isNotNull);
+      expect(await store.outboxMoves(relayServer), isFalse);
+      // New rows of every route take the one destination.
+      await store.enqueue('health', {'samples': []});
+      expect((await store.outbox()).last.destination, relayServer);
     });
 
-    test('a store from before the private place sends private rows where notes go', () async {
-      await store.set('outbox.destination', ownWebhook);
-      expect([await store.destination(), await store.privateDestination()], [ownWebhook, ownWebhook]);
-      await store.enqueue('health', {'samples': []});
-      await store.enqueue('notes', {'clientId': 'a'});
-      expect(rows(await store.outbox()), [('health', ownWebhook), ('notes', ownWebhook)]);
-      // A move with one place moves both, as before.
+    test('a move to the same place keeps what the calendar sent and when each last sent', () async {
+      final at = DateTime(2026, 11, 9, 9).millisecondsSinceEpoch.toString();
+      for (final key in [sentHealth, sentPoints, sentCalendar]) {
+        await store.set(key, at);
+      }
+      await store.queueCalendar([{'events': [], 'removed': []}], {'work:a:1': 'hash'}, const []);
       await store.moveOutbox(relayServer);
-      expect([await store.privateDestination(), {for (final item in await store.outbox()) item.destination}],
-        [relayServer, {relayServer}]);
+      expect(await store.calendarSent(), {'work:a:1': 'hash'});
+      expect([for (final key in [sentHealth, sentPoints, sentCalendar]) await store.sentAt(key)], everyElement(isNotNull));
+      // A second place that matched the notes' one, from an older build, goes with no loss.
+      await store.set('outbox.private', relayServer);
+      await store.moveOutbox(relayServer);
+      expect([await store.calendarSent(), await store.get('outbox.private')], [{'work:a:1': 'hash'}, null]);
+      // A real move forgets them.
+      await store.moveOutbox(ownWebhook);
+      expect([await store.calendarSent(), await store.sentAt(sentHealth)], [isEmpty, null]);
     });
   });
 }

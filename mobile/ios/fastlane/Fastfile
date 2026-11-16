@@ -62,6 +62,11 @@ PUBLIC_BETA_GROUP = "Public beta"
 # Apple's own What to Test limit.
 WHAT_TO_TEST_LIMIT = 4000
 
+# The App Store page, kept beside this file: mobile/README.md#the-app-store-page.
+LISTING_METADATA = "./fastlane/metadata"
+LISTING_SCREENSHOTS = "./fastlane/screenshots"
+LISTING_RATING = "./fastlane/rating.json"
+
 platform :ios do
   # The App Store Connect key from the secrets; it also signs Spaceship's own calls.
   private_lane :connect_key do
@@ -208,6 +213,41 @@ platform :ios do
     end
   end
 
+  # fastlane listing version:1.1.0 [verify_only:true]
+  desc "Send the App Store page from fastlane/; verify_only:true checks it against App Store Connect and sends nothing"
+  lane :listing do |options|
+    version = options.fetch(:version).to_s
+    verify_only = options[:verify_only].to_s == "true"
+    api_key = connect_key
+    app = connect_app
+
+    # Apple keeps a version's page fixed from review on, so a rerun after submit leaves it as it is.
+    same = app.get_app_store_versions(filter: { platform: "IOS" }).find { |found| found.version_string == version }
+    if same && SENT_STATES.include?(same.app_store_state)
+      UI.important("Version #{version} is already #{same.app_store_state}, so its page is not sent again.")
+      next
+    end
+    if verify_only
+      check_listing(app)
+      next
+    end
+
+    deliver(
+      api_key: api_key,
+      app_identifier: app.bundle_id,
+      platform: "ios",
+      app_version: version,
+      metadata_path: LISTING_METADATA,
+      screenshots_path: LISTING_SCREENSHOTS,
+      app_rating_config_path: LISTING_RATING,
+      overwrite_screenshots: true,
+      skip_binary_upload: true,
+      submit_for_review: false,
+      run_precheck_before_submit: false,
+      force: true
+    )
+  end
+
   # fastlane public_beta version:1.1.1 build:271 notes:what-to-test.txt
   desc "Add a TestFlight build to the Public beta group with its What to Test text, and send it to beta review"
   lane :public_beta do |options|
@@ -243,6 +283,37 @@ def connect_app
   app = Spaceship::ConnectAPI::App.find(app_identifier)
   UI.user_error!("App Store Connect has no app #{app_identifier}.") if app.nil?
   app
+end
+
+# The screenshot sets App Store review needs: the app runs on iPhone and iPad, and holds a watch app.
+def listing_devices
+  types = Spaceship::ConnectAPI::AppScreenshotSet::DisplayType
+  {
+    "a 6.9-inch iPhone" => [types::APP_IPHONE_67],
+    "a 13-inch iPad" => [types::APP_IPAD_PRO_3GEN_129],
+    "an Apple Watch" => [types::APP_WATCH_ULTRA, types::APP_WATCH_SERIES_10, types::APP_WATCH_SERIES_7]
+  }
+end
+
+# A release check: deliver's verify_only checks only a binary, so this runs deliver's own screenshot check and reads
+# App Store Connect, and sends nothing. Apple's own checks of the words, such as a taken name, come at the release.
+def check_listing(app)
+  require "deliver"
+  locale = app.primary_locale
+  # Lane code runs inside fastlane/, but actions such as deliver run from the folder above, where these paths start.
+  shots = Dir.chdir("..") do
+    unless File.directory?(File.join(LISTING_METADATA, locale))
+      UI.user_error!("App Store Connect's primary language is #{locale}, but #{LISTING_METADATA} has no #{locale} folder.")
+    end
+    Deliver::Loader.load_app_screenshots(LISTING_SCREENSHOTS, false)
+  end
+  missing = listing_devices.reject { |_, types| shots.any? { |shot| types.include?(shot.display_type) } }.keys
+  UI.user_error!("The App Store page has no screenshots for #{missing.join(', ')}.") unless missing.empty?
+  busy = app.get_app_store_versions(filter: { platform: "IOS" }).find do |found|
+    %w[WAITING_FOR_REVIEW IN_REVIEW].include?(found.app_store_state)
+  end
+  UI.user_error!("Version #{busy.version_string} is still #{busy.app_store_state}.") if busy
+  UI.success("Ready: the App Store page in #{locale} has #{shots.count} screenshots. Nothing was sent.")
 end
 
 # Writes the build's What to Test for one locale, or changes it when the build already has that locale.

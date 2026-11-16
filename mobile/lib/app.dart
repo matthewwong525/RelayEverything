@@ -37,6 +37,7 @@ class RelayApp extends StatelessWidget {
       listenable: relay,
       builder: (context, home) => MaterialApp(
         title: 'Relay Everything',
+        debugShowCheckedModeBanner: false,
         theme: _iPhoneButtons(_light),
         darkTheme: _iPhoneButtons(_dark),
         themeMode: switch (relay.settings.appearance) {

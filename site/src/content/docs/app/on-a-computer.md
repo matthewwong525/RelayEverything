@@ -158,7 +158,7 @@ Your computers and AI apps are not in Settings: they are in **Connect your AI**,
 
 On the phone, **Delete my account**, **Webhooks** and a tap on an AI app or a computer open this page in the phone's browser, at the matching page.
 
-The phone's own settings, such as the switches for health, places, the calendar and photos, the speech model and **Only to my own webhook**, are only in the app on your phone: [Settings](../settings/).
+The phone's own settings, such as the switches for health, places, the calendar and photos, and the speech model, are only in the app on your phone: [Settings](../settings/).
 
 An old link to a page of Settings still opens the matching page: `/#ai-apps` and `/#chats` open **Connect your AI**, `/#email-notes` opens **Email notes**, `/#webhooks` opens **Webhooks**, `/#devices` and `/#account` open **Account**, and `/#api-keys` opens **API keys**.
 

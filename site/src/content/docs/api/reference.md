@@ -48,7 +48,7 @@ Send the input as a JSON body.
 
 `PATCH /apps/relay/api/notes` · `relay.notes-edit` · writes · called by a signed-in person or a phone key
 
-Change the words or a recording's transcript of any note in your space, and list the files added since to a note this device sent. The page changes notes as your space's Web device. The newer change wins: a change made before the note's last one gets 409. Webhooks get it as note.updated.
+Change the words or a recording's transcript of any note in your space, and list the files added since to a note this device sent. The page changes notes as your space's Web device. The newer change wins: a change made before the note's last one gets 409. A note in Recently Deleted gets 409 with the code `deleted`. Webhooks get it as note.updated.
 
 ### Input
 
@@ -83,16 +83,47 @@ Send the input as a JSON body.
 | `not_found` | Your space has no note with this id, or this device sent no note with this clientId. |
 | `older` | The note changed after this change was made, so the newer words stay: GET notes gives them. |
 | `not_own` | Add a file only to a note this device sent. |
+| `deleted` | The note is in Recently Deleted, where it can't be changed: recover it first with POST notes/recover. |
 
 ## Delete a note
 
 `DELETE /apps/relay/api/notes` · `relay.notes-delete` · writes · called by a signed-in person or a phone key
 
-Delete any note in your space, with its files and recording, from the page, the AI apps and every phone at its next sync. Webhooks get it as note.deleted. It can't be undone.
+Move any note in your space to Recently Deleted for 30 days: the page and every phone show it there after their next sync, and the AI apps no longer find it. After 30 days, or with `forever`, it goes for good with its files and recording. Webhooks get note.deleted once: at the move, or at a delete for good of a note not in Recently Deleted.
 
 ### Input
 
 Send the input as query parameters.
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | no | The server's id for the note, as GET notes gives it: any note in your space. |
+| `clientId` | string | no | Or the device's own id for a note it sent, as POST notes sent it. |
+| `forever` | boolean | no | True to delete the note for good now, with its files and recording; it can't be undone. Left out, the note moves to Recently Deleted for 30 days. |
+
+### Output
+
+| Field | Type | Required | What it holds |
+|---|---|---|---|
+| `id` | string | yes |  |
+| `deleted` | boolean | yes |  |
+| `deletedAt` | integer | no | When the note moved to Recently Deleted, in Unix ms; left out after a delete for good. |
+
+### Errors
+
+| Code | When |
+|---|---|
+| `not_found` | Your space has no note with this id, or this device sent no note with this clientId. |
+
+## Recover a deleted note
+
+`POST /apps/relay/api/notes/recover` · `relay.notes-recover` · writes · called by a signed-in person or a phone key
+
+Move a note in Recently Deleted back to your notes, as it was, on the page and every phone at its next sync. A note not in Recently Deleted stays as it is. Webhooks get it as note.recovered, with the whole note.
+
+### Input
+
+Send the input as a JSON body.
 
 | Field | Type | Required | What it holds |
 |---|---|---|---|
@@ -104,7 +135,7 @@ Send the input as query parameters.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `id` | string | yes |  |
-| `deleted` | boolean | yes |  |
+| `recovered` | boolean | yes |  |
 
 ### Errors
 
@@ -149,7 +180,7 @@ Send the input as a JSON body.
 
 `GET /apps/relay/api/notes` · `relay.notes-sync` · reads · called by a signed-in person or a phone key
 
-Read each note added, changed or deleted after a change number, oldest change first. Ask again with `next` while `more` is true.
+Read each note added, changed, moved to or from Recently Deleted, or deleted for good after a change number, oldest change first. Ask again with `next` while `more` is true.
 
 ### Input
 
@@ -159,13 +190,14 @@ Send the input as query parameters.
 |---|---|---|---|
 | `since` | integer | no | The last page's `next`; 0 or left out for every note. |
 | `limit` | integer | no | How many notes, 100 when left out. |
-| `deleted` | integer | no | 1 to get each deleted note as its ids with `deleted: true`; else they are left out. |
+| `deleted` | integer | no | 1 to get each note deleted for good as its ids with `deleted: true`; else they are left out. |
+| `trash` | integer | no | 1 to get each note in Recently Deleted whole, with its `deletedAt`; else it comes as one deleted for good. |
 
 ### Output
 
 | Field | Type | Required | What it holds |
 |---|---|---|---|
-| `notes` | array of object or object | yes | Each note as below; with `deleted=1`, a deleted note is only its `id`, `clientId` and `deleted: true`. |
+| `notes` | array of object or object | yes | Each note as below; with `deleted=1`, a note deleted for good is only its `id`, `clientId` and `deleted: true`. Without `trash=1`, a note in Recently Deleted is the same. |
 | `notes[].id` | string | yes |  |
 | `notes[].clientId` | string or null | yes | The sending device's own id for the note. |
 | `notes[].mine` | boolean | yes | True when the calling phone sent the note, or, for the page, your space's Web device did. |
@@ -186,6 +218,7 @@ Send the input as query parameters.
 | `notes[].attachments[].top` | boolean | yes | True for the recording the note started with, shown above the note's words. |
 | `notes[].pinned` | boolean | yes | True when the note is pinned to the top of the notes list. |
 | `notes[].pinChangedAt` | number or null | yes | When the note's pin last changed, in Unix ms; null when never. |
+| `notes[].deletedAt` | number or null | yes | When the note moved to Recently Deleted, in Unix ms; null for a note not deleted. It goes for good 30 days after. |
 | `next` | number | yes | The change number to ask from next time. |
 | `more` | boolean | yes | True when more changes wait after this page. |
 

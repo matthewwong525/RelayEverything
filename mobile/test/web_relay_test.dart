@@ -68,7 +68,9 @@ void main() {
           ])], 'next': 9, 'more': false},
       'POST api/notes': (_) => {'id': 'n9', 'added': true},
       'PATCH api/notes': (_) => {'id': 'n1', 'updated': true},
-      'DELETE api/notes': (_) => {'id': 'n1', 'deleted': true},
+      'DELETE api/notes': (request) => {'id': 'n1', 'deleted': true,
+        if (request.url.queryParameters['forever'] != 'true') 'deletedAt': 4000},
+      'POST api/notes/recover': (_) => {'id': 'n1', 'recovered': true},
       'POST api/attachments': (_) => {'ok': true, 'added': true},
       'POST sign-in/out': (_) => <String, Object>{},
     });
@@ -83,8 +85,8 @@ void main() {
     expect(relay.email, 'ana@example.com');
     expect(relay.connected, isTrue);
     expect([for (final entry in relay.entries) entry.id], ['n3', 'web-note-1', 'n1']);
-    expect(server.requests[1].url.queryParameters, {'since': '0'});
-    expect(server.requests[2].url.queryParameters, {'since': '7'});
+    expect(server.requests[1].url.queryParameters, {'since': '0', 'trash': '1'});
+    expect(server.requests[2].url.queryParameters, {'since': '7', 'trash': '1'});
     final ring = relay.entries.first;
     expect(ring.from, 'Email');
     final sound = ring.recordings.single;
@@ -120,7 +122,7 @@ void main() {
     await relay.start();
     server.routes['GET api/notes'] = (_) => {'notes': [{'id': 'n1', 'clientId': null, 'deleted': true}], 'next': 10, 'more': false};
     await relay.pullNotes();
-    expect(server.requests.last.url.queryParameters, {'since': '9', 'deleted': '1'});
+    expect(server.requests.last.url.queryParameters, {'since': '9', 'deleted': '1', 'trash': '1'});
     expect([for (final entry in relay.entries) entry.id], ['n3', 'web-note-1']);
   });
 
@@ -319,41 +321,57 @@ void main() {
     expect(relay.entries.firstWhere((entry) => entry.id == 'web-note-1').files, isEmpty);
   });
 
-  test('deletes after the Undo time, and Undo keeps the note', () async {
+  test('moves a note to Recently Deleted at once, then on the server, and Recover brings it back', () async {
     await relay.start();
     await relay.deleteNote('n1');
     expect(relay.entries.any((entry) => entry.id == 'n1'), isFalse);
-    await relay.undoDelete('n1');
-    expect(relay.entries.any((entry) => entry.id == 'n1'), isTrue);
-    expect(server.calls, isNot(contains('DELETE notes')));
-    await relay.deleteNote('web-note-1');
-    await relay.endUndo('web-note-1');
-    expect(server.requests.last.method, 'DELETE');
-    expect(server.requests.last.url.queryParameters, {'clientId': 'web-note-1'});
+    expect([for (final entry in relay.deleted) (entry.id, entry.deletedAt)], [('n1', DateTime.fromMillisecondsSinceEpoch(4000))]);
+    expect([server.calls.last, server.requests.last.url.queryParameters], ['DELETE notes', {'id': 'n1'}]);
+    expect(relay.canUndoDelete, isTrue);
+    await relay.recover('n1');
+    expect([relay.entries.any((entry) => entry.id == 'n1'), relay.deleted, relay.canUndoDelete], [true, isEmpty, false]);
+    expect([server.calls.last, jsonDecode(server.requests.last.body)], ['POST recover', {'id': 'n1'}]);
   });
 
-  test('Sign out sends the deletes under Undo before the notes leave memory', () async {
+  test('Undo brings back the newest note deleted, and Delete for good sends forever', () async {
+    await relay.start();
+    await relay.deleteNote('n1');
+    await relay.deleteNote('web-note-1');
+    expect(await relay.undoLastDelete(), isTrue);
+    expect([for (final entry in relay.deleted) entry.id], ['n1']);
+    await relay.deleteForever('n1');
+    expect([relay.deleted, relay.canUndoDelete, await relay.undoLastDelete()], [isEmpty, false, false]);
+    expect([server.calls.last, server.requests.last.url.queryParameters], ['DELETE notes', {'id': 'n1', 'forever': 'true'}]);
+  });
+
+  test('a read moves a note deleted elsewhere to Recently Deleted, and brings back one recovered elsewhere', () async {
+    await relay.start();
+    server.routes['GET api/notes'] = (_) => {'notes': [{...note('n1'), 'deletedAt': 3000}], 'next': 10, 'more': false};
+    await relay.pullNotes();
+    expect([[for (final entry in relay.entries) entry.id], [for (final entry in relay.deleted) entry.id]],
+      [['n3', 'web-note-1'], ['n1']]);
+    server.routes['GET api/notes'] = (_) => {'notes': [{...note('n1'), 'deletedAt': null}], 'next': 11, 'more': false};
+    await relay.pullNotes();
+    expect([[for (final entry in relay.entries) entry.id], relay.deleted], [['n3', 'web-note-1', 'n1'], isEmpty]);
+  });
+
+  test('Sign out leaves no note in memory, also none in Recently Deleted', () async {
     await relay.start();
     await relay.deleteNote('n1');
     await relay.disconnect();
-    expect(server.calls.sublist(server.calls.length - 2), ['DELETE notes', 'POST out']);
-    expect(server.requests.firstWhere((request) => request.method == 'DELETE').url.queryParameters, {'id': 'n1'});
-    expect(relay.entries, isEmpty);
+    expect(server.calls.last, 'POST out');
+    expect([relay.entries, relay.deleted], [isEmpty, isEmpty]);
   });
 
-  test('a closing page sends the deletes under Undo and the words that did not go', () async {
+  test('a closing page sends the words that did not go', () async {
     await relay.start();
-    await relay.deleteNote('n1');
     server.routes['PATCH api/notes'] = (_) => http.Response('', 502);
     await relay.editNote('web-note-1', 'Typed before closing');
     relay.pageClosing();
     expect([for (final (method, address, _) in lastSends) '$method $address'], [
-      'DELETE https://relay.example.com/apps/relay/api/notes?id=n1',
       'PATCH https://relay.example.com/apps/relay/api/notes',
     ]);
     expect(jsonDecode(lastSends.last.$3!), {'clientId': 'web-note-1', 'text': 'Typed before closing', 'editedAt': 5000});
-    await relay.endUndo('n1');
-    expect(server.calls, isNot(contains('DELETE notes')), reason: 'it went as the page closed');
   });
 
   test("a closing page sends the open note's words that the editor did not save yet", () async {
@@ -452,19 +470,18 @@ void main() {
     final notices = <String>[];
     final listening = relay.notices.listen(notices.add);
     await relay.deleteNote('n1');
-    await relay.endUndo('n1');
     await Future<void>.delayed(Duration.zero);
-    expect(relay.entries.any((entry) => entry.id == 'n1'), isTrue);
+    expect([relay.entries.any((entry) => entry.id == 'n1'), relay.deleted], [true, isEmpty]);
     expect(notices, ['The note was not deleted. Try later.']);
     await listening.cancel();
   });
 
-  test('an empty note on the server is deleted with Undo; one with a recording or files stays', () async {
+  test('an empty note on the server is deleted for good, as Apple Notes does; one with a recording or files stays', () async {
     await relay.start();
-    expect(await relay.dropEmptyNote('n1'), Emptied.deleting);
-    expect(relay.entries.any((entry) => entry.id == 'n1'), isFalse);
+    expect(await relay.dropEmptyNote('n1'), Emptied.deleted);
+    expect([relay.entries.any((entry) => entry.id == 'n1'), relay.deleted], [false, isEmpty]);
+    expect(server.requests.last.url.queryParameters, {'id': 'n1', 'forever': 'true'});
     expect(await relay.dropEmptyNote('n3'), Emptied.kept);
-    await relay.undoDelete('n1');
   });
 
   test('opens a file in a new tab, plays a recording from its route, and says when a file is not ready', () async {

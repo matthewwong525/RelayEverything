@@ -79,11 +79,12 @@ function saveNote({ note: { id, source, text, recorded_at, created_at, device, a
 }
 
 // One way to save each type this receiver knows. A note.updated holds a changed note's latest words and transcripts; a
-// note.deleted deletes the note and its files.
+// note.deleted deletes the note and its files, and a note.recovered saves it again, its files' bytes after in their note.file.
 const handlers = {
   'note.created': saveNote,
   'note.updated': saveNote,
   'note.deleted': ({ note: { id } }) => { dropFiles.run(id); dropRecordings.run(id); dropNote.run(id); },
+  'note.recovered': saveNote,
   'note.file': ({ note_id, file: f }) => file.run(f.id, note_id, f.name, f.content_type, f.size, Buffer.from(f.base64, 'base64')),
   'health.samples': ({ samples }) => samples.forEach(s => {
     const same = [s.device.id, s.type, s.start, s.end, s.source, s.id];

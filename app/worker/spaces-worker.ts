@@ -20,7 +20,9 @@ import memory from "../../schema/space-migrations/0016_memory.sql";
 import notePlaces from "../../schema/space-migrations/0017_note_places.sql";
 import notePins from "../../schema/space-migrations/0018_note_pins.sql";
 import memoryStore from "../../schema/space-migrations/0019_memory_store.sql";
+import recentlyDeleted from "../../schema/space-migrations/0020_recently_deleted.sql";
 import recordingTranscripts from "../../schema/space-migrations/0021_recording_transcripts.sql";
+import { FIRST_END, KEEP_DELETED } from "./apps/relay/recently-deleted.ts";
 import type { Row, Sql, SqlValue } from "./apps/relay/space.ts";
 import { BEHIND } from "./apps/relay/webhooks/log.ts";
 
@@ -31,7 +33,7 @@ export const MIGRATIONS: readonly [string, string][] = [["0001_relay", relay], [
   ["0010_note_edits", noteEdits], ["0011_note_sync", noteSync], ["0012_note_deletes", noteDeletes],
   ["0013_stays", stays], ["0014_nights", nights], ["0015_agent_devices", agentDevices], ["0016_memory", memory],
   ["0017_note_places", notePlaces], ["0018_note_pins", notePins], ["0019_memory_store", memoryStore],
-  ["0021_recording_transcripts", recordingTranscripts]];
+  ["0020_recently_deleted", recentlyDeleted], ["0021_recording_transcripts", recordingTranscripts]];
 /** A staging space ran a migration first under an older name, before another change took its number. */
 const RAN_AS: Readonly<Record<string, string>> = { "0010_note_edits": "0008_note_edits" };
 
@@ -84,10 +86,38 @@ export class Space extends DurableObject<SpacesEnv> {
     return key.buffer;
   }
 
-  /** Remembers whose space this is, for the alarm's queue messages, and sets the alarm when none is set. */
-  async watch(personId: string): Promise<void> {
+  /** Remembers whose space this is, for the alarm's queue messages. */
+  private remember(personId: string) {
     this.query("INSERT INTO space_meta (name, value) VALUES ('person', ?) ON CONFLICT (name) DO UPDATE SET value = excluded.value", [personId]);
-    if (await this.ctx.storage.getAlarm() === null) await this.ctx.storage.setAlarm(Date.now() + SWEEP);
+  }
+
+  /** Remembers the person, and sets the alarm for the next sweep unless one comes sooner. An alarm set for the end of a
+   *  note's 30 days may be weeks away; the alarm itself still purges then. */
+  async watch(personId: string): Promise<void> {
+    this.remember(personId);
+    const next = Date.now() + SWEEP;
+    const alarm = await this.ctx.storage.getAlarm();
+    if (alarm === null || alarm > next) await this.ctx.storage.setAlarm(next);
+  }
+
+  /** Remembers the person, and moves the alarm to the end of the first note's 30 days in Recently Deleted when that
+   *  comes first. */
+  async watchDeleted(personId: string): Promise<void> {
+    this.remember(personId);
+    const end = this.query(FIRST_END)[0]?.at as number | null;
+    const alarm = await this.ctx.storage.getAlarm();
+    if (end !== null && (alarm === null || end < alarm)) await this.ctx.storage.setAlarm(end);
+  }
+
+  /** Asks the queue to delete each note 30 days in Recently Deleted, as the file store is the app's. Says when the
+   *  next one ends, or null with none waiting. */
+  private async purge(): Promise<number | null> {
+    const person = this.query("SELECT value FROM space_meta WHERE name = 'person'")[0]?.value;
+    const due = this.query("SELECT 1 FROM relay_notes WHERE deleted_at <= ? LIMIT 1", [Date.now() - KEEP_DELETED]).length > 0;
+    if (due && person) await this.env.RELAY_WEBHOOKS.sendBatch([{ body: { purge: true, person } }]);
+    const end = this.query(FIRST_END)[0]?.at as number | null;
+    // A note due now is gone once the queue runs: look again at the next sweep.
+    return end === null ? null : end > Date.now() ? end : Date.now() + SWEEP;
   }
 
   /** Wakes each webhook left behind by a lost wake-up, and drops tries older than 30 days. Says how many it woke. The
@@ -100,10 +130,13 @@ export class Space extends DurableObject<SpacesEnv> {
     return behind.length;
   }
 
-  /** Every 15 minutes while the space has a webhook; a space with none sets no alarm, so it costs nothing. */
+  /** Every 15 minutes while the space has a webhook, and at the end of each note's 30 days in Recently Deleted; a space
+   *  with neither sets no alarm, so it costs nothing. */
   async alarm(): Promise<void> {
     await this.sweep();
-    if (this.query("SELECT 1 FROM relay_webhooks LIMIT 1").length) await this.ctx.storage.setAlarm(Date.now() + SWEEP);
+    const ends = [await this.purge(), this.query("SELECT 1 FROM relay_webhooks LIMIT 1").length ? Date.now() + SWEEP : null]
+      .filter(at => at !== null);
+    if (ends.length) await this.ctx.storage.setAlarm(Math.min(...ends));
   }
 
   /** Deletes every row, the file key and the alarm. The object then holds nothing; a new sign-in gets a new space. */

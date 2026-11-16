@@ -22,7 +22,7 @@ final later = at.add(const Duration(minutes: 5));
 Attachment recording(String id, {bool top = true}) => Attachment(id: id, name: 'Recording.wav', type: 'audio/wav', size: 10,
   path: 'attachments/$id.wav', lengthMs: 12000, wordsPending: true, top: top);
 
-/// Takes away version 15's recording columns, so a store made now reads as an older one.
+/// Takes away version 16's recording columns, so a store made now reads as an older one.
 void dropRecordingColumns(void Function(String sql) execute) {
   for (final column in ['length_ms', 'transcript', 'words_pending', 'top', 'ready', 'here_only']) {
     execute('ALTER TABLE attachments DROP COLUMN $column');
@@ -904,11 +904,13 @@ void main() {
         await made.get('x');
         await made.close();
         final old = Store(NativeDatabase(file, setup: (db) {
-          if (db.userVersion != 15) return;
-          // Version 13 added the source column, version 14 the pin columns, and version 15 the recording columns.
+          if (db.userVersion != 16) return;
+          // Version 13 added the source column, version 14 the pin columns, version 15 named deleting_at deleted_at, and
+          // version 16 added the recording columns.
           for (final column in ['source', 'pinned_at', 'pin_changed_at', 'pin_unsent']) {
             db.execute('ALTER TABLE notes DROP COLUMN $column');
           }
+          db.execute('ALTER TABLE notes RENAME COLUMN deleted_at TO deleting_at');
           dropRecordingColumns(db.execute);
           db.execute('INSERT INTO state VALUES (?, ?)',
             [settingsKey, jsonEncode({'sending': true, 'history': history, 'locationSend': 'points'})]);
@@ -955,10 +957,11 @@ void main() {
       await made.get('x');
       await made.close();
       final old = Store(NativeDatabase(file, setup: (db) {
-        if (db.userVersion != 15) return;
+        if (db.userVersion != 16) return;
         for (final column in ['source', 'pinned_at', 'pin_changed_at', 'pin_unsent']) {
           db.execute('ALTER TABLE notes DROP COLUMN $column');
         }
+        db.execute('ALTER TABLE notes RENAME COLUMN deleted_at TO deleting_at');
         dropRecordingColumns(db.execute);
         db.execute("INSERT INTO notes (client_id, body, created_at, kind, audio_path, duration_ms) VALUES (?, ?, 1, 'voice', ?, 3000)",
           ['old', jsonEncode(note('old').toJson()), 'voice/old.wav']);

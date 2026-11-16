@@ -26,6 +26,9 @@ final update = item(11, noteUpdate, {'clientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6
   'attachments': [{'id': 'f1', 'name': 'receipt.jpg', 'type': 'image/jpeg', 'size': 4},
     {'id': 'r1', 'name': 'Recording.wav', 'type': 'audio/wav', 'size': 9, 'lengthMs': 4200, 'transcript': 'Paid in cash.'}]});
 final deleted = item(15, noteDelete, {'clientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'id': 's1'});
+final recovered = item(17, noteRecover, {'clientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'text': 'Receipt for the desk lamp',
+  'createdAt': Date.recorded, 'id': 's1',
+  'attachments': [{'id': 'f1', 'name': 'receipt.jpg', 'type': 'image/jpeg', 'size': 4}]});
 final file = item(8, 'attachment', {'noteClientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'id': 'f1',
   'path': 'attachments/f1.jpg', 'name': 'receipt.jpg', 'type': 'image/jpeg'});
 final samples = item(9, 'health', {'samples': [{'type': 'steps', 'start': Date.recorded,
@@ -88,6 +91,12 @@ void main() {
     // A delete names the note by the id the receiver keeps it under: the phone's own.
     expect(webhook.message(deleted), {'version': 1, 'type': 'note.deleted', 'timestamp': '2026-11-04T14:01:02.000Z', 'data': {
       'note': {'id': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'deleted_at': '2026-11-04T14:01:02.000Z'}}});
+    // A recover sends the whole note again, so a receiver that dropped it on the delete keeps it again.
+    expect(webhook.message(recovered), {'version': 1, 'type': 'note.recovered', 'timestamp': '2026-11-04T14:01:02.000Z',
+      'data': webhook.message(note)!['data']});
+    // A forever delete of a note the receiver already heard was deleted sends nothing more.
+    expect(webhook.message(item(18, noteDelete, {'clientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'forever': true,
+      'moved': true})), isNull);
     // A change carries the note's own created_at, though it was queued later, so a receiver keeps one row as it was.
     final later = OutboxItem(12, noteUpdate, update.body, destination: ownWebhook, createdAt: sent);
     expect(webhook.message(later)!['data']['note']['created_at'], webhook.message(note)!['data']['note']['created_at']);
@@ -311,6 +320,7 @@ void main() {
     await webhook.send(note);
     await webhook.send(update);
     await webhook.send(deleted);
+    await webhook.send(recovered);
     await webhook.sendFile(file, [1, 2, 3, 4]);
     await webhook.send(samples);
     await webhook.send(points);

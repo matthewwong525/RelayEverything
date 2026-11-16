@@ -43,7 +43,8 @@ export interface Db {
 type Stub = {
   query(sql: string, params: SqlValue[]): Promise<Row[]>; batch(statements: Sql[]): Promise<Row[][]>;
   fileKey(): Promise<ArrayBuffer>;
-  watch(personId: string): Promise<void>; sweep(personId: string): Promise<number>; deleteEverything(): Promise<void>;
+  watch(personId: string): Promise<void>; watchDeleted(personId: string): Promise<void>; sweep(personId: string): Promise<number>;
+  deleteEverything(): Promise<void>;
 };
 /** The agents' database's RPC methods: spaces-worker.ts's `Workbench`, which holds no table of the space. */
 type Workbench = {
@@ -161,6 +162,8 @@ export type PersonSpace = {
   workbench: Workbench;
   /** Keeps the webhook alarm set while the space has a webhook. */
   watch(): Promise<void>;
+  /** Sets the alarm for the end of the first note's 30 days in Recently Deleted, when that comes first. */
+  watchDeleted(): Promise<void>;
   sweep(): Promise<number>;
   deleteEverything(): Promise<void>;
 };
@@ -174,7 +177,7 @@ export function spaceOf(env: SpaceEnv, caller: Caller): PersonSpace {
   return {
     personId: caller.personId, db: dbOf(stub), files: filesOf(env.RELAY_BUCKET, stub, caller.personId),
     workbench: { run: async statements => bench().run(statements), tables: async () => bench().tables() },
-    watch: async () => stub.watch(caller.personId), sweep: async () => stub.sweep(caller.personId),
+    watch: async () => stub.watch(caller.personId), watchDeleted: async () => stub.watchDeleted(caller.personId), sweep: async () => stub.sweep(caller.personId),
     // The agents' database goes first: a space that is gone leaves no way back to it.
     deleteEverything: async () => { await bench().deleteEverything(); await stub.deleteEverything(); },
   };

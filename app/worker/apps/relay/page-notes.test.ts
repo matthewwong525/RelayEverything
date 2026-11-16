@@ -66,9 +66,11 @@ it("adds, changes and deletes a session's note as the space's Web device, made o
   const synced = (await call(phone, "GET", "notes")).json.notes;
   expect(synced.map(note => [note.device, note.mine, note.text])).toEqual([["Web", false, "Ideas for the trip: Porto"]]);
   expect((await call(matthew, "GET", "notes")).json.notes.map(note => note.mine)).toEqual([true]);
-  expect(await page(matthew, "DELETE", "notes", { clientId: "web-note-0001" })).toEqual({ status: 200, json: { id: json.id, deleted: true } });
+  expect(await page(matthew, "DELETE", "notes", { clientId: "web-note-0001" }))
+    .toEqual({ status: 200, json: { id: json.id, deleted: true, deletedAt: NOW } });
   expect(await delivered()).toEqual([["note.deleted", null]]);
-  expect(rows("relay_notes")).toEqual([]);
+  // It waits in Recently Deleted: the page's feed still gives it, with the time it moved.
+  expect((await call(matthew, "GET", "notes", { trash: "1" })).json.notes.map(note => note.deletedAt)).toEqual([NOW]);
   expect(log()).toEqual(["note.created", "note.updated", "note.deleted"]);
   expect(webRows()).toHaveLength(1);
 });
@@ -80,7 +82,7 @@ it("changes and deletes a phone's note by id from the page, which never owns it"
   expect(await page(matthew, "PATCH", "notes", { id, text: "Milk", attachments: [PDF] })).toMatchObject({ status: 400, json: { error: { code: "not_own" } } });
   expect((await page(matthew, "PATCH", "notes", { clientId: "phone-note-01", text: "Bread" })).status).toBe(404);
   expect((await call(matthew, "GET", "notes")).json.notes.map(note => note.mine)).toEqual([false]);
-  expect((await page(matthew, "DELETE", "notes", { id })).json).toEqual({ id, deleted: true });
+  expect((await page(matthew, "DELETE", "notes", { id })).json).toEqual({ id, deleted: true, deletedAt: NOW });
   expect(log()).toEqual(["note.created", "note.updated", "note.deleted"]);
 });
 

@@ -312,11 +312,8 @@ class _RecordingCardState extends State<RecordingCard> {
     setState(() => _open = !_open);
   }
 
-  Future<void> _copy() async {
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    await Clipboard.setData(ClipboardData(text: _words.text.trim()));
-    messenger?.showSnackBar(const SnackBar(content: Text('Copied')));
-  }
+  /// Copies the words and shows nothing, as Apple's apps do.
+  Future<void> _copy() => Clipboard.setData(ClipboardData(text: _words.text.trim()));
 
   @override
   Widget build(BuildContext context) {

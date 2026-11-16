@@ -1,6 +1,6 @@
 # The Relay Everything brand
 
-Relay Everything's look: the logo, the colors, the type and the four rules that every screen of the phone app, its share card and [the website](relay-website.md) follow. Each later screen change starts from this page; [UX principles](ux-principles.md) decide what a screen is, and this page decides how it looks.
+Relay Everything's look: the logo, the colors, the type and the five rules that every screen of the phone app, its share card and [the website](relay-website.md) follow. Each later screen change starts from this page; [UX principles](ux-principles.md) decide what a screen is, and this page decides how it looks.
 
 ## Feel
 
@@ -70,5 +70,6 @@ Inter, one variable font, inside the app, inside the iPhone share sheet and serv
 | Cards, no borders | A card is a lighter shape on paper. No box inside a box. |
 | Words with every color | A state says its name: *2 waiting*, *Key refused*, *Off*. Never color alone. The sync state shows only when the person can act on it, so there is no *Synced* or *On this phone*. The sync dot sits beside its word: spark that pulses while waiting notes send, a hollow ring for *2 waiting*, also with no signal, and danger for *Key refused*. With reduced motion on the phone, the dot stays still. |
 | Soft corners | 12 px on buttons and fields, 16 px on cards. |
+| No toasts; a problem is an alert | Nothing slides in from the bottom. A done action shows its result in place, and a copy shows nothing. A problem is a Cupertino alert: its first sentence is the title, the rest is the message, with *OK*. A delete moves the note to *Recently Deleted*, with no *Undo* bar. |
 
 These rules apply the [UX principles](ux-principles.md#principles) *one primary action*, *fewer borders* and *never rely on color alone* to Relay Everything.

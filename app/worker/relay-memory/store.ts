@@ -45,8 +45,8 @@ const FACT_INSERT = `INSERT INTO relay_memory (id, fields, sources, replaces, de
   owner_subject, shared, memory_sources) VALUES (?, ?, ?, (SELECT json_group_array(id) FROM relay_memory WHERE replaced_by IS NULL
   AND n IN (SELECT value FROM json_each(?)) AND (? OR owner_subject = ?)), ?, ?, ?, ${NEXT_NUMBER}, ?, ?, ?, ?, ?, ?) RETURNING n`;
 /** The records a `relay:` link may name, by kind; a day is checked as a date. */
-const RECORDS: Record<string, string> = { note: "relay_notes", chat: "relay_chats", photo: "relay_photos", stay: "relay_stays",
-  night: "relay_nights", event: "relay_calendar_events", workout: "relay_health" };
+const RECORDS: Record<string, string> = { note: "(SELECT id FROM relay_notes WHERE deleted_at IS NULL)", chat: "relay_chats",
+  photo: "relay_photos", stay: "relay_stays", night: "relay_nights", event: "relay_calendar_events", workout: "relay_health" };
 // Words too common to match on their own: a fact sharing only *how* or *should* with a question is noise.
 const FILLER = new Set(("how should what when which does the and for with that this from into about have been would could there their "
   + "them then than also just only some any all our your you are was were can will not").split(" "));

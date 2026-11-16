@@ -20,17 +20,19 @@ const editInput = z.strictObject({
 }).refine(edit => (edit.id === undefined) !== (edit.clientId === undefined), "Give the note's id or its clientId, not both.")
   .refine(hasWords, "Give the note words or a file.");
 type Edit = z.infer<typeof editInput>;
-type Stored = { id: string; text: string; device_id: string; client_id: string | null; edited_at: number | null };
+type Stored = { id: string; text: string; device_id: string; client_id: string | null; edited_at: number | null; deleted_at: number | null };
 
 const REFUSAL = "Only a phone key or the Relay Everything page can change a note.";
 const ERRORS = { not_found: "Your space has no note with this id, or this device sent no note with this clientId.",
   older: "The note changed after this change was made, so the newer words stay: GET notes gives them.",
-  not_own: "Add a file only to a note this device sent." };
+  not_own: "Add a file only to a note this device sent.",
+  deleted: "The note is in Recently Deleted, where it can't be changed: recover it first with POST notes/recover." };
 
-const failed = (code: keyof typeof ERRORS, status: number) => Response.json({ error: { code, message: ERRORS[code] } }, { status });
+const failed = (code: keyof typeof ERRORS, status: number) =>
+  Response.json({ error: { code, message: ERRORS[code] } }, { status });
 
 function stored({ db }: PersonSpace, deviceId: string, edit: Edit) {
-  const select = "SELECT id, text, device_id, client_id, edited_at FROM relay_notes";
+  const select = "SELECT id, text, device_id, client_id, edited_at, deleted_at FROM relay_notes";
   return (edit.id !== undefined ? db.prepare(`${select} WHERE id = ?`).bind(edit.id)
     : db.prepare(`${select} WHERE device_id = ? AND client_id = ?`).bind(deviceId, edit.clientId!)).first<Stored>();
 }
@@ -60,6 +62,7 @@ async function editNote(env: Parameters<typeof wake>[0], space: PersonSpace, dev
   const { db } = space;
   const note = await stored(space, deviceId, edit);
   if (!note) return failed("not_found", 404);
+  if (note.deleted_at !== null) return failed("deleted", 409);
   const now = Date.now();
   // A phone's clock can run ahead: a change from the future would lock the note against every later one.
   const editedAt = Math.min(edit.editedAt ?? now, now);
@@ -84,7 +87,8 @@ export const noteEdit = defineAction({
   operationId: "relay.notes-edit", summary: "Change a note",
   description: "Change the words or a recording's transcript of any note in your space, and list the files added since to a note this device sent. "
     + "The page changes notes as your space's Web device. "
-    + "The newer change wins: a change made before the note's last one gets 409. Webhooks get it as note.updated.",
+    + "The newer change wins: a change made before the note's last one gets 409. A note in Recently Deleted gets 409 with the code `deleted`. "
+    + "Webhooks get it as note.updated.",
   input: editInput, output: z.strictObject({ id: z.string(), updated: z.boolean().describe("False when the words and transcripts were the same and no file was new.") }),
   encoding: "json", effect: "write", agentAvailable: false, requiresIdentity: false, errors: ERRORS, examples: [],
   handler: asDeviceOrPage<ActionCall>(REFUSAL, async ({ space, deviceId, env, call }) => editNote(env, space, deviceId, call.input as Edit)),

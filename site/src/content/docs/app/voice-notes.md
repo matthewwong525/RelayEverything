@@ -28,7 +28,7 @@ A recording you give to **Add a note** in Apple Shortcuts becomes a voice note t
 
 To add a recording to a note you have open, tap the **mic** in the bar at the bottom of the note, or in the bar over the keyboard. The same full screen opens as for a held **New note**: talk, then tap anywhere to save, or tap the **X** to keep nothing. The new recording goes at the bottom of the note, after your words, with the photos and files, in the order you added them. Only the recording a voice note starts with sits at the top. A recording with no words heard stays in the note.
 
-A note holds up to 10 files, and each recording counts as one. The mic shows on a phone only, and not on a note from another phone or from email. The Relay Everything page and the Mac app record nothing.
+A note holds up to 10 files, and each recording counts as one. The mic shows on a phone only, and not on a note from another phone, from email or in **Recently Deleted**. The Relay Everything page and the Mac app record nothing.
 
 The first time you hold **New note**, the phone asks for the microphone. If you said no, allow the microphone for Relay Everything in the phone's settings.
 
@@ -93,9 +93,9 @@ With a screen reader, swipe up or down on the waves to go 5 seconds forward or b
 
 ## Read the transcript
 
-Under the player, the **Transcript** row shows the first 2 lines of what you said. Tap it to see all of the words, with a copy button. Tap it again to fold them.
+Under the player, the **Transcript** row shows the first 2 lines of what you said. Tap it to see all of the words, with a copy button. The copy shows no message. Tap it again to fold them.
 
-To fix a wrong word, open the transcript and type in it. The phone keeps the change as a change of the note, and with sending on, it goes to your space, your other phones and your webhooks.
+To fix a wrong word, open the transcript and type in it. The phone keeps the change as a change of the note, and with sending on, it goes to your space, your other phones and your webhooks. A note in **Recently Deleted** reads only: [recover it](../your-notes/#recently-deleted) first.
 
 ## Where your recording goes
 

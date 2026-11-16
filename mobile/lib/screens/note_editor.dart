@@ -23,13 +23,13 @@ import '../relay.dart';
 import '../web/paste.dart';
 import 'back_to.dart';
 import 'days.dart';
-import 'folder.dart' show Opener, openInBrowser;
+import 'folder.dart' show Opener, askAlert, browserProblem, openInBrowser, showProblemOn;
 import 'hold_to_talk.dart' show recordFromShortcut;
 import 'more_menu.dart';
 import 'note_bars.dart';
 import 'note_blocks.dart';
 import 'round_button.dart';
-import 'timeline.dart' show showDeleted;
+import 'timeline.dart' show askDeleteForever;
 
 /// Picks photos ([photos] true) or files from the phone. The app's is `file_picker`; a test passes its own.
 typedef FilesPicker = Future<List<NewFile>> Function({required bool photos});
@@ -126,11 +126,14 @@ class NoteEditorState extends State<NoteEditor> {
   final _scroll = ScrollController();
   Timer? _pause;
   Future<void> _writing = Future.value();
-  ScaffoldMessengerState? _messenger;
+  /// The app's navigator, taken while the page is open: a problem that comes after it closes still shows.
+  NavigatorState? _navigator;
   /// Kept with no send yet, as typing saves: leaving sends it.
   bool _unsent = false;
   /// Set by ⋯ → *Delete*: no save runs after it, so leaving keeps nothing.
   bool _deleted = false;
+  /// The note is in *Recently Deleted*: it opens to read only, and a tap in its words asks to recover it.
+  bool _trash = false;
   bool _formatting = false;
   /// Set with the keyboard, or at once when a button brings it up, so the edit that comes first waits for a pause.
   late bool _typing = widget.entry == null;
@@ -167,12 +170,14 @@ class NoteEditorState extends State<NoteEditor> {
   /// The note as the list has it now, so a recording's words still being written fill in here too.
   Entry? get _current => _stored ? _live ?? widget.entry : null;
 
-  /// The note in the list now, or null when the phone no longer has it.
+  /// The note in the list or in *Recently Deleted* now, or null when the phone no longer has it.
   Entry? get _live {
     final opened = widget.entry;
-    return relay.entries.where((other) => other.id == _id &&
+    return [...relay.entries, ...relay.deleted].where((other) => other.id == _id &&
       (_id.isNotEmpty || (other.at == opened?.at && other.recordings.isEmpty == opened?.recordings.isEmpty))).firstOrNull;
   }
+
+  bool get _inTrash => _stored && relay.deleted.any((entry) => entry.id == _id);
 
   @override
   void initState() {
@@ -184,6 +189,7 @@ class NoteEditorState extends State<NoteEditor> {
       // ignore: experimental_member_use
       config: QuillControllerConfig(clipboardConfig: QuillClipboardConfig(onClipboardPaste: _clipboardPaste)));
     _listen();
+    _trash = _controller.readOnly = _inTrash;
     _controller.addListener(_caretMoved);
     _focus.addListener(_focusChanged);
     relay.addListener(_relayChanged);
@@ -209,7 +215,7 @@ class NoteEditorState extends State<NoteEditor> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _messenger = ScaffoldMessenger.maybeOf(context);
+    _navigator = Navigator.maybeOf(context, rootNavigator: true);
     final inset = MediaQuery.viewInsetsOf(context).bottom;
     _measureKeyboard(inset);
     // The keyboard coming up shrinks the page under the caret.
@@ -272,6 +278,11 @@ class NoteEditorState extends State<NoteEditor> {
   void _relayChanged() {
     if (!_stored && !_deleted && _adds == 0 && relay.entries.any((entry) => entry.id == _id)) _stored = true;
     if (_stored && !_deleted && _live == null) return _gone();
+    // Deleted or recovered, here or on another device: the words lock or open.
+    if (_inTrash != _trash) {
+      setState(() => _trash = _controller.readOnly = _inTrash);
+      if (_trash) _focus.unfocus();
+    }
   }
 
   /// The note left the phone, such as a voice note with no speech or one deleted on another phone: leaving keeps
@@ -307,7 +318,7 @@ class NoteEditorState extends State<NoteEditor> {
   /// on leave goes after them.
   void _save({required bool sendNow, List<NewFile> files = const [], bool leaving = false}) {
     _pause?.cancel();
-    if (_deleted) return;
+    if (_deleted || _trash) return;
     final delta = _controller.document.toDelta();
     final text = delta == _saved ? _savedText : deltaToMarkdown(delta);
     // Blank words, such as only an empty Title line, are kept as none, so a note of files alone is not `#`.
@@ -334,7 +345,6 @@ class NoteEditorState extends State<NoteEditor> {
       if (_stored && empty && files.isEmpty && _bare) {
         final emptied = leaving ? await relay.dropEmptyNote(_id) : Emptied.kept;
         if (emptied != Emptied.kept) _stored = false;
-        if (emptied == Emptied.deleting) showDeleted(_messenger, relay, _id);
       } else if (_stored && !changed) {
         // Left unchanged with blank words, yet a file or a recording keeps it: only what waits still goes.
         if (unsent) await relay.sync();
@@ -347,7 +357,7 @@ class NoteEditorState extends State<NoteEditor> {
         if (mounted) setState(() {});
       }
       if (adding) _adds--;
-      if (problem != null) _messenger?.showSnackBar(SnackBar(content: Text(problem)));
+      if (problem != null) await showProblemOn(_navigator, problem);
     });
   }
 
@@ -419,7 +429,7 @@ class NoteEditorState extends State<NoteEditor> {
     return true;
   }
 
-  void _say(String message) => _messenger?.showSnackBar(SnackBar(content: Text(message)));
+  void _say(String message) => unawaited(showProblemOn(_navigator, message));
 
   void _done() {
     setState(() => _formatting = _typing = false);
@@ -567,27 +577,42 @@ class NoteEditorState extends State<NoteEditor> {
 
   Future<void> _share() => (widget.sharer ?? shareWithPhone)(_plain);
 
-  Future<void> _copy() async {
-    await Clipboard.setData(ClipboardData(text: _plain));
-    _say('Copied');
-  }
+  /// Copies the words, with no message: the person knows what they copied.
+  Future<void> _copy() => Clipboard.setData(ClipboardData(text: _plain));
 
-  /// ⋯ → *Delete*: the page closes, and the note goes after any save still running, with *Undo* on the list. A new
-  /// note not kept yet keeps nothing.
+  /// ⋯ → *Delete*: the page closes, and the note moves to *Recently Deleted* after any save still running, with no
+  /// message. A new note not kept yet keeps nothing.
   void _delete() {
     _pause?.cancel();
     _deleted = true;
-    final messenger = _messenger;
     _writing = _writing.then((_) async {
       if (!_stored) return;
       await relay.deleteNote(_id);
-      showDeleted(messenger, relay, _id);
     });
     _leave();
   }
 
-  /// ⋯ → *Delete*, or the browser's delete key: the note goes, with *Undo*.
-  void delete() => _delete();
+  /// ⋯ → *Recover* on a note in *Recently Deleted*: it goes back to the notes, and its words open to edit.
+  Future<void> _recover() => relay.recover(_id);
+
+  /// ⋯ → *Delete* on a note in *Recently Deleted*: it asks first, then the note goes for good and the page closes.
+  Future<void> _deleteForever() async {
+    if (!await askDeleteForever(context) || !mounted) return;
+    _deleted = true;
+    unawaited(relay.deleteForever(_id));
+    _leave();
+  }
+
+  /// A tap in the words of a note in *Recently Deleted*, as Apple Notes asks.
+  Future<void> _askRecover() async {
+    if (await askAlert(context, title: "Recently deleted notes can't be edited.",
+      message: "To edit this note, you'll need to recover it.", action: 'Recover')) {
+      await _recover();
+    }
+  }
+
+  /// ⋯ → *Delete*, or the browser's delete key: the note moves to *Recently Deleted*, or, from there, goes for good.
+  void delete() => _trash ? unawaited(_deleteForever()) : _delete();
 
   void _leave() {
     if (widget.onClose case final close?) return close();
@@ -596,13 +621,14 @@ class NoteEditorState extends State<NoteEditor> {
 
   /// Files dropped on the note in the browser: they join it as the paperclip's do. A note from elsewhere takes none.
   void addFiles(List<NewFile> files) {
-    if (files.isEmpty) return;
+    if (files.isEmpty || _trash) return;
     if (_attachOrNull == null) return _say('You can add files only to a note you wrote here or on your phone.');
     _save(sendNow: true, files: files);
   }
 
   /// *Bold* or *Italic* from the Mac's *Format* menu: on the words picked, or on what is typed next, as ⌘B and ⌘I do.
   void toggleStyle(Attribute attribute) {
+    if (_trash) return;
     final on = _controller.getSelectionStyle().attributes.containsKey(attribute.key);
     _controller.formatSelection(on ? Attribute.clone(attribute, null) : attribute);
   }
@@ -620,6 +646,10 @@ class NoteEditorState extends State<NoteEditor> {
   /// A tap on a link while reading opens it, and the keyboard stays down. While editing, as in Apple Notes, a tap on
   /// the cursor opens or closes the text menu; any other tap returns false, so the editor places the cursor.
   bool _tapUp(TapUpDetails details, TextPosition Function(Offset) positionOf) {
+    if (_trash) {
+      unawaited(_askRecover());
+      return true;
+    }
     final at = positionOf(details.globalPosition);
     if (_focus.hasFocus || _formatting) return !_formatting && _toggleMenu(at);
     final link = linkAtPosition(_controller.document, at);
@@ -644,7 +674,7 @@ class NoteEditorState extends State<NoteEditor> {
 
   Future<void> _openLink(String link) async {
     final address = Uri.tryParse(link.contains('://') ? link : 'https://$link');
-    if (address == null || !await (widget.opener ?? openInBrowser)(address)) _say('The browser did not open. Try again.');
+    if (address == null || !await (widget.opener ?? openInBrowser)(address)) _say(browserProblem);
   }
 
   /// *Yesterday at 18:05*, and *From Email* for a note from elsewhere.
@@ -655,11 +685,12 @@ class NoteEditorState extends State<NoteEditor> {
       .whereType<String>().join(' · ');
   }
 
-  /// The server takes new files only from the phone that made the note, so a note from elsewhere offers none.
-  AttachPick? get _attachOrNull => _current?.from == null ? _attach : null;
+  /// The server takes new files only from the phone that made the note, so a note from elsewhere offers none, and
+  /// nor does a note in *Recently Deleted*.
+  AttachPick? get _attachOrNull => _current?.from == null && !_trash ? _attach : null;
 
-  /// *Record* shows only on a phone, and for a note made here, as *Attach* does.
-  VoidCallback? get _recordOrNull => !relay.desktop && _current?.from == null ? _record : null;
+  /// *Record* shows only on a phone, and for a note made here and not in *Recently Deleted*, as *Attach* does.
+  VoidCallback? get _recordOrNull => !relay.desktop && _current?.from == null && !_trash ? _record : null;
 
   /// *Record*: the recording screen opens over the note, and the recording joins it after its words. The words typed
   /// so far are kept first, so a new note with words is kept before the recording joins it.
@@ -694,7 +725,7 @@ class NoteEditorState extends State<NoteEditor> {
             ? Align(alignment: Alignment.topCenter,
                 child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 760), child: _page(context, brand)))
             : _page(context, brand))),
-          if (!widget.pane && !_formatting) Positioned(left: 16, right: 16, bottom: 0, child: SafeArea(
+          if (!widget.pane && !_formatting && !_trash) Positioned(left: 16, right: 16, bottom: 0, child: SafeArea(
             top: false,
             minimum: EdgeInsets.only(bottom: editing || _finding ? 6 : 12),
             child: _finding
@@ -729,8 +760,8 @@ class NoteEditorState extends State<NoteEditor> {
       child: Row(spacing: 10, children: [
         ButtonPill(children: [PillIconButton(icon: CupertinoIcons.square_pencil, tooltip: 'New note', onPressed: _compose)]),
         ButtonPill(children: [
-          PillIconButton(icon: CupertinoIcons.textformat, tooltip: 'Text styles', onPressed: _paneStyles),
-          PillIconButton(icon: CupertinoIcons.checkmark_circle, tooltip: 'Checklist', onPressed: _checklist),
+          PillIconButton(icon: CupertinoIcons.textformat, tooltip: 'Text styles', onPressed: _trash ? null : _paneStyles),
+          PillIconButton(icon: CupertinoIcons.checkmark_circle, tooltip: 'Checklist', onPressed: _trash ? null : _checklist),
           AttachButton(onPick: _attachOrNull, menu: false),
         ]),
         // Search gives up width first, so a narrow pane keeps every tool.
@@ -746,7 +777,13 @@ class NoteEditorState extends State<NoteEditor> {
   );
 
   /// Built with the list, so a pin from another device changes *Pin Note* to *Unpin Note* while the page is open.
-  Widget _more() => ListenableBuilder(listenable: relay, builder: (context, _) => MoreMenu(
+  Widget _more() => ListenableBuilder(listenable: relay, builder: (context, _) => _trash
+    ? MoreMenu(
+        items: [('Recover', CupertinoIcons.arrow_uturn_left, () => unawaited(_recover())), ('Copy', CupertinoIcons.doc_on_doc, _copy)],
+        destructive: ('Delete', CupertinoIcons.trash, () => unawaited(_deleteForever())),
+        builder: (context, toggle) => PillIconButton(icon: CupertinoIcons.ellipsis, tooltip: 'More', onPressed: toggle),
+      )
+    : MoreMenu(
     items: [
       if (_current case final note?)
         note.pinned ? ('Unpin Note', CupertinoIcons.pin_slash, _pin) : ('Pin Note', CupertinoIcons.pin, _pin),
@@ -765,7 +802,8 @@ class NoteEditorState extends State<NoteEditor> {
     final muted = TextStyle(fontSize: 13, color: brand.muted);
     final recordings = note?.recordings ?? const <EntryRecording>[];
     final files = note?.files ?? const <EntryFile>[];
-    final editable = !relay.desktop && note?.from == null;
+    // A note in *Recently Deleted* reads only: its transcripts too.
+    final editable = !relay.desktop && note?.from == null && !_trash;
     Widget card(EntryRecording recording) => RecordingCard(key: ValueKey(recording.id.isEmpty ? recording.recording : recording.id),
       relay: relay, recording: recording, editable: editable);
     Widget added(EntryRecording recording) => Padding(padding: const EdgeInsets.only(top: 14), child: card(recording));

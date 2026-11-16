@@ -38,5 +38,15 @@ import workmanager_apple
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "RelayPaste") {
       RelayPaste.register(registrar.messenger())
     }
+    // A shake after a delete asks to undo it (SceneDelegate.swift).
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "RelayShake") {
+      RelayShake.register(registrar.messenger())
+    }
+  }
+
+  /// A shake with no view to take it comes here, at the end of the responder chain.
+  override func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
+    if motion == .motionShake { RelayShake.shaken(event) }
+    super.motionEnded(motion, with: event)
   }
 }

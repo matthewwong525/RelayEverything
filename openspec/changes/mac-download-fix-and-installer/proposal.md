@@ -31,7 +31,7 @@ The Mac app opens to a black window and never shows a note: it can not read its 
   </svg>
   ```
   No real picture: the Mac app runs only on a Mac, and this computer is not one.
-- **The download opens as a Relay Everything window.** A fixed-size window with no toolbar or sidebar: the logo at the top, a deep emerald band with the app on the left, an arrow, and Applications on the right, and under it *Drag Relay Everything to Applications*. The names under the icons stay readable in light and dark mode. The disk shows the Relay Everything icon, not a plain white one. Its colors stay the same in dark mode: the picture is fixed, and only Finder's icon names change.
+- **The download opens as a Relay Everything window.** A fixed-size window with no toolbar or sidebar: light paper with the logo at the top, the app on the left, a green arrow, and Applications on the right, and under them *Drag Relay Everything to Applications*. The names under the icons are black and easy to read in light and dark mode. The disk shows the Relay Everything icon, not a plain white one. Its colors stay the same in dark mode: the picture is fixed, and only Finder's icon names change.
   ```svg
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 364" width="600" height="364">
   <g transform="scale(0.909)">
@@ -41,14 +41,13 @@ The Mac app opens to a black window and never shows a note: it can not read its 
       <path d="M36 12a10 10 0 0 1 0 12M40 8a16 16 0 0 1 0 20" stroke="#F5A524"/>
     </g>
     <text x="276" y="58" font-size="20" font-weight="700" fill="#121614">Relay Everything</text>
-    <rect x="40" y="100" width="580" height="200" rx="16" fill="#158662"/>
     <rect x="122" y="140" width="96" height="96" rx="22" fill="#0E7A5A"/>
     <text x="170" y="200" font-size="44" font-weight="700" fill="#FFFFFF" text-anchor="middle">R</text>
-    <text x="170" y="270" font-size="13" fill="#FFFFFF" text-anchor="middle">Relay Everything</text>
-    <path d="M262 188h120" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
-    <path d="M372 172l18 16-18 16" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="170" y="270" font-size="13" fill="#121614" text-anchor="middle">Relay Everything</text>
+    <path d="M262 188h120" stroke="#0E7A5A" stroke-width="5" stroke-linecap="round"/>
+    <path d="M372 172l18 16-18 16" fill="none" stroke="#0E7A5A" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
     <rect x="442" y="148" width="96" height="80" rx="10" fill="#6CB4EE"/>
-    <text x="490" y="270" font-size="13" fill="#FFFFFF" text-anchor="middle">Applications</text>
+    <text x="490" y="270" font-size="13" fill="#121614" text-anchor="middle">Applications</text>
     <text x="330" y="346" font-size="16" fill="#5E6660" text-anchor="middle">Drag Relay Everything to Applications</text>
   </g>
   </svg>
@@ -75,7 +74,7 @@ The Mac app opens to a black window and never shows a note: it can not read its 
 - New `mobile/macos/dmg/settings.py` (dmgbuild layout) and `mobile/macos/dmg/make-dmg.sh`.
 - Overlaps the mac-app-updates plan in `mobile-macos.yml` and `install.md`: the dmgbuild `.dmg` is the one file its update feed and the website give; the second to land takes in the other's lines.
 - `.github/workflows/mobile-macos.yml`: makes the disk image with dmgbuild on every run; a branch keeps the unsigned image in place of the zip.
-- Docs: `mobile/README.md` (the Mac build), `wiki/brand.md` (the script's new output and the band color), the website's Mac install step (`site/src/content/docs/start/install.md`).
+- Docs: `mobile/README.md` (the Mac build), `wiki/brand.md` (the script's new output, and why it stays light), the website's Mac install step (`site/src/content/docs/start/install.md`).
 
 ## Decision log
 
@@ -89,3 +88,6 @@ The Mac app opens to a black window and never shows a note: it can not read its 
 - **2026-11-16** — Assumed: the window is 660 by 428, not 660 by 400, because the second look found that Finder's window size counts the title bar, which would cut the bottom of the background. Task 3.2's screenshot confirms it.
 - **2026-11-16** — Saved for the Mac check: all tasks but 3.2 are done; the pull request's build makes the unsigned disk image that 3.2 checks on a Mac.
 - **2026-11-16** — Check: `.github/workflows/mobile-macos.yml` changes the Mac build's steps but loosens no check: dmgbuild replaces `hdiutil create`, and a branch keeps the unsigned disk image in place of the zip, still with `if-no-files-found: error`; the signing, Apple's check, the staple and `mac-check` are unchanged.
+- **2026-11-16** — Asked nothing: Matthew's Mac check showed the green band hid the green app icon and made the names hard to read, and that Finder drew the names black in dark mode on this light-topped picture. So the band is gone: all paper, a green arrow, black names in both modes.
+- **2026-11-16** — Matthew's Mac check showed the unsigned test copy would not open (`different Team IDs`): a branch now signs every part ad hoc, with no hardened runtime. The signed build is unchanged.
+- **2026-11-16** — Check: `.github/workflows/mobile-macos.yml` signs a branch's copy ad hoc with no hardened runtime, because macOS refuses ad hoc frameworks under it; the copy goes nowhere, and main's and a release's signing keep the hardened runtime.

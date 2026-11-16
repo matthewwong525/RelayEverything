@@ -304,6 +304,10 @@ test('only a checked Mac disk image reaches the pre-release and the release, and
   assert.match(mac, /pip install dmgbuild==\d+\.\d+\.\d+/);
   const signed = mac.indexOf('--entitlements macos/Runner/Release.entitlements');
   assert.ok(signed > 0 && signed < mac.lastIndexOf('macos/dmg/make-dmg.sh "$APP" "$DMG"'), 'the app is signed first');
-  assert.match(mac, /- name: Disk image to try\n {8}if: inputs\.mode == 'branch'\n {8}run: macos\/dmg\/make-dmg\.sh "\$APP" "\$DMG"/);
+  // A branch's copy signs every part ad hoc with no hardened runtime, or macOS refuses its frameworks and it never opens.
+  const branchDmg = mac.match(/- name: Disk image to try\n {8}if: inputs\.mode == 'branch'\n {8}run: \|\n((?: {10}.*\n)+)/)?.[1] ?? '';
+  assert.match(branchDmg, /codesign --force --sign - --entitlements macos\/Runner\/Release\.entitlements "\$APP"/);
+  assert.doesNotMatch(branchDmg, /--options runtime/);
+  assert.match(branchDmg, /macos\/dmg\/make-dmg\.sh "\$APP" "\$DMG"\n$/);
   assert.match(mac, /- name: File to try\n(?: {8,}.*\n)*? {10}path: mobile\/Relay-Everything-Mac\.dmg\n/);
 });

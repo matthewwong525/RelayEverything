@@ -96,9 +96,16 @@ jobs:
         if: inputs.mode == 'branch' || steps.key.outputs.sign == 'true'
         run: pip install dmgbuild==1.6.7
       # The same disk image as a release's, unsigned, so the install window can be checked before it goes out.
+      # Every part signed ad hoc, frameworks first, with no hardened runtime: with it, macOS refuses the frameworks
+      # ("different Team IDs") and the copy to try never opens.
       - name: Disk image to try
         if: inputs.mode == 'branch'
-        run: macos/dmg/make-dmg.sh "$APP" "$DMG"
+        run: |
+          find "$APP/Contents/Frameworks" -depth \( -name '*.framework' -o -name '*.dylib' \) -print0 |
+            xargs -0 -I{} codesign --force --sign - {}
+          codesign --force --sign - --entitlements macos/Runner/Release.entitlements "$APP"
+          codesign --verify --strict --deep --verbose=2 "$APP"
+          macos/dmg/make-dmg.sh "$APP" "$DMG"
       - name: File to try
         if: inputs.mode == 'branch'
         uses: actions/upload-artifact@v4

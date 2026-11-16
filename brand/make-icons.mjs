@@ -27,8 +27,6 @@ const paper = '#F7F8F4';
 const spark = '#F5A524';
 const ink = '#121614';
 const muted = '#5E6660';
-// The Mac install window's band: Finder writes icon names white in dark mode and black in light, over any picture.
-const band = '#158662';
 const dark = { accentText: '#4CC79A', spark: '#FFC24D', ink: '#ECF3EE' };
 
 // The mark's drawing: each path, with its stroke on the path itself (ImageMagick's renderer ignores a stroke set on
@@ -105,14 +103,14 @@ function contrast(a, b) {
   const [high, low] = [lum(a), lum(b)].sort((x, y) => y - x);
   return (high + 0.05) / (low + 0.05);
 }
-for (const text of ['#FFFFFF', '#000000']) {
-  const ratio = contrast(band, text);
-  if (ratio < 4.5) throw new Error(`the install window's band ${band} gives ${ratio.toFixed(2)} to 1 with ${text}: 4.5 is the least`);
-}
+// Finder picks the icon names' color from the install window's picture: on a light picture it writes them in black,
+// in dark mode too. So the picture stays light paper, with no band behind the icons, where the app's green icon would
+// sink into the green.
+if (contrast(paper, '#000000') < 4.5) throw new Error(`the install window's paper ${paper} is too dark for Finder's black names`);
 
 /**
- * The Mac install window's background, 660 by 400 points: the logo at the top, the band behind the app (170, 188)
- * and Applications (490, 188) as mobile/macos/dmg/settings.py places them, a white arrow between, and the one line.
+ * The Mac install window's background, 660 by 400 points: the logo at the top, the app (170, 188) and Applications
+ * (490, 188) on paper as mobile/macos/dmg/settings.py places them, an accent arrow between, and the one line.
  */
 function dmgBackground() {
   const wordmark = readFileSync(at('brand/logo.svg'), 'utf8').match(/<path class="w"[^>]*\/>/)[0]
@@ -125,8 +123,7 @@ function dmgBackground() {
     ${markIn(accentText)}
     ${wordmark}
   </g>
-  <rect x="40" y="100" width="580" height="200" rx="16" fill="${band}"/>
-  <g fill="none" stroke="${onAccent}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+  <g fill="none" stroke="${accent}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
     <path d="M262 188h132"/>
     <path d="M376 170l20 18-20 18"/>
   </g>

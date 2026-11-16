@@ -8,11 +8,12 @@
 
 ## 2. The install window
 
-- [x] 2.1 In `brand/make-icons.mjs`, draw `mobile/macos/dmg/background.png` and `background@2x.png` as the design says, and throw when the band green is under 4.5 to 1 with white or black; run `node brand/make-icons.mjs` twice and verify the second run changes nothing and the picture matches the plan's drawing.
+- [x] 2.1 In `brand/make-icons.mjs`, draw `mobile/macos/dmg/background.png` and `background@2x.png` as the design says, all paper with an accent arrow and no band, and throw when paper is too dark for Finder's black names; run `node brand/make-icons.mjs` twice and verify the second run changes nothing and the picture matches the plan's drawing.
 - [x] 2.2 Add `mobile/macos/dmg/settings.py` (the dmgbuild layout) and `mobile/macos/dmg/make-dmg.sh <app> <dmg>`; verify `bash -n` passes on the script and `python3 -m py_compile` on the settings.
 - [x] 2.3 In `.github/workflows/mobile-macos.yml`, install a pinned dmgbuild, make the image with `make-dmg.sh` in the signed step in place of `hdiutil create`, and on a branch make and keep the unsigned image in place of the zip; verify `actionlint` passes, or the YAML parses if it is missing.
 - [x] 2.4 If mac-app-updates landed first, take in its lines: make the image with `make-dmg.sh` after Sparkle's helpers and the app are signed, and give that one signed, notarised `Relay-Everything-Mac.dmg` to the update feed, the `mac-updates` release and the website; if this plan lands first, leave a note in that plan's chat. Verify `grep -n "hdiutil create" .github/workflows/mobile-macos.yml` finds nothing and the feed step reads the same `$DMG`.
-- [x] 2.5 Update `wiki/brand.md` (the script also writes the install window's background; the band green and its reason), the Mac build bullets in `mobile/README.md` (a branch keeps the unsigned disk image; dmgbuild makes the window), and step 2 of the Mac section in `site/src/content/docs/start/install.md` (the window shows the app and Applications); verify `node scripts/product-name.test.mjs` passes.
+- [x] 2.5 Update `wiki/brand.md` (the script also writes the install window's background, and why it stays light), the Mac build bullets in `mobile/README.md` (a branch keeps the unsigned disk image; dmgbuild makes the window), and step 2 of the Mac section in `site/src/content/docs/start/install.md` (the window shows the app and Applications); verify `node scripts/product-name.test.mjs` passes.
+- [x] 2.6 Sign a branch's copy ad hoc in every part, with no hardened runtime, so it opens on a Mac; verify `node --test scripts/app-release.test.mjs` passes.
 
 ## 3. Checks
 

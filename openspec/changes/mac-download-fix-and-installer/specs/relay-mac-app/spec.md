@@ -16,7 +16,7 @@ The Mac app SHALL show its notes window on every open: on the first open with no
 
 ### Requirement: The Mac download opens as a Relay Everything install window
 
-The Mac disk image SHALL open as a fixed-size Finder window with no toolbar or sidebar, on a background in the Relay Everything brand: the logo, the app and Applications on a deep emerald band with an arrow from the app to Applications, and the words *Drag Relay Everything to Applications*. The band color SHALL give the names under the icons a contrast of 4.5 to 1 or more with both white and black text, so they read in light and dark mode. The disk SHALL show the Relay Everything icon. A pull request's unsigned Mac build SHALL be the same disk image.
+The Mac disk image SHALL open as a fixed-size Finder window with no toolbar or sidebar, on a background in the Relay Everything brand: light paper with the logo, the app and Applications, an arrow from the app to Applications, and the words *Drag Relay Everything to Applications*. The background SHALL stay light behind the icons, so Finder writes their names in black, readable in light and dark mode, and the app's green icon stands out. The disk SHALL show the Relay Everything icon. A pull request's unsigned Mac build SHALL be the same disk image, and its app SHALL open on a Mac once the person allows it.
 
 #### Scenario: Open the download
 
@@ -26,4 +26,4 @@ The Mac disk image SHALL open as a fixed-size Finder window with no toolbar or s
 #### Scenario: Dark mode
 
 - **WHEN** the person's Mac is in dark mode and opens the download
-- **THEN** the names *Relay Everything* and *Applications* read clearly on the emerald band
+- **THEN** the names *Relay Everything* and *Applications* read clearly, in black, and the app's icon stands out from the background

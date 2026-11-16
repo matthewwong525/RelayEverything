@@ -39,10 +39,10 @@ The plan *mac-app-updates* (chat "The Mac app updates itself, and the website's 
 
 ### Draw the background with the brand script
 
-`brand/make-icons.mjs` writes `mobile/macos/dmg/background.png` (660 by 400) and `background@2x.png` (1320 by 800), drawn by the same headless Chromium from an SVG: paper `#F7F8F4`; at the top, the mark in accent-text with spark waves beside the wordmark outline from `brand/logo.svg` (no font needed); a band at y 100 to 300 with 16 corners in the band green; a white arrow between the two icon spots; and *Drag Relay Everything to Applications* in muted, Inter 16, from `mobile/assets/fonts/inter/InterVariable.ttf` through `@font-face`. dmgbuild combines the PNG and its `@2x` into one multi-resolution picture.
+`brand/make-icons.mjs` writes `mobile/macos/dmg/background.png` (660 by 400) and `background@2x.png` (1320 by 800), drawn by the same headless Chromium from an SVG: paper `#F7F8F4`; at the top, the mark in accent-text with spark waves beside the wordmark outline from `brand/logo.svg` (no font needed); an accent arrow between the two icon spots; and *Drag Relay Everything to Applications* in muted, Inter 16, from `mobile/assets/fonts/inter/InterVariable.ttf` through `@font-face`. dmgbuild combines the PNG and its `@2x` into one multi-resolution picture.
 
-- **Band green `#158662`.** Finder draws icon names white in dark mode and black in light mode, whatever is behind them. `#158662` gives 4.55 to 1 with white and 4.62 to 1 with black. The script throws, naming the ratio, when the band color drops below 4.5 to 1 with either. Matthew chose the band on 2026-11-16.
-- *One bright thing:* the spark stays only in the mark's waves; the arrow is white, not spark.
+- **All paper, no band.** Finder picks the icon names' color from the picture: on Matthew's Mac in dark mode it wrote them black on this light picture. A first try put a `#158662` band behind the icons; on the Mac it hid the green app icon and the black names were hard to read, so it went. The script throws if paper is too dark for black names.
+- *One bright thing:* the spark stays only in the mark's waves; the arrow is accent, the drag being the one main action.
 
 ## UX
 
@@ -64,11 +64,12 @@ One action: the drag. The arrow and the one line of words point to it; the logo 
 
 ### Components
 
-No app parts. The background reuses the brand mark, the wordmark outline and the Emerald tokens; the band green is new, only in this picture, for the label-contrast reason above.
+No app parts. The background reuses the brand mark, the wordmark outline and the Emerald tokens; no new color.
 
 ## Risks / Trade-offs
 
-- [Finder's real label colors are slightly softer than pure white and black] → the band is centered between them, and the apply step checks a screenshot of the window in both modes from the pull request's image.
+- [A future macOS could draw the names white in dark mode on any picture] → the names would be faint on paper; the Mac check after each change to the window looks at both modes.
+- [A branch's copy is signed ad hoc, not with the Developer ID] → it opens only after the person allows it (`xattr -dr com.apple.quarantine` or *Open Anyway*); it goes nowhere.
 - [dmgbuild's layout depends on Finder reading its `.DS_Store`; a new macOS could change how] → it is the common tool for this, used by many Mac apps; the window still opens with both icons if the layout is ignored.
 - [Six keychain reads where one was] → none a person sees.
 

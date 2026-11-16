@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · one-webhook-path</title>
+<title>Review · 2026-11-16-one-webhook-path</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -452,11 +452,11 @@
 })();
 </script>
 </head>
-<body data-change="one-webhook-path" data-own-back>
+<body data-change="2026-11-16-one-webhook-path" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>one-webhook-path</h1>
+  <h1>2026-11-16-one-webhook-path</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Tap a picture to see it full screen.</span></p>
@@ -508,6 +508,8 @@
 <li class="decision card" id="decision-17" data-note="decision-17" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-16</p>Second look: no bug in the code; two weak tests, both fixed. The nights move test now starts its row at the webhook, so it fails if the move does nothing, and a new test closes the one-time message by a tap outside it and checks that the message does not come back.</li>
 <li class="decision card" id="decision-18" data-note="decision-18" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-16</p>Assumed, at 5.3: this change lands before <code>recently-deleted</code>, so it left a note for that plan in shared memory: <i>note deleted</i> and <i>note recovered</i> go on both paths. This change touched no webhook message.</li>
 <li class="decision card" id="decision-19" data-note="decision-19" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-16</p>Saved for final acceptance: built, reviewed, and the spec changes are in the main specs. <code>flutter analyze</code> is clean and all phone tests pass. The iPhone device check (5.4) runs on this saved commit.</li>
+<li class="decision card" id="decision-20" data-note="decision-20" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-16</p>Check: the iPhone device check on 9945396 (run 43786411426) gave <i>works</i>. The fixed tour passed, with <code>new-note</code> on its second try. Claude saw all three scenarios work: Settings and <i>Sign in</i> show no <i>Only to my own webhook</i> and no private-data group; the webhook Account page's <i>Sign in to Relay Everything</i> row and the <i>Sign in</i> screen say everything then goes through Relay Everything. The doubled webhook address in Claude's picture came from its own flow typing twice.</li>
+<li class="decision card" id="decision-21" data-note="decision-21" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-16</p>Archived for the ship. The spec deltas were already in the main specs at the last save. The walk reuses the iPhone check on 9945396, because the archive changes no app file.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

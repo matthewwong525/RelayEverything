@@ -1,6 +1,6 @@
 # One path to your webhook: signed in, through Relay Everything; with no account, straight from the phone
 
-**Status:** in-review
+**Status:** ready-to-ship
 **Branch:** loved-turtle
 **Open questions:** none
 
@@ -98,3 +98,5 @@ None.
 - **2026-11-16** — Second look: no bug in the code; two weak tests, both fixed. The nights move test now starts its row at the webhook, so it fails if the move does nothing, and a new test closes the one-time message by a tap outside it and checks that the message does not come back.
 - **2026-11-16** — Assumed, at 5.3: this change lands before `recently-deleted`, so it left a note for that plan in shared memory: *note deleted* and *note recovered* go on both paths. This change touched no webhook message.
 - **2026-11-16** — Saved for final acceptance: built, reviewed, and the spec changes are in the main specs. `flutter analyze` is clean and all phone tests pass. The iPhone device check (5.4) runs on this saved commit.
+- **2026-11-16** — Check: the iPhone device check on 9945396 (run 43786411426) gave *works*. The fixed tour passed, with `new-note` on its second try. Claude saw all three scenarios work: Settings and *Sign in* show no *Only to my own webhook* and no private-data group; the webhook Account page's *Sign in to Relay Everything* row and the *Sign in* screen say everything then goes through Relay Everything. The doubled webhook address in Claude's picture came from its own flow typing twice.
+- **2026-11-16** — Archived for the ship. The spec deltas were already in the main specs at the last save. The walk reuses the iPhone check on 9945396, because the archive changes no app file.

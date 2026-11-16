@@ -34,4 +34,4 @@
 - [x] 5.1 `flutter analyze` and `flutter test` in `mobile/`; `node scripts/product-name.test.mjs`; `grep -rn "privateTo\|Only to my own\|Only my own" mobile/lib site/src AGENTS.md` finds nothing.
 - [x] 5.2 If `recordings-as-attachments` landed first, check that the server → webhook send and the no-account phone → webhook send both carry a recording as a file with its transcript, and that this change left both as that plan made them; if this lands first, leave a note on that plan.
 - [x] 5.3 If `recently-deleted` landed first, check that the server → webhook send and the no-account phone → webhook send both carry `note.deleted` and `note.recovered`, and that this change left both as that plan made them; if this lands first, leave a note on that plan.
-- [ ] 5.4 `/save`, then the iPhone device check on the saved commit: *Webhooks* signed out, the webhook Account page and *Sign in* words.
+- [x] 5.4 `/save`, then the iPhone device check on the saved commit: *Webhooks* signed out, the webhook Account page and *Sign in* words.

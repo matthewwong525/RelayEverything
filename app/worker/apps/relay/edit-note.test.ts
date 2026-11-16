@@ -111,3 +111,34 @@ it("refuses a phone key from another person's space by id", async () => {
   expect((await byId(benPhone)).status).toBe(404);
   expect(rows("relay_notes").map(row => row.text)).toEqual(["Flight to Lisbn"]);
 });
+
+const WAV = { id: "rec-wav-0001", name: "Recording.wav", type: "audio/wav", size: 9, transcript: "Call the fab.", lengthMs: 4200, top: true };
+const recordings = () => rows("relay_attachments").map(row => [row.id, row.transcript, row.length_ms, row.top]);
+
+it("keeps a recording's corrected transcript under the newer-change rule, and logs one note.updated", async () => {
+  const { json: { id } } = await sent({ text: "", attachments: [WAV] });
+  expect(recordings()).toEqual([["rec-wav-0001", "Call the fab.", 4200, 1]]);
+  expect((await edit(phone, { text: "", attachments: [WAV] })).json).toEqual({ id, updated: false });
+  expect(log().map(([kind]) => kind)).toEqual(["note.created"]);
+  const fixed = { ...WAV, transcript: "Call the lab." };
+  expect((await edit(phone, { text: "", attachments: [fixed], editedAt: NOW - MINUTE })).json).toEqual({ id, updated: true });
+  expect(recordings()).toEqual([["rec-wav-0001", "Call the lab.", 4200, 1]]);
+  expect(log().map(([kind]) => kind)).toEqual(["note.created", "note.updated"]);
+  const [file] = (await call(phone, "GET", "notes")).json.notes[0].attachments;
+  expect(file).toMatchObject({ transcript: "Call the lab.", lengthMs: 4200, top: true });
+  // An older change keeps the newer words; a file listed without a transcript keeps the one it has.
+  expect((await edit(phone, { text: "", attachments: [WAV], editedAt: NOW - 2 * MINUTE })).status).toBe(409);
+  expect((await edit(phone, { text: "Notes", attachments: [{ ...PDF, id: WAV.id }] })).json).toMatchObject({ updated: true });
+  expect(recordings()).toEqual([["rec-wav-0001", "Call the lab.", 4200, 1]]);
+  expect(log().map(([kind]) => kind)).toEqual(["note.created", "note.updated", "note.updated"]);
+});
+
+it("takes a failed recording's first transcript from any phone, and refuses one too long", async () => {
+  await sent({ text: "", attachments: [{ ...WAV, transcript: null, top: false }] });
+  expect(recordings()).toEqual([["rec-wav-0001", null, 4200, 0]]);
+  expect((await edit(ipad, { text: "", attachments: [WAV] })).status).toBe(404);
+  const id = rows("relay_notes")[0].id;
+  expect((await call(ipad, "PATCH", "notes", { id, text: "", attachments: [WAV] })).json).toEqual({ id, updated: true });
+  expect(recordings()).toEqual([["rec-wav-0001", "Call the fab.", 4200, 0]]);
+  expect((await edit(phone, { text: "", attachments: [{ ...WAV, transcript: "a".repeat(100_001) }] })).status).toBe(400);
+});

@@ -84,7 +84,7 @@ The phone remembers your choice. The share card from other apps follows the phon
 
 ## Voice notes
 
-This group shows if the speech model is on this phone, and its size. Your voice is written into words on this phone, and recordings never leave it. Tap **Remove** to delete the model and free 57 MB. The voice notes you made stay, with their words and recordings. The next voice note asks to get the model again. [Voice notes](../voice-notes/#get-the-speech-model)
+This group shows if the speech model is on this phone, and its size. Your voice is written into words on this phone. With sending on, recordings go to your space like files: [Where your recording goes](../voice-notes/#where-your-recording-goes). Tap **Remove** to delete the model and free 57 MB. The voice notes you made stay, with their words and recordings. The next voice note asks to get the model again. [Voice notes](../voice-notes/#get-the-speech-model)
 
 ## Version
 

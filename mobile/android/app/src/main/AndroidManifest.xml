@@ -2,7 +2,7 @@
     xmlns:tools="http://schemas.android.com/tools">
     <!-- Sync, a note's place and the location history. -->
     <uses-permission android:name="android.permission.INTERNET"/>
-    <!-- Voice notes: Hold to talk. The recording stays on the phone. -->
+    <!-- Voice notes: hold New note, or tap the microphone in a note. The phone writes the words; with sending on, the recording goes to the person's space as a file. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>

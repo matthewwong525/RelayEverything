@@ -13,6 +13,7 @@ import 'data/store.dart';
 import 'mac/mac_app.dart';
 import 'relay.dart';
 import 'sync/photos.dart' show PhoneNetwork;
+import 'voice/playback.dart';
 
 /// How often the open Mac app reads the notes changed elsewhere, besides each return to the window and each return of
 /// the network.
@@ -27,7 +28,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   registerBrandLicenses();
   final relay = RelayController(store: Store(driftDatabase(name: 'relay')), vault: KeyVault(), platform: RelayPlatform.mac,
-    folder: getApplicationSupportDirectory, opener: openWithMac, network: PhoneNetwork());
+    folder: getApplicationSupportDirectory, opener: openWithMac, network: PhoneNetwork(), player: SoundPlayer());
   await relay.load();
   runApp(MacApp(relay: relay));
   Timer.periodic(macPullEvery, (_) => unawaited(relay.pullNotes()));

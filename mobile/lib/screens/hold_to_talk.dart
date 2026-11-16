@@ -151,11 +151,11 @@ Future<void> askForModel(BuildContext context, Relay relay) async {
   }
 }
 
-/// *Start a voice note* from Shortcuts or the Action button: it records at once, on the same recording screen as a hold
-/// on *New note*, or, with no speech model yet, asks the same question.
-Future<void> recordFromShortcut(BuildContext context, Relay relay) async {
+/// *Start a voice note* from Shortcuts or the Action button, or *Record* in note [into]: it records at once, on the same
+/// recording screen as a hold on *New note*, or, with no speech model yet, asks the same question.
+Future<void> recordFromShortcut(BuildContext context, Relay relay, {String? into}) async {
   if (relay.speechModel != ModelState.ready) return askForModel(context, relay);
-  final problem = await relay.startVoiceNote();
+  final problem = await relay.startVoiceNote(into: into);
   if (context.mounted) _say(context, problem);
 }
 
@@ -359,8 +359,8 @@ class ModelDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Get the speech model?'),
-      content: Text('Voice notes need a ${megabytes(bytes)} file, one time. The phone uses it to write your words. '
-        'Your voice never leaves this phone.'),
+      content: Text('Voice notes need a ${megabytes(bytes)} file, one time. The phone uses it to write your words '
+        'itself, with no server.'),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Not now')),
         FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Get it')),

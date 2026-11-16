@@ -100,8 +100,8 @@ class AccountCard extends StatelessWidget {
   }
 }
 
-/// The speech model voice notes use: where it is, its size, and *Remove* to free the space. The voice never leaves
-/// the phone.
+/// The speech model voice notes use: where it is, its size, and *Remove* to free the space. It writes the words on
+/// the phone, with no server.
 class _VoiceRow extends StatelessWidget {
   const _VoiceRow({required this.relay});
 
@@ -111,7 +111,7 @@ class _VoiceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = megabytes(relay.modelBytes);
     final state = switch (relay.speechModel) {
-      ModelState.ready => 'On this phone, $size. Your voice never leaves it.',
+      ModelState.ready => 'On this phone, $size. It writes your words with no server.',
       ModelState.downloading => 'Getting it… ${(relay.modelProgress * 100).floor()}%',
       ModelState.failed => 'It did not download. Hold New note to try again.',
       _ => 'Not on this phone. Your first voice note asks to get it, $size.',

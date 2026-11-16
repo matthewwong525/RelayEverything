@@ -1,11 +1,17 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:relay_app/data/api.dart' show Failure;
+import 'package:relay_app/data/note_sync.dart';
 import 'package:relay_app/data/outbox.dart';
+import 'package:relay_app/data/sender.dart';
+import 'package:relay_app/data/settings.dart' show Settings;
+import 'package:relay_app/data/settings.dart' show settingsKey;
 import 'package:relay_app/data/store.dart';
 
 import 'fakes.dart';
@@ -14,6 +20,15 @@ final at = DateTime.fromMillisecondsSinceEpoch(1793797200000);
 final later = at.add(const Duration(minutes: 5));
 
 LocalNote note(String id, [String text = 'Buy milk']) => LocalNote(clientId: id, text: text, createdAt: at);
+
+/// A recording as the phone keeps it, its words not written yet.
+Attachment recording(String id, {bool top = true}) => Attachment(id: id, name: 'Recording.wav', type: 'audio/wav', size: 10,
+  path: 'attachments/$id.wav', lengthMs: 2000, wordsPending: true, top: top);
+
+/// A recording as a pull lists it.
+Map<String, dynamic> pulledRecording(String id, String? transcript, {bool top = true}) => {'id': id,
+  'name': 'Recording.wav', 'type': 'audio/wav', 'size': 10, 'ready': true, 'transcript': transcript, 'lengthMs': 4000,
+  'top': top};
 
 void main() {
   late Store store;
@@ -231,8 +246,38 @@ void main() {
     test('from a ring with a recording is a voice note, with its recording as a file to download', () async {
       await store.applyPulled([pulledNote('s7', source: 'ring', audio: true, device: 'Ring')]);
       final kept = (await store.notes()).single;
-      expect([kept.kind, kept.audioPath, [for (final file in kept.attachments) (file.id, file.type)]],
-        [NoteKind.voice, null, [('${recordingPrefix}s7', 'audio/mp4')]]);
+      // A ring's recording stays a plain file: its words are the note's.
+      expect([kept.kind, [for (final file in kept.attachments) (file.id, file.type, file.recording)]],
+        [NoteKind.voice, [('${recordingPrefix}s7', 'audio/mp4', false)]]);
+    });
+
+    test('with a recording keeps it as a recording, with its transcript, length and place, to download on play', () async {
+      await store.applyPulled([pulledNote('s16', text: '', device: 'Pixel', files: [pulledRecording('r1', 'Call the fab'),
+        pulledRecording('r2', null, top: false)])]);
+      final files = (await kept('srv:s16')).attachments;
+      expect([for (final file in files) (file.id, file.recording, file.transcript, file.lengthMs, file.top, file.path)],
+        [('r1', true, 'Call the fab', 4000, true, ''), ('r2', true, null, 4000, false, '')]);
+      // Only this phone's own recordings get words written here.
+      expect(await store.pendingWords(), isEmpty);
+    });
+
+    test('a later pull brings a recording\'s corrected transcript', () async {
+      await store.applyPulled([pulledNote('s17', text: '', files: [pulledRecording('r1', 'Call the fab')])]);
+      await store.applyPulled([pulledNote('s17', text: '', editedAt: later, files: [pulledRecording('r1', 'Call the lab')])]);
+      expect([(await kept('srv:s17')).attachments.single.transcript, await store.outbox()], ['Call the lab', isEmpty]);
+    });
+
+    test('this phone\'s unsent transcript edit, newer than the pull, stays and goes', () async {
+      await store.addVoiceNote(LocalNote(clientId: 'v', text: '', createdAt: at, kind: NoteKind.voice, attachments: [recording('r')]));
+      await store.setTranscript('r', 'Call the fab', send: true, at: at);
+      await flush(store, FakeServer().api(connection), clock: () => at);
+      expect(await store.setTranscript('r', 'Call the lab', send: false, at: later, edit: true), isTrue);
+      await store.applyPulled([pulledNote('s18', clientId: 'v', mine: true, text: '', recordedAt: at,
+        editedAt: at.add(const Duration(minutes: 1)), files: [pulledRecording('r', 'Call the fab')])]);
+      expect((await store.attachmentsOf('v')).single.transcript, 'Call the lab');
+      final change = (await store.outbox()).single;
+      expect([change.route, change.body['id'], (change.body['attachments'] as List).single['transcript']],
+        [noteUpdate, 's18', 'Call the lab']);
     });
   });
 
@@ -308,15 +353,15 @@ void main() {
       const file = Attachment(id: 'f1', name: 'a.pdf', type: 'application/pdf', size: 1, path: 'attachments/f1');
       await store.addNote(LocalNote(clientId: 'file', text: '', createdAt: at, attachments: const [file]), send: true);
       await store.addVoiceNote(LocalNote(clientId: 'voice', text: '', createdAt: at, kind: NoteKind.voice,
-        audioPath: 'voice/voice.m4a', durationMs: 2000));
-      await store.setWords('voice', 'Hello', send: true);
+        attachments: [recording('r1')]));
+      await store.setTranscript('r1', 'Hello', send: true, at: at);
       await store.addVoiceNote(LocalNote(clientId: 'coming', text: '', createdAt: at, kind: NoteKind.voice,
-        audioPath: 'voice/coming.m4a', durationMs: 2000));
+        attachments: [recording('r2')]));
       for (final id in ['file', 'voice', 'coming']) {
         expect(await store.dropEmptyNote(id), isFalse, reason: id);
       }
       expect((await store.notes()).length, 3);
-      expect([for (final item in await store.outbox()) item.route], ['notes', 'attachment', 'notes']);
+      expect([for (final item in await store.outbox()) item.route], ['notes', 'attachment', 'notes', 'attachment']);
     });
   });
 
@@ -681,6 +726,134 @@ void main() {
     expect(await old.deleteNote('kept'), isTrue);
   });
 
+  group('upgrades a phone from version 14, whose voice notes kept their words as text', () {
+    late Directory folder;
+    late File file;
+    // The file is version 15 again after the move, so the step back runs only on the first open.
+    var older = true;
+
+    /// A version 14 store, sending on, with a sent, an unsent, a waiting, a pending, a missing-file and a silent watch
+    /// voice note, each but the missing one with its recording in `voice/`.
+    Future<Store> open() async {
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+      addTearDown(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = false);
+      final old = Store(NativeDatabase(file, setup: (db) {
+        if (!older || db.userVersion != 15) return;
+        older = false;
+        for (final column in ['length_ms', 'transcript', 'words_pending', 'top', 'ready', 'here_only']) {
+          db.execute('ALTER TABLE attachments DROP COLUMN $column');
+        }
+        db.execute('INSERT INTO state VALUES (?, ?)', [settingsKey, jsonEncode({'sending': true})]);
+        String body(String id, String text) => jsonEncode(note(id, text).toJson());
+        for (final (id, text, sentAt, queued, pending, source) in [
+          ('sent', 'Call the fab', 5, 1, 0, null), ('unsent', 'Buy milk', null, 0, 0, null),
+          ('waiting', 'Waiting words', null, 1, 0, null), ('pending', 'Note @ 7:07 PM', null, 0, 1, null),
+          ('missing', 'Lost', null, 0, 0, null), ('watch', '', null, 0, 0, 'watch'),
+        ]) {
+          db.execute("INSERT INTO notes (client_id, body, created_at, sent_at, queued, kind, audio_path, duration_ms, "
+            "words_pending, source, server_id) VALUES (?, ?, 1, ?, ?, 'voice', ?, 3000, ?, ?, ?)",
+            [id, body(id, text), sentAt, queued, 'voice/$id.wav', pending, source, sentAt == null ? null : 's-$id']);
+        }
+        db.execute("INSERT INTO outbox (route, body, created_at) VALUES ('notes', ?, 2)", [body('waiting', 'Waiting words')]);
+        db.execute('PRAGMA user_version = 14');
+      }), folder: () async => folder);
+      addTearDown(old.close);
+      return old;
+    }
+
+    setUp(() async {
+      older = true;
+      folder = tempFolder();
+      file = File('${folder.path}/relay.db');
+      final made = Store(NativeDatabase(file));
+      await made.get('x');
+      await made.close();
+      await Directory('${folder.path}/voice').create();
+      for (final id in ['sent', 'unsent', 'waiting', 'pending', 'watch']) {
+        await File('${folder.path}/voice/$id.wav').writeAsString('RIFF $id');
+      }
+    });
+
+    test('moves each recording to the note\'s first file, with its words as the transcript and an empty text', () async {
+      final old = await open();
+      final notes = {for (final kept in await old.notes()) kept.clientId: kept};
+      (String, String?, bool, bool)? first(String id) => switch (notes[id]!.attachments) {
+        [final file] => (notes[id]!.text, file.transcript, file.wordsPending, file.top),
+        _ => null,
+      };
+      expect(first('sent'), ('', 'Call the fab', false, true));
+      expect(first('unsent'), ('', 'Buy milk', false, true));
+      expect(first('waiting'), ('', 'Waiting words', false, true));
+      // Words still coming were typed with the recording: they stay the text, and the note still waits.
+      expect([first('pending'), notes['pending']!.wordsPending], [('Note @ 7:07 PM', null, true, true), true]);
+      expect([notes['missing']!.text, notes['missing']!.attachments, notes['missing']!.wordsPending], ['Lost', isEmpty, false]);
+      expect(first('watch'), ('', '', false, true));
+      for (final id in ['sent', 'unsent', 'waiting', 'pending', 'watch']) {
+        final kept = notes[id]!.attachments.single;
+        expect([kept.path, kept.lengthMs, kept.size, kept.type], ['attachments/${kept.id}.wav', 3000, 'RIFF $id'.length,
+          'audio/wav'], reason: id);
+        expect([File('${folder.path}/${kept.path}').existsSync(), File('${folder.path}/voice/$id.wav').existsSync()],
+          [true, false], reason: id);
+      }
+      expect([for (final (note, _) in await old.pendingWords()) note.clientId], ['pending']);
+    });
+
+    test('with sending on, a sent note goes as a change, a waiting upload takes the recording, and a silent watch note goes',
+      () async {
+      final old = await open();
+      final outbox = await old.outbox();
+      expect([for (final item in outbox) (item.route, item.body['clientId'] ?? item.body['noteClientId'])], [
+        ('notes', 'waiting'), (noteUpdate, 'sent'), ('attachment', 'sent'), ('attachment', 'waiting'), ('notes', 'watch'),
+        ('attachment', 'watch'),
+      ]);
+      final change = outbox[1].body;
+      expect([change['id'], change['text'], (change['attachments'] as List).single['transcript']], ['s-sent', '', 'Call the fab']);
+      expect((outbox.first.body['attachments'] as List).single['transcript'], 'Waiting words');
+      // The unsent note stays an earlier note, for *Send them*.
+      expect(await old.earlierCount(), 2);
+    });
+
+    test('a sent note the space refuses as another device\'s keeps its words as text and its recording here only', () async {
+      final old = await open();
+      // A new sign-in made this phone a new device: the space takes no file for a note the earlier key sent.
+      final server = FakeServer((request) => request.method == 'PATCH'
+        ? FakeServer.json({'error': {'code': 'not_own', 'message': 'Add a file only to a note this device sent.'}}, 400)
+        : _isPull(request) ? FakeServer.json({'notes': [{'id': 's-sent', 'clientId': 'sent', 'mine': false, 'text': 'Call the fab',
+            'recordedAt': 1, 'device': 'iPhone', 'attachments': []}], 'next': 1, 'more': false})
+        : FakeServer.ok(request));
+      for (var round = 0; round < 3; round++) {
+        await flush(old, server.api(bearer), clock: () => later, folder: () async => folder);
+      }
+      final sent = (await old.notes()).singleWhere((kept) => kept.clientId == 'sent');
+      final file = sent.attachments.single;
+      expect([for (final request in server.requests) if (request.method == 'PATCH') jsonDecode(request.body)['text']], ['']);
+      expect([for (final request in server.requests) if (request.url.path.endsWith('/attachments'))
+        request.headers['X-Note-Client-Id']], isNot(contains('sent')));
+      expect([sent.text, file.transcript, file.hereOnly, File('${folder.path}/${file.path}').existsSync()],
+        ['Call the fab', null, true, true]);
+      expect([for (final (kept, _) in await old.pendingWords()) kept.clientId], isNot(contains('sent')));
+      expect([for (final item in await old.outbox()) item.body['clientId'] ?? item.body['noteClientId']], isNot(contains('sent')));
+      // The space's text comes back on the next pull: the words show once, as the text.
+      await syncNotes(old, Sender(server.api), settings: const Settings(sending: true), connection: bearer);
+      final pulled = (await old.notes()).singleWhere((kept) => kept.clientId == 'sent');
+      expect([pulled.text, pulled.attachments.single.transcript, pulled.attachments.single.hereOnly], ['Call the fab', null, true]);
+      // A later change lists no file the space refused.
+      expect(await old.editNote('sent', 'Call the fab today', send: true, at: later), isTrue);
+      final change = (await old.outbox()).last.body;
+      expect([change['text'], change.containsKey('attachments')], ['Call the fab today', false]);
+    });
+
+    test('a second open moves nothing and sends nothing again', () async {
+      final first = await open();
+      final files = [for (final kept in await first.notes()) for (final file in kept.attachments) file.id];
+      final waiting = (await first.outbox()).length;
+      await first.close();
+      final again = await open();
+      expect([for (final kept in await again.notes()) for (final file in kept.attachments) file.id], files);
+      expect((await again.outbox()).length, waiting);
+    });
+  });
+
   group('earlier notes from your own webhook', () {
     /// Keeps note [id], made at [made], and sends it and its files, as a webhook takes them: sent, with no server id.
     Future<void> sentToWebhook(String id, DateTime made, {List<Attachment> files = const []}) async {
@@ -806,3 +979,5 @@ void main() {
     });
   });
 }
+
+bool _isPull(http.Request request) => request.method == 'GET' && request.url.path.endsWith('/notes');

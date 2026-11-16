@@ -26,9 +26,8 @@ enum Emptied { kept, dropped, deleting }
 
 /// One row of the timeline: a note typed or said on this phone, or one from elsewhere that a pull brought.
 class Entry {
-  const Entry({this.id = '', required this.text, required this.at, this.sent = false, this.waiting = false, this.voice = false,
-    this.writing = false, this.failed = false, this.why, this.noWords = false, this.recording, this.length, this.files = const [],
-    this.from, this.pinned = false});
+  const Entry({this.id = '', required this.text, required this.at, this.sent = false, this.waiting = false,
+    this.recordings = const [], this.files = const [], this.from, this.pinned = false});
 
   /// The phone's own id for the note: [Relay.editNote] takes it.
   final String id;
@@ -40,22 +39,10 @@ class Entry {
   /// It has an upload in the outbox while sending is on.
   final bool waiting;
 
-  /// Said into this phone, by a hold on *New note* or from Shortcuts.
-  final bool voice;
-  /// True while the phone writes its words.
-  final bool writing;
-  /// True when its words failed or took too long: the recording is kept, and *Try again* writes them again.
-  final bool failed;
-  /// Why its words failed, such as `the speech engine stopped (code -6).`; null when they did not fail. It stays on
-  /// the phone.
-  final String? why;
-  /// True for a watch note in which the phone found no words: it keeps its recording to play, and is not sent.
-  final bool noWords;
-  /// The recording on this phone, to play: [Relay.play] takes it.
-  final String? recording;
-  final Duration? length;
+  /// The note's recordings, in the order they were added, each with its own words.
+  final List<EntryRecording> recordings;
 
-  /// The note's files, in the order they were added.
+  /// The note's other files, in the order they were added.
   final List<EntryFile> files;
 
   /// Where a note from elsewhere was made, such as `Email` or another phone; null for a note from this phone.
@@ -63,6 +50,38 @@ class Entry {
 
   /// Pinned to the top of the notes list, in *Pinned*.
   final bool pinned;
+}
+
+/// One recording on a note, with its transcript: kept on this phone, or in the person's space until it plays.
+class EntryRecording {
+  const EntryRecording({this.id = '', required this.recording, this.length, this.transcript, this.writing = false,
+    this.failed = false, this.why, this.top = false, this.ready = true, this.filesBefore = 0});
+
+  /// The recording's file id: [Relay.editTranscript] takes it.
+  final String id;
+  /// What [Relay.play] takes: its path on this device, its id while only in the person's space, or in the browser its
+  /// address.
+  final String recording;
+  /// Null in the browser for a ring note's recording, whose length the player reads.
+  final Duration? length;
+  /// The written words: null until they are written, empty when the recording holds no speech.
+  final String? transcript;
+  /// True while the phone writes its words.
+  final bool writing;
+  /// True when its words failed or took too long: the recording is kept, and *Try again* writes them again.
+  final bool failed;
+  /// Why its words failed, such as `the speech engine stopped (code -6).`; null when they did not fail. It stays on
+  /// the phone.
+  final String? why;
+  /// The recording a voice note started with: it shows above the note's words; every other one shows with the files.
+  final bool top;
+  /// False while the sound is still on the phone that made it: the card says so in place of a player.
+  final bool ready;
+  /// How many of the note's other files were added before it: the page shows each in the order added.
+  final int filesBefore;
+
+  /// The phone found no speech in it.
+  bool get noWords => transcript != null && transcript!.isEmpty;
 }
 
 /// One file on a note: kept on this phone, or, for a note from elsewhere, in the person's space until opened. In the
@@ -95,7 +114,7 @@ class EntryFile {
 class Playback {
   const Playback({required this.recording, required this.at, required this.playing, this.length});
 
-  /// The note's recording, as [Entry.recording] names it.
+  /// The recording, as [EntryRecording.recording] names it.
   final String recording;
   final Duration at;
   final bool playing;
@@ -368,17 +387,20 @@ abstract class Relay extends ChangeNotifier {
   Stream<double>? get level;
   /// True once a first voice note started on this phone, from any start: *New note* then shows no *Hold to talk*.
   bool get holdTipSeen;
-  /// A hold on *New note*: starts a voice note. Returns the words to show when it can not, such as a refused microphone or one that
-  /// did not start; it does not throw.
-  Future<String?> startVoiceNote();
+  /// A hold on *New note*: starts a voice note, or with [into] a recording that goes into that note, as *Record* does.
+  /// Returns the words to show when it can not, such as a refused microphone, one that did not start, or a note that
+  /// holds 10 files already; it does not throw.
+  Future<String?> startVoiceNote({String? into});
   /// A tap anywhere or the back gesture: keeps the note and writes its words. Returns the words to show for one too
   /// short to keep, for a microphone that did not stop, or for a note the phone could not keep; then nothing is kept.
   /// [listening] is null after it in every case.
   Future<String?> endVoiceNote();
   /// The X, *Cancel*: keeps nothing.
   Future<void> cancelVoiceNote();
-  /// *Try again* on a note whose words failed: writes the words of each such note again, from its kept recording.
+  /// *Try again* on a recording whose words failed: writes the words of each such recording again.
   Future<void> writeWordsAgain();
+  /// Keeps the person's correction of recording [recording]'s transcript, as a change of its note.
+  Future<void> editTranscript(String recording, String transcript) async {}
   /// Plays a voice note's recording: from this phone, or in the browser from the person's space. The recording that is
   /// paused plays on from where it stopped; another one stops it.
   Future<void> play(String recording);

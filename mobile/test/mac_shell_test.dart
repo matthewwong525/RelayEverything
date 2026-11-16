@@ -15,6 +15,7 @@ import 'package:relay_app/screens/connect_ai.dart' show ConnectAiPage;
 import 'package:relay_app/screens/email_notes.dart' show EmailNotesPage;
 import 'package:relay_app/screens/hold_to_talk.dart' show NewNoteButton;
 import 'package:relay_app/screens/home.dart';
+import 'package:relay_app/screens/note_blocks.dart' show RecordingCard;
 import 'package:relay_app/screens/note_editor.dart';
 import 'package:relay_app/screens/settings.dart';
 import 'package:relay_app/screens/timeline.dart' show TimelineScreen;
@@ -52,8 +53,8 @@ void main() {
       ..settings = const Settings(sending: true)
       ..entries = [
         Entry(id: 'own', text: '# Groceries\nmilk and eggs', at: now, sent: true),
-        Entry(id: 'voice', text: 'Call the dentist at 3', at: now.subtract(const Duration(hours: 1)), sent: true, voice: true,
-          from: 'iPhone'),
+        Entry(id: 'voice', text: '', at: now.subtract(const Duration(hours: 1)), sent: true, from: 'iPhone', recordings: const [
+          EntryRecording(id: 'r1', recording: 'r1', transcript: 'Call the dentist at 3', length: Duration(seconds: 8), top: true)]),
       ];
     drops = StreamController<List<NewFile>>.broadcast();
     opened = [];
@@ -169,6 +170,22 @@ void main() {
       expect(find.byType(ConnectAiPage), findsOneWidget);
       await finish(tester);
     });
+  });
+
+  testWidgets("a phone's recording shows as its card with its transcript and plays, and the Mac shows no Record",
+      (tester) async {
+    await show(tester, wide);
+    await tester.tap(find.descendant(of: find.byType(NotesPane), matching: find.text('Call the dentist at 3')));
+    await tester.pumpAndSettle();
+    expect(editor(tester).id, 'voice');
+    final card = find.byType(RecordingCard);
+    expect([find.descendant(of: card, matching: find.text('Call the dentist at 3')),
+      find.descendant(of: card, matching: find.byTooltip('Play'))], everyElement(findsOneWidget));
+    expect(find.byTooltip('Record'), findsNothing);
+    await tester.tap(find.descendant(of: card, matching: find.byTooltip('Play')));
+    await tester.pump();
+    expect(relay.calls, contains('play r1'));
+    await finish(tester);
   });
 
   testWidgets('two parts from 700 px put the left bar in a menu, with the same rows', (tester) async {

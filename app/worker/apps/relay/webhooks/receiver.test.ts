@@ -108,6 +108,22 @@ it("keeps a changed note's latest words and its recording, and lists a file adde
   saved.close();
 });
 
+it("keeps a voice note's recording with its transcript, takes a corrected one, and deletes it with its note", async () => {
+  const at = Date.now();
+  const note = { ...ring, id: "a0000000-0000-4000-8000-000000000012", source: "typed" as const, text: "", audio_key: null };
+  const wav = { id: "rec-voice-0001", name: "Recording.wav", content_type: "audio/wav", size: 9, transcript: null, length_ms: 4200 };
+  expect((await send(noteCreated(note, null, at, [wav]))).status).toBe(204);
+  expect((await send(noteUpdated({ ...note, edited_at: at }, at, [{ ...wav, transcript: "Call the fab." }]))).status).toBe(204);
+  const saved = new DatabaseSync(database, { readOnly: true });
+  expect({ ...saved.prepare("SELECT transcript, length_ms FROM recordings WHERE note_id = ?").get(note.id) })
+    .toEqual({ transcript: "Call the fab.", length_ms: 4200 });
+  saved.close();
+  expect((await send(noteDeleted(note.id, at))).status).toBe(204);
+  const after = new DatabaseSync(database, { readOnly: true });
+  expect(after.prepare("SELECT count(*) AS n FROM recordings WHERE note_id = ?").get(note.id)).toEqual({ n: 0 });
+  after.close();
+});
+
 it("deletes a deleted note and its files, and another note stays", async () => {
   const at = Date.now();
   const note = { ...ring, id: "a0000000-0000-4000-8000-000000000011", audio_key: null };
@@ -131,7 +147,9 @@ it("saves what the phone sends to its own webhook, with each file's bytes beside
   const note = JSON.parse(phone("note.created")).data.note;
   const saved = new DatabaseSync(database, { readOnly: true });
   expect(saved.prepare("SELECT f.name, hex(f.bytes) AS bytes FROM files f JOIN notes n ON n.id = f.note_id WHERE n.id = ?").all(note.id)
-    .map(row => ({ ...row }))).toEqual([{ name: "receipt.jpg", bytes: "01020304" }]);
+    .map(row => ({ ...row }))).toEqual([{ name: "receipt.jpg", bytes: "01020304" }, { name: "Recording.wav", bytes: "" }]);
+  expect({ ...saved.prepare("SELECT transcript, length_ms FROM recordings WHERE note_id = ?").get(note.id) })
+    .toEqual({ transcript: "Paid in cash.", length_ms: 4200 });
   // The phone's own device id keeps its samples apart from the server's.
   expect(saved.prepare("SELECT count(*) AS n FROM health_samples WHERE device_id = ?").get(note.device.id)).toEqual({ n: 2 });
   expect(saved.prepare("SELECT kind FROM workouts WHERE device_id = ?").get(note.device.id)).toEqual({ kind: "running" });

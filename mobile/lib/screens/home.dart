@@ -93,10 +93,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// A tap saved the voice note that started [at]: its page opens over any page that is open, and its words fill in
   /// there. Its back button names Home only when Home is the page under it. The phone keeps a note's time to the
-  /// millisecond. With no such note, such as after a race with *Cancel*, nothing opens.
+  /// millisecond. With no such note, such as after a race with *Cancel* or for *Record* in an open note, nothing opens.
   void _openVoiceNote(DateTime at) {
     if (!mounted) return;
-    final note = relay.entries.where((entry) => entry.voice &&
+    final note = relay.entries.where((entry) => entry.recordings.any((recording) => recording.top) &&
       entry.at.millisecondsSinceEpoch == at.millisecondsSinceEpoch).firstOrNull;
     if (note == null) return;
     final onHome = ModalRoute.of(context)?.isCurrent ?? true;

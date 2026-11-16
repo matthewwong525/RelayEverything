@@ -135,7 +135,7 @@ test('each age rating answer is a question Apple asks, with an answer it takes',
 
 test('the privacy answers say what is collected, linked to the person, for the app only, with no tracking', () => {
   const answers = JSON.parse(readFileSync(join(FASTLANE, 'app_privacy_details.json'), 'utf8'));
-  assert.deepEqual(answers.map(answer => answer.category).sort(), ['DEVICE_ID', 'EMAIL_ADDRESS', 'FITNESS', 'HEALTH',
+  assert.deepEqual(answers.map(answer => answer.category).sort(), ['AUDIO_DATA', 'DEVICE_ID', 'EMAIL_ADDRESS', 'FITNESS', 'HEALTH',
     'OTHER_USER_CONTENT', 'PHOTOS_OR_VIDEOS', 'PRECISE_LOCATION', 'USER_ID']);
   for (const answer of answers) {
     assert.deepEqual(answer.purposes, ['APP_FUNCTIONALITY'], answer.category);
@@ -168,4 +168,11 @@ test('the screenshots cover iPhone, iPad and Apple Watch, each at a size Apple t
   const files = names.map(name => ({ name, buffer: readFileSync(join(SCREENSHOTS, name)) }));
   const problems = screenshotProblems(files);
   assert.deepEqual(problems, [], `Fix screenshots/${LOCALE}/ (mobile/README.md#the-app-store-page):\n${problems.join('\n')}`);
+});
+
+test('the microphone text says where a recording goes, as the privacy answers do', () => {
+  const plist = readFileSync(new URL('../mobile/ios/Runner/Info.plist', import.meta.url), 'utf8');
+  const text = plist.match(/<key>NSMicrophoneUsageDescription<\/key>\s*<string>([^<]*)<\/string>/)?.[1] ?? '';
+  assert.match(text, /goes to your own space/);
+  assert.doesNotMatch(text, /never leaves/);
 });

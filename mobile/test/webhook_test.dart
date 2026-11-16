@@ -23,7 +23,8 @@ final note = item(7, 'notes', {'clientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', '
   'attachments': [{'id': 'f1', 'name': 'receipt.jpg', 'type': 'image/jpeg', 'size': 4}]});
 final update = item(11, noteUpdate, {'clientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'text': '# Receipt\n- [x] Paid',
   'createdAt': Date.recorded, 'editedAt': Date.recorded + 600000,
-  'attachments': [{'id': 'f1', 'name': 'receipt.jpg', 'type': 'image/jpeg', 'size': 4}]});
+  'attachments': [{'id': 'f1', 'name': 'receipt.jpg', 'type': 'image/jpeg', 'size': 4},
+    {'id': 'r1', 'name': 'Recording.wav', 'type': 'audio/wav', 'size': 9, 'lengthMs': 4200, 'transcript': 'Paid in cash.'}]});
 final deleted = item(15, noteDelete, {'clientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'id': 's1'});
 final file = item(8, 'attachment', {'noteClientId': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'id': 'f1',
   'path': 'attachments/f1.jpg', 'name': 'receipt.jpg', 'type': 'image/jpeg'});
@@ -80,7 +81,9 @@ void main() {
     expect(webhook.message(update), {'version': 1, 'type': 'note.updated', 'timestamp': '2026-11-04T14:01:02.000Z', 'data': {
       'note': {'id': '3f9a0c1d2e4b5a6978c1d2e3f4a5b6c7', 'source': 'typed', 'text': '# Receipt\n- [x] Paid',
         'recorded_at': '2026-11-04T14:01:00.000Z', 'created_at': '2026-11-04T14:01:00.000Z', 'device': device,
-        'attachments': [{'id': 'f1', 'name': 'receipt.jpg', 'content_type': 'image/jpeg', 'size': 4}],
+        'attachments': [{'id': 'f1', 'name': 'receipt.jpg', 'content_type': 'image/jpeg', 'size': 4},
+          {'id': 'r1', 'name': 'Recording.wav', 'content_type': 'audio/wav', 'size': 9, 'transcript': 'Paid in cash.',
+            'length_ms': 4200}],
         'edited_at': '2026-11-04T14:11:00.000Z'}}});
     // A delete names the note by the id the receiver keeps it under: the phone's own.
     expect(webhook.message(deleted), {'version': 1, 'type': 'note.deleted', 'timestamp': '2026-11-04T14:01:02.000Z', 'data': {
@@ -157,6 +160,20 @@ void main() {
         'content_type': 'image/jpeg', 'size': 4, 'base64': '/9j/2Q=='}}});
     final placeless = QueuedPhoto(clientId: 'p' * 8, assetId: 'a', takenAt: queued, width: 1, height: 1, path: 'p');
     expect((webhook.photoMessage(placeless, [1])['data'] as Map)['photo'], containsPair('place', null));
+  });
+
+  test('lists a recording with its transcript and length, null while its words failed, and a plain file with neither', () {
+    // The phone's own `top` goes to the server only.
+    Map<String, dynamic> recording(String id, String? transcript) => {'id': id, 'name': 'Recording.wav', 'type': 'audio/wav',
+      'size': 8, 'lengthMs': 4200, 'transcript': transcript, 'top': true};
+    final voice = item(17, 'notes', {'clientId': 'v1', 'text': '', 'createdAt': Date.recorded, 'attachments': [
+      recording('r1', 'Call the fab'), recording('r2', null), {'id': 'f1', 'name': 'receipt.jpg', 'type': 'image/jpeg', 'size': 4}]});
+    final built = client(FakeServer()).message(voice)!['data']['note'];
+    expect([built['text'], built['attachments']], ['', [
+      {'id': 'r1', 'name': 'Recording.wav', 'content_type': 'audio/wav', 'size': 8, 'transcript': 'Call the fab', 'length_ms': 4200},
+      {'id': 'r2', 'name': 'Recording.wav', 'content_type': 'audio/wav', 'size': 8, 'transcript': null, 'length_ms': 4200},
+      {'id': 'f1', 'name': 'receipt.jpg', 'content_type': 'image/jpeg', 'size': 4},
+    ]]);
   });
 
   test('signs each message, and a retry sends the same webhook-id and body', () async {

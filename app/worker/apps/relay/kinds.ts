@@ -75,7 +75,7 @@ async function note(files: Files, db: Db, [entry]: Entry[]): Promise<Built> {
   const row = await db.prepare(NOTE).bind(entry.ref).first<NoteRow>();
   if (!row) return "skip";
   // The message names the files and never waits for their bytes, as it carries none.
-  const { results } = await db.prepare("SELECT id, name, content_type, size FROM relay_attachments WHERE note_id = ? ORDER BY rowid")
+  const { results } = await db.prepare("SELECT id, name, content_type, size, transcript, length_ms FROM relay_attachments WHERE note_id = ? ORDER BY rowid")
     .bind(row.id).all<AttachmentRow>();
   if (entry.kind === "note.updated") return noteUpdated(row, entry.logged_at, results);
   const audio = await audioOf(files, row);

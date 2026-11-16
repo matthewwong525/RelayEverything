@@ -8,10 +8,14 @@ import { INPUTS } from "./inputs.ts";
 const at = z.string().describe("A time in the asked zone, with its offset: 2026-11-04T09:01:00-05:00.");
 const nextCursor = z.string().nullable().describe("Send it as `cursor` to read the next page; null on the last one.");
 const note = z.strictObject({
-  id: z.string(), title: z.string().describe("The first 80 characters of the text."), source: z.enum(["ring", "typed"]), text: z.string(),
+  id: z.string(), title: z.string().describe("The first 80 characters of the text, or of the first recording's words when it has none."), source: z.enum(["ring", "typed"]), text: z.string(),
   recordedAt: at, device: z.string().describe("The name of the device that sent it."), audio: z.boolean().describe("Whether it has a recording."),
   attachments: z.array(z.strictObject({ id: z.string(), name: z.string(), type: z.string(), size: z.number().describe("In bytes."),
-    ready: z.boolean().describe("Whether the file's bytes have arrived.") })).describe("The note's files: names, types and sizes, never the bytes."),
+    ready: z.boolean().describe("Whether the file's bytes have arrived."),
+    transcript: z.string().nullable().describe("A recording's words; null for any other file or while it has none."),
+    lengthMs: z.number().nullable().describe("A recording's length in ms; null for any other file."),
+    top: z.boolean().describe("Whether it is the recording the note started with.") }))
+    .describe("The note's files: names, types and sizes, and a recording's transcript, never the bytes or the sound."),
 });
 const stayId = z.number().int().describe("The stay's or trip's id: give it to `GET /v1/points` for its points.");
 const visit = z.strictObject({ id: stayId.optional(), name: z.string().describe("The best name the phone found: a calendar event's place, a place on the map, the street, or the coordinates."),

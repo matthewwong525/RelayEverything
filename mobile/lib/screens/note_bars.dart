@@ -58,41 +58,51 @@ class AttachButton extends StatelessWidget {
   }
 }
 
-/// Over the keyboard while the person edits: *Text styles*, *Checklist* and *Attach*.
+/// *Record*: the microphone, which records into the open note. Null [onRecord] shows none, as in the browser, on the
+/// Mac and on a note from elsewhere.
+Widget? _recordButton(VoidCallback? onRecord) => onRecord == null ? null
+  : PillIconButton(icon: CupertinoIcons.mic, tooltip: 'Record', onPressed: onRecord);
+
+/// Over the keyboard while the person edits: *Text styles*, *Checklist*, *Attach* and, on a phone, *Record*.
 class FloatingToolBar extends StatelessWidget {
   const FloatingToolBar({super.key, required this.onStyles, required this.onChecklist, required this.onAttach,
-    this.attachMenu = true});
+    this.attachMenu = true, this.onRecord});
 
   final VoidCallback onStyles;
   final VoidCallback onChecklist;
   final AttachPick? onAttach;
   /// *Attach* opens *Photos* and *Files*; false in the browser.
   final bool attachMenu;
+  final VoidCallback? onRecord;
 
   @override
   Widget build(BuildContext context) => _FrostedPill(children: [
     PillIconButton(icon: CupertinoIcons.textformat, tooltip: 'Text styles', onPressed: onStyles),
     PillIconButton(icon: CupertinoIcons.checkmark_circle, tooltip: 'Checklist', onPressed: onChecklist),
     AttachButton(onPick: onAttach, menu: attachMenu),
+    ?_recordButton(onRecord),
   ]);
 }
 
-/// At the bottom while the person reads: *Checklist* and *Attach* in a pill, and the round compose button.
+/// At the bottom while the person reads: *Checklist*, *Attach* and, on a phone, *Record* in a pill, and the round
+/// compose button.
 class ReadingBar extends StatelessWidget {
   const ReadingBar({super.key, required this.onChecklist, required this.onAttach, required this.onCompose,
-    this.attachMenu = true});
+    this.attachMenu = true, this.onRecord});
 
   final VoidCallback onChecklist;
   final AttachPick? onAttach;
   final VoidCallback onCompose;
   /// *Attach* opens *Photos* and *Files*; false in the browser.
   final bool attachMenu;
+  final VoidCallback? onRecord;
 
   @override
   Widget build(BuildContext context) => Row(children: [
     _FrostedPill(children: [
       PillIconButton(icon: CupertinoIcons.checkmark_circle, tooltip: 'Checklist', onPressed: onChecklist),
       AttachButton(onPick: onAttach, menu: attachMenu),
+      ?_recordButton(onRecord),
     ]),
     const Spacer(),
     AccentGlow(child: RoundIconButton(icon: CupertinoIcons.square_pencil, tooltip: 'New note', onPressed: onCompose,

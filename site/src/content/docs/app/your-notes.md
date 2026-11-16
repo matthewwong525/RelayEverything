@@ -29,8 +29,8 @@ Home holds no setup. Your account, sign-in, phones and webhooks are in [Settings
 
 Tap **Notes** on Home. The list shows your notes, newest first, under the **Notes** title. Tap **Home** at the top left to go back. The notes are in groups by day: **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then one group for each month. Each group is one card, with one row for each note:
 
-- The note's first line, in bold, without its style marks. A voice note shows **Writing the words…** until the phone writes them. [Voice notes](../voice-notes/)
-- The time, then the rest of the words. Today and yesterday show the time, this week the day, and older notes the date. A voice note also shows a microphone and its length after the time, such as *0:42*. A note from somewhere else also shows where it came from, such as *8:02 · Email*.
+- The note's first line, in bold, without its style marks. A voice note with no words of yours shows the start of its transcript, or **Writing the words…** until the phone writes it. [Voice notes](../voice-notes/)
+- The time, then the rest of the words. Today and yesterday show the time, this week the day, and older notes the date. A note with a recording also shows a microphone and its first recording's length after the time, such as *0:42*. A note from somewhere else also shows where it came from, such as *8:02 · Email*.
 - **Waiting to send**, only on a note that waits. A sent note says nothing about sending.
 - The first picture, small, at the right. [Add photos and files](#add-photos-and-files)
 
@@ -49,7 +49,7 @@ Under the title, three filters show how many notes each holds: **All**, **Voice*
 | Filter | What it shows |
 |---|---|
 | **All** | Every note. |
-| **Voice** | Only the notes you said. An empty one says *Hold New note to talk.* [Voice notes](../voice-notes/) |
+| **Voice** | Only the notes with a recording. An empty one says *Hold New note to talk.* [Voice notes](../voice-notes/) |
 | **Photos and files** | The notes with a photo or a file. A link alone does not put a note here. An empty one says **No photos or files yet**: *A note with a photo or a file shows here.* |
 
 A note stays in its place in **All** when you add a photo to it. The list keeps the filter you picked while you open a note and come back. [Search](#search-your-notes) finds only the notes of the filter you picked.
@@ -62,13 +62,15 @@ Tap a note's row to open it on its own page:
 - All of its words, in their styles.
 - Each picture, full width. Tap a picture to open it.
 - Each other file, as a row with its name and size. Tap it to open it.
-- On a voice note, the player under the date: its recording, from this phone. [Play a note back](../voice-notes/#play-a-note-back)
+- On a voice note, the recording's card under the date, before the words: the player, and the transcript folded to 2 lines. A recording you add later shows after the words, with the pictures and files. [Play a note back](../voice-notes/#play-a-note-back)
 
 The page shows the date alone at the top. It shows no tag and nothing about sending: a note that waits sends by itself.
 
 A web address in the words, such as `https://example.com` or `www.example.com`, shows in green and underlined. Tap it to open it in the phone's browser. This works for an address that you typed or pasted as plain text too. While you type, a tap on a link puts the cursor there, as in Apple Notes. The note's words do not change: the link shows only on the phone.
 
-The page works as in Apple Notes: you change the note in place. Tap the words where you want to type. The cursor goes there and the keyboard comes up. There is no **Save** button: the phone keeps each change as you type, and when you leave the page. You can change a voice note's words too. Its recording stays as it was.
+The page works as in Apple Notes: you change the note in place. Tap the words where you want to type. The cursor goes there and the keyboard comes up. There is no **Save** button: the phone keeps each change as you type, and when you leave the page. On a voice note, your words go under the recording's card: the page says *Add notes…* until you type. To fix a word that the phone wrote, open the transcript and type in it: [Read the transcript](../voice-notes/#read-the-transcript). The recording stays as it was.
+
+To add a recording, tap the **mic** in the bar at the bottom, or in the bar over the keyboard: [Add a recording to a note](../voice-notes/#add-a-recording-to-a-note).
 
 To paste, hold in the words, or tap the blinking cursor. On an iPhone with iOS 16 or later, the iPhone's own menu comes up, with **Paste**, **Copy**, **Cut**, **Select All**, **Look Up** and **Share** as each fits. A second tap on the cursor closes it. **Paste** puts in the words at once, with no *Allow Paste?* question. While you hold and drag the cursor, a magnifier shows the words under your finger.
 
@@ -184,7 +186,7 @@ Notes go first. Each time, the phone sends your notes, then gets the new notes. 
 - **Delete anywhere.** Delete a note on one phone, and it goes from your other phones at their next sync, and from your page and your AI: [Delete a note](#delete-a-note). A note open on another phone stays until you leave it, then goes.
 - **The newer change wins.** If two phones change the same note before they sync, the change made later stays on every phone and on your page, even when the older change arrives last.
 - **Files on tap.** A note from somewhere else lists its files by name and size. Tap one to download it and open it. Only that file downloads, so the phone uses no space or data for files you never open. You add files only to the notes you wrote on this phone.
-- **Voice recordings stay on their phone.** A voice note from another phone shows its words with no recording. An older recorded note's recording downloads and opens on tap, as a file does.
+- **Recordings on tap.** A voice note from another phone shows its transcript at once. Tap **Play** to download its recording and play it. A recording made while sending was off stays only on the phone that made it. An older recorded note's recording downloads and opens on tap, as a file does.
 - **Signing out** with **Sign out** on the [Account](../settings/#account) page deletes the notes from somewhere else, and their files, from this phone. The notes that you wrote on this phone stay.
 
 Signed out, the phone gets no notes and makes no network call. Notes it got before stay until you sign out. With **My own webhook**, the phone sends only to your webhook and gets no notes. To get your notes on every phone and keep your own database too, sign in to Relay Everything and add your webhook on your Relay Everything page: your server sends every note and change from every phone to it.
@@ -192,7 +194,7 @@ Signed out, the phone gets no notes and makes no network call. Notes it got befo
 ## Search your notes
 
 1. Tap **Search**, at the bottom of Home or of the notes list.
-2. Type a word. The list shows only the notes with that word in their words or their file names. Upper and lower case are the same. On Home, search finds every note. In the notes list, it finds only the notes of the filter you picked.
+2. Type a word. The list shows only the notes with that word in their words, their recordings' transcripts or their file names. Upper and lower case are the same. On Home, search finds every note. In the notes list, it finds only the notes of the filter you picked.
 3. Tap **Cancel** to see Home or the list's notes again.
 
 Search reads only the notes on this phone, so it works with no signal and sends nothing. With no match, the list says *No notes with "<your words>"*.

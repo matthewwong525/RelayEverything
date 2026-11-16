@@ -130,7 +130,7 @@
                           },
                           "title": {
                             "type": "string",
-                            "description": "The first 80 characters of the text."
+                            "description": "The first 80 characters of the text, or of the first recording's words when it has none."
                           },
                           "source": {
                             "type": "string",
@@ -175,6 +175,32 @@
                                 "ready": {
                                   "type": "boolean",
                                   "description": "Whether the file's bytes have arrived."
+                                },
+                                "transcript": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "description": "A recording's words; null for any other file or while it has none."
+                                },
+                                "lengthMs": {
+                                  "anyOf": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "description": "A recording's length in ms; null for any other file."
+                                },
+                                "top": {
+                                  "type": "boolean",
+                                  "description": "Whether it is the recording the note started with."
                                 }
                               },
                               "required": [
@@ -182,11 +208,14 @@
                                 "name",
                                 "type",
                                 "size",
-                                "ready"
+                                "ready",
+                                "transcript",
+                                "lengthMs",
+                                "top"
                               ],
                               "additionalProperties": false
                             },
-                            "description": "The note's files: names, types and sizes, never the bytes."
+                            "description": "The note's files: names, types and sizes, and a recording's transcript, never the bytes or the sound."
                           }
                         },
                         "required": [
@@ -463,7 +492,7 @@
                     },
                     "title": {
                       "type": "string",
-                      "description": "The first 80 characters of the text."
+                      "description": "The first 80 characters of the text, or of the first recording's words when it has none."
                     },
                     "source": {
                       "type": "string",
@@ -508,6 +537,32 @@
                           "ready": {
                             "type": "boolean",
                             "description": "Whether the file's bytes have arrived."
+                          },
+                          "transcript": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "A recording's words; null for any other file or while it has none."
+                          },
+                          "lengthMs": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "A recording's length in ms; null for any other file."
+                          },
+                          "top": {
+                            "type": "boolean",
+                            "description": "Whether it is the recording the note started with."
                           }
                         },
                         "required": [
@@ -515,11 +570,14 @@
                           "name",
                           "type",
                           "size",
-                          "ready"
+                          "ready",
+                          "transcript",
+                          "lengthMs",
+                          "top"
                         ],
                         "additionalProperties": false
                       },
-                      "description": "The note's files: names, types and sizes, never the bytes."
+                      "description": "The note's files: names, types and sizes, and a recording's transcript, never the bytes or the sound."
                     },
                     "placesNearby": {
                       "type": "array",

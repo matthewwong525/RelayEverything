@@ -43,7 +43,7 @@ On the phone, Location, Health, Calendar and Photos are in **On this phone**, be
 
 ### The notes and the open note
 
-The middle shows your notes, newest first, with your pinned notes first in **Pinned**, then in groups by day: **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then one group for each month. Above them, the filters **All**, **Voice** and **Photos and files** each show how many notes they hold: click one to see only its notes. [Filter your notes](../your-notes/#filter-your-notes) Each row shows the first line, the time, and the start of the words, with no tag. A voice note also shows a microphone and its length. A note from somewhere else also shows where it came from, such as *Email*. Click a row to open the note at the right.
+The middle shows your notes, newest first, with your pinned notes first in **Pinned**, then in groups by day: **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then one group for each month. Above them, the filters **All**, **Voice** and **Photos and files** each show how many notes they hold: click one to see only its notes. [Filter your notes](../your-notes/#filter-your-notes) Each row shows the first line, the time, and the start of the words, with no tag. A note with a recording also shows a microphone and its length. A note from somewhere else also shows where it came from, such as *Email*. Click a row to open the note at the right.
 
 ### The top bar
 
@@ -104,11 +104,13 @@ You can select and copy the words of a note with the mouse.
 
 ## Search
 
-Type words in **Search**, at the top right, or press Ctrl+F (⌘F on a Mac). The list shows only the notes with your words. The open note stays open.
+Type words in **Search**, at the top right, or press Ctrl+F (⌘F on a Mac). The list shows only the notes with your words, in their text or in a recording's transcript. The open note stays open.
 
 ## Voice notes
 
-A voice note plays in the browser: open it and click **Play** in the player under the date. Click or drag on the line to go to that part, and click **Pause** to stop. The browser shows a plain line in place of the sound waves. You record voice notes on your phone only, because the phone writes the words with its own speech model: [Voice notes](../voice-notes/).
+A note shows each recording as its card, as on the phone: the one a voice note starts with above your words, and the others after them. Click **Play** to play the recording from your space. Click or drag on the line to go to that part, and click **Pause** to stop. The browser shows a plain line in place of the sound waves. Under the player, the **Transcript** row shows the first 2 lines of the words: click it to see all of them. Until the phone sends the recording, the card shows the transcript and says the recording is still on your phone.
+
+The page and the Mac app record nothing: you record on your phone only, because the phone writes the words with its own speech model. [Voice notes](../voice-notes/)
 
 ## Other connections
 
@@ -159,7 +161,7 @@ The Mac app is Relay Everything in its own window, with the same layout as the b
 - **The menu bar** has **New Note** (⌘N), **Find** (⌘F), **Bold** (⌘B), **Italic** (⌘I) and **Settings…** (⌘,).
 - **Drop a file from Finder** on a note to add it. Each file can be up to 25 MB.
 - **It leaves out Location, Health, Calendar and Photos.** Your phone sends them.
-- **Voice notes show their words.** You record voice notes on your phone, and the Mac shows their words. A sound file on a note opens in the Mac's own player.
+- **Recordings play.** A recording from your phone shows as its card with its transcript, and plays from your space, as in the browser: [Voice notes](#voice-notes). The Mac records nothing. Any other sound file on a note opens in the Mac's own player.
 
 The Mac shows as *Mac* under **Phones** on your Account page. **Sign out** there stops it at its next request.
 

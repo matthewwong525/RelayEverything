@@ -101,7 +101,8 @@ class WebhookClient implements Outbound {
       'created_at': _iso(body['createdAt']), 'device': _device, 'audio': null,
       if (files != null && files.isNotEmpty) 'attachments': [
         for (final file in files.cast<Map>())
-          {'id': file['id'], 'name': file['name'], 'content_type': _type(file['type']), 'size': file['size']},
+          {'id': file['id'], 'name': file['name'], 'content_type': _type(file['type']), 'size': file['size'],
+            if (file['lengthMs'] != null) ...{'transcript': file['transcript'], 'length_ms': file['lengthMs']}},
       ],
     };
   }

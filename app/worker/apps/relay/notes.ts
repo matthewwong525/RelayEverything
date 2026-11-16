@@ -17,6 +17,10 @@ const attachment = z.strictObject({
   name: z.string().min(1).max(255).describe("The file's name, such as `warranty.pdf`."),
   type: z.string().max(255).describe("The file's content type, such as `application/pdf`; empty when the phone does not know it."),
   size: z.number().int().min(0).max(MAX_FILE_BYTES).describe("The file's size in bytes, up to 25 MB."),
+  transcript: z.string().max(100_000).nullable().optional()
+    .describe("Only a recording: the words the phone wrote from it, or null while it has none. A change to it changes the note."),
+  lengthMs: z.number().int().min(0).optional().describe("Only a recording: how long it is, in ms. A file with a length is a recording."),
+  top: z.boolean().optional().describe("True for the recording the note started with, shown above the note's words."),
 });
 
 /** A note's files, up to 10, each with its own id. */

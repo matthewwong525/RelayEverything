@@ -86,15 +86,34 @@ void main() {
     expect(server.requests[1].url.queryParameters, {'since': '0'});
     expect(server.requests[2].url.queryParameters, {'since': '7'});
     final ring = relay.entries.first;
-    expect(ring.voice, isTrue);
     expect(ring.from, 'Email');
-    expect(ring.recording, 'https://relay.example.com/apps/relay/api/audio?id=n3');
+    final sound = ring.recordings.single;
+    expect([sound.recording, sound.top, sound.transcript, sound.ready],
+      ['https://relay.example.com/apps/relay/api/audio?id=n3', true, isNull, true], reason: 'its words are the note\'s');
     expect(ring.files.first.url, 'https://relay.example.com/apps/relay/api/attachment?id=file-0001');
     expect(ring.files.first.ready, isTrue);
     expect(ring.files.last.ready, isFalse);
     expect(relay.entries[1].from, isNull, reason: 'the Web device wrote it here');
     expect(relay.entries.last.from, 'iPhone');
     expect(relay.status, SyncStatus.synced);
+  });
+
+  test('a recording from the phone shows as its card, with its transcript, and plays from its file route once its sound '
+      'is there', () {
+    final entry = relay.entryOf(note('n4', files: [
+      {'id': 'rec-1', 'name': 'Recording.wav', 'type': 'audio/wav', 'size': 10, 'ready': true, 'transcript': 'Call the fab',
+        'lengthMs': 4200, 'top': true},
+      {'id': 'file-1', 'name': 'card.png', 'type': 'image/png', 'size': 10, 'ready': true, 'top': false},
+      {'id': 'rec-2', 'name': 'Recording.wav', 'type': 'audio/wav', 'size': 10, 'ready': false, 'transcript': 'And the panel',
+        'lengthMs': 1500, 'top': false},
+    ]), 'n4');
+    expect([for (final file in entry.files) file.id], ['file-1'], reason: 'a recording is not one of the files');
+    final [first, second] = entry.recordings;
+    expect([first.id, first.recording, first.ready, first.transcript, first.length, first.top, first.filesBefore],
+      ['rec-1', 'https://relay.example.com/apps/relay/api/attachment?id=rec-1', true, 'Call the fab',
+        const Duration(milliseconds: 4200), true, 0]);
+    expect([second.recording, second.ready, second.transcript, second.top, second.filesBefore],
+      ['', false, 'And the panel', false, 1]);
   });
 
   test('a later read asks from the last change and drops a deleted note', () async {
@@ -456,12 +475,12 @@ void main() {
     await relay.openFile(ring.files.first);
     expect(opened.single.toString(), 'https://relay.example.com/apps/relay/api/attachment?id=file-0001');
     await relay.openFile(ring.files.last);
-    await relay.play(ring.recording!);
+    await relay.play(ring.recordings.single.recording);
     expect(player.played.single, 'https://relay.example.com/apps/relay/api/audio?id=n3');
     // Pause and seek go to the same player, and the browser reads no waves: it keeps no copy of the recording.
     await relay.pause();
     await relay.seek(const Duration(seconds: 3));
-    expect([player.calls, relay.playback.value?.at, relay.playback.value?.playing, await relay.waveOf(ring.recording!)],
+    expect([player.calls, relay.playback.value?.at, relay.playback.value?.playing, await relay.waveOf(ring.recordings.single.recording)],
       [['play', 'pause', 'seek 3000'], const Duration(seconds: 3), false, isEmpty]);
     await Future<void>.delayed(Duration.zero);
     expect(notices, ['This file is still on its way. Try again soon.']);

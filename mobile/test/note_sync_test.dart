@@ -9,6 +9,7 @@ import 'package:relay_app/controller.dart';
 import 'package:relay_app/data/api.dart';
 import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/note_sync.dart';
+import 'package:relay_app/data/outbox.dart' show flush;
 import 'package:relay_app/data/sender.dart';
 import 'package:relay_app/data/settings.dart';
 import 'package:relay_app/data/store.dart';
@@ -142,6 +143,67 @@ void main() {
       await syncNotes(store, Sender(server.api), settings: _on, connection: bearer);
       expect([server.requests.last.url.queryParameters['since'], await store.get(noteSyncSeq), await store.notes()],
         ['0', '3', isEmpty]);
+    });
+  });
+
+  group('a recording', () {
+    Map<String, dynamic> pulledRecording(String id, String? transcript, {bool top = true}) => {'id': id,
+      'name': 'Recording.m4a', 'type': 'audio/mp4', 'size': 2048, 'ready': true, 'lengthMs': 4000,
+      'transcript': transcript, 'top': top};
+
+    test('a pulled note keeps each recording with its words, length and place', () async {
+      final server = FakeServer((_) => notesPage([pulledNote('s1', text: '', files: [pulledRecording('a1', 'Order more switches'),
+        pulledRecording('a2', '', top: false)])], next: 2));
+      await syncNotes(store, Sender(server.api), settings: _on, connection: bearer);
+      final note = (await store.notes()).single;
+      expect([for (final file in note.attachments) (file.id, file.recording, file.transcript, file.lengthMs, file.top)],
+        [('a1', true, 'Order more switches', 4000, true), ('a2', true, '', 4000, false)]);
+      expect(await store.pendingWords(), isEmpty);
+    });
+
+    test('a recording whose bytes are still on the other phone is not ready, until a later pull says they arrived', () async {
+      final pages = {
+        0: notesPage([pulledNote('s1', text: '', files: [{...pulledRecording('a1', 'Order more switches'), 'ready': false}])],
+          next: 2),
+        2: notesPage([pulledNote('s1', text: '', files: [pulledRecording('a1', 'Order more switches')])], next: 3),
+      };
+      final server = FakeServer((request) => pages[int.parse(request.url.queryParameters['since']!)]!);
+      await syncNotes(store, Sender(server.api), settings: _on, connection: bearer);
+      expect((await store.notes()).single.attachments.single.ready, isFalse);
+      await syncNotes(store, Sender(server.api), settings: _on, connection: bearer);
+      expect((await store.notes()).single.attachments.single.ready, isTrue);
+    });
+
+    test('a later pull brings the corrected words', () async {
+      final pages = {
+        0: notesPage([pulledNote('s1', text: '', files: [pulledRecording('a1', 'Order more switch')])], next: 2),
+        2: notesPage([pulledNote('s1', text: '', editedAt: DateTime(2026, 11, 5, 9),
+          files: [pulledRecording('a1', 'Order more switches')])], next: 3),
+      };
+      final server = FakeServer((request) => pages[int.parse(request.url.queryParameters['since']!)]!);
+      await syncNotes(store, Sender(server.api), settings: _on, connection: bearer);
+      await syncNotes(store, Sender(server.api), settings: _on, connection: bearer);
+      expect([(await store.notes()).single.attachments.single.transcript, await store.get(noteSyncSeq)],
+        ['Order more switches', '3']);
+    });
+
+    test('the phone\'s upload lists each recording with its length, words and place', () async {
+      final at = DateTime(2026, 11, 5, 8);
+      await store.addVoiceNote(LocalNote(clientId: 'v', text: '', createdAt: at, kind: NoteKind.voice, attachments: [
+        const Attachment(id: 'r1', name: 'Recording.wav', type: 'audio/wav', size: 10, path: 'attachments/r1.wav',
+          lengthMs: 12000, wordsPending: true, top: true),
+        const Attachment(id: 'r2', name: 'Recording.wav', type: 'audio/wav', size: 10, path: 'attachments/r2.wav',
+          lengthMs: 3000, wordsPending: true)]));
+      await store.setTranscript('r1', 'Order more switches', send: true, at: at);
+      await store.setTranscript('r2', '', send: true, at: at);
+      final server = FakeServer();
+      await flush(store, server.api(bearer), clock: () => at);
+      final post = server.requests.firstWhere((request) => request.url.path.endsWith('/notes'));
+      expect((jsonDecode(post.body) as Map)['attachments'], [
+        {'id': 'r1', 'name': 'Recording.wav', 'type': 'audio/wav', 'size': 10, 'lengthMs': 12000,
+          'transcript': 'Order more switches', 'top': true},
+        {'id': 'r2', 'name': 'Recording.wav', 'type': 'audio/wav', 'size': 10, 'lengthMs': 3000, 'transcript': ''},
+      ]);
     });
   });
 

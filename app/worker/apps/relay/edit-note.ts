@@ -1,5 +1,5 @@
-// PATCH notes: new words for any note in the space, from a phone or the page, by `id` or the device's own `clientId`,
-// and files added to a note it sent. Logs one note.updated; a change older than the note's last one changes nothing.
+// PATCH notes: new words or recording transcripts for any note in the space, from a phone or the page, by `id` or the
+// device's own `clientId`, and files added to a note it sent. Logs one note.updated; an older change changes nothing.
 import { z } from "zod";
 import { defineAction, type ActionCall } from "../../api/contract.ts";
 import { addFiles } from "./add-note.ts";
@@ -14,7 +14,8 @@ const editInput = z.strictObject({
   clientId: z.string().regex(CLIENT_ID).optional().describe("Or the device's own id for a note it sent, as POST notes sent it."),
   text: noteText.describe("What the note says now, in place of its words before. It can be empty only when the note has files."),
   attachments: noteFiles.optional()
-    .describe("All of the note's files now, up to 10. A file the server lacks is added: send its bytes after, with POST attachments."),
+    .describe("All of the note's files now, up to 10. A file the server lacks is added: send its bytes after, with POST attachments. "
+      + "A known recording takes its new transcript and length."),
   editedAt: time.optional().describe("When the device made the change, in Unix ms; now when left out. A later time is taken as now."),
 }).refine(edit => (edit.id === undefined) !== (edit.clientId === undefined), "Give the note's id or its clientId, not both.")
   .refine(hasWords, "Give the note words or a file.");
@@ -34,14 +35,27 @@ function stored({ db }: PersonSpace, deviceId: string, edit: Edit) {
     : db.prepare(`${select} WHERE device_id = ? AND client_id = ?`).bind(deviceId, edit.clientId!)).first<Stored>();
 }
 
-/** The files the change lists that the note lacks, oldest first. */
-async function addedFiles({ db }: PersonSpace, note: Stored, edit: Edit) {
-  const { results } = await db.prepare("SELECT id FROM relay_attachments WHERE note_id = ?").bind(note.id).all<{ id: string }>();
-  const known = new Set(results.map(file => file.id));
-  return withTypes(edit.attachments)?.filter(file => !known.has(file.id)) ?? [];
+type File = NonNullable<ReturnType<typeof withTypes>>[number];
+type Known = { id: string; transcript: string | null; length_ms: number | null };
+
+/** A listed file the note holds, with its transcript and length as the change gives them, where they differ. */
+function retold(file: File, known: Known | undefined): Known | null {
+  if (!known) return null;
+  const now = { id: file.id, transcript: file.transcript === undefined ? known.transcript : file.transcript,
+    length_ms: file.lengthMs ?? known.length_ms };
+  return now.transcript !== known.transcript || now.length_ms !== known.length_ms ? now : null;
 }
 
-/** Changes the note, or answers why not. Same words and no new file change nothing. */
+/** The files the change lists that the note lacks, oldest first, and the known ones with a new transcript or length. */
+async function fileChanges({ db }: PersonSpace, note: Stored, edit: Edit) {
+  const { results } = await db.prepare("SELECT id, transcript, length_ms FROM relay_attachments WHERE note_id = ?").bind(note.id).all<Known>();
+  const known = new Map(results.map(file => [file.id, file]));
+  const files = withTypes(edit.attachments) ?? [];
+  return { added: files.filter(file => !known.has(file.id)),
+    retold: files.map(file => retold(file, known.get(file.id))).filter(file => file !== null) };
+}
+
+/** Changes the note, or answers why not. Same words, transcripts and no new file change nothing. */
 async function editNote(env: Parameters<typeof wake>[0], space: PersonSpace, deviceId: string, edit: Edit): Promise<Response> {
   const { db } = space;
   const note = await stored(space, deviceId, edit);
@@ -50,13 +64,15 @@ async function editNote(env: Parameters<typeof wake>[0], space: PersonSpace, dev
   // A phone's clock can run ahead: a change from the future would lock the note against every later one.
   const editedAt = Math.min(edit.editedAt ?? now, now);
   if (note.edited_at !== null && note.edited_at > editedAt) return failed("older", 409);
-  const added = await addedFiles(space, note, edit);
+  const { added, retold } = await fileChanges(space, note, edit);
   if (added.length && (note.device_id !== deviceId || note.client_id === null)) return failed("not_own", 400);
-  if (note.text === edit.text && !added.length) return Response.json({ id: note.id, updated: false });
+  if (note.text === edit.text && !added.length && !retold.length) return Response.json({ id: note.id, updated: false });
   // Logged at the note's own time, as its note.created is, so "Send past data" sends it with the note.
   await db.batch([
     db.prepare("UPDATE relay_notes SET text = ?, edited_at = ? WHERE id = ?").bind(edit.text, editedAt, note.id),
     ...addFiles(db, deviceId, note.client_id!, added),
+    ...retold.map(file => db.prepare("UPDATE relay_attachments SET transcript = ?, length_ms = ? WHERE id = ? AND note_id = ?")
+      .bind(file.transcript, file.length_ms, file.id, note.id)),
     db.prepare("INSERT INTO relay_outbox (kind, ref, at, logged_at) SELECT 'note.updated', id, recorded_at, ? FROM relay_notes WHERE id = ?")
       .bind(now, note.id),
   ]);
@@ -66,10 +82,10 @@ async function editNote(env: Parameters<typeof wake>[0], space: PersonSpace, dev
 
 export const noteEdit = defineAction({
   operationId: "relay.notes-edit", summary: "Change a note",
-  description: "Change the words of any note in your space, and list the files added since to a note this device sent. "
+  description: "Change the words or a recording's transcript of any note in your space, and list the files added since to a note this device sent. "
     + "The page changes notes as your space's Web device. "
     + "The newer change wins: a change made before the note's last one gets 409. Webhooks get it as note.updated.",
-  input: editInput, output: z.strictObject({ id: z.string(), updated: z.boolean().describe("False when the words were the same and no file was new.") }),
+  input: editInput, output: z.strictObject({ id: z.string(), updated: z.boolean().describe("False when the words and transcripts were the same and no file was new.") }),
   encoding: "json", effect: "write", agentAvailable: false, requiresIdentity: false, errors: ERRORS, examples: [],
   handler: asDeviceOrPage<ActionCall>(REFUSAL, async ({ space, deviceId, env, call }) => editNote(env, space, deviceId, call.input as Edit)),
 });

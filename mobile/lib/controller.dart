@@ -49,7 +49,7 @@ const holdTipKey = 'holdTipSeen';
 /// After a sync, the names are read again only this long after the last read: they change only on the person's page.
 const _namesEvery = Duration(minutes: 10);
 
-/// What voice notes need: the speech model, the microphone, the words and playback. All of it stays on this phone.
+/// What voice notes need: the speech model, the microphone, the words and playback. Each runs on this phone.
 class VoiceParts {
   const VoiceParts({required this.model, required this.recorder, required this.transcriber, required this.player});
 
@@ -82,17 +82,19 @@ class RelayController extends Relay {
     RelayApi Function(Connection)? apiFor, http.Client Function()? signInClient, WebAuth? webAuth, DateTime Function()? clock,
     WebhookClient Function(Webhook webhook, String installId)? webhookFor, this.schedule, this.voice, this.native, this.folder,
     this.opener, this.share, this.calendar, this.photos, this.network, this.motion, Duration Function(Duration length)? wordsLimit,
-    this.platform = RelayPlatform.phone})
+    this.platform = RelayPlatform.phone, SoundPlayer? player})
     : _sender = Sender(apiFor, signInClient, webhookFor), _webAuth = webAuth ?? phoneWebAuth, _clock = clock ?? DateTime.now,
-      _wordsLimit = wordsLimit ?? wordsLimitOf {
+      _wordsLimit = wordsLimit ?? wordsLimitOf, _ownPlayer = player {
     voice?.model.addListener(notifyListeners);
     // A recording at its longest ends as if the person let go.
     voice?.recorder.onLongest = (recording) {
       final fix = _takeVoiceFix();
       _listening = null;
       notifyListeners();
+      final into = _into;
+      _into = null;
       if (recording == null) return notice(_stopFailed);
-      unawaited(_keepVoice(recording, fix).then((problem) => problem == null ? null : notice(problem)));
+      unawaited(_keepVoice(recording, fix, into: into).then((problem) => problem == null ? null : notice(problem)));
     };
   }
 
@@ -110,6 +112,9 @@ class RelayController extends Relay {
   final Future<void> Function(bool on)? schedule;
   /// Voice notes; with none, the app has typed notes only.
   final VoiceParts? voice;
+  /// Plays recordings with no [voice], as on the Mac.
+  final SoundPlayer? _ownPlayer;
+  SoundPlayer? get _player => voice?.player ?? _ownPlayer;
   /// The iPhone's Swift side, which keeps places and wakes the app while it is closed; null on Android.
   final NativeBackground? native;
   /// The app's support folder, where a note's files are kept in `attachments/`; with none, notes take no files.
@@ -251,7 +256,7 @@ class RelayController extends Relay {
     if (_settings.calendar) await _readCalendars();
     await _refreshLocal();
     // A voice note whose words the app's close cut short gets them now, from its kept recording.
-    _track(_writePending(dropStray: true));
+    _track(_writePending(strayBefore: DateTime.now()));
   }
 
   /// Keeps each note in the shortcuts inbox, from Shortcuts or the Apple Watch, with no point: at load, each return to
@@ -315,13 +320,20 @@ class RelayController extends Relay {
 
   Entry _entryOfLocal(LocalNote note) => Entry(id: note.clientId, text: note.text, at: note.createdAt,
     sent: note.mine && note.sentAt != null, waiting: _settings.sending && note.sentAt == null && note.queued,
-    voice: note.kind == NoteKind.voice, writing: note.wordsPending && !_wordsFailed.containsKey(note.clientId),
-    failed: note.wordsPending && _wordsFailed.containsKey(note.clientId),
-    why: note.wordsPending ? _wordsFailed[note.clientId] : null, noWords: note.noWords, recording: note.audioPath,
-    length: note.durationMs == null ? null : Duration(milliseconds: note.durationMs!),
-    files: [for (final file in note.attachments) EntryFile(id: file.id, name: file.name, type: file.type, size: file.size,
-      path: file.path.isEmpty ? '' : fullPath(file.path))],
+    recordings: [for (final (index, file) in note.attachments.indexed) if (file.recording)
+      _recordingOf(note, file, note.attachments.take(index).where((other) => !other.recording).length)],
+    files: [for (final file in note.attachments) if (!file.recording) EntryFile(id: file.id, name: file.name, type: file.type,
+      size: file.size, path: file.path.isEmpty ? '' : fullPath(file.path))],
     from: note.mine ? null : note.device ?? 'elsewhere', pinned: note.pinned);
+
+  /// A recording on this phone plays from its path; one only in the person's space by its id, which downloads it. One
+  /// whose bytes are still on the phone that made it is not ready.
+  EntryRecording _recordingOf(LocalNote note, Attachment file, int filesBefore) => EntryRecording(id: file.id,
+    filesBefore: filesBefore, ready: file.path.isNotEmpty || file.ready,
+    recording: file.path.isEmpty ? file.id : file.path, length: Duration(milliseconds: file.lengthMs ?? 0),
+    transcript: file.transcript, top: file.top, failed: _wordsFailed.containsKey(file.id), why: _wordsFailed[file.id],
+    writing: file.transcript == null && note.mine && file.path.isNotEmpty && !file.hereOnly &&
+      !_wordsFailed.containsKey(file.id));
 
   /// The app's support folder, once [load] has read it.
   String? get filesRoot => _root;
@@ -939,11 +951,11 @@ class RelayController extends Relay {
   }
 
   /// Keeps a shortcut's recording, a WAV Swift left at [recording] from the support folder, as a voice note that waits
-  /// for its words, with [text], the words typed with it, first. The note is kept before its recording moves to
-  /// `voice/<id>.wav`, so the sweep for stray recordings never takes it. It adds a point as [keepNote] does, and a [clientId]
-  /// already kept gives back that note. The words are written now when this engine has the voice parts, else at the
-  /// app's next open. A recording that is not there keeps the typed words alone, or nothing. [fromWatch] marks a note the
-  /// Apple Watch handed over: it is never deleted for having no words.
+  /// for the recording's words, with [text], the words given with it, as its text. The note is kept before its
+  /// recording moves to `attachments/<id>.wav`, so a second drain of the same request finds it. It adds a point as
+  /// [keepNote] does, and a [clientId] already kept gives back that note. The words are written now when this engine
+  /// has the voice parts, else at the app's next open. A recording that is not there keeps the given words alone, or
+  /// nothing. [fromWatch] marks a note the Apple Watch handed over: it is never deleted for having no words.
   Future<Kept> keepRecording(String text, {required String recording, required int durationMs, String? clientId,
     DateTime? createdAt, bool point = true, bool fromWatch = false}) async {
     final id = clientId ?? newClientId();
@@ -953,21 +965,32 @@ class RelayController extends Relay {
     final root = _root ?? (await folder?.call())?.path;
     final source = File('$root/$recording');
     if (root == null || !await source.exists()) return keepNote(text, clientId: id, createdAt: createdAt, point: point);
+    final file = _newRecording(await source.length(), durationMs, top: true);
     final note = LocalNote(clientId: id, text: text.trim(), createdAt: createdAt ?? _clock(), kind: NoteKind.voice,
-      audioPath: VoiceRecorder.pathOf(id), durationMs: durationMs, wordsPending: true, fromWatch: fromWatch);
+      wordsPending: true, fromWatch: fromWatch, attachments: [file]);
     await store.addVoiceNote(note);
     try {
-      final target = File('$root/${note.audioPath}');
-      await target.parent.create(recursive: true);
-      await source.rename(target.path);
+      await _moveTo(source, '$root/${file.path}');
     } on FileSystemException {
       await store.dropNote(id);
       rethrow;
     }
     await _refreshLocal();
     if (point) _pointAt(note.createdAt);
-    if (voice != null) _track(_write(note));
+    if (voice != null) _track(_write(note, file));
     return Kept(note, null);
+  }
+
+  /// A new recording's file row, at `attachments/<id>.wav`, whose words are not written yet.
+  static Attachment _newRecording(int size, int lengthMs, {bool top = false}) {
+    final id = newClientId();
+    return Attachment(id: id, name: 'Recording.wav', type: 'audio/wav', size: size, path: 'attachments/$id.wav',
+      lengthMs: lengthMs, wordsPending: true, top: top);
+  }
+
+  static Future<void> _moveTo(File source, String target) async {
+    await File(target).parent.create(recursive: true);
+    await source.rename(target);
   }
 
   /// Copies a file into `attachments/<id><.ext>`, or moves the app's own copy there. Null when it could not.
@@ -1001,7 +1024,10 @@ class RelayController extends Relay {
   }
 
   /// Downloads one file of a note from elsewhere into `attachments/`, or a ring note's recording, and keeps its place.
-  Future<File?> _download(EntryFile file) async {
+  Future<File?> _download(EntryFile file) async => (await _downloadTo(file))?.$1;
+
+  /// [_download], with the file's path from the support folder.
+  Future<(File, String)?> _downloadTo(EntryFile file) async {
     final root = _root, api = _sender.reader(_settings, connection: _connection);
     if (root == null || api == null) {
       notice(_sendToDownload);
@@ -1016,7 +1042,7 @@ class RelayController extends Relay {
       await target.writeAsBytes(bytes);
       await store.fileKept(file.id, path);
       await _refreshLocal();
-      return target;
+      return (target, path);
     } on ApiException {
       notice(_notDownloaded);
     } on FileSystemException {
@@ -1218,6 +1244,7 @@ class RelayController extends Relay {
   static const _tooShort = 'Too short to keep. Nothing was saved.';
   static const _stopFailed = 'The microphone did not stop right. Nothing was saved.';
   static const _notSaved = 'The voice note did not save.';
+  static const _full = 'This note holds $maxFiles files already. Nothing was recorded.';
   static const _noSpeech = 'No speech heard. Nothing was saved.';
   static const _wordsDidNotCome = 'The words did not come. Tap Try again on the note.';
 
@@ -1251,9 +1278,11 @@ class RelayController extends Relay {
   }
 
   @override
-  Future<String?> startVoiceNote() async {
+  Future<String?> startVoiceNote({String? into}) async {
     final parts = voice;
     if (parts == null || parts.model.state != ModelState.ready || _starting != null || parts.recorder.recording) return null;
+    if (into != null && (await store.attachmentsOf(into)).length >= maxFiles) return _full;
+    _into = into;
     final bool allowed;
     try {
       allowed = await (_starting = parts.recorder.start(newClientId()));
@@ -1298,6 +1327,8 @@ class RelayController extends Relay {
     await _started();
     final fix = _takeVoiceFix();
     if (!parts.recorder.recording) return null;
+    final into = _into;
+    _into = null;
     final Recording? recording;
     try {
       recording = await parts.recorder.stop();
@@ -1309,8 +1340,11 @@ class RelayController extends Relay {
       notifyListeners();
     }
     if (recording == null) return _tooShort;
-    return _keepVoice(recording, fix);
+    return _keepVoice(recording, fix, into: into);
   }
+
+  /// The note a recording started with *Record* goes into; null for a new voice note.
+  String? _into;
 
   /// The fix the voice note took as it started, now that it ends; a note that is not kept drops it.
   Future<Pin?>? _takeVoiceFix() {
@@ -1325,6 +1359,7 @@ class RelayController extends Relay {
     if (parts == null) return;
     await _started();
     _voiceFix = null;
+    _into = null;
     try {
       await parts.recorder.cancel();
     } catch (_) {
@@ -1337,62 +1372,108 @@ class RelayController extends Relay {
 
   @override
   Future<void> play(String recording) async {
-    final parts = voice;
-    if (parts == null) return;
-    final file = await parts.recorder.fileOf(recording);
-    // Phone backups leave recordings out, so a note restored to a new phone has its words but no recording.
+    final player = _player;
+    if (player == null) return;
+    var path = recording;
+    // A recording only in the person's space, named by its id, downloads first.
+    if (!recording.contains('/')) {
+      final file = [for (final note in await store.notes()) ...note.attachments].where((file) => file.id == recording).firstOrNull;
+      if (file == null) return;
+      final got = await _downloadTo(EntryFile(id: file.id, name: file.name, type: file.type, size: file.size));
+      if (got == null) return;
+      path = got.$2;
+    }
+    final file = await _fileOf(path);
+    // Phone backups leave recordings out, so a note restored to a new phone may have its words but no recording.
     if (!await file.exists()) return notice(_noRecording);
-    await parts.player.play(recording, file.uri);
+    await player.play(path, file.uri);
+  }
+
+  /// A recording's file, from its path in the support folder.
+  Future<File> _fileOf(String path) async {
+    final parts = voice;
+    return parts == null ? File(fullPath(path)) : parts.recorder.fileOf(path);
   }
 
   @override
-  ValueListenable<Playback?> get playback => voice?.player ?? noPlayback;
+  ValueListenable<Playback?> get playback => _player ?? noPlayback;
 
   @override
-  Future<void> pause() async => voice?.player.pause();
+  Future<void> pause() async => _player?.pause();
 
   @override
-  Future<void> seek(Duration at) async => voice?.player.seek(at);
+  Future<void> seek(Duration at) async => _player?.seek(at);
 
   /// Reads the recording's waves away from the page, so a 5-minute recording does not stall it.
   @override
   Future<List<double>> waveOf(String recording, {int bars = 48}) async {
-    final parts = voice;
-    if (parts == null) return const [];
+    if (!recording.contains('/')) return const [];
     try {
-      return await compute(readWave, ((await parts.recorder.fileOf(recording)).path, bars));
+      return await compute(readWave, ((await _fileOf(recording)).path, bars));
     } on Exception {
       return const [];
     }
   }
 
-  /// Shows the note at once, with no words yet, and writes them in the background. Returns the words to show when the
-  /// phone could not keep it, such as a full disk; then its recording is deleted too. A kept note adds [fix], the fix
-  /// taken as it started, as its point.
-  Future<String?> _keepVoice(Recording recording, Future<Pin?>? fix) async {
-    final note = LocalNote(clientId: recording.clientId, text: '', createdAt: recording.startedAt, kind: NoteKind.voice,
-      audioPath: recording.audioPath, durationMs: recording.length.inMilliseconds, wordsPending: true);
+  @override
+  Future<void> editTranscript(String recording, String transcript) async {
+    if (!await store.setTranscript(recording, transcript.trim(), send: _settings.sending, at: _clock(), edit: true)) return;
+    await _refreshLocal();
+    if (_settings.sending) unawaited(sync());
+  }
+
+  /// Shows the recording at once in a new voice note, or in note [into], with no words yet, and writes them in the
+  /// background. Returns the words to show when the phone could not keep it, such as a full disk; then its recording is
+  /// deleted too. A kept new note adds [fix], the fix taken as it started, as its point.
+  Future<String?> _keepVoice(Recording recording, Future<Pin?>? fix, {String? into}) async {
+    final parts = voice!;
+    final source = await parts.recorder.fileOf(recording.audioPath);
+    final File target;
+    final LocalNote note;
+    final Attachment file;
+    var full = false;
     try {
-      await store.addVoiceNote(note);
+      file = _newRecording(await source.length(), recording.length.inMilliseconds, top: into == null);
+      target = await _fileOf(file.path);
+      await _moveTo(source, target.path);
     } catch (_) {
-      try {
-        final file = await voice!.recorder.fileOf(recording.audioPath);
-        if (await file.exists()) await file.delete();
-      } catch (_) {
-        // The next open deletes a recording no note keeps.
-      }
+      await _deleteQuietly(source);
       return _notSaved;
     }
+    try {
+      if (into != null && await store.hasNote(into)) {
+        full = !await store.addRecording(into, file);
+        if (full) throw StateError('full');
+        note = (await store.notes()).firstWhere((note) => note.clientId == into);
+      } else {
+        // A new note from the bars has no words yet, so the recording makes it, under where the words go.
+        note = LocalNote(clientId: into ?? recording.clientId, text: '', createdAt: recording.startedAt,
+          kind: into == null ? NoteKind.voice : NoteKind.typed, wordsPending: true, attachments: [file]);
+        await store.addVoiceNote(note);
+      }
+    } catch (_) {
+      await _deleteQuietly(target);
+      return full ? _full : _notSaved;
+    }
     await _refreshLocal();
-    _track(_write(note));
-    if (fix != null) _point(note.createdAt, fix);
+    _track(_write(note, file));
+    if (fix != null && into == null) _point(note.createdAt, fix);
     return null;
+  }
+
+  /// Deletes [file] if it is there; the next open deletes a recording no note keeps.
+  static Future<void> _deleteQuietly(File file) async {
+    try {
+      if (await file.exists()) await file.delete();
+    } catch (_) {
+      // Left for the next open.
+    }
   }
 
   @override
   Future<void> writeWordsAgain() async {
     if (_wordsFailed.isEmpty) return;
-    // Only the failed notes: a note whose words are being written now must not be written twice.
+    // Only the failed recordings: one whose words are being written now must not be written twice.
     final failed = Set.of(_wordsFailed.keys);
     _wordsFailed.clear();
     _toldSinceAgain = false;
@@ -1405,8 +1486,8 @@ class RelayController extends Relay {
     job.whenComplete(() => _writing.remove(job));
   }
 
-  /// Ends when every voice note being written has its words, and is sent while sending is on, or is gone or failed. A
-  /// watch note's hand-off waits on it, so iOS gives the app time to finish.
+  /// Ends when every recording being written has its words, and its note is sent while sending is on, or is gone or
+  /// failed. A watch note's hand-off waits on it, so iOS gives the app time to finish.
   Future<void> wordsSettled() async {
     while (_writing.isNotEmpty) {
       await Future.wait(List.of(_writing));
@@ -1417,96 +1498,95 @@ class RelayController extends Relay {
   @visibleForTesting
   Future<void> wordsWritten() => wordsSettled();
 
-  /// Writes the words of each voice note still waiting, oldest first, or only of the notes in [only]. With [dropStray],
-  /// deletes recordings no note keeps, such as one the app's close cut off while the person still held the button.
-  Future<void> _writePending({bool dropStray = false, Set<String>? only}) async {
+  /// Writes the words of each recording still without them, oldest note first, or only of the recordings in [only].
+  /// With [strayBefore], deletes recordings no note keeps, such as one the app's close cut off while the person still
+  /// held the button: a kept recording moves out of `voice/` at once, and one written since [strayBefore] is new.
+  Future<void> _writePending({DateTime? strayBefore, Set<String>? only}) async {
     final parts = voice;
     if (parts == null) return;
-    final pending = await store.pendingWords();
-    if (dropStray) {
-      final kept = {for (final note in await store.notes()) if (note.audioPath != null) note.audioPath};
+    if (strayBefore != null) {
       final folder = (await parts.recorder.fileOf(VoiceRecorder.pathOf('x'))).parent;
       if (await folder.exists()) {
         await for (final file in folder.list()) {
-          final path = 'voice/${file.uri.pathSegments.last}';
-          if (file is! File || kept.contains(path)) continue;
-          // A shortcut's recording can land meanwhile: its note is kept before the recording moves here.
-          if (await store.keepsRecording(path)) continue;
-          await _deleteRecording(file);
+          if (file is File && (await _changedAt(file)).isBefore(strayBefore)) await _deleteRecording(file);
         }
       }
     }
-    for (final note in pending) {
-      if (only == null || only.contains(note.clientId)) await _write(note);
+    for (final (note, file) in await store.pendingWords()) {
+      if (only == null || only.contains(file.id)) await _write(note, file);
     }
   }
 
-  /// Writes one voice note's words, after the words typed with it. No words: a note with typed words keeps them and its
-  /// recording; a watch note keeps its recording and shows *No words heard*; any other goes with its recording, and the
-  /// app says it heard no speech. It waits while the model is away; failed words, or words past the time limit, show
-  /// *Try again* on the note.
-  Future<void> _write(LocalNote note) async {
+  /// Writes the words of [note]'s recording [file]. No words: a new voice note with nothing else in it goes with its
+  /// recording, and the app says it heard no speech; any other recording stays, with *No words heard*. It waits while
+  /// the model is away; failed words, or words past the time limit, show *Try again* on the recording, and its note
+  /// goes without them.
+  Future<void> _write(LocalNote note, Attachment file) async {
     final parts = voice;
     if (parts == null) return;
-    final file = await parts.recorder.fileOf(note.audioPath ?? VoiceRecorder.pathOf(note.clientId));
-    if (!await file.exists()) {
-      // Typed words stay, with no recording to write. The phone never deletes a watch note on its own.
-      if (note.text.trim().isNotEmpty) return _keepTyped(note);
-      if (note.fromWatch) return _keepNoWords(note);
-      await store.dropNote(note.clientId);
-      await _refreshLocal();
-      return;
-    }
-    if (parts.model.state != ModelState.ready) return;
-    final String words;
+    final sound = await _fileOf(file.path);
+    final there = await sound.exists();
+    if (there && parts.model.state != ModelState.ready) return;
+    String words;
     try {
-      // The limit counts from when the note before ends or passes its limit, and stops only this note's writing.
-      words = await parts.transcriber.words(file, limit: _wordsLimit(Duration(milliseconds: note.durationMs ?? 0)));
+      // A recording gone, such as after a restore to a new phone, has no words to write.
+      if (!there) throw const _Gone();
+      // The limit counts from when the recording before ends or passes its limit, and stops only this one's writing.
+      words = await parts.transcriber.words(sound, limit: _wordsLimit(Duration(milliseconds: file.lengthMs ?? 0)));
+    } on _Gone {
+      words = '';
     } on Object catch (error, stack) {
       // Any error, an Error too, such as an ArgumentError from the speech engine: the note must never wait silently.
-      debugPrint('Voice note ${note.clientId}: the words failed: $error\n$stack');
-      // The notice shows once for each note: not again when the same note fails on a return to the app.
-      final tell = _toldWordsFailed.add(note.clientId) && !_toldSinceAgain;
+      debugPrint('Recording ${file.id}: the words failed: $error\n$stack');
+      // The notice shows once for each recording: not again when the same one fails on a return to the app.
+      final tell = _toldWordsFailed.add(file.id) && !_toldSinceAgain;
       if (tell) _toldSinceAgain = true;
-      _wordsFailed[note.clientId] = whyNoWords(error);
-      await _refreshLocal();
+      _wordsFailed[file.id] = whyNoWords(error);
+      await _setWords(file, null, note);
       if (tell && !_disposed) notice(_wordsDidNotCome);
       return;
     }
-    if (words.isEmpty) {
-      if (note.text.trim().isNotEmpty) return _keepTyped(note);
-      if (note.fromWatch) return _keepNoWords(note);
+    if (words.isEmpty && await _silentNewNote(note.clientId)) {
       await store.dropNote(note.clientId);
-      await _deleteRecording(file);
+      if (there) await _deleteRecording(sound);
       await _refreshLocal();
-      notice(_noSpeech);
+      if (there) notice(_noSpeech);
       return;
     }
-    if (await store.setWords(note.clientId, words, send: _settings.sending)) {
-      await _refreshLocal();
-      await sync();
-    }
+    await _setWords(file, words, note);
+  }
+
+  /// Keeps a recording's words, or null for failed ones, and sends its note while sending is on.
+  Future<void> _setWords(Attachment file, String? words, LocalNote note) async {
+    final kept = await store.setTranscript(file.id, words, send: _settings.sending, at: _clock());
+    // A recording that failed again changes nothing in the store, yet now shows *Try again*.
+    await _refreshLocal();
+    if (kept && _settings.sending) await sync();
+  }
+
+  /// True for a voice note held on *New note* with nothing but its one recording: no speech in it keeps nothing. A
+  /// watch note, words given or typed with it, or another file keep the note.
+  Future<bool> _silentNewNote(String clientId) async {
+    final note = (await store.notes()).where((note) => note.clientId == clientId).firstOrNull;
+    return note != null && note.kind == NoteKind.voice && !note.fromWatch && note.sentAt == null &&
+      note.text.trim().isEmpty && note.attachments.length == 1;
   }
 
   /// Deletes a recording, or does nothing when the sweep for stray recordings deleted it first.
+  /// When [file] last changed; a file gone meanwhile counts as new, so nothing deletes it.
+  static Future<DateTime> _changedAt(File file) async {
+    try {
+      return await file.lastModified();
+    } on FileSystemException {
+      return DateTime.now();
+    }
+  }
+
   Future<void> _deleteRecording(File file) async {
     try {
       await file.delete();
     } on PathNotFoundException {
       // Gone already.
-    }
-  }
-
-  /// A watch note with no words stays, with its recording to play, and is not sent: there are no words to send.
-  Future<void> _keepNoWords(LocalNote note) async {
-    if (await store.setWords(note.clientId, '', send: false)) await _refreshLocal();
-  }
-
-  /// Ends a voice note's wait with only the words typed with it, such as a shortcut's label over a silent recording.
-  Future<void> _keepTyped(LocalNote note) async {
-    if (await store.setWords(note.clientId, '', send: _settings.sending)) {
-      await _refreshLocal();
-      await sync();
     }
   }
 
@@ -1531,4 +1611,9 @@ class RelayController extends Relay {
     voice?.model.removeListener(notifyListeners);
     super.dispose();
   }
+}
+
+/// A recording whose file is gone: [RelayController] treats it as one with no speech.
+class _Gone implements Exception {
+  const _Gone();
 }

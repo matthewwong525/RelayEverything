@@ -49,7 +49,7 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Relay Everything records a voice note while you hold Hold to talk. The phone writes its words, and the recording never leaves the phone.</string>
+	<string>Relay Everything records a voice note while you hold New note or tap the microphone in a note. The phone writes its words itself. With sending on, the recording goes to your own space, as a file does.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>With the calendar on, Relay Everything reads your events and sends them to your own Relay Everything server. It never changes an event.</string>
 	<key>NSCalendarsUsageDescription</key>

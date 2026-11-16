@@ -172,6 +172,20 @@ it("sends a changed note with its latest words, the time of the change and its f
   expect(plain.data).not.toHaveProperty("note.audio");
 });
 
+it("lists a recording with its transcript and length, null while it has no words, and a plain file with neither", () => {
+  const pdf = { id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 245_760, transcript: null, length_ms: null };
+  const wav = { id: "rec-0001", name: "Recording.wav", content_type: "audio/wav", size: 134_444, transcript: "Call the fab.", length_ms: 4200 };
+  const voice = { ...typed, text: "" };
+  const created = noteCreated(voice, null, AT, [wav, { ...wav, id: "rec-0002", transcript: null }, pdf]);
+  expect(message.parse(created)).toEqual(created);
+  expect(created.data).toMatchObject({ note: { text: "", attachments: [wav, { id: "rec-0002", transcript: null, length_ms: 4200 },
+    { id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 245_760 }] } });
+  expect((created.data as { note: { attachments: object[] } }).note.attachments[2]).not.toHaveProperty("transcript");
+  const updated = noteUpdated({ ...voice, edited_at: AT }, AT, [{ ...wav, transcript: "Call the lab." }]);
+  expect(message.parse(updated)).toEqual(updated);
+  expect(updated.data).toMatchObject({ note: { attachments: [{ transcript: "Call the lab.", length_ms: 4200 }] } });
+});
+
 it("takes a note's file with its bytes, which the server and the phone both send", () => {
   const file = { version: 1, type: "note.file", timestamp: "2026-11-04T14:01:02.000Z", data: { note_id: typed.id,
     file: { id: "file-pdf-0001", name: "warranty.pdf", content_type: "application/pdf", size: 4, base64: "AAAAGA==" } } };

@@ -208,21 +208,29 @@ class WebRelay extends Relay {
     return true;
   }
 
-  /// The screens' row for a note from `GET notes`, with the routes that read its files and recording.
+  /// The screens' row for a note from `GET notes`, with the routes that read its files and recordings. A ring note's
+  /// recording shows as its top recording, with no transcript: its words are the note's.
   Entry entryOf(Map<String, dynamic> json, String id) {
     final serverId = json['id'] as String;
-    final ring = json['source'] == 'ring';
     final audio = json['audio'] == true;
+    final files = [for (final file in (json['attachments'] as List?) ?? const []) if (file is Map) file];
     return Entry(
       id: id,
       text: json['text'] as String? ?? '',
       at: DateTime.fromMillisecondsSinceEpoch(json['recordedAt'] as int),
       sent: true,
-      voice: ring || audio,
-      recording: audio ? client.api('audio', {'id': serverId}).toString() : null,
+      recordings: [
+        if (audio) EntryRecording(recording: client.api('audio', {'id': serverId}).toString(), top: true),
+        for (final (index, file) in files.indexed)
+          if (file['lengthMs'] case final int length) EntryRecording(id: file['id'] as String,
+            filesBefore: files.take(index).where((other) => other['lengthMs'] == null).length,
+            recording: file['ready'] == true ? client.api('attachment', {'id': file['id'] as String}).toString() : '',
+            length: Duration(milliseconds: length), transcript: file['transcript'] as String?, top: file['top'] == true,
+            ready: file['ready'] == true),
+      ],
       files: [
-        for (final file in (json['attachments'] as List?) ?? const [])
-          if (file is Map) EntryFile(id: file['id'] as String, name: file['name'] as String? ?? '', type: file['type'] as String? ?? '',
+        for (final file in files)
+          if (file['lengthMs'] == null) EntryFile(id: file['id'] as String, name: file['name'] as String? ?? '', type: file['type'] as String? ?? '',
             size: file['size'] as int? ?? 0,
             url: file['ready'] == true ? client.api('attachment', {'id': file['id'] as String}).toString() : null),
       ],
@@ -443,7 +451,7 @@ class WebRelay extends Relay {
 
   static Entry _copy(Entry entry, {String? text, List<EntryFile>? files, bool? waiting, bool? pinned}) => Entry(id: entry.id,
     text: text ?? entry.text, at: entry.at, sent: entry.sent, waiting: waiting ?? entry.waiting,
-    voice: entry.voice, recording: entry.recording, length: entry.length, files: files ?? entry.files, from: entry.from,
+    recordings: entry.recordings, files: files ?? entry.files, from: entry.from,
     pinned: pinned ?? entry.pinned);
 
   /// Shows the pin at once, then sends it after the changes before it, so a new note lands first. A refusal puts the
@@ -469,7 +477,7 @@ class WebRelay extends Relay {
   Future<Emptied> dropEmptyNote(String id) async {
     final note = _notes[id];
     if (note == null) return Emptied.dropped;
-    if (note.entry.files.isNotEmpty || note.entry.recording != null) return Emptied.kept;
+    if (note.entry.files.isNotEmpty || note.entry.recordings.isNotEmpty) return Emptied.kept;
     if (note.serverId == null && note.mine) {
       _notes.remove(id);
       _unsent.remove(id);
@@ -666,7 +674,7 @@ class WebRelay extends Relay {
   @override DateTime? get listening => null;
   @override Stream<double>? get level => null;
   @override bool get holdTipSeen => true;
-  @override Future<String?> startVoiceNote() async => onlyOnPhone;
+  @override Future<String?> startVoiceNote({String? into}) async => onlyOnPhone;
   @override Future<String?> endVoiceNote() async => null;
   @override Future<void> cancelVoiceNote() async {}
   @override Future<void> writeWordsAgain() async {}

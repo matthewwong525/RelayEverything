@@ -27,10 +27,12 @@ void main() {
       ['Today 2', 'Yesterday 1', 'Previous 7 days 1']);
   });
 
-  test('search finds words and file names, in any case, and never a place', () {
+  test('search finds words, transcripts and file names, in any case, and never a place', () {
     final note = Entry(text: 'Paint colours for the hall', at: now,
+      recordings: const [EntryRecording(recording: 'attachments/r.wav', transcript: 'Ask Sam about the warm grey'),
+        EntryRecording(recording: 'attachments/w.wav')],
       files: const [EntryFile(name: 'Swatches.pdf', type: 'application/pdf', size: 1, path: '/nowhere/Swatches.pdf')]);
-    for (final words in ['PAINT', 'hall', 'swatches', '  colours  ', '']) {
+    for (final words in ['PAINT', 'hall', 'swatches', '  colours  ', '', 'warm GREY']) {
       expect(entryMatches(note, words), isTrue, reason: words);
     }
     expect([entryMatches(note, 'dentist'), entryMatches(note, 'home')], [false, false]);
@@ -46,14 +48,17 @@ void main() {
     const file = EntryFile(name: 'lease.pdf', type: 'application/pdf', size: 1, path: '/nowhere/lease.pdf');
     final notes = {
       'typed': Entry(text: 'Buy milk', at: now),
-      'voice': Entry(text: 'Call the fab', at: now, voice: true),
+      'voice': Entry(text: '', at: now,
+        recordings: const [EntryRecording(recording: 'attachments/r.wav', transcript: 'Call the fab', top: true)]),
+      // A recording added with the mic puts a typed note in Voice too.
+      'mic': Entry(text: 'Fab notes', at: now, recordings: const [EntryRecording(recording: 'attachments/m.wav')]),
       'photo': Entry(text: 'Receipt', at: now, files: const [photo]),
       'file': Entry(text: '', at: now, files: const [file]),
       'link': Entry(text: 'Read HTTPS://example.com/post later', at: now),
     };
     List<String> inFolder(NotesFolder folder) => [for (final MapEntry(:key, :value) in notes.entries) if (entryIn(folder, value)) key];
     expect(inFolder(NotesFolder.all), notes.keys);
-    expect(inFolder(NotesFolder.voice), ['voice']);
+    expect(inFolder(NotesFolder.voice), ['voice', 'mic']);
     expect(inFolder(NotesFolder.files), ['photo', 'file']);
     expect([for (final folder in NotesFolder.values) folder.title], ['All', 'Voice', 'Photos and files']);
   });

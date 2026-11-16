@@ -2,7 +2,7 @@ Relay Everything works fully with no account. Notes stay on the phone, and the a
 
 To try sign-in: on Home, tap the gear at the top right to open Settings. Tap "Sign in to Relay Everything", then "Sign in". The sign-in page offers Sign in with Apple and a one-time code by email. You can use your own Apple ID, so no demo account is necessary.
 
-Permissions: Health, Location, Calendar and Photos each ask for permission only when the person turns that one on in its folder on Home. They work only with sending on. The app asks for the microphone at the first voice note. The phone writes the words of a voice note itself, with whisper.cpp, and the recording stays on the phone.
+Permissions: Health, Location, Calendar and Photos each ask for permission only when the person turns that one on in its folder on Home. They work only with sending on. The app asks for the microphone at the first voice note. The phone writes the words of a voice note itself, with whisper.cpp. The recording stays on the phone until the person turns on sending; then it goes to their own space, as a file does.
 
 The Apple Watch app starts a voice note when it opens, and sends the note to the iPhone.
 

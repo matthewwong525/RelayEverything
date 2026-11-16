@@ -64,6 +64,7 @@ Future<FlushResult> flush(Store store, Outbound api, {DateTime Function()? clock
       }
       if (error.failure != Failure.rejected) return FlushResult(sent: sent, dropped: dropped, failure: error.failure);
       dropped++;
+      if (item.route == noteUpdate && error.code == notOwn) await store.keepHere(item.body['clientId'] as String, now());
     }
     if (item.route == 'notes') await store.noteSent(item.body['clientId'] as String, now());
     if (item.route == 'attachment') await store.attachmentSent(item.body['id'] as String, now());

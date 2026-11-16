@@ -14,7 +14,7 @@ To send straight to your own database, with no account and nothing on Relay Ever
 3. Tap **Sign in**. A sign-in page opens in the app. Sign in, if you are not signed in on the phone already.
 4. The page asks **Connect this phone?**, with a name for the phone. Change the name if you want, and tap **Connect**.
 5. The app comes back with its own key, and checks it with the server. If you wrote notes before, the app asks **Send your earlier notes too?** Tap **Send them** to send them, or **Only new notes** to keep them only on the phone. The app asks again each time you sign in.
-6. The phone sends, and the account card shows your email and *Signed in*.
+6. The phone sends its notes, then gets your notes from your other phones, computers, email and AI apps at once. The account card shows your email and *Signed in*.
 
 The key never shows. It goes from the server to the phone only, and works only with a secret that the phone made for this one sign-in. Tap **Cancel** on the page, or close it, and the phone gets no key. Each phone gets its key only this way: your Relay Everything page makes no phone key and no QR code.
 

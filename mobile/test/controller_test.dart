@@ -54,7 +54,8 @@ void main() {
     calendar: calendar, photos: photos, network: network, motion: motion);
 
   List<Map<String, dynamic>> sentNotes() => [
-    for (final request in server.requests) if (request.url.path.endsWith('notes')) jsonDecode(request.body) as Map<String, dynamic>,
+    for (final request in server.requests)
+      if (request.method != 'GET' && request.url.path.endsWith('notes')) jsonDecode(request.body) as Map<String, dynamic>,
   ];
   List<Map<String, dynamic>> sentPoints() => [
     for (final request in server.requests) if (request.url.path.endsWith('locations'))
@@ -145,7 +146,7 @@ void main() {
       expect(storage.values.values, contains('secret-value'));
     });
 
-    test('the list shows only the notes made on this phone, each sent or not, and reads nothing from the server', () async {
+    test('the list shows only the notes made on this phone, each sent or not, when the server has no others', () async {
       final relay = await offlineWithNotes(['Local only']);
       await relay.startSending(sendEarlier: false);
       await pumpEventQueue();
@@ -155,8 +156,8 @@ void main() {
       await relay.sync();
       expect([for (final entry in relay.entries) (entry.text, entry.sent, entry.waiting)],
         [('Sent', true, false), ('Local only', false, false)]);
-      // After each full sync, at most each 10 minutes, the phone reads the names of what the person connected.
-      expect(server.routes, ['key', 'connections', 'notes', 'connections']);
+      // Sending on reads the notes once; after each full sync, at most each 10 minutes, it reads the connected names.
+      expect(server.routes, ['key', 'notes', 'connections', 'notes', 'connections']);
       await relay.stopSending();
       expect(relay.entries, hasLength(2));
     });
@@ -640,9 +641,9 @@ void main() {
       expect(storage.values.values, contains('secret-value'));
       expect(relay.status, SyncStatus.synced);
       expect([relay.entries.single.text, relay.entries.single.sent], ['Lunch idea', true]);
-      // A device key only adds: it reads the key check, and after a full sync the names of what the person connected.
+      // A device key only adds: it reads the key check, the notes when sending starts, and the connected names.
       expect([for (final request in server.requests) if (request.method == 'GET') request.url.path.split('/').last],
-        ['key', 'connections']);
+        ['key', 'notes', 'connections']);
     });
 
     test('a waiting note sends with no tap when the network comes back after none', () async {
@@ -697,7 +698,7 @@ void main() {
       expect(await relay.dropEmptyNote('n1'), Emptied.deleted);
       await relay.settled();
       expect([for (final request in server.requests) '${request.method} ${request.url.path.split('/').last}'],
-        ['GET key', 'GET connections', 'DELETE notes']);
+        ['GET key', 'GET notes', 'GET connections', 'DELETE notes']);
       expect(server.requests.last.url.queryParameters, {'clientId': 'n1', 'forever': 'true'});
       expect([relay.entries, relay.deleted, relay.waiting], [isEmpty, isEmpty, 0]);
       relay.dispose();
@@ -714,7 +715,7 @@ void main() {
       expect(await relay.startSending(sendEarlier: true), isNull);
       await pumpEventQueue();
       await relay.sync();
-      expect(server.requests.where((request) => request.url.path.endsWith('/notes')), isEmpty);
+      expect(server.requests.where((request) => request.method != 'GET' && request.url.path.endsWith('/notes')), isEmpty);
       relay.dispose();
     });
 
@@ -727,10 +728,11 @@ void main() {
       await relay.addNote('From a page key');
       await pumpEventQueue();
       await relay.sync();
-      // The note comes while the first round runs, so it goes in a round of its own before the names are read.
-      expect(server.routes, ['key', 'notes', 'connections']);
-      expect([for (final request in server.requests) request.headers['Authorization']], List.filled(3, 'Bearer $pageKey'));
-      expect([for (final request in server.requests) request.headers['CF-Access-Client-Id']], [null, null, null]);
+      // The first round reads the notes; the note comes while it runs, so it goes in its own round before the names.
+      expect([for (final request in server.requests) '${request.method} ${request.url.path.split('/').last}'],
+        ['GET key', 'GET notes', 'POST notes', 'GET connections']);
+      expect([for (final request in server.requests) request.headers['Authorization']], List.filled(4, 'Bearer $pageKey'));
+      expect([for (final request in server.requests) request.headers['CF-Access-Client-Id']], List.filled(4, null));
     });
 
     test('refuses a key the server turns down, and keeps one it could not try', () async {
@@ -2574,7 +2576,7 @@ void main() {
       clock = now.add(const Duration(minutes: 1));
       await relay.addNote('New', files: [picked('new.jpg', [1, 2])]);
       await relay.sync();
-      expect(server.routes, ['key', 'notes', 'attachments', 'connections', 'notes', 'attachments']);
+      expect(server.routes, ['key', 'notes', 'attachments', 'notes', 'connections', 'notes', 'attachments']);
       final uploads = [for (final request in server.requests) if (request.url.path.endsWith('attachments')) request];
       expect([for (final upload in uploads) upload.bodyBytes], [[9], [1, 2]]);
       final notes = sentNotes();

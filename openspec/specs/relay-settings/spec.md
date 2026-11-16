@@ -17,17 +17,29 @@ Settings SHALL show, in this order, the account card and *Appearance*, on the ph
 - **WHEN** the same person opens Settings in the browser
 - **THEN** its list shows *Account* and *Appearance*, in that order, and nothing else
 
-### Requirement: The account card says where notes go, in few words
+### Requirement: The account card says where data goes, in few words
 
 Signed in, the account card SHALL show the account's email and *Signed in*, and nothing more. Sending to the person's own webhook with no account, it SHALL say *My own webhook* and show the webhook's address. Signed out, it SHALL say *Sign in to Relay Everything* and that notes stay on the phone until the person signs in. A tap SHALL open the sign-in when signed out, else the Account page.
 
-#### Scenario: Private data to the webhook
-- **WHEN** a signed-in person sends health, places, calendar and photos only to their own webhook, and opens Settings
+#### Scenario: Signed in
+- **WHEN** a signed-in person opens Settings
 - **THEN** the account card shows their email and *Signed in*, and no other line
 
 #### Scenario: Signed out
 - **WHEN** a person opens Settings on a new install
 - **THEN** the account card says *Sign in to Relay Everything*, and no request leaves the phone
+
+### Requirement: Advanced holds the webhooks and API keys
+
+*Advanced* on the Account page SHALL hold *Webhooks*, and in the browser *API keys*, each a row that opens its page and says in one line what it is for. On the phone, *Webhooks* SHALL say a person does not need it to use Relay Everything, list the webhooks by name, and open the person's Relay Everything page to add or change one; it SHALL hold no choice of where data goes. In the browser, *Webhooks* SHALL add, change and remove webhooks as before. *API keys* SHALL list the person's API keys, each with *Turn off*, and *Add an API key*, which shows the new key once. No page but *API keys* SHALL show a key.
+
+#### Scenario: The phone's Webhooks page
+- **WHEN** a signed-in person opens *Webhooks* on the phone
+- **THEN** it lists their webhooks by name and a link to add or change one on their page, and shows no switch
+
+#### Scenario: The default
+- **WHEN** a person signs in, never opens *Webhooks*, and turns on Health
+- **THEN** their health readings go to Relay Everything
 
 ### Requirement: Account holds the person, their phones and the developer options
 
@@ -52,18 +64,6 @@ The phone's sign-in SHALL show one primary *Sign in* button, which signs in to R
 #### Scenario: A webhook with no account
 - **WHEN** a person with no account taps *Don't want an account? Use your own webhook*, pastes an https address, copies the secret, and saves
 - **THEN** the phone sends new notes to the webhook, the account card says *My own webhook*, and the phone never asks them to sign in
-
-### Requirement: Advanced on the Account page holds the developer options
-
-*Advanced* on the Account page SHALL hold *Webhooks*, and in the browser *API keys*, each a row that opens its page and says in one line what it is for. On the phone, *Webhooks* SHALL say a person does not need it to use Relay Everything, list the webhooks by name, open the person's Relay Everything page to add or change one, and hold *Only to my own webhook* for health, places, calendar and photos, shown only while signed in. In the browser, *Webhooks* SHALL add, change and remove webhooks as before. *API keys* SHALL list the person's API keys, each with *Turn off*, and *Add an API key*, which shows the new key once. No page but *API keys* SHALL show a key. *Only to my own webhook* SHALL be off by default and SHALL work as the earlier private-data choice did. A person who never opens *Advanced* SHALL send everything they turn on to Relay Everything.
-
-#### Scenario: The default
-- **WHEN** a person signs in, never opens *Webhooks*, and turns on Health
-- **THEN** their health readings go to Relay Everything
-
-#### Scenario: Private data to the webhook
-- **WHEN** a signed-in person with no webhook on the phone turns on *Only to my own webhook* in *Webhooks*, sets the webhook and saves
-- **THEN** health, places, calendar and photos go only to the webhook, notes still go to Relay Everything, and leaving the setup unsaved changes nothing
 
 ### Requirement: Gray buttons show their words in the app's font
 

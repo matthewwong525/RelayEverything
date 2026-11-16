@@ -10,17 +10,13 @@ import 'back_to.dart';
 /// *Sign in*: one *Sign in* button to Relay Everything, and one quiet link, *Don't want an account? Use your own
 /// webhook*, which opens the webhook's setup in four steps: the address, the secret to copy, *Send a test*, and *Save*.
 /// A phone that keeps a key offers it in one tap. The account card in Settings and a folder's *Sign in* open it, and it
-/// closes with the place once that place is set up; leaving it changes nothing. With [privateOnly], *Only to my own
-/// webhook* in Webhooks opens the setup alone: its *Save* keeps the webhook and closes with [SendPlace.webhook], and
-/// Webhooks sends private data there; notes stay where they go. With [signInOnly], the webhook Account page's *Sign in
-/// to Relay Everything* opens the sign-in alone: the phone sends to the webhook already.
+/// closes with the place once that place is set up; leaving it changes nothing. With [signInOnly], the webhook Account
+/// page's *Sign in to Relay Everything* opens the sign-in alone, and says that everything then goes to Relay Everything.
 class ConnectScreen extends StatefulWidget {
   const ConnectScreen({super.key, required this.relay, Future<void> Function(String text)? copy,
-    this.privateOnly = false, this.signInOnly = false}) : copy = copy ?? _copy;
+    this.signInOnly = false}) : copy = copy ?? _copy;
 
   final Relay relay;
-  /// The webhook's setup for health, places, the calendar and photos only, with no way to sign in.
-  final bool privateOnly;
   /// The sign-in with no link to the webhook.
   final bool signInOnly;
   /// Puts the secret on the clipboard; a test passes its own.
@@ -34,7 +30,7 @@ Future<void> _copy(String text) => Clipboard.setData(ClipboardData(text: text));
 
 class _ConnectScreenState extends State<ConnectScreen> {
   /// True once the person picked *Don't want an account? Use your own webhook*.
-  late bool _webhookOpen = widget.privateOnly;
+  bool _webhookOpen = false;
   late final _address = TextEditingController(text: widget.relay.webhookAddress ?? 'https://');
   late final _secret = TextEditingController(text: widget.relay.webhookSecret ?? widget.relay.newWebhookSecret());
   String? _problem;
@@ -125,11 +121,8 @@ class _ConnectScreenState extends State<ConnectScreen> {
   );
 
   List<Widget> _webhook() => [
-    Text(widget.privateOnly
-      ? 'The phone sends your health, places, calendar and photos straight to your server. Relay Everything never gets '
-        'them. Your notes still sync through Relay Everything.'
-      : 'Your notes go straight from this ${widget.relay.device} to your server. You need no account.'
-        '${widget.relay.platform == RelayPlatform.mac ? '' : ' Health and places go there too if you turn them on.'}'),
+    Text('Your notes go straight from this ${widget.relay.device} to your server. You need no account.'
+      '${widget.relay.platform == RelayPlatform.mac ? '' : ' Health and places go there too if you turn them on.'}'),
     _step(1, "Your webhook's address"),
     TextField(controller: _address, keyboardType: TextInputType.url, autocorrect: false,
       decoration: const InputDecoration(labelText: 'Address', helperText: 'It must start with https://.',
@@ -150,18 +143,17 @@ class _ConnectScreenState extends State<ConnectScreen> {
     const SizedBox(height: 16),
     Text('The ${widget.relay.device} sends only while it is on and has signal, so your data comes in groups. '
       'Your Relay Everything page and your AI can not read it.', style: Theme.of(context).textTheme.bodySmall),
-    if (!widget.privateOnly) ...[
-      const SizedBox(height: 16),
-      _quiet('Sign in to Relay Everything instead', () => _pick(false)),
-    ],
+    const SizedBox(height: 16),
+    _quiet('Sign in to Relay Everything instead', () => _pick(false)),
   ];
 
   /// One *Sign in*, and below it one quiet link to the webhook. A phone already set to another server keeps it: this
   /// shows only with no key kept.
   List<Widget> _server() => [
     Text(widget.signInOnly
-      ? 'Sign in to keep your notes the same on all your devices, and let your AI read them. Health, places, calendar '
-        'and photos still go only to your webhook.'
+      ? 'Sign in to keep your notes the same on all your devices, and let your AI read them. This '
+        '${widget.relay.device} then sends everything to Relay Everything, health, places, calendar and photos too. To '
+        'keep getting them at your webhook, add it on your Relay Everything page.'
       : 'Sign in to keep your notes the same on all your devices, and let your AI read them.'),
     const SizedBox(height: 16),
     FilledButton(onPressed: _busy ? null : () => _signIn(defaultServer),

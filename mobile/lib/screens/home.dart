@@ -15,6 +15,7 @@ import 'note_editor.dart';
 import 'recently_deleted.dart';
 import 'settings.dart';
 import 'timeline.dart';
+import 'webhooks.dart';
 
 export 'folder.dart' show Opener;
 
@@ -72,6 +73,24 @@ class _HomeScreenState extends State<HomeScreen> {
     relay.addListener(_showListening);
     // The account's email and names, for Settings' Account row and the Account page.
     relay.refreshConnections();
+    if (relay.throughServerNotice) WidgetsBinding.instance.addPostFrameCallback((_) => _tellThroughServer());
+  }
+
+  /// Once, after an update moved to Relay Everything what this phone sent only to its own webhook: says so, and *Open
+  /// Webhooks* opens the page that adds the webhook. Every way out clears it, so it never shows again.
+  Future<void> _tellThroughServer() async {
+    if (!mounted || !relay.throughServerNotice) return;
+    final open = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+      title: const Text('Everything now goes through Relay Everything'),
+      content: Text('This ${relay.device} no longer sends health, places, calendar and photos straight to your '
+        'webhook. They go to Relay Everything, then to each webhook you tick for them on your page.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('OK')),
+        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Open Webhooks')),
+      ],
+    ));
+    await relay.dismissThroughServerNotice();
+    if (open == true && mounted) _open(WebhooksPage(relay: relay, opener: widget.opener));
   }
 
   /// Starts one voice note, or asks for the model once, however many times the shortcut ran.

@@ -60,6 +60,7 @@ Deleting from *Recently Deleted*, and the 30-day end, can't be undone.
 - **2026-11-15** — Assumed: Apple's words for the alerts and the folder (*Recently Deleted*, *Undo Delete Note*, *Recently deleted notes can't be edited.*), because the app copies Apple Notes.
 - **2026-11-15** — Assumed: one plan for the server, the app and the website, because the folder is the same on every device and must sync.
 - **2026-11-16** — Archived and saved for publishing: the phone checks (885 tests), the server's 1269 other tests and its lint, and the public check pass; one test that builds a 25 MB file timed out once on a busy machine and passes alone.
+- **2026-11-16** — Took in *one webhook path* (#140), which landed first: *Only to my own webhook* is gone, and its alert went with it; `note.deleted` and `note.recovered` still go on both paths, from the server to every webhook when signed in, and from the phone to its own webhook with no account. The device check's flow now swipes across the whole row.
 
 ## Capabilities
 

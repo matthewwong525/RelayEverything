@@ -1,0 +1,13 @@
+# The App Store screenshot of the notes list: the pinned meeting note, then the newest first.
+appId: com.matthewwong525.relayApp
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 60000
+- tapOn: 'Notes(.|\n)*'
+- extendedWaitUntil:
+    visible: "Pinned"
+    timeout: 30000
+- assertVisible: 'Groceries(.|\n)*'
+- takeScreenshot: notes

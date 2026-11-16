@@ -160,7 +160,7 @@ class _ConnectAiPageState extends State<ConnectAiPage> {
           onManage: signedIn ? () => openRelayPage(context, relay, '#ai-apps', opener: widget.opener) : null,
         ),
         if (!signedIn) Padding(padding: const EdgeInsets.only(top: 20), child: FilledButton(
-          onPressed: () => choosePlace(context, relay, keepWebhook: accountOf(relay) == AccountState.webhook),
+          onPressed: () => choosePlace(context, relay, signInOnly: accountOf(relay) == AccountState.webhook),
           child: const Text('Sign in'))),
       ];
     });

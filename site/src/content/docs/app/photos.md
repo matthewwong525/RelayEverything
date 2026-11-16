@@ -22,7 +22,6 @@ Each photo carries when and where you took it, so a webhook gets photos only whe
 
 - **From your server**, photos go only to a webhook you tick **Photos** for. Tick it only for a database you control. [Your own database](../../connections/your-database/#add-a-webhook)
 - **From the phone**, when it sends to [your own webhook](../../connections/your-database/#send-from-the-phone) with no Relay Everything account, **Photos** sends each new photo straight to that webhook. Nothing goes to Relay Everything, so your AI can't see these photos.
-- **From the phone while your notes sync**, when you turn on **Only to my own webhook** in **Webhooks**, under **Advanced** on the **Account** page. Photos go straight to your webhook, and Relay Everything never gets them. [Settings](../settings/#health-places-calendar-and-photos-only-to-your-webhook)
 
 Each photo goes in its own [`photo.created`](../../connections/your-database/#photocreated) message, with the JPEG copy, when and where you took it, and its size. If you move sending, or your photos, between your server and your webhook, the copies that did not go yet go to the new place.
 

@@ -287,9 +287,9 @@ abstract class Relay extends ChangeNotifier {
   /// to the webhook count too.
   Future<int> earlierNotes({SendPlace? to});
   /// Turns sending on to [place], or to the place set before, with its key or webhook already kept. What waits moves
-  /// there too. [sendEarlier] queues the earlier notes too, oldest first, as [earlierNotes] counts them. [privateTo]
-  /// also sets where health, places, the calendar and photos go, as [setPrivatePlace] does, in the same step.
-  Future<String?> startSending({required bool sendEarlier, SendPlace? place, SendPlace? privateTo});
+  /// there too. [sendEarlier] queues the earlier notes too, oldest first, as [earlierNotes] counts them. Notes, health,
+  /// places, the calendar and photos all go to that one place.
+  Future<String?> startSending({required bool sendEarlier, SendPlace? place});
 
   /// The person's own webhook, when one is kept: its address and secret.
   String? get webhookAddress;
@@ -302,13 +302,11 @@ abstract class Relay extends ChangeNotifier {
   Future<String?> saveWebhook(String address, String secret);
   /// *Send a test*: a signed test message to [address]. Returns the words to show: the receiver's answer, or why not.
   Future<String> testWebhook(String address, String secret);
-  /// *Health, places, calendar and photos* on the Account page: [SendPlace.server] sends them to Relay Everything with
-  /// the notes; [SendPlace.webhook] sends them only to the person's own webhook, kept first with [saveWebhook], while
-  /// notes still sync. What of them waits moves too. [Settings.privateTo] keeps the choice.
-  Future<String?> setPrivatePlace(SendPlace place);
-  /// True while health, places, the calendar and photos should go only to the webhook, but the phone lost it, such as in
-  /// a restore: they wait on the phone until the person sets it again.
-  bool get privateWebhookMissing;
+  /// True once, after an update moved to Relay Everything the health, places, calendar and photos this phone sent only to
+  /// its own webhook: Home says so in one message, until [dismissThroughServerNotice].
+  bool get throughServerNotice;
+  /// The person saw the message: it never shows again.
+  Future<void> dismissThroughServerNotice();
   /// Turns sending off: stops health, the calendar, location history and photos, and drops what of them did not go.
   /// Keeps notes and the key.
   Future<void> stopSending();

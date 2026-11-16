@@ -97,7 +97,7 @@ class _EmailNotesPageState extends State<EmailNotesPage> {
         if (state != AccountState.signedIn) ...[
           Padding(padding: const EdgeInsets.fromLTRB(4, 12, 4, 0), child: Text('Sign in to get your addresses.', style: muted)),
           Padding(padding: const EdgeInsets.only(top: 12), child: FilledButton(
-            onPressed: () => choosePlace(context, relay, keepWebhook: state == AccountState.webhook),
+            onPressed: () => choosePlace(context, relay, signInOnly: state == AccountState.webhook),
             child: const Text('Sign in'))),
         ],
       ];

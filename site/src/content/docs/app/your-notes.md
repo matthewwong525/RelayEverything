@@ -204,7 +204,7 @@ Notes go first. Each time, the phone sends your notes, then gets the new notes. 
 - **Voice recordings stay on their phone.** A voice note from another phone shows its words with no recording. An older recorded note's recording downloads and opens on tap, as a file does.
 - **Signing out** with **Sign out** on the [Account](../settings/#account) page deletes the notes from somewhere else, and their files, from this phone. The notes that you wrote on this phone stay.
 
-Signed out, the phone gets no notes and makes no network call. Notes it got before stay until you sign out. With **My own webhook**, the phone sends only to your webhook and gets no notes. To get your notes on every phone and keep your own database too, sign in to Relay Everything and add your webhook on your Relay Everything page: your server sends every note and change from every phone to it.
+Signed out, the phone gets no notes and makes no network call. Notes it got before stay until you sign out. With **My own webhook**, the phone sends only to your webhook and gets no notes. To get your notes on every phone and keep your own database too, sign in to Relay Everything and add your webhook on your Relay Everything page: your server sends every note and change from every phone to it, and what else you tick for it. Signed in, the phone sends nothing to your webhook itself.
 
 ## Search your notes
 

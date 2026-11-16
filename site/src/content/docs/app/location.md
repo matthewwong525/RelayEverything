@@ -77,9 +77,9 @@ Your choice applies on both phones, to your Relay Everything server and to [your
 
 The **Location** folder shows when the points last went, and how many wait, such as *Sent 14:05 · 12 points waiting*. Its row on Home shows the mode too, such as *Save battery · Sent 14:05*.
 
-## Only to your own webhook
+## Your own webhook
 
-Signed in to Relay Everything, you can send your location history only to your own webhook and still sync your notes. On the **Account** page, under **Advanced**, open **Webhooks** and turn on **Only to my own webhook**. The phone then sends each point straight to your receiver as `location.points`, and each stay and trip as `location.stays`, and Relay Everything gets none of them. The **Location** folder then says *Sent to your webhook* and the time. A note keeps no place, so where you made it goes only with your location history. The points already sent stay in your space. [Settings](../settings/#health-places-calendar-and-photos-only-to-your-webhook)
+Signed in to Relay Everything, your location history goes to Relay Everything, and the phone sends none to a webhook itself. To get it at your own database, tick **Location history** for it on your Relay Everything page. To keep it off Relay Everything, use the app with no account and your own webhook: the phone then sends each point straight to your receiver as `location.points`, and each stay and trip as `location.stays`. A note keeps no place, so where you made it goes only with your location history. [Settings](../settings/#keep-your-data-off-relay-everything)
 
 ## Turn it off
 

@@ -2,7 +2,7 @@
 // not in `missing`. How to add a kind: wiki/relay-webhook-changes.md.
 import type { Files } from "./space.ts";
 import { MINUTE, type Db } from "./store.ts";
-import { calendarEvents, healthNights, healthSamples, locationPoints, locationStays, noteCreated, noteDeleted, noteFile, noteUpdated, photoCreated, type AttachmentRow, type EventRow,
+import { calendarEvents, healthNights, healthSamples, locationPoints, locationStays, noteCreated, noteDeleted, noteFile, noteRecovered, noteUpdated, photoCreated, type AttachmentRow, type EventRow,
   type HealthRow, type LocationRow, type NightRow, type NoteRow, type PhotoRow, type StayRow } from "./webhooks/format.ts";
 import { base64 } from "./webhooks/sign.ts";
 
@@ -58,29 +58,30 @@ async function audioOf(files: Files, row: NoteRow): Promise<string | null | "wai
   return Date.now() - row.created_at < FILE_WAIT ? "wait" : null;
 }
 
-/** One stored file of a note; "skip" when the note, and so the file, was deleted since. */
+/** One stored file of a note; "skip" when the note was deleted since, or waits in Recently Deleted. */
 async function file(files: Files, db: Db, entry: Entry): Promise<Built> {
-  const row = await db.prepare("SELECT id, note_id, name, content_type, size, file_key FROM relay_attachments WHERE id = ?").bind(entry.ref)
+  const row = await db.prepare(`SELECT a.id, a.note_id, a.name, a.content_type, a.size, a.file_key FROM relay_attachments a
+    JOIN relay_notes n ON n.id = a.note_id WHERE a.id = ? AND n.deleted_at IS NULL`).bind(entry.ref)
     .first<AttachmentRow & { note_id: string; file_key: string | null }>();
   const bytes = row?.file_key ? await files.open(row.file_key) : null;
   if (!row || !bytes) return "skip";
   return { message: noteFile(row, row.note_id, entry.logged_at), bytes };
 }
 
-/** A note alone, as it is now; "skip" when it was deleted since. A `note.updated` is a change from the phone that sent
- *  it. A `note.deleted` needs only its log row. */
+/** A note alone, as it is now; "skip" when it was deleted since, or waits in Recently Deleted. A `note.updated` is a
+ *  change from the phone that sent it. A `note.deleted` needs only its log row. */
 async function note(files: Files, db: Db, [entry]: Entry[]): Promise<Built> {
   if (entry.kind === "note.file") return file(files, db, entry);
   if (entry.kind === "note.deleted") return noteDeleted(entry.ref, entry.logged_at);
   const row = await db.prepare(NOTE).bind(entry.ref).first<NoteRow>();
-  if (!row) return "skip";
+  if (!row || row.deleted_at) return "skip";
   // The message names the files and never waits for their bytes, as it carries none.
   const { results } = await db.prepare("SELECT id, name, content_type, size FROM relay_attachments WHERE note_id = ? ORDER BY rowid")
     .bind(row.id).all<AttachmentRow>();
   if (entry.kind === "note.updated") return noteUpdated(row, entry.logged_at, results);
   const audio = await audioOf(files, row);
   if (audio === "wait") return "wait";
-  return noteCreated(row, audio, entry.logged_at, results);
+  return (entry.kind === "note.recovered" ? noteRecovered : noteCreated)(row, audio, entry.logged_at, results);
 }
 
 const PHOTO = `SELECT p.*, d.name AS device_name FROM relay_photos p JOIN relay_devices d ON d.id = p.device_id WHERE p.id = ?`;
@@ -99,7 +100,8 @@ const NO_WEBHOOK = "No webhook message yet: a later plan adds one.";
 
 export const KINDS: DataKind[] = [
   { id: "notes", label: "Notes", detail: "with their words and recording", always: true, alone: true,
-    log: ["note.created", "note.updated", "note.file", "note.deleted"], messages: ["note.created", "note.updated", "note.file", "note.deleted"],
+    log: ["note.created", "note.updated", "note.file", "note.deleted", "note.recovered"],
+    messages: ["note.created", "note.updated", "note.file", "note.deleted", "note.recovered"],
     build: note,
     api: ["/v1/notes", "/v1/notes/{id}"], tools: ["search", "fetch", "timeline", "add_note"], docs: "app/your-notes" },
   { id: "health", label: "Health", detail: "steps, heart rate, sleep, weight and more", sensitive: true,

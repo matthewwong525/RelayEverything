@@ -68,7 +68,7 @@ On your Relay Everything page, open **Settings**, then **Account**, click **Dele
 | Part | How |
 |---|---|
 | Everything sent | Tap **Sign out**, or **Stop sending** for your own webhook, on the app's [Account](../app/settings/#account) page. Health, the calendar, location and photos stop, and what of them did not go yet is deleted. |
-| A note | [Delete it](../app/your-notes/#delete-a-note) with a swipe or **⋯** → **Delete**. With sending on, your server deletes the note, its files and its recording too, and each webhook gets `note.deleted`. A copy your webhook already saved stays in your own database until your receiver deletes it. |
+| A note | [Delete it](../app/your-notes/#delete-a-note) with a swipe or **⋯** → **Delete**. The note waits 30 days in **Recently Deleted**, then goes for good: with sending on, your server then deletes the note, its files and its recording too. Each webhook gets `note.deleted` at the delete. A copy your webhook already saved stays in your own database until your receiver deletes it. |
 | Voice notes | Do not tap **Get it**, or tap **Remove** in Settings to delete the speech model. Delete a recording by deleting its note, or by removing the app. |
 | Location history | Turn off **Location history** in the app's **Location** folder. |
 | Photos | Turn off **Photos** in the app's **Photos** folder: the copies that did not go yet are deleted. To delete the photos already sent, click **Delete all photos** on your Relay Everything page: [Photos](../app/photos/#delete-all-photos). |

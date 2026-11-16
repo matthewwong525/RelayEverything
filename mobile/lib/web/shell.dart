@@ -14,7 +14,9 @@ import '../screens/days.dart';
 import '../screens/email_notes.dart' show EmailNotesPage, emailNotesLine;
 import '../screens/folder.dart';
 import '../screens/home.dart';
+import '../screens/more_menu.dart';
 import '../screens/note_editor.dart';
+import '../screens/recently_deleted.dart';
 import '../screens/round_button.dart';
 import '../screens/settings.dart' show SettingsScreen;
 import '../screens/timeline.dart';
@@ -48,6 +50,11 @@ class ConnectionPlace extends WebPlace {
   const ConnectionPlace(this.kind);
 
   final ConnectionKind kind;
+}
+
+/// *Recently Deleted*: the notes deleted in the last 30 days.
+class DeletedPlace extends WebPlace {
+  const DeletedPlace();
 }
 
 /// *Connect your AI*: the computers with the plugin, *Saved chats*, and the AI apps.
@@ -150,7 +157,7 @@ class WebShellState extends State<WebShell> {
     _lifecycle = AppLifecycleListener(onResume: () => unawaited(_mac ? relay.pullNotes() : relay.sync()));
     // Home shows its own notices on the phone's pages.
     _notices = relay.notices.listen((message) {
-      if (mounted && !_homeShows) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      if (mounted && !_homeShows) unawaited(showProblem(context, message));
     });
     if (widget.settingsAt case final page?) {
       WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _settings(page); });
@@ -221,6 +228,15 @@ class WebShellState extends State<WebShell> {
   /// An item of the Mac's *Format* menu, on the words picked or the cursor's line in the open note, as its key does.
   void format(FormatAction action) => _editor.currentState?.format(action);
 
+  /// ⌘Z, Ctrl+Z in the browser on Windows, and the Mac's *Edit* → *Undo*: brings the last deleted note back from
+  /// *Recently Deleted*. False while words are being typed, or with no delete left to undo: the key then undoes the
+  /// typing, as before.
+  bool undoDelete() {
+    if (!relay.canUndoDelete || textHasFocus()) return false;
+    unawaited(relay.undoLastDelete());
+    return true;
+  }
+
   /// Files dropped on the page join the open note, or start a new one.
   Future<void> _dropped(List<NewFile> files) async {
     if (files.isEmpty || !mounted) return;
@@ -229,7 +245,7 @@ class WebShellState extends State<WebShell> {
     final id = newClientId();
     final problem = await relay.addNote('', files: files, id: id);
     if (!mounted) return;
-    if (problem != null) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(problem)));
+    if (problem != null) unawaited(showProblem(context, problem));
     final added = relay.entries.where((entry) => entry.id == id).firstOrNull;
     if (added != null) openNote(added);
   }
@@ -248,6 +264,9 @@ class WebShellState extends State<WebShell> {
       settings();
     } else if (key == PhysicalKeyboardKey.backspace && keys.isShiftPressed && _open) {
       _editor.currentState?.delete();
+    } else if (key == PhysicalKeyboardKey.keyZ && !keys.isShiftPressed && !keys.isAltPressed &&
+        (!_mac || keys.isMetaPressed) && undoDelete()) {
+      // Undone: the key goes no further.
     } else {
       return KeyEventResult.ignored;
     }
@@ -295,6 +314,11 @@ class WebShellState extends State<WebShell> {
             VerticalDivider(width: 1, color: brand.line),
             Expanded(child: _open ? _editorOf(pane: true) : _noNote()),
           ],
+          DeletedPlace() => [
+            SizedBox(width: three ? 340 : 320, child: DeletedPane(relay: relay, selected: _openId, onOpen: openNote, onMenu: menu)),
+            VerticalDivider(width: 1, color: brand.line),
+            Expanded(child: _open ? _editorOf(pane: true) : _noNote(line: 'Pick a note to read it.')),
+          ],
           _ => [Expanded(child: _withMenu(menu, _pageOf(_place, wide: true)))],
         },
       ]),
@@ -310,7 +334,7 @@ class WebShellState extends State<WebShell> {
       ConnectAiPlace() => WebConnectAiPage(client: client, opener: widget.opener, onSavedChats: () => _go(const ChatsPlace())),
       EmailNotesPlace() => WebEmailNotesPage(client: client),
       ChatsPlace() => ChatsView(client: client, wide: wide, opener: widget.opener),
-      FolderPlace() || SettingsPlace() => const SizedBox.shrink(),
+      FolderPlace() || DeletedPlace() || SettingsPlace() => const SizedBox.shrink(),
     };
   }
 
@@ -322,7 +346,7 @@ class WebShellState extends State<WebShell> {
       EmailNotesPlace() => EmailNotesPage(relay: relay),
       ChatsPlace() => TranscriptsPage(relay: relay, opener: widget.opener),
       SettingsPlace() => SettingsScreen(relay: relay, opener: widget.opener),
-      FolderPlace() || ConnectionPlace() => const SizedBox.shrink(),
+      FolderPlace() || DeletedPlace() || ConnectionPlace() => const SizedBox.shrink(),
     };
     return PartRoot(onBack: wide ? null : _goHome, child: Navigator(
       key: ValueKey(place.runtimeType),
@@ -340,13 +364,13 @@ class WebShellState extends State<WebShell> {
   ]);
 
   Widget _editorOf({required bool pane, String back = 'Notes'}) => NoteEditor(key: _editor, relay: relay, entry: _entry,
-    pane: pane, back: back, onClose: _close, onCompose: () => openNote(null), search: pane ? _searchField() : null,
+    pane: pane, back: back, onClose: _close, onCompose: newNote, search: pane ? _searchField() : null,
     picker: widget.picker, sharer: widget.sharer, opener: widget.opener);
 
   Widget _searchField() => SearchField(controller: _search, focus: _searchFocus);
 
-  /// The note pane with no note open: the top bar, and a line that says what to do.
-  Widget _noNote() {
+  /// The note pane with no note open: the top bar, and a [line] that says what to do.
+  Widget _noNote({String line = 'Pick a note, or start a new one.'}) {
     final brand = brandOf(context);
     return Scaffold(
       backgroundColor: brand.paper,
@@ -354,12 +378,12 @@ class WebShellState extends State<WebShell> {
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
         child: Row(spacing: 10, children: [
           ButtonPill(children: [PillIconButton(icon: CupertinoIcons.square_pencil, tooltip: 'New note',
-            onPressed: () => openNote(null))]),
+            onPressed: newNote)]),
           const Spacer(),
           _searchField(),
         ]),
       )),
-      body: Center(child: Text('Pick a note, or start a new one.', style: TextStyle(color: brand.muted))),
+      body: Center(child: Text(line, style: TextStyle(color: brand.muted))),
     );
   }
 
@@ -367,11 +391,12 @@ class WebShellState extends State<WebShell> {
   Widget _narrow() {
     if (_open) {
       return PopScope(canPop: false, onPopInvokedWithResult: (popped, _) { if (!popped) _close(); },
-        child: _editorOf(pane: false, back: _home ? 'Home' : 'Notes'));
+        child: _editorOf(pane: false, back: _home ? 'Home' : _place is DeletedPlace ? RecentlyDeletedScreen.title : 'Notes'));
     }
     if (_home) {
       return HomeScreen(relay: relay, opener: widget.opener, picker: widget.picker, sharer: widget.sharer, onOpen: openNote,
-        onFolder: (folder) => _go(FolderPlace(folder)), onSettings: _settings, otherConnections: [
+        onFolder: (folder) => _go(FolderPlace(folder)), onDeleted: () => _go(const DeletedPlace()), onSettings: _settings,
+        otherConnections: [
           for (final (kind, title, icon) in _kinds)
             FolderRow(icon: icon, title: title, onTap: () => _go(ConnectionPlace(kind))),
           FolderRow(icon: CupertinoIcons.sparkles, title: 'Connect your AI', line: connectAiLine,
@@ -386,6 +411,8 @@ class WebShellState extends State<WebShell> {
       child: switch (_place) {
         FolderPlace(:final folder) => TimelineScreen(relay: relay, folder: folder, picker: widget.picker, sharer: widget.sharer,
           opener: widget.opener, onOpen: openNote, onBack: _goHome, onFilter: (filter) => setState(() => _place = FolderPlace(filter))),
+        DeletedPlace() => RecentlyDeletedScreen(relay: relay, picker: widget.picker, sharer: widget.sharer, opener: widget.opener,
+          onOpen: openNote, onBack: _goHome),
         // The Mac's pages have their own back.
         _ when widget.client == null => _pageOf(_place, wide: false),
         // The saved chats go back to *Connect your AI*, which opened them.
@@ -421,6 +448,7 @@ class Sidebar extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     bool on(WebPlace other) => switch ((place, other)) {
       (FolderPlace(), FolderPlace()) => true,
+      (DeletedPlace(), DeletedPlace()) => true,
       (ConnectionPlace(kind: final a), ConnectionPlace(kind: final b)) => a == b,
       (ConnectAiPlace() || ChatsPlace(), ConnectAiPlace()) => true,
       (EmailNotesPlace(), EmailNotesPlace()) => true,
@@ -457,6 +485,9 @@ class Sidebar extends StatelessWidget {
           Flexible(child: Text('Relay Everything', style: text.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
         ])),
         row(CupertinoIcons.doc_text, 'Notes', const FolderPlace(NotesFolder.all), count: relay.entries.length),
+        // Only while it holds a note, as in Apple Notes.
+        if (relay.deleted.isNotEmpty)
+          row(CupertinoIcons.trash, RecentlyDeletedScreen.title, const DeletedPlace(), count: relay.deleted.length),
         Padding(padding: const EdgeInsets.fromLTRB(22, 20, 16, 6),
           child: Text('Other connections', style: text.labelLarge?.copyWith(color: brand.muted))),
         for (final (kind, title, icon) in connections) row(icon, title, ConnectionPlace(kind)),
@@ -510,6 +541,46 @@ class NotesPane extends StatelessWidget {
           onOpen: onOpen, selected: selected),
       const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
     ]));
+  }
+}
+
+/// The middle pane on *Recently Deleted*: its title and count, ⋯ with *Recover All* and *Delete All*, the 30-day line,
+/// then the notes by the day each was deleted.
+class DeletedPane extends StatelessWidget {
+  const DeletedPane({super.key, required this.relay, required this.onOpen, this.selected, this.onMenu});
+
+  final Relay relay;
+  final NoteOpener onOpen;
+  final String? selected;
+  /// Opens the left bar in the two-pane layout.
+  final VoidCallback? onMenu;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = brandOf(context);
+    final text = Theme.of(context).textTheme;
+    final notes = relay.deleted;
+    return CustomScrollView(slivers: [
+      SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(8, 14, 12, 0), child: Row(children: [
+        if (onMenu != null) IconButton(tooltip: 'Folders', onPressed: onMenu, icon: const Icon(CupertinoIcons.sidebar_left)),
+        Expanded(child: Padding(padding: EdgeInsets.only(left: onMenu == null ? 12 : 4),
+          child: Text(RecentlyDeletedScreen.title, style: text.titleLarge?.copyWith(fontWeight: FontWeight.w700)))),
+        if (notes.isNotEmpty) ButtonPill(children: [MoreMenu(
+          items: [('Recover All', CupertinoIcons.arrow_uturn_left, () => unawaited(relay.recoverAll()))],
+          destructive: ('Delete All', CupertinoIcons.trash, () => unawaited(deleteAll(context, relay))),
+          builder: (context, toggle) => PillIconButton(icon: CupertinoIcons.ellipsis, tooltip: 'More', onPressed: toggle),
+        )]),
+      ]))),
+      SliverToBoxAdapter(child: SyncLine(relay: relay, count: countOf(notes.length))),
+      SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(18, 0, 18, 4),
+        child: Text(keepLine, style: TextStyle(fontSize: 14, height: 1.4, color: brand.muted)))),
+      if (notes.isEmpty)
+        SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(32),
+          child: Text('No notes', textAlign: TextAlign.center, style: TextStyle(color: brand.muted))))
+      else
+        noteSliver(context, relay, notes, '', back: RecentlyDeletedScreen.title, onOpen: onOpen, selected: selected, deleted: true),
+      const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
+    ]);
   }
 }
 

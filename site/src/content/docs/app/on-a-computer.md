@@ -89,7 +89,7 @@ A picture shows in its note. Another file shows as a row with its name and size:
 
 Open the note, click **⋯**, then **Delete**. Or press Ctrl+Shift+Backspace (⌘⇧Backspace on a Mac).
 
-The note leaves the list, and a bar says **Note deleted**, with **Undo**. Click **Undo** to get the note back, as on the phone. When the bar goes, or when you sign out or close the tab, your space deletes the note, its files and its recording, and your phones remove it at their next sync. [Delete a note](../your-notes/#delete-a-note)
+The note leaves the list and goes to **Recently Deleted** for 30 days. Press Ctrl+Z (⌘Z on a Mac) when you are not typing in a note to undo the last delete. Your phones show the note in **Recently Deleted** at their next sync. To recover a note, or delete it for good, open **Recently Deleted** in the left bar: [Recently Deleted](../your-notes/#recently-deleted)
 
 ## Keyboard keys
 
@@ -109,6 +109,7 @@ The note leaves the list, and a bar says **Note deleted**, with **Undo**. Click 
 | Link | Ctrl+K | ⌘K |
 | Table | Ctrl+Alt+T | ⌘⌥T |
 | Delete the open note | Ctrl+Shift+Backspace | ⌘⇧Backspace |
+| Undo the last delete, when you are not typing | Ctrl+Z | ⌘Z |
 
 The browser keeps some keys for itself. In Chrome, Ctrl+Shift+T opens a closed tab again, so use Ctrl+Alt+1 for a title there. You can also type Markdown marks at the start of a line, such as `## `: [Text styles and checklists](../your-notes/#text-styles-and-checklists)
 

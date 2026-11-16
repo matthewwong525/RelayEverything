@@ -50,6 +50,7 @@ class RelayApi implements Outbound {
   Future<void> send(OutboxItem item) async {
     if (item.route == noteUpdate) return _change(item.body);
     if (item.route == noteDelete) return _delete(item.body);
+    if (item.route == noteRecover) return _recover(item.body);
     if (item.route == notePin) {
       await pin(item.body);
       return;
@@ -83,11 +84,21 @@ class RelayApi implements Outbound {
       if (withFiles && body['attachments'] != null) 'attachments': body['attachments']})),
     rejected: const {400, 404, 409, 413});
 
-  /// A note deleted on the phone, by its server `id` once a pull saved one, else by its `clientId`. A 404 (deleted
-  /// already, never landed, or an old server) is dropped: the note is gone either way.
+  /// A note deleted on the phone, by its server `id` once a pull saved one, else by its `clientId`: moved to *Recently
+  /// Deleted*, or with `forever` deleted for good. A 404 (deleted for good already, never landed, or an old server) is
+  /// dropped: the note is gone either way.
   Future<void> _delete(Map<String, dynamic> body) => _call(() => _client.delete(_uri('notes').replace(queryParameters: {
-      if (body['id'] != null) 'id': body['id'] as String else 'clientId': body['clientId'] as String}), headers: _headers),
+      ..._noteKey(body), if (body['forever'] == true) 'forever': 'true'}), headers: _headers),
     rejected: const {400, 404});
+
+  /// A note brought back from *Recently Deleted* on the phone. A 404 (deleted for good, or an old server) is dropped: the
+  /// pull then takes the server's state.
+  Future<void> _recover(Map<String, dynamic> body) => _call(() => _client.post(_uri('notes/recover'),
+      headers: {..._headers, 'Content-Type': 'application/json'}, body: jsonEncode(_noteKey(body))),
+    rejected: const {400, 404});
+
+  static Map<String, String> _noteKey(Map<String, dynamic> body) =>
+    body['id'] != null ? {'id': body['id'] as String} : {'clientId': body['clientId'] as String};
 
   /// A note's pin, by its server `id` once a pull saved one, else by its `clientId`, and gives when the server says the
   /// pin changed, by its own clock. A 404 (no such note) or a 409 (a newer pin change is kept) is dropped; the pull then
@@ -168,9 +179,10 @@ class RelayApi implements Outbound {
   Future<Map<String, dynamic>> connections() => _call(() => _client.get(_uri('connections'), headers: _headers));
 
   /// One page of the person's notes that changed after change number [since], oldest change first:
-  /// `{notes, next, more}`. A deleted note comes as `{id, clientId, deleted: true}`.
+  /// `{notes, next, more}`. A note deleted for good comes as `{id, clientId, deleted: true}`; one in Recently Deleted
+  /// whole, with its `deletedAt`.
   Future<Map<String, dynamic>> getNotes(int since, {int limit = 100}) => _call(() => _client.get(
-    _uri('notes').replace(queryParameters: {'since': '$since', 'limit': '$limit', 'deleted': '1'}), headers: _headers));
+    _uri('notes').replace(queryParameters: {'since': '$since', 'limit': '$limit', 'deleted': '1', 'trash': '1'}), headers: _headers));
 
   /// The bytes of a note's file [id], or with [audio] the recording of the ring note [id]. A file the server does not
   /// have, such as one still on its way, is [Failure.rejected].

@@ -13,22 +13,18 @@ export 'data/phone_calendar.dart' show PhoneCalendar;
 export 'data/settings.dart' show Appearance, LocationMode, LocationSend, SendPlace, Settings;
 export 'voice/model.dart' show ModelState, ModelProblem;
 
-/// How long *Undo* shows after a note is deleted. The delete runs when its bar closes.
-const undoTime = Duration(seconds: 5);
-
-/// The longest a delete waits with no *Undo* bar to close it, as after a close: longer than [undoTime] with the bar's
-/// own show and hide, and its wait behind a bar that closes, so a delete never runs while *Undo* still shows.
-const deleteAfter = Duration(seconds: 10);
+/// How long a deleted note waits in *Recently Deleted* before it is deleted for good, with its files and recording.
+const keepDeleted = Duration(days: 30);
 
 /// What [Relay.dropEmptyNote] did: a file or recording [kept] the note, a note never sent or queued was [dropped] at
-/// once, or a note the server has or may get is [deleting], with *Undo*.
-enum Emptied { kept, dropped, deleting }
+/// once, or a note the server has or may get was [deleted] for good everywhere. It never goes to *Recently Deleted*.
+enum Emptied { kept, dropped, deleted }
 
 /// One row of the timeline: a note typed or said on this phone, or one from elsewhere that a pull brought.
 class Entry {
   const Entry({this.id = '', required this.text, required this.at, this.sent = false, this.waiting = false, this.voice = false,
     this.writing = false, this.failed = false, this.why, this.noWords = false, this.recording, this.length, this.files = const [],
-    this.from, this.pinned = false});
+    this.from, this.pinned = false, this.deletedAt});
 
   /// The phone's own id for the note: [Relay.editNote] takes it.
   final String id;
@@ -63,6 +59,10 @@ class Entry {
 
   /// Pinned to the top of the notes list, in *Pinned*.
   final bool pinned;
+
+  /// When the person deleted it: it waits in *Recently Deleted*, read only, until [keepDeleted] after this. Null for a
+  /// note in the notes list.
+  final DateTime? deletedAt;
 }
 
 /// One file on a note: kept on this phone, or, for a note from elsewhere, in the person's space until opened. In the
@@ -330,18 +330,60 @@ abstract class Relay extends ChangeNotifier {
   /// Keeps the person's change to note [id]: its new words and files added. A sent note's change goes at the next sync,
   /// and with [sendNow] at once. Returns the words to show for files left out; null when all of it was kept.
   Future<String?> editNote(String id, String text, {List<NewFile> files = const [], bool sendNow = true});
-  /// Deletes note [id], as Apple Notes does when you leave a note with no words: the editor calls it once the words are
-  /// blank. A note never sent, with no upload, goes from this phone at once; a sent note, or one whose upload waits or
-  /// is on its way, is deleted everywhere, as [deleteNote] does, with *Undo*. A note with a file or a recording stays.
+  /// Deletes note [id] for good, as Apple Notes does when you leave a note with no words: the editor calls it once the
+  /// words are blank. A note never sent, with no upload, goes from this phone at once; a sent note, or one whose upload
+  /// waits or is on its way, is deleted for good everywhere, as [deleteForever] does. It never goes to *Recently
+  /// Deleted*: it has no words to keep. A note with a file or a recording stays.
   Future<Emptied> dropEmptyNote(String id);
-  /// Deletes note [id]: it leaves the list at once, and [undoDelete] brings it back until [endUndo], or [deleteAfter] with
-  /// no bar. Then it goes from this phone, and a sent note also from the person's space, their other phones and
-  /// webhooks, at the next send.
+  /// Moves note [id] to *Recently Deleted*: it leaves the notes list at once, with no message, and waits there for
+  /// [keepDeleted]. A sent note moves on the person's space, their other phones and their page too, at the next send.
+  /// [undoLastDelete] brings back the newest one.
   Future<void> deleteNote(String id);
-  /// Brings back note [id], deleted and not yet gone, as it was. Nothing of the delete left the phone.
-  Future<void> undoDelete(String id);
-  /// The *Undo* bar of note [id] closed with no *Undo*: the delete runs now. A note brought back or gone stays as it is.
-  Future<void> endUndo(String id);
+  /// The notes in *Recently Deleted*, newest delete first.
+  List<Entry> get deleted;
+  /// Moves note [id] back from *Recently Deleted* to the notes list, as it was.
+  Future<void> recover(String id);
+  /// *Recover All*: every note in *Recently Deleted* goes back.
+  Future<void> recoverAll() async {
+    for (final entry in [...deleted]) {
+      await recover(entry.id);
+    }
+  }
+  /// Deletes note [id] for good, from *Recently Deleted*, with its files and recording, here and everywhere. It can't be
+  /// undone.
+  Future<void> deleteForever(String id);
+  /// *Delete All*: every note in *Recently Deleted* goes for good.
+  Future<void> deleteAll() async {
+    for (final entry in [...deleted]) {
+      await deleteForever(entry.id);
+    }
+  }
+
+  /// The notes deleted in this run of the app, oldest first: a shake or ⌘Z brings back the newest one still in
+  /// *Recently Deleted*. As in UIKit, a new start begins with none.
+  final _undo = <String>[];
+
+  /// Each [deleteNote] tells it here, so [undoLastDelete] can bring the note back.
+  @protected
+  void deletedNow(String id) => _undo
+    ..remove(id)
+    ..add(id);
+
+  /// True while a note deleted in this run is still in *Recently Deleted*: a shake then offers *Undo Delete Note*.
+  bool get canUndoDelete => _undo.any((id) => deleted.any((entry) => entry.id == id));
+
+  /// Brings back the last note deleted in this run that is still in *Recently Deleted*. False when there is none.
+  Future<bool> undoLastDelete() async {
+    while (_undo.isNotEmpty) {
+      final id = _undo.removeLast();
+      if (deleted.any((entry) => entry.id == id)) {
+        await recover(id);
+        return true;
+      }
+    }
+    return false;
+  }
+
   /// Pins note [id] to the top of the notes list, or unpins it, at once and with no change to its words. While sending to
   /// Relay Everything, the pin goes to the person's space, their other phones and their page; a webhook gets nothing.
   Future<void> pinNote(String id, bool pinned);
@@ -394,7 +436,7 @@ abstract class Relay extends ChangeNotifier {
   Future<List<double>> waveOf(String recording, {int bars = 48}) async => const [];
 
   final _notices = StreamController<String>.broadcast();
-  /// Short messages that come later than the act, such as *No speech heard*.
+  /// Problems that come later than the act, such as *No speech heard*: each shows as an alert.
   Stream<String> get notices => _notices.stream;
   void notice(String message) => _notices.add(message);
 

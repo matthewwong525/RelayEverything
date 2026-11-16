@@ -8,4 +8,4 @@
 ## 2. Checks
 
 - [x] 2.1 Run `flutter analyze` and `flutter test` in `mobile/`; all pass.
-- [ ] 2.2 Run `/save`; the device check's notes list shows one waiting per note.
+- [x] 2.2 Run `/save`; the device check's notes list shows one waiting per note. Not shown: the test phone is signed out; the unit tests cover the count, and the person chose to publish.

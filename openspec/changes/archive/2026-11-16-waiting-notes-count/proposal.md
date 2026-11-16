@@ -1,6 +1,6 @@
 # The waiting count counts notes, not each file
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** waiting-notes-count
 **Open questions:** none
 

@@ -112,3 +112,4 @@ Reused: `VoicePlayer` (inside the card, without its own `Card`), `_FrostedPill`,
 - **2026-11-16** — Assumed: the build saves on the worktree's branch `audio-note-transcript-layout`, because the branch already held the plan; the change keeps its name.
 - **2026-11-16** — Asked: publish now and add *Audio Data* in App Store Connect later → the person said it is added already.
 - **2026-11-16** — Assumed: archived at publish after the web page check passed; the device check could not build the app (GitHub's Mac failed to reach github.com), so the phone scenarios rest on the unit tests.
+- **2026-11-16** — Assumed: the `recording-card` flow taps *Record* until the recording screen opens, and matches *Home* by its start, because the device check tapped *Record* while the speech model was still coming, then missed *Home* under its *1 waiting* line.

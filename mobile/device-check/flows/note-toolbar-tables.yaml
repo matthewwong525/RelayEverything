@@ -26,6 +26,12 @@ appId: com.matthewwong525.relayApp
     timeout: 10000
 - takeScreenshot: note-toolbar-swiped
 - doubleTapOn: '(.|\n)*Milk(.|\n)*'
+# On the simulator a double tap can show the iPhone's own menu with only *Select All* and pick no word: then pick all.
+- runFlow:
+    when:
+      visible: "Select All"
+    commands:
+      - tapOn: "Select All"
 - extendedWaitUntil:
     visible: "Lists"
     timeout: 10000

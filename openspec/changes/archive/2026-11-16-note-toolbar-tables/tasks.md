@@ -38,4 +38,4 @@
 
 - [x] 6.1 Write a Maestro flow in `mobile/device-check/flows/` that opens a note, swipes the bar, selects a word and makes it bold, and adds a table and types in two cells.
 - [x] 6.2 Run `flutter analyze` and `flutter test` in `mobile/`, and build the web app, and verify all pass.
-- [ ] 6.3 `/save`, then run the device check on the saved commit with the change's flow and scenarios, and show its pictures, the real keyboard and the selection bar among them.
+- [x] 6.3 `/save`, then run the device check on the saved commit with the change's flow and scenarios, and show its pictures, the real keyboard and the selection bar among them.

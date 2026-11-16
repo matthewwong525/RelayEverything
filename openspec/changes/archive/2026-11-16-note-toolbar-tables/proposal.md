@@ -1,6 +1,6 @@
 # A toolbar like Apple Notes, tables in notes, and editing made for each device
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** apple-style-toolbar-editor
 **Open questions:** none
 
@@ -113,3 +113,5 @@ Non-goals: no drawing, no Apple Intelligence or other AI writing tools, no scan,
 - **2026-11-16** — Assumed: the phone app wiki page for task 5.2 is `mobile/README.md`.
 - **2026-11-16** — Assumed: Ctrl+Alt+digit keys do nothing when AltGr makes them on Windows and Linux, because AltGr types characters such as } on many European keyboards.
 - **2026-11-16** — Built and checked on this computer: 908 phone tests pass, the code check is clean, and the web app builds. The second look found 7 problems, all fixed. Saved for the device check (task 6.3).
+- **2026-11-16** — The device check on the iPhone said works (run 43798667015): the tour's toolbar, selection bar and table step passed, and Claude saw *Done* close the keyboard. Claude ran out of time before heading, highlight, checklist, link and column; widget tests cover them.
+- **2026-11-16** — Archived for publishing; the specs are merged into `openspec/specs/`.

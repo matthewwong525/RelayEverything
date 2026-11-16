@@ -86,3 +86,5 @@ Before the picture, a 3 s optional wait for *OK* lets the alert show: the app ch
 - **2026-11-16** — Assumed: add two lines to the wiki's *Write a tour flow*, because a later flow meets the same alert and optional-tap wait.
 - **2026-11-16** — Assumed: keep `tour.sh`'s 360 s second-try limit and rely on task 3.2's timing check, because raising it changes a file the plan does not name and the driver's 180 s start is a worst case.
 - **2026-11-16** — Saved for the device check (task 3.2); the second look's fix makes the card check match the card's own words, not the alert's title.
+- **2026-11-16** — Device check run 43958043942: `recording-card` passed on its first try. The words still ran past 2 minutes on the test iPhone, and the step closed the alert as planned. The recording was 0:10, not a few seconds: the loop's checks take time after the last *Record* tap.
+- **2026-11-16** — Archive checkpoint: archived for publish on branch subtle-catfish.

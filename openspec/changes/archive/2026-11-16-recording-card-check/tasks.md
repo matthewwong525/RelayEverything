@@ -13,4 +13,4 @@
 ## 3. Checks
 
 - [x] 3.1 Check the YAML parses: `node -e` with a YAML parser, or `npx --yes js-yaml mobile/device-check/flows/recording-card.yaml`.
-- [ ] 3.2 Run `/save`, then run the device check on the saved commit with `--flows recording-card`. Pass: `tour.json` shows `recording-card` passed, and `tour/recording-card.png` shows the recording's card with no alert. Read the step's times in `maestro.log`; if a wait ran close to its timeout, raise it and check once more.
+- [x] 3.2 Run `/save`, then run the device check on the saved commit with `--flows recording-card`. Pass: `tour.json` shows `recording-card` passed, and `tour/recording-card.png` shows the recording's card with no alert. Read the step's times in `maestro.log`; if a wait ran close to its timeout, raise it and check once more. Done: run 43958043942, `recording-card` passed on its first try; the picture shows the card, a 0:10 recording with *The words did not come. Your recording is safe.* and *Try again*, and no alert. The whole tour fit its limits on the first try, so no timeout changed.

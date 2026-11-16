@@ -75,15 +75,3 @@ No app parts. The background reuses the brand mark, the wordmark outline and the
 ## Migration Plan
 
 None. A Mac that never opened has nothing saved; the next download replaces the app.
-
-## Decision log
-
-- **2026-11-16** — Asked which background the install window uses (Finder's icon names are white in dark mode, black in light) → chose the green band.
-- **2026-11-16** — Assumed: the black-window fix goes in this change, because it is the same Mac download and the log named the cause.
-- **2026-11-16** — Assumed: dmgbuild over create-dmg, because it needs no Finder automation on the build machine.
-- **2026-11-16** — Assumed: the dmgbuild `.dmg` is the one file the mac-app-updates feed and the website give, and the second plan to land takes in the first's lines, because the daily line-up named the overlap.
-- **2026-11-16** — Assumed: a pull request keeps the unsigned disk image in place of the zip, so the window can be checked before it goes out.
-- **2026-11-16** — Note for the mac-app-updates plan, which had not landed on `main` when this one was built (no Sparkle or `mac-updates` lines in `mobile-macos.yml`): this plan lands first. When mac-app-updates lands, it takes in these lines: the `setup-python` and pinned `dmgbuild` steps, and `macos/dmg/make-dmg.sh "$APP" "$DMG"` in place of `hdiutil create`, run after Sparkle's helpers and the app are signed. Its update feed, the `mac-updates` release and the website give that one signed, notarised `$DMG`, `Relay-Everything-Mac.dmg`. `scripts/app-release.test.mjs` fails on an `hdiutil create`.
-- **2026-11-16** — Assumed: the test gate between parts moved to the end, as the build rules say; acceptance is the same.
-- **2026-11-16** — Assumed: the window is 660 by 428, not 660 by 400, because the second look found that Finder's window size counts the title bar, which would cut the bottom of the background. Task 3.2's screenshot confirms it.
-- **2026-11-16** — Saved for the Mac check: all tasks but 3.2 are done; the pull request's build makes the unsigned disk image that 3.2 checks on a Mac.

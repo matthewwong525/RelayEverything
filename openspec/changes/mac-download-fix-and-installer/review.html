@@ -458,7 +458,7 @@
   <p class="eyebrow">Review</p>
   <h1>mac-download-fix-and-installer</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
-  <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#notes">Notes</a></li></ul></nav>
+  <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Tap a picture to see it full screen.</span></p>
   <p id="script-error" role="alert" hidden></p>
 </header>
@@ -510,6 +510,20 @@
 <section id="needs" aria-labelledby="needs-h"><h2 id="needs-h">What the build needs</h2>
 <ol class="needs">
 <li class="need card" id="need-1" data-need="none"><p><b>Nothing.</b> The background is drawn from the brand files, and the signed build uses the Mac certificate already set up for <code>main</code>.</p></li>
+</ol>
+</section>
+<section id="decisions" aria-labelledby="decisions-h"><h2 id="decisions-h">Decisions</h2>
+<ol class="decisions">
+<li class="decision card" id="decision-1" data-note="decision-1" tabindex="0"><p class="meta"><span class="tag asked">asked</span>2026-11-16</p>Asked which background the install window uses (Finder's icon names are white in dark mode, black in light) → chose the green band.</li>
+<li class="decision card" id="decision-2" data-note="decision-2" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-16</p>Assumed: the black-window fix goes in this change, because it is the same Mac download and the log named the cause.</li>
+<li class="decision card" id="decision-3" data-note="decision-3" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-16</p>Assumed: dmgbuild over create-dmg, because it needs no Finder automation on the build machine.</li>
+<li class="decision card" id="decision-4" data-note="decision-4" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-16</p>Assumed: the dmgbuild <code>.dmg</code> is the one file the mac-app-updates feed and the website give, and the second plan to land takes in the first's lines, because the daily line-up named the overlap.</li>
+<li class="decision card" id="decision-5" data-note="decision-5" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-16</p>Assumed: a pull request keeps the unsigned disk image in place of the zip, so the window can be checked before it goes out.</li>
+<li class="decision card" id="decision-6" data-note="decision-6" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-16</p>Note for the mac-app-updates plan, which had not landed on <code>main</code> when this one was built (no Sparkle or <code>mac-updates</code> lines in <code>mobile-macos.yml</code>): this plan lands first. When mac-app-updates lands, it takes in these lines: the <code>setup-python</code> and pinned <code>dmgbuild</code> steps, and <code>macos/dmg/make-dmg.sh &quot;$APP&quot; &quot;$DMG&quot;</code> in place of <code>hdiutil create</code>, run after Sparkle's helpers and the app are signed. Its update feed, the <code>mac-updates</code> release and the website give that one signed, notarised <code>$DMG</code>, <code>Relay-Everything-Mac.dmg</code>. <code>scripts/app-release.test.mjs</code> fails on an <code>hdiutil create</code>.</li>
+<li class="decision card" id="decision-7" data-note="decision-7" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-16</p>Assumed: the test gate between parts moved to the end, as the build rules say; acceptance is the same.</li>
+<li class="decision card" id="decision-8" data-note="decision-8" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-16</p>Assumed: the window is 660 by 428, not 660 by 400, because the second look found that Finder's window size counts the title bar, which would cut the bottom of the background. Task 3.2's screenshot confirms it.</li>
+<li class="decision card" id="decision-9" data-note="decision-9" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-16</p>Saved for the Mac check: all tasks but 3.2 are done; the pull request's build makes the unsigned disk image that 3.2 checks on a Mac.</li>
+<li class="decision card" id="decision-10" data-note="decision-10" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-16</p>Check: <code>.github/workflows/mobile-macos.yml</code> changes the Mac build's steps but loosens no check: dmgbuild replaces <code>hdiutil create</code>, and a branch keeps the unsigned disk image in place of the zip, still with <code>if-no-files-found: error</code>; the signing, Apple's check, the staple and <code>mac-check</code> are unchanged.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

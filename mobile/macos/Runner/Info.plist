@@ -30,5 +30,19 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/matthewwong525/RelayEverything/releases/download/mac-updates/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>juCR51aZlqOKdcX01hRbjOnplQ/t6YP/Q6Suvlt/L4I=</string>
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
+	<key>SUEnableDownloaderService</key>
+	<false/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
 </dict>
 </plist>

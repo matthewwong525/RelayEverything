@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-// The phone app's release steps for .github/workflows/mobile-ci.yml: the run's version, the release notes, the
-// marks on released pull requests, and the check of the Mac app's disk image. mobile/README.md says how a release runs.
-import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+// The phone app's release steps for .github/workflows/mobile-ci.yml: the run's version, the release notes, the marks on
+// released pull requests, the check of the Mac app's disk image, and its update feed. mobile/README.md says how a release runs.
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { isMain, parseCli, usageError } from './lib-cli.mjs';
+import { NAME as SPARKLE_KEY, edSignature } from './sparkle-key.mjs';
 
-const USAGE = `usage: node scripts/app-release.mjs <version|notes|mark|mac-check> [options]
+const USAGE = `usage: node scripts/app-release.mjs <version|notes|mark|mac-check|mac-feed> [options]
 
 version  Prints mode, version, build, tag and previous_tag as key=value lines for $GITHUB_OUTPUT.
          Takes --ref (GITHUB_REF), --sha (GITHUB_SHA), --event (GITHUB_EVENT_NAME), --build (GITHUB_RUN_NUMBER)
@@ -17,7 +19,12 @@ notes    Writes notes.md (GitHub) and whats-new.txt (App Store) to --out (defaul
          (GITHUB_REPOSITORY) names the repository for links.
 mark     Labels each pull request in those notes "released" and comments once with the version. Same options.
 mac-check  On a Mac: exits 1 unless --file is Relay-Everything-Mac.dmg, signed, accepted by Gatekeeper as checked by
-         Apple, and stapled. Only a file that passes goes to a GitHub release.`;
+         Apple, and stapled, and each of Sparkle's helpers in the app is signed by the app's own team. Only a file that
+         passes goes to a GitHub release.
+mac-feed Adds --file, the Mac app of --version and --build on the release --tag, to the update feed --feed (appcast.xml,
+         made when missing), signed with SPARKLE_ED_PRIVATE_KEY. --channel is release or beta; --notes is a text file of
+         what is new. Keeps the newest 10 of each channel. Prints newest=true when no item in the feed has a higher
+         build, so only then does the file replace the website's download.`;
 
 const TAG = /^v(\d+)\.(\d+)\.(\d+)$/;
 /** The Mac app's one file on each GitHub release; the website's *Download for Mac* link names it. */
@@ -227,21 +234,124 @@ export const macChecks = file => [
   { what: "Apple's ticket is not stapled to it", command: 'xcrun', args: ['stapler', 'validate', file] },
 ];
 
-const defaultExec = (command, args) => execFileSync(command, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+/** Sparkle's helpers in the app, each signed on its own before Sparkle.framework (mobile-macos.yml). */
+export const SPARKLE_HELPERS = ['XPCServices/Installer.xpc', 'XPCServices/Downloader.xpc', 'Autoupdate', 'Updater.app']
+  .map(path => `Contents/Frameworks/Sparkle.framework/Versions/B/${path}`);
+const MAC_APP = 'Relay Everything.app';
 
-/** `mac-check`: runs each of [macChecks] through `exec`, and throws with the first reason the file can not go out. */
-export function macCheck({ file, exec = defaultExec, exists = existsSync }) {
-  if (basename(file ?? '') !== MAC_DMG) throw new Error(`the Mac app's file must be named ${MAC_DMG}, not "${basename(file ?? '')}"`);
-  if (!exists(file)) throw new Error(`${file} is missing`);
-  for (const { what, command, args } of macChecks(file)) {
-    try {
-      exec(command, args);
-    } catch (error) {
-      const detail = `${error.stderr ?? ''}`.trim().split('\n')[0];
-      throw new Error(`${MAC_DMG} can not go to a release: ${what}${detail ? ` (${detail})` : ''}`);
+// codesign --display writes its lines to stderr, so a run's output is both.
+function defaultExec(command, args) {
+  const run = spawnSync(command, args, { encoding: 'utf8' });
+  if (run.status !== 0) throw Object.assign(new Error(`${command} failed`), { stderr: run.stderr ?? run.error?.message });
+  return `${run.stdout}${run.stderr}`;
+}
+
+function checked(exec, what, command, args) {
+  try {
+    return `${exec(command, args) ?? ''}`;
+  } catch (error) {
+    const detail = `${error.stderr ?? ''}`.trim().split('\n')[0];
+    throw new Error(`${MAC_DMG} can not go to a release: ${what}${detail ? ` (${detail})` : ''}`);
+  }
+}
+
+/** The signing team of `path`, from `codesign --display`; '' when it has none, as an unsigned or ad hoc file. */
+function teamOf(exec, path) {
+  const out = checked(exec, `${basename(path)} is not signed`, 'codesign', ['--display', '--verbose=2', path]);
+  const team = /^TeamIdentifier=(.+)$/m.exec(out)?.[1].trim() ?? '';
+  return team === 'not set' ? '' : team;
+}
+
+/** Each of Sparkle's helpers in the app on the mounted disk image: a valid signature by the app's own team. */
+function checkHelpers(exec, mount) {
+  const app = join(mount, MAC_APP);
+  const team = teamOf(exec, app);
+  for (const helper of SPARKLE_HELPERS) {
+    const path = join(app, helper);
+    checked(exec, `Sparkle's ${basename(helper)} is not signed, or its signature is broken`, 'codesign',
+      ['--verify', '--strict', '--deep', '--verbose=2', path]);
+    if (!team || teamOf(exec, path) !== team) {
+      throw new Error(`${MAC_DMG} can not go to a release: Sparkle's ${basename(helper)} is not signed by the app's team ${team || '(none)'}`);
     }
   }
+}
+
+/** `mac-check`: runs each of [macChecks] through `exec`, then [checkHelpers] in the mounted image, and throws with the
+ * first reason the file can not go out. */
+export function macCheck({ file, exec = defaultExec, exists = existsSync, mount = () => mkdtempSync(join(tmpdir(), 'relay-dmg-')) }) {
+  if (basename(file ?? '') !== MAC_DMG) throw new Error(`the Mac app's file must be named ${MAC_DMG}, not "${basename(file ?? '')}"`);
+  if (!exists(file)) throw new Error(`${file} is missing`);
+  for (const { what, command, args } of macChecks(file)) checked(exec, what, command, args);
+  const at = mount();
+  checked(exec, 'it does not open', 'hdiutil', ['attach', file, '-nobrowse', '-readonly', '-noautoopen', '-mountpoint', at]);
+  try {
+    checkHelpers(exec, at);
+  } finally {
+    exec('hdiutil', ['detach', at, '-force']);
+    rmSync(at, { recursive: true, force: true });
+  }
   return `result=checked file=${MAC_DMG}`;
+}
+
+/** How many items of each channel the feed keeps. */
+export const FEED_KEEP = 10;
+const SPARKLE_NS = 'http://www.andymatuschak.org/xml-namespaces/sparkle';
+
+const xmlText = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** The macOS version the app needs, from the Runner's `MACOSX_DEPLOYMENT_TARGET`. */
+export function minimumMacos(pbxproj) {
+  const match = /MACOSX_DEPLOYMENT_TARGET = ([\d.]+);/.exec(pbxproj);
+  if (!match) throw new Error('mobile/macos/Runner.xcodeproj has no MACOSX_DEPLOYMENT_TARGET');
+  return match[1];
+}
+
+/** One feed item: a release has no channel, a test build is `beta`. The enclosure is the file on its own release. */
+export function feedItem({ version, build, url, length, signature, channel, notes, minimum, date }) {
+  return [
+    '    <item>',
+    `      <title>Relay Everything ${xmlText(version)} (${xmlText(build)})</title>`,
+    `      <pubDate>${date.toUTCString()}</pubDate>`,
+    `      <sparkle:version>${xmlText(build)}</sparkle:version>`,
+    `      <sparkle:shortVersionString>${xmlText(version)}</sparkle:shortVersionString>`,
+    `      <sparkle:minimumSystemVersion>${xmlText(minimum)}</sparkle:minimumSystemVersion>`,
+    ...(channel === 'beta' ? ['      <sparkle:channel>beta</sparkle:channel>'] : []),
+    `      <description sparkle:format="plain-text"><![CDATA[${notes.replaceAll(']]>', ']] >')}]]></description>`,
+    `      <enclosure url="${xmlText(url)}" length="${length}" type="application/octet-stream" sparkle:edSignature="${signature}"/>`,
+    '    </item>',
+  ].join('\n');
+}
+
+const itemsOf = xml => xml.match(/^ {4}<item>[\s\S]*?<\/item>$/gm) ?? [];
+const buildOf = item => Number(/<sparkle:version>(\d+)<\/sparkle:version>/.exec(item)?.[1] ?? 0);
+const channelOf = item => /<sparkle:channel>([^<]+)<\/sparkle:channel>/.exec(item)?.[1] ?? 'release';
+
+/** The feed with `item` first, its build's earlier item dropped, and the newest [FEED_KEEP] of each channel kept;
+ * `newest` is true when no other item has a higher build. */
+export function addToFeed(xml, item) {
+  const build = buildOf(item);
+  const others = itemsOf(xml ?? '').filter(old => buildOf(old) !== build);
+  const kept = [item, ...others].sort((a, b) => buildOf(b) - buildOf(a))
+    .filter((one, at, all) => all.slice(0, at).filter(newer => channelOf(newer) === channelOf(one)).length < FEED_KEEP);
+  return {
+    xml: ['<?xml version="1.0" encoding="utf-8"?>', `<rss version="2.0" xmlns:sparkle="${SPARKLE_NS}">`, '  <channel>',
+      '    <title>Relay Everything for Mac</title>', ...kept, '  </channel>', '</rss>', ''].join('\n'),
+    newest: others.every(old => buildOf(old) < build),
+  };
+}
+
+/** `mac-feed`: signs the disk image and writes the feed with its item; returns the result= line. */
+export function macFeed({ file, feed, version, build, tag, channel, notes, repo, seed, minimum, date = new Date() }) {
+  if (!['release', 'beta'].includes(channel)) throw new Error(`--channel must be release or beta, not "${channel}"`);
+  if (!/^\d+$/.test(String(build))) throw new Error(`the build number must be a whole number, not "${build}"`);
+  if (!seed) throw new Error(`${SPARKLE_KEY} is missing: add it to this repository's secrets (node scripts/sparkle-key.mjs)`);
+  const bytes = readFileSync(file);
+  const url = `https://github.com/${repo}/releases/download/${encodeURIComponent(tag)}/${MAC_DMG}`;
+  const item = feedItem({ version, build, url, length: bytes.length, signature: edSignature(seed, bytes), channel,
+    notes: readFileSync(notes, 'utf8').trim(), minimum, date });
+  const { xml, newest } = addToFeed(existsSync(feed) ? readFileSync(feed, 'utf8') : '', item);
+  writeFileSync(feed, xml);
+  return `result=written items=${itemsOf(xml).length} newest=${newest}`;
 }
 
 function required(values, name) {
@@ -266,6 +376,10 @@ if (isMain(import.meta.url)) {
       repo: { type: 'string', default: env.GITHUB_REPOSITORY ?? '' },
       out: { type: 'string', default: '.' },
       file: { type: 'string' },
+      feed: { type: 'string' },
+      tag: { type: 'string' },
+      channel: { type: 'string' },
+      notes: { type: 'string' },
     },
   });
   const [command] = positionals;
@@ -279,6 +393,13 @@ if (isMain(import.meta.url)) {
   try {
     if (command === 'mac-check') {
       console.log(macCheck({ file: required(values, 'file') }));
+    } else if (command === 'mac-feed') {
+      console.log(macFeed({
+        file: required(values, 'file'), feed: required(values, 'feed'), version: required(values, 'version'),
+        build: required(values, 'build'), tag: required(values, 'tag'), channel: required(values, 'channel'),
+        notes: required(values, 'notes'), repo: required(values, 'repo'), seed: env[SPARKLE_KEY],
+        minimum: minimumMacos(readFileSync(join(root(), 'mobile/macos/Runner.xcodeproj/project.pbxproj'), 'utf8')),
+      }));
     } else if (command === 'version') {
       console.log(versionLines({
         git: makeGit(root()), ref: values.ref, sha: values.sha, event: values.event, build: values.build,

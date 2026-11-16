@@ -16,6 +16,7 @@ import 'data/settings.dart';
 import 'data/sign_in.dart';
 import 'data/store.dart';
 import 'data/webhook.dart';
+import 'mac/updates.dart';
 import 'relay.dart';
 import 'share/inbox.dart';
 import 'shortcuts/inbox.dart';
@@ -86,7 +87,7 @@ class RelayController extends Relay {
     RelayApi Function(Connection)? apiFor, http.Client Function()? signInClient, WebAuth? webAuth, DateTime Function()? clock,
     WebhookClient Function(Webhook webhook, String installId)? webhookFor, this.schedule, this.voice, this.native, this.folder,
     this.opener, this.share, this.calendar, this.photos, this.network, this.motion, Duration Function(Duration length)? wordsLimit,
-    this.platform = RelayPlatform.phone})
+    this.platform = RelayPlatform.phone, this.updates})
     : _sender = Sender(apiFor, signInClient, webhookFor), _webAuth = webAuth ?? phoneWebAuth, _clock = clock ?? DateTime.now,
       _wordsLimit = wordsLimit ?? wordsLimitOf {
     voice?.model.addListener(notifyListeners);
@@ -127,6 +128,8 @@ class RelayController extends Relay {
   final Network? network;
   /// The motion sensors, for a trip's mode; with none, the mode comes from speed.
   final Motion? motion;
+  /// The Mac app's updates; null on the phone.
+  final MacUpdates? updates;
   final Sender _sender;
   final WebAuth _webAuth;
   final DateTime Function() _clock;
@@ -596,6 +599,17 @@ class RelayController extends Relay {
 
   @override
   Future<void> setAppearance(Appearance appearance) => _saveSettings(_settings.copyWith(appearance: appearance));
+
+  @override
+  Future<void> checkForUpdates() async {
+    await updates?.check();
+  }
+
+  @override
+  Future<void> setTestBuilds(bool on) async {
+    await _saveSettings(_settings.copyWith(testBuilds: on));
+    await updates?.setTestBuilds(on);
+  }
 
   @override
   Future<void> setHighlightColour(String colour) => _saveSettings(_settings.copyWith(highlightColour: colour));

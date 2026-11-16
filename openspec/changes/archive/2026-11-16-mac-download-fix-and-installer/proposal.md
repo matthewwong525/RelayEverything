@@ -1,6 +1,6 @@
 # Proposal: The Mac app opens, and its download looks like Relay Everything
 
-**Status:** built; waiting for the check on a Mac (task 3.2)
+**Status:** ready-to-ship
 **Branch:** mac-dmg-nicer-on-brand
 **Open questions:** none
 
@@ -91,3 +91,5 @@ The Mac app opens to a black window and never shows a note: it can not read its 
 - **2026-11-16** — Asked nothing: Matthew's Mac check showed the green band hid the green app icon and made the names hard to read, and that Finder drew the names black in dark mode on this light-topped picture. So the band is gone: all paper, a green arrow, black names in both modes.
 - **2026-11-16** — Matthew's Mac check showed the unsigned test copy would not open (`different Team IDs`): a branch now signs every part ad hoc, with no hardened runtime. The signed build is unchanged.
 - **2026-11-16** — Check: `.github/workflows/mobile-macos.yml` signs a branch's copy ad hoc with no hardened runtime, because macOS refuses ad hoc frameworks under it; the copy goes nowhere, and main's and a release's signing keep the hardened runtime.
+- **2026-11-16** — Asked Matthew how the test copy relay-everything-mac-386 went on his Mac → all good: the light install window looks right and the app opens to its notes.
+- **2026-11-16** — Archived at ship: Matthew checked the test copy on a Mac.

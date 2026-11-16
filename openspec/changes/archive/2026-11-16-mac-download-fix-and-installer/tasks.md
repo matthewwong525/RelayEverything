@@ -18,4 +18,4 @@
 ## 3. Checks
 
 - [x] 3.1 Run `node scripts/public-check.mjs` and the mobile tests; verify both pass.
-- [ ] 3.2 `/save`, then download the pull request's unsigned `Relay-Everything-Mac.dmg` from its run; verify on a Mac, in light and dark mode, that the window matches the plan and that the installed app opens to its notes window, and get Matthew's screenshot if no Mac is at hand.
+- [x] 3.2 `/save`, then download the pull request's unsigned `Relay-Everything-Mac.dmg` from its run; verify on a Mac, in light and dark mode, that the window matches the plan and that the installed app opens to its notes window, and get Matthew's screenshot if no Mac is at hand.

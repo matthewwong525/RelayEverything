@@ -32,7 +32,7 @@ void main() {
     placeAt = null;
     return place;
   }));
-  // A closing tab sends the deletes under *Undo* and the words that did not go.
+  // A closing tab sends the words that did not go.
   onPageClose(relay.pageClosing);
   unawaited(relay.start());
 }

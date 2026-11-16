@@ -59,9 +59,10 @@ class WebRelay extends Relay {
   String? get email => _email;
 
   final _notes = <String, _Note>{};
-  /// Notes deleted with *Undo* still showing: the delete runs when the bar ends.
-  final _deletes = <String, Timer>{};
-  final _hidden = <String, _Note>{};
+  /// The notes in *Recently Deleted*, by the same id as in [_notes].
+  final _trash = <String, _Note>{};
+  /// Notes whose move to or from *Recently Deleted* is on its way: a read held from before it does not undo it.
+  final _moving = <String>{};
   int _next = 0;
   /// A read left a change to a note out, such as the one open in the editor: [_next] stays before it, so the read after
   /// the note closes takes it.
@@ -91,6 +92,10 @@ class WebRelay extends Relay {
   @override
   List<Entry> get entries => [for (final note in _notes.values) note.entry]..sort((a, b) => b.at.compareTo(a.at));
 
+  @override
+  List<Entry> get deleted => [for (final note in _trash.values) note.entry]
+    ..sort((a, b) => (b.deletedAt ?? b.at).compareTo(a.deletedAt ?? a.at));
+
   /// Asks who is signed in, then reads every note. A 401 shows the sign-in.
   Future<void> start() async {
     try {
@@ -108,11 +113,8 @@ class WebRelay extends Relay {
   /// The sign-in ended, such as on a 401: the notes go from memory and the sign-in shows. [disconnect] sends what waits
   /// first; after a 401 nothing can go.
   void signedOut() {
-    for (final timer in _deletes.values) {
-      timer.cancel();
-    }
-    _deletes.clear();
-    _hidden.clear();
+    _trash.clear();
+    _moving.clear();
     _notes.clear();
     _unsent.clear();
     _unposted.clear();
@@ -158,7 +160,7 @@ class WebRelay extends Relay {
       var since = _next;
       var held = false;
       while (true) {
-        final page = await client.get('notes', query: {'since': '$since', if (_loaded) 'deleted': '1'});
+        final page = await client.get('notes', query: {'since': '$since', if (_loaded) 'deleted': '1', 'trash': '1'});
         for (final note in (page['notes'] as List?) ?? const []) {
           if (note is Map<String, dynamic> && !_apply(note)) held = true;
         }
@@ -179,32 +181,33 @@ class WebRelay extends Relay {
     notifyListeners();
   }
 
-  /// Keeps one note from `GET notes`, or drops a deleted one. It returns false for a change it left out: the note open in
-  /// the editor, and one whose typed words did not go yet, keep their words until the read after.
+  /// Keeps one note from `GET notes`, in the list or in *Recently Deleted* by its `deletedAt`, or drops one deleted for
+  /// good. It returns false for a change it left out: the note open in the editor, and one whose typed words did not go
+  /// yet, keep their words until the read after; a note whose move is on its way waits for that move.
   bool _apply(Map<String, dynamic> json) {
     final serverId = json['id'] as String;
     final clientId = json['clientId'] as String?;
     final mine = json['mine'] == true;
     final id = mine && clientId != null ? clientId : serverId;
     if (json['deleted'] == true) {
-      final key = [..._notes.keys, ..._hidden.keys].where((key) => (_notes[key] ?? _hidden[key])!.serverId == serverId)
+      final key = [..._notes.keys, ..._trash.keys].where((key) => (_notes[key] ?? _trash[key])!.serverId == serverId)
         .firstOrNull ?? id;
       if (_notes.containsKey(key) && (key == openNote || _unsent.contains(key))) return false;
       _notes.remove(key);
-      // Deleted elsewhere while *Undo* shows: there is nothing left to delete or to bring back.
-      _deletes.remove(key)?.cancel();
-      _hidden.remove(key);
+      _trash.remove(key);
       _bytes.remove(key);
       return true;
     }
+    if (_moving.contains(id)) return false;
     final note = _Note(entryOf(json, id), serverId: serverId, clientId: clientId, mine: mine);
-    // *Undo* brings back the newest words.
-    if (_hidden.containsKey(id)) {
-      _hidden[id] = note;
-      return true;
-    }
     if (_notes.containsKey(id) && (id == openNote || _unsent.contains(id))) return false;
-    _notes[id] = note;
+    if (note.entry.deletedAt != null) {
+      _notes.remove(id);
+      _trash[id] = note;
+    } else {
+      _trash.remove(id);
+      _notes[id] = note;
+    }
     return true;
   }
 
@@ -228,6 +231,7 @@ class WebRelay extends Relay {
       ],
       from: json['mine'] == true ? null : json['device'] as String?,
       pinned: json['pinned'] == true,
+      deletedAt: switch (json['deletedAt']) { final int at => DateTime.fromMillisecondsSinceEpoch(at), _ => null },
     );
   }
 
@@ -263,14 +267,14 @@ class WebRelay extends Relay {
       try {
         final answer = await client.post('notes', {'clientId': clientId, 'text': text, 'createdAt': now.millisecondsSinceEpoch,
           if (attached.isNotEmpty) 'attachments': _listOf(attached)});
-        final note = _notes[clientId] ?? _hidden[clientId];
+        final note = _notes[clientId] ?? _trash[clientId];
         note?.serverId = answer['id'] as String?;
         _unposted.remove(clientId);
         // An edit made while this went is still to go.
         if (note?.entry.text == text) _unsent.remove(clientId);
       } on SpaceRefused catch (refused) {
         // No answer: the note stays, with its files, and goes again at the next save, on close and as the page closes.
-        if (_again(refused) && (_notes.containsKey(clientId) || _hidden.containsKey(clientId))) {
+        if (_again(refused) && (_notes.containsKey(clientId) || _trash.containsKey(clientId))) {
           _settle(clientId);
           return ['${refused.message} $_kept', ...problems].join(' ');
         }
@@ -326,7 +330,7 @@ class WebRelay extends Relay {
   /// Sends note [id]'s words as they are now, and lists its files when some still wait: the server adds the ones it
   /// lacks. A new note that got no answer goes as new again. Gives the refusal, or null once the words went.
   Future<SpaceRefused?> _sendWords(String id) async {
-    final note = _notes[id];
+    final note = _notes[id] ?? _trash[id];
     if (note == null) {
       _unsent.remove(id);
       return null;
@@ -361,8 +365,7 @@ class WebRelay extends Relay {
   /// A new note the server refused goes from this page, with its files.
   void _drop(String id) {
     _notes.remove(id);
-    _hidden.remove(id);
-    _deletes.remove(id)?.cancel();
+    _trash.remove(id);
     _unsent.remove(id);
     _unposted.remove(id);
     _bytes.remove(id);
@@ -408,7 +411,7 @@ class WebRelay extends Relay {
   Future<List<String>> _sendFiles(String id) async {
     final waiting = _bytes[id];
     if (waiting == null) return const [];
-    final noteClientId = (_notes[id] ?? _hidden[id])?.clientId ?? id;
+    final noteClientId = (_notes[id] ?? _trash[id])?.clientId ?? id;
     final problems = <String>[];
     for (final MapEntry(key: fileId, value: file) in [...waiting.entries]) {
       try {
@@ -441,10 +444,12 @@ class WebRelay extends Relay {
     notifyListeners();
   }
 
-  static Entry _copy(Entry entry, {String? text, List<EntryFile>? files, bool? waiting, bool? pinned}) => Entry(id: entry.id,
+  /// [deletedAt] puts the note in *Recently Deleted* at that time; [recovered] takes it out.
+  static Entry _copy(Entry entry, {String? text, List<EntryFile>? files, bool? waiting, bool? pinned, DateTime? deletedAt,
+    bool recovered = false}) => Entry(id: entry.id,
     text: text ?? entry.text, at: entry.at, sent: entry.sent, waiting: waiting ?? entry.waiting,
     voice: entry.voice, recording: entry.recording, length: entry.length, files: files ?? entry.files, from: entry.from,
-    pinned: pinned ?? entry.pinned);
+    pinned: pinned ?? entry.pinned, deletedAt: recovered ? null : deletedAt ?? entry.deletedAt);
 
   /// Shows the pin at once, then sends it after the changes before it, so a new note lands first. A refusal puts the
   /// pin back; a 409 means a newer pin came from elsewhere, which the read after shows.
@@ -477,50 +482,89 @@ class WebRelay extends Relay {
       notifyListeners();
       return Emptied.dropped;
     }
-    await deleteNote(id);
-    return Emptied.deleting;
+    await deleteForever(id);
+    return Emptied.deleted;
   }
 
+  /// Moves the note to *Recently Deleted* at once, then on the server after the changes before it: its words that did
+  /// not go go first. A refusal brings it back to the list with a notice.
   @override
   Future<void> deleteNote(String id) async {
     final note = _notes.remove(id);
     if (note == null) return;
-    _hidden[id] = note;
+    note.entry = _copy(note.entry, deletedAt: _clock());
+    _trash[id] = note;
+    _moving.add(id);
+    deletedNow(id);
     notifyListeners();
-    _deletes.remove(id)?.cancel();
-    _deletes[id] = Timer(deleteAfter, () => unawaited(_finishDelete(id)));
+    try {
+      await _inOrder(() async {
+        if (_unsent.contains(id)) await _sendWords(id);
+        final answer = await client.delete('notes', query: note.key);
+        if (answer['deletedAt'] case final int at when _trash[id] == note) {
+          note.entry = _copy(note.entry, deletedAt: DateTime.fromMillisecondsSinceEpoch(at));
+        }
+      });
+    } on SpaceRefused catch (refused) {
+      if (refused.signedOut) return;
+      if (_trash[id] == note) {
+        _trash.remove(id);
+        // Not on the server: there is nothing to keep or to bring back.
+        if (refused.status != 404) _notes[id] = note..entry = _copy(note.entry, recovered: true);
+      }
+      if (refused.status != 404) notice('The note was not deleted. ${refused.message}');
+    } finally {
+      _moved(id);
+    }
   }
 
+  /// Brings the note back to the list at once, then on the server. A refusal puts it back in *Recently Deleted*.
   @override
-  Future<void> undoDelete(String id) async {
-    _deletes.remove(id)?.cancel();
-    final note = _hidden.remove(id);
-    if (note != null) _notes[id] = note;
+  Future<void> recover(String id) async {
+    final note = _trash.remove(id);
+    if (note == null) return;
+    note.entry = _copy(note.entry, recovered: true);
+    _notes[id] = note;
+    _moving.add(id);
     notifyListeners();
+    try {
+      await _inOrder(() => client.post('notes/recover', note.key));
+    } on SpaceRefused catch (refused) {
+      if (refused.signedOut) return;
+      if (_notes[id] == note) {
+        _notes.remove(id);
+        if (refused.status != 404) _trash[id] = note..entry = _copy(note.entry, deletedAt: _clock());
+      }
+      notice(refused.status == 404 ? 'This note is gone. It was deleted, maybe on another device.'
+        : 'The note was not recovered. ${refused.message}');
+    } finally {
+      _moved(id);
+    }
   }
 
+  /// The move of note [id] is done: a read held for it goes now.
+  void _moved(String id) {
+    _moving.remove(id);
+    notifyListeners();
+    if (_held) unawaited(pullNotes());
+  }
+
+  /// Deletes the note for good, at once, then on the server. A refusal brings it back where it was.
   @override
-  Future<void> endUndo(String id) async {
-    final timer = _deletes.remove(id);
-    if (timer == null) return;
-    timer.cancel();
-    await _finishDelete(id);
-  }
-
-  /// The *Undo* time ended: the note goes from the person's space. A refused delete brings it back.
-  Future<void> _finishDelete(String id) async {
-    _deletes.remove(id);
-    final note = _hidden.remove(id);
-    if (note == null || note.serverId == null && note.clientId == null) return;
+  Future<void> deleteForever(String id) async {
+    final trashed = _trash.containsKey(id);
+    final note = _trash.remove(id) ?? _notes.remove(id);
+    if (note == null) return;
     final unsent = _unsent.remove(id);
-    // A new note that got no answer may still be on the server, so its delete goes too.
     final unposted = _unposted.remove(id);
     final files = _bytes.remove(id);
+    notifyListeners();
+    if (note.serverId == null && note.clientId == null) return;
     try {
-      await _inOrder(() => client.delete('notes', query: note.key));
+      await _inOrder(() => client.delete('notes', query: {...note.key, 'forever': 'true'}));
     } on SpaceRefused catch (refused) {
       if (refused.status == 404 || refused.signedOut) return;
-      _notes[id] = note;
+      (trashed ? _trash : _notes)[id] = note;
       if (unsent) _unsent.add(id);
       if (unposted) _unposted.add(id);
       if (files != null) _bytes[id] = files;
@@ -529,35 +573,18 @@ class WebRelay extends Relay {
     }
   }
 
-  /// Each delete still under *Undo* goes now, as the bar would end it.
-  Future<void> _finishDeletes() async {
-    final ids = [..._deletes.keys];
-    for (final id in ids) {
-      _deletes.remove(id)?.cancel();
-    }
-    await Future.wait([for (final id in ids) _finishDelete(id)]);
-  }
-
-  /// The page is closing: each delete under *Undo*, the words that did not go, and the open note's words not yet saved,
-  /// are sent as well as the browser lets a closing page send. No answer can come back.
+  /// The page is closing: the words that did not go, and the open note's words not yet saved, are sent as well as the
+  /// browser lets a closing page send. No answer can come back.
   void pageClosing() {
     final now = _clock().millisecondsSinceEpoch;
     if (editorWords?.call() case (:final id, :final text)) {
       final note = _notes[id];
-      if (note == null && !_hidden.containsKey(id) && text.isNotEmpty) {
+      if (note == null && !_trash.containsKey(id) && text.isNotEmpty) {
         _lastSend('POST', client.api('notes'), jsonEncode({'clientId': id, 'text': text, 'createdAt': now}));
       } else if (note != null && note.entry.text != text && (text.isNotEmpty || note.entry.files.isNotEmpty)) {
         note.entry = _copy(note.entry, text: text);
         _unsent.add(id);
       }
-    }
-    for (final id in [..._deletes.keys]) {
-      _deletes.remove(id)!.cancel();
-      final note = _hidden.remove(id);
-      _unsent.remove(id);
-      _unposted.remove(id);
-      if (note == null || note.serverId == null && note.clientId == null) continue;
-      _lastSend('DELETE', client.api('notes', note.key));
     }
     for (final id in _unsent) {
       final note = _notes[id];
@@ -594,12 +621,11 @@ class WebRelay extends Relay {
   @override
   Future<void> seek(Duration at) => _player.seek(at);
 
-  /// *Sign out*: the deletes under *Undo* and the changes that wait go first. Then the browser's sign-in ends, even when
+  /// *Sign out*: the changes that wait go first. Then the browser's sign-in ends, even when
   /// the server did not answer, and the notes go from memory.
   @override
   Future<void> disconnect() async {
     if (connected) {
-      await _finishDeletes();
       await _inOrder(_sendWaiting);
     }
     try {
@@ -673,9 +699,6 @@ class WebRelay extends Relay {
 
   @override
   void dispose() {
-    for (final timer in _deletes.values) {
-      timer.cancel();
-    }
     _player.dispose();
     super.dispose();
   }

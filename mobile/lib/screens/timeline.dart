@@ -9,7 +9,7 @@ import '../editor/markdown.dart' show plainText;
 import '../relay.dart';
 import 'back_to.dart';
 import 'days.dart';
-import 'folder.dart' show Opener;
+import 'folder.dart' show Opener, askAlert;
 import 'hold_to_talk.dart';
 import 'note_blocks.dart' show EntryImage;
 import 'note_editor.dart';
@@ -173,16 +173,28 @@ const pinnedPart = 'Pinned';
 
 /// [notes] that hold [query]: the pinned ones in [pinnedPart], which folds, and the rest grouped by day, or a line that
 /// says none does. A tap opens a note, whose back button says [back], or calls [onOpen]. The [selected] row shows it is open.
+/// With [deleted], they are *Recently Deleted*'s notes: grouped by the day each was deleted, with no pinned part, and a
+/// swipe to the left shows *Recover* and *Delete*.
 Widget noteSliver(BuildContext context, Relay relay, List<Entry> notes, String query,
-  {required String back, FilesPicker? picker, Sharer? sharer, Opener? opener, NoteOpener? onOpen, String? selected}) {
+  {required String back, FilesPicker? picker, Sharer? sharer, Opener? opener, NoteOpener? onOpen, String? selected,
+  bool deleted = false}) {
   final shown = [for (final entry in notes) if (entryMatches(entry, query)) entry];
   if (shown.isEmpty) {
     return SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(32), child: Text('No notes with "${query.trim()}"',
       textAlign: TextAlign.center, style: TextStyle(color: brandOf(context).muted))));
   }
   Widget row(Entry entry) => _NoteRow(entry: entry, relay: relay, selected: selected != null && entry.id == selected,
-    onTap: () => onOpen != null ? onOpen(entry) : openPage(context,
+    deleted: deleted, onTap: () => onOpen != null ? onOpen(entry) : openPage(context,
       NoteEditor(entry: entry, relay: relay, picker: picker, sharer: sharer, opener: opener, back: back)));
+  if (deleted) {
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      sliver: SliverList.list(children: [
+        for (final (name, group) in groupByDay(shown, DateTime.now(), day: (entry) => entry.deletedAt ?? entry.at))
+          _DayGroup(name: name, children: [for (final entry in group) row(entry)]),
+      ]),
+    );
+  }
   final pinned = [for (final entry in shown) if (entry.pinned) entry]..sort((a, b) => b.at.compareTo(a.at));
   final folded = relay.folded.contains(pinnedPart);
   return SliverPadding(
@@ -513,30 +525,21 @@ String _preview(Entry entry) {
   return entry.files.skip(1).map((file) => file.name).join(', ');
 }
 
-/// *Note deleted* with *Undo* for [undoTime], after a swipe or ⋯ → *Delete*. It takes the messenger, as the note page
-/// that deletes may be gone when it shows. The delete runs when the bar closes with no *Undo*, never while it shows:
-/// the bar's own time starts only once it is in.
-void showDeleted(ScaffoldMessengerState? messenger, Relay relay, String id) {
-  if (messenger == null) return;
-  messenger.hideCurrentSnackBar();
-  final bar = messenger.showSnackBar(SnackBar(content: const Text('Note deleted'), duration: undoTime, persist: false,
-    action: SnackBarAction(label: 'Undo', onPressed: () => unawaited(relay.undoDelete(id)))));
-  unawaited(bar.closed.then((reason) {
-    if (reason != SnackBarClosedReason.action) unawaited(relay.endUndo(id));
-  }));
-}
-
 /// One note in its day's card: the first line in bold; then the time, a microphone and the length for a voice note, where
 /// a note from elsewhere came from, and the rest of the words, or *No words heard* for a watch note with none. No tag:
 /// only a note that waits says so, *Waiting to send*. A first picture shows small at the right. A tap opens it; a swipe
-/// to the left, or a screen reader's *Delete*, deletes it with *Undo*; a swipe to the right, or *Pin*, pins or unpins it.
+/// to the left, or a screen reader's *Delete*, moves it to *Recently Deleted* with no message; a swipe to the right, or
+/// *Pin*, pins or unpins it. In *Recently Deleted* a swipe to the left shows *Recover* and *Delete* in its place.
 class _NoteRow extends StatelessWidget {
-  const _NoteRow({required this.entry, required this.relay, required this.onTap, this.selected = false});
+  const _NoteRow({required this.entry, required this.relay, required this.onTap, this.selected = false,
+    this.deleted = false});
 
   final Entry entry;
   final Relay relay;
   /// The note open beside the list in the browser's wide layout.
   final bool selected;
+  /// A row of *Recently Deleted*.
+  final bool deleted;
   final VoidCallback onTap;
 
   @override
@@ -572,13 +575,26 @@ class _NoteRow extends StatelessWidget {
       ),
     ));
     if (entry.id.isEmpty) return row;
+    if (deleted) {
+      return Semantics(
+        container: true,
+        customSemanticsActions: {
+          const CustomSemanticsAction(label: 'Recover'): _recover,
+          const CustomSemanticsAction(label: 'Delete'): () => unawaited(deleteForever(context, relay, entry.id)),
+        },
+        child: SwipeActions(key: ValueKey('deleted:${entry.id}'), actions: [
+          ('Recover', brand.accent, brand.onAccent, _recover),
+          ('Delete', brand.danger, brand.onDanger, () => unawaited(deleteForever(context, relay, entry.id))),
+        ], child: row),
+      );
+    }
     final pin = entry.pinned ? 'Unpin' : 'Pin';
     // A node of its own, so a screen reader's *Delete* is on this row, not on the whole card.
     return Semantics(
       container: true,
       customSemanticsActions: {
         CustomSemanticsAction(label: pin): _pin,
-        const CustomSemanticsAction(label: 'Delete'): () => _delete(context),
+        const CustomSemanticsAction(label: 'Delete'): _delete,
       },
       child: Dismissible(
         key: ValueKey('note:${entry.id}'),
@@ -593,7 +609,7 @@ class _NoteRow extends StatelessWidget {
           _pin();
           return false;
         },
-        onDismissed: (_) => _delete(context),
+        onDismissed: (_) => _delete(),
         child: row,
       ),
     );
@@ -601,10 +617,95 @@ class _NoteRow extends StatelessWidget {
 
   void _pin() => unawaited(relay.pinNote(entry.id, !entry.pinned));
 
-  void _delete(BuildContext context) {
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    unawaited(relay.deleteNote(entry.id));
-    showDeleted(messenger, relay, entry.id);
+  void _delete() => unawaited(relay.deleteNote(entry.id));
+
+  void _recover() => unawaited(relay.recover(entry.id));
+}
+
+/// Asks before a note in *Recently Deleted* is deleted for good, as that can't be undone: true for *Delete*.
+Future<bool> askDeleteForever(BuildContext context) => askAlert(context, title: 'Delete this note?',
+  message: "This note will be deleted for good. You can't undo this.", action: 'Delete', destructive: true);
+
+/// Asks first, then deletes note [id] for good from *Recently Deleted*.
+Future<void> deleteForever(BuildContext context, Relay relay, String id) async {
+  if (await askDeleteForever(context)) await relay.deleteForever(id);
+}
+
+/// Buttons a swipe to the left shows under a row, as Apple Notes has *Recover* and *Delete* in *Recently Deleted*:
+/// each is its word, its color, its text color, and what a tap does. A tap on a button closes the row first; a tap on
+/// an open row closes it.
+class SwipeActions extends StatefulWidget {
+  const SwipeActions({super.key, required this.actions, required this.child});
+
+  final List<(String label, Color color, Color text, VoidCallback onTap)> actions;
+  final Widget child;
+
+  /// Each button's width when the row is open.
+  static const width = 88.0;
+
+  @override
+  State<SwipeActions> createState() => _SwipeActionsState();
+}
+
+class _SwipeActionsState extends State<SwipeActions> with SingleTickerProviderStateMixin {
+  /// 0 shut, 1 open.
+  late final _open = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
+
+  double get _all => SwipeActions.width * widget.actions.length;
+
+  void _drag(DragUpdateDetails details) =>
+    _open.value = (_open.value - (details.primaryDelta ?? 0) / _all).clamp(0.0, 1.0);
+
+  void _end(DragEndDetails details) {
+    final speed = details.primaryVelocity ?? 0;
+    if (speed < -300 || speed <= 300 && _open.value > 0.4) {
+      unawaited(_open.forward());
+    } else {
+      unawaited(_open.reverse());
+    }
+  }
+
+  @override
+  void dispose() {
+    _open.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onHorizontalDragUpdate: _drag,
+      onHorizontalDragEnd: _end,
+      child: AnimatedBuilder(
+        animation: _open,
+        child: widget.child,
+        builder: (context, child) {
+          final shown = _open.value * _all;
+          final open = _open.value > 0;
+          return Stack(children: [
+            if (open) Positioned.fill(child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+              for (final (label, color, text, onTap) in widget.actions)
+                SizedBox(width: shown / widget.actions.length, child: Material(color: color, child: InkWell(
+                  onTap: () {
+                    _open.value = 0;
+                    onTap();
+                  },
+                  child: Center(child: Text(label, maxLines: 1, overflow: TextOverflow.clip, softWrap: false,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: text))),
+                ))),
+            ])),
+            Transform.translate(
+              offset: Offset(-shown, 0),
+              child: GestureDetector(
+                behavior: open ? HitTestBehavior.opaque : HitTestBehavior.deferToChild,
+                onTap: open ? () => unawaited(_open.reverse()) : null,
+                child: IgnorePointer(ignoring: open, child: child),
+              ),
+            ),
+          ]);
+        },
+      ),
+    );
   }
 }
 

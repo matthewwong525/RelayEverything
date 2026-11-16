@@ -267,6 +267,19 @@ void main() {
       await finish(tester);
     });
 
+    testWidgets("Undo from the Edit menu and ⌘Z bring back the last deleted note while no words are typed", (tester) async {
+      await show(tester, wide);
+      await relay.deleteNote('voice');
+      await relay.deleteNote('own');
+      await tester.pumpAndSettle();
+      expect(inSidebar('Recently Deleted'), findsOneWidget);
+      await select(tester, 'Undo');
+      expect(relay.calls.last, 'recover own');
+      await press(tester, [LogicalKeyboardKey.metaLeft], LogicalKeyboardKey.keyZ);
+      expect([relay.calls.last, relay.deleted, inSidebar('Recently Deleted')], ['recover voice', isEmpty, findsNothing]);
+      await finish(tester);
+    });
+
     testWidgets('New Note from the menu and ⌘N both start a new note, from any place', (tester) async {
       await show(tester, wide);
       await tester.tap(inSidebar('Settings'));
@@ -353,7 +366,8 @@ void main() {
       await show(tester, wide);
       drops.add(const [NewFile(path: '/Users/sam/Movies/trip.mov', name: 'trip.mov', size: 26 * 1024 * 1024)]);
       await tester.pumpAndSettle();
-      expect(find.text('trip.mov is over 25 MB, so it was not added.'), findsOneWidget);
+      // An alert: the one sentence is its title.
+      expect(find.text('trip.mov is over 25 MB, so it was not added'), findsOneWidget);
       await finish(tester);
     });
 

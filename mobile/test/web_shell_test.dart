@@ -13,6 +13,7 @@ import 'package:relay_app/screens/home.dart';
 import 'package:relay_app/screens/note_bars.dart';
 import 'package:relay_app/screens/note_blocks.dart';
 import 'package:relay_app/screens/note_editor.dart';
+import 'package:relay_app/screens/recently_deleted.dart' show keepLine;
 import 'package:relay_app/screens/settings.dart';
 import 'package:relay_app/screens/timeline.dart' show TimelineScreen;
 import 'package:relay_app/web/chats.dart' show ChatsView;
@@ -101,6 +102,32 @@ void main() {
   NoteEditorState editor(WidgetTester tester) => tester.state<NoteEditorState>(find.byType(NoteEditor));
 
   group('three panes from 1000 px', () {
+    testWidgets('Recently Deleted shows under Notes only while it holds a note, and opens its notes to read only',
+        (tester) async {
+      await show(tester, wide);
+      expect(inSidebar('Recently Deleted'), findsNothing);
+      await relay.deleteNote('voice');
+      await tester.pumpAndSettle();
+      expect(sidebarCount('Recently Deleted', 1), findsOneWidget);
+      expect(tester.getTopLeft(inSidebar('Recently Deleted')).dy, greaterThan(tester.getTopLeft(inSidebar('Notes')).dy));
+      await tester.tap(inSidebar('Recently Deleted'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DeletedPane), findsOneWidget);
+      expect(find.descendant(of: find.byType(DeletedPane), matching: find.text(keepLine)), findsOneWidget);
+      expect(find.text('Pick a note to read it.'), findsOneWidget);
+      await tester.tap(find.descendant(of: find.byType(DeletedPane), matching: find.text('Call the dentist at 3')));
+      await tester.pumpAndSettle();
+      expect(editor(tester).id, 'voice');
+      expect(quill(tester).readOnly, isTrue);
+      // Recover All empties it, and the row leaves the left bar.
+      await tester.tap(find.descendant(of: find.byType(DeletedPane), matching: find.byTooltip('More')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Recover All'));
+      await tester.pumpAndSettle();
+      expect([relay.calls.last, inSidebar('Recently Deleted')], ['recover voice', findsNothing]);
+      await finish(tester);
+    });
+
     testWidgets('the left bar has one Notes row with its count, Other connections, and Settings at the bottom', (tester) async {
       await show(tester, wide);
       expect(inSidebar('Relay Everything'), findsOneWidget);
@@ -545,11 +572,18 @@ void main() {
       await finish(tester);
     });
 
-    testWidgets('Ctrl+Shift+Backspace deletes the open note with Undo', (tester) async {
+    testWidgets('Ctrl+Shift+Backspace moves the open note to Recently Deleted with no message, and Ctrl+Z brings it back',
+        (tester) async {
       await show(tester, wide);
       await press(tester, [LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.shiftLeft], LogicalKeyboardKey.backspace);
       expect(relay.calls, contains('delete own'));
-      expect(find.text('Undo'), findsOneWidget);
+      expect([find.text('Undo'), find.byType(SnackBar)], everyElement(findsNothing));
+      expect(sidebarCount('Recently Deleted', 1), findsOneWidget);
+      await press(tester, [LogicalKeyboardKey.controlLeft], LogicalKeyboardKey.keyZ);
+      expect([relay.calls.last, relay.deleted, inSidebar('Recently Deleted')], ['recover own', isEmpty, findsNothing]);
+      // With no delete left to undo, the key does nothing here.
+      await press(tester, [LogicalKeyboardKey.controlLeft], LogicalKeyboardKey.keyZ);
+      expect(relay.calls.last, 'recover own');
       await finish(tester);
     });
 

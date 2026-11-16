@@ -4,6 +4,7 @@ import { z } from "zod";
 import { defineAction, type ActionCall } from "../../api/contract.ts";
 import { asPersonOrPhone, webDevice } from "./caller.ts";
 import { noteChanges } from "./queries.ts";
+import { purgeDue } from "./recently-deleted.ts";
 import { file } from "./timeline.ts";
 
 const PAGE = 100;
@@ -14,27 +15,36 @@ const syncedNote = z.strictObject({ id: z.string(), clientId: z.string().nullabl
   device: z.string().describe("The name of the device or way in that sent it, such as `Email`."), audio: z.boolean(),
   attachments: z.array(file).describe("The note's files, oldest first."),
   pinned: z.boolean().describe("True when the note is pinned to the top of the notes list."),
-  pinChangedAt: z.number().nullable().describe("When the note's pin last changed, in Unix ms; null when never.") });
+  pinChangedAt: z.number().nullable().describe("When the note's pin last changed, in Unix ms; null when never."),
+  deletedAt: z.number().nullable().describe("When the note moved to Recently Deleted, in Unix ms; null for a note not deleted. "
+    + "It goes for good 30 days after.") });
 const deletedNote = z.strictObject({ id: z.string(), clientId: z.string().nullable().describe("The sending phone's own id for it."),
-  deleted: z.literal(true).describe("The note was deleted: drop it.") });
+  deleted: z.literal(true).describe("The note was deleted for good: drop it.") });
 
 export const noteSync = defineAction({
   operationId: "relay.notes-sync", summary: "Read the notes changed since the last sync",
-  description: "Read each note added, changed or deleted after a change number, oldest change first. Ask again with `next` while `more` is true.",
+  description: "Read each note added, changed, moved to or from Recently Deleted, or deleted for good after a change number, oldest change first. "
+    + "Ask again with `next` while `more` is true.",
   input: z.strictObject({
     since: z.number().int().min(0).optional().describe("The last page's `next`; 0 or left out for every note."),
     limit: z.number().int().min(1).max(PAGE).optional().describe(`How many notes, ${PAGE} when left out.`),
-    deleted: z.number().int().min(0).max(1).optional().describe("1 to get each deleted note as its ids with `deleted: true`; else they are left out."),
+    deleted: z.number().int().min(0).max(1).optional()
+      .describe("1 to get each note deleted for good as its ids with `deleted: true`; else they are left out."),
+    trash: z.number().int().min(0).max(1).optional()
+      .describe("1 to get each note in Recently Deleted whole, with its `deletedAt`; else it comes as one deleted for good."),
   }),
   output: z.strictObject({ notes: z.array(z.union([syncedNote, deletedNote]))
-    .describe("Each note as below; with `deleted=1`, a deleted note is only its `id`, `clientId` and `deleted: true`."),
+    .describe("Each note as below; with `deleted=1`, a note deleted for good is only its `id`, `clientId` and `deleted: true`. "
+      + "Without `trash=1`, a note in Recently Deleted is the same."),
     next: z.number().describe("The change number to ask from next time."),
     more: z.boolean().describe("True when more changes wait after this page.") }),
   encoding: "query", effect: "read", agentAvailable: false, requiresIdentity: false, errors: {}, examples: [],
   handler: asPersonOrPhone<ActionCall>(async ({ space, caller, call }) => {
-    const { since = 0, limit = PAGE, deleted = 0 } = call.input as { since?: number; limit?: number; deleted?: number };
+    const { since = 0, limit = PAGE, deleted = 0, trash = 0 } = call.input as { since?: number; limit?: number; deleted?: number; trash?: number };
     // The page's own notes are its Web device's: it may add files only to those. A read never makes the device.
     const deviceId = caller.device?.id ?? await webDevice(space, false);
-    return Response.json(await noteChanges(space.db, since, limit, deviceId, deleted === 1));
+    // The alarm purges too; this catches a space whose alarm has not run yet.
+    await purgeDue(space);
+    return Response.json(await noteChanges(space.db, since, limit, deviceId, deleted === 1, trash === 1));
   }),
 });

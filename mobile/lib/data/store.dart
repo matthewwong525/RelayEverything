@@ -18,7 +18,7 @@ class LocalNote {
   const LocalNote({required this.clientId, required this.text, required this.createdAt, this.sentAt,
     this.queued = false, this.kind = NoteKind.typed, this.audioPath, this.durationMs,
     this.wordsPending = false, this.attachments = const [], this.editedAt, this.serverId, this.device, this.mine = true,
-    this.fromWatch = false, this.pinned = false});
+    this.fromWatch = false, this.pinned = false, this.deletedAt});
 
   final String clientId;
   final String text;
@@ -59,6 +59,10 @@ class LocalNote {
 
   /// True for a note pinned to the top of the notes list. A pin is not part of the note's upload.
   final bool pinned;
+
+  /// When the person deleted the note: it waits in *Recently Deleted* until 30 days after this. Null for a note in the
+  /// notes list.
+  final DateTime? deletedAt;
 
   /// True for a watch note in which the phone found no words: it keeps its recording, waits for nothing, and is not
   /// sent until the person writes words in it. Its SQL twin is [Store]'s `_noWords`.
@@ -120,8 +124,14 @@ class Pin {
 /// The route of a sent note's change: `PATCH notes` on the server, `note.updated` to a webhook.
 const noteUpdate = 'note.update';
 
-/// The route of a sent note's delete: `DELETE notes` on the server, `note.deleted` to a webhook.
+/// The route of a sent note's delete: `DELETE notes` on the server, `note.deleted` to a webhook. Its body's `forever`
+/// deletes the note for good; with none, the note moves to *Recently Deleted*. A `moved` forever delete is of a note the
+/// webhook already heard was deleted, so it gets no second message.
 const noteDelete = 'note.delete';
+
+/// The route of a note brought back from *Recently Deleted*: `POST notes/recover` on the server, `note.recovered` with
+/// the whole note to a webhook.
+const noteRecover = 'note.recover';
 
 /// The route of a note's pin or unpin: `PUT notes/pin` on the server, and no message to a webhook.
 const notePin = 'note.pin';
@@ -221,8 +231,9 @@ const _voiceColumns = "kind TEXT NOT NULL DEFAULT 'typed', audio_path TEXT, dura
 const _syncColumns = 'server_id TEXT, device TEXT, mine INTEGER NOT NULL DEFAULT 1, edit_unsent INTEGER NOT NULL DEFAULT 0';
 const _serverIdIndex = 'CREATE UNIQUE INDEX notes_server_id ON notes (server_id)';
 
-// deleting_at: when the person deleted the note. It is hidden, and still here for *Undo*, until its delete runs.
-const _deletingColumn = 'deleting_at INTEGER';
+// deleted_at: when the person deleted the note. It waits in *Recently Deleted* until 30 days after it, then goes for
+// good. Version 9 to 14 named it deleting_at, a mark for the 5-second *Undo*.
+const _deletedColumn = 'deleted_at INTEGER';
 
 // source: 'watch' for a voice note the Apple Watch handed over, else null. It is not in the body, which is the upload.
 const _sourceColumn = 'source TEXT';
@@ -240,7 +251,7 @@ const _schema = [
   // words_pending = 1: a voice note still waits for its words, so no upload can go without them.
   'CREATE TABLE notes (client_id TEXT PRIMARY KEY, body TEXT NOT NULL, created_at INTEGER NOT NULL, sent_at INTEGER, '
     'queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0, $_voiceColumns, edited_at INTEGER, $_syncColumns, '
-    '$_deletingColumn, $_sourceColumn, $_pinColumns)',
+    '$_deletedColumn, $_sourceColumn, $_pinColumns)',
   _serverIdIndex,
   'CREATE TABLE points (at INTEGER PRIMARY KEY, body TEXT NOT NULL)',
   'CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
@@ -281,7 +292,7 @@ class Store extends GeneratedDatabase {
   Iterable<TableInfo<Table, dynamic>> get allTables => const [];
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(onCreate: (_) async {
@@ -327,7 +338,7 @@ class Store extends GeneratedDatabase {
     }
     // Version 9 could not delete a note, and its pulls left out deleted notes: the next pull starts again from 0.
     if (from < 10) {
-      await customStatement('ALTER TABLE notes ADD COLUMN $_deletingColumn');
+      await customStatement('ALTER TABLE notes ADD COLUMN deleting_at INTEGER');
       await customStatement("DELETE FROM state WHERE key = '$noteSyncSeq'");
     }
     // Version 10 sent points only, with no stays or trips.
@@ -345,7 +356,24 @@ class Store extends GeneratedDatabase {
         await customStatement('ALTER TABLE notes ADD COLUMN $column');
       }
     }
+    // Version 14 deleted a note for good 5 seconds after its delete.
+    if (from < 15) await _moveMarks();
   });
+
+  /// A note marked deleted, as when the app closed while its *Undo* showed, lands in *Recently Deleted*, never lost: the
+  /// mark becomes its delete time, and a note the server may have gets its move. A delete still waiting went for good
+  /// in that version, so it stays one.
+  Future<void> _moveMarks() => transaction(() async {
+    await _run('ALTER TABLE notes RENAME COLUMN deleting_at TO deleted_at');
+    await _run("UPDATE outbox SET body = json_set(body, '\$.forever', json('true')) WHERE route = '$noteDelete'");
+    for (final row in await _rows('SELECT client_id, server_id FROM notes WHERE deleted_at IS NOT NULL AND $_known')) {
+      await enqueue(noteDelete, {'clientId': row.read<String>('client_id'), 'id': ?row.read<String?>('server_id')});
+    }
+  });
+
+  // The server has the note or may get it: it went, a pull gave its id, or its upload waits or is on its way.
+  static const _known = "(sent_at IS NOT NULL OR server_id IS NOT NULL OR EXISTS (SELECT 1 FROM outbox WHERE route = 'notes' "
+    "AND json_extract(outbox.body, '\$.clientId') = notes.client_id))";
 
   /// A note keeps no place: each unsent note's place becomes one location point at its time while location history is
   /// on, every note and waiting upload loses its place, and a note that waited for its fix gets its upload.
@@ -492,13 +520,13 @@ class Store extends GeneratedDatabase {
 
   /// Keeps the person's change to a note: its new [text], and [files] added. A note not sent yet changes its waiting
   /// upload, or none; a sent note with [send] gets one change upload, and a change still waiting takes the new words.
-  /// New files' uploads go after. False when nothing changed, or the note is gone or waits for its words.
+  /// New files' uploads go after. False when nothing changed, or the note is gone, deleted or waits for its words.
   /// A note changes by its server id once a pull saved one, and a note from elsewhere's new files stay on this phone.
   /// A watch note with no words that gets words, with [send], gets its upload, as a note kept with sending on.
   Future<bool> editNote(String clientId, String text, {List<Attachment> files = const [], required bool send,
     required DateTime at}) => transaction(() async {
     final notes = await _rows('SELECT body, sent_at, server_id, mine, queued, kind, source FROM notes '
-      'WHERE client_id = ? AND words_pending = 0', [clientId]);
+      'WHERE client_id = ? AND words_pending = 0 AND deleted_at IS NULL', [clientId]);
     if (notes.isEmpty) return false;
     final row = notes.single;
     final old = _noteOf(jsonDecode(row.read<String>('body')) as Map<String, dynamic>, kind: NoteKind.values.byName(row.read<String>('kind')),
@@ -620,7 +648,7 @@ class Store extends GeneratedDatabase {
   /// changed here and never went, such as one made while sending was off. A pull reads only notes that changed on the
   /// server, so it would never find these.
   Future<void> queueUnsentPins() => transaction(() async {
-    for (final row in await _rows('SELECT client_id FROM notes WHERE pin_unsent = 1 AND deleting_at IS NULL AND '
+    for (final row in await _rows('SELECT client_id FROM notes WHERE pin_unsent = 1 AND deleted_at IS NULL AND '
         "(sent_at IS NOT NULL OR server_id IS NOT NULL OR EXISTS (SELECT 1 FROM outbox WHERE route = 'notes' AND "
         "json_extract(outbox.body, '\$.clientId') = notes.client_id)) AND NOT EXISTS (SELECT 1 FROM outbox WHERE "
         "route = '$notePin' AND json_extract(outbox.body, '\$.clientId') = notes.client_id) ORDER BY created_at, client_id")) {
@@ -721,38 +749,93 @@ class Store extends GeneratedDatabase {
     return true;
   });
 
-  /// Hides a note the person deleted, so *Undo* can bring it back until [deleteNote] runs.
-  Future<void> markDeleted(String clientId, DateTime at) =>
-    _run('UPDATE notes SET deleting_at = ? WHERE client_id = ?', [at.millisecondsSinceEpoch, clientId]);
+  /// Moves a note to *Recently Deleted* at [at]: it leaves [notes] and shows in [deletedNotes], with its words, files and
+  /// recording. A note the server may have, as it went or its upload may be on its way, gets one `note.delete`, also with
+  /// sending off: the outbox keeps it until sending is on. A recover still waiting goes. False when the note is gone or
+  /// already deleted.
+  Future<bool> deleteNote(String clientId, DateTime at) => transaction(() async {
+    final notes = await _rows('SELECT server_id, $_known AS known FROM notes WHERE client_id = ? AND deleted_at IS NULL',
+      [clientId]);
+    if (notes.isEmpty) return false;
+    await _run('UPDATE notes SET deleted_at = ? WHERE client_id = ?', [at.millisecondsSinceEpoch, clientId]);
+    await _run("DELETE FROM outbox WHERE route = '$noteRecover' AND json_extract(body, '\$.clientId') = ?", [clientId]);
+    if (notes.single.read<int>('known') == 1) {
+      await enqueue(noteDelete, {'clientId': clientId, 'id': ?notes.single.read<String?>('server_id')});
+    }
+    return true;
+  });
 
-  /// Brings back a note marked deleted, as it was.
-  Future<void> undoDelete(String clientId) => _run('UPDATE notes SET deleting_at = NULL WHERE client_id = ?', [clientId]);
+  /// Brings a note back from *Recently Deleted*, as it was. A note the server may have gets one `note.recover`, with its
+  /// words for a webhook, and a move still waiting goes. For the person's own webhook, each file kept here follows in one
+  /// `attachment` upload, as the server sends its own copies. False when the note is gone or not deleted.
+  Future<bool> recover(String clientId) => transaction(() async {
+    final notes = await _rows('SELECT body, server_id, $_known AS known FROM notes WHERE client_id = ? AND deleted_at IS NOT NULL',
+      [clientId]);
+    if (notes.isEmpty) return false;
+    await _run('UPDATE notes SET deleted_at = NULL WHERE client_id = ?', [clientId]);
+    await _run("DELETE FROM outbox WHERE route = '$noteDelete' AND json_extract(body, '\$.clientId') = ? "
+      "AND json_extract(body, '\$.forever') IS NOT 1", [clientId]);
+    // Always, also after a move that never went: a move on its way may still land, and a recover of a note not
+    // deleted changes nothing.
+    if (notes.single.read<int>('known') == 1) {
+      final body = jsonDecode(notes.single.read<String>('body')) as Map<String, dynamic>;
+      final files = await attachmentsOf(clientId);
+      await enqueue(noteRecover, {...LocalNote(clientId: clientId, text: body['text'] as String? ?? '',
+        createdAt: DateTime.fromMillisecondsSinceEpoch(body['createdAt'] as int), attachments: files).toJson(),
+        'id': ?notes.single.read<String?>('server_id')});
+      if (await destination() == ownWebhook) {
+        for (final file in files) {
+          if (file.path.isNotEmpty) await enqueue('attachment', file.upload(clientId));
+        }
+      }
+    }
+    return true;
+  });
 
-  /// Each note marked deleted, with when, such as one whose *Undo* time a close cut short.
-  Future<List<(String, DateTime)>> marked() async => [
-    for (final row in await _rows('SELECT client_id, deleting_at FROM notes WHERE deleting_at IS NOT NULL ORDER BY deleting_at'))
-      (row.read<String>('client_id'), DateTime.fromMillisecondsSinceEpoch(row.read<int>('deleting_at'))),
-  ];
-
-  /// Deletes a note on this phone, with its files and each upload of it still waiting. A note the server may have, as
-  /// it went or its upload may be on its way, gets one `note.delete`, also with sending off: the outbox keeps it until
-  /// sending is on, so the note never comes back. A 404 for one that never landed is dropped. True when one was queued.
-  Future<bool> deleteNote(String clientId) async {
+  /// Deletes a note for good on this phone, with its files and each upload of it still waiting. A note the server may
+  /// have gets one `note.delete` with `forever`, also with sending off, so the note never comes back. A 404 for one that
+  /// never landed is dropped. True when one was queued.
+  Future<bool> deleteForever(String clientId) async {
     final files = <String>[];
     final queued = await transaction(() async {
-      final notes = await _rows('SELECT sent_at, server_id FROM notes WHERE client_id = ?', [clientId]);
+      final notes = await _rows('SELECT server_id, deleted_at, $_known AS known FROM notes WHERE client_id = ?', [clientId]);
       if (notes.isEmpty) return false;
       final serverId = notes.single.read<String?>('server_id');
-      final going = await _rows("SELECT 1 FROM outbox WHERE route = 'notes' AND json_extract(body, '\$.clientId') = ?", [clientId]);
-      final sent = serverId != null || notes.single.read<int?>('sent_at') != null || going.isNotEmpty;
+      final known = notes.single.read<int>('known') == 1;
+      // A webhook heard of the move once it went; a move still waiting never went, so the forever delete tells it.
+      final moveWaits = (await _rows("SELECT 1 FROM outbox WHERE route = '$noteDelete' AND json_extract(body, '\$.clientId') = ?",
+        [clientId])).isNotEmpty;
+      final moved = notes.single.read<int?>('deleted_at') != null && !moveWaits;
       files.addAll(await _drop(clientId));
-      if (sent) await enqueue(noteDelete, {'clientId': clientId, 'id': ?serverId});
-      return sent;
+      if (known) await enqueue(noteDelete, {'clientId': clientId, 'id': ?serverId, 'forever': true, if (moved) 'moved': true});
+      return known;
     });
     for (final path in files) {
       await _delete(path);
     }
     return queued;
+  }
+
+  /// Deletes for good, on this phone, each note in *Recently Deleted* for 30 days or more at [now], also with sending off.
+  /// The server deletes its copy on its own; a move that never went goes as a forever delete instead. Gives how many.
+  Future<int> purgeDeleted(DateTime now) async {
+    final rows = await _rows('SELECT client_id FROM notes WHERE deleted_at IS NOT NULL AND deleted_at <= ?',
+      [now.subtract(const Duration(days: 30)).millisecondsSinceEpoch]);
+    for (final row in rows) {
+      final clientId = row.read<String>('client_id');
+      final files = await transaction(() async {
+        final moveWaits = (await _rows("SELECT 1 FROM outbox WHERE route = '$noteDelete' AND json_extract(body, '\$.clientId') = ?",
+          [clientId])).isNotEmpty;
+        final serverId = (await _rows('SELECT server_id FROM notes WHERE client_id = ?', [clientId])).single.read<String?>('server_id');
+        final dropped = await _drop(clientId);
+        if (moveWaits) await enqueue(noteDelete, {'clientId': clientId, 'id': ?serverId, 'forever': true});
+        return dropped;
+      });
+      for (final path in files) {
+        await _delete(path);
+      }
+    }
+    return rows.length;
   }
 
   /// Deletes a note's row, its files' rows and its waiting uploads, inside a step; gives its local files, which the
@@ -764,7 +847,7 @@ class Store extends GeneratedDatabase {
       for (final row in await _rows('SELECT audio_path FROM notes WHERE client_id = ? AND audio_path IS NOT NULL', [clientId]))
         row.read<String>('audio_path'),
     ];
-    await _run("DELETE FROM outbox WHERE (route IN ($_noteRoutes) AND json_extract(body, '\$.clientId') = ?) "
+    await _run("DELETE FROM outbox WHERE (route IN ($_noteRoutes, '$noteDelete', '$noteRecover') AND json_extract(body, '\$.clientId') = ?) "
       "OR (route = 'attachment' AND json_extract(body, '\$.noteClientId') = ?)", [clientId, clientId]);
     await _run('DELETE FROM attachments WHERE note_client_id = ?', [clientId]);
     await _run('DELETE FROM notes WHERE client_id = ?', [clientId]);
@@ -778,12 +861,12 @@ class Store extends GeneratedDatabase {
   /// [LocalNote.noWords] in SQL: such a note is not an earlier note to send.
   static const _noWords = "source IS 'watch' AND kind = 'voice' AND words_pending = 0 AND json_extract(body, '\$.text') = ''";
 
-  static const _earlier = 'FROM notes WHERE sent_at IS NULL AND queued = 0 AND words_pending = 0 AND deleting_at IS NULL '
+  static const _earlier = 'FROM notes WHERE sent_at IS NULL AND queued = 0 AND words_pending = 0 AND deleted_at IS NULL '
     'AND NOT ($_noWords)';
 
   /// With the notes that went only to the person's own webhook: this phone's own, sent, with no server id and no upload
   /// waiting. A note on the person's Relay Everything space has a server id once a pull saw it, so it never counts again.
-  static const _earlierOrWebhook = 'FROM notes WHERE words_pending = 0 AND deleting_at IS NULL AND NOT ($_noWords) AND '
+  static const _earlierOrWebhook = 'FROM notes WHERE words_pending = 0 AND deleted_at IS NULL AND NOT ($_noWords) AND '
     '((sent_at IS NULL AND queued = 0) OR (mine = 1 AND server_id IS NULL AND sent_at IS NOT NULL AND NOT EXISTS '
     "(SELECT 1 FROM outbox WHERE route = 'notes' AND json_extract(outbox.body, '\$.clientId') = notes.client_id)))";
 
@@ -812,12 +895,12 @@ class Store extends GeneratedDatabase {
   Future<void> noteSent(String clientId, DateTime at) =>
     _run('UPDATE notes SET sent_at = ? WHERE client_id = ?', [at.millisecondsSinceEpoch, clientId]);
 
-  /// Keeps the notes a pull read, in change order; gives false when it left out [editing], the note open in the editor,
-  /// or the delete of a note this phone marked deleted.
+  /// Keeps the notes a pull read, in change order; gives false when it left out [editing], the note open in the editor.
   /// A note matches by server id, then by client id against this phone's own notes, whatever the server's `mine` says:
   /// a new key makes a new device on the server, which then calls this phone's older notes not its own. Phone ids are
   /// 32 random hex characters and email ids start `email:`, so no other note matches. One from elsewhere is kept as
-  /// `srv:<id>`. A deleted note's `{id, clientId, deleted: true}` deletes it here, with its files, after the step.
+  /// `srv:<id>`. A note deleted for good, `{id, clientId, deleted: true}`, goes from here, with its files, after the step.
+  /// A note's `deletedAt` moves it to *Recently Deleted* here too, or back.
   Future<bool> applyPulled(List<Map<String, dynamic>> notes, {String? editing}) async {
     final files = <String>[];
     final all = await transaction(() async {
@@ -834,17 +917,16 @@ class Store extends GeneratedDatabase {
     return all;
   }
 
-  /// Deletes a note deleted elsewhere, matched as [_applyPulled] matches, and adds its local files to [files]. The note
-  /// open in the editor stays, as for a change, and so does a note this phone marked deleted: false holds the sync place,
-  /// so the next pull deletes it here too if *Undo* brought it back.
+  /// Deletes a note deleted for good elsewhere, matched as [_applyPulled] matches, and adds its local files to [files],
+  /// also from *Recently Deleted*. The note open in the editor stays, as for a change: false holds the sync place.
   Future<bool> _applyDeleted(Map<String, dynamic> note, String? editing, List<String> files) async {
     final clientId = note['clientId'] as String?;
-    const columns = 'SELECT client_id, deleting_at FROM notes';
+    const columns = 'SELECT client_id FROM notes';
     var rows = await _rows('$columns WHERE server_id = ?', [note['id']]);
     if (rows.isEmpty && clientId != null) rows = await _rows('$columns WHERE client_id = ? AND mine = 1', [clientId]);
     if (rows.isEmpty) return true;
     final id = rows.single.read<String>('client_id');
-    if (id == editing || rows.single.read<int?>('deleting_at') != null) return false;
+    if (id == editing) return false;
     files.addAll(await _drop(id));
     return true;
   }
@@ -908,7 +990,20 @@ class Store extends GeneratedDatabase {
         [file.id, id, file.name, file.type, file.size, recordedAt]);
     }
     await _applyPin(id, serverId, note, rows.isEmpty ? null : rows.single);
+    await _applyMove(id, note);
     return true;
+  }
+
+  /// A note moved to *Recently Deleted* elsewhere moves here, at the server's delete time, and one recovered elsewhere
+  /// comes back. A move or recover made here that still waits to go wins: the server gets it next. A server older than
+  /// *Recently Deleted* says nothing of it, and nothing changes.
+  Future<void> _applyMove(String id, Map<String, dynamic> note) async {
+    if (!note.containsKey('deletedAt')) return;
+    final at = note['deletedAt'] as int?;
+    final waits = await _rows("SELECT 1 FROM outbox WHERE route IN ('$noteDelete', '$noteRecover') "
+      "AND json_extract(body, '\$.clientId') = ?", [id]);
+    if (waits.isNotEmpty) return;
+    await _run('UPDATE notes SET deleted_at = ? WHERE client_id = ? AND (deleted_at IS NULL) != (? IS NULL)', [at, id, at]);
   }
 
   /// Newer pin wins, here as on the server. A note whose pin the server already has takes the pulled pin and its time.
@@ -953,23 +1048,28 @@ class Store extends GeneratedDatabase {
     }
   }
 
-  /// Every note made on this phone, newest first, each with its files. A note marked deleted is left out.
-  Future<List<LocalNote>> notes() async {
+  /// Every note on this phone, newest first, each with its files. A note in *Recently Deleted* is left out.
+  Future<List<LocalNote>> notes() => _notesWhere('deleted_at IS NULL', 'created_at DESC, client_id DESC');
+
+  /// The notes in *Recently Deleted*, newest delete first, each with its files and when it was deleted.
+  Future<List<LocalNote>> deletedNotes() => _notesWhere('deleted_at IS NOT NULL', 'deleted_at DESC, client_id DESC');
+
+  Future<List<LocalNote>> _notesWhere(String where, String order) async {
     final files = <String, List<Attachment>>{};
     for (final row in await _rows('SELECT note_client_id, id, name, type, size, path, sent_at FROM attachments ORDER BY rowid')) {
       files.putIfAbsent(row.read<String>('note_client_id'), () => []).add(_attachmentOf(row));
     }
     return [
       for (final row in await _rows('SELECT client_id, body, sent_at, queued, kind, audio_path, duration_ms, words_pending, '
-          'edited_at, server_id, device, mine, source, pinned_at FROM notes WHERE deleting_at IS NULL '
-          'ORDER BY created_at DESC, client_id DESC'))
+          'edited_at, server_id, device, mine, source, pinned_at, deleted_at FROM notes WHERE $where ORDER BY $order'))
         _noteOf(jsonDecode(row.read<String>('body')) as Map<String, dynamic>, sentAt: row.read<int?>('sent_at'),
           queued: row.read<int>('queued') == 1,
           kind: NoteKind.values.byName(row.read<String>('kind')), audioPath: row.read<String?>('audio_path'),
           durationMs: row.read<int?>('duration_ms'), wordsPending: row.read<int>('words_pending') == 1,
           attachments: files[row.read<String>('client_id')], editedAt: row.read<int?>('edited_at'),
           serverId: row.read<String?>('server_id'), device: row.read<String?>('device'), mine: row.read<int>('mine') == 1,
-          fromWatch: row.read<String?>('source') == 'watch', pinned: row.read<int?>('pinned_at') != null),
+          fromWatch: row.read<String?>('source') == 'watch', pinned: row.read<int?>('pinned_at') != null,
+          deletedAt: row.read<int?>('deleted_at')),
     ];
   }
 
@@ -977,13 +1077,14 @@ class Store extends GeneratedDatabase {
   static LocalNote _noteOf(Map<String, dynamic> body, {int? sentAt, bool queued = false,
     NoteKind kind = NoteKind.typed, String? audioPath, int? durationMs, bool wordsPending = false,
     List<Attachment>? attachments, int? editedAt, String? serverId, String? device, bool mine = true,
-    bool fromWatch = false, bool pinned = false}) => LocalNote(
+    bool fromWatch = false, bool pinned = false, int? deletedAt}) => LocalNote(
     clientId: body['clientId'] as String, text: body['text'] as String,
     createdAt: DateTime.fromMillisecondsSinceEpoch(body['createdAt'] as int),
     sentAt: sentAt == null ? null : DateTime.fromMillisecondsSinceEpoch(sentAt), queued: queued,
     kind: kind, audioPath: audioPath, durationMs: durationMs, wordsPending: wordsPending,
     editedAt: editedAt == null ? null : DateTime.fromMillisecondsSinceEpoch(editedAt),
     serverId: serverId, device: device, mine: mine, fromWatch: fromWatch, pinned: pinned,
+    deletedAt: deletedAt == null ? null : DateTime.fromMillisecondsSinceEpoch(deletedAt),
     attachments: attachments ?? [
       for (final file in (body['attachments'] as List?) ?? const [])
         Attachment(id: (file as Map)['id'] as String, name: file['name'] as String, type: file['type'] as String,

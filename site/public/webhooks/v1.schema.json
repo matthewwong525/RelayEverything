@@ -335,7 +335,164 @@
         "timestamp",
         "data"
       ],
-      "description": "A note was deleted on a phone, with its files and recording: delete the note's row and its files by its id. It can't be undone."
+      "description": "A note was deleted: it waits in Recently Deleted for 30 days, then goes for good with its files and recording, with no further message. Delete or hide the note's row and its files by its id. A note.recovered follows if it comes back."
+    },
+    {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "type": {
+          "type": "string",
+          "const": "note.recovered"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+          "description": "When Relay Everything, or the phone that sends to its own webhook, stored what this message holds."
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "note": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "The note's id, the same in every message about this note: a UUID, or the phone's own note id when the phone sends to its own webhook."
+                },
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "ring",
+                    "typed"
+                  ]
+                },
+                "text": {
+                  "type": "string",
+                  "description": "The words: a typed note, or an older recorded note's transcription."
+                },
+                "recorded_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                  "description": "A time in ISO 8601, UTC."
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                  "description": "When Relay Everything stored it."
+                },
+                "device": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "The device key's id in Relay Everything, or the phone's own install id when the phone sends to its own webhook."
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "description": "The phone or other device that sent the item."
+                },
+                "audio": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "content_type": {
+                          "type": "string",
+                          "const": "audio/mp4"
+                        },
+                        "base64": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "content_type",
+                        "base64"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "An older recorded note's recording, or null for a typed note or an older recorded note with words only."
+                },
+                "edited_at": {
+                  "description": "When a phone last changed the note.",
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                },
+                "attachments": {
+                  "description": "The note's files: each one's name, type and size, never its bytes; each file's bytes follow in its own note.file. Only a note with files has this list.",
+                  "minItems": 1,
+                  "maxItems": 10,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "description": "The file's id, from the phone that sent it."
+                      },
+                      "name": {
+                        "type": "string",
+                        "description": "The file's name, such as warranty.pdf."
+                      },
+                      "content_type": {
+                        "type": "string",
+                        "description": "Such as application/pdf."
+                      },
+                      "size": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991,
+                        "description": "In bytes."
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "content_type",
+                      "size"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "source",
+                "text",
+                "recorded_at",
+                "created_at",
+                "device",
+                "audio"
+              ]
+            }
+          },
+          "required": [
+            "note"
+          ]
+        }
+      },
+      "required": [
+        "version",
+        "type",
+        "timestamp",
+        "data"
+      ],
+      "description": "A note came back from Recently Deleted, after its note.deleted: the whole note, as it is now. Add or show the note's row again by its id; each file's bytes follow in its own note.file."
     },
     {
       "type": "object",

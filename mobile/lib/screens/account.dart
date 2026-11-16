@@ -160,16 +160,16 @@ class _AccountPageState extends State<AccountPage> {
   /// says the webhook gets nothing from the phone until the person adds it on their page. The phone keeps the webhook's
   /// address and secret, for a later *Sign out*.
   Future<void> _signIn(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.maybeOf(context, rootNavigator: true);
     if (!await choosePlace(context, relay, signInOnly: true)) return;
     unawaited(relay.refreshConnections());
-    messenger.showSnackBar(const SnackBar(content: Text('Signed in. To keep getting everything at your webhook, add it '
-      'under Webhooks on your Relay Everything page.')));
+    unawaited(showProblemOn(navigator, 'Signed in. To keep getting everything at your webhook, add it under Webhooks '
+      'on your Relay Everything page.'));
   }
 
   Future<void> _test(BuildContext context) async {
     final answer = await relay.testWebhook(relay.webhookAddress ?? '', relay.webhookSecret ?? '');
-    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(answer)));
+    if (context.mounted) unawaited(showProblem(context, answer));
   }
 
   /// Asks first, then forgets the key and stops sending, and goes back to Settings, which says *Sign in*.

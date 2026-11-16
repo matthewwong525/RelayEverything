@@ -11,9 +11,10 @@ import '../brand.dart';
 import '../relay.dart';
 import '../voice/model.dart' show megabytes;
 import '../voice/recorder.dart' show longest;
+import 'folder.dart' show showProblem, showProblemOn;
 
 void _say(BuildContext context, String? message) {
-  if (message != null) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  if (message != null) unawaited(showProblem(context, message));
 }
 
 /// *New note*: a tap writes, a hold talks. While held, a spark ring fills round the button over [holdToTalk]; when it
@@ -231,14 +232,14 @@ class _RecordingScreenState extends State<RecordingScreen> {
   Future<void> _save() async {
     if (_done) return;
     _done = true;
-    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.maybeOf(context, rootNavigator: true);
     final onSaved = widget.onSaved;
     // Read first: the save ends the listening, and the note keeps this time.
     final since = _relay.listening;
     try {
       final problem = await _relay.endVoiceNote();
       if (problem != null) {
-        messenger.showSnackBar(SnackBar(content: Text(problem)));
+        unawaited(showProblemOn(navigator, problem));
       } else if (since != null) {
         onSaved(since);
       }
@@ -247,9 +248,9 @@ class _RecordingScreenState extends State<RecordingScreen> {
       // the X closes it.
       _done = false;
       final listening = _relay.listening != null;
-      messenger.showSnackBar(SnackBar(content: Text(listening
+      unawaited(showProblemOn(navigator, listening
         ? 'The voice note did not save. Tap to try again, or tap X.'
-        : 'The voice note did not save.')));
+        : 'The voice note did not save.'));
     }
   }
 

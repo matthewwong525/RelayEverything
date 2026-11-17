@@ -28,7 +28,7 @@ Why and What Changes use [plain words](../explore/references/asking-the-user.md#
 
 ## Draw in the proposal, then build the page
 
-Draw as you write, with no second agent: by default one fence in each What Changes bullet, by [the drawing guide](references/drawings.md). A card shows [the closest real result](references/review-page.md#a-card-shows-the-closest-real-result), notes included; a phone app screen gets its pictures from [its screen test](../../../wiki/development/phone-pictures.md). Every plan lists [what the build needs](references/review-page.md#what-the-build-needs), its answers [asked in the chat](../explore/references/asking-the-user.md#choices-go-in-the-chat).
+Draw as you write, with no second agent: by default one fence in each What Changes bullet, by [the drawing guide](references/drawings.md). A card shows [the closest real result](references/review-page.md#a-card-shows-the-closest-real-result), notes included. Every plan lists [what the build needs](references/review-page.md#what-the-build-needs), its answers [asked in the chat](../explore/references/asking-the-user.md#choices-go-in-the-chat).
 
 Build the page after drafting and each edit:
 

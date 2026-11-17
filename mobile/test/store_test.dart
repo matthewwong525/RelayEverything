@@ -141,6 +141,79 @@ void main() {
     });
   });
 
+  group('a file removed from a note', () {
+    const f1 = Attachment(id: 'f1', name: 'receipt.jpg', type: 'image/jpeg', size: 1, path: 'attachments/f1.jpg');
+    const f2 = Attachment(id: 'f2', name: 'lease.pdf', type: 'application/pdf', size: 1, path: 'attachments/f2.pdf');
+    Map<String, dynamic> listed(Attachment file) => {'id': file.id, 'name': file.name, 'type': file.type, 'size': file.size};
+    Future<List<String>> ids(String clientId) async => [for (final file in await store.attachmentsOf(clientId)) file.id];
+
+    test('goes from the phone with its upload, and each change names it until a pull has the note without it', () async {
+      await store.addNote(note('n1'), send: true);
+      await flush(store, FakeServer().api(connection), clock: () => at);
+      await store.editNote('n1', 'Buy milk', files: const [f1, f2], send: true, at: later);
+      expect(await store.editNote('n1', 'Buy milk', removed: {'f1'}, send: true, at: later.add(const Duration(minutes: 1))),
+        isTrue);
+      expect(await ids('n1'), ['f2']);
+      final outbox = await store.outbox();
+      expect([for (final item in outbox) item.route], [noteUpdate, 'attachment']);
+      expect([outbox.first.body['removed'], [for (final file in outbox.first.body['attachments'] as List) file['id']]],
+        [['f1'], ['f2']]);
+      await store.applyPulled([pulledNote('s1', clientId: 'n1', mine: true, text: 'Buy milk', recordedAt: at,
+        editedAt: later.add(const Duration(minutes: 2)), files: [listed(f2)])]);
+      await store.editNote('n1', 'Buy oat milk', send: true, at: later.add(const Duration(minutes: 3)));
+      final change = (await store.outbox()).firstWhere((item) => item.route == noteUpdate);
+      expect([change.body['text'], change.body.containsKey('removed')], ['Buy oat milk', false]);
+    });
+
+    test('and added again, as by Undo, is named no more', () async {
+      await store.addNote(note('n1'), send: true);
+      await flush(store, FakeServer().api(connection), clock: () => at);
+      await store.editNote('n1', 'Buy milk', files: const [f1], send: true, at: later);
+      await store.editNote('n1', 'Buy milk', removed: {'f1'}, send: true, at: later);
+      await store.editNote('n1', 'Buy milk', files: const [f1], send: true, at: later);
+      expect(await ids('n1'), ['f1']);
+      expect((await store.outbox()).first.body.containsKey('removed'), isFalse);
+    });
+
+    test('a recording still being written, removed, no longer holds the note: it goes, or blank, it can be dropped',
+        () async {
+      await store.addNote(note('n1', 'Fab call'));
+      await store.addRecording('n1', recording('r1', top: false));
+      expect(await store.editNote('n1', 'Fab call', removed: {'r1'}, send: true, at: later), isTrue);
+      expect([for (final item in await store.outbox()) (item.route, item.body['clientId'])], [('notes', 'n1')]);
+      expect(await store.setTranscript('r1', 'Call the fab', send: true, at: later), isFalse);
+      await store.addNote(note('n2', ''));
+      await store.addRecording('n2', recording('r2', top: false));
+      await store.editNote('n2', '', removed: {'r2'}, send: false, at: later);
+      expect([await store.isBare('n2'), await store.dropEmptyNote('n2')], [isTrue, isTrue]);
+    });
+
+    test('a recording removed while another is still being written leaves the note waiting for those words', () async {
+      await store.addNote(note('n1', 'Fab call'));
+      await store.addRecording('n1', recording('r1', top: false));
+      await store.addRecording('n1', recording('r2', top: false));
+      await store.editNote('n1', 'Fab call', removed: {'r1'}, send: true, at: later);
+      expect(await store.outbox(), isEmpty);
+      await store.setTranscript('r2', 'Call the fab', send: true, at: later);
+      expect([for (final item in await store.outbox()) item.route], ['notes', 'attachment']);
+    });
+
+    test('on a note from elsewhere stays: only the phone that made it may remove one', () async {
+      await store.applyPulled([pulledNote('s1', text: 'Desk lamp', recordedAt: at, files: [listed(f1)])]);
+      await store.editNote('srv:s1', 'Desk lamp', removed: {'f1'}, send: true, at: later);
+      expect(await ids('srv:s1'), ['f1']);
+    });
+
+    test('elsewhere goes from the phone at the next pull; a file still to send stays', () async {
+      await store.applyPulled([pulledNote('s1', text: 'Desk lamp', recordedAt: at, files: [listed(f1), listed(f2)])]);
+      await store.applyPulled([pulledNote('s1', text: 'Desk lamp', recordedAt: at, editedAt: later, files: [listed(f2)])]);
+      expect(await ids('srv:s1'), ['f2']);
+      await store.addNote(LocalNote(clientId: 'n2', text: 'Lease', createdAt: at, attachments: const [f1]), send: true);
+      await store.applyPulled([pulledNote('s2', clientId: 'n2', mine: true, text: 'Lease', recordedAt: at)]);
+      expect(await ids('n2'), ['f1']);
+    });
+  });
+
   group('a pulled note', () {
     test('of this phone, pulled back, stays one note with its server id', () async {
       await store.addNote(note('n1'), send: true);

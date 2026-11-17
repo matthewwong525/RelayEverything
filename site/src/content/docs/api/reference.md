@@ -48,7 +48,7 @@ Send the input as a JSON body.
 
 `PATCH /apps/relay/api/notes` · `relay.notes-edit` · writes · called by a signed-in person or a phone key
 
-Change the words or a recording's transcript of any note in your space, and list the files added since to a note this device sent. The page changes notes as your space's Web device. The newer change wins: a change made before the note's last one gets 409. A note in Recently Deleted gets 409 with the code `deleted`. Webhooks get it as note.updated.
+Change the words or a recording's transcript of any note in your space. On a note this device sent, list the files added since, and name in `removed` the files to remove. The page changes notes as your space's Web device. The newer change wins: a change made before the note's last one gets 409. A note in Recently Deleted gets 409 with the code `deleted`. Webhooks get it as note.updated.
 
 ### Input
 
@@ -59,7 +59,7 @@ Send the input as a JSON body.
 | `id` | string | no | The server's id for the note, as GET notes gives it: any note in your space. |
 | `clientId` | string | no | Or the device's own id for a note it sent, as POST notes sent it. |
 | `text` | string | yes | What the note says now, in place of its words before. It can be empty only when the note has files. |
-| `attachments` | array of object | no | All of the note's files now, up to 10. A file the server lacks is added: send its bytes after, with POST attachments. A known recording takes its new transcript and length. |
+| `attachments` | array of object | no | All of the note's files now, up to 10. A file the server lacks is added: send its bytes after, with POST attachments. A known recording takes its new transcript and length. A file left out stays: only `removed` removes one. |
 | `attachments[].id` | string | yes | The phone's own id for the file: its upload names it. |
 | `attachments[].name` | string | yes | The file's name, such as `warranty.pdf`. |
 | `attachments[].type` | string | yes | The file's content type, such as `application/pdf`; empty when the phone does not know it. |
@@ -67,6 +67,7 @@ Send the input as a JSON body.
 | `attachments[].transcript` | string or null | no | Only a recording: the words the phone wrote from it, or null while it has none. A change to it changes the note. |
 | `attachments[].lengthMs` | integer | no | Only a recording: how long it is, in ms. A file with a length is a recording. |
 | `attachments[].top` | boolean | no | True for the recording the note started with, shown above the note's words. |
+| `removed` | array of string | no | The ids of files to remove from a note this device sent, up to 10: each goes from the note and from your space. An id the note does not hold is skipped, so a resend changes nothing. |
 | `editedAt` | integer | no | When the device made the change, in Unix ms; now when left out. A later time is taken as now. |
 
 ### Output
@@ -74,7 +75,7 @@ Send the input as a JSON body.
 | Field | Type | Required | What it holds |
 |---|---|---|---|
 | `id` | string | yes |  |
-| `updated` | boolean | yes | False when the words and transcripts were the same and no file was new. |
+| `updated` | boolean | yes | False when the words and transcripts were the same and no file was new or removed. |
 
 ### Errors
 
@@ -82,7 +83,7 @@ Send the input as a JSON body.
 |---|---|
 | `not_found` | Your space has no note with this id, or this device sent no note with this clientId. |
 | `older` | The note changed after this change was made, so the newer words stay: GET notes gives them. |
-| `not_own` | Add a file only to a note this device sent. |
+| `not_own` | Add or remove a file only on a note this device sent. |
 | `deleted` | The note is in Recently Deleted, where it can't be changed: recover it first with POST notes/recover. |
 
 ## Delete a note

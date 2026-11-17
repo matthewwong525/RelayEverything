@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
 import { handleApp } from "../index";
-import { benPhone, call, checker, db, env, ipad, laptop, lost, matthew, NOW, phone, request, rows } from "../../../tests/relay";
+import { ANA, benPhone, bucket, call, checker, db, env, ipad, laptop, lost, matthew, NOW, phone, request, rows } from "../../../tests/relay";
 
 const MINUTE = 60_000;
 const PDF = { id: "file-pdf-0001", name: "warranty.pdf", type: "application/pdf", size: 3 };
@@ -141,4 +141,47 @@ it("takes a failed recording's first transcript from any phone, and refuses one 
   expect((await call(ipad, "PATCH", "notes", { id, text: "", attachments: [WAV] })).json).toEqual({ id, updated: true });
   expect(recordings()).toEqual([["rec-wav-0001", "Call the fab.", 4200, 0]]);
   expect((await edit(phone, { text: "", attachments: [{ ...WAV, transcript: "a".repeat(100_001) }] })).status).toBe(400);
+});
+
+const PNG = { id: "file-png-0001", name: "board.png", type: "image/png", size: 3 };
+/** Sends file `id`'s bytes for the sent note, as the phone does after the note. */
+const upload = (id: string) => handleApp(request(phone, "POST", "https://relay.example.com/apps/relay/api/attachments", {
+  body: new Uint8Array([1, 2, 3]), headers: { "Content-Type": "image/png", "X-Note-Client-Id": "note-edit-01", "X-Attachment-Id": id } }), env(), null);
+const sealed = (id: string) => bucket.objects.has(`people/${ANA}/attachments/${id}`);
+
+it("removes a file of a sent note with its sealed file, logs one note.updated, and changes nothing when sent again", async () => {
+  const { json: { id } } = await sent({ attachments: [PDF, PNG] });
+  await upload(PNG.id);
+  expect(sealed(PNG.id)).toBe(true);
+  expect(await edit(phone, { text: "Desk lamp", attachments: [PDF], removed: [PNG.id] })).toEqual({ status: 200, json: { id, updated: true } });
+  expect(rows("relay_attachments").map(row => row.id)).toEqual([PDF.id]);
+  expect(sealed(PNG.id)).toBe(false);
+  expect(log().map(([kind]) => kind)).toEqual(["note.created", "note.file", "note.updated"]);
+  // A resend after a lost answer finds nothing to remove.
+  expect((await edit(phone, { text: "Desk lamp", attachments: [PDF], removed: [PNG.id] })).json).toEqual({ id, updated: false });
+  expect(log().map(([kind]) => kind)).toEqual(["note.created", "note.file", "note.updated"]);
+  // A phone pulls the note without the file.
+  expect((await call(ipad, "GET", "notes")).json.notes[0].attachments.map(file => file.id)).toEqual([PDF.id]);
+});
+
+it("removes the last file of a note with no words, and takes a file sent both listed and removed as removed", async () => {
+  await sent({ text: "", attachments: [PNG] });
+  expect((await edit(phone, { text: "", attachments: [PNG], removed: [PNG.id] })).json).toMatchObject({ updated: true });
+  expect(rows("relay_attachments")).toEqual([]);
+});
+
+it("keeps every file of a short list with no removed, as an older app sends it", async () => {
+  await sent({ attachments: [PDF, PNG] });
+  expect((await edit(phone, { text: "Desk lamp, two files", attachments: [PDF] })).json).toMatchObject({ updated: true });
+  expect(rows("relay_attachments").map(row => row.id)).toEqual([PDF.id, PNG.id]);
+});
+
+it("refuses a removal from another device's note, and leaves its files", async () => {
+  emailed();
+  db.sql.exec(`INSERT INTO relay_attachments (id, note_id, name, content_type, size, created_at)
+    VALUES ('file-mail-0001', 'n-mail', 'ticket.pdf', 'application/pdf', 3, ${NOW})`);
+  expect(await byId(phone, { removed: ["file-mail-0001"] })).toMatchObject({ status: 400, json: { error: { code: "not_own" } } });
+  expect(rows("relay_attachments").map(row => row.id)).toEqual(["file-mail-0001"]);
+  expect(log().map(([kind]) => kind)).toEqual(["note.created"]);
+  expect((await edit(phone, { removed: Array.from({ length: 11 }, (_, at) => `file-many-${String(at).padStart(4, "0")}`) })).status).toBe(400);
 });

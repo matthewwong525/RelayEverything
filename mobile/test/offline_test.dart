@@ -173,7 +173,7 @@ void main() {
     await until(tester, () => relay.entries.any((entry) => entry.recordings.any((recording) => !recording.writing)));
     await tester.pumpAndSettle();
     expect(find.byType(NoteEditor), findsOneWidget);
-    expect(quill(tester).document.toPlainText().trim(), isEmpty);
+    expect(quill(tester).document.toPlainText().replaceAll('\uFFFC', '').trim(), isEmpty, reason: 'only the recording');
     expect(find.descendant(of: find.byType(RecordingCard), matching: find.text('Transcript')), findsOneWidget);
     await tester.tap(find.text('Transcript'));
     await tester.pumpAndSettle();
@@ -227,7 +227,7 @@ void main() {
     await tester.tapAt(const Offset(200, 150));
     await until(tester, () => relay.entries.any((entry) => entry.recordings.any((recording) => !recording.writing)));
     await tester.pumpAndSettle();
-    expect(quill(tester).document.toPlainText().trim(), isEmpty);
+    expect(quill(tester).document.toPlainText().replaceAll('\uFFFC', '').trim(), isEmpty, reason: 'only the recording');
     expect(find.descendant(of: find.byType(RecordingCard), matching: find.text('Transcript')), findsOneWidget);
     await tester.tap(find.text('Transcript'));
     await tester.pumpAndSettle();

@@ -276,4 +276,53 @@ void main() {
     expect(plainText('snake_case 5 * 3'), 'snake_case 5 * 3');
     expect(plainText(''), '');
   });
+
+  group('files in the words', () {
+    const note = '# Receipt\n![receipt.jpg](attachment:p1)\nTotal 12\n![Recording.wav](attachment:r1)';
+
+    test('a file line comes back byte for byte, with words between files', () {
+      final delta = markdownToDelta(note);
+      final files = [for (final op in delta.toList()) if (op.data case final Map<dynamic, dynamic> embed) NoteAttachment.fromEmbed(embed)];
+      expect([for (final file in files) (file?.id, file?.name)], [('p1', 'receipt.jpg'), ('r1', 'Recording.wav')]);
+      expect(deltaToMarkdown(delta), note);
+    });
+
+    test('a line for a file the note does not keep stays words', () {
+      final delta = markdownToDelta(note, files: {'p1'});
+      expect([for (final op in delta.toList()) if (op.data is Map) op.data], hasLength(1));
+      expect(deltaToMarkdown(delta), note, reason: 'the unknown line goes back as it came');
+    });
+
+    test('a name with brackets or a line break still makes one line that reads back', () {
+      const file = NoteAttachment('f1', 'plan [v2]\n.pdf');
+      expect(file.markdown, '![plan _v2__.pdf](attachment:f1)');
+      expect(NoteAttachment.read(file.markdown)?.id, 'f1');
+      expect(NoteAttachment.read('see ![a](attachment:f1)'), isNull, reason: 'only a whole line places a file');
+    });
+
+    test('plain words leave the file lines out', () {
+      expect(plainText(note), 'Receipt\nTotal 12');
+      expect(plainText('![receipt.jpg](attachment:p1)'), '');
+    });
+
+    test('a text names a file by its id, and loses only the lines asked for', () {
+      expect(NoteAttachment.idsIn(note), {'p1', 'r1'});
+      expect(NoteAttachment.without(note, {'p1'}), '# Receipt\nTotal 12\n![Recording.wav](attachment:r1)');
+      expect(NoteAttachment.without(note, const {}), note);
+    });
+
+    test('words or a file on a file\'s line keep a line of their own, never lost', () {
+      final p1 = {attachmentEmbed: const NoteAttachment('p1', 'receipt.jpg').toJson()};
+      final p2 = {attachmentEmbed: const NoteAttachment('p2', 'box.jpg').toJson()};
+      final delta = Delta()
+        ..insert('Paid ')
+        ..insert(p1)
+        ..insert('in cash\n')
+        ..insert(p1)
+        ..insert(p2)
+        ..insert('\n');
+      expect(deltaToMarkdown(delta), 'Paid \n![receipt.jpg](attachment:p1)\nin cash\n'
+        '![receipt.jpg](attachment:p1)\n![box.jpg](attachment:p2)');
+    });
+  });
 }

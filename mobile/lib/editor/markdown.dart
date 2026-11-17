@@ -5,7 +5,8 @@ import 'package:flutter_quill/quill_delta.dart';
 
 // A note keeps its styles in its words as Markdown, so the server, Claude and webhooks read plain text. The editor's
 // Delta goes to it and back byte for byte; underline, which Markdown lacks, is `<u>…</u>`, a highlight is
-// `<mark class="pink">…</mark>`, a link on words is `[words](address)`, and a table is a Markdown table.
+// `<mark class="pink">…</mark>`, a link on words is `[words](address)`, a table is a Markdown table, and a note's file
+// is a line `![name](attachment:<id>)` at its place.
 
 /// The editor's own list kind for a `- ` line: drawn as a dash, where `* ` is a bullet.
 const dashedList = 'dashed';
@@ -61,9 +62,13 @@ int _rankOf(String key) => key.startsWith(_linkKey) ? 0 : key.startsWith(_markKe
 /// The embed type of a table in the editor's Delta.
 const tableEmbed = 'table';
 
+/// The embed type of a note's file in the editor's Delta.
+const attachmentEmbed = 'attachment';
+
 /// The Delta of [markdown]. With [title], a first line with no line style shows as a Title, as an old note's first line
-/// did in the list; its text gains `# ` only once the person changes the note.
-Delta markdownToDelta(String markdown, {bool title = false}) {
+/// did in the list; its text gains `# ` only once the person changes the note. A file's line is a block only when [files]
+/// holds its id, or [files] is null; else it stays words.
+Delta markdownToDelta(String markdown, {bool title = false, Set<String>? files}) {
   final delta = Delta();
   final lines = markdown.split('\n');
   final counts = <int, int>{};
@@ -89,6 +94,13 @@ Delta markdownToDelta(String markdown, {bool title = false}) {
         ..insert('\n');
       counts.clear();
       at = next - 1;
+      continue;
+    }
+    if (NoteAttachment.read(lines[at]) case final file? when files == null || files.contains(file.id)) {
+      delta
+        ..insert({attachmentEmbed: file.toJson()})
+        ..insert('\n');
+      counts.clear();
       continue;
     }
     final (style, words) = _lineOf(lines[at], counts);
@@ -275,10 +287,19 @@ String deltaToMarkdown(Delta delta) {
   var runs = <(String, Set<String>)>[];
   var code = false;
   NoteTable? table;
+  NoteAttachment? file;
   for (final op in delta.toList()) {
     final data = op.data;
     if (data is Map) {
       table = NoteTable.fromEmbed(data) ?? table;
+      // A file's line holds the file alone. Words or a file before it on its line, which the editor never leaves,
+      // each keep a line of their own, so none is lost.
+      if (NoteAttachment.fromEmbed(data) case final embedded?) {
+        if (file != null) lines.add(file.markdown);
+        if (runs.isNotEmpty) lines.add(_inlineOf(runs));
+        runs = [];
+        file = embedded;
+      }
       continue;
     }
     if (data is! String) continue;
@@ -295,6 +316,11 @@ String deltaToMarkdown(Delta delta) {
         counts.clear();
         lines.add(table.markdown);
         table = null;
+      } else if (file != null) {
+        counts.clear();
+        lines.add(file.markdown);
+        if (runs.isNotEmpty) lines.add(_inlineOf(runs));
+        file = null;
       } else if (isCode) {
         counts.clear();
         lines.add([for (final (text, _) in runs) text].join());
@@ -388,14 +414,66 @@ String _inlineOf(List<(String, Set<String>)> runs) {
 }
 
 /// [markdown] with no marks: the words as the page shows them, line by line, and a table's rows with a tab between
-/// cells. The list, search and Share read it.
+/// cells. A file's line is left out. The list, search and Share read it.
 String plainText(String markdown) {
-  final text = [
-    for (final op in markdownToDelta(markdown).toList())
-      if (op.data case final String words) words
-      else if (op.data case final Map<dynamic, dynamic> embed) NoteTable.fromEmbed(embed)?.text ?? '',
-  ].join();
-  return text.substring(0, text.length - 1);
+  final text = StringBuffer();
+  var afterFile = false;
+  for (final op in markdownToDelta(markdown).toList()) {
+    if (op.data case final String words) {
+      text.write(afterFile ? words.substring(1) : words);
+      afterFile = false;
+    } else if (op.data case final Map<dynamic, dynamic> embed) {
+      afterFile = NoteAttachment.fromEmbed(embed) != null;
+      text.write(NoteTable.fromEmbed(embed)?.text ?? '');
+    }
+  }
+  final all = text.toString();
+  return all.isEmpty ? '' : all.substring(0, all.length - 1);
+}
+
+/// A note's file at its place in the words: its id, and the name a reader of the text sees. The editor keeps it as one
+/// embed whose data is [toJson].
+class NoteAttachment {
+  const NoteAttachment(this.id, this.name);
+
+  final String id;
+  final String name;
+
+  static final _line = RegExp(r'^!\[([^\]\n]*)\]\(attachment:([A-Za-z0-9:_-]{1,80})\)$');
+  static final _id = RegExp(r'^[A-Za-z0-9:_-]{1,80}$');
+
+  /// Whether a file's [id] can make its line: a file with no id, or an odd one, shows outside the words.
+  static bool placeable(String id) => _id.hasMatch(id);
+
+  /// The file a whole [line] names, or null for words.
+  static NoteAttachment? read(String line) {
+    final match = _line.firstMatch(line);
+    return match == null ? null : NoteAttachment(match[2]!, match[1]!);
+  }
+
+  /// The line that marks the file's place. A name's brackets and line breaks become `_`, so the line reads back.
+  String get markdown => '![${name.replaceAll(RegExp(r'[\[\]\r\n]'), '_')}](attachment:$id)';
+
+  String toJson() => jsonEncode({'id': id, 'name': name});
+
+  /// The ids of the files whose lines [text] holds.
+  static Set<String> idsIn(String text) => {for (final line in text.split('\n')) ?read(line)?.id};
+
+  /// [text] with no line for a file in [ids]: a note never names a file it does not keep.
+  static String without(String text, Set<String> ids) => ids.isEmpty ? text
+    : text.split('\n').where((line) => !ids.contains(read(line)?.id)).join('\n');
+
+  /// The file in an embed's data, `{"attachment": "<json>"}`, or null for another embed.
+  static NoteAttachment? fromEmbed(Map<dynamic, dynamic> embed) {
+    final data = embed[attachmentEmbed];
+    if (data is! String) return null;
+    try {
+      final json = jsonDecode(data) as Map<String, dynamic>;
+      return NoteAttachment(json['id'] as String, json['name'] as String? ?? '');
+    } on Object {
+      return null;
+    }
+  }
 }
 
 /// A table in a note: its rows of plain words, the first the head row, and the Markdown it was read from. The editor

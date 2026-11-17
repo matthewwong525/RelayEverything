@@ -16,6 +16,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../brand.dart';
 import '../data/client_id.dart';
+import '../editor/attachments.dart';
 import '../editor/magnifier.dart';
 import '../editor/markdown.dart';
 import '../editor/paste.dart';
@@ -161,6 +162,13 @@ class NoteEditorState extends State<NoteEditor> {
   /// Stops the browser's paste events reaching this note.
   late final void Function() _stopPastes;
 
+  /// Every file the page has placed in the words: one gone from them since was removed, and is not placed again.
+  final _shown = <String>{};
+  /// Where each file added on this page goes, by id: the cursor's place then, or null for the end.
+  final _placeAt = <String, int?>{};
+  /// Saves still running: a file gone from the note leaves the words only after them, as *Undo* may bring it back.
+  int _saving = 0;
+
   /// The note whose words have the cursor: the iPhone's own *Paste* goes there.
   static NoteEditorState? _pasteTarget;
 
@@ -211,9 +219,39 @@ class NoteEditorState extends State<NoteEditor> {
     if (_stored && _live == null) _gone();
   }
 
-  static Document _documentOf(Entry? entry) => Document.fromDelta(entry == null
-    ? (Delta()..insert('\n', Attribute.h1.toJson()))
-    : withLinks(markdownToDelta(entry.text, title: true)));
+  /// A note's words with each file at its place. A file the text does not name, as in an older note, goes where the
+  /// page showed it before: the recording a voice note started with first, and the rest after the words.
+  Document _documentOf(Entry? entry) {
+    if (entry == null) return Document.fromDelta(Delta()..insert('\n', Attribute.h1.toJson()));
+    final files = filesOf(entry);
+    final words = withLinks(markdownToDelta(entry.text, title: true, files: {for (final file in files) file.file.id}));
+    final placed = attachmentIdsIn(words);
+    _shown.addAll([for (final file in files) file.file.id]);
+    return Document.fromDelta(withFilesPlaced(words,
+      top: [for (final file in files) if (file.top && !placed.contains(file.file.id)) file.file],
+      rest: [for (final file in files) if (!file.top && !placed.contains(file.file.id)) file.file]));
+  }
+
+  /// Each of [note]'s files that can have a place in its words, in the order added; [top] marks the recording a
+  /// voice note started with. A file with no id that can make a line, such as a ring note's recording in the browser,
+  /// has no place: the page shows it above or under the words.
+  static List<({NoteAttachment file, bool top})> filesOf(Entry note) {
+    final below = note.recordings.where((recording) => !recording.top && NoteAttachment.placeable(recording.id));
+    ({NoteAttachment file, bool top}) of(EntryRecording recording) =>
+      (file: NoteAttachment(recording.id, recording.name), top: recording.top);
+    return [
+      for (final recording in note.recordings) if (recording.top && NoteAttachment.placeable(recording.id)) of(recording),
+      for (final (index, file) in note.files.indexed) ...[
+        for (final recording in below.where((recording) => recording.filesBefore == index)) of(recording),
+        if (NoteAttachment.placeable(file.id)) (file: NoteAttachment(file.id, file.name), top: false),
+      ],
+      for (final recording in below.where((recording) => recording.filesBefore >= note.files.length)) of(recording),
+    ];
+  }
+
+  /// [text] as kept: blank words keep only the lines that place the files, so a note of files alone is not `#`.
+  static String _kept(String text) => plainText(text).trim().isNotEmpty ? text
+    : text.split('\n').where((line) => NoteAttachment.read(line) != null).join('\n');
 
   void _listen() {
     _saved = _controller.document.toDelta();
@@ -244,13 +282,14 @@ class NoteEditorState extends State<NoteEditor> {
     _tables.flush();
     final delta = _controller.document.toDelta();
     final text = delta == _saved ? _savedText : _markdownOf(delta);
-    return (id: _id, text: plainText(text).trim().isEmpty ? '' : text);
+    return (id: _id, text: _kept(text));
   }
 
   @override
   void dispose() {
     _tables.flush();
     _save(sendNow: true, leaving: true);
+    unawaited(_writing.then((_) => relay.closedNote(_id)));
     if (relay.openNote == _id) relay.openNote = _heldBefore;
     if (relay.editorWords == _words) relay.editorWords = null;
     relay.removeListener(_relayChanged);
@@ -301,7 +340,9 @@ class NoteEditorState extends State<NoteEditor> {
   /// the marks taken away, as the iPhone's keyboard types it. The space goes in first as typed, so one Undo gives the
   /// marks back. A paste never comes here: it is one change of its own.
   bool _typed(int index, int length, Object? data) {
-    if (_marking || data != ' ' || length != 0 || index <= 0) return true;
+    if (_marking) return true;
+    if (_keepFilesApart(index, length, data) case final handled?) return handled;
+    if (data != ' ' || length != 0 || index <= 0) return true;
     final words = _controller.document.toPlainText();
     if (index >= words.length || !isLineMark(words.substring(words.lastIndexOf('\n', index - 1) + 1, index))) return true;
     _marking = true;
@@ -320,8 +361,41 @@ class NoteEditorState extends State<NoteEditor> {
     return false;
   }
 
+  /// Each file stays on a line of its own. Backspace on the line under a file takes the file, as in Apple Notes; words
+  /// typed beside a file go on a new line. A note from elsewhere keeps its files: the server takes changes to them
+  /// only from the phone that made it. Null when the change needs no help; else true lets it go as it is.
+  bool? _keepFilesApart(int index, int length, Object? data) {
+    final files = {for (final (offset, _) in attachmentsIn(_controller.document.toDelta())) offset};
+    if (files.isEmpty) return null;
+    final own = _current?.from == null;
+    final text = _controller.document.toPlainText();
+    var start = index;
+    final end = index + length;
+    if (length == 1 && data is String && data.isEmpty && text[index] == '\n' && files.contains(index - 1)) start--;
+    if (!own && files.any((at) => at >= start && at < end)) return false;
+    if (data is! String) return start == index ? null : _replaceWith(start, end, '', start);
+    final before = start == 0 ? '\n' : text[start - 1];
+    final after = end < text.length ? text[end] : '\n';
+    final joinsBefore = files.contains(start - 1) && !(data.isEmpty ? after == '\n' : data.startsWith('\n'));
+    final joinsAfter = files.contains(end) && !(data.isEmpty ? before == '\n' : data.endsWith('\n'));
+    if (start == index && !joinsBefore && !joinsAfter) return null;
+    final words = data.isEmpty && joinsBefore && joinsAfter ? '\n'
+      : '${joinsBefore ? '\n' : ''}$data${joinsAfter ? '\n' : ''}';
+    return _replaceWith(start, end, words, start + (joinsBefore ? 1 : 0) + data.length);
+  }
+
+  bool _replaceWith(int start, int end, String words, int caret) {
+    _marking = true;
+    try {
+      _controller.replaceText(start, end - start, words, TextSelection.collapsed(offset: caret));
+    } finally {
+      _marking = false;
+    }
+    return false;
+  }
+
   /// A recording made into a new note keeps it, so the next save edits it. A kept note gone from the list closes the
-  /// page.
+  /// page. A file new to the note takes its place in the words.
   void _relayChanged() {
     if (!_stored && !_deleted && _adds == 0 && relay.entries.any((entry) => entry.id == _id)) _stored = true;
     if (_stored && !_deleted && _live == null) return _gone();
@@ -330,6 +404,64 @@ class NoteEditorState extends State<NoteEditor> {
       setState(() => _trash = _controller.readOnly = _inTrash);
       if (_trash) _focus.unfocus();
     }
+    _placeFiles();
+  }
+
+  /// Puts each file new to the note in the words: one added on this page where it was asked for, as a change that
+  /// saves, and one from elsewhere, such as a recording the phone kept, at the end, as no change. A file the note no
+  /// longer has leaves the words, once every save is done.
+  void _placeFiles() {
+    final note = _current;
+    if (note == null || _trash || _deleted) return;
+    final files = filesOf(note);
+    final held = {for (final file in files) file.file.id};
+    final delta = _controller.document.toDelta();
+    if (_saving == 0 && delta == _saved) {
+      final change = Delta();
+      var at = 0;
+      for (final (offset, file) in attachmentsIn(delta)) {
+        if (held.contains(file.id)) continue;
+        change
+          ..retain(offset - at)
+          ..delete(2);
+        at = offset + 2;
+      }
+      if (change.isNotEmpty) _silently(change);
+    }
+    final placed = attachmentIdsIn(_controller.document.toDelta());
+    final missing = [for (final file in files) if (!placed.contains(file.file.id) && !_shown.contains(file.file.id)) file.file];
+    if (missing.isEmpty) return;
+    _shown.addAll(missing.map((file) => file.id));
+    final asked = <int?, List<NoteAttachment>>{};
+    for (final file in missing.where((file) => _placeAt.containsKey(file.id))) {
+      (asked[_placeAt.remove(file.id)] ??= []).add(file);
+    }
+    for (final MapEntry(key: at, value: files) in asked.entries) {
+      final place = placeFiles(_controller.document, files, at);
+      final focused = _focus.hasFocus;
+      _controller.ignoreFocusOnTextChange = !focused;
+      _controller.compose(place.change, _controller.selection, ChangeSource.local);
+      if (focused) _controller.updateSelection(TextSelection.collapsed(offset: place.caret), ChangeSource.local);
+      _controller.ignoreFocusOnTextChange = false;
+    }
+    final rest = [for (final file in missing) if (!asked.values.any((files) => files.contains(file))) file];
+    if (rest.isNotEmpty) _silently(placeFiles(_controller.document, rest, null).change);
+  }
+
+  /// Makes [change] with no Undo step and no save: a note kept as it was stays kept.
+  void _silently(Delta change) {
+    final kept = _controller.document.toDelta() == _saved;
+    final history = _controller.document.history;
+    _controller.ignoreFocusOnTextChange = true;
+    history.ignoreChange = true;
+    try {
+      _controller.compose(change, _controller.selection, ChangeSource.remote);
+    } finally {
+      history.ignoreChange = false;
+      _controller.ignoreFocusOnTextChange = false;
+    }
+    history.transform(change);
+    if (kept) _saved = _controller.document.toDelta();
   }
 
   /// The note left the phone, such as a voice note with no speech or one deleted on another phone: leaving keeps
@@ -371,8 +503,16 @@ class NoteEditorState extends State<NoteEditor> {
     final text = delta == _saved ? _savedText : _markdownOf(delta);
     // Blank words, such as only an empty Title line, are kept as none, so a note of files alone is not `#`.
     final empty = plainText(text).trim().isEmpty;
+    final note = _current;
+    final inWords = attachmentIdsIn(delta);
+    // A file gone from the words was removed: only the phone that made the note may remove one.
+    final removed = note == null || note.from != null ? const <String>{}
+      : {for (final file in filesOf(note)) if (_shown.contains(file.file.id) && !inWords.contains(file.file.id)) file.file.id};
     final changed = delta != _saved || files.isNotEmpty;
     final dropping = leaving && empty && files.isEmpty && (_stored || _adds > 0);
+    // Left with blank words and its last file just removed, the note is as bare as one that had none.
+    final clearing = dropping && note != null && removed.isNotEmpty &&
+      removed.length == note.files.length + note.recordings.length;
     if (!changed && !dropping) {
       if (sendNow && _unsent) {
         _unsent = false;
@@ -388,23 +528,33 @@ class NoteEditorState extends State<NoteEditor> {
     _unsent = !sendNow;
     final adding = !_stored;
     if (adding) _adds++;
+    _saving++;
     _writing = _writing.then((_) async {
       String? problem;
-      if (_stored && empty && files.isEmpty && _bare) {
+      if (_stored && empty && files.isEmpty && (_bare || clearing)) {
+        // The removal is kept first, so a note that still stays, such as a voice note, has it.
+        final removing = !_bare;
+        if (removing) problem = await relay.editNote(_id, _kept(text), removed: removed, sendNow: false);
         final emptied = leaving ? await relay.dropEmptyNote(_id) : Emptied.kept;
-        if (emptied != Emptied.kept) _stored = false;
+        if (emptied != Emptied.kept) {
+          _stored = false;
+        } else if (removing && sendNow) {
+          await relay.sync();
+        }
       } else if (_stored && !changed) {
         // Left unchanged with blank words, yet a file or a recording keeps it: only what waits still goes.
         if (unsent) await relay.sync();
       } else if (_stored) {
-        problem = await relay.editNote(_id, empty ? '' : text, files: files, sendNow: sendNow);
+        problem = await relay.editNote(_id, _kept(text), files: files, removed: removed, sendNow: sendNow);
       } else if (!empty || files.isNotEmpty) {
-        problem = await relay.addNote(empty ? '' : text, files: files, id: _id, sendNow: sendNow);
+        problem = await relay.addNote(_kept(text), files: files, id: _id, sendNow: sendNow);
         // An add of only files the phone could not keep keeps nothing, so the next save adds the note again.
         _stored = relay.entries.any((entry) => entry.id == _id);
         if (mounted) setState(() {});
       }
       if (adding) _adds--;
+      _saving--;
+      if (mounted) _placeFiles();
       if (problem != null) await showProblemOn(_navigator, problem);
     });
   }
@@ -476,8 +626,12 @@ class NoteEditorState extends State<NoteEditor> {
       paste = pasteChange(_controller.document, selection, pasted.isEmpty ? pasted : withLinks(pasted));
     }
     if (paste == null) return true;
-    _controller.compose(paste.change, TextSelection.collapsed(offset: paste.caret), ChangeSource.local);
-    _controller.updateSelection(TextSelection.collapsed(offset: paste.caret), ChangeSource.local);
+    // Words pasted beside a file go on a line of their own, as typed ones do, in the same change.
+    final apart = filesApartChange(Document.fromDelta(_controller.document.toDelta().compose(paste.change)));
+    final change = apart == null ? paste.change : paste.change.compose(apart);
+    final caret = apart == null ? paste.caret : apart.transformPosition(paste.caret, force: false);
+    _controller.compose(change, TextSelection.collapsed(offset: caret), ChangeSource.local);
+    _controller.updateSelection(TextSelection.collapsed(offset: caret), ChangeSource.local);
     _revealCaret();
     return true;
   }
@@ -639,7 +793,19 @@ class NoteEditorState extends State<NoteEditor> {
     } on Exception {
       return _say('The ${relay.web ? 'browser' : relay.desktop ? 'Mac' : 'phone'} did not give the file. Try again.');
     }
-    if (mounted && picked.isNotEmpty) _save(sendNow: !_focus.hasFocus, files: picked);
+    if (!mounted || picked.isEmpty) return;
+    // The cursor's place before the save: the files go there once the note keeps them.
+    final at = _focus.hasFocus ? _controller.selection.start : null;
+    _save(sendNow: !_focus.hasFocus, files: _placed(picked, at));
+  }
+
+  /// [files], each with the id the note will keep it by, and asked to go at [at], or at the end.
+  List<NewFile> _placed(List<NewFile> files, int? at) {
+    final placed = [for (final file in files) file.withId(newClientId())];
+    for (final file in placed) {
+      _placeAt[file.id!] = at;
+    }
+    return placed;
   }
 
   String get _plain => plainText(deltaToMarkdown(_controller.document.toDelta()));
@@ -692,7 +858,7 @@ class NoteEditorState extends State<NoteEditor> {
   void addFiles(List<NewFile> files) {
     if (files.isEmpty || _trash) return;
     if (_attachOrNull == null) return _say('You can add files only to a note you wrote here or on your phone.');
-    _save(sendNow: true, files: files);
+    _save(sendNow: true, files: _placed(files, null));
   }
 
   /// A format item from the computer's keys, its *Text styles* menu or right-click menu, or the Mac's *Format* menu: on
@@ -782,7 +948,7 @@ class NoteEditorState extends State<NoteEditor> {
       unawaited(_askRecover());
       return true;
     }
-    if (isOnTable(context, details.globalPosition)) return true;
+    if (isOnTable(context, details.globalPosition) || isOnAttachment(context, details.globalPosition)) return true;
     final at = positionOf(details.globalPosition);
     if (_focus.hasFocus || _formatting) return !_formatting && _toggleMenu(at);
     final link = linkAtPosition(_controller.document, at);
@@ -826,13 +992,15 @@ class NoteEditorState extends State<NoteEditor> {
   /// *Record* shows only on a phone, and for a note made here and not in *Recently Deleted*, as *Attach* does.
   VoidCallback? get _recordOrNull => !relay.desktop && _current?.from == null && !_trash ? _record : null;
 
-  /// *Record*: the recording screen opens over the note, and the recording joins it after its words. The words typed
-  /// so far are kept first, so a new note with words is kept before the recording joins it.
+  /// *Record*: the recording screen opens over the note, and the recording joins it at the cursor, or at the end. The
+  /// words typed so far are kept first, so a new note with words is kept before the recording joins it.
   Future<void> _record() async {
+    final id = newClientId();
+    _placeAt[id] = _focus.hasFocus ? _controller.selection.start : null;
     _focus.unfocus();
     _save(sendNow: false);
     await _writing;
-    if (mounted) await recordFromShortcut(context, relay, into: _id);
+    if (mounted) await recordFromShortcut(context, relay, into: _id, id: id);
   }
 
   @override
@@ -956,25 +1124,50 @@ class NoteEditorState extends State<NoteEditor> {
     builder: (context, toggle) => PillIconButton(icon: CupertinoIcons.ellipsis, tooltip: 'More', onPressed: toggle),
   ));
 
-  /// The note's page: the date, the recording the voice note started with, the words, then each picture, file and added
-  /// recording in the order added.
-  Widget _page(BuildContext context, BrandColors brand) {
-    final note = _current;
-    final muted = TextStyle(fontSize: 13, color: brand.muted);
-    final recordings = note?.recordings ?? const <EntryRecording>[];
-    final files = note?.files ?? const <EntryFile>[];
-    // A note in *Recently Deleted* reads only: its transcripts too.
-    final editable = !relay.desktop && note?.from == null && !_trash;
-    final when = _when(context, note?.at ?? DateTime.now(), note?.from);
+  /// A recording's card, with what its page needs to go back to the note: the note's first typed line and its date.
+  Widget _card(Entry? note, EntryRecording recording) {
     // The recording's page goes back to the note by its first typed line.
-    final first = _controller.document.toPlainText().trim().split('\n').first.trim();
+    final first = _controller.document.toPlainText().split('\n').map((line) => line.trim())
+      .firstWhere((line) => line.isNotEmpty && line != embedLetter, orElse: () => '');
     // Cut by characters, not code units: half an emoji is not a string Flutter can draw.
     final letters = first.characters;
     final title = first.isEmpty ? 'Note' : letters.length > 18 ? '${letters.take(17).toString().trimRight()}…' : first;
-    Widget card(EntryRecording recording) => RecordingCard(key: ValueKey(recording.id.isEmpty ? recording.recording : recording.id),
-      relay: relay, recording: recording, editable: editable, title: title, when: when);
-    Widget added(EntryRecording recording) => Padding(padding: const EdgeInsets.only(top: 14), child: card(recording));
-    final below = recordings.where((recording) => !recording.top);
+    // A note in *Recently Deleted* reads only: its transcripts too.
+    return RecordingCard(key: ValueKey(recording.id.isEmpty ? recording.recording : recording.id), relay: relay,
+      recording: recording, editable: !relay.desktop && note?.from == null && !_trash, title: title,
+      when: _when(context, note?.at ?? DateTime.now(), note?.from));
+  }
+
+  /// What a file's place in the words shows: its picture, its row, or its recording's card. Under the recording a voice
+  /// note started with, blank words show *Add notes…*, as the empty words of a note show what to type.
+  Widget? _blockOf(NoteAttachment file) {
+    final note = _current;
+    if (note == null) return null;
+    if (note.recordings.where((recording) => recording.id == file.id).firstOrNull case final recording?) {
+      final card = _card(note, recording);
+      if (!recording.top || _controller.document.toPlainText().replaceAll(embedLetter, '').trim().isNotEmpty) return card;
+      return Stack(clipBehavior: Clip.none, children: [
+        card,
+        // Over the empty line under the card, 7 below it, as tall as a line of words.
+        Positioned(left: 0, right: 0, bottom: -32, child: IgnorePointer(child: Text('Add notes…',
+          style: TextStyle(fontFamily: brandFont, fontSize: 17, height: 1.5, color: brandOf(context).muted)))),
+      ]);
+    }
+    final kept = note.files.where((other) => other.id == file.id).firstOrNull;
+    return kept == null ? null : _fileBlock(kept);
+  }
+
+  Widget _fileBlock(EntryFile file) =>
+    file.picture && file.ready ? NotePicture(file: file, relay: relay) : NoteFileRow(file: file, relay: relay);
+
+  /// The note's page: the date, then the words with each picture, file and recording at its place in them.
+  Widget _page(BuildContext context, BrandColors brand) {
+    final note = _current;
+    final muted = TextStyle(fontSize: 13, color: brand.muted);
+    // A file with no id, such as a ring note's recording in the browser, has no place in the words.
+    final recordings = [for (final recording in note?.recordings ?? const <EntryRecording>[]) if (!NoteAttachment.placeable(recording.id)) recording];
+    final above = [for (final recording in recordings) if (recording.top) recording];
+    final when = _when(context, note?.at ?? DateTime.now(), note?.from);
     return SingleChildScrollView(
       controller: _scroll,
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 120),
@@ -982,8 +1175,7 @@ class NoteEditorState extends State<NoteEditor> {
         // The date alone: nothing about sending, and no tag.
         Text(when, style: muted, textAlign: TextAlign.center),
         const SizedBox(height: 14),
-        for (final recording in recordings.where((recording) => recording.top))
-          Padding(padding: const EdgeInsets.only(bottom: 12), child: card(recording)),
+        for (final recording in above) Padding(padding: const EdgeInsets.only(bottom: 12), child: _card(note, recording)),
         QuillEditor(
           key: _editor,
           controller: _controller,
@@ -992,14 +1184,14 @@ class NoteEditorState extends State<NoteEditor> {
           config: QuillEditorConfig(
             scrollable: false,
             autoFocus: widget.entry == null,
-            placeholder: recordings.any((recording) => recording.top) ? 'Add notes…' : 'What do you want to keep?',
+            placeholder: above.isNotEmpty ? 'Add notes…' : 'What do you want to keep?',
             customStyles: noteStyles(context),
             // The format keys only on a computer: a phone's keyboard has no ⌘.
             customShortcuts: relay.desktop ? {...formatShortcuts(), ...pageKeys} : null,
             customActions: relay.desktop
               ? {FormatIntent: CallbackAction<FormatIntent>(onInvoke: (intent) => format(intent.action))}
               : null,
-            embedBuilders: [TableEmbedBuilder(_tables)],
+            embedBuilders: [TableEmbedBuilder(_tables), AttachmentEmbedBuilder(_blockOf)],
             onTapUp: _tapUp,
             contextMenuBuilder: (context, editor) => noteContextMenu(context, editor,
               format: relay.desktop ? _pick : null),
@@ -1011,12 +1203,10 @@ class NoteEditorState extends State<NoteEditor> {
             customLeadingBlockBuilder: (_, config) => _leading(config, brand),
           ),
         ),
-        for (final (index, file) in files.indexed) ...[
-          for (final recording in below.where((recording) => recording.filesBefore == index)) added(recording),
-          Padding(padding: const EdgeInsets.only(top: 14),
-            child: file.picture && file.ready ? NotePicture(file: file, relay: relay) : NoteFileRow(file: file, relay: relay)),
-        ],
-        for (final recording in below.where((recording) => recording.filesBefore >= files.length)) added(recording),
+        for (final recording in recordings) if (!recording.top)
+          Padding(padding: const EdgeInsets.only(top: 14), child: _card(note, recording)),
+        for (final file in note?.files ?? const <EntryFile>[]) if (!NoteAttachment.placeable(file.id))
+          Padding(padding: const EdgeInsets.only(top: 14), child: _fileBlock(file)),
       ]),
     );
   }

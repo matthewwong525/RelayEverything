@@ -26,6 +26,23 @@ The server seals the file with your space's own key and keeps it in your own fol
 | `404` | The note is not one this device sent, or its list does not name this file. |
 | `413` | The file is larger than 25 MB. |
 
+## Place a file in the words
+
+A note's `text` marks where each file shows, with a line of its own: `![warranty.pdf](attachment:<the file's id>)`. The phone writes the line when you add a file, and shows the file there. A file with no line shows after the words, and a recording the note started with shows first. Your AI and your webhooks read the line as normal text.
+
+## Remove a file
+
+[`PATCH notes`](../reference/#change-a-note) takes `removed`, up to 10 file ids, from the device that sent the note. The server deletes each file's row and its sealed bytes, skips an id the note does not have, and sends one `note.updated` with the files that stay. A file that `attachments` leaves out stays: only `removed` removes one.
+
+```sh
+curl -X PATCH https://<your-relay-server>/apps/relay/api/notes \
+  -H "Authorization: Bearer rek_…" \
+  -H "Content-Type: application/json" \
+  -d '{"clientId":"<the note's clientId>","text":"Lease","editedAt":1763400000000,"removed":["<file id>"]}'
+```
+
+A `removed` from another device's note answers `400` with `not_own`. A removal sent again changes nothing.
+
 ## Open a file
 
 `GET /apps/relay/api/attachment?id=<file id>` sends a file back, with its own `Content-Type`. A signed-in person calls it on the Relay Everything page, and a phone's [device key](../keys/) calls it when you tap a synced note's file in the app. A chat key or an API key can't. A picture opens in the page; any other file downloads with its own name.

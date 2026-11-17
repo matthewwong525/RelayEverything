@@ -524,7 +524,7 @@ String noteTitle(Entry entry) {
 /// What follows the time on a row: the rest of the words, or else the file names the title does not show.
 String _preview(Entry entry) {
   final rest = plainText(entry.text).trim().split('\n').skip(1).map((line) => line.trim()).where((line) => line.isNotEmpty).join(' ');
-  if (rest.isNotEmpty || entry.text.trim().isNotEmpty) return rest;
+  if (rest.isNotEmpty || plainText(entry.text).trim().isNotEmpty) return rest;
   if (entry.recordings.firstOrNull?.noWords ?? false) return 'No words heard';
   if (entry.recordings.isNotEmpty) return entry.files.map((file) => file.name).join(', ');
   return entry.files.skip(1).map((file) => file.name).join(', ');

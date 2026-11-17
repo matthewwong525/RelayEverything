@@ -154,9 +154,9 @@ Future<void> askForModel(BuildContext context, Relay relay) async {
 
 /// *Start a voice note* from Shortcuts or the Action button, or *Record* in note [into]: it records at once, on the same
 /// recording screen as a hold on *New note*, or, with no speech model yet, asks the same question.
-Future<void> recordFromShortcut(BuildContext context, Relay relay, {String? into}) async {
+Future<void> recordFromShortcut(BuildContext context, Relay relay, {String? into, String? id}) async {
   if (relay.speechModel != ModelState.ready) return askForModel(context, relay);
-  final problem = await relay.startVoiceNote(into: into);
+  final problem = await relay.startVoiceNote(into: into, id: id);
   if (context.mounted) _say(context, problem);
 }
 

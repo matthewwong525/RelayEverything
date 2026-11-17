@@ -153,7 +153,7 @@ Files that your server stored before it sent `note.file` go once to each webhook
 
 ### `note.updated`
 
-Relay Everything sends `note.updated` when a phone changes a note's words or a recording's transcript, or adds a file to a note it sent. With [your notes on every phone](../../app/your-notes/#your-notes-on-every-phone), any signed-in phone can change any note, also one from email, and your server sends each change, from any phone, to every active webhook. A phone that sends to your own webhook sends it there itself. It always comes after the note's `note.created`. Each new file then comes in its own [`note.file`](#notefile).
+Relay Everything sends `note.updated` when a phone changes a note's words or a recording's transcript, or adds a file to a note it sent or removes one from it. With [your notes on every phone](../../app/your-notes/#your-notes-on-every-phone), any signed-in phone can change any note, also one from email, and your server sends each change, from any phone, to every active webhook. A phone that sends to your own webhook sends it there itself. It always comes after the note's `note.created`. Each new file then comes in its own [`note.file`](#notefile).
 
 ```json
 {
@@ -175,9 +175,9 @@ Relay Everything sends `note.updated` when a phone changes a note's words or a r
 }
 ```
 
-It holds the same `note` as `note.created`, with its latest words and without `audio`. `edited_at` is when the phone changed the note; an older `note.updated` has none. When two phones change a note, the change with the later `edited_at` is the one your server keeps, and only it sends. `attachments` lists all the note's files, as in `note.created`, with each recording's latest `transcript`, and only a note with files has it. Update the note's row by its `id`, and keep its stored `audio`. A changed note has the same `id`, `recorded_at` and `created_at`.
+It holds the same `note` as `note.created`, with its latest words and without `audio`. `edited_at` is when the phone changed the note; an older `note.updated` has none. When two phones change a note, the change with the later `edited_at` is the one your server keeps, and only it sends. `attachments` lists all the note's files, as in `note.created`, with each recording's latest `transcript`, and only a note with files has it. A file that the list no longer names was removed: delete its rows. Update the note's row by its `id`, and keep its stored `audio`. A changed note has the same `id`, `recorded_at` and `created_at`.
 
-The words keep their styles as Markdown marks, such as `#` for a title, `- [ ]` and `- [x]` for a checklist, and `<u>…</u>` for underline. A receiver that ignores `note.updated` keeps working: it keeps the words from `note.created`.
+The words keep their styles as Markdown marks, such as `#` for a title, `- [ ]` and `- [x]` for a checklist, and `<u>…</u>` for underline. A line `![warranty.pdf](attachment:<id>)` marks where the file with that `id` shows in the words. A receiver that ignores `note.updated` keeps working: it keeps the words from `note.created`.
 
 ### `note.deleted`
 

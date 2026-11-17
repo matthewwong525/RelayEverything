@@ -2602,6 +2602,33 @@ void main() {
       expect([relay.entries.single.text, relay.entries.single.files.length, relay.waiting], ['# Desk lamp', 10, 0]);
     });
 
+    test('a removed file goes from the space with the change; its line coming back, as by Undo, sends it again; a '
+        'closed page deletes its bytes', () async {
+      final relay = withFiles();
+      await relay.load();
+      expect(await relay.connect(pageCode), isNull);
+      await relay.startSending(sendEarlier: false);
+      await relay.addNote('Desk lamp', id: 'n1', files: [picked('receipt.jpg', [1]), picked('lease.pdf', [2])]);
+      await relay.sync();
+      final photo = relay.entries.single.files.first;
+      final line = '![receipt.jpg](attachment:${photo.id})';
+      server.requests.clear();
+      await relay.editNote('n1', '# Desk lamp', removed: {photo.id});
+      await relay.sync();
+      expect([for (final file in relay.entries.single.files) file.name], ['lease.pdf']);
+      expect(jsonDecode(server.requests.single.body)['removed'], [photo.id]);
+      expect(File(photo.path).existsSync(), isTrue, reason: 'Undo may bring it back while the page is open');
+      server.requests.clear();
+      await relay.editNote('n1', '# Desk lamp\n$line');
+      await relay.sync();
+      expect([for (final file in relay.entries.single.files) file.name], ['lease.pdf', 'receipt.jpg']);
+      expect([relay.entries.single.text, server.routes], ['# Desk lamp\n$line', ['notes', 'attachments']]);
+      expect((jsonDecode(server.requests.first.body) as Map).containsKey('removed'), isFalse);
+      await relay.editNote('n1', '# Desk lamp', removed: {photo.id});
+      await relay.closedNote('n1');
+      expect(File(photo.path).existsSync(), isFalse);
+    });
+
     test('opens a file with the phone, and says when it is gone or no app opens it', () async {
       final opened = <(String, String)>[];
       var opens = true;

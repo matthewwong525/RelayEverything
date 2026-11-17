@@ -10,12 +10,23 @@ export const FIRST_END = `SELECT min(deleted_at) + ${KEEP_DELETED} AS at FROM re
 
 type Stored = { id: string; audio_key: string | null; deleted_at: number | null };
 
+/** Deletes the sealed files of note `noteId`'s files, or of only the files `ids` names, at least one, and the files
+ *  `more` names. The rows stay: the caller deletes them after, so a step that fails leaves no row without its file. */
+export async function removeSealed({ db, files }: Pick<PersonSpace, "db" | "files">, noteId: string, ids?: string[],
+  more: string[] = []): Promise<void> {
+  const only = ids ? ` AND id IN (${ids.map(() => "?").join(", ")})` : "";
+  const { results } = await db.prepare(
+    `SELECT file_key FROM relay_attachments WHERE note_id = ? AND file_key IS NOT NULL${only}`).bind(noteId, ...ids ?? [])
+    .all<{ file_key: string }>();
+  const names = [...results.map(row => row.file_key), ...more];
+  if (names.length) await files.remove(names);
+}
+
 /** Deletes the note for good, files first, so a step that fails leaves no row without its file. A note not yet in
  *  Recently Deleted logs one note.deleted; one there already sent it. Says whether it logged. */
-export async function removeForever({ db, files }: Pick<PersonSpace, "db" | "files">, note: Stored): Promise<boolean> {
-  const { results } = await db.prepare("SELECT file_key FROM relay_attachments WHERE note_id = ? AND file_key IS NOT NULL")
-    .bind(note.id).all<{ file_key: string }>();
-  await files.remove([...results.map(row => row.file_key), ...note.audio_key ? [note.audio_key] : []]);
+export async function removeForever(space: Pick<PersonSpace, "db" | "files">, note: Stored): Promise<boolean> {
+  const { db } = space;
+  await removeSealed(space, note.id, undefined, note.audio_key ? [note.audio_key] : []);
   const logged = note.deleted_at === null;
   // Logged at the note's own time, as its note.created is; the files go with the note by their foreign key.
   await db.batch([

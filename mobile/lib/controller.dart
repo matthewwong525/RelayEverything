@@ -16,6 +16,7 @@ import 'data/settings.dart';
 import 'data/sign_in.dart';
 import 'data/store.dart';
 import 'data/webhook.dart';
+import 'editor/markdown.dart' show NoteAttachment, plainText;
 import 'mac/updates.dart';
 import 'relay.dart';
 import 'share/inbox.dart';
@@ -96,10 +97,10 @@ class RelayController extends Relay {
       final fix = _takeVoiceFix();
       _listening = null;
       notifyListeners();
-      final into = _into;
-      _into = null;
+      final (into, id) = (_into, _intoId);
+      _into = _intoId = null;
       if (recording == null) return notice(_stopFailed);
-      unawaited(_keepVoice(recording, fix, into: into).then((problem) => problem == null ? null : notice(problem)));
+      unawaited(_keepVoice(recording, fix, into: into, id: id).then((problem) => problem == null ? null : notice(problem)));
     };
   }
 
@@ -322,7 +323,7 @@ class RelayController extends Relay {
   /// A recording on this phone plays from its path; one only in the person's space by its id, which downloads it. One
   /// whose bytes are still on the phone that made it is not ready.
   EntryRecording _recordingOf(LocalNote note, Attachment file, int filesBefore) => EntryRecording(id: file.id,
-    filesBefore: filesBefore, ready: file.path.isNotEmpty || file.ready,
+    name: file.name, filesBefore: filesBefore, ready: file.path.isNotEmpty || file.ready,
     recording: file.path.isEmpty ? file.id : file.path, length: Duration(milliseconds: file.lengthMs ?? 0),
     transcript: file.transcript, top: file.top, failed: _wordsFailed.containsKey(file.id), why: _wordsFailed[file.id],
     writing: file.transcript == null && note.mine && file.path.isNotEmpty && !file.hereOnly &&
@@ -854,13 +855,49 @@ class RelayController extends Relay {
   Future<String?> addNote(String text, {List<NewFile> files = const [], String? id, bool sendNow = true}) async =>
     (await keepNote(text, files: files, clientId: id, sendNow: sendNow)).problem;
 
+  /// A file whose line comes back, as by *Undo*, after [removed] took it is the note's again while its page is open:
+  /// [closedNote] then deletes its bytes. Text names only the files the note keeps.
   @override
-  Future<String?> editNote(String id, String text, {List<NewFile> files = const [], bool sendNow = true}) async {
-    final check = checkFiles(const [], files, already: (await store.attachmentsOf(id)).length);
+  Future<String?> editNote(String id, String text, {List<NewFile> files = const [], Set<String> removed = const {},
+    bool sendNow = true}) async {
+    final held = {for (final file in await store.attachmentsOf(id)) file.id: file};
+    final named = NoteAttachment.idsIn(text);
+    final back = [
+      for (final file in _removedFiles[id]?.values ?? const <Attachment>[])
+        if (named.contains(file.id) && !held.containsKey(file.id) && !removed.contains(file.id)) ?_unsentOrNull(file),
+    ];
+    final check = checkFiles(const [], files, already: held.keys.where((id) => !removed.contains(id)).length + back.length);
     final (attachments, problems) = await _keepFiles(check.kept, check.problem);
-    if (await store.editNote(id, text, files: attachments, send: _settings.sending, at: _clock())) await _refreshLocal();
+    final known = {...held.keys, ...?_removedFiles[id]?.keys};
+    final after = {...held.keys.where((file) => !removed.contains(file)), ...back.map((file) => file.id),
+      ...attachments.map((file) => file.id)};
+    if (await store.editNote(id, NoteAttachment.without(text, known.difference(after)), files: [...back, ...attachments],
+        removed: removed, send: _settings.sending, at: _clock())) {
+      final now = {for (final file in await store.attachmentsOf(id)) file.id};
+      final gone = _removedFiles.putIfAbsent(id, () => {});
+      for (final file in held.values) {
+        if (!now.contains(file.id)) gone[file.id] = file;
+      }
+      gone.removeWhere((fileId, _) => now.contains(fileId));
+      await _refreshLocal();
+    }
     if (sendNow) unawaited(sync());
     return problems.isEmpty ? null : problems.join(' ');
+  }
+
+  /// Files the person removed from a note whose page is still open, by note and file id: *Undo* puts one back.
+  final Map<String, Map<String, Attachment>> _removedFiles = {};
+
+  /// A removed file as one to send again; one with no bytes on this phone can not come back.
+  static Attachment? _unsentOrNull(Attachment file) => file.path.isEmpty ? null : Attachment(id: file.id, name: file.name,
+    type: file.type, size: file.size, path: file.path, lengthMs: file.lengthMs, transcript: file.transcript, top: file.top);
+
+  @override
+  Future<void> closedNote(String id) async {
+    final gone = _removedFiles.remove(id)?.values ?? const <Attachment>[];
+    for (final file in gone) {
+      if (file.path.isNotEmpty) await _deleteQuietly(File(fullPath(file.path)));
+    }
   }
 
   @override
@@ -981,9 +1018,9 @@ class RelayController extends Relay {
   }
 
   /// A new recording's file row, at `attachments/<id>.wav`, whose words are not written yet.
-  static Attachment _newRecording(int size, int lengthMs, {bool top = false}) {
-    final id = newClientId();
-    return Attachment(id: id, name: 'Recording.wav', type: 'audio/wav', size: size, path: 'attachments/$id.wav',
+  static Attachment _newRecording(int size, int lengthMs, {bool top = false, String? id}) {
+    final name = id ?? newClientId();
+    return Attachment(id: name, name: 'Recording.wav', type: 'audio/wav', size: size, path: 'attachments/$name.wav',
       lengthMs: lengthMs, wordsPending: true, top: top);
   }
 
@@ -996,7 +1033,7 @@ class RelayController extends Relay {
   Future<Attachment?> _keepFile(NewFile file) async {
     final root = _root ?? (await folder?.call())?.path;
     if (root == null) return null;
-    return keepFile(root, file, newClientId());
+    return keepFile(root, file, file.id ?? newClientId());
   }
 
   /// Ends when each new note's point is kept, and the sync after it is done. Shortcuts waits on it, so a note goes
@@ -1273,11 +1310,12 @@ class RelayController extends Relay {
   }
 
   @override
-  Future<String?> startVoiceNote({String? into}) async {
+  Future<String?> startVoiceNote({String? into, String? id}) async {
     final parts = voice;
     if (parts == null || parts.model.state != ModelState.ready || _starting != null || parts.recorder.recording) return null;
     if (into != null && (await store.attachmentsOf(into)).length >= maxFiles) return _full;
     _into = into;
+    _intoId = id;
     final bool allowed;
     try {
       allowed = await (_starting = parts.recorder.start(newClientId()));
@@ -1322,8 +1360,8 @@ class RelayController extends Relay {
     await _started();
     final fix = _takeVoiceFix();
     if (!parts.recorder.recording) return null;
-    final into = _into;
-    _into = null;
+    final (into, id) = (_into, _intoId);
+    _into = _intoId = null;
     final Recording? recording;
     try {
       recording = await parts.recorder.stop();
@@ -1335,11 +1373,13 @@ class RelayController extends Relay {
       notifyListeners();
     }
     if (recording == null) return _tooShort;
-    return _keepVoice(recording, fix, into: into);
+    return _keepVoice(recording, fix, into: into, id: id);
   }
 
   /// The note a recording started with *Record* goes into; null for a new voice note.
   String? _into;
+  /// The id the note's page gave the recording, so it can place it; null makes a new one.
+  String? _intoId;
 
   /// The fix the voice note took as it started, now that it ends; a note that is not kept drops it.
   Future<Pin?>? _takeVoiceFix() {
@@ -1354,7 +1394,7 @@ class RelayController extends Relay {
     if (parts == null) return;
     await _started();
     _voiceFix = null;
-    _into = null;
+    _into = _intoId = null;
     try {
       await parts.recorder.cancel();
     } catch (_) {
@@ -1420,7 +1460,7 @@ class RelayController extends Relay {
   /// Shows the recording at once in a new voice note, or in note [into], with no words yet, and writes them in the
   /// background. Returns the words to show when the phone could not keep it, such as a full disk; then its recording is
   /// deleted too. A kept new note adds [fix], the fix taken as it started, as its point.
-  Future<String?> _keepVoice(Recording recording, Future<Pin?>? fix, {String? into}) async {
+  Future<String?> _keepVoice(Recording recording, Future<Pin?>? fix, {String? into, String? id}) async {
     final parts = voice!;
     final source = await parts.recorder.fileOf(recording.audioPath);
     final File target;
@@ -1428,7 +1468,7 @@ class RelayController extends Relay {
     final Attachment file;
     var full = false;
     try {
-      file = _newRecording(await source.length(), recording.length.inMilliseconds, top: into == null);
+      file = _newRecording(await source.length(), recording.length.inMilliseconds, top: into == null, id: id);
       target = await _fileOf(file.path);
       await _moveTo(source, target.path);
     } catch (_) {
@@ -1564,7 +1604,7 @@ class RelayController extends Relay {
   Future<bool> _silentNewNote(String clientId) async {
     final note = (await store.notes()).where((note) => note.clientId == clientId).firstOrNull;
     return note != null && note.kind == NoteKind.voice && !note.fromWatch && note.sentAt == null &&
-      note.text.trim().isEmpty && note.attachments.length == 1;
+      plainText(note.text).trim().isEmpty && note.attachments.length == 1;
   }
 
   /// Deletes a recording, or does nothing when the sweep for stray recordings deleted it first.

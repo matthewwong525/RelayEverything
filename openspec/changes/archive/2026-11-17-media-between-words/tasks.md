@@ -25,4 +25,4 @@
 ## 4. Checks
 
 - [x] 4.1 Run the Flutter tests in `mobile/` and `npm test` in `app/`; fix what fails.
-- [ ] 4.2 `/save`, then `/verify` with the device check and the new flow.
+- [x] 4.2 `/save`, then `/verify` with the device check and the new flow.

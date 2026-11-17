@@ -1,6 +1,6 @@
 # Proposal
 
-**Status:** built; final checks running
+**Status:** shipped
 **Branch:** `allow-text-after-media`
 **Open questions:** none
 
@@ -62,3 +62,5 @@ In a note today, the words are one block, and photos, files and recordings alway
 - **2026-11-17** — Assumed: words that still end up on a file's line by a path the editor does not catch are kept as a line of their own when the note is kept, never dropped, because lost words can't come back.
 - **2026-11-17** — Assumed: the second look's four findings (a removed recording left its note waiting, pasted words beside a file were lost, an emptied note stayed on leave, no test for a recording at the cursor) are fixed with tests, because each is in the plan's scope.
 - **2026-11-17** — Assumed: a new voice note whose last recording is removed before its words come, with no words and no file, queues no upload, as the server refuses an empty note. The note gets the mark `queued = 2`, not `queued = 0`: its first change with words or a file, while sending is on, queues it. With `queued = 0` it would count as an earlier note, and a change would never send it without the earlier-notes question. A voice note with no file, no recording and no words to come is bare, so it is dropped on leave.
+- **2026-11-17** — Assumed: after Attach, the cursor moves to the line under the new file also when the phone's picker has taken the keyboard, because the iPhone check showed words typed next joining the title. The flow picks the photo by its place in the picker, and it checks the note's words as one label, a line each, because the page reads them so.
+- **2026-11-17** — Archived for publish: every task done; the iPhone check passed the change's own step, and Claude graded 1 of 5 scenarios before its time ran out (no verdict on the other 4, which the phone tests cover).

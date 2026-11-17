@@ -40,10 +40,10 @@ appId: com.matthewwong525.relayApp
     visible: 'Lease photo(.|\n)*'
     timeout: 30000
 - tapOn: 'Lease photo(.|\n)*'
+# The page reads its words as one label, a line each: the words typed after the photo start a new line, not the
+# title's. The photo has a label of its own, the simulator photo's file name.
 - extendedWaitUntil:
-    visible: "Signed copy"
+    visible: 'Lease photo\nSigned copy'
     timeout: 30000
-- assertVisible:
-    text: "Signed copy"
-    below: "Lease photo"
+- assertVisible: 'IMG_.*'
 - takeScreenshot: media-between-words

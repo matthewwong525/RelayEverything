@@ -265,7 +265,8 @@ const _pinColumns = 'pinned_at INTEGER, pin_changed_at INTEGER, pin_unsent INTEG
 const _schema = [
   'CREATE TABLE outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, destination TEXT NOT NULL DEFAULT \'$relayServer\', route TEXT NOT NULL, '
     'body TEXT NOT NULL, created_at INTEGER NOT NULL)',
-  // queued = 1: the note has its upload. pinning: unused since version 12, when a note stopped keeping a place.
+  // queued = 1: the note has its upload; 2: sending was on when it was ready, but it had no words or file to send, so
+  // its first change that gives it one queues its upload. pinning: unused since version 12, when a note stopped keeping a place.
   // words_pending = 1: a voice note still waits for its words, so no upload can go without them.
   'CREATE TABLE notes (client_id TEXT PRIMARY KEY, body TEXT NOT NULL, created_at INTEGER NOT NULL, sent_at INTEGER, '
     'queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0, $_voiceColumns, edited_at INTEGER, $_syncColumns, '
@@ -612,10 +613,11 @@ class Store extends GeneratedDatabase {
   /// go after. False when nothing changed, or the note is gone, deleted or waits for its words. A note changes by its
   /// server id once a pull saved one, and a note from elsewhere's new files stay on this phone. A note that waits for a
   /// recording's words keeps the change and queues nothing: [_settle] sends it with the words, or at once when the
-  /// change removed the last recording it waited for.
+  /// change removed the last recording it waited for. A note that had nothing to send when it was ready goes with the
+  /// first change, with [send], that gives it words or a file.
   Future<bool> editNote(String clientId, String text, {List<Attachment> files = const [], Set<String> removed = const {},
     required bool send, required DateTime at}) => transaction(() async {
-    final notes = await _rows('SELECT body, sent_at, server_id, mine, words_pending FROM notes '
+    final notes = await _rows('SELECT body, sent_at, server_id, mine, words_pending, queued FROM notes '
       'WHERE client_id = ? AND deleted_at IS NULL', [clientId]);
     if (notes.isEmpty) return false;
     final old = _noteOf(jsonDecode(notes.single.read<String>('body')) as Map<String, dynamic>);
@@ -642,6 +644,13 @@ class Store extends GeneratedDatabase {
       await _run('UPDATE outbox SET body = ? WHERE id = ?', [jsonEncode(route == 'notes' ? body : change), waiting.single.read<int>('id')]);
     } else if (send && notes.single.read<int?>('sent_at') != null) {
       await enqueue(noteUpdate, change);
+    } else if (send && notes.single.read<int>('queued') == _queueOnEdit) {
+      // A note that had nothing to send when it was ready goes now, with its files, once it has words or a file.
+      if (!_blank(body)) {
+        await _queue(body);
+        await _run('UPDATE notes SET queued = 1 WHERE client_id = ?', [clientId]);
+      }
+      return true;
     } else {
       await _run('UPDATE notes SET edit_unsent = 1 WHERE client_id = ?', [clientId]);
       return true;
@@ -879,8 +888,9 @@ class Store extends GeneratedDatabase {
   });
 
   /// Once none of its recordings waits for words, note [clientId] goes with its newest files and transcripts: a waiting
-  /// upload takes them, a sent note gets a change, and, with [queueNew], one never queued gets its upload; each file
-  /// not sent follows. With [send] false, a sent note's change waits for the next pull.
+  /// upload takes them, a sent note gets a change, and, with [queueNew], one never queued gets its upload, or with no
+  /// words and no file waits for a change that gives it one; each file not sent follows. With [send] false, a sent
+  /// note's change waits for the next pull.
   Future<void> _settle(String clientId, {required bool send, required DateTime at, bool queueNew = true}) async {
     await _run('UPDATE notes SET words_pending = EXISTS (SELECT 1 FROM attachments WHERE note_client_id = ? '
       'AND words_pending = 1) WHERE client_id = ?', [clientId, clientId]);
@@ -903,14 +913,27 @@ class Store extends GeneratedDatabase {
       await _run('UPDATE notes SET edited_at = ?, edit_unsent = ? WHERE client_id = ?', [editedAt, send ? 0 : 1, clientId]);
       if (!send) return;
       await enqueue(noteUpdate, _changeOf(body, editedAt, serverId: serverId, mine: mine, removed: await _removedOf(clientId)));
-    } else if (row.read<int>('queued') == 0) {
+    } else if (row.read<int>('queued') != 1) {
       if (!send || !queueNew) return;
+      // The server refuses a note with no words and no file: it waits for a change that gives it one.
+      if (_blank(body)) {
+        await _run('UPDATE notes SET queued = $_queueOnEdit WHERE client_id = ?', [clientId]);
+        return;
+      }
       await _queue(body);
       await _run('UPDATE notes SET queued = 1 WHERE client_id = ?', [clientId]);
       return;
     }
     if (mine) await _queueFiles(clientId);
   }
+
+  /// The `queued` mark of a note that had no words or file to send when it was ready: its first change that gives it one
+  /// queues its upload.
+  static const _queueOnEdit = 2;
+
+  /// True when an upload of note [body] holds no words and no file, which the server refuses.
+  static bool _blank(Map<String, dynamic> body) =>
+    (body['text'] as String).trim().isEmpty && ((body['attachments'] as List?)?.isEmpty ?? true);
 
   /// Queues the upload of each of note [clientId]'s files on this phone that is not sent and not queued yet.
   Future<void> _queueFiles(String clientId) async {
@@ -927,8 +950,9 @@ class Store extends GeneratedDatabase {
     await _run('DELETE FROM attachments WHERE note_client_id = ? AND note_client_id NOT IN (SELECT client_id FROM notes)', [clientId]);
   });
 
-  // A typed note with no file, recording or words to come: blank words leave nothing in it.
-  static const _bare = "kind = 'typed' AND words_pending = 0 "
+  // A note with no file, recording or words to come, such as a voice note whose recording was removed: blank words
+  // leave nothing in it. A voice note from before version 16 with its recording beside it is never bare.
+  static const _bare = "words_pending = 0 AND audio_path IS NULL "
     'AND NOT EXISTS (SELECT 1 FROM attachments WHERE note_client_id = notes.client_id)';
 
   /// True when blank words leave nothing in the note: it has no file or recording, and waits for no words.

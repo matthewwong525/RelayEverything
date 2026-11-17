@@ -188,6 +188,29 @@ void main() {
       expect([await store.isBare('n2'), await store.dropEmptyNote('n2')], [isTrue, isTrue]);
     });
 
+    test('a new voice note\'s recording removed while being written sends no empty note: the words typed after go',
+        () async {
+      await store.addVoiceNote(LocalNote(clientId: 'v', text: '', createdAt: at, kind: NoteKind.voice,
+        attachments: [recording('r')]));
+      expect(await store.editNote('v', '', removed: {'r'}, send: true, at: later), isTrue);
+      expect([await store.outbox(), await store.earlierCount()], [isEmpty, 0]);
+      expect(await store.editNote('v', 'Call the bank', send: true, at: later.add(const Duration(minutes: 1))), isTrue);
+      final server = FakeServer();
+      expect((await flush(store, server.api(connection), clock: () => at)).sent, 1);
+      final request = server.requests.single;
+      expect([request.method, request.url.path, jsonDecode(request.body)['text']],
+        ['POST', '/apps/relay/api/notes', 'Call the bank']);
+      expect([(await kept('v')).sentAt, await store.outbox()], [isNotNull, isEmpty]);
+    });
+
+    test('a new voice note\'s recording removed while being written, left with no words, is dropped', () async {
+      await store.addVoiceNote(LocalNote(clientId: 'v', text: '', createdAt: at, kind: NoteKind.voice,
+        attachments: [recording('r')]));
+      await store.editNote('v', '', removed: {'r'}, send: true, at: later);
+      expect([await store.isBare('v'), await store.dropEmptyNote('v')], [isTrue, isTrue]);
+      expect([await store.notes(), await store.outbox()], [isEmpty, isEmpty]);
+    });
+
     test('a recording removed while another is still being written leaves the note waiting for those words', () async {
       await store.addNote(note('n1', 'Fab call'));
       await store.addRecording('n1', recording('r1', top: false));

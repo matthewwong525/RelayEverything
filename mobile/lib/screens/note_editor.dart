@@ -438,10 +438,11 @@ class NoteEditorState extends State<NoteEditor> {
     }
     for (final MapEntry(key: at, value: files) in asked.entries) {
       final place = placeFiles(_controller.document, files, at);
-      final focused = _focus.hasFocus;
-      _controller.ignoreFocusOnTextChange = !focused;
+      _controller.ignoreFocusOnTextChange = !_focus.hasFocus;
       _controller.compose(place.change, _controller.selection, ChangeSource.local);
-      if (focused) _controller.updateSelection(TextSelection.collapsed(offset: place.caret), ChangeSource.local);
+      // A place asked at the cursor moves the cursor under the files, also while a picker or the recording screen
+      // has the keyboard: the words typed next go under them.
+      if (at != null) _controller.updateSelection(TextSelection.collapsed(offset: place.caret), ChangeSource.local);
       _controller.ignoreFocusOnTextChange = false;
     }
     final rest = [for (final file in missing) if (!asked.values.any((files) => files.contains(file))) file];
@@ -787,6 +788,10 @@ class NoteEditorState extends State<NoteEditor> {
 
   /// *Attach* → *Photos* or *Files*. The browser has one picker for every kind of file.
   Future<void> _attach({required bool photos}) async {
+    // The cursor's place before the picker: the phone's picker takes the keyboard while it is open. The files go
+    // there once the note keeps them.
+    final editing = _focus.hasFocus;
+    final at = editing ? _controller.selection.start : null;
     final List<NewFile> picked;
     try {
       picked = await (widget.picker ?? pickWithPhone)(photos: photos);
@@ -794,9 +799,7 @@ class NoteEditorState extends State<NoteEditor> {
       return _say('The ${relay.web ? 'browser' : relay.desktop ? 'Mac' : 'phone'} did not give the file. Try again.');
     }
     if (!mounted || picked.isEmpty) return;
-    // The cursor's place before the save: the files go there once the note keeps them.
-    final at = _focus.hasFocus ? _controller.selection.start : null;
-    _save(sendNow: !_focus.hasFocus, files: _placed(picked, at));
+    _save(sendNow: !editing && !_focus.hasFocus, files: _placed(picked, at));
   }
 
   /// [files], each with the id the note will keep it by, and asked to go at [at], or at the end.

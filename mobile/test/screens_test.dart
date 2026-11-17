@@ -4234,6 +4234,27 @@ void main() {
       expect(relay.calls.last, startsWith('edit # Desk lamp\n![receipt.jpg](attachment:$id)\nBought on Monday'));
     });
 
+    testWidgets('the cursor goes under a photo also when the picker takes the keyboard, so the words typed next go there',
+        (tester) async {
+      relay.keepsEdits = true;
+      await tester.pumpWidget(RelayApp(relay: relay, picker: ({required photos}) async {
+        // The phone's picker takes the keyboard while it is open.
+        FocusManager.instance.primaryFocus?.unfocus();
+        return [const NewFile(path: '/picked/a.jpg', name: 'lease.jpg', size: 10)];
+      }));
+      await openFolder(tester, 'Notes');
+      await tester.tap(newNote);
+      await tester.pumpAndSettle();
+      await type(tester, 'Lease photo');
+      await tester.tap(find.byTooltip('Attach'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Photos'));
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      await type(tester, 'Signed copy');
+      expect(markdownOf(tester), matches(RegExp(r'^# Lease photo\n!\[lease\.jpg\]\(attachment:[^)]+\)\nSigned copy\n?$')));
+    });
+
     testWidgets('Record shows in both bars on a phone, and records into the open note on the recording screen',
         (tester) async {
       relay.entries = [Entry(id: 'n1', text: 'Fab call', at: now)];

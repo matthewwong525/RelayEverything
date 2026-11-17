@@ -1,4 +1,4 @@
-# A photo in a note's words: type a title, Attach → Photos picks a simulator photo, which goes under the title, and
+# A photo in a note's words: type a title, Attach → Photos marks a simulator photo and its check adds it, which goes under the title, and
 # words typed next go under the photo. Close and open the note: the words still show under the photo. Not in the fixed
 # tour: a check names it, `--flows media-between-words`.
 appId: com.matthewwong525.relayApp
@@ -25,6 +25,10 @@ appId: com.matthewwong525.relayApp
 - tapOn:
     text: 'Photo, (.|\n)*'
     index: 0
+# The picker takes several photos: a tap only marks one, and the blue check at the top right adds it. It is outside
+# the app, so tap its place.
+- tapOn:
+    point: "90%,13%"
 - extendedWaitUntil:
     notVisible: 'Photo, (.|\n)*'
     timeout: 30000

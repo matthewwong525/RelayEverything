@@ -1,6 +1,6 @@
-# A photo in a note's words: type a title, Attach → Photos marks a simulator photo and its check adds it, which goes under the title, and
-# words typed next go under the photo. Close and open the note: the words still show under the photo. Not in the fixed
-# tour: a check names it, `--flows media-between-words`.
+# A photo in a note's words: type a title, then Attach → Photos adds a simulator photo under it, and words typed next
+# go under the photo. Close and open the note: the words still show under the photo. Not in the fixed tour: a check
+# names it, `--flows media-between-words`.
 appId: com.matthewwong525.relayApp
 ---
 - launchApp:
@@ -18,31 +18,17 @@ appId: com.matthewwong525.relayApp
 # The bar over the keyboard has Attach; its menu has Photos and Files.
 - tapOn: "Attach"
 - tapOn: "Photos"
-# The iOS photo picker labels each photo "Photo, <date>"; the simulator has its sample photos.
-- extendedWaitUntil:
-    visible: 'Photo, (.|\n)*'
-    timeout: 30000
+# The iOS photo picker runs outside the app, and the check can't always read its photos by name, so tap by place.
+- waitForAnimationToEnd:
+    timeout: 5000
+# 45% down lands on a photo whether the picker's notice shows (first row) or not (second row).
 - tapOn:
-    text: 'Photo, (.|\n)*'
-    index: 0
-    waitToSettleTimeoutMs: 2000
-# A notice at the picker's top can go away and move the photos, so tap again until the picker counts one photo.
-- repeat:
-    while:
-      visible: "Select Items"
-    times: 4
-    commands:
-      - tapOn:
-          text: 'Photo, (.|\n)*'
-          index: 0
-          waitToSettleTimeoutMs: 2000
-- assertNotVisible: "Select Items"
-# The picker takes several photos: a tap only marks one, and the blue check at the top right adds it. It is outside
-# the app, so tap its place.
+    point: "16%,45%"
+# The picker takes several photos: a tap only marks one, and the blue check at the top right adds it.
 - tapOn:
     point: "90%,13%"
 - extendedWaitUntil:
-    notVisible: 'Photo, (.|\n)*'
+    visible: "Done"
     timeout: 30000
 # The cursor was on the last line, so the photo goes at the end and the cursor waits on the empty line under it.
 - inputText: "Signed copy"

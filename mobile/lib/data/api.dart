@@ -69,15 +69,17 @@ class RelayApi implements Outbound {
     }
   }
 
-  /// A sent note's newest words, edit time and the file list the store gave it, by its server `id` once a pull saved one,
-  /// else by its `clientId`. A 404 (no such note, or an old server) or a 409 (a newer change is kept) is dropped; the
-  /// pull then takes it. A 400 with files, as when a new key made this phone another device, goes once more without
-  /// them, so the words still land; with no words it can not land, so it is dropped and [Store.keepHere] keeps them.
+  /// A sent note's newest words, edit time, and the file list and removed files the store gave it, by its server `id`
+  /// once a pull saved one, else by its `clientId`. A 404 (no such note, or an old server) or a 409 (a newer change is
+  /// kept) is dropped; the pull then takes it. A 400 with files, as when a new key made this phone another device, goes
+  /// once more without them, so the words still land; with no words it can not land, so it is dropped and
+  /// [Store.keepHere] keeps them.
   Future<void> _change(Map<String, dynamic> body) async {
     try {
       await _patchNote(body, withFiles: true);
     } on ApiException catch (error) {
-      if (error.status != 400 || body['attachments'] == null || (body['text'] as String? ?? '').trim().isEmpty) rethrow;
+      final files = body['attachments'] != null || body['removed'] != null;
+      if (error.status != 400 || !files || (body['text'] as String? ?? '').trim().isEmpty) rethrow;
       await _patchNote(body, withFiles: false);
     }
   }
@@ -86,7 +88,8 @@ class RelayApi implements Outbound {
     headers: {..._headers, 'Content-Type': 'application/json'}, body: jsonEncode({
       if (body['id'] != null) 'id': body['id'] else 'clientId': body['clientId'],
       'text': body['text'], if (body['editedAt'] != null) 'editedAt': body['editedAt'],
-      if (withFiles && body['attachments'] != null) 'attachments': body['attachments']})),
+      if (withFiles && body['attachments'] != null) 'attachments': body['attachments'],
+      if (withFiles && body['removed'] != null) 'removed': body['removed']})),
     rejected: const {400, 404, 409, 413});
 
   /// A note deleted on the phone, by its server `id` once a pull saved one, else by its `clientId`: moved to *Recently

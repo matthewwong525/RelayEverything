@@ -54,11 +54,13 @@ class Entry {
 
 /// One recording on a note, with its transcript: kept on this phone, or in the person's space until it plays.
 class EntryRecording {
-  const EntryRecording({this.id = '', required this.recording, this.length, this.transcript, this.writing = false,
+  const EntryRecording({this.id = '', this.name = 'Recording', required this.recording, this.length, this.transcript, this.writing = false,
     this.failed = false, this.why, this.top = false, this.ready = true, this.filesBefore = 0});
 
   /// The recording's file id: [Relay.editTranscript] takes it.
   final String id;
+  /// The recording's file name, which the note's text shows at its place.
+  final String name;
   /// What [Relay.play] takes: its path on this device, its id while only in the person's space, or in the browser its
   /// address.
   final String recording;
@@ -350,9 +352,14 @@ abstract class Relay extends ChangeNotifier {
   /// as one over 25 MB, or for a note with nothing in it; null when all of it was kept. With [sendNow] false it waits
   /// for the next sync, as the editor saves while the person types.
   Future<String?> addNote(String text, {List<NewFile> files = const [], String? id, bool sendNow = true});
-  /// Keeps the person's change to note [id]: its new words and files added. A sent note's change goes at the next sync,
-  /// and with [sendNow] at once. Returns the words to show for files left out; null when all of it was kept.
-  Future<String?> editNote(String id, String text, {List<NewFile> files = const [], bool sendNow = true});
+  /// Keeps the person's change to note [id]: its new words, files added, and the files [removed] names. A sent note's
+  /// change goes at the next sync, and with [sendNow] at once. Returns the words to show for files left out; null when
+  /// all of it was kept.
+  Future<String?> editNote(String id, String text, {List<NewFile> files = const [], Set<String> removed = const {},
+    bool sendNow = true});
+  /// The page of note [id] closed: a file it removed can come back by *Undo* no more, so its bytes go for good. The
+  /// phone keeps them until then; the browser keeps none, so there a removed file stays removed.
+  Future<void> closedNote(String id) async {}
   /// Deletes note [id] for good, as Apple Notes does when you leave a note with no words: the editor calls it once the
   /// words are blank. A note never sent, with no upload, goes from this phone at once; a sent note, or one whose upload
   /// waits or is on its way, is deleted for good everywhere, as [deleteForever] does. It never goes to *Recently
@@ -433,10 +440,10 @@ abstract class Relay extends ChangeNotifier {
   Stream<double>? get level;
   /// True once a first voice note started on this phone, from any start: *New note* then shows no *Hold to talk*.
   bool get holdTipSeen;
-  /// A hold on *New note*: starts a voice note, or with [into] a recording that goes into that note, as *Record* does.
-  /// Returns the words to show when it can not, such as a refused microphone, one that did not start, or a note that
-  /// holds 10 files already; it does not throw.
-  Future<String?> startVoiceNote({String? into});
+  /// A hold on *New note*: starts a voice note, or with [into] a recording that goes into that note as file [id], as
+  /// *Record* does. Returns the words to show when it can not, such as a refused microphone, one that did not start,
+  /// or a note that holds 10 files already; it does not throw.
+  Future<String?> startVoiceNote({String? into, String? id});
   /// A tap anywhere or the back gesture: keeps the note and writes its words. Returns the words to show for one too
   /// short to keep, for a microphone that did not stop, or for a note the phone could not keep; then nothing is kept.
   /// [listening] is null after it in every case.

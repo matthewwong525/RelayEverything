@@ -1,0 +1,49 @@
+# A photo in a note's words: type a title, then Attach → Photos adds a simulator photo under it, and words typed next
+# go under the photo. Close and open the note: the words still show under the photo. Not in the fixed tour: a check
+# names it, `--flows media-between-words`.
+appId: com.matthewwong525.relayApp
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: 'Home(.|\n)*'
+    timeout: 60000
+# A row's label joins its name and its count, so match its start.
+- tapOn: 'Notes(.|\n)*'
+- tapOn: "New note"
+- extendedWaitUntil:
+    visible: "Done"
+    timeout: 30000
+- inputText: "Lease photo"
+# The bar over the keyboard has Attach; its menu has Photos and Files.
+- tapOn: "Attach"
+- tapOn: "Photos"
+# The iOS photo picker runs outside the app, and the check can't always read its photos by name, so tap by place.
+- waitForAnimationToEnd:
+    timeout: 5000
+# 45% down lands on a photo whether the picker's notice shows (first row) or not (second row).
+- tapOn:
+    point: "16%,45%"
+# The picker takes several photos: a tap only marks one, and the blue check at the top right adds it.
+- tapOn:
+    point: "90%,13%"
+- extendedWaitUntil:
+    visible: "Done"
+    timeout: 30000
+# The cursor was on the last line, so the photo goes at the end and the cursor waits on the empty line under it.
+- inputText: "Signed copy"
+- tapOn: "Done"
+- takeScreenshot: media-between-words-typed
+# The back button's label joins Back and the folder it names, and a row joins its lines, so match their start.
+- tapOn: 'Back(.|\n)*'
+- extendedWaitUntil:
+    visible: 'Lease photo(.|\n)*'
+    timeout: 30000
+- tapOn: 'Lease photo(.|\n)*'
+# The page reads its words as one label, a line each: the words typed after the photo start a new line, not the
+# title's. The photo has a label of its own, the simulator photo's file name.
+- extendedWaitUntil:
+    visible: 'Lease photo\nSigned copy'
+    timeout: 30000
+- assertVisible: 'IMG_.*'
+- takeScreenshot: media-between-words

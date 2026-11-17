@@ -10,7 +10,7 @@ const maxFileBytes = 25 * 1024 * 1024;
 
 /// A file the person picked, or one a shortcut gave, before the app keeps its own copy.
 class NewFile {
-  const NewFile({this.path = '', required this.name, required this.size, this._type, this.move = false, this.bytes});
+  const NewFile({this.path = '', required this.name, required this.size, this._type, this.move = false, this.bytes, this.id});
 
   /// Where the file is now, as a full path; empty in the browser, which gives [bytes].
   final String path;
@@ -22,6 +22,12 @@ class NewFile {
 
   /// True when the file is the app's own copy, such as one a shortcut gave: the app moves it, and copies nothing.
   final bool move;
+
+  /// The id the note keeps the file by, made by the note's page so it can place the file; null makes a new one.
+  final String? id;
+
+  /// The same file, kept by [id].
+  NewFile withId(String id) => NewFile(path: path, name: name, size: size, type: _type, move: move, bytes: bytes, id: id);
 
   /// The content type, from the giver or else from the name.
   String get type => _type == null || _type.isEmpty ? typeOf(name) : _type;

@@ -265,7 +265,8 @@ const _pinColumns = 'pinned_at INTEGER, pin_changed_at INTEGER, pin_unsent INTEG
 const _schema = [
   'CREATE TABLE outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, destination TEXT NOT NULL DEFAULT \'$relayServer\', route TEXT NOT NULL, '
     'body TEXT NOT NULL, created_at INTEGER NOT NULL)',
-  // queued = 1: the note has its upload. pinning: unused since version 12, when a note stopped keeping a place.
+  // queued = 1: the note has its upload; 2: sending was on when it was ready, but it had no words or file to send, so
+  // its first change that gives it one queues its upload. pinning: unused since version 12, when a note stopped keeping a place.
   // words_pending = 1: a voice note still waits for its words, so no upload can go without them.
   'CREATE TABLE notes (client_id TEXT PRIMARY KEY, body TEXT NOT NULL, created_at INTEGER NOT NULL, sent_at INTEGER, '
     'queued INTEGER NOT NULL DEFAULT 0, pinning INTEGER NOT NULL DEFAULT 0, $_voiceColumns, edited_at INTEGER, $_syncColumns, '
@@ -606,36 +607,50 @@ class Store extends GeneratedDatabase {
     if (item.route == 'notes') await _run("UPDATE outbox SET route = '$noteUpdate' WHERE id = ?", [item.id]);
   });
 
-  /// Keeps the person's change to a note: its new [text], and [files] added. A note not sent yet changes its waiting
-  /// upload, or none; a sent note with [send] gets one change upload, and a change still waiting takes the new words.
-  /// New files' uploads go after. False when nothing changed, or the note is gone, deleted or waits for its words.
-  /// A note changes by its server id once a pull saved one, and a note from elsewhere's new files stay on this phone.
-  /// A note that waits for a recording's words keeps the change and queues nothing: [_settle] sends it with the words.
-  Future<bool> editNote(String clientId, String text, {List<Attachment> files = const [], required bool send,
-    required DateTime at}) => transaction(() async {
-    final notes = await _rows('SELECT body, sent_at, server_id, mine, words_pending FROM notes '
+  /// Keeps the person's change to a note: its new [text], [files] added, and the files [removed] names, whose rows and
+  /// waiting uploads go while their bytes stay for the caller. A note not sent yet changes its waiting upload, or none;
+  /// a sent note with [send] gets one change upload, and a change still waiting takes the new words. New files' uploads
+  /// go after. False when nothing changed, or the note is gone, deleted or waits for its words. A note changes by its
+  /// server id once a pull saved one, and a note from elsewhere's new files stay on this phone. A note that waits for a
+  /// recording's words keeps the change and queues nothing: [_settle] sends it with the words, or at once when the
+  /// change removed the last recording it waited for. A note that had nothing to send when it was ready goes with the
+  /// first change, with [send], that gives it words or a file.
+  Future<bool> editNote(String clientId, String text, {List<Attachment> files = const [], Set<String> removed = const {},
+    required bool send, required DateTime at}) => transaction(() async {
+    final notes = await _rows('SELECT body, sent_at, server_id, mine, words_pending, queued FROM notes '
       'WHERE client_id = ? AND deleted_at IS NULL', [clientId]);
     if (notes.isEmpty) return false;
     final old = _noteOf(jsonDecode(notes.single.read<String>('body')) as Map<String, dynamic>);
-    if (old.text == text && files.isEmpty) return false;
+    if (old.text == text && files.isEmpty && removed.isEmpty) return false;
+    final mine = notes.single.read<int>('mine') == 1;
+    if (mine) await _remove(clientId, removed, back: {for (final file in files) file.id});
     for (final file in files) {
       await _insertFile(clientId, file);
     }
     final body = LocalNote(clientId: clientId, text: text, createdAt: old.createdAt,
       attachments: await attachmentsOf(clientId)).toJson();
-    final mine = notes.single.read<int>('mine') == 1;
-    final change = _changeOf(body, at.millisecondsSinceEpoch, serverId: notes.single.read<String?>('server_id'), mine: mine);
+    final change = _changeOf(body, at.millisecondsSinceEpoch, serverId: notes.single.read<String?>('server_id'), mine: mine,
+      removed: await _removedOf(clientId));
     await _run('UPDATE notes SET body = ?, edited_at = ?, edit_unsent = 0 WHERE client_id = ?',
       [jsonEncode(body), at.millisecondsSinceEpoch, clientId]);
     final waiting = await _waitingUpload(clientId);
     if (notes.single.read<int>('words_pending') == 1) {
-      await _run('UPDATE notes SET edit_unsent = 1 WHERE client_id = ?', [clientId]);
+      // A removed recording no longer holds the note: with no other words to come, it goes as when the last words come.
+      await _settle(clientId, send: send, at: at);
+      await _run('UPDATE notes SET edit_unsent = 1 WHERE client_id = ? AND words_pending = 1', [clientId]);
       return true;
     } else if (waiting.isNotEmpty) {
       final route = waiting.single.read<String>('route');
       await _run('UPDATE outbox SET body = ? WHERE id = ?', [jsonEncode(route == 'notes' ? body : change), waiting.single.read<int>('id')]);
     } else if (send && notes.single.read<int?>('sent_at') != null) {
       await enqueue(noteUpdate, change);
+    } else if (send && notes.single.read<int>('queued') == _queueOnEdit) {
+      // A note that had nothing to send when it was ready goes now, with its files, once it has words or a file.
+      if (!_blank(body)) {
+        await _queue(body);
+        await _run('UPDATE notes SET queued = 1 WHERE client_id = ?', [clientId]);
+      }
+      return true;
     } else {
       await _run('UPDATE notes SET edit_unsent = 1 WHERE client_id = ?', [clientId]);
       return true;
@@ -646,6 +661,31 @@ class Store extends GeneratedDatabase {
     return true;
   });
 
+  /// Deletes the rows of note [clientId]'s files [ids] names, and their waiting uploads, and notes them as removed until
+  /// the server has the change; a file in [back] is the note's again, so it is removed no more.
+  Future<void> _remove(String clientId, Set<String> ids, {Set<String> back = const {}}) async {
+    final held = {for (final file in await attachmentsOf(clientId)) file.id};
+    for (final id in ids.where(held.contains)) {
+      await _run('DELETE FROM attachments WHERE id = ? AND note_client_id = ?', [id, clientId]);
+      await _run("DELETE FROM outbox WHERE route = 'attachment' AND json_extract(body, '\$.id') = ?", [id]);
+    }
+    final pending = [for (final id in [...await _removedOf(clientId), ...ids.where(held.contains)]) if (!back.contains(id)) id];
+    if (pending.isEmpty) {
+      await remove(_removedKey(clientId));
+    } else {
+      await set(_removedKey(clientId), jsonEncode(pending.toSet().toList()));
+    }
+  }
+
+  static String _removedKey(String clientId) => 'removed:$clientId';
+
+  /// The files removed from note [clientId] that a change still names, as the server may hold them: the newest
+  /// [maxFiles], as the server takes no more at once. A resend is safe: the server skips a file it no longer holds.
+  Future<List<String>> _removedOf(String clientId) async {
+    final ids = [for (final id in jsonDecode(await get(_removedKey(clientId)) ?? '[]') as List) id as String];
+    return ids.length > maxFiles ? ids.sublist(ids.length - maxFiles) : ids;
+  }
+
   /// The newest upload of note [clientId] still waiting, new or a change: `id` and `route`, or none.
   Future<List<QueryRow>> _waitingUpload(String clientId) => _rows("SELECT id, route FROM outbox WHERE route IN "
     "('notes', '$noteUpdate') AND json_extract(body, '\$.clientId') = ? ORDER BY id DESC LIMIT 1", [clientId]);
@@ -653,10 +693,12 @@ class Store extends GeneratedDatabase {
   /// A sent note's change upload. It names the note by its server id when a pull saved one: a new key is a new device
   /// on the server, which then knows this phone's older notes by id only. A note from elsewhere lists no files, as the
   /// server takes new files only from the phone that sent the note.
-  static Map<String, dynamic> _changeOf(Map<String, dynamic> body, int editedAt, {String? serverId, required bool mine}) => {
+  static Map<String, dynamic> _changeOf(Map<String, dynamic> body, int editedAt, {String? serverId, required bool mine,
+    List<String> removed = const []}) => {
     for (final entry in body.entries) if (mine || entry.key != 'attachments') entry.key: entry.value,
     'editedAt': editedAt,
     'id': ?serverId,
+    if (mine && removed.isNotEmpty) 'removed': removed,
   };
 
   /// Keeps the note, and with [send] queues its upload in the same step.
@@ -846,8 +888,9 @@ class Store extends GeneratedDatabase {
   });
 
   /// Once none of its recordings waits for words, note [clientId] goes with its newest files and transcripts: a waiting
-  /// upload takes them, a sent note gets a change, and, with [queueNew], one never queued gets its upload; each file
-  /// not sent follows. With [send] false, a sent note's change waits for the next pull.
+  /// upload takes them, a sent note gets a change, and, with [queueNew], one never queued gets its upload, or with no
+  /// words and no file waits for a change that gives it one; each file not sent follows. With [send] false, a sent
+  /// note's change waits for the next pull.
   Future<void> _settle(String clientId, {required bool send, required DateTime at, bool queueNew = true}) async {
     await _run('UPDATE notes SET words_pending = EXISTS (SELECT 1 FROM attachments WHERE note_client_id = ? '
       'AND words_pending = 1) WHERE client_id = ?', [clientId, clientId]);
@@ -863,20 +906,34 @@ class Store extends GeneratedDatabase {
       final change = waiting.single.read<String>('route') == noteUpdate;
       final editedAt = row.read<int?>('edited_at') ?? at.millisecondsSinceEpoch;
       await _run('UPDATE outbox SET body = ? WHERE id = ?',
-        [jsonEncode(change ? _changeOf(body, editedAt, serverId: serverId, mine: mine) : body), waiting.single.read<int>('id')]);
+        [jsonEncode(change ? _changeOf(body, editedAt, serverId: serverId, mine: mine, removed: await _removedOf(clientId)) : body),
+          waiting.single.read<int>('id')]);
     } else if (row.read<int?>('sent_at') != null || serverId != null) {
       final editedAt = max(at.millisecondsSinceEpoch, row.read<int?>('edited_at') ?? 0);
       await _run('UPDATE notes SET edited_at = ?, edit_unsent = ? WHERE client_id = ?', [editedAt, send ? 0 : 1, clientId]);
       if (!send) return;
-      await enqueue(noteUpdate, _changeOf(body, editedAt, serverId: serverId, mine: mine));
-    } else if (row.read<int>('queued') == 0) {
+      await enqueue(noteUpdate, _changeOf(body, editedAt, serverId: serverId, mine: mine, removed: await _removedOf(clientId)));
+    } else if (row.read<int>('queued') != 1) {
       if (!send || !queueNew) return;
+      // The server refuses a note with no words and no file: it waits for a change that gives it one.
+      if (_blank(body)) {
+        await _run('UPDATE notes SET queued = $_queueOnEdit WHERE client_id = ?', [clientId]);
+        return;
+      }
       await _queue(body);
       await _run('UPDATE notes SET queued = 1 WHERE client_id = ?', [clientId]);
       return;
     }
     if (mine) await _queueFiles(clientId);
   }
+
+  /// The `queued` mark of a note that had no words or file to send when it was ready: its first change that gives it one
+  /// queues its upload.
+  static const _queueOnEdit = 2;
+
+  /// True when an upload of note [body] holds no words and no file, which the server refuses.
+  static bool _blank(Map<String, dynamic> body) =>
+    (body['text'] as String).trim().isEmpty && ((body['attachments'] as List?)?.isEmpty ?? true);
 
   /// Queues the upload of each of note [clientId]'s files on this phone that is not sent and not queued yet.
   Future<void> _queueFiles(String clientId) async {
@@ -893,8 +950,9 @@ class Store extends GeneratedDatabase {
     await _run('DELETE FROM attachments WHERE note_client_id = ? AND note_client_id NOT IN (SELECT client_id FROM notes)', [clientId]);
   });
 
-  // A typed note with no file, recording or words to come: blank words leave nothing in it.
-  static const _bare = "kind = 'typed' AND words_pending = 0 "
+  // A note with no file, recording or words to come, such as a voice note whose recording was removed: blank words
+  // leave nothing in it. A voice note from before version 16 with its recording beside it is never bare.
+  static const _bare = "words_pending = 0 AND audio_path IS NULL "
     'AND NOT EXISTS (SELECT 1 FROM attachments WHERE note_client_id = notes.client_id)';
 
   /// True when blank words leave nothing in the note: it has no file or recording, and waits for no words.
@@ -1014,6 +1072,7 @@ class Store extends GeneratedDatabase {
       "OR (route = 'attachment' AND json_extract(body, '\$.noteClientId') = ?)", [clientId, clientId]);
     await _run('DELETE FROM attachments WHERE note_client_id = ?', [clientId]);
     await _run('DELETE FROM notes WHERE client_id = ?', [clientId]);
+    await remove(_removedKey(clientId));
     return files;
   }
 
@@ -1069,7 +1128,7 @@ class Store extends GeneratedDatabase {
     final all = await transaction(() async {
       var all = true;
       for (final note in notes) {
-        final kept = note['deleted'] == true ? await _applyDeleted(note, editing, files) : await _applyPulled(note, editing);
+        final kept = note['deleted'] == true ? await _applyDeleted(note, editing, files) : await _applyPulled(note, editing, files);
         if (!kept) all = false;
       }
       return all;
@@ -1098,7 +1157,8 @@ class Store extends GeneratedDatabase {
   /// the pulled edit time; else the pulled words are kept and any waiting change of the note is dropped. An edit that
   /// never went, such as one made while sending was off, gets its change queued: a pull runs only while sending is on.
   /// An edit that went, or was dropped, is never queued again: the server may keep it at an earlier time than the phone.
-  Future<bool> _applyPulled(Map<String, dynamic> note, String? editing) async {
+  /// A sent file the pulled note no longer lists was removed elsewhere: its row goes, and its local bytes join [paths].
+  Future<bool> _applyPulled(Map<String, dynamic> note, String? editing, List<String> paths) async {
     final serverId = note['id'] as String;
     final clientId = note['clientId'] as String?;
     const columns = 'SELECT client_id, body, edited_at, mine, edit_unsent, pinned_at, pin_changed_at, pin_unsent FROM notes';
@@ -1139,8 +1199,10 @@ class Store extends GeneratedDatabase {
     }
     if (!keep) {
       await _run("DELETE FROM outbox WHERE route = '$noteUpdate' AND json_extract(body, '\$.clientId') = ?", [id]);
+      await remove(_removedKey(id));
+      if (note['attachments'] is List) paths.addAll(await _prune(id, {for (final file in files) file.id}));
     } else if (unsent) {
-      await enqueue(noteUpdate, _changeOf(local, localAt, serverId: serverId, mine: mine));
+      await enqueue(noteUpdate, _changeOf(local, localAt, serverId: serverId, mine: mine, removed: await _removedOf(id)));
       await _run('UPDATE notes SET edit_unsent = 0 WHERE client_id = ?', [id]);
     } else {
       // A change queued before this pull saved the server id goes by it now.
@@ -1160,6 +1222,18 @@ class Store extends GeneratedDatabase {
     await _applyPin(id, serverId, note, rows.isEmpty ? null : rows.single);
     await _applyMove(id, note);
     return true;
+  }
+
+  /// Deletes the rows of note [clientId]'s sent files that [listed] leaves out, and gives their local paths. A file
+  /// still to send, being written, or kept only here stays: the server never had it.
+  Future<List<String>> _prune(String clientId, Set<String> listed) async {
+    final rows = await _rows('SELECT id, path FROM attachments WHERE note_client_id = ? AND sent_at IS NOT NULL '
+      'AND here_only = 0 AND words_pending = 0', [clientId]);
+    final gone = rows.where((row) => !listed.contains(row.read<String>('id')));
+    for (final row in gone) {
+      await _run('DELETE FROM attachments WHERE id = ? AND note_client_id = ?', [row.read<String>('id'), clientId]);
+    }
+    return [for (final row in gone) if ((row.read<String?>('path') ?? '').isNotEmpty) row.read<String>('path')];
   }
 
   /// True when [local] has the pulled [text], and each of its written transcripts is the pulled one.

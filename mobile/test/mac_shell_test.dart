@@ -32,8 +32,9 @@ const narrow = Size(500, 844);
 /// A Mac whose note keeps a file only up to 25 MB, as the controller does.
 class _MacRelay extends FakeRelay {
   @override
-  Future<String?> editNote(String id, String text, {List<NewFile> files = const [], bool sendNow = true}) async {
-    await super.editNote(id, text, files: files, sendNow: sendNow);
+  Future<String?> editNote(String id, String text, {List<NewFile> files = const [], Set<String> removed = const {},
+    bool sendNow = true}) async {
+    await super.editNote(id, text, files: files, removed: removed, sendNow: sendNow);
     return checkFiles(const [], files).problem;
   }
 }

@@ -283,17 +283,17 @@ it("sends a note's place as a location point to a webhook ticked for location, a
   expect([types(), bodies()[0].data.points[0].place, "place" in bodies()[1].data.note]).toEqual([["location.points", "note.created"], "Queen St W", false]);
 });
 
-it("sends a note changed on its phone as note.updated, after its note.created, with its latest words and files", async () => {
+it("sends a note changed on its phone as note.updated, after its note.created, with its latest words and the files left", async () => {
   hook();
-  await note("note-0001");
+  await noteWithFiles("note-0001");
   at(NOW + MINUTE);
   const file = { id: "file-pdf-0001", name: "list.pdf", type: "application/pdf", size: 3 };
-  await call(phone, "PATCH", "notes", { clientId: "note-0001", text: "# Switches\n- [ ] Order more", attachments: [file] });
+  await call(phone, "PATCH", "notes", { clientId: "note-0001", text: "# Switches\n- [ ] Order more", attachments: [file], removed: ["note-0001-png"] });
   expect(queue.sent).toEqual([wakeUp("hook-1"), wakeUp("hook-1")]);
   await deliver(wakeUp("hook-1"));
   expect(types()).toEqual(["note.created", "note.updated"]);
   expect(bodies()[1].data.note).toMatchObject({ id: bodies()[0].data.note.id, text: "# Switches\n- [ ] Order more",
-    edited_at: new Date(NOW + MINUTE).toISOString(), attachments: [{ id: file.id, name: file.name, content_type: file.type, size: 3 }] });
+    edited_at: new Date(NOW + MINUTE).toISOString(), attachments: [{ id: "note-0001-pdf" }, { id: file.id, name: file.name, content_type: file.type, size: 3 }] });
   expect(bodies()[1].data.note).not.toHaveProperty("audio");
   expect(webhook()).toMatchObject({ sent_seq: 2 });
 });

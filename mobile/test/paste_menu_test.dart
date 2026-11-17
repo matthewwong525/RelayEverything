@@ -12,7 +12,7 @@ import 'package:relay_app/app.dart';
 import 'package:relay_app/editor/markdown.dart';
 import 'package:relay_app/editor/system_menu.dart';
 import 'package:relay_app/editor/table.dart' show NoteTableView, cellPause;
-import 'package:relay_app/relay.dart' show Entry;
+import 'package:relay_app/relay.dart' show Entry, EntryFile;
 import 'package:relay_app/screens/note_editor.dart';
 
 import 'screens_test.dart' show FakeRelay, editorFocused, now, openFolder, quill;
@@ -325,6 +325,36 @@ void main() {
       expect(await phonePaste(tester, plain: 'oat '), isTrue);
       expect(stored(tester), '# Buy oat milk and eggs\nhttps://example.com/list\nCall Sam');
       expect(quill(tester).selection, const TextSelection.collapsed(offset: 8));
+    });
+
+    testWidgets('words pasted beside a photo go on a line of their own, kept in the note, and one Undo takes them back',
+        (tester) async {
+      const photo = EntryFile(id: 'p1', name: 'receipt.jpg', type: 'image/jpeg', size: 1);
+      const text = '# Desk lamp\n![receipt.jpg](attachment:p1)\nPaid';
+      relay.entries = [Entry(id: 'n1', text: text, at: now, files: const [photo])];
+      systemMenuOn(tester, true);
+      await tester.pumpWidget(RelayApp(relay: relay, opener: (_) async => true));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Desk lamp').first);
+      await tester.pumpAndSettle();
+      await tester.tapAt(onLine(tester, 'Paid', 10));
+      await tester.pump(const Duration(seconds: 1));
+      expect(editorFocused(tester), isTrue);
+      final before = quill(tester).document.toDelta();
+      // The photo is at 10 and its line ends at 11: a paste there would put the words on the photo's line.
+      quill(tester).updateSelection(const TextSelection.collapsed(offset: 11), ChangeSource.local);
+      await tester.pump();
+      expect(await phonePaste(tester, plain: 'in cash'), isTrue);
+      expect(stored(tester), '# Desk lamp\n![receipt.jpg](attachment:p1)\nin cash\nPaid');
+      expect(quill(tester).selection, const TextSelection.collapsed(offset: 12 + 'in cash'.length));
+      quill(tester).undo();
+      await tester.pump();
+      expect(quill(tester).document.toDelta(), before);
+      quill(tester).updateSelection(const TextSelection.collapsed(offset: 10), ChangeSource.local);
+      await tester.pump();
+      await phonePaste(tester, plain: 'Shop');
+      expect(stored(tester), '# Desk lamp\nShop\n![receipt.jpg](attachment:p1)\nPaid');
+      expect(quill(tester).selection, const TextSelection.collapsed(offset: 10 + 'Shop'.length));
     });
 
     testWidgets('one Undo takes back the whole paste', (tester) async {

@@ -235,10 +235,36 @@ class FakeRelay extends Relay {
     return null;
   }
 
+  /// True: an edit changes the note's words and files in [entries], as the app does.
+  bool keepsEdits = false;
+  /// The files removed by each edit, in order.
+  final removals = <Set<String>>[];
+  final _removedFiles = <String, EntryFile>{};
+
   @override
-  Future<String?> editNote(String id, String text, {List<NewFile> files = const [], bool sendNow = true}) async {
+  Future<String?> editNote(String id, String text, {List<NewFile> files = const [], Set<String> removed = const {},
+    bool sendNow = true}) async {
     calls.add('edit $text${_names(files)}${sendNow ? '' : ' (later)'}');
+    if (removed.isNotEmpty) removals.add(removed);
+    final before = [for (final entry in entries) if (entry.id == id) entry];
     await slow?.future;
+    if (keepsEdits) {
+      final named = NoteAttachment.idsIn(text);
+      entries = [
+        for (final entry in entries)
+          entry.id != id ? entry : Entry(id: id, text: text, at: entry.at, sent: entry.sent, from: entry.from,
+            files: [for (final file in entry.files) if (!removed.contains(file.id)) file,
+              // A removed file whose line comes back, as by Undo, is the note's again.
+              for (final file in _removedFiles.values) if (named.contains(file.id) && !removed.contains(file.id)) file,
+              for (final file in files) EntryFile(id: file.id ?? file.name, name: file.name, type: file.type, size: file.size)],
+            recordings: [for (final recording in entry.recordings) if (!removed.contains(recording.id)) recording]),
+      ];
+      for (final entry in entries.where((entry) => entry.id == id)) {
+        _removedFiles.removeWhere((fileId, _) => entry.files.any((file) => file.id == fileId));
+      }
+      _removedFiles.addAll({for (final entry in before) for (final file in entry.files) if (removed.contains(file.id)) file.id: file});
+      notifyListeners();
+    }
     return null;
   }
 
@@ -342,10 +368,13 @@ class FakeRelay extends Relay {
 
   /// The note *Record* records into, null for a new voice note.
   String? into;
+  /// The id the note's page gave the recording *Record* makes.
+  String? recordingId;
 
   @override
-  Future<String?> startVoiceNote({String? into}) async {
+  Future<String?> startVoiceNote({String? into, String? id}) async {
     this.into = into;
+    recordingId = id;
     calls.add(into == null ? 'voice start' : 'voice start into $into');
     if (startProblem == null) {
       holdTipSeen = true;
@@ -4050,8 +4079,8 @@ void main() {
       expect(find.widgetWithText(SelectableText, 'Call the dentist at 3'), findsOneWidget);
     });
 
-    testWidgets('the recording a voice note started with sits above the words, with Add notes…; an added one sits after '
-        'the words, among the files in the order added', (tester) async {
+    testWidgets('an older voice note keeps its look in the words: the recording it started with first, with Add notes…, '
+        'then each file and added recording in the order added', (tester) async {
       const a = EntryFile(id: 'a', name: 'lease.pdf', type: 'application/pdf', size: 1, path: '/nowhere/lease.pdf');
       const b = EntryFile(id: 'b', name: 'quote.pdf', type: 'application/pdf', size: 1, path: '/nowhere/quote.pdf');
       relay.entries = [Entry(id: 'v', text: '', at: now, files: const [a, b], recordings: const [
@@ -4062,10 +4091,168 @@ void main() {
       double top(Finder finder) => tester.getTopLeft(finder).dy;
       final first = find.byKey(const ValueKey('r1'));
       final second = find.byKey(const ValueKey('r2'));
-      final tops = [top(first), top(find.byType(QuillEditor)), top(find.text('lease.pdf')), top(second), top(find.text('quote.pdf'))];
+      final tops = [top(first), top(find.text('lease.pdf')), top(second), top(find.text('quote.pdf'))];
       expect(tops, [for (final y in [...tops]..sort()) y]);
-      expect(find.textContaining('Add notes…', findRichText: true), findsOneWidget);
+      expect(find.descendant(of: find.byType(QuillEditor), matching: find.text('quote.pdf')), findsOneWidget);
+      expect(find.text('Add notes…'), findsOneWidget);
       expect(find.textContaining('What do you want to keep?', findRichText: true), findsNothing);
+      await tester.pump(const Duration(seconds: 2));
+      expect(relay.calls, isEmpty, reason: 'placing the files changes nothing kept');
+    });
+
+    testWidgets('a change to an older voice note keeps the recording first in its text', (tester) async {
+      relay.entries = [Entry(id: 'v', text: 'Fab call', at: now, recordings: const [
+        EntryRecording(id: 'r1', recording: 'voice/1.wav', transcript: 'Call the fab', top: true)])];
+      await openNote(tester, relay.entries.single);
+      quill(tester).updateSelection(const TextSelection.collapsed(offset: 10), ChangeSource.local);
+      await type(tester, ' at 3');
+      await tester.pump(const Duration(seconds: 2));
+      expect(relay.calls.last, startsWith('edit ![Recording](attachment:r1)\n# Fab call at 3'));
+      expect(find.text('Add notes…'), findsNothing);
+    });
+
+    testWidgets('words typed under a photo stay under it when the note opens again', (tester) async {
+      const photo = EntryFile(id: 'p1', name: 'receipt.jpg', type: 'image/jpeg', size: 1, path: '/nowhere/receipt.jpg');
+      relay.entries = [Entry(id: 'n1', text: '# Desk lamp\n![receipt.jpg](attachment:p1)\nPaid in cash', at: now,
+        files: const [photo])];
+      await openNote(tester, relay.entries.single);
+      double top(Finder finder) => tester.getTopLeft(finder).dy;
+      final words = find.textContaining('Paid in cash', findRichText: true);
+      expect(top(find.textContaining('Desk lamp', findRichText: true)), lessThan(top(find.byTooltip('receipt.jpg'))));
+      expect(top(find.byTooltip('receipt.jpg')), lessThan(top(words)));
+      expect(find.textContaining('attachment:', findRichText: true), findsNothing);
+      expect(markdownOf(tester), '# Desk lamp\n![receipt.jpg](attachment:p1)\nPaid in cash');
+    });
+
+    testWidgets('backspace under a photo removes it from the note; Undo brings it back', (tester) async {
+      const photo = EntryFile(id: 'p1', name: 'receipt.jpg', type: 'image/jpeg', size: 1);
+      relay
+        ..keepsEdits = true
+        ..entries = [Entry(id: 'n1', text: '# Desk lamp\n![receipt.jpg](attachment:p1)\nPaid in cash', at: now,
+          files: const [photo])];
+      await openNote(tester, relay.entries.single);
+      // The line under the photo starts at 12: backspace there takes the line end after the photo, at 11.
+      quill(tester).replaceText(11, 1, '', const TextSelection.collapsed(offset: 11));
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Desk lamp\nPaid in cash');
+      expect([relay.removals, find.text('receipt.jpg').evaluate()], [[{'p1'}], isEmpty]);
+      quill(tester).undo();
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(markdownOf(tester), '# Desk lamp\n![receipt.jpg](attachment:p1)\nPaid in cash');
+      expect(relay.calls.last, startsWith('edit # Desk lamp\n![receipt.jpg](attachment:p1)\nPaid in cash'));
+      expect(find.text('receipt.jpg'), findsOneWidget);
+    });
+
+    testWidgets('removing the only photo while typing, then leaving at once, keeps the removal and drops the empty note',
+        (tester) async {
+      const photo = EntryFile(id: 'p1', name: 'receipt.jpg', type: 'image/jpeg', size: 1);
+      relay
+        ..keepsEdits = true
+        ..entries = [Entry(id: 'n1', text: '![receipt.jpg](attachment:p1)', at: now, files: const [photo]),
+          Entry(id: 'n2', text: 'Call Sam', at: now)];
+      await openNote(tester, relay.entries.first);
+      tester.widget<QuillEditor>(find.byType(QuillEditor)).focusNode.requestFocus();
+      await tester.pump();
+      // The photo is at 0 and its line ends at 1: backspace on the empty line under it takes the photo.
+      quill(tester).replaceText(1, 1, '', const TextSelection.collapsed(offset: 1));
+      await tester.pump();
+      expect([markdownOf(tester), relay.calls], ['', isEmpty], reason: 'while typing, the change waits for a pause');
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect([relay.removals, relay.calls.last], [[{'p1'}], 'drop n1']);
+      expect([for (final entry in relay.entries) entry.id], ['n2']);
+    });
+
+    testWidgets('a recording made with the cursor at the end of the first of two lines goes between them', (tester) async {
+      relay.entries = [Entry(id: 'n1', text: 'Fab call\nAt three', at: now)];
+      await openNote(tester, relay.entries.single);
+      await tester.tap(find.byType(QuillEditor));
+      await tester.pumpAndSettle();
+      quill(tester).updateSelection(const TextSelection.collapsed(offset: 8), ChangeSource.local);
+      await tester.pump();
+      await tester.tap(find.byTooltip('Record'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      final id = relay.recordingId!;
+      relay.entries = [Entry(id: 'n1', text: 'Fab call\nAt three', at: now,
+        recordings: [EntryRecording(id: id, recording: 'voice/$id.wav', writing: true)])];
+      relay.changed();
+      await tester.pump();
+      expect(markdownOf(tester), '# Fab call\n![Recording](attachment:$id)\nAt three');
+      await tester.tap(cancelX);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets('words typed beside a photo go on a line of their own', (tester) async {
+      const photo = EntryFile(id: 'p1', name: 'receipt.jpg', type: 'image/jpeg', size: 1);
+      relay.entries = [Entry(id: 'n1', text: '# Desk lamp\n![receipt.jpg](attachment:p1)', at: now, files: const [photo])];
+      await openNote(tester, relay.entries.single);
+      quill(tester).updateSelection(const TextSelection.collapsed(offset: 11), ChangeSource.local);
+      await type(tester, 'Paid');
+      quill(tester).updateSelection(const TextSelection.collapsed(offset: 10), ChangeSource.local);
+      await type(tester, 'Shop');
+      expect(markdownOf(tester), '# Desk lamp\nShop\n![receipt.jpg](attachment:p1)\nPaid\n');
+    });
+
+    testWidgets('a note from elsewhere keeps its files: no backspace or cut takes one', (tester) async {
+      const photo = EntryFile(id: 'p1', name: 'receipt.jpg', type: 'image/jpeg', size: 1);
+      relay.entries = [Entry(id: 'n1', text: '# Desk lamp\n![receipt.jpg](attachment:p1)\nPaid in cash', at: now, sent: true,
+        from: 'iPhone', files: const [photo])];
+      await openNote(tester, relay.entries.single);
+      quill(tester).replaceText(11, 1, '', const TextSelection.collapsed(offset: 11));
+      quill(tester).replaceText(0, 13, '', const TextSelection.collapsed(offset: 0));
+      await tester.pump(const Duration(seconds: 2));
+      expect(markdownOf(tester), '# Desk lamp\n![receipt.jpg](attachment:p1)\nPaid in cash');
+      expect(relay.removals, isEmpty);
+    });
+
+    testWidgets('Attach puts the photo under the line with the cursor, and the note keeps it there', (tester) async {
+      relay
+        ..keepsEdits = true
+        ..entries = [Entry(id: 'n1', text: '# Desk lamp\nBought on Monday\nKeep the box', at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay, picker: ({required photos}) async =>
+        [const NewFile(path: '/picked/a.jpg', name: 'receipt.jpg', size: 10)]));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Desk lamp'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(QuillEditor));
+      await tester.pump();
+      quill(tester).updateSelection(const TextSelection.collapsed(offset: 3), ChangeSource.local);
+      await tester.pump();
+      await tester.tap(find.byTooltip('Attach'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Photos'));
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      final id = relay.entries.single.files.single.id;
+      expect(markdownOf(tester), '# Desk lamp\n![receipt.jpg](attachment:$id)\nBought on Monday\nKeep the box');
+      // The line is a change of its own: it saves on the typing pause.
+      await tester.pump(savePause);
+      expect(relay.calls.last, startsWith('edit # Desk lamp\n![receipt.jpg](attachment:$id)\nBought on Monday'));
+    });
+
+    testWidgets('the cursor goes under a photo also when the picker takes the keyboard, so the words typed next go there',
+        (tester) async {
+      relay.keepsEdits = true;
+      await tester.pumpWidget(RelayApp(relay: relay, picker: ({required photos}) async {
+        // The phone's picker takes the keyboard while it is open.
+        FocusManager.instance.primaryFocus?.unfocus();
+        return [const NewFile(path: '/picked/a.jpg', name: 'lease.jpg', size: 10)];
+      }));
+      await openFolder(tester, 'Notes');
+      await tester.tap(newNote);
+      await tester.pumpAndSettle();
+      await type(tester, 'Lease photo');
+      await tester.tap(find.byTooltip('Attach'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Photos'));
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      await type(tester, 'Signed copy');
+      expect(markdownOf(tester), matches(RegExp(r'^# Lease photo\n!\[lease\.jpg\]\(attachment:[^)]+\)\nSigned copy\n?$')));
     });
 
     testWidgets('Record shows in both bars on a phone, and records into the open note on the recording screen',
@@ -4081,7 +4268,7 @@ void main() {
       await tester.tap(find.byTooltip('Record'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      expect(relay.calls, ['voice start into n1']);
+      expect([relay.calls, relay.recordingId], [['voice start into n1'], isNotNull]);
       expect(find.byType(RecordingScreen), findsOneWidget);
       await tester.tap(cancelX);
       await tester.pump();

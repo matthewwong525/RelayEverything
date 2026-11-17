@@ -60,9 +60,11 @@ Tap a note's row to open it on its own page:
 
 - The date and the time.
 - All of its words, in their styles.
-- Each picture, full width. Tap a picture to open it.
-- Each other file, as a row with its name and size. Tap it to open it.
-- On a voice note, the recording's card under the date, before the words: the player, and a **Transcript** row. Tap it to open the recording's page, with all of its words. A recording you add later shows after the words, with the pictures and files. [Play a note back](../voice-notes/#play-a-note-back)
+- Each picture, full width, at its place in the words. Tap a picture to open it.
+- Each other file, as a row with its name and size, at its place in the words. Tap it to open it.
+- On a voice note, the recording's card under the date, before the words: the player, and a **Transcript** row. Tap it to open the recording's page, with all of its words. A recording you add later shows at its place in the words, as a picture does. [Play a note back](../voice-notes/#play-a-note-back)
+
+A note from before files went in the words keeps its look: the recording it started with shows first, and its other files after the words.
 
 The page shows the date alone at the top. It shows no tag and nothing about sending: a note that waits sends by itself.
 
@@ -166,6 +168,7 @@ The page shows each style as it looks. Inside, the note keeps its styles as plai
 | Underline | `<u>words</u>` |
 | Highlight | `<mark class="pink">words</mark>`, with the color's name |
 | A link on words | `[words](https://example.com)`. An address that is its own words stays as it is. |
+| A photo, a file or a recording | `![warranty.pdf](attachment:<id>)` on a line of its own, with the file's name and its id |
 | A table | A Markdown table: a line of cells between `\|` marks for each row, with a `\| --- \|` line under the first row |
 | Bulleted, dashed and numbered lists | `* `, `- ` and `1. ` at the start of the line |
 | Checklist | `- [ ] ` open, `- [x] ` ticked |
@@ -276,10 +279,13 @@ A note can hold photos, screenshots, PDFs and other files of any kind.
 
 1. Tap **New note**.
 2. Type the note, or leave it empty: a note can be only files.
-3. Tap **Add photo or file**, the paperclip. A small menu opens beside it: tap **Photos** or **Files**, and pick them from the phone. Each one shows under the words, with its name and size.
-4. Tap **‹** to go back.
+3. Tap **Add photo or file**, the paperclip. A small menu opens beside it: tap **Photos** or **Files**, and pick them from the phone. Each one goes on a line of its own: under the line with the cursor, or at the end of the note when you are not typing.
+4. Type under the file, or above it. Words that you type go on their own line, never beside a file.
+5. Tap **‹** to go back.
 
 You can add a file to a note later too: open the note and tap the paperclip. With sending on, a file that you add to a sent note goes to your server after the change.
+
+To remove a file, put the cursor on the line under it and tap delete, or select it with words and delete them. Tap **Undo** to get it back while the note is open. When you leave the note, the file goes for good: from this phone and, with sending on, from your server, your page and your other phones. You can remove a file only from a note that you wrote on this phone. On a note from somewhere else, delete does not remove its files.
 
 A note holds up to 10 files, each up to 25 MB. The app refuses a file over 25 MB, or an eleventh file, with a message, and keeps the rest.
 

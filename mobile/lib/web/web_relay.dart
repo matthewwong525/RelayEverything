@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../data/client_id.dart';
 import '../data/files.dart';
+import '../editor/markdown.dart' show NoteAttachment;
 import '../relay.dart';
 import '../voice/playback.dart';
 import 'page_close.dart';
@@ -75,6 +76,10 @@ class WebRelay extends Relay {
   final _bytes = <String, Map<String, NewFile>>{};
   /// New notes that got no answer from the server: each is also in [_unsent], and goes again as a new note.
   final _unposted = <String>{};
+  /// The files removed from each sent note that the server has not removed yet: they go with the note's next change.
+  final _removing = <String, Set<String>>{};
+  /// Every file removed on this page, by note: a note's text never names one again, as no *Undo* brings it back here.
+  final _gone = <String, Set<String>>{};
   /// The changes go one at a time, in the order the person made them.
   Future<void> _sending = Future.value();
   Future<void>? _pulling;
@@ -226,6 +231,7 @@ class WebRelay extends Relay {
         if (audio) EntryRecording(recording: client.api('audio', {'id': serverId}).toString(), top: true),
         for (final (index, file) in files.indexed)
           if (file['lengthMs'] case final int length) EntryRecording(id: file['id'] as String,
+            name: file['name'] as String? ?? 'Recording',
             filesBefore: files.take(index).where((other) => other['lengthMs'] == null).length,
             recording: file['ready'] == true ? client.api('attachment', {'id': file['id'] as String}).toString() : '',
             length: Duration(milliseconds: length), transcript: file['transcript'] as String?, top: file['top'] == true,
@@ -263,7 +269,7 @@ class WebRelay extends Relay {
     if (text.trim().isEmpty && kept.isEmpty) return [...problems, if (problems.isEmpty) _nothing].join(' ');
     final clientId = id ?? newClientId();
     final now = _clock();
-    final attached = [for (final file in kept) (newClientId(), file)];
+    final attached = [for (final file in kept) (file.id ?? newClientId(), file)];
     _notes[clientId] = _Note(Entry(id: clientId, text: text, at: now, waiting: true, files: [for (final (fileId, file) in attached)
       EntryFile(id: fileId, name: file.name, type: file.type, size: file.size)]), clientId: clientId, mine: true);
     if (attached.isNotEmpty) _bytes[clientId] = {for (final (fileId, file) in attached) fileId: file};
@@ -298,19 +304,30 @@ class WebRelay extends Relay {
   /// Shows the new words at once, then sends them. With no answer, the typed words stay and go again later; a newer change
   /// from elsewhere, or a refusal, takes the note back to what it was.
   @override
-  Future<String?> editNote(String id, String text, {List<NewFile> files = const [], bool sendNow = true}) async {
+  Future<String?> editNote(String id, String text, {List<NewFile> files = const [], Set<String> removed = const {},
+    bool sendNow = true}) async {
     final note = _notes[id];
     if (note == null) return 'This note is gone. It was deleted, maybe on another device.';
-    final check = checkFiles(const [], files, already: note.entry.files.length);
-    final (kept, problems) = _readable(check);
-    final attached = [for (final file in kept) (newClientId(), file)];
     final before = note.entry;
+    final held = {for (final file in before.files) file.id, for (final recording in before.recordings) recording.id};
+    final removing = removed.intersection(held);
+    final check = checkFiles(const [], files, already: before.files.where((file) => !removing.contains(file.id)).length);
+    final (kept, problems) = _readable(check);
+    final attached = [for (final file in kept) (file.id ?? newClientId(), file)];
     // A new note still to go is not an earlier edit: a refusal of this edit leaves the note as the server has it.
     final hadUnsent = _unsent.contains(id) && !_unposted.contains(id);
-    final all = [...before.files, for (final (fileId, file) in attached)
+    final all = [for (final file in before.files) if (!removing.contains(file.id)) file, for (final (fileId, file) in attached)
       EntryFile(id: fileId, name: file.name, type: file.type, size: file.size)];
-    note.entry = _copy(before, text: text, files: all, waiting: attached.isNotEmpty);
+    final gone = (_gone[id] ??= {})..addAll(removing);
+    note.entry = _copy(before, text: NoteAttachment.without(text, gone), files: all, waiting: attached.isNotEmpty,
+      recordings: [for (final recording in before.recordings) if (!removing.contains(recording.id)) recording]);
     if (attached.isNotEmpty) (_bytes[id] ??= {}).addAll({for (final (fileId, file) in attached) fileId: file});
+    _bytes[id]?.removeWhere((fileId, _) => removing.contains(fileId));
+    if (_unposted.contains(id)) {
+      if (_bytes[id]?.isEmpty ?? false) _bytes.remove(id);
+    } else if (removing.isNotEmpty) {
+      (_removing[id] ??= {}).addAll(removing);
+    }
     _unsent.add(id);
     notifyListeners();
     return _inOrder(() async {
@@ -318,6 +335,8 @@ class WebRelay extends Relay {
       if (refused != null && !_again(refused)) {
         if (_notes[id] == note) note.entry = before;
         if (!hadUnsent) _unsent.remove(id);
+        _removing[id]?.removeAll(removing);
+        _gone[id]?.removeAll(removing);
         for (final (fileId, _) in attached) {
           _bytes[id]?.remove(fileId);
         }
@@ -355,8 +374,12 @@ class WebRelay extends Relay {
           return null;
         }
       }
+      // The server takes 10 removed at once; one it no longer holds is skipped, so the rest go with the next change.
+      final removed = [...?_removing[id]].take(maxFiles).toList();
       await client.patch('notes', {...note.key, 'text': note.entry.text, 'editedAt': _clock().millisecondsSinceEpoch,
-        if (_bytes[id]?.isNotEmpty ?? false) 'attachments': files});
+        if (_bytes[id]?.isNotEmpty ?? false) 'attachments': files, if (removed.isNotEmpty) 'removed': removed});
+      _removing[id]?.removeAll(removed);
+      if (_removing[id]?.isEmpty ?? false) _removing.remove(id);
       _unsent.remove(id);
       return null;
     } on SpaceRefused catch (refused) {
@@ -377,6 +400,7 @@ class WebRelay extends Relay {
     _unsent.remove(id);
     _unposted.remove(id);
     _bytes.remove(id);
+    _removing.remove(id);
     notifyListeners();
   }
 
@@ -390,6 +414,7 @@ class WebRelay extends Relay {
       if (refused == null || _again(refused)) continue;
       _unsent.remove(id);
       _bytes.remove(id);
+      _removing.remove(id);
       notice(posting ? 'A new note did not go. ${refused.message}' : 'Your change to a note did not go. ${refused.message}');
     }
     for (final id in [..._bytes.keys]) {
@@ -453,10 +478,10 @@ class WebRelay extends Relay {
   }
 
   /// [deletedAt] puts the note in *Recently Deleted* at that time; [recovered] takes it out.
-  static Entry _copy(Entry entry, {String? text, List<EntryFile>? files, bool? waiting, bool? pinned, DateTime? deletedAt,
-    bool recovered = false}) => Entry(id: entry.id,
+  static Entry _copy(Entry entry, {String? text, List<EntryFile>? files, List<EntryRecording>? recordings, bool? waiting,
+    bool? pinned, DateTime? deletedAt, bool recovered = false}) => Entry(id: entry.id,
     text: text ?? entry.text, at: entry.at, sent: entry.sent, waiting: waiting ?? entry.waiting,
-    recordings: entry.recordings, files: files ?? entry.files, from: entry.from,
+    recordings: recordings ?? entry.recordings, files: files ?? entry.files, from: entry.from,
     pinned: pinned ?? entry.pinned, deletedAt: recovered ? null : deletedAt ?? entry.deletedAt);
 
   /// Shows the pin at once, then sends it after the changes before it, so a new note lands first. A refusal puts the
@@ -706,7 +731,7 @@ class WebRelay extends Relay {
   @override DateTime? get listening => null;
   @override Stream<double>? get level => null;
   @override bool get holdTipSeen => true;
-  @override Future<String?> startVoiceNote({String? into}) async => onlyOnPhone;
+  @override Future<String?> startVoiceNote({String? into, String? id}) async => onlyOnPhone;
   @override Future<String?> endVoiceNote() async => null;
   @override Future<void> cancelVoiceNote() async {}
   @override Future<void> writeWordsAgain() async {}

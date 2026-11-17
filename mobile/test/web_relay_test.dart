@@ -181,6 +181,19 @@ void main() {
     expect(body['id'], 'n1');
   });
 
+  test('a file removed from its own note leaves it at once, and only the next change names it', () async {
+    server.routes['GET api/notes'] = (_) => {'notes': [note('n5', clientId: 'web-note-5', mine: true, device: 'Web',
+      text: '![lease.pdf](attachment:f1)\nLease', files: [{'id': 'f1', 'name': 'lease.pdf', 'type': 'application/pdf',
+        'size': 1, 'ready': true}])], 'next': 3};
+    await relay.start();
+    expect(await relay.editNote('web-note-5', 'Lease', removed: {'f1'}), isNull);
+    expect(relay.entries.single.files, isEmpty);
+    expect(jsonDecode(server.requests.last.body), {'clientId': 'web-note-5', 'text': 'Lease', 'editedAt': 5000, 'removed': ['f1']});
+    // The browser keeps no bytes, so a line that comes back for the removed file is left out.
+    expect(await relay.editNote('web-note-5', '![lease.pdf](attachment:f1)\nLease'), isNull);
+    expect(jsonDecode(server.requests.last.body), {'clientId': 'web-note-5', 'text': 'Lease', 'editedAt': 5000});
+  });
+
   test('pins at once with PUT notes/pin, by clientId for its own note and by id for one from elsewhere', () async {
     server.routes['PUT api/notes/pin'] = (request) => {'id': 'n1', 'pinned': true, 'updated': true};
     await relay.start();

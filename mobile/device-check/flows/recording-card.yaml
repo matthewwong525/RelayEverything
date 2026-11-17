@@ -1,7 +1,7 @@
 # A recording in a note: Record in a typed note's bar opens the recording screen, a tap saves, and the recording shows as
-# its own card under the words. The card shows its transcript folded, No words heard for a quiet simulator microphone,
-# or, on a slow test iPhone, The words did not come with Try again. The transcript opens with a tap, and words typed
-# after it stay in the note. Not in the fixed tour: it needs the speech model and a microphone, so a check names it:
+# its own card under the words. The card shows a Transcript row with none of the words, No words heard for a quiet
+# simulator microphone, or, on a slow test iPhone, The words did not come with Try again. A tap on Transcript opens the
+# recording's own page with Copy transcript; Back goes to the note, and words typed after it stay in the note. Not in the fixed tour: it needs the speech model and a microphone, so a check names it:
 # `--flows recording-card`.
 appId: com.matthewwong525.relayApp
 ---
@@ -79,14 +79,23 @@ appId: com.matthewwong525.relayApp
 # Match the card's own words: the alert's title is only "The words did not come".
 - assertVisible: '(.|\n)*(Transcript|No words heard|The words did not come\. Your recording is safe)(.|\n)*'
 - takeScreenshot: recording-card
-# A transcript opens with a tap; a quiet recording shows No words heard in its place.
+# A tap on Transcript opens the recording's page, and Back goes to the note; a quiet recording shows No words heard in
+# its place, and opens no page.
 - runFlow:
     when:
       visible: 'Transcript(.|\n)*'
     commands:
       - tapOn: 'Transcript(.|\n)*'
-      - assertVisible: "Copy transcript"
+      - extendedWaitUntil:
+          visible: "Copy transcript"
+          timeout: 10000
       - takeScreenshot: recording-transcript-open
+      # The back button's label holds the note's title too, so match its start.
+      - tapOn: 'Back(.|\n)*'
+      # Only the recording's page has Copy transcript: gone means the note is back.
+      - extendedWaitUntil:
+          notVisible: "Copy transcript"
+          timeout: 10000
 # A late alert can still come; on the note page only an alert shows OK.
 - runFlow:
     when:

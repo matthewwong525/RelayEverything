@@ -174,8 +174,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(NoteEditor), findsOneWidget);
     expect(quill(tester).document.toPlainText().trim(), isEmpty);
-    expect(find.descendant(of: find.byType(RecordingCard), matching: find.text('Ask the fab if the flex stiffener can be 0.2 mm')),
+    expect(find.descendant(of: find.byType(RecordingCard), matching: find.text('Transcript')), findsOneWidget);
+    await tester.tap(find.text('Transcript'));
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: find.byType(RecordingPage), matching: find.text('Ask the fab if the flex stiffener can be 0.2 mm')),
       findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('Ask the fab if the flex stiffener can be 0.2 mm'), findsOneWidget);
@@ -223,8 +228,13 @@ void main() {
     await until(tester, () => relay.entries.any((entry) => entry.recordings.any((recording) => !recording.writing)));
     await tester.pumpAndSettle();
     expect(quill(tester).document.toPlainText().trim(), isEmpty);
-    expect(find.descendant(of: find.byType(RecordingCard), matching: find.text('Ask the fab if the flex stiffener can be 0.2 mm')),
+    expect(find.descendant(of: find.byType(RecordingCard), matching: find.text('Transcript')), findsOneWidget);
+    await tester.tap(find.text('Transcript'));
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: find.byType(RecordingPage), matching: find.text('Ask the fab if the flex stiffener can be 0.2 mm')),
       findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('Ask the fab if the flex stiffener can be 0.2 mm'), findsOneWidget);

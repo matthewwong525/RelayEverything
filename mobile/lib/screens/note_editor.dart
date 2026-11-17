@@ -965,8 +965,14 @@ class NoteEditorState extends State<NoteEditor> {
     final files = note?.files ?? const <EntryFile>[];
     // A note in *Recently Deleted* reads only: its transcripts too.
     final editable = !relay.desktop && note?.from == null && !_trash;
+    final when = _when(context, note?.at ?? DateTime.now(), note?.from);
+    // The recording's page goes back to the note by its first typed line.
+    final first = _controller.document.toPlainText().trim().split('\n').first.trim();
+    // Cut by characters, not code units: half an emoji is not a string Flutter can draw.
+    final letters = first.characters;
+    final title = first.isEmpty ? 'Note' : letters.length > 18 ? '${letters.take(17).toString().trimRight()}…' : first;
     Widget card(EntryRecording recording) => RecordingCard(key: ValueKey(recording.id.isEmpty ? recording.recording : recording.id),
-      relay: relay, recording: recording, editable: editable);
+      relay: relay, recording: recording, editable: editable, title: title, when: when);
     Widget added(EntryRecording recording) => Padding(padding: const EdgeInsets.only(top: 14), child: card(recording));
     final below = recordings.where((recording) => !recording.top);
     return SingleChildScrollView(
@@ -974,7 +980,7 @@ class NoteEditorState extends State<NoteEditor> {
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 120),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         // The date alone: nothing about sending, and no tag.
-        Text(_when(context, note?.at ?? DateTime.now(), note?.from), style: muted, textAlign: TextAlign.center),
+        Text(when, style: muted, textAlign: TextAlign.center),
         const SizedBox(height: 14),
         for (final recording in recordings.where((recording) => recording.top))
           Padding(padding: const EdgeInsets.only(bottom: 12), child: card(recording)),

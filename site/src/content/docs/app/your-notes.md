@@ -62,7 +62,7 @@ Tap a note's row to open it on its own page:
 - All of its words, in their styles.
 - Each picture, full width. Tap a picture to open it.
 - Each other file, as a row with its name and size. Tap it to open it.
-- On a voice note, the recording's card under the date, before the words: the player, and the transcript folded to 2 lines. A recording you add later shows after the words, with the pictures and files. [Play a note back](../voice-notes/#play-a-note-back)
+- On a voice note, the recording's card under the date, before the words: the player, and a **Transcript** row. Tap it to open the recording's page, with all of its words. A recording you add later shows after the words, with the pictures and files. [Play a note back](../voice-notes/#play-a-note-back)
 
 The page shows the date alone at the top. It shows no tag and nothing about sending: a note that waits sends by itself.
 
@@ -70,7 +70,7 @@ A web address in the words, such as `https://example.com` or `www.example.com`, 
 
 To put a link on words, such as *the menu*, select them and tap **Link**. A box asks for the address. If you copied a web address, the box shows it already. Tap **Done**. The words show as a link, and the note keeps them as `[the menu](https://example.com/menu)`. Put the cursor in a link and tap **Link** to change its address, or tap **Remove Link** to take the link away. An address that is not a web address shows *That is not a web address. Try again.*
 
-The page works as in Apple Notes: you change the note in place. Tap the words where you want to type. The cursor goes there and the keyboard comes up. There is no **Save** button: the phone keeps each change as you type, and when you leave the page. On a voice note, your words go under the recording's card: the page says *Add notes…* until you type. To fix a word that the phone wrote, open the transcript and type in it: [Read the transcript](../voice-notes/#read-the-transcript). The recording stays as it was.
+The page works as in Apple Notes: you change the note in place. Tap the words where you want to type. The cursor goes there and the keyboard comes up. There is no **Save** button: the phone keeps each change as you type, and when you leave the page. On a voice note, your words go under the recording's card: the page says *Add notes…* until you type. To fix a word that the phone wrote, tap **Transcript** and type on the recording's page: [Read the transcript](../voice-notes/#read-the-transcript). The recording stays as it was.
 
 To add a recording, tap the **mic** in the bar at the bottom, or in the bar over the keyboard: [Add a recording to a note](../voice-notes/#add-a-recording-to-a-note).
 
@@ -241,7 +241,7 @@ Notes go first. Each time, the phone sends your notes, then gets the new notes. 
 - **Delete anywhere.** Delete a note on one phone, and it goes to **Recently Deleted** on your other phones at their next sync, and on your page. Your AI no longer finds it: [Delete a note](#delete-a-note). A note open on another phone stays until you leave it, then goes.
 - **The newer change wins.** If two phones change the same note before they sync, the change made later stays on every phone and on your page, even when the older change arrives last.
 - **Files on tap.** A note from somewhere else lists its files by name and size. Tap one to download it and open it. Only that file downloads, so the phone uses no space or data for files you never open. You add files only to the notes you wrote on this phone.
-- **Recordings on tap.** A voice note from another phone shows its transcript at once. Tap **Play** to download its recording and play it. A recording made while sending was off stays only on the phone that made it. An older recorded note's recording downloads and opens on tap, as a file does.
+- **Recordings on tap.** A voice note from another phone shows its transcript at once: tap **Transcript** to read it. Tap **Play** to download its recording and play it. A recording made while sending was off stays only on the phone that made it. An older recorded note's recording downloads and opens on tap, as a file does.
 - **Signing out** with **Sign out** on the [Account](../settings/#account) page deletes the notes from somewhere else, and their files, from this phone. The notes that you wrote on this phone stay.
 
 Signed out, the phone gets no notes and makes no network call. Notes it got before stay until you sign out. With **My own webhook**, the phone sends only to your webhook and gets no notes. To get your notes on every phone and keep your own database too, sign in to Relay Everything and add your webhook on your Relay Everything page: your server sends every note and change from every phone to it, and what else you tick for it. Signed in, the phone sends nothing to your webhook itself.

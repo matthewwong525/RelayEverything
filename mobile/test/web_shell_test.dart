@@ -217,7 +217,7 @@ void main() {
       await finish(tester);
     });
 
-    testWidgets('a recording from the phone shows its transcript in its card, Still on your phone until its sound comes, '
+    testWidgets('a recording from the phone shows Transcript in its card, Still on your phone until its sound comes, '
         'and the page shows no Record', (tester) async {
       relay.entries = [Entry(id: 'voice', text: '', at: now, sent: true, from: 'iPhone', recordings: const [
         EntryRecording(id: 'r1', recording: '', ready: false, transcript: 'Call the dentist at 3', length: Duration(seconds: 8),
@@ -225,7 +225,7 @@ void main() {
       await show(tester, wide);
       final card = find.byType(RecordingCard);
       expect([find.descendant(of: card, matching: find.text('Still on your phone')),
-        find.descendant(of: card, matching: find.text('Call the dentist at 3'))], everyElement(findsOneWidget));
+        find.descendant(of: card, matching: find.text('Transcript'))], everyElement(findsOneWidget));
       expect([find.byType(VoicePlayer), find.byTooltip('Record')], everyElement(findsNothing));
       relay
         ..entries = [Entry(id: 'voice', text: '', at: now, sent: true, from: 'iPhone', recordings: const [

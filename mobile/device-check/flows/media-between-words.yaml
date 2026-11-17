@@ -18,13 +18,25 @@ appId: com.matthewwong525.relayApp
 # The bar over the keyboard has Attach; its menu has Photos and Files.
 - tapOn: "Attach"
 - tapOn: "Photos"
-# The iOS photo picker labels each photo "Photo, <date>"; the simulator has its sample photos. One tap picks it.
+# The iOS photo picker labels each photo "Photo, <date>"; the simulator has its sample photos.
 - extendedWaitUntil:
     visible: 'Photo, (.|\n)*'
     timeout: 30000
 - tapOn:
     text: 'Photo, (.|\n)*'
     index: 0
+    waitToSettleTimeoutMs: 2000
+# A notice at the picker's top can go away and move the photos, so tap again until the picker counts one photo.
+- repeat:
+    while:
+      visible: "Select Items"
+    times: 4
+    commands:
+      - tapOn:
+          text: 'Photo, (.|\n)*'
+          index: 0
+          waitToSettleTimeoutMs: 2000
+- assertNotVisible: "Select Items"
 # The picker takes several photos: a tap only marks one, and the blue check at the top right adds it. It is outside
 # the app, so tap its place.
 - tapOn:

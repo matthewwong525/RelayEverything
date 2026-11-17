@@ -21,7 +21,7 @@ import 'package:relay_app/screens/email_notes.dart' show EmailNotesPage;
 import 'package:relay_app/screens/hold_to_talk.dart';
 import 'package:relay_app/screens/folder.dart';
 import 'package:relay_app/screens/note_bars.dart';
-import 'package:relay_app/screens/note_blocks.dart' show RecordingCard, VoicePlayer, WavePainter;
+import 'package:relay_app/screens/note_blocks.dart' show RecordingCard, RecordingPage, VoicePlayer, WavePainter;
 import 'package:relay_app/screens/note_editor.dart';
 import 'package:relay_app/screens/recently_deleted.dart' show RecentlyDeletedScreen, keepLine;
 import 'package:relay_app/screens/round_button.dart' show ButtonPill, PillIconButton;
@@ -3475,9 +3475,13 @@ void main() {
         ..changed();
       await tester.pumpAndSettle();
       expect(find.text('Writing the words…'), findsNothing);
-      expect(find.descendant(of: find.byType(RecordingCard), matching: find.text('Ask the fab if the flex stiffener can be 0.2 mm')),
-        findsOneWidget);
+      expect(find.descendant(of: find.byType(RecordingCard), matching: find.text('Transcript')), findsOneWidget);
       expect(quill(tester).document.toPlainText(), '\n');
+      await tester.tap(find.text('Transcript'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(TextField, 'Ask the fab if the flex stiffener can be 0.2 mm'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
       await tester.pageBack();
       await tester.pumpAndSettle();
       expect([find.byType(NoteEditor), find.byType(TimelineScreen)], [findsNothing, findsNothing]);
@@ -3536,7 +3540,7 @@ void main() {
       await openNoteAsFound(tester, writing);
       await tester.pumpAndSettle();
       expect([find.byType(NoteEditor), find.text('Writing the words…')], [findsOneWidget, findsNothing]);
-      expect(find.text('Ask the fab if the flex stiffener can be 0.2 mm'), findsOneWidget);
+      expect(find.text('Transcript'), findsOneWidget);
       expect(quill(tester).document.toPlainText(), '\n');
       await tester.pageBack();
       await tester.pumpAndSettle();
@@ -3930,37 +3934,69 @@ void main() {
     const long = 'Ask the fab if the flex stiffener can be 0.2 mm, and whether the panel ships with the ring, and when the '
       'second batch of samples leaves the factory, because the launch moves if it is late.';
 
-    testWidgets('a recording card folds its transcript to 2 lines, opens with a tap, copies it, and a correction goes when '
-        'the field lets go', (tester) async {
+    testWidgets('a recording card shows Transcript and none of the words; a tap opens its page with all the words, copy and '
+        'the player, with no box and no splash', (tester) async {
       final copied = <String>[];
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
         if (call.method == 'Clipboard.setData') copied.add((call.arguments as Map)['text'] as String);
         return null;
       });
       addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
-      relay.entries = [Entry(id: 'v', text: '', at: now, recordings: const [EntryRecording(id: 'r1', recording: 'voice/v.wav',
-        length: Duration(seconds: 9), transcript: long, top: true)])];
+      relay.entries = [Entry(id: 'v', text: 'Fab call', at: now, recordings: const [EntryRecording(id: 'r1',
+        recording: 'voice/v.wav', length: Duration(seconds: 42), transcript: long, top: true)])];
       await openNote(tester, relay.entries.single);
       final card = find.byType(RecordingCard);
       expect([find.descendant(of: card, matching: find.text('Transcript')), find.descendant(of: card, matching: find.byType(VoicePlayer))],
         everyElement(findsOneWidget));
-      expect(tester.widget<Text>(find.descendant(of: card, matching: find.text(long))).maxLines, 2);
+      expect(find.textContaining('flex stiffener'), findsNothing);
+      // No ink on the row: an InkWell spread a grey splash over the card.
+      final row = find.ancestor(of: find.text('Transcript'), matching: find.byType(GestureDetector)).first;
+      expect([find.descendant(of: row, matching: find.byType(InkWell)),
+        find.ancestor(of: find.text('Transcript'), matching: find.byType(InkWell))], everyElement(findsNothing));
       expect([find.byType(TextField), find.byTooltip('Copy transcript')], everyElement(findsNothing));
       await tester.tap(find.text('Transcript'));
       await tester.pumpAndSettle();
-      expect(find.descendant(of: card, matching: find.byType(TextField)), findsOneWidget);
+      final page = find.byType(RecordingPage);
+      expect(page, findsOneWidget);
+      expect([find.descendant(of: page, matching: find.byType(VoicePlayer)), find.byTooltip('Copy transcript'),
+        find.widgetWithText(TextButton, 'Fab call'), find.textContaining(' · 0:42')], everyElement(findsOneWidget));
+      expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, long);
       await tester.tap(find.byTooltip('Copy transcript'));
       await tester.pumpAndSettle();
       // A copy shows nothing, as in Apple's apps: no toast.
       expect([copied, find.text('Copied').evaluate().length, find.byType(SnackBar).evaluate().length], [[long], 0, 0]);
+      // Every border is off, so the theme's rounded box never draws, not even with the cursor in the words.
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      final decorator = tester.widget<InputDecorator>(find.descendant(of: page, matching: find.byType(InputDecorator)));
+      final borders = [decorator.decoration.border, decorator.decoration.enabledBorder, decorator.decoration.focusedBorder,
+        decorator.decoration.disabledBorder];
+      expect(borders, everyElement(InputBorder.none));
+      expect(borders, isNot(contains(isA<OutlineInputBorder>())));
+      expect([find.byTooltip('Done'), find.descendant(of: page, matching: find.byType(VoicePlayer))], [findsOneWidget, findsNothing]);
+    });
+
+    testWidgets('a fix on the recording\'s page is kept once, when the words let go, and on Back', (tester) async {
+      relay.entries = [Entry(id: 'v', text: '', at: now, recordings: const [EntryRecording(id: 'r1', recording: 'voice/v.wav',
+        length: Duration(seconds: 9), transcript: long, top: true)])];
+      await openNote(tester, relay.entries.single);
+      await tester.tap(find.text('Transcript'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(TextButton, 'Note'), findsOneWidget, reason: 'a note with no typed words goes back to Note');
       await tester.enterText(find.byType(TextField), 'Ask the fab if the flex stiffener can be 0.3 mm');
       await tester.pump();
-      expect(relay.calls, isEmpty, reason: 'the correction waits for the field to let go');
-      // The field's own hint says *Transcript* too, unseen: the header is the first.
-      await tester.tap(find.text('Transcript').first);
+      expect(relay.calls, isEmpty, reason: 'the fix waits for the words to let go');
+      await tester.tap(find.byTooltip('Done'));
       await tester.pumpAndSettle();
       expect(relay.calls, ['transcript r1 Ask the fab if the flex stiffener can be 0.3 mm']);
-      expect(find.byType(TextField), findsNothing);
+      expect(find.byTooltip('Done'), findsNothing);
+      await tester.enterText(find.byType(TextField), 'Ask the fab if the flex stiffener can be 0.4 mm');
+      await tester.pump();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect([find.byType(RecordingPage), find.byType(NoteEditor)], [findsNothing, findsOneWidget]);
+      expect(relay.calls, ['transcript r1 Ask the fab if the flex stiffener can be 0.3 mm',
+        'transcript r1 Ask the fab if the flex stiffener can be 0.4 mm']);
     });
 
     testWidgets('the card says Writing the words, then No words heard, and a blank correction is never sent', (tester) async {
@@ -3988,9 +4024,10 @@ void main() {
       relay.entries = [Entry(id: 'v', text: '', at: now, sent: true, from: 'iPhone',
         recordings: const [EntryRecording(id: 'r1', recording: 'r1', transcript: 'Call the dentist at 3', top: true)])];
       await openNote(tester, relay.entries.single);
+      expect(find.byTooltip('Record'), findsNothing);
       await tester.tap(find.text('Transcript'));
       await tester.pumpAndSettle();
-      expect([find.byType(TextField), find.byTooltip('Record')], everyElement(findsNothing));
+      expect(find.byType(TextField), findsNothing);
       expect(find.widgetWithText(SelectableText, 'Call the dentist at 3'), findsOneWidget);
     });
 
@@ -4000,9 +4037,10 @@ void main() {
         ..deleted = [Entry(id: 'v', text: '', at: now, sent: true, deletedAt: now,
           recordings: const [EntryRecording(id: 'r1', recording: 'voice/v.wav', transcript: 'Call the dentist at 3', top: true)])];
       await openNote(tester, relay.deleted.single);
+      expect(find.byTooltip('Record'), findsNothing);
       await tester.tap(find.text('Transcript'));
       await tester.pumpAndSettle();
-      expect([find.byType(TextField), find.byTooltip('Record')], everyElement(findsNothing));
+      expect(find.byType(TextField), findsNothing);
       expect(find.widgetWithText(SelectableText, 'Call the dentist at 3'), findsOneWidget);
     });
 
@@ -4016,8 +4054,8 @@ void main() {
       ])];
       await openNote(tester, relay.entries.single);
       double top(Finder finder) => tester.getTopLeft(finder).dy;
-      final first = find.ancestor(of: find.text('First thought'), matching: find.byType(RecordingCard));
-      final second = find.ancestor(of: find.text('Second thought'), matching: find.byType(RecordingCard));
+      final first = find.byKey(const ValueKey('r1'));
+      final second = find.byKey(const ValueKey('r2'));
       final tops = [top(first), top(find.byType(QuillEditor)), top(find.text('lease.pdf')), top(second), top(find.text('quote.pdf'))];
       expect(tops, [for (final y in [...tops]..sort()) y]);
       expect(find.textContaining('Add notes…', findRichText: true), findsOneWidget);

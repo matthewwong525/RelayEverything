@@ -16,7 +16,7 @@ import 'package:relay_app/screens/connect_ai.dart' show ConnectAiPage;
 import 'package:relay_app/screens/email_notes.dart' show EmailNotesPage;
 import 'package:relay_app/screens/hold_to_talk.dart' show NewNoteButton;
 import 'package:relay_app/screens/home.dart';
-import 'package:relay_app/screens/note_blocks.dart' show RecordingCard;
+import 'package:relay_app/screens/note_blocks.dart' show RecordingCard, RecordingPage;
 import 'package:relay_app/screens/note_editor.dart';
 import 'package:relay_app/screens/settings.dart';
 import 'package:relay_app/screens/timeline.dart' show TimelineScreen;
@@ -173,19 +173,26 @@ void main() {
     });
   });
 
-  testWidgets("a phone's recording shows as its card with its transcript and plays, and the Mac shows no Record",
+  testWidgets("a phone's recording shows as its card, plays, and opens its transcript's page, and the Mac shows no Record",
       (tester) async {
     await show(tester, wide);
     await tester.tap(find.descendant(of: find.byType(NotesPane), matching: find.text('Call the dentist at 3')));
     await tester.pumpAndSettle();
     expect(editor(tester).id, 'voice');
     final card = find.byType(RecordingCard);
-    expect([find.descendant(of: card, matching: find.text('Call the dentist at 3')),
+    expect([find.descendant(of: card, matching: find.text('Transcript')),
       find.descendant(of: card, matching: find.byTooltip('Play'))], everyElement(findsOneWidget));
     expect(find.byTooltip('Record'), findsNothing);
     await tester.tap(find.descendant(of: card, matching: find.byTooltip('Play')));
     await tester.pump();
     expect(relay.calls, contains('play r1'));
+    // The recording's page opens on the Mac too, with the words to read.
+    await tester.tap(find.descendant(of: card, matching: find.text('Transcript')));
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: find.byType(RecordingPage), matching: find.widgetWithText(SelectableText, 'Call the dentist at 3')),
+      findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await finish(tester);
   });
 

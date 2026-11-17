@@ -7,7 +7,9 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import '../brand.dart';
 import '../relay.dart';
+import 'back_to.dart';
 import 'hold_to_talk.dart' show clockOf;
+import 'round_button.dart';
 
 /// A picture of a note: the app's copy on the phone, or the person's space's file route in the browser. [cacheWidth] keeps
 /// a small picture small in memory.
@@ -254,75 +256,35 @@ class WavePainter extends CustomPainter {
   bool shouldRepaint(WavePainter old) => old.levels != levels || old.done != done || old.played != played || old.rest != rest;
 }
 
-/// One recording in a note: its player, a hairline, then *Transcript*, folded to 2 lines until a tap opens it. Open, it
-/// offers *Copy* and, with [editable], a field to correct the words, kept when the field loses the cursor or folds.
-/// While the words are written, failed or empty, the card says so. In the browser and on the Mac, a recording whose
-/// sound has not come from the phone shows *Still on your phone* in place of the player.
-class RecordingCard extends StatefulWidget {
-  const RecordingCard({super.key, required this.relay, required this.recording, this.editable = false});
+/// One recording in a note: its player, a hairline, then a *Transcript ›* row with none of the words. A tap on the row
+/// opens the [RecordingPage], with all the words, as Apple Notes opens a recording. The row shows no splash: the page
+/// opening shows the tap. While the words are written, failed or empty, the card says so and opens nothing. In the
+/// browser and on the Mac, a recording whose sound has not come from the phone shows *Still on your phone* in place of
+/// the player.
+class RecordingCard extends StatelessWidget {
+  const RecordingCard({super.key, required this.relay, required this.recording, this.editable = false, this.title = 'Note',
+    this.when});
 
   final Relay relay;
   final EntryRecording recording;
-  /// The phone's own note: its transcript can be corrected here.
+  /// The phone's own note: its transcript can be corrected on the recording's page.
   final bool editable;
+  /// The note's title, which the recording's page goes back to.
+  final String title;
+  /// The note's date, such as *Today at 11:24 PM*, which the recording's page shows with the length.
+  final String? when;
 
-  @override
-  State<RecordingCard> createState() => _RecordingCardState();
-}
-
-class _RecordingCardState extends State<RecordingCard> {
-  bool _open = false;
-  late final _words = TextEditingController(text: widget.recording.transcript ?? '');
-  final _focus = FocusNode();
-
-  EntryRecording get _recording => widget.recording;
-
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(() {
-      if (!_focus.hasFocus) _keep();
-    });
-  }
-
-  @override
-  void didUpdateWidget(RecordingCard old) {
-    super.didUpdateWidget(old);
-    final words = _recording.transcript ?? '';
-    if (!_focus.hasFocus && words != old.recording.transcript && words != _words.text) _words.text = words;
-  }
-
-  @override
-  void dispose() {
-    _keep();
-    _focus.dispose();
-    _words.dispose();
-    super.dispose();
-  }
-
-  /// Sends a corrected transcript; blank words are never kept, so the words written stay.
-  void _keep() {
-    final words = _words.text.trim();
-    if (!widget.editable || words.isEmpty || words == _recording.transcript?.trim()) return;
-    unawaited(widget.relay.editTranscript(_recording.id, words));
-  }
-
-  void _toggle() {
-    if (_open) _focus.unfocus();
-    setState(() => _open = !_open);
-  }
-
-  /// Copies the words and shows nothing, as Apple's apps do.
-  Future<void> _copy() => Clipboard.setData(ClipboardData(text: _words.text.trim()));
+  void _open(BuildContext context) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
+    RecordingPage(relay: relay, recording: recording, editable: editable, back: title, when: when)));
 
   @override
   Widget build(BuildContext context) {
     final brand = brandOf(context);
     final muted = TextStyle(fontSize: 15, color: brand.muted);
-    final recording = _recording;
+    final words = recording.transcript != null && !recording.noWords && !recording.writing && !recording.failed;
     return Card(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       if (recording.ready)
-        VoicePlayer(relay: widget.relay, recording: recording.recording, length: recording.length)
+        VoicePlayer(relay: relay, recording: recording.recording, length: recording.length)
       else Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 16), child: Row(spacing: 10, children: [
         Icon(CupertinoIcons.mic, size: 18, color: brand.muted),
         Expanded(child: Text('Still on your phone', style: muted)),
@@ -330,13 +292,24 @@ class _RecordingCardState extends State<RecordingCard> {
       ])),
       if (recording.writing || recording.failed || recording.transcript != null) ...[
         Divider(height: 1, indent: 16, endIndent: 16, color: brand.muted.withValues(alpha: 0.15)),
-        Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 14), child: _transcript(brand, muted)),
+        if (words)
+          // Not an InkWell: its grey splash spread over the whole card.
+          Semantics(button: true, child: GestureDetector(
+            key: const ValueKey('transcript'),
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _open(context),
+            child: Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 14), child: Row(children: [
+              Text('Transcript', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: brand.muted)),
+              const Spacer(),
+              Icon(CupertinoIcons.chevron_right, size: 15, color: brand.muted),
+            ])),
+          ))
+        else Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 14), child: _status(brand, muted)),
       ],
     ]));
   }
 
-  Widget _transcript(BrandColors brand, TextStyle muted) {
-    final recording = _recording;
+  Widget _status(BrandColors brand, TextStyle muted) {
     if (recording.writing) {
       return Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 8, children: [
         Text('Writing the words…', style: muted),
@@ -348,27 +321,129 @@ class _RecordingCardState extends State<RecordingCard> {
         Text('The words did not come. Your recording is safe.', style: muted),
         // The reason, small and muted: the person sees it only on a recording that failed.
         if (recording.why case final why?) Text('Why: $why', style: TextStyle(fontSize: 13, color: brand.muted)),
-        FilledButton(onPressed: widget.relay.writeWordsAgain, child: const Text('Try again')),
+        FilledButton(onPressed: relay.writeWordsAgain, child: const Text('Try again')),
       ]);
     }
-    if (recording.noWords) return Text('No words heard', style: muted);
-    const words = TextStyle(fontSize: 15, height: 1.45);
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 6, children: [
-      Semantics(button: true, expanded: _open, child: InkWell(onTap: _toggle, child: Row(children: [
-        Text('Transcript', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: brand.muted)),
-        const Spacer(),
-        if (_open) IconButton(tooltip: 'Copy transcript', onPressed: _copy, visualDensity: VisualDensity.compact,
-          icon: Icon(CupertinoIcons.doc_on_doc, size: 17, color: brand.muted)),
-        Icon(_open ? CupertinoIcons.chevron_up : CupertinoIcons.chevron_down, size: 15, color: brand.muted,
-          semanticLabel: _open ? 'Fold transcript' : 'Open transcript'),
-      ]))),
-      if (!_open)
-        GestureDetector(onTap: _toggle, child: Text(_words.text, maxLines: 2, overflow: TextOverflow.ellipsis, style: words))
-      else if (widget.editable)
-        TextField(controller: _words, focusNode: _focus, maxLines: null, style: words,
-          decoration: const InputDecoration.collapsed(hintText: 'Transcript'))
-      else
-        SelectableText(_words.text, style: words),
-    ]);
+    return Text('No words heard', style: muted);
+  }
+}
+
+/// A recording's own page, as Apple Notes has it: back to the note, *Copy transcript*, the date and the length, all the
+/// words as plain text, and the player at the bottom. With [editable], a tap on a word puts the cursor there, with no
+/// box: the change is kept when the words lose the cursor, on *Done*, and when the page closes. Newer words from the
+/// person's space fill in while the words do not have the cursor.
+class RecordingPage extends StatefulWidget {
+  const RecordingPage({super.key, required this.relay, required this.recording, this.editable = false, this.back = 'Note',
+    this.when});
+
+  final Relay relay;
+  final EntryRecording recording;
+  /// The phone's own note: its transcript can be corrected here.
+  final bool editable;
+  /// The page under it, which *Back* names: the note's title.
+  final String back;
+  /// The note's date, shown with the recording's length.
+  final String? when;
+
+  @override
+  State<RecordingPage> createState() => _RecordingPageState();
+}
+
+class _RecordingPageState extends State<RecordingPage> {
+  late EntryRecording _recording = widget.recording;
+  late final _words = TextEditingController(text: _recording.transcript ?? '');
+  final _focus = FocusNode();
+  /// The words last sent, so a blur and then the page closing send them once.
+  String? _sent;
+
+  Relay get relay => widget.relay;
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(_focusChanged);
+    relay.addListener(_synced);
+  }
+
+  void _focusChanged() {
+    if (!_focus.hasFocus) _keep();
+    if (mounted) setState(() {});
+  }
+
+  /// The recording as the phone has it now: by its file id, or by its file while it has none.
+  EntryRecording? get _live {
+    final id = _recording.id;
+    return [...relay.entries, ...relay.deleted].expand((entry) => entry.recordings)
+      .where((other) => id.isNotEmpty ? other.id == id : other.recording == _recording.recording).firstOrNull;
+  }
+
+  void _synced() {
+    final live = _live;
+    if (live == null || !mounted) return;
+    final words = live.transcript ?? '';
+    if (!_focus.hasFocus && words != _recording.transcript && words != _words.text) _words.text = words;
+    setState(() => _recording = live);
+  }
+
+  @override
+  void dispose() {
+    relay.removeListener(_synced);
+    _keep();
+    _focus.removeListener(_focusChanged);
+    _focus.dispose();
+    _words.dispose();
+    super.dispose();
+  }
+
+  /// Sends a corrected transcript; blank words are never kept, so the words written stay.
+  void _keep() {
+    final words = _words.text.trim();
+    if (!widget.editable || words.isEmpty || words == _recording.transcript?.trim() || words == _sent) return;
+    _sent = words;
+    unawaited(relay.editTranscript(_recording.id, words));
+  }
+
+  /// Copies the words and shows nothing, as Apple's apps do.
+  Future<void> _copy() => Clipboard.setData(ClipboardData(text: _words.text.trim()));
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = brandOf(context);
+    final recording = _recording;
+    final editing = _focus.hasFocus;
+    final line = [?widget.when, if (recording.length case final length?) clockOf(length)].join(' · ');
+    final words = TextStyle(fontSize: 17, height: 1.5, color: brand.ink);
+    // Every border off: the theme's own would draw a rounded box around the words.
+    const none = InputDecoration.collapsed(hintText: 'Transcript');
+    return Scaffold(
+      appBar: AppBar(leading: BackTo(widget.back), leadingWidth: BackTo.widthOf(widget.back), actions: [
+        RoundIconButton(icon: CupertinoIcons.doc_on_doc, tooltip: 'Copy transcript', onPressed: _copy),
+        if (editing) Padding(padding: const EdgeInsets.only(left: 8),
+          child: RoundIconButton(icon: CupertinoIcons.checkmark_alt, tooltip: 'Done', onPressed: _focus.unfocus, accent: true)),
+        const SizedBox(width: 12),
+      ]),
+      body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Expanded(child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            if (line.isNotEmpty) Text(line, style: TextStyle(fontSize: 13, color: brand.muted), textAlign: TextAlign.center),
+            const SizedBox(height: 14),
+            if (widget.editable)
+              TextField(controller: _words, focusNode: _focus, maxLines: null, style: words,
+                decoration: none.copyWith(enabledBorder: InputBorder.none, focusedBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none, errorBorder: InputBorder.none, focusedErrorBorder: InputBorder.none))
+            else
+              SelectableText(_words.text, style: words),
+          ]),
+        )),
+        // The keyboard takes the bottom while the words are fixed: the player comes back with *Done*.
+        if (!editing) SafeArea(top: false, minimum: const EdgeInsets.fromLTRB(12, 0, 12, 12), child: Card(child: recording.ready
+          ? VoicePlayer(relay: relay, recording: recording.recording, length: recording.length)
+          : Padding(padding: const EdgeInsets.all(16), child: Row(spacing: 10, children: [
+              Icon(CupertinoIcons.mic, size: 18, color: brand.muted),
+              Expanded(child: Text('Still on your phone', style: TextStyle(fontSize: 15, color: brand.muted))),
+            ])))),
+      ]),
+    );
   }
 }

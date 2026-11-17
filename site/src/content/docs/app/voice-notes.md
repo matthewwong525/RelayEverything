@@ -18,7 +18,7 @@ The bars use the sound level only to draw the screen. The app keeps none of it a
 
 A tap shorter than half a second opens the **New note** page to type, and records nothing. If you let go before the circle closes, it empties.
 
-When you tap to save, the note opens with the recording's card at the top. The card says **Writing the words…**, then the transcript fills in. Under the card, the page says *Add notes…*: tap there to type your own notes. Tap the back button to go to the page you were on. In your notes, the note's row shows a microphone and the recording's length, then your own words, or the start of the transcript when you typed none. Tap **Voice** above your notes to see only the notes with a recording.
+When you tap to save, the note opens with the recording's card at the top. The card says **Writing the words…**, then **Transcript** shows when the words are in. Under the card, the page says *Add notes…*: tap there to type your own notes. Tap the back button to go to the page you were on. In your notes, the note's row shows a microphone and the recording's length, then your own words, or the start of the transcript when you typed none. Tap **Voice** above your notes to see only the notes with a recording.
 
 A note saves by itself after 5 minutes: the screen says *Saves by itself at 5:00*. Then it does not open: it shows at the top of your notes.
 
@@ -93,9 +93,9 @@ With a screen reader, swipe up or down on the waves to go 5 seconds forward or b
 
 ## Read the transcript
 
-Under the player, the **Transcript** row shows the first 2 lines of what you said. Tap it to see all of the words, with a copy button. The copy shows no message. Tap it again to fold them.
+Under the player, the card shows a **Transcript** row. Tap it to open the recording's page, as in Apple Notes. The page shows all of the words as plain text, the date and the length, and the player at the bottom. Long words scroll. Tap the copy button at the top to copy the words: the copy shows no message. Tap the back button to go to the note.
 
-To fix a wrong word, open the transcript and type in it. The phone keeps the change as a change of the note, and with sending on, it goes to your space, your other phones and your webhooks. A note in **Recently Deleted** reads only: [recover it](../your-notes/#recently-deleted) first.
+To fix a wrong word, tap it on the recording's page and type. Tap the check button to close the keyboard. The phone keeps the change as a change of the note, and with sending on, it goes to your space, your other phones and your webhooks. A note in **Recently Deleted** reads only: [recover it](../your-notes/#recently-deleted) first.
 
 ## Where your recording goes
 

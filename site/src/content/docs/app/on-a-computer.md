@@ -121,7 +121,7 @@ Type words in **Search**, at the top right, or press Ctrl+F (⌘F on a Mac). The
 
 ## Voice notes
 
-A note shows each recording as its card, as on the phone: the one a voice note starts with above your words, and the others after them. Click **Play** to play the recording from your space. Click or drag on the line to go to that part, and click **Pause** to stop. The browser shows a plain line in place of the sound waves. Under the player, the **Transcript** row shows the first 2 lines of the words: click it to see all of them. Until the phone sends the recording, the card shows the transcript and says the recording is still on your phone.
+A note shows each recording as its card, as on the phone: the one a voice note starts with above your words, and the others after them. Click **Play** to play the recording from your space. Click or drag on the line to go to that part, and click **Pause** to stop. The browser shows a plain line in place of the sound waves. Under the player, click the **Transcript** row to open the recording's page, with all of the words. Until the phone sends the recording, the card says the recording is still on your phone, and its **Transcript** row still opens the words.
 
 The page and the Mac app record nothing: you record on your phone only, because the phone writes the words with its own speech model. [Voice notes](../voice-notes/)
 

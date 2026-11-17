@@ -3954,6 +3954,12 @@ void main() {
       expect([find.descendant(of: row, matching: find.byType(InkWell)),
         find.ancestor(of: find.text('Transcript'), matching: find.byType(InkWell))], everyElement(findsNothing));
       expect([find.byType(TextField), find.byTooltip('Copy transcript')], everyElement(findsNothing));
+      // The row is its own button for a screen reader, not merged into the card: a tap on its label hits the row.
+      final semantics = tester.ensureSemantics();
+      final node = tester.getSemantics(find.text('Transcript'));
+      expect([node.label, node.getSemanticsData().hasAction(SemanticsAction.tap)], ['Transcript', true]);
+      expect(node.rect.height, lessThan(tester.getSize(card).height / 2));
+      semantics.dispose();
       await tester.tap(find.text('Transcript'));
       await tester.pumpAndSettle();
       final page = find.byType(RecordingPage);

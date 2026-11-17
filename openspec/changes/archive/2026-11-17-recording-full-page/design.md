@@ -60,3 +60,4 @@ Existing: `VoicePlayer`, `BackTo`, `RoundIconButton`, `Card`, brand colors. New:
 - **2026-11-17** — Assumed: the TestFlight look (task 4.2) moves to an open thread after the publish, because TestFlight builds only from `main`.
 - **2026-11-17** — Review fixes: the back title is cut by characters, not code units, so an emoji is never split; the device check taps `Back(.|\n)*` and waits for *Copy transcript* to go.
 - **2026-11-17** — Archive checkpoint: built, reviewed (2 fixes), 978 phone tests pass locally; saved for publish on branch fix-transcript-open-splash.
+- **2026-11-17** — iPhone check fix: the *Transcript* row is its own screen-reader node; merged into the card, a tap on its label hit the player, so the device check's tap opened nothing.

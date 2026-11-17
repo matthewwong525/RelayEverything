@@ -293,8 +293,9 @@ class RecordingCard extends StatelessWidget {
       if (recording.writing || recording.failed || recording.transcript != null) ...[
         Divider(height: 1, indent: 16, endIndent: 16, color: brand.muted.withValues(alpha: 0.15)),
         if (words)
-          // Not an InkWell: its grey splash spread over the whole card.
-          Semantics(button: true, child: GestureDetector(
+          // Not an InkWell: its grey splash spread over the whole card. Its own node: merged into the card, a screen
+          // reader or a test tapping *Transcript* taps the middle of the card, the player.
+          Semantics(container: true, button: true, child: GestureDetector(
             key: const ValueKey('transcript'),
             behavior: HitTestBehavior.opaque,
             onTap: () => _open(context),

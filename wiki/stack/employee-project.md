@@ -79,7 +79,7 @@ The app serves the file at `/_memory/setup.mjs` on its own address: the same lin
 **The copy keeps itself up to date.** Plain Git in it reaches the app with the person's sign-in, so any tool that fetches sees the newest published project:
 
 - **A new chat** in a teammate's copy, on the published branch with nothing changed and nothing ahead, pulls the newest version in the background. A copy with edits, extra commits or another branch is left as it is. The owner's own copy never moves by itself.
-- **A new [Paseo](https://paseo.sh) worktree** starts from `origin/main`, which Paseo's background fetch keeps current. Paseo needs no change.
+- **A new [Paseo](https://paseo.sh) worktree** starts from the copy's local `main`, not `origin/main`, and Paseo has no setting to change it: on 2026-11-12 a workspace started 23 changes behind. Keep the local `main` current, by the new-chat pull above or, on a server, a timer that fast-forwards it to `origin/main` when no tracked file has changes.
 - **When the sign-in has run out**, Git fails with a line naming the sign-in step, and work goes on from the last download. A new workspace from [the schedule skill](../../.agents/skills/schedule/SKILL.md) says the same in its warning.
 
 Setup writes [`scripts/company-git-credential.mjs`](../../scripts/company-git-credential.mjs) into the copy's `.git/config` by its full path, for the app's Git address alone. On each call it reads the sign-in `cloudflared` saved, checks it belongs to the person who set the copy up and has not run out, and hands it to Git as a password. It never signs in and never stores anything. An empty helper entry comes first, so a computer-wide helper such as a keychain never receives the sign-in.

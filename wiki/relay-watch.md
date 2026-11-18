@@ -25,7 +25,7 @@ Swift's `Int` is the size of a pointer. A Series 4 to 8, an SE, an SE 2, the fir
 
 ## The phone keeps every watch note
 
-A voice note held on the phone with no words is deleted, because it was a mistaken hold. A watch note with no words is kept as *No words heard*, with its recording, and is not sent. The person can't hear the recording on the watch, so a deleted watch note is a silent loss. The note keeps its `source` (`watch`) in the store, not in its body, because the body is what gets sent.
+A voice note held on *New note* with nothing but its one recording and no words is deleted, because it was a mistaken hold: `_silentNewNote` in [`controller.dart`](../mobile/lib/controller.dart). A watch note with no words is kept, and its recording shows *No words heard*. With sending on, its recording goes to the person's space with no transcript, as [the phone app's guide](../mobile/README.md) says. The person can't hear the recording on the watch, so a deleted watch note is a silent loss. The note keeps its `source` (`watch`) in the store, not in its body, because the body is what gets sent.
 
 ## The phone writes the words off screen
 
@@ -43,3 +43,4 @@ CI builds the signed app with the watch app, compiles the watch app for the [32-
 
 - [How the phone sends health, places and the calendar](relay-phone-sync.md): the phone's own background round.
 - [The device check](development/device-check.md): what the iPhone simulator check can show.
+- [The phone app](../mobile/README.md): how its notes, recordings and builds work, the watch app included.

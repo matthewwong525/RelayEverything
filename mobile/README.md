@@ -135,7 +135,7 @@ The App Store page lives in [`ios/fastlane/`](ios/fastlane/), next to the iPhone
 
 **Change the privacy answers.** Apple has no way for a script to set them. When a change makes the app send a new kind of data, change `app_privacy_details.json` in the same change. Then, before the next release tag, open the app's *App Privacy* page in [App Store Connect](https://appstoreconnect.apple.com/), make the answers the same as the file, and publish them.
 
-**Set once by hand in App Store Connect:** the price, free, in all countries; and the reviewer contact, under *App Review Information*. The contact's email and phone stay in App Store Connect, never in this repository.
+**Set once by hand in App Store Connect:** the price, free, in all countries; and the reviewer contact, under *App Review Information*. The contact's email and phone stay in App Store Connect, never in this repository. The app's content rights answer is *does not use third-party content* (`contentRightsDeclaration`, set once through the API): without it, a release stops at App Store review, and the release check does not see it.
 
 ## The Mac app
 

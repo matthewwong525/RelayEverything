@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · parakeet-speech-model</title>
+<title>Review · 2026-11-19-parakeet-speech-model</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -451,11 +451,11 @@
 })();
 </script>
 </head>
-<body data-change="parakeet-speech-model" data-own-back>
+<body data-change="2026-11-19-parakeet-speech-model" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>parakeet-speech-model</h1>
+  <h1>2026-11-19-parakeet-speech-model</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Tap a picture to see it full screen.</span></p>
@@ -590,6 +590,9 @@ h1{font-size:30px;font-weight:700;margin:40px 0 14px}
 <li class="decision card" id="decision-13" data-note="decision-13" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-19</p>Assumed: the time limit ends the note's wait and sends the worker its stop message, and a failed run disposes the worker, in place of the <code>Isolate.kill</code> that design.md Decision 4 named, because <code>sherpa_onnx</code> sets no native finalizer, so a killed worker keeps its 130 MB model in memory until the app closes (found in review).</li>
 <li class="decision card" id="decision-14" data-note="decision-14" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-19</p>Assumed: the Mac app keeps <code>sherpa_onnx_macos</code>, about 58 MB, though it has no voice notes, and a check confirms that the Mac build in CI passes and the built app opens, because <code>sherpa_onnx</code> names its Mac package for every app that uses it, and only a copy of the plugin could leave it out. Its podspec links the library into the app (<code>vendored_libraries</code>), so a build step that deletes it would stop the Mac app from opening.</li>
 <li class="decision card" id="decision-15" data-note="decision-15" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-19</p>Checkpoint: built, reviewed twice (memory fix, update-scenario test, Mac size accepted); local checks pass; saved for the phone builds in CI (task 5.2) and the device check (task 5.3).</li>
+<li class="decision card" id="decision-16" data-note="decision-16" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-19</p>Saved as PR #158: every check passed, all three phone builds too, and the iPhone build's check said <i>All speech parts are in the build</i>. A branch build keeps no <code>.ipa</code>, so its size is not known; the Mac build's file grew from 28 MB to 49 MB, the Mac speech library this plan accepted.</li>
+<li class="decision card" id="decision-17" data-note="decision-17" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-19</p>iPhone device check on <code>732c742</code> (<a href="https://github.com/matthewwong525/RelayEverything/actions/runs/44573916834">run</a>): the ask says <i>103 MB</i>, the voice-note step got the model and passed, and the recording-card step's card showed <i>No words heard</i> (the simulator's microphone is silent), so the engine ran. The tour ended <code>broken</code> on a later recording-card tap that is out of scope: since #153 the title's tap area spans the card, so a tap on <i>Fab call</i> opens no keyboard. Verdict: UNKNOWN, no contradiction of this change's scenarios.</li>
+<li class="decision card" id="decision-18" data-note="decision-18" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-19</p>Archived for publishing; the main spec <code>relay-voice-notes</code> already holds this change's requirement.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

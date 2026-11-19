@@ -26,5 +26,5 @@
 ## 5. Checks
 
 - [x] 5.1 Run `flutter analyze` and `flutter test` in `mobile/`, and `node scripts/public-check.mjs`; verify all pass.
-- [ ] 5.2 `/save`, then verify the phone builds in CI pass, the iPhone build's speech-parts check passes, and report the `.ipa` size beside the last build's.
-- [ ] 5.3 With `/verify`, run the device check with `--flows voice-note,recording-card`; verify the ask shows *103 MB* and, where the simulator can, a voice note gets its words.
+- [x] 5.2 `/save`, then verify the phone builds in CI pass, the iPhone build's speech-parts check passes, and report the `.ipa` size beside the last build's.
+- [x] 5.3 With `/verify`, run the device check with `--flows voice-note,recording-card`; verify the ask shows *103 MB* and, where the simulator can, a voice note gets its words.

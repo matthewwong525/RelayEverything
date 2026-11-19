@@ -1,6 +1,6 @@
 # Proposal: Voice notes use Parakeet small
 
-**Status:** built, checking
+**Status:** ready-to-ship
 **Branch:** compare-parakeet-small-voice-model
 **Open questions:** none
 
@@ -51,6 +51,9 @@ The phone writes a voice note's words with whisper.cpp's small English model. NV
 - **2026-11-19** — Assumed: the time limit ends the note's wait and sends the worker its stop message, and a failed run disposes the worker, in place of the `Isolate.kill` that design.md Decision 4 named, because `sherpa_onnx` sets no native finalizer, so a killed worker keeps its 130 MB model in memory until the app closes (found in review).
 - **2026-11-19** — Assumed: the Mac app keeps `sherpa_onnx_macos`, about 58 MB, though it has no voice notes, and a check confirms that the Mac build in CI passes and the built app opens, because `sherpa_onnx` names its Mac package for every app that uses it, and only a copy of the plugin could leave it out. Its podspec links the library into the app (`vendored_libraries`), so a build step that deletes it would stop the Mac app from opening.
 - **2026-11-19** — Checkpoint: built, reviewed twice (memory fix, update-scenario test, Mac size accepted); local checks pass; saved for the phone builds in CI (task 5.2) and the device check (task 5.3).
+- **2026-11-19** — Saved as PR #158: every check passed, all three phone builds too, and the iPhone build's check said *All speech parts are in the build*. A branch build keeps no `.ipa`, so its size is not known; the Mac build's file grew from 28 MB to 49 MB, the Mac speech library this plan accepted.
+- **2026-11-19** — iPhone device check on `732c742` ([run](https://github.com/matthewwong525/RelayEverything/actions/runs/44573916834)): the ask says *103 MB*, the voice-note step got the model and passed, and the recording-card step's card showed *No words heard* (the simulator's microphone is silent), so the engine ran. The tour ended `broken` on a later recording-card tap that is out of scope: since #153 the title's tap area spans the card, so a tap on *Fab call* opens no keyboard. Verdict: UNKNOWN, no contradiction of this change's scenarios.
+- **2026-11-19** — Archived for publishing; the main spec `relay-voice-notes` already holds this change's requirement.
 
 ## Capabilities
 

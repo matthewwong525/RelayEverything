@@ -1,6 +1,6 @@
 # Proposal
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** `note-editor-cursor-and-tab`
 **Open questions:** none
 
@@ -44,3 +44,4 @@ On the web page and the Mac app, two things in a note do not work as you expect.
 - **2026-11-19** — Assumed: Tab with a selection moves every line it touches through the app's own indent command, the same one the Format sheet's indent buttons use, because the editor's built-in Tab acts on one line only.
 - **2026-11-19** — Assumed: the code was written before this plan, because the person reported two bugs in a live screen; the plan records the fix and its checks.
 - **2026-11-19** — Save: the two requirements join the main `relay-note-editing` spec; the preview is next, then publish.
+- **2026-11-19** — Archived to publish: the person chose *Publish it* after the preview; checks passed on PR #157.

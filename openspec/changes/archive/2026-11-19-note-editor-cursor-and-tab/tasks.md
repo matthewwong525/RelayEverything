@@ -8,4 +8,4 @@
 
 - [x] 2.1 `flutter analyze` and `flutter test` pass
 - [x] 2.2 A local dark-mode web build shows a light cursor, and Tab and Shift+Tab move all three selected bullets
-- [ ] 2.3 `/save`, then show the preview
+- [x] 2.3 `/save`, then show the preview

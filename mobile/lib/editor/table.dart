@@ -6,12 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart' show HitTestResult;
 import 'package:flutter/rendering.dart' show RenderMetaData;
 import 'package:flutter/services.dart';
-import 'package:flutter_quill/flutter_quill.dart';
-import 'package:flutter_quill/quill_delta.dart';
+import 'package:super_editor/super_editor.dart';
 
 import '../brand.dart';
 import '../screens/more_menu.dart';
+import 'attachments.dart' show NoteBlockBox, NoteBlockViewModel;
 import 'markdown.dart';
+import 'note_editing.dart';
 
 /// How long a cell waits after the last letter before its words go into the note: each pause is one Undo step.
 const cellPause = Duration(milliseconds: 600);
@@ -36,35 +37,59 @@ bool isOnTable(BuildContext context, Offset position) {
   });
 }
 
-/// Each table embed in [delta], with where it is in the note.
-Iterable<(int, NoteTable)> tablesIn(Delta delta) sync* {
-  var offset = 0;
-  for (final op in delta.toList()) {
-    if (op.data case final Map<dynamic, dynamic> embed) {
-      if (NoteTable.fromEmbed(embed) case final table?) yield (offset, table);
-    }
-    offset += op.length ?? 0;
+/// A table in a note, a block of its own.
+class NoteTableNode extends BlockNode {
+  NoteTableNode({required this.id, required this.table, super.metadata}) {
+    initAddToMetadata({NodeMetadata.blockType: const NamedAttribution('noteTable')});
   }
+
+  @override
+  final String id;
+
+  final NoteTable table;
+
+  /// The same block with [table] in place of its own.
+  NoteTableNode withTable(NoteTable table) => NoteTableNode(id: id, table: table, metadata: metadata);
+
+  @override
+  String? copyContent(dynamic selection) => table.text;
+
+  @override
+  bool hasEquivalentContent(DocumentNode other) => other is NoteTableNode && other.table.sameRows(table);
+
+  @override
+  NoteTableNode copyWithAddedMetadata(Map<String, dynamic> newProperties) =>
+    NoteTableNode(id: id, table: table, metadata: {...metadata, ...newProperties});
+
+  @override
+  NoteTableNode copyAndReplaceMetadata(Map<String, dynamic> newMetadata) =>
+    NoteTableNode(id: id, table: table, metadata: newMetadata);
+
+  NoteTableNode copy() => NoteTableNode(id: id, table: table, metadata: Map.of(metadata));
+
+  @override
+  bool operator ==(Object other) => identical(this, other) || other is NoteTableNode && other.id == id &&
+    identical(other.table, table);
+
+  @override
+  int get hashCode => Object.hash(id, table);
 }
 
-/// [op] with a new id for the table it holds, so a pasted copy of a table is a table of its own; any other [op] as it
-/// is.
-Operation withNewTableId(Operation op) {
-  if (op.data case final Map<dynamic, dynamic> embed) {
-    if (NoteTable.fromEmbed(embed) case final table?) {
-      return Operation.insert({tableEmbed: NoteTable(table.rows, source: table.source).toJson()}, op.attributes);
-    }
-  }
-  return op;
-}
+/// The tables in [nodes], in order.
+Iterable<NoteTable> tablesIn(Iterable<DocumentNode> nodes) => [for (final node in nodes) if (node is NoteTableNode) node.table];
+
+/// [node] with a new id for the table it holds, so a pasted copy of a table is a table of its own; any other [node] as
+/// it is.
+DocumentNode withNewTableId(DocumentNode node) =>
+  node is NoteTableNode ? NoteTableNode(id: Editor.createNodeId(), table: node.table.withNewId()) : node;
 
 /// The tables of one note page: the cell in use, the cell changes still to write, and the changes to the note's
 /// tables, each as one change of the note, so one Undo takes each back. A table's cells are fields outside the editor,
 /// so the page asks here whether the person edits a table.
 class NoteTables extends ChangeNotifier {
-  NoteTables(this.controller);
+  NoteTables(this.editing);
 
-  final QuillController controller;
+  final NoteEditing editing;
 
   /// The node a cell's keys go up to, outside the editor, so a key in a cell never reaches the editor's own keys.
   final keys = FocusNode(debugLabel: 'Table cells', canRequestFocus: false, skipTraversal: true);
@@ -116,46 +141,53 @@ class NoteTables extends ChangeNotifier {
   /// longer holds it, such as after an Undo took it away.
   void write(NoteTable table) {
     _pending.remove(table.id);
-    final at = offsetOf(table.id);
+    final nodes = editing.nodes;
+    final at = _indexOf(nodes, table.id);
     if (at == null) return;
-    _compose(Delta()
-      ..retain(at)
-      ..insert({tableEmbed: table.toJson()})
-      ..delete(1), controller.selection);
+    editing.breakTyping();
+    editing.setNodes([
+      for (final node in nodes) node is NoteTableNode && node.table.id == table.id ? node.withTable(table) : node,
+    ], keepSelection: true);
   }
 
-  /// Where the table with [id] is in the note, or null.
-  int? offsetOf(String id) =>
-    tablesIn(controller.document.toDelta()).where((found) => found.$2.id == id).firstOrNull?.$1;
-
-  /// One change of the note as its own Undo step, which brings no keyboard for the note's words over the cell's.
-  void _compose(Delta change, TextSelection selection) {
-    controller.document.history.lastRecorded = 0;
-    controller.ignoreFocusOnTextChange = true;
-    controller.compose(change, selection, ChangeSource.local);
-    controller.ignoreFocusOnTextChange = false;
+  /// Where the table with [id] is in [nodes], or null.
+  static int? _indexOf(List<DocumentNode> nodes, String id) {
+    final at = nodes.indexWhere((node) => node is NoteTableNode && node.table.id == id);
+    return at < 0 ? null : at;
   }
 
-  /// *Table*: a table of 2 columns and 2 rows at the cursor, on its own line, with the cursor in its first cell.
+  /// Whether the note holds the table with [id].
+  bool holds(String id) => _indexOf(editing.nodes, id) != null;
+
+  /// *Table*: a table of 2 columns and 2 rows at the cursor, on its own line, with the cursor in its first cell. Words
+  /// after the cursor go to a line under the table, and an empty line stays under it to type in.
   void insert() {
     flush();
-    final document = controller.document;
-    final text = document.toPlainText();
-    final at = min(controller.selection.start, text.length - 1);
-    final lineStart = at == 0 || text[at - 1] == '\n';
+    final nodes = editing.nodes;
+    final selection = editing.composer.selection;
+    final at = selection == null ? nodes.length - 1
+      : max(0, nodes.indexWhere((node) => node.id == selection.extent.nodeId));
+    final node = nodes[at];
     final table = NoteTable.empty();
-    final lineStyle = <String, dynamic>{
-      for (final attribute in document.collectStyle(at, 0).attributes.values)
-        if (attribute.scope == AttributeScope.block) attribute.key: attribute.value,
+    final block = NoteTableNode(id: Editor.createNodeId(), table: table);
+    final offset = switch (selection?.extent.nodePosition) {
+      TextNodePosition(:final offset) => offset,
+      _ => null,
     };
-    final change = Delta()..retain(at);
-    if (!lineStart) change.insert('\n', lineStyle.isEmpty ? null : lineStyle);
-    change
-      ..insert({tableEmbed: table.toJson()})
-      ..insert('\n');
+    List<DocumentNode> placed;
+    if (node is TextNode && offset != null && offset > 0) {
+      final after = lineNode(kindOf(node), node.text.copyText(offset), indent: indentOf(node));
+      placed = [...nodes.take(at), node.copyTextNodeWith(text: node.text.copyText(0, offset)), block, after,
+        ...nodes.skip(at + 1)];
+    } else if (node is TextNode && offset == 0) {
+      placed = [...nodes.take(at), block, ...nodes.skip(at)];
+    } else {
+      placed = [...nodes.take(at + 1), block, if (at == nodes.length - 1) lineNode(LineKind.paragraph, AttributedText()),
+        ...nodes.skip(at + 1)];
+    }
     _focusFirst = table.id;
-    final embedAt = lineStart ? at : at + 1;
-    _compose(change, TextSelection.collapsed(offset: embedAt));
+    editing.breakTyping();
+    editing.setNodes(placed);
     _active = (id: table.id, row: 0, column: 0);
     notifyListeners();
   }
@@ -167,41 +199,45 @@ class NoteTables extends ChangeNotifier {
     return true;
   }
 
-  /// *Convert to text*: the table in use becomes lines of its cells' words, split by tabs. Returns where the words
-  /// start, for the cursor, or null with no table in use.
-  int? convertActive() {
+  /// *Convert to text*: the table in use becomes lines of its cells' words, split by tabs. Returns the node where the
+  /// words start, for the cursor, or null with no table in use.
+  String? convertActive() {
     final id = _active?.id;
     if (id == null) return null;
     flush();
-    final at = offsetOf(id);
-    final table = at == null ? null : tablesIn(controller.document.toDelta()).firstWhere((found) => found.$1 == at).$2;
+    final nodes = editing.nodes;
+    final at = _indexOf(nodes, id);
     _active = null;
-    if (at == null || table == null) return null;
-    _compose(Delta()
-      ..retain(at)
-      ..insert(table.text)
-      ..delete(1), TextSelection.collapsed(offset: at));
+    if (at == null) return null;
+    final table = (nodes[at] as NoteTableNode).table;
+    final lines = [for (final row in table.rows) lineNode(LineKind.paragraph, AttributedText(row.join('\t')))];
+    if (lines.isEmpty) lines.add(lineNode(LineKind.paragraph, AttributedText()));
+    editing.breakTyping();
+    editing.setNodes([...nodes.take(at), ...lines, ...nodes.skip(at + 1)], selection: DocumentSelection.collapsed(
+      position: DocumentPosition(nodeId: lines.first.id, nodePosition: const TextNodePosition(offset: 0))));
     notifyListeners();
-    return at;
+    return lines.first.id;
   }
 
-  /// *Delete table*: the table in use and its line go. Returns where it was, for the cursor, or null with no table in
-  /// use.
-  int? deleteActive() {
+  /// *Delete table*: the table in use goes. Returns the node the cursor goes to, or null with no table in use.
+  String? deleteActive() {
     final id = _active?.id;
     if (id == null) return null;
     _pending.remove(id);
     flush();
-    final at = offsetOf(id);
+    final nodes = editing.nodes;
+    final at = _indexOf(nodes, id);
     _active = null;
     if (at == null) return null;
-    // The note's last line break never goes, so a table on the last line leaves an empty line.
-    final last = at + 2 >= controller.document.length;
-    _compose(Delta()
-      ..retain(at)
-      ..delete(last ? 1 : 2), TextSelection.collapsed(offset: at));
+    // A table on the last line leaves an empty line.
+    final rest = [...nodes.take(at), ...nodes.skip(at + 1)];
+    if (at == nodes.length - 1) rest.add(lineNode(LineKind.paragraph, AttributedText()));
+    final next = rest[min(at, rest.length - 1)];
+    editing.breakTyping();
+    editing.setNodes(rest, selection: DocumentSelection.collapsed(
+      position: DocumentPosition(nodeId: next.id, nodePosition: next.beginningPosition)));
     notifyListeners();
-    return at;
+    return next.id;
   }
 
   @override
@@ -212,25 +248,33 @@ class NoteTables extends ChangeNotifier {
   }
 }
 
-/// Draws each `table` embed of the note as a [NoteTableView].
-class TableEmbedBuilder extends EmbedBuilder {
-  const TableEmbedBuilder(this.tables);
+/// Draws each table of the note as a [NoteTableView].
+class NoteTableComponentBuilder implements ComponentBuilder {
+  const NoteTableComponentBuilder(this.tables, {this.readOnly = false, this.style});
 
-  final NoteTables tables;
-
-  @override
-  String get key => tableEmbed;
-
-  @override
-  bool get expanded => true;
+  final NoteTables? tables;
+  final bool readOnly;
+  final TextStyle? style;
 
   @override
-  Widget build(BuildContext context, EmbedContext embedContext) {
-    final data = embedContext.node.value.data;
-    final table = (data is String ? NoteTable.fromJson(data) : null) ?? NoteTable.empty();
-    // Keyed by the table's id: a cell change puts a new embed in, and the cell must keep the cursor.
-    return NoteTableView(key: ValueKey(table.id), table: table, tables: tables, readOnly: embedContext.readOnly,
-      style: embedContext.textStyle);
+  SingleColumnLayoutComponentViewModel? createViewModel(Document document, DocumentNode node) =>
+    node is NoteTableNode ? NoteBlockViewModel(nodeId: node.id, node: node) : null;
+
+  @override
+  Widget? createComponent(SingleColumnDocumentComponentContext componentContext,
+      SingleColumnLayoutComponentViewModel componentViewModel) {
+    if (componentViewModel is! NoteBlockViewModel) return null;
+    final node = componentViewModel.node;
+    if (node is! NoteTableNode) return null;
+    return NoteBlockBox(
+      viewModel: componentViewModel,
+      child: BoxComponent(
+        key: componentContext.componentKey,
+        // Keyed by the table's id: a cell change puts a new node in, and the cell must keep the cursor.
+        child: NoteTableView(key: ValueKey(node.table.id), table: node.table, tables: tables,
+          readOnly: readOnly || tables == null, style: style),
+      ),
+    );
   }
 }
 
@@ -240,7 +284,7 @@ class NoteTableView extends StatefulWidget {
   const NoteTableView({super.key, required this.table, required this.tables, this.readOnly = false, this.style});
 
   final NoteTable table;
-  final NoteTables tables;
+  final NoteTables? tables;
   final bool readOnly;
   final TextStyle? style;
 
@@ -254,15 +298,15 @@ class _NoteTableViewState extends State<NoteTableView> {
   /// The cell to put the cursor in once the new rows show.
   (int, int)? _focusAfter;
 
-  NoteTables get _tables => widget.tables;
+  NoteTables? get _tables => widget.tables;
   String get _id => widget.table.id;
 
   @override
   void initState() {
     super.initState();
     _build(widget.table.rows);
-    _tables.addListener(_tablesChanged);
-    if (_tables.takeFocusFirst(_id)) _focusAfter = (0, 0);
+    _tables?.addListener(_tablesChanged);
+    if (_tables?.takeFocusFirst(_id) ?? false) _focusAfter = (0, 0);
     _focusSoon();
   }
 
@@ -270,7 +314,7 @@ class _NoteTableViewState extends State<NoteTableView> {
   void didUpdateWidget(NoteTableView old) {
     super.didUpdateWidget(old);
     // A change from outside the cells, such as an Undo, shows in them; words still waiting keep their own.
-    if (_tables.waits(_id) || _sameRows(widget.table.rows)) return;
+    if ((_tables?.waits(_id) ?? false) || _sameRows(widget.table.rows)) return;
     final rows = widget.table.rows;
     if (rows.length != _cells.length || (rows.isNotEmpty && rows.first.length != _cells.first.length)) {
       _dispose();
@@ -309,9 +353,9 @@ class _NoteTableViewState extends State<NoteTableView> {
     final node = FocusNode(debugLabel: 'Cell $row, $column');
     node.addListener(() {
       if (node.hasFocus) {
-        _tables.enter((id: _id, row: row, column: column));
+        _tables?.enter((id: _id, row: row, column: column));
       } else {
-        _tables.flush();
+        _tables?.flush();
       }
     });
     return node;
@@ -344,7 +388,7 @@ class _NoteTableViewState extends State<NoteTableView> {
 
   @override
   void dispose() {
-    _tables.removeListener(_tablesChanged);
+    _tables?.removeListener(_tablesChanged);
     _dispose();
     super.dispose();
   }
@@ -361,7 +405,7 @@ class _NoteTableViewState extends State<NoteTableView> {
     setState(() => _build(rows));
     _focusAfter = (row, column);
     _focusSoon();
-    _tables.write(widget.table.withRows(rows));
+    _tables?.write(widget.table.withRows(rows));
     Future(() {
       for (final cell in cells.expand((row) => row)) {
         cell.dispose();
@@ -388,20 +432,20 @@ class _NoteTableViewState extends State<NoteTableView> {
 
   void _addColumn(int at, int focus) => _reshape([
     for (final row in _rows) [...row.take(at), '', ...row.skip(at)],
-  ], _tables.active?.row ?? 0, focus);
+  ], _tables?.active?.row ?? 0, focus);
 
   void _deleteColumn(int at) {
     if (_columns <= 1) return;
     _reshape([for (final row in _rows) [...row.take(at), ...row.skip(at + 1)]],
-      _tables.active?.row ?? 0, min(at, _columns - 2));
+      _tables?.active?.row ?? 0, min(at, _columns - 2));
   }
 
   void _addRow(int at, int focus) =>
-    _reshape([..._rows.take(at), List.filled(_columns, ''), ..._rows.skip(at)], focus, _tables.active?.column ?? 0);
+    _reshape([..._rows.take(at), List.filled(_columns, ''), ..._rows.skip(at)], focus, _tables?.active?.column ?? 0);
 
   void _deleteRow(int at) {
     if (_cells.length <= 1) return;
-    _reshape([..._rows.take(at), ..._rows.skip(at + 1)], min(at, _cells.length - 2), _tables.active?.column ?? 0);
+    _reshape([..._rows.take(at), ..._rows.skip(at + 1)], min(at, _cells.length - 2), _tables?.active?.column ?? 0);
   }
 
   /// Each column as wide as its longest words, from 100 to 280 points.
@@ -422,7 +466,7 @@ class _NoteTableViewState extends State<NoteTableView> {
     final brand = brandOf(context);
     final style = (widget.style ?? DefaultTextStyle.of(context).style).copyWith(height: 1.3);
     final widths = _widths(style);
-    final active = _tables.active;
+    final active = _tables?.active;
     final here = active != null && active.id == _id && !widget.readOnly;
     final line = BorderSide(color: brand.muted.withValues(alpha: 0.35), width: 0.8);
     Widget cell(int row, int column) => DecoratedBox(
@@ -460,7 +504,7 @@ class _NoteTableViewState extends State<NoteTableView> {
     return MetaData(metaData: _tableMark, behavior: HitTestBehavior.translucent, child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       // A cell's keys go up to the page, past the editor's own keys.
-      child: Focus(parentNode: _tables.keys, canRequestFocus: false, skipTraversal: true,
+      child: Focus(parentNode: _tables?.keys, canRequestFocus: false, skipTraversal: true,
         child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: table)),
     ));
   }
@@ -477,7 +521,7 @@ class _NoteTableViewState extends State<NoteTableView> {
       scrollPadding: const EdgeInsets.fromLTRB(20, 20, 20, _cellRoom),
       // A tap in the note's words moves the cursor there; a tap elsewhere keeps it in the cell.
       onTapOutside: (_) {},
-      onChanged: (_) => _tables.change(widget.table.withRows(_rows)),
+      onChanged: (_) => _tables?.change(widget.table.withRows(_rows)),
       onEditingComplete: () {},
       onSubmitted: (_) => _down(row, column),
       decoration: const InputDecoration(isCollapsed: true, filled: false, border: InputBorder.none,

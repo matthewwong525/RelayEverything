@@ -3,16 +3,19 @@ import 'dart:io';
 
 import 'package:flutter/cupertino.dart' show CupertinoAlertDialog, CupertinoDialogAction, CupertinoIcons, CupertinoTextField;
 import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/gestures.dart' show PointerDeviceKind, kDoubleTapTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart' show CustomSemanticsAction, RenderParagraph, SemanticsAction;
-import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:relay_app/app.dart';
 import 'package:relay_app/brand.dart';
 import 'package:relay_app/editor/markdown.dart';
-import 'package:relay_app/editor/shortcuts.dart' show FormatIntent, formatShortcuts;
+import 'package:relay_app/editor/note_commands.dart';
+import 'package:relay_app/editor/note_editing.dart';
+import 'package:relay_app/editor/note_style.dart' show noteInlineStyle;
+import 'package:relay_app/editor/system_menu.dart' show NoteSystemMenu;
 import 'package:relay_app/editor/table.dart' show NoteTableView, cellPause;
 import 'package:relay_app/relay.dart';
 import 'package:relay_app/screens/connect.dart';
@@ -29,6 +32,7 @@ import 'package:relay_app/screens/settings.dart' show SettingsRow, SettingsScree
 import 'package:relay_app/screens/timeline.dart' show FoldHeader, SyncLine, TimelineScreen, TitleBar;
 import 'package:relay_app/screens/transcripts.dart' show CommandBox, TranscriptsPage;
 import 'package:relay_app/screens/webhooks.dart' show WebhooksPage;
+import 'package:super_editor/super_editor.dart';
 
 class FakeRelay extends Relay {
   /// The phone app, or the browser for a test of the web page.
@@ -545,29 +549,56 @@ List<double> barHeights(WidgetTester tester) => [
 /// The microphone on a voice note's row, not the one on *New note*.
 final rowMic = find.byWidgetPredicate((widget) => widget is Icon && widget.semanticLabel == 'Voice note');
 
-/// The note page's editor.
-QuillController quill(WidgetTester tester) => tester.widget<QuillEditor>(find.byType(QuillEditor)).controller;
+/// The note page's state.
+NoteEditorState noteState(WidgetTester tester) => tester.state<NoteEditorState>(find.byType(NoteEditor));
+
+/// The note page's document, its selection and its Undo.
+NoteEditing note(WidgetTester tester) => noteState(tester).editing;
+
+/// The styles on the words picked, or the next letters typed.
+Set<Attribution> stylesOf(WidgetTester tester) => NoteCommands(note(tester)).inline;
 
 /// The note page's words as it keeps them.
-String markdownOf(WidgetTester tester) => deltaToMarkdown(quill(tester).document.toDelta());
+String markdownOf(WidgetTester tester) => note(tester).markdown;
+
+/// The note page's words, as a box a tap can find: the editor itself is a sliver.
+final noteEditor = find.descendant(of: find.byType(SingleColumnDocumentLayout), matching: find.byType(Padding)).first;
+
+/// The focus of the note page's words.
+FocusNode editorFocus(WidgetTester tester) => tester.widget<SuperEditor>(find.byType(SuperEditor)).focusNode!;
 
 /// Whether the note page has the keyboard up.
-bool editorFocused(WidgetTester tester) => tester.widget<QuillEditor>(find.byType(QuillEditor)).focusNode.hasFocus;
+bool editorFocused(WidgetTester tester) => editorFocus(tester).hasFocus;
 
 /// Types [words] at the cursor, as the keyboard does.
 Future<void> type(WidgetTester tester, String words) async {
-  final controller = quill(tester);
-  final at = controller.selection.baseOffset;
-  controller.replaceText(at, 0, words, TextSelection.collapsed(offset: at + words.length));
+  final editing = note(tester);
+  editing.replaceText(editing.selection.baseOffset, 0, words);
   await tester.pump();
+}
+
+/// Puts a link to [address] on [length] letters at [start] of the note page's words.
+void linkWords(WidgetTester tester, int start, int length, String address) {
+  final editing = note(tester);
+  final range = documentSelectionOf(editing.nodes, TextSelection(baseOffset: start, extentOffset: start + length));
+  editing.editor.execute([AddTextAttributionsRequest(documentRange: DocumentRange(start: range.base, end: range.extent),
+    attributions: {LinkAttribution(address)})]);
+}
+
+/// The caret's place on the screen.
+Rect caretOf(WidgetTester tester) {
+  final layout = noteState(tester).documentLayout;
+  final caret = layout.getRectForPosition(note(tester).composer.selection!.extent)!;
+  return layout.getGlobalOffsetFromDocumentOffset(caret.topLeft) & caret.size;
 }
 
 /// The screen point [part] of the way across the note page's letter at [letter]: 0.8 is its right half.
 Offset onLetter(WidgetTester tester, int letter, double part) {
-  final editor = tester.allRenderObjects.whereType<RenderEditor>().first;
-  final left = editor.getLocalRectForCaret(TextPosition(offset: letter));
-  final right = editor.getLocalRectForCaret(TextPosition(offset: letter + 1));
-  return editor.localToGlobal(Offset(left.left + (right.left - left.left) * part, left.center.dy));
+  final layout = noteState(tester).documentLayout;
+  final nodes = note(tester).nodes;
+  final left = layout.getRectForPosition(positionAt(nodes, letter))!;
+  final right = layout.getRectForPosition(positionAt(nodes, letter + 1))!;
+  return layout.getGlobalOffsetFromDocumentOffset(Offset(left.left + (right.left - left.left) * part, left.center.dy));
 }
 
 void main() {
@@ -1229,16 +1260,16 @@ void main() {
       await tester.tap(find.text('Buy milk'));
       await tester.pumpAndSettle();
       expect(find.byType(NoteEditor), findsOneWidget);
-      expect(quill(tester).readOnly, isTrue);
+      expect(noteState(tester).readOnly, isTrue);
       expect([find.byType(ReadingBar), find.byType(NewNoteButton)], everyElement(findsNothing));
-      await tester.tap(find.byType(QuillEditor));
+      await tester.tap(noteEditor);
       await tester.pumpAndSettle();
       expect([find.text("Recently deleted notes can't be edited."), find.text("To edit this note, you'll need to recover it.")],
         everyElement(findsOneWidget));
       await tester.tap(find.widgetWithText(CupertinoDialogAction, 'Recover'));
       await tester.pumpAndSettle();
       expect(relay.calls, ['recover n1']);
-      expect(quill(tester).readOnly, isFalse);
+      expect(noteState(tester).readOnly, isFalse);
       expect(find.byType(ReadingBar), findsOneWidget);
     });
 
@@ -1617,7 +1648,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Save'), findsNothing);
       expect(editorFocused(tester), isTrue);
-      expect(quill(tester).document.toDelta().toJson(), [{'insert': '\n', 'attributes': {'header': 1}}]);
+      expect([for (final node in note(tester).nodes) (kindOf(node), (node as TextNode).text.toPlainText())], [(LineKind.header1, '')]);
       await type(tester, 'Buy milk');
       await tester.pageBack();
       await tester.pumpAndSettle();
@@ -1644,7 +1675,7 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
       expect(relay.calls, ['note # Buy (later)']);
       final id = relay.entries.single.id;
-      quill(tester).replaceText(0, 3, '', const TextSelection.collapsed(offset: 0));
+      note(tester).replaceText(0, 3, '');
       await tester.pump(const Duration(seconds: 2));
       expect(relay.calls, ['note # Buy (later)']);
       await tester.pageBack();
@@ -1660,7 +1691,7 @@ void main() {
       await tester.tap(find.text('Buy milk'));
       await tester.pumpAndSettle();
       // With the keyboard down a change is kept at once: blank words are not.
-      quill(tester).replaceText(0, 8, '', const TextSelection.collapsed(offset: 0));
+      note(tester).replaceText(0, 8, '');
       await tester.pump();
       expect(relay.calls, isEmpty);
       await tester.pageBack();
@@ -1675,7 +1706,7 @@ void main() {
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Buy milk'));
       await tester.pumpAndSettle();
-      quill(tester).replaceText(0, 8, '', const TextSelection.collapsed(offset: 0));
+      note(tester).replaceText(0, 8, '');
       await tester.pump();
       await tester.pageBack();
       await tester.pumpAndSettle();
@@ -1691,7 +1722,7 @@ void main() {
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Hello there'));
       await tester.pumpAndSettle();
-      quill(tester).replaceText(0, 11, '', const TextSelection.collapsed(offset: 0));
+      note(tester).replaceText(0, 11, '');
       await tester.pump();
       expect(relay.calls, ['edit ']);
       await tester.pageBack();
@@ -1743,9 +1774,9 @@ void main() {
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Buy milk'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(QuillEditor));
+      await tester.tap(noteEditor);
       await tester.pump();
-      quill(tester).updateSelection(const TextSelection.collapsed(offset: 8), ChangeSource.local);
+      note(tester).select(const TextSelection.collapsed(offset: 8));
       relay.slow = Completer();
       await type(tester, ' now');
       await tester.pump(const Duration(seconds: 2));
@@ -1777,7 +1808,7 @@ void main() {
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Buy milk'));
       await tester.pumpAndSettle();
-      quill(tester).replaceText(4, 4, 'oat milk', const TextSelection.collapsed(offset: 12));
+      note(tester).replaceText(4, 4, 'oat milk');
       await tester.pump();
       // With the keyboard down a change is kept and sent at once.
       expect(relay.calls, ['edit # Buy oat milk']);
@@ -1805,7 +1836,7 @@ void main() {
       await tester.tap(find.byTooltip('New note'));
       await tester.pumpAndSettle();
       expect(find.byType(NoteEditor), findsOneWidget);
-      expect(quill(tester).document.toPlainText(), '\n');
+      expect(note(tester).text, '\n');
       expect(editorFocused(tester), isTrue);
     });
 
@@ -1830,9 +1861,9 @@ void main() {
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Shop'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(QuillEditor));
+      await tester.tap(noteEditor);
       await tester.pump();
-      quill(tester).updateSelection(const TextSelection.collapsed(offset: 7), ChangeSource.local);
+      note(tester).select(const TextSelection.collapsed(offset: 7));
       await tester.tap(find.byTooltip('Text styles'));
       await tester.pumpAndSettle();
       expect(find.byType(FormatSheet), findsOneWidget);
@@ -1841,7 +1872,7 @@ void main() {
       await tester.pumpAndSettle();
       bool lit(String label) => tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, label)).selected;
       expect([lit('Heading'), lit('Body')], [true, false], reason: 'the chip of the line\'s style lights at once');
-      quill(tester).updateSelection(const TextSelection(baseOffset: 5, extentOffset: 9), ChangeSource.local);
+      note(tester).select(const TextSelection(baseOffset: 5, extentOffset: 9));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Bold'));
       await tester.pumpAndSettle();
@@ -1865,7 +1896,7 @@ void main() {
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Shop'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(QuillEditor));
+      await tester.tap(noteEditor);
       await tester.pump();
       final ratio = tester.view.devicePixelRatio;
       tester.view.viewInsets = FakeViewPadding(bottom: 336 * ratio);
@@ -1886,9 +1917,9 @@ void main() {
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Shop'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(QuillEditor));
+      await tester.tap(noteEditor);
       await tester.pump();
-      quill(tester).updateSelection(const TextSelection.collapsed(offset: 7), ChangeSource.local);
+      note(tester).select(const TextSelection.collapsed(offset: 7));
       await tester.tap(find.byTooltip('Text styles'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Bulleted list'));
@@ -1907,9 +1938,10 @@ void main() {
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Shop'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(QuillEditor));
-      await tester.pump();
-      quill(tester).updateSelection(const TextSelection.collapsed(offset: 9), ChangeSource.local);
+      await tester.tap(noteEditor);
+      // The editor waits a double tap's time to know the tap was one.
+      await tester.pump(kDoubleTapTimeout);
+      note(tester).select(const TextSelection.collapsed(offset: 9));
       await type(tester, '\n');
       expect(markdownOf(tester), '# Shop\n* Eggs\n* ');
       await type(tester, '\n');
@@ -2039,15 +2071,16 @@ void main() {
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Onfido Verification'));
       await tester.pumpAndSettle();
-      final document = quill(tester).document;
-      final words = document.toPlainText();
+      final document = note(tester).nodes;
+      final words = note(tester).text;
       String? linkOn(String part) => linkAt(document, words.indexOf(part) + 2);
       expect([linkOn('id.onfido'), linkOn('example'), linkOn('Hello'), linkOn('Or ')],
         ['https://id.onfido.com/XX6L46TU', 'www.example.com', null, null]);
       // The stop after an address is not part of the link.
       expect(linkAt(document, words.indexOf('.com.') + 4), isNull);
       // The link draws in the accent text color, underlined.
-      final link = noteStyles(tester.element(find.byType(QuillEditor))).link!;
+      final link = noteInlineStyle({LinkAttribution('https://example.com')}, const TextStyle(), BrandColors.light,
+        Brightness.light);
       expect([link.color, link.decoration], [BrandColors.light.accentText, TextDecoration.underline]);
       // A tap on the link while reading opens it, and the keyboard stays down.
       final line = find.text('https://id.onfido.com/XX6L46TU', findRichText: true);
@@ -2067,7 +2100,7 @@ void main() {
       expect(opened, hasLength(1));
       expect(editorFocused(tester), isTrue);
       final address = words.indexOf('https://id.onfido');
-      expect(quill(tester).selection.baseOffset, inInclusiveRange(address, address + 'https://id.onfido.com/XX6L46TU'.length));
+      expect(note(tester).selection.baseOffset, inInclusiveRange(address, address + 'https://id.onfido.com/XX6L46TU'.length));
       await tester.pageBack();
       await tester.pumpAndSettle();
       expect(relay.calls, isEmpty, reason: 'an untouched note is never written back');
@@ -2075,9 +2108,12 @@ void main() {
 
     testWidgets('a link mark never reaches the words: a changed note keeps the plain address', (tester) async {
       const text = 'Links\nSee https://example.com/a_b';
-      final marked = withLinks(markdownToDelta(text, title: true));
-      expect(marked.toList().where((op) => op.attributes?['link'] != null).map((op) => op.data), ['https://example.com/a_b']);
-      expect(deltaToMarkdown(marked), '# Links\nSee https://example.com/a_b');
+      final marked = withLinks(markdownToNodes(text, title: true));
+      expect([
+        for (final node in marked.whereType<TextNode>())
+          for (final (words, marks) in runsOf(node.text)) if (marks.any((mark) => mark.startsWith('link:'))) words,
+      ], ['https://example.com/a_b']);
+      expect(documentToMarkdown(marked), '# Links\nSee https://example.com/a_b');
       relay.entries = [Entry(id: 'n1', text: text, at: now)];
       await tester.pumpWidget(RelayApp(relay: relay));
       await openFolder(tester, 'Notes');
@@ -2103,8 +2139,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Tickets', findRichText: true));
       await tester.pump();
-      final end = quill(tester).document.length - 1;
-      quill(tester).updateSelection(TextSelection.collapsed(offset: end), ChangeSource.local);
+      final end = note(tester).text.length - 1;
+      note(tester).select(TextSelection.collapsed(offset: end));
       // One letter at a time, as the keyboard types. The editor links an `https://` address as it is typed, but not
       // a `www.` one.
       const typed = ' https://example.com and www.example.com.';
@@ -2112,16 +2148,18 @@ void main() {
         await type(tester, letter);
       }
       final www = end + typed.indexOf('www.');
-      expect(linkAt(quill(tester).document, www + 5), isNull, reason: 'no www link while typing');
+      expect(linkAt(note(tester).nodes, www + 5), isNull, reason: 'no www link while typing');
       await tester.tap(find.byTooltip('Done'));
       await tester.pumpAndSettle();
       expect(editorFocused(tester), isFalse);
-      expect(linkAt(quill(tester).document, www + 15), isNull, reason: 'the stop is not part of the link');
+      expect(linkAt(note(tester).nodes, www + 15), isNull, reason: 'the stop is not part of the link');
       await tester.pump(const Duration(seconds: 1));
       await tester.tapAt(onLetter(tester, www + 5, 0.5));
       await tester.pumpAndSettle();
       expect(opened, [Uri.parse('https://www.example.com')]);
       expect(editorFocused(tester), isFalse);
+      // A second tap that soon would be a double tap, which selects a word.
+      await tester.pump(kDoubleTapTimeout);
       await tester.tapAt(onLetter(tester, end + 10, 0.5));
       await tester.pumpAndSettle();
       expect(opened, [Uri.parse('https://www.example.com'), Uri.parse('https://example.com')]);
@@ -2142,8 +2180,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Tickets', findRichText: true));
       await tester.pump();
-      final end = quill(tester).document.length - 1;
-      quill(tester).updateSelection(TextSelection.collapsed(offset: end), ChangeSource.local);
+      final end = note(tester).text.length - 1;
+      note(tester).select(TextSelection.collapsed(offset: end));
       const typed = ' See https://a.com. Then';
       for (final letter in typed.split('')) {
         await type(tester, letter);
@@ -2151,12 +2189,12 @@ void main() {
       // The mark the editor's own space rule leaves when it takes the stop into the link.
       final stop = end + typed.indexOf('. Then');
       final start = end + typed.indexOf('https://');
-      quill(tester).formatText(start, stop + 1 - start, const LinkAttribute('https://a.com.'));
+      linkWords(tester, start, stop + 1 - start, 'https://a.com.');
       await tester.pump();
-      expect(linkAt(quill(tester).document, stop), 'https://a.com.');
+      expect(linkAt(note(tester).nodes, stop), 'https://a.com.');
       await tester.tap(find.byTooltip('Done'));
       await tester.pumpAndSettle();
-      expect([linkAt(quill(tester).document, stop - 1), linkAt(quill(tester).document, stop)], ['https://a.com', null]);
+      expect([linkAt(note(tester).nodes, stop - 1), linkAt(note(tester).nodes, stop)], ['https://a.com', null]);
       await tester.pump(const Duration(seconds: 1));
       await tester.tapAt(onLetter(tester, stop - 2, 0.5));
       await tester.pumpAndSettle();
@@ -2175,17 +2213,17 @@ void main() {
       await tester.tapAt(tester.getTopLeft(find.text('Links', findRichText: true)) + const Offset(10, 8));
       await tester.pump();
       expect(editorFocused(tester), isTrue);
-      final controller = quill(tester);
-      final first = controller.document.toPlainText().indexOf('https://');
-      controller.replaceText(first, 'https://'.length, '', TextSelection.collapsed(offset: first));
+      final controller = note(tester);
+      final first = controller.text.indexOf('https://');
+      controller.replaceText(first, 'https://'.length, '');
       await tester.pump();
-      final path = controller.document.toPlainText().indexOf('/path');
-      controller.replaceText(path, 0, ' ', TextSelection.collapsed(offset: path + 1));
+      final path = controller.text.indexOf('/path');
+      controller.replaceText(path, 0, ' ');
       await tester.pump();
       await tester.tap(find.byTooltip('Done'));
       await tester.pumpAndSettle();
-      final document = quill(tester).document;
-      final words = document.toPlainText();
+      final document = note(tester).nodes;
+      final words = note(tester).text;
       expect(words, 'Links\nGo example.com now\nSee https://example.com /path\n');
       String? linkOn(String part) => linkAt(document, words.indexOf(part) + 1);
       expect([linkOn('example.com now'), linkOn('https://example.com /'), linkOn('/path')], [null, 'https://example.com', null]);
@@ -2202,13 +2240,13 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tapAt(tester.getTopLeft(find.text('Food', findRichText: true)) + const Offset(10, 8));
       await tester.pump();
-      final controller = quill(tester);
-      final menu = controller.document.toPlainText().indexOf('menu');
-      controller.formatText(menu, 4, const LinkAttribute('https://example.com/menu'));
+      final controller = note(tester);
+      final menu = controller.text.indexOf('menu');
+      linkWords(tester, menu, 4, 'https://example.com/menu');
       await tester.pump();
       await tester.tap(find.byTooltip('Done'));
       await tester.pumpAndSettle();
-      expect(linkAt(quill(tester).document, menu + 1), 'https://example.com/menu');
+      expect(linkAt(note(tester).nodes, menu + 1), 'https://example.com/menu');
       await tester.pageBack();
       await tester.pumpAndSettle();
       expect(relay.calls, ['edit # Food\nSee the [menu](https://example.com/menu)']);
@@ -2222,8 +2260,8 @@ void main() {
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Links'));
       await tester.pumpAndSettle();
-      final document = quill(tester).document;
-      final words = document.toPlainText();
+      final document = note(tester).nodes;
+      final words = note(tester).text;
       expect([linkAt(document, words.indexOf('GitHub') + 1), linkAt(document, words.indexOf('Sam') + 1)],
         ['https://github.com', 'mailto:sam@example.com']);
       await tester.tap(find.byTooltip('Checklist'));
@@ -2244,12 +2282,12 @@ void main() {
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Links'));
       await tester.pumpAndSettle();
-      final words = quill(tester).document.toPlainText();
+      final words = note(tester).text;
       final start = words.indexOf('https://');
       final last = start + 'https://example.com'.length - 1;
-      expect(linkAtPosition(quill(tester).document, TextPosition(offset: last + 1, affinity: TextAffinity.upstream)),
+      expect(linkAtPosition(note(tester).nodes, TextPosition(offset: last + 1, affinity: TextAffinity.upstream)),
         'https://example.com');
-      expect(linkAtPosition(quill(tester).document, TextPosition(offset: start, affinity: TextAffinity.upstream)), isNull);
+      expect(linkAtPosition(note(tester).nodes, TextPosition(offset: start, affinity: TextAffinity.upstream)), isNull);
       await tester.tapAt(onLetter(tester, last, 0.8));
       await tester.pumpAndSettle();
       expect(opened, [Uri.parse('https://example.com')]);
@@ -2275,18 +2313,17 @@ void main() {
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Long'));
       await tester.pumpAndSettle();
-      await tester.tapAt(tester.getTopLeft(find.byType(QuillEditor)) + const Offset(40, 10));
+      await tester.tapAt(tester.getTopLeft(noteEditor) + const Offset(40, 10));
       await tester.pump();
       tester.view.viewInsets = const FakeViewPadding(bottom: 300);
-      quill(tester).updateSelection(TextSelection.collapsed(offset: quill(tester).document.length - 1), ChangeSource.local);
+      note(tester).select(TextSelection.collapsed(offset: note(tester).text.length - 1));
       await type(tester, '\nMore');
       await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
       final bar = tester.getRect(find.byType(FloatingToolBar));
       expect(bar.bottom, 844 - 300 - 6);
-      final editor = tester.allRenderObjects.whereType<RenderEditor>().first;
-      final caret = editor.getLocalRectForCaret(quill(tester).selection.extent);
-      final top = editor.localToGlobal(caret.topLeft).dy, bottom = editor.localToGlobal(caret.bottomLeft).dy;
+      final caret = caretOf(tester);
+      final top = caret.top, bottom = caret.bottom;
       expect(top, greaterThan(0));
       expect(bottom, lessThanOrEqualTo(bar.top));
       await tester.pump(const Duration(seconds: 2));
@@ -2303,22 +2340,23 @@ void main() {
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Long'));
       await tester.pumpAndSettle();
-      await tester.tapAt(tester.getTopLeft(find.byType(QuillEditor)) + const Offset(40, 10));
+      await tester.tapAt(tester.getTopLeft(noteEditor) + const Offset(40, 10));
       await tester.pump();
       tester.view.viewInsets = const FakeViewPadding(bottom: 300);
-      quill(tester).updateSelection(TextSelection.collapsed(offset: quill(tester).document.length - 1), ChangeSource.local);
+      note(tester).select(TextSelection.collapsed(offset: note(tester).text.length - 1));
       await type(tester, '\nMore');
       await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
-      final page = tester.getRect(find.byType(SingleChildScrollView));
-      final editor = tester.allRenderObjects.whereType<RenderEditor>().first;
-      expect(editor.localToGlobal(Offset.zero).dy, lessThan(page.top - 400), reason: 'the page scrolled far down');
-      final line2 = quill(tester).document.toPlainText().indexOf('Line 2');
-      quill(tester).updateSelection(TextSelection.collapsed(offset: line2), ChangeSource.local);
+      final page = tester.getRect(find.byType(CustomScrollView));
+      final layout = noteState(tester).documentLayout;
+      expect(layout.getGlobalOffsetFromDocumentOffset(Offset.zero).dy, lessThan(page.top - 400),
+        reason: 'the page scrolled far down');
+      final line2 = note(tester).text.indexOf('Line 2');
+      note(tester).select(TextSelection.collapsed(offset: line2));
       await tester.pumpAndSettle();
-      final caret = editor.getLocalRectForCaret(quill(tester).selection.extent);
-      expect(editor.localToGlobal(caret.topLeft).dy, greaterThanOrEqualTo(page.top));
-      expect(editor.localToGlobal(caret.bottomLeft).dy, lessThanOrEqualTo(tester.getRect(find.byType(FloatingToolBar)).top));
+      final caret = caretOf(tester);
+      expect(caret.top, greaterThanOrEqualTo(page.top));
+      expect(caret.bottom, lessThanOrEqualTo(tester.getRect(find.byType(FloatingToolBar)).top));
       await tester.pump(const Duration(seconds: 2));
     });
 
@@ -2329,11 +2367,11 @@ void main() {
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Shop'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(QuillEditor));
+      await tester.tap(noteEditor);
       await tester.pump();
       expect(editorFocused(tester), isTrue);
       expect([find.byTooltip('Undo'), find.byTooltip('Redo')], everyElement(findsNothing));
-      quill(tester).updateSelection(const TextSelection.collapsed(offset: 4), ChangeSource.local);
+      note(tester).select(const TextSelection.collapsed(offset: 4));
       await type(tester, ' buy milk');
       expect([find.byTooltip('Undo'), find.byTooltip('Redo')], [findsOneWidget, findsNothing]);
       await tester.pump(const Duration(seconds: 2));
@@ -2367,9 +2405,10 @@ void main() {
         ..entries = [Entry(id: 'v1', text: '', at: now, recordings: recorded('voice/a.wav', transcript: 'Call Sam'))]
         ..changed();
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(QuillEditor));
-      await tester.pump();
-      expect(quill(tester).document.toPlainText(), '\n');
+      await tester.tap(noteEditor);
+      // The editor waits a double tap's time to know the tap was one.
+      await tester.pump(kDoubleTapTimeout);
+      expect(note(tester).text, '\n');
       expect(find.byTooltip('Undo'), findsNothing);
       expect(relay.calls, isEmpty);
     });
@@ -2429,18 +2468,18 @@ void main() {
         reason: 'the field draws no box inside the pill, as in Apple Notes');
       await tester.enterText(field, 'train');
       await tester.pumpAndSettle();
-      final words = quill(tester).document.toPlainText();
+      final words = note(tester).text;
       final starts = [words.indexOf('Train'), words.indexOf('train'), words.lastIndexOf('train')];
       TextSelection match(int index) => TextSelection(baseOffset: starts[index], extentOffset: starts[index] + 5);
-      expect([find.text('1 of 3').evaluate().length, quill(tester).selection], [1, match(0)]);
+      expect([find.text('1 of 3').evaluate().length, note(tester).selection], [1, match(0)]);
       for (final (index, label) in [(1, '2 of 3'), (2, '3 of 3'), (0, '1 of 3')]) {
         await tester.tap(find.byTooltip('Next match'));
         await tester.pumpAndSettle();
-        expect([find.text(label).evaluate().length, quill(tester).selection], [1, match(index)], reason: label);
+        expect([find.text(label).evaluate().length, note(tester).selection], [1, match(index)], reason: label);
       }
       await tester.tap(find.byTooltip('Previous match'));
       await tester.pumpAndSettle();
-      expect([find.text('3 of 3').evaluate().length, quill(tester).selection], [1, match(2)]);
+      expect([find.text('3 of 3').evaluate().length, note(tester).selection], [1, match(2)]);
       expect(editorFocused(tester), isFalse);
       await tester.enterText(field, 'plane');
       await tester.pumpAndSettle();
@@ -2450,7 +2489,7 @@ void main() {
       await tester.tap(find.byTooltip('Done'));
       await tester.pumpAndSettle();
       expect([find.byType(FindBar), find.byType(ReadingBar)], [findsNothing, findsOneWidget]);
-      expect(quill(tester).selection.isCollapsed, isTrue);
+      expect(note(tester).selection.isCollapsed, isTrue);
       expect(markdownOf(tester), before);
       await tester.pageBack();
       await tester.pumpAndSettle();
@@ -2469,7 +2508,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(find.descendant(of: find.byType(FindBar), matching: find.byType(TextField)), 'train');
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(QuillEditor));
+      await tester.tap(noteEditor);
       await tester.pumpAndSettle();
       expect(editorFocused(tester), isTrue);
       expect([find.byType(FindBar), find.byType(FloatingToolBar), find.byTooltip('Done')],
@@ -2491,11 +2530,11 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(find.descendant(of: find.byType(FindBar), matching: find.byType(TextField)), 'milk');
       await tester.pumpAndSettle();
-      final words = quill(tester).document.toPlainText();
-      expect([find.text('1 of 2').evaluate().length, quill(tester).selection.textInside(words)], [1, 'MILK']);
+      final words = note(tester).text;
+      expect([find.text('1 of 2').evaluate().length, note(tester).selection.textInside(words)], [1, 'MILK']);
       await tester.tap(find.byTooltip('Next match'));
       await tester.pumpAndSettle();
-      expect([quill(tester).selection.start, quill(tester).selection.textInside(words)], [words.lastIndexOf('milk'), 'milk']);
+      expect([note(tester).selection.start, note(tester).selection.textInside(words)], [words.lastIndexOf('milk'), 'milk']);
     });
 
     testWidgets('Find in Note scrolls a match far down a long note into view above the find bar', (tester) async {
@@ -2515,10 +2554,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(find.descendant(of: find.byType(FindBar), matching: find.byType(TextField)), 'gate');
       await tester.pumpAndSettle();
-      final editor = tester.allRenderObjects.whereType<RenderEditor>().first;
-      final caret = editor.getLocalRectForCaret(quill(tester).selection.extent);
-      expect(editor.localToGlobal(caret.bottomLeft).dy, lessThanOrEqualTo(tester.getRect(find.byType(FindBar)).top));
-      expect(editor.localToGlobal(caret.topLeft).dy, greaterThan(0));
+      final caret = caretOf(tester);
+      expect(caret.bottom, lessThanOrEqualTo(tester.getRect(find.byType(FindBar)).top));
+      expect(caret.top, greaterThan(0));
     });
 
     testWidgets('a waiting and a sent note\'s page show only the date, with no tag and no send item in ⋯', (tester) async {
@@ -2563,6 +2601,88 @@ void main() {
     await tester.pump();
     expect(problem('Relay Everything may not read your health data.'), findsOneWidget);
     expect(relay.calls, ['history true', 'health true']);
+  });
+
+  testWidgets('the spacing is even: a line under an item, the next item and a plain line each sit one line lower',
+      (tester) async {
+    relay.entries = [Entry(id: 'n1', at: now,
+      text: '# Chores\n1. Rinse the cups\n   Why: the kettle needs them\n2. Feed the cat\nWipe the bench\nSweep the mat')];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Notes');
+    await tester.tap(find.text('Chores'));
+    await tester.pumpAndSettle();
+    final layout = noteState(tester).documentLayout;
+    double topOf(String line) {
+      final rect = layout.getRectForPosition(positionAt(note(tester).nodes, note(tester).text.indexOf(line)))!;
+      return layout.getGlobalOffsetFromDocumentOffset(rect.topLeft).dy;
+    }
+    final underItem = topOf('Why:') - topOf('Rinse');
+    final nextItem = topOf('Feed') - topOf('Why:');
+    final plain = topOf('Sweep') - topOf('Wipe');
+    expect(underItem, greaterThan(0));
+    expect([nextItem, plain], [moreOrLessEquals(underItem), moreOrLessEquals(underItem)]);
+  });
+
+  group('a triple tap selects one line', () {
+    // A numbered item with a line of its own under it, as a pasted plan has.
+    const words = '# Chores\n1. Rinse the cups\n   Why: the kettle needs them\n2. Feed the cat';
+
+    Future<void> openChores(WidgetTester tester) async {
+      relay.entries = [Entry(id: 'n1', text: words, at: now)];
+      await tester.pumpWidget(RelayApp(relay: relay));
+      await openFolder(tester, 'Notes');
+      await tester.tap(find.text('Chores'));
+      await tester.pumpAndSettle();
+    }
+
+    /// Taps [count] times at [at], as fast as a person does.
+    Future<void> tapAgain(WidgetTester tester, Offset at, int count, PointerDeviceKind kind) async {
+      for (var tap = 0; tap < count; tap++) {
+        await tester.tapAt(at, kind: kind);
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await tester.pumpAndSettle();
+    }
+
+    TextSelection lineOf(WidgetTester tester, String line) {
+      final start = note(tester).text.indexOf(line);
+      return TextSelection(baseOffset: start, extentOffset: start + line.length);
+    }
+
+    testWidgets('a triple click on an item selects its words, not the line under it', (tester) async {
+      await openChores(tester);
+      final cups = note(tester).text.indexOf('cups');
+      await tapAgain(tester, onLetter(tester, cups + 1, 0.5), 3, PointerDeviceKind.mouse);
+      expect(note(tester).selection, lineOf(tester, 'Rinse the cups'));
+      final kettle = note(tester).text.indexOf('kettle');
+      await tester.pump(const Duration(seconds: 1));
+      await tapAgain(tester, onLetter(tester, kettle + 1, 0.5), 3, PointerDeviceKind.mouse);
+      expect(note(tester).selection, lineOf(tester, 'Why: the kettle needs them'));
+      expect(markdownOf(tester), words, reason: 'a selection changes no words');
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+    testWidgets('a double click still selects one word', (tester) async {
+      await openChores(tester);
+      final cups = note(tester).text.indexOf('cups');
+      await tapAgain(tester, onLetter(tester, cups + 1, 0.5), 2, PointerDeviceKind.mouse);
+      expect(note(tester).selection, TextSelection(baseOffset: cups, extentOffset: cups + 4));
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+    testWidgets('a triple tap with a finger selects the item words, not the line under it', (tester) async {
+      await openChores(tester);
+      final cups = note(tester).text.indexOf('cups');
+      await tapAgain(tester, onLetter(tester, cups + 1, 0.5), 3, PointerDeviceKind.touch);
+      expect(note(tester).selection, lineOf(tester, 'Rinse the cups'));
+      await tester.pump(NoteSystemMenu.closeWindow);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+    testWidgets('a triple tap with a finger on Android selects one line too', (tester) async {
+      await openChores(tester);
+      final kettle = note(tester).text.indexOf('kettle');
+      await tapAgain(tester, onLetter(tester, kettle + 1, 0.5), 3, PointerDeviceKind.touch);
+      expect(note(tester).selection, lineOf(tester, 'Why: the kettle needs them'));
+      expect(markdownOf(tester), words, reason: 'a selection changes no words');
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
   });
 
   group('photos', () {
@@ -3505,7 +3625,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Writing the words…'), findsNothing);
       expect(find.descendant(of: find.byType(RecordingCard), matching: find.text('Transcript')), findsOneWidget);
-      expect(quill(tester).document.toPlainText(), '\n');
+      expect(note(tester).text, '\n');
       await tester.tap(find.text('Transcript'));
       await tester.pumpAndSettle();
       expect(find.widgetWithText(TextField, 'Ask the fab if the flex stiffener can be 0.2 mm'), findsOneWidget);
@@ -3570,7 +3690,7 @@ void main() {
       await tester.pumpAndSettle();
       expect([find.byType(NoteEditor), find.text('Writing the words…')], [findsOneWidget, findsNothing]);
       expect(find.text('Transcript'), findsOneWidget);
-      expect(quill(tester).document.toPlainText(), '\n');
+      expect(note(tester).text, '\n');
       await tester.pageBack();
       await tester.pumpAndSettle();
       expect(relay.calls, isEmpty);
@@ -3876,7 +3996,7 @@ void main() {
       final player = find.byType(VoicePlayer);
       expect(find.descendant(of: player, matching: find.text('0:42')), findsOneWidget);
       // Under the date, above the words.
-      expect(tester.getTopLeft(player).dy, lessThan(tester.getTopLeft(find.byType(QuillEditor)).dy));
+      expect(tester.getTopLeft(player).dy, lessThan(tester.getTopLeft(noteEditor).dy));
       expect(tester.widget<CustomPaint>(find.descendant(of: find.byKey(const ValueKey('waves')),
         matching: find.byType(CustomPaint))).painter, isA<WavePainter>().having((wave) => wave.levels, 'levels', hasLength(48)));
       await tester.tap(find.byTooltip('Play'));
@@ -4093,7 +4213,7 @@ void main() {
       final second = find.byKey(const ValueKey('r2'));
       final tops = [top(first), top(find.text('lease.pdf')), top(second), top(find.text('quote.pdf'))];
       expect(tops, [for (final y in [...tops]..sort()) y]);
-      expect(find.descendant(of: find.byType(QuillEditor), matching: find.text('quote.pdf')), findsOneWidget);
+      expect(find.descendant(of: noteEditor, matching: find.text('quote.pdf')), findsOneWidget);
       expect(find.text('Add notes…'), findsOneWidget);
       expect(find.textContaining('What do you want to keep?', findRichText: true), findsNothing);
       await tester.pump(const Duration(seconds: 2));
@@ -4104,7 +4224,7 @@ void main() {
       relay.entries = [Entry(id: 'v', text: 'Fab call', at: now, recordings: const [
         EntryRecording(id: 'r1', recording: 'voice/1.wav', transcript: 'Call the fab', top: true)])];
       await openNote(tester, relay.entries.single);
-      quill(tester).updateSelection(const TextSelection.collapsed(offset: 10), ChangeSource.local);
+      note(tester).select(const TextSelection.collapsed(offset: 10));
       await type(tester, ' at 3');
       await tester.pump(const Duration(seconds: 2));
       expect(relay.calls.last, startsWith('edit ![Recording](attachment:r1)\n# Fab call at 3'));
@@ -4132,12 +4252,12 @@ void main() {
           files: const [photo])];
       await openNote(tester, relay.entries.single);
       // The line under the photo starts at 12: backspace there takes the line end after the photo, at 11.
-      quill(tester).replaceText(11, 1, '', const TextSelection.collapsed(offset: 11));
+      note(tester).replaceText(11, 1, '');
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
       expect(markdownOf(tester), '# Desk lamp\nPaid in cash');
       expect([relay.removals, find.text('receipt.jpg').evaluate()], [[{'p1'}], isEmpty]);
-      quill(tester).undo();
+      note(tester).undo();
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
       expect(markdownOf(tester), '# Desk lamp\n![receipt.jpg](attachment:p1)\nPaid in cash');
@@ -4153,10 +4273,10 @@ void main() {
         ..entries = [Entry(id: 'n1', text: '![receipt.jpg](attachment:p1)', at: now, files: const [photo]),
           Entry(id: 'n2', text: 'Call Sam', at: now)];
       await openNote(tester, relay.entries.first);
-      tester.widget<QuillEditor>(find.byType(QuillEditor)).focusNode.requestFocus();
+      editorFocus(tester).requestFocus();
       await tester.pump();
       // The photo is at 0 and its line ends at 1: backspace on the empty line under it takes the photo.
-      quill(tester).replaceText(1, 1, '', const TextSelection.collapsed(offset: 1));
+      note(tester).replaceText(1, 1, '');
       await tester.pump();
       expect([markdownOf(tester), relay.calls], ['', isEmpty], reason: 'while typing, the change waits for a pause');
       await tester.pageBack();
@@ -4168,9 +4288,9 @@ void main() {
     testWidgets('a recording made with the cursor at the end of the first of two lines goes between them', (tester) async {
       relay.entries = [Entry(id: 'n1', text: 'Fab call\nAt three', at: now)];
       await openNote(tester, relay.entries.single);
-      await tester.tap(find.byType(QuillEditor));
+      await tester.tap(noteEditor);
       await tester.pumpAndSettle();
-      quill(tester).updateSelection(const TextSelection.collapsed(offset: 8), ChangeSource.local);
+      note(tester).select(const TextSelection.collapsed(offset: 8));
       await tester.pump();
       await tester.tap(find.byTooltip('Record'));
       await tester.pump();
@@ -4190,9 +4310,11 @@ void main() {
       const photo = EntryFile(id: 'p1', name: 'receipt.jpg', type: 'image/jpeg', size: 1);
       relay.entries = [Entry(id: 'n1', text: '# Desk lamp\n![receipt.jpg](attachment:p1)', at: now, files: const [photo])];
       await openNote(tester, relay.entries.single);
-      quill(tester).updateSelection(const TextSelection.collapsed(offset: 11), ChangeSource.local);
+      note(tester).select(const TextSelection.collapsed(offset: 11));
+      await tester.pump();
       await type(tester, 'Paid');
-      quill(tester).updateSelection(const TextSelection.collapsed(offset: 10), ChangeSource.local);
+      note(tester).select(const TextSelection.collapsed(offset: 10));
+      await tester.pump();
       await type(tester, 'Shop');
       expect(markdownOf(tester), '# Desk lamp\nShop\n![receipt.jpg](attachment:p1)\nPaid\n');
     });
@@ -4202,11 +4324,29 @@ void main() {
       relay.entries = [Entry(id: 'n1', text: '# Desk lamp\n![receipt.jpg](attachment:p1)\nPaid in cash', at: now, sent: true,
         from: 'iPhone', files: const [photo])];
       await openNote(tester, relay.entries.single);
-      quill(tester).replaceText(11, 1, '', const TextSelection.collapsed(offset: 11));
-      quill(tester).replaceText(0, 13, '', const TextSelection.collapsed(offset: 0));
+      note(tester).replaceText(11, 1, '');
+      note(tester).replaceText(0, 13, '');
       await tester.pump(const Duration(seconds: 2));
       expect(markdownOf(tester), '# Desk lamp\n![receipt.jpg](attachment:p1)\nPaid in cash');
       expect(relay.removals, isEmpty);
+    });
+
+    testWidgets('a note from elsewhere whose file the server no longer has loses its line, and sends none', (tester) async {
+      const photo = EntryFile(id: 'p1', name: 'stub.jpg', type: 'image/jpeg', size: 1);
+      Entry lamp({List<EntryFile> files = const []}) => Entry(id: 'n1',
+        text: '# Desk lamp\n![stub.jpg](attachment:p1)\nPaid in cash', at: now, sent: true, from: 'iPhone', files: files);
+      relay.entries = [lamp(files: const [photo])];
+      await openNote(tester, relay.entries.single);
+      relay.entries = [lamp()];
+      relay.changed();
+      await tester.pump();
+      expect(markdownOf(tester), '# Desk lamp\nPaid in cash');
+      expect(find.text('stub.jpg'), findsNothing);
+      note(tester).select(const TextSelection.collapsed(offset: 23));
+      await type(tester, ' now');
+      await tester.pump(savePause);
+      expect(relay.calls.last, startsWith('edit # Desk lamp\nPaid in cash now'));
+      expect(relay.calls.where((call) => call.contains('attachment:p1')), isEmpty);
     });
 
     testWidgets('Attach puts the photo under the line with the cursor, and the note keeps it there', (tester) async {
@@ -4218,9 +4358,9 @@ void main() {
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Desk lamp'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(QuillEditor));
+      await tester.tap(noteEditor);
       await tester.pump();
-      quill(tester).updateSelection(const TextSelection.collapsed(offset: 3), ChangeSource.local);
+      note(tester).select(const TextSelection.collapsed(offset: 3));
       await tester.pump();
       await tester.tap(find.byTooltip('Attach'));
       await tester.pumpAndSettle();
@@ -4260,7 +4400,7 @@ void main() {
       relay.entries = [Entry(id: 'n1', text: 'Fab call', at: now)];
       await openNote(tester, relay.entries.single);
       expect(find.byTooltip('Record'), findsOneWidget, reason: 'the bar while reading');
-      await tester.tap(find.byType(QuillEditor));
+      await tester.tap(noteEditor);
       await tester.pumpAndSettle();
       expect(find.byTooltip('Record'), findsOneWidget, reason: 'the bar over the keyboard');
       final left = [for (final tool in ['Attach', 'Record', 'Bulleted list']) tester.getRect(find.byTooltip(tool)).left];
@@ -4375,22 +4515,19 @@ void main() {
         await tester.pumpAndSettle();
         return find.semantics.byLabel('New note').evaluate().single.getSemanticsData().customSemanticsActionIds;
       }
-      Future<Map<ShortcutActivator, Intent>?> holdKeys() async {
+      Future<int> holdKeys() async {
         await tester.longPress(newNote);
         await tester.pumpAndSettle();
         expect(relay.calls, isNot(contains('voice start')));
-        final keys = tester.widget<QuillEditor>(find.byType(QuillEditor)).config.customShortcuts;
+        final keys = tester.widget<SuperEditor>(find.byType(SuperEditor)).keyboardActions!.length;
         await tester.pageBack();
         await tester.pumpAndSettle();
         return keys;
       }
 
-      // The page keys, and the format keys with them.
-      void hasPageKeys(Map<ShortcutActivator, Intent>? keys) {
-        expect({for (final key in pageKeys.keys) key: keys?[key]}, pageKeys,
-          reason: 'a long press is a tap: it writes, with the page keys');
-        expect(keys!.values.whereType<FormatIntent>(), hasLength(formatShortcuts().length));
-      }
+      // The format keys, which pass the page keys up, and the note's own keys, before the editor's.
+      void hasPageKeys(int keys) => expect(keys, defaultImeKeyboardActions.length + 2,
+        reason: 'a long press is a tap: it writes, with the format keys and the page keys');
       expect(await show(RelayPlatform.mac), isEmpty);
       hasPageKeys(await holdKeys());
       expect(await show(RelayPlatform.web), isEmpty);
@@ -4610,7 +4747,7 @@ void main() {
       await tester.pumpAndSettle();
       // The note page under it still shows, so a pull leaves that note as it is.
       expect(find.byType(NoteEditor), findsOneWidget);
-      expect([quill(tester).document.toPlainText(), relay.openNote], ['Dentist moved to Thursday 3 pm\n', 'n1']);
+      expect([note(tester).text, relay.openNote], ['Dentist moved to Thursday 3 pm\n', 'n1']);
       // The list under it shows the voice note still writing its words, so the screen never settles.
       await tester.pageBack();
       for (var frame = 0; frame < 10; frame++) {
@@ -4642,9 +4779,9 @@ void main() {
 
     /// Gives the note the keyboard, with [selection].
     Future<void> edit(WidgetTester tester, TextSelection selection) async {
-      tester.widget<QuillEditor>(find.byType(QuillEditor)).focusNode.requestFocus();
+      editorFocus(tester).requestFocus();
       await tester.pump();
-      quill(tester).updateSelection(selection, ChangeSource.local);
+      note(tester).select(selection);
       await tester.pumpAndSettle();
     }
 
@@ -4688,9 +4825,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byTooltip('Indent more').hitTestable(), findsOneWidget);
       expect(find.byTooltip('Hide keyboard').hitTestable(), findsOneWidget);
-      final editor = tester.allRenderObjects.whereType<RenderEditor>().first;
-      final caret = editor.getLocalRectForCaret(quill(tester).selection.extent);
-      expect(editor.localToGlobal(caret.bottomLeft).dy, lessThanOrEqualTo(bar.top));
+      expect(caretOf(tester).bottom, lessThanOrEqualTo(bar.top));
       await tester.tap(find.byTooltip('Hide keyboard'));
       await tester.pumpAndSettle();
       expect([editorFocused(tester), find.byType(ReadingBar).evaluate().length], [false, 1]);
@@ -4701,7 +4836,7 @@ void main() {
       await openNote(tester, 'Shop', 'Shop\n**Eggs** and milk');
       await edit(tester, const TextSelection.collapsed(offset: 7));
       expect([find.byType(FloatingToolBar), find.byType(SelectionToolBar)], [findsOneWidget, findsNothing]);
-      quill(tester).updateSelection(const TextSelection(baseOffset: 5, extentOffset: 9), ChangeSource.local);
+      note(tester).select(const TextSelection(baseOffset: 5, extentOffset: 9));
       await tester.pumpAndSettle();
       expect([find.byType(FloatingToolBar), find.byType(SelectionToolBar)], [findsNothing, findsOneWidget]);
       expect([for (final tool in ['Bold', 'Italic', 'Underline', 'Strikethrough', 'Highlight', 'Link']) lit(tester, tool)],
@@ -4717,7 +4852,7 @@ void main() {
       await pickIn(tester, 'Lists', 'Numbered List');
       expect(markdownOf(tester), '# Shop\n1. Eggs and milk');
       expect(lit(tester, 'Lists'), isTrue);
-      quill(tester).updateSelection(const TextSelection.collapsed(offset: 7), ChangeSource.local);
+      note(tester).select(const TextSelection.collapsed(offset: 7));
       await tester.pumpAndSettle();
       expect([find.byType(FloatingToolBar), find.byType(SelectionToolBar)], [findsOneWidget, findsNothing]);
     });
@@ -4736,7 +4871,7 @@ void main() {
         expect([for (final other in styles) chip(other)], [for (final other in styles) other == style], reason: style);
       }
       expect(markdownOf(tester), '# Shop\nEggs and milk');
-      quill(tester).updateSelection(const TextSelection(baseOffset: 5, extentOffset: 9), ChangeSource.local);
+      note(tester).select(const TextSelection(baseOffset: 5, extentOffset: 9));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Highlight colour'));
       await tester.pumpAndSettle();
@@ -4760,7 +4895,7 @@ void main() {
       });
       addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
       await openNote(tester, 'Shop', 'Shop\nSee the menu');
-      final start = quill(tester).document.toPlainText().indexOf('the menu');
+      final start = note(tester).text.indexOf('the menu');
       await edit(tester, TextSelection(baseOffset: start, extentOffset: start + 8));
       await tester.tap(find.byTooltip('Link'));
       await tester.pumpAndSettle();
@@ -4811,21 +4946,21 @@ void main() {
           await type(tester, letter);
         }
         expect(markdownOf(tester).split('\n').last, line, reason: mark);
-        expect(quill(tester).document.toPlainText(), endsWith('\nx\n'), reason: 'the marks of $mark go');
+        expect(note(tester).text, endsWith('\nx\n'), reason: 'the marks of $mark go');
       }
       await type(tester, '\n');
       await type(tester, '#');
       await type(tester, ' ');
-      expect(quill(tester).document.toDelta().last.attributes, {'header': 1});
+      expect(kindOf(note(tester).nodes.last), LineKind.header1);
       await tester.pump(const Duration(seconds: 2));
       await tester.tap(find.byTooltip('Undo'));
       await tester.pumpAndSettle();
-      expect(quill(tester).document.toPlainText(), endsWith('\n# \n'));
-      expect(quill(tester).document.toDelta().last.attributes?['header'], isNull);
+      expect(note(tester).text, endsWith('\n# \n'));
+      expect(kindOf(note(tester).nodes.last), isNot(LineKind.header1));
       // A paste is one change: its marks stay words.
       await type(tester, '\n');
       await type(tester, '# x');
-      expect(quill(tester).document.toPlainText(), endsWith('\n# x\n'));
+      expect(note(tester).text, endsWith('\n# x\n'));
       await tester.pump(const Duration(seconds: 2));
     });
 
@@ -4928,7 +5063,7 @@ void main() {
       await tester.tap(cells.at(0));
       await tester.pumpAndSettle();
       await pickIn(tester, 'Table', 'Convert to text');
-      expect(quill(tester).document.toPlainText(), 'Plan\nDay\tTrain\nMon\t9:00\nEnd\n');
+      expect(note(tester).text, 'Plan\nDay\tTrain\nMon\t9:00\nEnd\n');
       expect(editorFocused(tester), isTrue);
       await tester.tap(find.byTooltip('Undo'));
       await tester.pumpAndSettle();
@@ -4936,7 +5071,7 @@ void main() {
       await tester.tap(cells.at(3));
       await tester.pumpAndSettle();
       await pickIn(tester, 'Table', 'Delete table');
-      expect(quill(tester).document.toPlainText(), 'Plan\nEnd\n');
+      expect(note(tester).text, 'Plan\nEnd\n');
       expect(cells, findsNothing);
     });
 
@@ -4949,7 +5084,7 @@ void main() {
       await tester.enterText(find.descendant(of: find.byType(FindBar), matching: find.byType(TextField)), 'train');
       await tester.pumpAndSettle();
       expect(find.text('1 of 3'), findsOneWidget);
-      expect(quill(tester).selection, const TextSelection(baseOffset: 5, extentOffset: 6), reason: 'the table is picked');
+      expect(note(tester).selection, const TextSelection(baseOffset: 5, extentOffset: 6), reason: 'the table is picked');
     });
   });
 }

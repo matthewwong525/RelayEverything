@@ -1,10 +1,7 @@
 import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_quill/flutter_quill.dart';
-import 'package:flutter_quill/quill_delta.dart';
-
-import 'markdown.dart' show dashedList;
+import 'package:super_editor/super_editor.dart' show ExecutionInstruction, SuperEditorContext, SuperEditorKeyboardAction;
 
 /// Each thing the note page's format tools do: the Format sheet and menu, the bars, the keys and the Mac's *Format*
 /// menu all name one of these, so they do the same thing.
@@ -106,40 +103,21 @@ class _NotAltGr extends ShortcutActivator {
   String debugDescribeKeys() => '${keys.debugDescribeKeys()}, not AltGr';
 }
 
-/// The Markdown marks typed at the start of a line, and the line style each gives, as Notes reads them.
-const _lineMarks = <String, Map<String, dynamic>>{
-  '#': {'header': 1},
-  '##': {'header': 2},
-  '###': {'header': 3},
-  '-': {'list': dashedList},
-  '*': {'list': 'bullet'},
-  '1.': {'list': 'ordered'},
-  '[]': {'list': 'unchecked'},
-  '>': {'blockquote': true},
-};
-
-/// Whether [words] at the start of a line are Markdown marks that a space turns into the line's style.
-bool isLineMark(String words) => _lineMarks.containsKey(words);
-
-/// The change after a space typed at [index] in [document] when the words before it in its line are one of the
-/// Markdown marks, such as `#`: the marks and the space go and the line takes their style, with the line's other
-/// styles off. Null for any other space. A code block keeps its marks as words.
-Delta? lineMarkChange(Document document, int index) {
-  final text = document.toPlainText();
-  if (index <= 0 || index >= text.length || text[index] != ' ') return null;
-  final start = text.lastIndexOf('\n', index - 1) + 1;
-  final style = _lineMarks[text.substring(start, index)];
-  if (style == null) return null;
-  final end = text.indexOf('\n', index);
-  final line = document.collectStyle(index, 0).attributes;
-  if (line.containsKey(Attribute.codeBlock.key)) return null;
-  final attributes = <String, dynamic>{
-    for (final key in ['header', 'list', 'blockquote']) if (line.containsKey(key)) key: null,
-    ...style,
+/// The note's keys for super_editor: each format key does its [FormatAction] through [format], and each key of
+/// [passUp] goes up to the page, past the editor's own keys.
+SuperEditorKeyboardAction formatKeyAction(void Function(FormatAction action) format,
+    {Map<ShortcutActivator, Intent> passUp = const {}}) {
+  final keys = formatShortcuts();
+  return ({required SuperEditorContext editContext, required KeyEvent keyEvent}) {
+    if (keyEvent is! KeyDownEvent && keyEvent is! KeyRepeatEvent) return ExecutionInstruction.continueExecution;
+    final keyboard = HardwareKeyboard.instance;
+    if (passUp.keys.any((key) => key.accepts(keyEvent, keyboard))) return ExecutionInstruction.blocked;
+    for (final MapEntry(:key, :value) in keys.entries) {
+      if (value is FormatIntent && key.accepts(keyEvent, keyboard)) {
+        format(value.action);
+        return ExecutionInstruction.haltExecution;
+      }
+    }
+    return ExecutionInstruction.continueExecution;
   };
-  return Delta()
-    ..retain(start)
-    ..delete(index - start + 1)
-    ..retain(end - index - 1)
-    ..retain(1, attributes);
 }

@@ -76,13 +76,14 @@ The page works as in Apple Notes: you change the note in place. Tap the words wh
 
 To add a recording, tap the **mic** in the bar at the bottom, or in the bar over the keyboard: [Add a recording to a note](../voice-notes/#add-a-recording-to-a-note).
 
-To paste, hold in the words, or tap the blinking cursor. On an iPhone with iOS 16 or later, the iPhone's own menu comes up, with **Paste**, **Copy**, **Cut**, **Select All**, **Look Up** and **Share** as each fits. A second tap on the cursor closes it. **Paste** puts in the words at once, with no *Allow Paste?* question. While you hold and drag the cursor, a magnifier shows the words under your finger.
+To paste, hold in the words, or tap the blinking cursor. On an iPhone with iOS 16 or later, the iPhone's own menu comes up, with **Paste**, **Copy**, **Cut**, **Select All**, **Look Up** and **Share** as each fits. A second tap on the cursor closes it. **Paste** puts in the words at once, with no *Allow Paste?* question. While you hold and drag the cursor, a magnifier shows the words under your finger. Tap three times on a line to select only that line, not the lines under it.
 
 A paste keeps the formatting that a note can show, as in Notion. Words that you copy from a web page, Notion, Google Docs, Apple Notes, Word or an email come in with their headings, bullet and numbered lists, checklists, quotes, code blocks, and bold, italic, underlined and struck-through words. Colors, fonts, sizes and pictures go: the pasted words take the note's own look. A heading past the third level comes in as a subheading.
 
 - **Markdown becomes formatting.** Words that you copy from ChatGPT, Claude or a text file, such as `## Plan`, `- [ ] Call the bank` or `**now**`, come in as a heading, a checklist item and bold words, not as marks.
 - **A link keeps its words.** A link whose words are not its address, such as *the menu*, comes in as those words, linked to the address.
 - **A table stays a table.** A table from a web page, Google Docs, Notion or a Markdown table from Claude comes in as a [table](#tables).
+- **A list keeps its numbers.** A numbered list with a line under each item, such as *Why: …*, comes in as 1, 2, 3, with each line under its item. A list that has an indent before it, under a label, comes in as a list, not as a sub-list.
 - **A few words join the line.** Words with no line style go in at the cursor, and the line keeps its own style.
 - **Empty lines stay tidy.** Two or more empty lines in a row become one, and empty lines at the start and the end go.
 - **Undo takes back the whole paste** in one step.

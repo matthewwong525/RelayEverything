@@ -113,7 +113,7 @@ The note leaves the list and goes to **Recently Deleted** for 30 days. Press Ctr
 
 The browser keeps some keys for itself. In Chrome, Ctrl+Shift+T opens a closed tab again, so use Ctrl+Alt+1 for a title there. You can also type Markdown marks at the start of a line, such as `## `: [Text styles and checklists](../your-notes/#text-styles-and-checklists)
 
-You can select and copy the words of a note with the mouse.
+You can select and copy the words of a note with the mouse. A triple-click selects one line.
 
 ## Search
 

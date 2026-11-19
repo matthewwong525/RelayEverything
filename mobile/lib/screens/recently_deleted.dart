@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_quill/flutter_quill.dart' show QuillEditorState;
+import 'package:super_editor/super_editor.dart' show SuperEditor;
 
 import '../brand.dart';
 import '../relay.dart';
@@ -97,7 +97,7 @@ bool textHasFocus() {
   final focused = FocusManager.instance.primaryFocus?.context;
   if (focused == null) return false;
   return focused.widget is EditableText || focused.findAncestorStateOfType<EditableTextState>() != null ||
-    focused.findAncestorStateOfType<QuillEditorState>() != null;
+    focused.findAncestorWidgetOfExactType<SuperEditor>() != null;
 }
 
 /// After a shake: *Undo Delete Note*, with *Cancel* and *Undo*, when a delete can be undone and no words are being

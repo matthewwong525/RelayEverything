@@ -141,6 +141,8 @@
 		5E1A7B0B2F00000100A1B2C3 /* RelayBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayBackground.swift; sourceTree = "<group>"; };
 		5E1A7D0B2F00000100A1B2C4 /* RelayPaste.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayPaste.swift; sourceTree = "<group>"; };
 		78E0A7A72DC9AD7400C4905E /* FlutterGeneratedPluginSwiftPackage */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = FlutterGeneratedPluginSwiftPackage; path = Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage; sourceTree = "<group>"; };
+		5E1A0C0D2F00000100000001 /* Extension-Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Extension-Debug.xcconfig; path = Flutter/Extension-Debug.xcconfig; sourceTree = "<group>"; };
+		5E1A0C0D2F00000100000002 /* Extension-Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Extension-Release.xcconfig; path = Flutter/Extension-Release.xcconfig; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = Flutter/Release.xcconfig; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = Flutter/Debug.xcconfig; sourceTree = "<group>"; };
 		9740EEB31CF90195004384FC /* Generated.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = Generated.xcconfig; path = Flutter/Generated.xcconfig; sourceTree = "<group>"; };
@@ -238,6 +240,8 @@
 				9740EEB21CF90195004384FC /* Debug.xcconfig */,
 				7AFA3C8E1D35360C0083082E /* Release.xcconfig */,
 				9740EEB31CF90195004384FC /* Generated.xcconfig */,
+				5E1A0C0D2F00000100000001 /* Extension-Debug.xcconfig */,
+				5E1A0C0D2F00000100000002 /* Extension-Release.xcconfig */,
 			);
 			name = Flutter;
 			sourceTree = "<group>";
@@ -1020,7 +1024,7 @@
 		};
 		5E1A7D412F00B00100AA0001 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */;
+			baseConfigurationReference = 5E1A0C0D2F00000100000001 /* Extension-Debug.xcconfig */;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
@@ -1046,7 +1050,7 @@
 		};
 		5E1A7D422F00B00100AA0001 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
+			baseConfigurationReference = 5E1A0C0D2F00000100000002 /* Extension-Release.xcconfig */;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
@@ -1070,7 +1074,7 @@
 		};
 		5E1A7D432F00B00100AA0001 /* Profile */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
+			baseConfigurationReference = 5E1A0C0D2F00000100000002 /* Extension-Release.xcconfig */;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
@@ -1094,7 +1098,7 @@
 		};
 		5E1A7E012F00C00900AA0001 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */;
+			baseConfigurationReference = 5E1A0C0D2F00000100000001 /* Extension-Debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
@@ -1120,7 +1124,7 @@
 		};
 		5E1A7E022F00C00900AA0001 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
+			baseConfigurationReference = 5E1A0C0D2F00000100000002 /* Extension-Release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
@@ -1144,7 +1148,7 @@
 		};
 		5E1A7E032F00C00900AA0001 /* Profile */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
+			baseConfigurationReference = 5E1A0C0D2F00000100000002 /* Extension-Release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
@@ -1168,7 +1172,7 @@
 		};
 		5E1A7E042F00C00900AA0001 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */;
+			baseConfigurationReference = 5E1A0C0D2F00000100000001 /* Extension-Debug.xcconfig */;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_STYLE = Automatic;
@@ -1195,7 +1199,7 @@
 		};
 		5E1A7E052F00C00900AA0001 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
+			baseConfigurationReference = 5E1A0C0D2F00000100000002 /* Extension-Release.xcconfig */;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_STYLE = Automatic;
@@ -1220,7 +1224,7 @@
 		};
 		5E1A7E062F00C00900AA0001 /* Profile */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
+			baseConfigurationReference = 5E1A0C0D2F00000100000002 /* Extension-Release.xcconfig */;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_STYLE = Automatic;

@@ -1,16 +1,12 @@
 import 'package:flutter/gestures.dart' show HitTestResult;
 import 'package:flutter/rendering.dart' show RenderMetaData;
 import 'package:flutter/widgets.dart';
-import 'package:flutter_quill/flutter_quill.dart';
-import 'package:flutter_quill/quill_delta.dart';
+import 'package:super_editor/super_editor.dart';
 
 import 'markdown.dart';
 
 /// Marks a file's block on the screen, so a tap on it can be told from a tap on the note's words.
 const _fileMark = #noteFile;
-
-/// The letter an embed is in the editor's plain words.
-const embedLetter = '\uFFFC';
 
 /// Whether [position] on the screen is on a file's block: the block takes the tap, such as *Play*, not the editor.
 bool isOnAttachment(BuildContext context, Offset position) {
@@ -22,114 +18,146 @@ bool isOnAttachment(BuildContext context, Offset position) {
   });
 }
 
-/// Each file embed in [delta], with where it is in the note.
-Iterable<(int, NoteAttachment)> attachmentsIn(Delta delta) sync* {
-  var offset = 0;
-  for (final op in delta.toList()) {
-    if (op.data case final Map<dynamic, dynamic> embed) {
-      if (NoteAttachment.fromEmbed(embed) case final file?) yield (offset, file);
-    }
-    offset += op.length ?? 0;
+/// A note's file at its place in the words, a block of its own.
+class AttachmentNode extends BlockNode {
+  AttachmentNode({required this.id, required this.file, super.metadata}) {
+    initAddToMetadata({NodeMetadata.blockType: const NamedAttribution('attachment')});
   }
+
+  @override
+  final String id;
+
+  final NoteAttachment file;
+
+  @override
+  String? copyContent(dynamic selection) => null;
+
+  @override
+  bool hasEquivalentContent(DocumentNode other) => other is AttachmentNode && other.file == file;
+
+  @override
+  AttachmentNode copyWithAddedMetadata(Map<String, dynamic> newProperties) =>
+    AttachmentNode(id: id, file: file, metadata: {...metadata, ...newProperties});
+
+  @override
+  AttachmentNode copyAndReplaceMetadata(Map<String, dynamic> newMetadata) =>
+    AttachmentNode(id: id, file: file, metadata: newMetadata);
+
+  AttachmentNode copy() => AttachmentNode(id: id, file: file, metadata: Map.of(metadata));
+
+  @override
+  bool operator ==(Object other) => identical(this, other) || other is AttachmentNode && other.id == id && other.file == file;
+
+  @override
+  int get hashCode => Object.hash(id, file);
 }
 
-/// The ids of the files placed in [delta].
-Set<String> attachmentIdsIn(Delta delta) => {for (final (_, file) in attachmentsIn(delta)) file.id};
+/// The files placed in [nodes], in order.
+Iterable<NoteAttachment> attachmentsIn(Iterable<DocumentNode> nodes) =>
+  [for (final node in nodes) if (node is AttachmentNode) node.file];
 
-/// The change that puts [files] in [document], each on a line of its own, and where the cursor goes after them. At
-/// [at], the cursor, they go on its line when it is empty, else under it; with no cursor, or on the last line, they go
-/// at the end. An empty line always stays under the last file, to type in.
-({Delta change, int caret}) placeFiles(Document document, List<NoteAttachment> files, int? at) {
-  final text = document.toPlainText();
-  final last = text.length - 1;
-  final from = at == null ? last : at.clamp(0, last);
-  final start = from == 0 ? 0 : text.lastIndexOf('\n', from - 1) + 1;
-  final end = text.indexOf('\n', start);
-  final change = Delta();
-  if (start == end || (at != null && end < last)) {
-    // An empty line takes them and stays under them; another line keeps them under it.
-    change.retain(start == end ? start : end + 1);
-    _insert(change, files);
-    return (change: change, caret: (start == end ? start : end + 1) + files.length * 2);
+/// The ids of the files placed in [nodes].
+Set<String> attachmentIdsIn(Iterable<DocumentNode> nodes) => {for (final file in attachmentsIn(nodes)) file.id};
+
+DocumentNode _fileNode(NoteAttachment file) => AttachmentNode(id: Editor.createNodeId(), file: file);
+
+DocumentNode _emptyLine() => lineNode(LineKind.paragraph, AttributedText());
+
+/// [nodes] with [files] in them, each a block of its own, and the node the cursor goes to after them. At [at], the
+/// cursor's node, they go in place of its line when it is empty, which stays under them, else under it; with no
+/// cursor, or on the last line, they go at the end. An empty line always stays under the last file, to type in.
+({List<DocumentNode> nodes, String caret}) placeFiles(List<DocumentNode> nodes, List<NoteAttachment> files, String? at) {
+  final index = at == null ? -1 : nodes.indexWhere((node) => node.id == at);
+  final from = index < 0 ? nodes.length - 1 : index;
+  final line = nodes[from];
+  final empty = line is TextNode && line.text.isEmpty;
+  final placed = [for (final file in files) _fileNode(file)];
+  if (empty || (index >= 0 && from < nodes.length - 1)) {
+    final to = empty ? from : from + 1;
+    return (nodes: [...nodes.take(to), ...placed, ...nodes.skip(to)], caret: nodes[to].id);
   }
-  // The last line has words or a block: a new line ends it, and the old line end comes after, with no line style.
-  final lineStyle = _lineStyleAt(document, last);
-  change
-    ..retain(last)
-    ..insert('\n', lineStyle.isEmpty ? null : lineStyle);
-  _insert(change, files);
-  if (lineStyle.isNotEmpty) change.retain(1, {for (final key in lineStyle.keys) key: null});
-  return (change: change, caret: last + 1 + files.length * 2);
+  // The last line has words or a block: a new empty line comes after the files.
+  final last = _emptyLine();
+  return (nodes: [...nodes, ...placed, last], caret: last.id);
 }
 
-/// The change that puts each file in [document] back on a line of its own, as a paste beside one can leave it: words
-/// before a file end their line, in its style, and words after it start a new line. Null when each file has its line.
-/// A file's line holds the file alone, so the words would be lost when the note is kept.
-Delta? filesApartChange(Document document) {
-  final text = document.toPlainText();
-  final breaks = <int, bool>{};
-  for (final (at, _) in attachmentsIn(document.toDelta())) {
-    if (at > 0 && text[at - 1] != '\n') breaks[at] = (breaks[at] ?? true) && text[at - 1] != embedLetter;
-    if (at + 1 < text.length && text[at + 1] != '\n') breaks[at + 1] = false;
-  }
-  if (breaks.isEmpty) return null;
-  final change = Delta();
-  var done = 0;
-  for (final at in breaks.keys.toList()..sort()) {
-    final style = breaks[at]! ? _lineStyleAt(document, at) : const <String, dynamic>{};
-    change
-      ..retain(at - done)
-      ..insert('\n', style.isEmpty ? null : style);
-    done = at;
-  }
-  return change;
-}
-
-Delta _insert(Delta change, List<NoteAttachment> files) {
-  for (final file in files) {
-    change
-      ..insert({attachmentEmbed: file.toJson()})
-      ..insert('\n');
-  }
-  return change;
-}
-
-Map<String, dynamic> _lineStyleAt(Document document, int at) => {
-  for (final attribute in document.collectStyle(at, 0).attributes.values)
-    if (attribute.scope == AttributeScope.block) attribute.key: attribute.value,
-};
-
-/// [delta] with [top] first and [rest] at the end, as an older note shows them, and an empty line last.
-Delta withFilesPlaced(Delta delta, {List<NoteAttachment> top = const [], List<NoteAttachment> rest = const []}) {
-  final document = Document.fromDelta(delta);
-  if (rest.isNotEmpty) document.compose(placeFiles(document, rest, null).change, ChangeSource.local);
-  if (top.isNotEmpty) document.compose(_insert(Delta(), top), ChangeSource.local);
-  final text = document.toPlainText();
+/// [nodes] with [top] first and [rest] at the end, as an older note shows them, and an empty line last.
+List<DocumentNode> withFilesPlaced(List<DocumentNode> nodes,
+    {List<NoteAttachment> top = const [], List<NoteAttachment> rest = const []}) {
+  var placed = rest.isEmpty ? nodes : placeFiles(nodes, rest, null).nodes;
+  placed = [for (final file in top) _fileNode(file), ...placed];
   // A file on the last line leaves nowhere to type under it.
-  if (attachmentsIn(document.toDelta()).lastOrNull?.$1 == text.length - 2) {
-    document.compose(Delta()..retain(text.length - 1)..insert('\n'), ChangeSource.local);
-  }
-  return document.toDelta();
+  if (placed.lastOrNull is AttachmentNode) placed = [...placed, _emptyLine()];
+  return placed;
 }
 
-/// Shows each file embed as [blockOf] draws it, or nothing for a file the note no longer has.
-class AttachmentEmbedBuilder extends EmbedBuilder {
-  const AttachmentEmbedBuilder(this.blockOf);
+/// A table's or a file's block as the page lays it out: its node, and whether it is selected.
+class NoteBlockViewModel extends SingleColumnLayoutComponentViewModel with SelectionAwareViewModelMixin {
+  NoteBlockViewModel({required super.nodeId, required this.node, super.createdAt, super.maxWidth,
+      super.padding = EdgeInsets.zero, super.opacity = 1.0, DocumentNodeSelection? selection,
+      Color selectionColor = const Color(0x00000000)}) {
+    super.selection = selection;
+    super.selectionColor = selectionColor;
+  }
+
+  final DocumentNode node;
+
+  @override
+  NoteBlockViewModel copy() => NoteBlockViewModel(nodeId: nodeId, node: node, createdAt: createdAt, maxWidth: maxWidth,
+    padding: padding, opacity: opacity, selection: selection, selectionColor: selectionColor);
+
+  @override
+  bool operator ==(Object other) => super == other && other is NoteBlockViewModel && identical(other.node, node);
+
+  @override
+  int get hashCode => super.hashCode ^ node.hashCode;
+}
+
+/// A block in the note's words, tinted while it is selected. Unlike super_editor's `SelectableBox`, it lets taps
+/// through, so a file opens and a table cell takes the cursor.
+class NoteBlockBox extends StatelessWidget {
+  const NoteBlockBox({super.key, required this.viewModel, required this.child});
+
+  final NoteBlockViewModel viewModel;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final selection = viewModel.selection?.nodeSelection;
+    final picked = selection is UpstreamDownstreamNodeSelection && !selection.isCollapsed;
+    return DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(color: picked ? viewModel.selectionColor.withValues(alpha: 0.5) : null),
+      child: child,
+    );
+  }
+}
+
+/// Shows each file's block as [blockOf] draws it, or nothing for a file the note no longer has.
+class AttachmentComponentBuilder implements ComponentBuilder {
+  const AttachmentComponentBuilder(this.blockOf);
 
   final Widget? Function(NoteAttachment file) blockOf;
 
   @override
-  String get key => attachmentEmbed;
+  SingleColumnLayoutComponentViewModel? createViewModel(Document document, DocumentNode node) =>
+    node is AttachmentNode ? NoteBlockViewModel(nodeId: node.id, node: node) : null;
 
   @override
-  bool get expanded => true;
-
-  @override
-  Widget build(BuildContext context, EmbedContext embedContext) {
-    final file = NoteAttachment.fromEmbed({attachmentEmbed: embedContext.node.value.data});
-    final block = file == null ? null : blockOf(file);
-    if (block == null) return const SizedBox.shrink();
-    return MetaData(key: ValueKey('file ${file!.id}'), metaData: _fileMark, behavior: HitTestBehavior.translucent,
-      child: Padding(padding: const EdgeInsets.symmetric(vertical: 7), child: block));
+  Widget? createComponent(SingleColumnDocumentComponentContext componentContext,
+      SingleColumnLayoutComponentViewModel componentViewModel) {
+    if (componentViewModel is! NoteBlockViewModel) return null;
+    final node = componentViewModel.node;
+    if (node is! AttachmentNode) return null;
+    final block = blockOf(node.file);
+    return NoteBlockBox(
+      viewModel: componentViewModel,
+      child: BoxComponent(
+        key: componentContext.componentKey,
+        child: block == null ? const SizedBox(height: 1) : MetaData(key: ValueKey('file ${node.file.id}'),
+          metaData: _fileMark, behavior: HitTestBehavior.translucent,
+          child: Padding(padding: const EdgeInsets.symmetric(vertical: 7), child: block)),
+      ),
+    );
   }
 }

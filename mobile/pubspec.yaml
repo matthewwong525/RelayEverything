@@ -66,8 +66,13 @@ dependencies:
   flutter_web_auth_2: ^5.1.0
   # Your calendar: reads the phone's calendars and their events (EventKit, CalendarContract). It never writes.
   device_calendar_plus: ^0.12.0
-  flutter_quill: ^11.6.0
-  # A paste's HTML, read into the note's own styles (lib/editor/paste.dart); the version flutter_quill already uses.
+  # The note's editor: blocks, as Notion has them, with triple-click and the iPhone's own text menu. A pre-release, so
+  # pinned to one version: a new one is its own change.
+  super_editor: 0.3.0-dev.52
+  follow_the_leader: ^0.5.3
+  # The drawn iPhone text menu (iOS 15) with Select All, as super_editor's own toolbar draws it.
+  overlord: ^0.4.2
+  # A paste's HTML, read into the note's own styles (lib/editor/paste.dart).
   html: ^0.15.7
   share_plus: ^13.3.1
   # The version and build at the bottom of Settings.

@@ -32,7 +32,7 @@ Job `swift-tests` runs the Swift tests on a second Mac: `RunnerTests` for the sh
 
 **The tour's result comes first.** After the tour, job `iphone` keeps `tour.json`, `tour/`, `reason.txt` and `crash.txt` as the file `device-check-tour`. Job `tour-report`, on GitHub's Linux machine, asks for that file each 30 seconds, then puts a short note on the pull request: the tour passed and Claude is checking, with the steps that needed a second try, or the tour is broken and why. It runs no branch code, because it holds the write token. It posts nothing when job `iphone` ends with no tour, such as after a failed build. `device-check.mjs` reads the same file and prints `tour=`.
 
-**A newer check of a branch stops the older one**, so only the newest commit is checked. The stopped run shows *cancelled* and posts nothing. A release's tour is never stopped.
+**A newer check of a branch stops the older one**, so only the newest commit is checked. The stopped run shows *cancelled* and posts nothing. A release's tour is never stopped. So start a check only through `device-check.mjs`, once: two runs of one commit started within a minute, by hand or by the script twice, make the script follow the older, stopped run and print `result=cancelled` while its own run goes on. On 2026-11-19 that cost about 30 minutes.
 
 Each run ends with one verdict:
 

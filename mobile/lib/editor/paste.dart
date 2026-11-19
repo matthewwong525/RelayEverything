@@ -1,12 +1,13 @@
 import 'dart:math';
 
-import 'package:flutter/services.dart' show TextSelection;
-import 'package:flutter_quill/flutter_quill.dart' show Document, Line;
-import 'package:flutter_quill/quill_delta.dart';
+import 'package:flutter/painting.dart' show TextAffinity;
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
+import 'package:super_editor/super_editor.dart';
 
+import 'attachments.dart';
 import 'markdown.dart';
+import 'table.dart';
 
 // Every paste into a note goes through here: the iPhone's own Paste, the editor's own menu and keys, and the browser.
 // A paste keeps only the styles a note can store as Markdown, so the page shows what the note keeps.
@@ -15,123 +16,163 @@ import 'markdown.dart';
 /// Only the note's styles stay: headings 1 to 3, lists with their indent, quotes, code blocks, tables, links on words,
 /// and bold, italic, underlined and struck words.
 /// Runs of empty lines become one, and empty lines at the start and end go. The result has gone to Markdown and back,
-/// so it is what the note stores; it ends with a line break, or is empty when the paste has no words.
-Delta pastedDelta({String? html, required String plain}) {
+/// so it is what the note stores; it is empty when the paste has no words. A file's line is a file only when [files]
+/// holds its id, or [files] is null.
+List<DocumentNode> pastedNodes({String? html, required String plain, Set<String>? files}) {
   final fromHtml = html == null || html.trim().isEmpty ? null : _HtmlReader().read(html);
   final lines = _tidy(fromHtml != null && fromHtml.any((line) => line.words.trim().isNotEmpty)
     ? fromHtml
-    : _linesOf(markdownToDelta(_plainMarkdown(plain))));
-  if (lines.isEmpty) return Delta();
-  return markdownToDelta(deltaToMarkdown(_deltaOf(lines)));
+    : [for (final node in markdownToNodes(_plainMarkdown(plain), files: files)) _Line.of(node)]);
+  if (lines.isEmpty) return const [];
+  return markdownToNodes(documentToMarkdown([for (final line in lines) line.node()]), files: files);
 }
 
-/// The change that puts [pasted], from [pastedDelta], over [selection] in [document], and where the caret goes after
-/// it; null when there is nothing to put. It is one change, so one *Undo* takes it back.
+/// A line's style: its kind and its indent.
+typedef _Style = (LineKind, int);
+
+_Style _lineStyleOf(DocumentNode node) => (kindOf(node), indentOf(node));
+
+bool _plain(_Style style) => style == (LineKind.paragraph, 0);
+
+/// [nodes] with [range] taken out, and where the caret goes. Two lines the range joins become one, in the style of
+/// the last, as a line's style is at its end.
+({List<DocumentNode> nodes, DocumentPosition caret}) deleteRange(List<DocumentNode> nodes, DocumentRange range) {
+  final ids = [for (final node in nodes) node.id];
+  var (start, end) = (range.start, range.end);
+  if (ids.indexOf(start.nodeId) > ids.indexOf(end.nodeId) || (start.nodeId == end.nodeId &&
+      _offsetIn(start.nodePosition) > _offsetIn(end.nodePosition))) {
+    (start, end) = (end, start);
+  }
+  final from = ids.indexOf(start.nodeId), to = ids.indexOf(end.nodeId);
+  final first = nodes[from], last = nodes[to];
+  final s = _offsetIn(start.nodePosition), e = _offsetIn(end.nodePosition);
+  if (first is TextNode && last is TextNode) {
+    final joined = lineNode(kindOf(last), first.text.copyText(0, s).copyAndAppend(last.text.copyText(e)),
+      indent: indentOf(last), id: first.id);
+    return (nodes: [...nodes.take(from), joined, ...nodes.skip(to + 1)],
+      caret: DocumentPosition(nodeId: first.id, nodePosition: TextNodePosition(offset: s)));
+  }
+  // A table or a file at an edge goes when the range holds it whole; a line of words keeps the words outside it.
+  final kept = <DocumentNode>[
+    if (first is TextNode) first.copyTextNodeWith(text: first.text.copyText(0, s)) else if (s == 1 && from != to) first,
+    if (from != to)
+      if (last is TextNode) last.copyTextNodeWith(text: last.text.copyText(e)) else if (e == 0) last,
+  ];
+  if (kept.isEmpty) kept.add(lineNode(LineKind.paragraph, AttributedText()));
+  final caretNode = kept.first;
+  return (nodes: [...nodes.take(from), ...kept, ...nodes.skip(to + 1)], caret: DocumentPosition(nodeId: caretNode.id,
+    nodePosition: caretNode is TextNode ? TextNodePosition(offset: caretNode.text.length) : caretNode.endPosition));
+}
+
+int _offsetIn(NodePosition position) => switch (position) {
+  TextNodePosition(:final offset) => offset,
+  UpstreamDownstreamNodePosition(:final affinity) => affinity == TextAffinity.upstream ? 0 : 1,
+  _ => 0,
+};
+
+/// [nodes] after [pasted], from [pastedNodes], goes over [selection], and where the caret goes after it; null when
+/// there is nothing to put. It is one change, so one *Undo* takes it back.
 ///
 /// The line at the cursor keeps its own style where it can: one line with no line style joins it, and the last
 /// pasted line with no line style joins the words after the cursor. A paste at the end of a line gives that line's
 /// style to the last pasted line, so a paste into a new note's empty Title line does not make its last line a Title.
-({Delta change, int caret})? pasteChange(Document document, TextSelection selection, Delta pasted) {
-  final lines = _linesOf(pasted);
-  if (lines.isEmpty) return null;
-  final start = selection.start, end = selection.end;
-  final first = document.queryChild(start), last = document.queryChild(end);
-  final line = last.node is Line ? last.node! as Line : null;
-  final cursorStyle = <String, dynamic>{
-    for (final attribute in line?.style.attributes.values ?? const <Never>[]) attribute.key: attribute.value,
-  };
-  final wordsBefore = first.offset > 0;
-  final nothingAfter = line != null && last.offset >= line.length - 1;
-  final lastStyle = lines.last.style;
+({List<DocumentNode> nodes, DocumentSelection caret})? pasteInto(List<DocumentNode> nodes, DocumentSelection selection,
+    List<DocumentNode> pasted) {
+  if (pasted.isEmpty && selection.isCollapsed) return null;
+  final (nodes: cleared, :caret) = selection.isCollapsed ? (nodes: nodes, caret: selection.extent)
+    : deleteRange(nodes, DocumentRange(start: selection.base, end: selection.extent));
+  nodes = cleared;
+  DocumentSelection at(DocumentNode node, int offset) => DocumentSelection.collapsed(position: DocumentPosition(
+    nodeId: node.id, nodePosition: node is TextNode ? TextNodePosition(offset: offset) : node.endPosition));
+  final index = nodes.indexWhere((node) => node.id == caret.nodeId);
+  final line = nodes[index];
+  if (pasted.isEmpty) return (nodes: nodes, caret: DocumentSelection.collapsed(position: caret));
+  if (line is! TextNode) {
+    // At a table or a file: the paste goes on lines of its own, before or after it.
+    final after = _offsetIn(caret.nodePosition) > 0;
+    final placed = after ? [...nodes.take(index + 1), ...pasted, ...nodes.skip(index + 1)]
+      : [...nodes.take(index), ...pasted, ...nodes.skip(index)];
+    final end = pasted.last;
+    return (nodes: placed, caret: at(end, end is TextNode ? end.text.length : 1));
+  }
+  final offset = _offsetIn(caret.nodePosition);
+  final before = line.text.copyText(0, offset), rest = line.text.copyText(offset);
+  final cursorStyle = _lineStyleOf(line);
+  final wordsBefore = offset > 0;
+  final nothingAfter = rest.isEmpty;
+  final lastStyle = _lineStyleOf(pasted.last);
+  final lastBlock = pasted.last is! TextNode;
   // Whether the last pasted line ends where the cursor's line ends, in place of its own line break. A table takes a
   // line of its own, so it never joins the words after the cursor.
-  final joinsLast = lines.last.embed ? nothingAfter
-    : (lines.length == 1 && lastStyle.isEmpty) || nothingAfter || lastStyle.isEmpty;
-  final change = Delta();
-  if (start > 0) change.retain(start);
-  if (end > start) change.delete(end - start);
-  var length = 0;
-  for (var at = 0; at < lines.length; at++) {
-    // Nor does a table join the words before the cursor.
-    if (at == 0 && wordsBefore && lines[at].embed) {
-      change.insert('\n', cursorStyle.isEmpty ? null : cursorStyle);
-      length++;
-    }
-    for (final (data, marks) in lines[at].runs) {
-      change.insert(data, marks);
-      length += data is String ? data.length : 1;
-    }
-    if (at == lines.length - 1 && joinsLast) break;
-    // The words before the cursor stay in their line's style when the first pasted line has none.
-    final style = at == 0 && wordsBefore && lines[at].style.isEmpty && !lines[at].embed ? cursorStyle : lines[at].style;
-    change.insert('\n', style.isEmpty ? null : style);
-    length++;
+  final joinsLast = lastBlock ? nothingAfter
+    : (pasted.length == 1 && _plain(lastStyle)) || nothingAfter || _plain(lastStyle);
+  final out = <DocumentNode>[];
+  var keepId = true;
+  DocumentNode emit(AttributedText text, _Style style) {
+    final node = lineNode(style.$1, text, indent: style.$2, id: keepId ? line.id : null);
+    keepId = false;
+    out.add(node);
+    return node;
   }
-  final singleJoin = lines.length == 1 && lastStyle.isEmpty && !lines.last.embed;
-  if (joinsLast && nothingAfter && !singleJoin) {
-    final restyle = {for (final key in cursorStyle.keys) if (!lastStyle.containsKey(key)) key: null, ...lastStyle};
-    if (restyle.entries.any((entry) => cursorStyle[entry.key] != entry.value)) change.retain(1, restyle);
-  }
-  if (length == 0 && end == start) return null;
-  return (change: change, caret: start + length);
-}
-
-/// One line of a paste: its runs of words, each with its inline styles, and its line style. A table's line holds its
-/// embed alone, as a run whose data is the embed's map.
-class _Line {
-  _Line(this.runs, this.style);
-
-  final List<(Object, Map<String, dynamic>?)> runs;
-  final Map<String, dynamic> style;
-
-  String get words => [for (final (text, _) in runs) if (text is String) text].join();
-
-  bool get embed => runs.any((run) => run.$1 is! String);
-}
-
-/// The lines of [delta]; a last line with no line break counts too.
-List<_Line> _linesOf(Delta delta) {
-  final lines = <_Line>[];
-  var runs = <(Object, Map<String, dynamic>?)>[];
-  for (final op in delta.toList()) {
-    final data = op.data;
-    if (data is Map) {
-      runs.add((data, null));
+  var current = before;
+  for (var k = 0; k < pasted.length; k++) {
+    final piece = pasted[k];
+    if (piece is! TextNode) {
+      // Nor does a table join the words before the cursor.
+      if (k == 0 && wordsBefore) emit(current, cursorStyle);
+      current = AttributedText();
+      out.add(piece);
       continue;
     }
-    if (data is! String) continue;
-    final parts = data.split('\n');
-    for (var at = 0; at < parts.length; at++) {
-      if (parts[at].isNotEmpty) runs.add((parts[at], op.attributes));
-      if (at == parts.length - 1) break;
-      lines.add(_Line(runs, {...?op.attributes}));
-      runs = [];
-    }
+    current = current.copyAndAppend(piece.text);
+    if (k == pasted.length - 1 && joinsLast) break;
+    // The words before the cursor stay in their line's style when the first pasted line has none.
+    emit(current, k == 0 && wordsBefore && _plain(_lineStyleOf(piece)) ? cursorStyle : _lineStyleOf(piece));
+    current = AttributedText();
   }
-  if (runs.isNotEmpty) lines.add(_Line(runs, const {}));
-  return lines;
+  if (lastBlock && joinsLast) {
+    final next = nodes.elementAtOrNull(index + 1);
+    return (nodes: [...nodes.take(index), ...out, ...nodes.skip(index + 1)],
+      caret: next == null ? at(out.last, 1) : DocumentSelection.collapsed(
+        position: DocumentPosition(nodeId: next.id, nodePosition: next.beginningPosition)));
+  }
+  final singleJoin = pasted.length == 1 && _plain(lastStyle) && !lastBlock;
+  final caretOffset = joinsLast ? current.length : 0;
+  final last = emit(current.copyAndAppend(rest), joinsLast && nothingAfter && !singleJoin ? lastStyle : cursorStyle);
+  return (nodes: [...nodes.take(index), ...out, ...nodes.skip(index + 1)], caret: at(last, caretOffset));
 }
 
-Delta _deltaOf(List<_Line> lines) {
-  final delta = Delta();
-  for (final line in lines) {
-    for (final (text, marks) in line.runs) {
-      delta.insert(text, marks == null || marks.isEmpty ? null : marks);
-    }
-    delta.insert('\n', line.style.isEmpty ? null : line.style);
-  }
-  return delta;
+/// One line of a paste: its runs of words, each with its inline marks, and its line style; or a table.
+class _Line {
+  _Line(this.runs, this.style, {this.table});
+
+  /// The line of a [node] read from Markdown.
+  factory _Line.of(DocumentNode node) => switch (node) {
+    NoteTableNode(:final table) => _Line(const [], (LineKind.paragraph, 0), table: table),
+    TextNode(:final text) => _Line(runsOf(text), _lineStyleOf(node)),
+    _ => _Line(const [], (LineKind.paragraph, 0)),
+  };
+
+  final List<(String, Set<String>)> runs;
+  final _Style style;
+  final NoteTable? table;
+
+  String get words => [for (final (text, _) in runs) text].join();
+
+  /// The note's node of this line.
+  DocumentNode node() => table != null ? NoteTableNode(id: Editor.createNodeId(), table: table!)
+    : lineNode(style.$1, attributedOf(runs), indent: style.$2);
 }
 
 /// A line with no words, outside a code block: an empty heading or list item, or spaces read as an indent, is one too.
-bool _blank(_Line line) => line.words.trim().isEmpty && !line.embed && !line.style.containsKey('code-block');
+bool _blank(_Line line) => line.words.trim().isEmpty && line.table == null && line.style.$1 != LineKind.code;
 
 /// Runs of empty lines become one, and empty lines at the start and end go.
 List<_Line> _tidy(List<_Line> lines) {
   final kept = <_Line>[];
   for (final line in lines) {
     if (_blank(line) && (kept.isEmpty || _blank(kept.last))) continue;
-    kept.add(_blank(line) ? _Line(const [], const {}) : line);
+    kept.add(_blank(line) ? _Line(const [], (LineKind.paragraph, 0)) : line);
   }
   while (kept.isNotEmpty && _blank(kept.last)) {
     kept.removeLast();
@@ -142,11 +183,51 @@ List<_Line> _tidy(List<_Line> lines) {
 /// A bullet typed as a sign, such as `• Milk`, as Apple Notes and many apps copy a list as words.
 final _bulletSign = RegExp(r'^([ \t]*)[•◦▪·]\s+');
 
-/// [plain] as a note's Markdown: one kind of line break, and a bullet sign as a `* ` bullet.
-String _plainMarkdown(String plain) => [
-  for (final line in plain.replaceAll('\r\n', '\n').replaceAll('\r', '\n').split('\n'))
-    line.replaceFirstMapped(_bulletSign, (match) => '${match[1]!.replaceAll('\t', '  ')}* '),
-].join('\n');
+/// A list line's indent and mark.
+final _listLine = RegExp(r'^([ \t]*)(\d{1,9}\. |- \[[ x]\] |[*-] )');
+
+/// [plain] as a note's Markdown: one kind of line break, a bullet sign as a `* ` bullet, and each list's indent as the
+/// note counts it. A list's first item indented up to 3 spaces, with no list above it, starts at the left; an item
+/// indented past the words of the item above is in that item's list, a level in; and a line of words indented to the
+/// words of the item above belongs to that item, so the list counts on past it.
+String _plainMarkdown(String plain) {
+  final lines = [
+    for (final line in plain.replaceAll('\r\n', '\n').replaceAll('\r', '\n').split('\n'))
+      line.replaceFirstMapped(_bulletSign, (match) => '${match[1]!.replaceAll('\t', '  ')}* '),
+  ];
+  // The items open above the line: where each one's mark starts and its words start in the paste, and where its words
+  // start as the note writes it.
+  final open = <({int mark, int words, int written})>[];
+  final out = <String>[];
+  for (final line in lines) {
+    final lead = line.length - line.trimLeft().length;
+    final width = line.substring(0, lead).replaceAll('\t', '  ').length;
+    final rest = line.substring(lead);
+    if (rest.isEmpty) {
+      open.clear();
+      out.add(line);
+      continue;
+    }
+    final item = _listLine.firstMatch(line);
+    if (item != null && (open.isNotEmpty || width <= 3)) {
+      while (open.isNotEmpty && width < open.last.words) {
+        open.removeLast();
+      }
+      final level = min(open.length, 8);
+      final mark = item[2]!;
+      out.add('${'  ' * level}$rest');
+      open.add((mark: width, words: width + mark.length, written: level * 2 + mark.length));
+      continue;
+    }
+    if (open.isNotEmpty && width >= open.last.words) {
+      out.add('${' ' * open.last.written}$rest');
+      continue;
+    }
+    open.clear();
+    out.add(line);
+  }
+  return out.join('\n');
+}
 
 /// Elements whose words never paste: the page's code, pictures and controls.
 const _skipped = {
@@ -162,6 +243,10 @@ const _blocks = {
 };
 
 const _maxIndent = 8;
+
+const _listKinds = {
+  'bullet': LineKind.bullet, 'ordered': LineKind.numbered, 'checked': LineKind.checked, 'unchecked': LineKind.unchecked,
+};
 
 /// Where a line is: what the elements around it make it.
 class _Block {
@@ -187,30 +272,35 @@ class _Block {
       level: level ?? this.level, quote: quote ?? this.quote, code: code ?? this.code,
       listTag: listTag ?? this.listTag, todo: todo ?? this.todo, wordList: wordList ?? this.wordList);
 
-  Map<String, dynamic> get style {
-    if (code) return {'code-block': true};
+  _Style get style {
+    if (code) return (LineKind.code, 0);
     final indent = min(level ?? max(lists - 1, 0), _maxIndent);
-    return {
-      if (list != null) 'list': list,
-      if (list != null && indent > 0) 'indent': indent,
-      if (header != null && list == null) 'header': header,
-      if (quote && list == null && header == null) 'blockquote': true,
-    };
+    if (list case final list?) return (_listKinds[list]!, indent);
+    if (header case final header?) return ([LineKind.header1, LineKind.header2, LineKind.header3][header - 1], 0);
+    return (quote ? LineKind.quote : LineKind.paragraph, 0);
   }
 }
 
 /// Reads a page's HTML into the note's lines, keeping only the styles a note can show.
 class _HtmlReader {
   final _lines = <_Line>[];
-  var _runs = <(String, Map<String, dynamic>?)>[];
-
+  var _runs = <(String, Set<String>)>[];
 
   List<_Line> read(String source) {
     final document = html_parser.parse(source);
     final root = document.body ?? document.documentElement;
     if (root != null) _children(root, const {}, const _Block());
     _end(const _Block());
-    return _lines;
+    // A code block's lines are one block of the note.
+    final lines = <_Line>[];
+    for (final line in _lines) {
+      if (line.style.$1 == LineKind.code && lines.isNotEmpty && lines.last.style.$1 == LineKind.code) {
+        lines.last = _Line([...lines.last.runs, ('\n', const {}), ...line.runs], line.style);
+      } else {
+        lines.add(line);
+      }
+    }
+    return lines;
   }
 
   void _children(dom.Node node, Set<String> marks, _Block block) {
@@ -230,14 +320,16 @@ class _HtmlReader {
     }
     if (tag == 'br') {
       if (block.code) return _breakCode(block);
-      if (_runs.every((run) => run.$1.trim().isEmpty)) _lines.add(_Line(const [], const {}));
+      // In a list item a line break starts a line under the item, in the same item, so the list counts on past it.
+      if (block.list != null) return _breakItem();
+      if (_runs.every((run) => run.$1.trim().isEmpty)) _lines.add(_Line(const [], (LineKind.paragraph, 0)));
       return _end(block);
     }
     final inner = _marksOf(tag, style, marks);
     if (tag == 'a') return _link(node, inner, block);
     if (tag == 'table' && !block.code && _table(node)) return;
     if (tag == 'td' || tag == 'th') {
-      if (_runs.isNotEmpty) _runs.add((' | ', null));
+      if (_runs.isNotEmpty) _runs.add((' | ', const {}));
       return _children(node, inner, block);
     }
     if (!_blocks.contains(tag) && !(style['mso-list'] ?? '').contains('level')) return _children(node, inner, block);
@@ -306,15 +398,26 @@ class _HtmlReader {
     if (block.code) {
       final parts = text.split('\n');
       for (var at = 0; at < parts.length; at++) {
-        if (parts[at].isNotEmpty) _runs.add((parts[at], null));
+        if (parts[at].isNotEmpty) _runs.add((parts[at], const {}));
         if (at < parts.length - 1) _breakCode(block);
       }
       return;
     }
     var words = text.replaceAll(RegExp(r'[ \t\n\r\f]+'), ' ');
-    if (words.startsWith(' ') && (_runs.isEmpty || _runs.last.$1.endsWith(' '))) words = words.substring(1);
+    if (words.startsWith(' ') && (_runs.isEmpty || _runs.last.$1.endsWith(' ') || _runs.last.$1.endsWith('\n'))) {
+      words = words.substring(1);
+    }
     if (words.isEmpty) return;
-    _runs.add((words.replaceAll(' ', ' '), _attributesOf(marks)));
+    _runs.add((words.replaceAll(' ', ' '), marks));
+  }
+
+  /// A line break inside a list item: the spaces before it go, and the item's words go on under it.
+  void _breakItem() {
+    while (_runs.isNotEmpty && _runs.last.$1.trimRight().isEmpty && !_runs.last.$1.endsWith('\n')) {
+      _runs.removeLast();
+    }
+    if (_runs.isNotEmpty) _runs.last = (_runs.last.$1.replaceFirst(RegExp(r' +$'), ''), _runs.last.$2);
+    _runs.add(('\n', const {}));
   }
 
   void _breakCode(_Block block) {
@@ -348,7 +451,7 @@ class _HtmlReader {
     if (rows.isEmpty || (rows.length == 1 && columns == 1)) return false;
     _end(const _Block());
     final full = [for (final row in rows) [...row, for (var pad = row.length; pad < columns; pad++) '']];
-    _lines.add(_Line([({tableEmbed: NoteTable(full).toJson()}, null)], const {}));
+    _lines.add(_Line(const [], (LineKind.paragraph, 0), table: NoteTable(full)));
     return true;
   }
 
@@ -375,13 +478,13 @@ class _HtmlReader {
       // Word writes the bullet or number as words, `·` then spaces, or `1.` then spaces.
       final marker = RegExp(r'^(\S{1,5})\s+').firstMatch(words);
       if (marker != null) {
-        if (RegExp(r'^[0-9a-zA-Z]{1,4}[.)]$').hasMatch(marker[1]!)) style = {...style, 'list': 'ordered'};
+        if (RegExp(r'^[0-9a-zA-Z]{1,4}[.)]$').hasMatch(marker[1]!)) style = (LineKind.numbered, style.$2);
         kept = _drop(trimmed, marker.end);
       }
-    } else if (style.isEmpty) {
+    } else if (_plain(style)) {
       final sign = _bulletSign.firstMatch(words);
       if (sign != null) {
-        style = {'list': 'bullet'};
+        style = (LineKind.bullet, 0);
         kept = _drop(trimmed, sign.end);
       }
     }
@@ -389,8 +492,8 @@ class _HtmlReader {
   }
 
   /// [runs] less their first [count] letters.
-  static List<(String, Map<String, dynamic>?)> _drop(List<(String, Map<String, dynamic>?)> runs, int count) {
-    final kept = <(String, Map<String, dynamic>?)>[];
+  static List<(String, Set<String>)> _drop(List<(String, Set<String>)> runs, int count) {
+    final kept = <(String, Set<String>)>[];
     var left = count;
     for (final (text, marks) in runs) {
       if (left < text.length) kept.add((text.substring(left), marks));
@@ -400,7 +503,7 @@ class _HtmlReader {
   }
 
   /// [runs] with no spaces at the line's start and end; empty when the line has no words.
-  static List<(String, Map<String, dynamic>?)> _trim(List<(String, Map<String, dynamic>?)> runs) {
+  static List<(String, Set<String>)> _trim(List<(String, Set<String>)> runs) {
     final kept = [for (final run in runs) if (run.$1.isNotEmpty) run];
     while (kept.isNotEmpty && kept.first.$1.trimLeft().isEmpty) {
       kept.removeAt(0);
@@ -413,8 +516,6 @@ class _HtmlReader {
     kept[kept.length - 1] = (kept.last.$1.trimRight(), kept.last.$2);
     return kept;
   }
-
-  static Map<String, dynamic>? _attributesOf(Set<String> marks) => attributesOfMarks(marks);
 
   /// An element's inline style, each property by name.
   static Map<String, String> _styleOf(dom.Element element) => {
@@ -455,3 +556,40 @@ class _HtmlReader {
     return marks;
   }
 }
+
+/// The part of [nodes] in [range], as a copy keeps it: the first and last lines cut at the range's ends, and each
+/// node with a new id, so a paste of it is lines and tables of their own.
+List<DocumentNode> copiedNodes(List<DocumentNode> nodes, DocumentRange range) {
+  final ids = [for (final node in nodes) node.id];
+  var (start, end) = (range.start, range.end);
+  if (ids.indexOf(start.nodeId) > ids.indexOf(end.nodeId) || (start.nodeId == end.nodeId &&
+      _offsetIn(start.nodePosition) > _offsetIn(end.nodePosition))) {
+    (start, end) = (end, start);
+  }
+  final from = ids.indexOf(start.nodeId), to = ids.indexOf(end.nodeId);
+  if (from < 0 || to < 0) return const [];
+  final copied = <DocumentNode>[];
+  for (var at = from; at <= to; at++) {
+    final node = nodes[at];
+    if (node is TextNode) {
+      final s = at == from ? _offsetIn(start.nodePosition) : 0;
+      final e = at == to ? _offsetIn(end.nodePosition) : node.text.length;
+      copied.add(lineNode(kindOf(node), node.text.copyText(s, e), indent: indentOf(node)));
+    } else if ((at != from || _offsetIn(start.nodePosition) == 0) && (at != to || _offsetIn(end.nodePosition) == 1)) {
+      copied.add(switch (node) {
+        NoteTableNode() => withNewTableId(node),
+        AttachmentNode(:final file) => AttachmentNode(id: Editor.createNodeId(), file: file),
+        _ => node,
+      });
+    }
+  }
+  return copied;
+}
+
+/// The plain words of [nodes], as a copy puts them on the clipboard: each line on its own, a table's cells split by
+/// tabs, and no file.
+String copiedText(List<DocumentNode> nodes) => [
+  for (final node in nodes)
+    if (node is TextNode) node.text.toPlainText(includePlaceholders: false)
+    else if (node is NoteTableNode) node.table.text,
+].join('\n');

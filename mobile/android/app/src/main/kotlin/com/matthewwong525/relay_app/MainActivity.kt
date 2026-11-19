@@ -1,6 +1,8 @@
 package com.matthewwong525.relay_app
 
 import android.Manifest
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.ActivityCompat
@@ -27,6 +29,13 @@ class MainActivity : FlutterFragmentActivity() {
                 }
                 else -> result.notImplemented()
             }
+        }
+        // `relay/clipboard` (lib/screens/note_editor.dart): `html` gives a note's paste the clipboard's HTML, so pasted
+        // words keep their lists and styles; null when the clipboard holds only plain words.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "relay/clipboard").setMethodCallHandler { call, result ->
+            if (call.method != "html") return@setMethodCallHandler result.notImplemented()
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            result.success(clipboard?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.htmlText)
         }
     }
 

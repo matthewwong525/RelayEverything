@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_quill/flutter_quill.dart' show Attribute, ChangeSource, QuillEditor;
+import 'package:super_editor/super_editor.dart' show boldAttribution, italicsAttribution;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:relay_app/data/files.dart' show checkFiles;
@@ -23,7 +23,7 @@ import 'package:relay_app/screens/timeline.dart' show TimelineScreen;
 import 'package:relay_app/screens/transcripts.dart' show TranscriptsPage;
 import 'package:relay_app/web/shell.dart';
 
-import 'screens_test.dart' show FakeRelay, markdownOf, quill;
+import 'screens_test.dart' show FakeRelay, markdownOf, note, noteEditor, stylesOf;
 
 const wide = Size(1200, 900);
 const middle = Size(800, 800);
@@ -312,13 +312,13 @@ void main() {
       await tester.pumpAndSettle();
       await select(tester, 'New Note');
       expect(find.byType(NotesPane), findsOneWidget);
-      expect(quill(tester).document.toPlainText(), '\n');
+      expect(note(tester).text, '\n');
       expect(editor(tester).id, isNot('own'));
       await tester.tap(find.text('Groceries').first);
       await tester.pumpAndSettle();
       expect(editor(tester).id, 'own');
       await press(tester, [LogicalKeyboardKey.metaLeft], LogicalKeyboardKey.keyN);
-      expect(quill(tester).document.toPlainText(), '\n');
+      expect(note(tester).text, '\n');
       expect(editor(tester).id, isNot('own'));
       await finish(tester);
     });
@@ -352,21 +352,21 @@ void main() {
 
     testWidgets("Bold and Italic from the menu style the words picked, as the editor's keys do", (tester) async {
       await show(tester, wide);
-      await tester.tap(find.byType(QuillEditor));
+      await tester.tap(noteEditor);
       await tester.pump();
-      quill(tester).updateSelection(const TextSelection(baseOffset: 10, extentOffset: 14), ChangeSource.local);
+      note(tester).select(const TextSelection(baseOffset: 10, extentOffset: 14));
       await select(tester, 'Bold');
       await select(tester, 'Italic');
-      var style = quill(tester).getSelectionStyle().attributes;
-      expect(style.containsKey(Attribute.bold.key), isTrue);
-      expect(style.containsKey(Attribute.italic.key), isTrue);
+      var style = stylesOf(tester);
+      expect(style.contains(boldAttribution), isTrue);
+      expect(style.contains(italicsAttribution), isTrue);
       // The editor's own key takes it off again: the menu and the key change the same style.
       await press(tester, [LogicalKeyboardKey.controlLeft], LogicalKeyboardKey.keyB);
-      style = quill(tester).getSelectionStyle().attributes;
-      expect(style.containsKey(Attribute.bold.key), isFalse);
+      style = stylesOf(tester);
+      expect(style.contains(boldAttribution), isFalse);
       await select(tester, 'Italic');
-      style = quill(tester).getSelectionStyle().attributes;
-      expect(style.containsKey(Attribute.italic.key), isFalse);
+      style = stylesOf(tester);
+      expect(style.contains(italicsAttribution), isFalse);
       await finish(tester);
     });
 
@@ -406,9 +406,9 @@ void main() {
         expect([shortcut.trigger, shortcut.meta, shortcut.control, shortcut.shift, shortcut.alt], [key, true, false, shift, alt],
           reason: label);
       }
-      await tester.tap(find.byType(QuillEditor));
+      await tester.tap(noteEditor);
       await tester.pump();
-      quill(tester).updateSelection(const TextSelection.collapsed(offset: 14), ChangeSource.local);
+      note(tester).select(const TextSelection.collapsed(offset: 14));
       await select(tester, 'Title');
       expect(markdownOf(tester), '# Groceries\n# milk and eggs');
       await select(tester, 'Body');

@@ -1,23 +1,34 @@
 import 'package:flutter/services.dart' show TextSelection;
-import 'package:flutter_quill/flutter_quill.dart' show ChangeSource, Document;
-import 'package:flutter_quill/quill_delta.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:relay_app/editor/markdown.dart';
-import 'package:relay_app/editor/paste.dart';
+import 'package:relay_app/editor/note_editing.dart' show documentSelectionOf, offsetAt;
+import 'package:relay_app/editor/paste.dart' as paste_ show pasteInto;
+import 'package:relay_app/editor/paste.dart' hide pasteInto;
+import 'package:relay_app/editor/table.dart';
+import 'package:super_editor/super_editor.dart';
 
 /// The Markdown a paste stores, which says each style in a line.
-String fromHtml(String html, {String plain = ''}) => deltaToMarkdown(pastedDelta(html: html, plain: plain));
-String fromPlain(String plain) => deltaToMarkdown(pastedDelta(plain: plain));
+String fromHtml(String html, {String plain = ''}) => documentToMarkdown(pastedNodes(html: html, plain: plain));
+String fromPlain(String plain) => documentToMarkdown(pastedNodes(plain: plain));
 
-/// Every key in [delta]'s attributes.
-Set<String> keysOf(Delta delta) => {for (final op in delta.toList()) ...?op.attributes?.keys};
+/// Every mark key in [nodes]' words.
+Set<String> marksIn(List<DocumentNode> nodes) => {
+  for (final node in nodes) if (node is TextNode) for (final (_, marks) in runsOf(node.text)) ...marks,
+};
 
-/// [document] after [pasted] goes over [selection], and the caret after it.
-(String, int) pasteInto(Delta document, TextSelection selection, Delta pasted) {
-  final doc = Document.fromDelta(document);
-  final paste = pasteChange(doc, selection, pasted)!;
-  doc.compose(paste.change, ChangeSource.local);
-  return (deltaToMarkdown(doc.toDelta()), paste.caret);
+/// Each node in short: a line's kind, indent and runs of marked words.
+List<Object> shapeOf(List<DocumentNode> nodes) => [
+  for (final node in nodes)
+    if (node is TextNode)
+      [kindOf(node).name, indentOf(node), for (final (words, marks) in runsOf(node.text)) '$words${marks.toList()..sort()}']
+    else node.runtimeType,
+];
+
+/// The note of [markdown] after [pasted] goes over [selection], and the caret after it.
+(String, int) pasteInto(String markdown, TextSelection selection, List<DocumentNode> pasted) {
+  final nodes = markdownToNodes(markdown);
+  final paste = paste_.pasteInto(nodes, documentSelectionOf(nodes, selection), pasted)!;
+  return (documentToMarkdown(paste.nodes), offsetAt(paste.nodes, paste.caret.extent)!);
 }
 
 void main() {
@@ -29,10 +40,10 @@ void main() {
     });
 
     test('colors, fonts, sizes, backgrounds and alignment go', () {
-      final delta = pastedDelta(plain: 'Red words\nMid', html: '<p><span style="color:red;font-size:30px;'
+      final nodes = pastedNodes(plain: 'Red words\nMid', html: '<p><span style="color:red;font-size:30px;'
         'font-family:Georgia;background-color:yellow">Red</span> words</p><p style="text-align:center">Mid</p>');
-      expect(deltaToMarkdown(delta), 'Red words\nMid');
-      expect(keysOf(delta), isEmpty);
+      expect(documentToMarkdown(nodes), 'Red words\nMid');
+      expect(marksIn(nodes), isEmpty);
     });
 
     test('a heading past the third level is a subheading', () {
@@ -47,9 +58,9 @@ void main() {
     });
 
     test('a table pastes as a table, with each cell\'s words', () {
-      final delta = pastedDelta(plain: '', html: '<p>Stops</p><table><thead><tr><th>Stop</th><th>Date</th></tr></thead>'
+      final nodes = pastedNodes(plain: '', html: '<p>Stops</p><table><thead><tr><th>Stop</th><th>Date</th></tr></thead>'
         '<tbody><tr><td><b>Toronto</b></td><td>Nov 20</td></tr><tr><td>Ottawa</td></tr></tbody></table><p>End</p>');
-      expect(deltaToMarkdown(delta), 'Stops\n| Stop | Date |\n| --- | --- |\n| Toronto | Nov 20 |\n| Ottawa |  |\nEnd');
+      expect(documentToMarkdown(nodes), 'Stops\n| Stop | Date |\n| --- | --- |\n| Toronto | Nov 20 |\n| Ottawa |  |\nEnd');
     });
 
     test('a page laid out in a table, or a table of one cell, pastes as words', () {
@@ -112,11 +123,8 @@ void main() {
 
   group('plain words are read as Markdown', () {
     test('Markdown from a chat becomes a heading, a checklist item and a dashed item with bold words', () {
-      expect(pastedDelta(plain: '## Plan\n- [ ] Call the bank\n- Buy **oat** milk').toJson(), [
-        {'insert': 'Plan'}, {'insert': '\n', 'attributes': {'header': 2}},
-        {'insert': 'Call the bank'}, {'insert': '\n', 'attributes': {'list': 'unchecked'}},
-        {'insert': 'Buy '}, {'insert': 'oat', 'attributes': {'bold': true}}, {'insert': ' milk'},
-        {'insert': '\n', 'attributes': {'list': 'dashed'}},
+      expect(shapeOf(pastedNodes(plain: '## Plan\n- [ ] Call the bank\n- Buy **oat** milk')), [
+        ['header2', 0, 'Plan[]'], ['unchecked', 0, 'Call the bank[]'], ['dashed', 0, 'Buy []', 'oat[bold]', ' milk[]'],
       ]);
     });
 
@@ -133,53 +141,52 @@ void main() {
     });
 
     test('nothing to paste is empty', () {
-      expect(pastedDelta(plain: '').isEmpty, isTrue);
-      expect(pastedDelta(plain: '\n\n', html: '<p> </p>').isEmpty, isTrue);
+      expect(pastedNodes(plain: ''), isEmpty);
+      expect(pastedNodes(plain: '\n\n', html: '<p> </p>'), isEmpty);
     });
   });
 
   test('each paste is what the note stores: it comes back the same from Markdown', () {
     final pastes = [
-      pastedDelta(plain: '', html: '<h1>A</h1><p><b>b</b> <i>c</i> <u>d</u> <s>e</s></p><ul><li>f<ul><li>g</li></ul></li>'
+      pastedNodes(plain: '', html: '<h1>A</h1><p><b>b</b> <i>c</i> <u>d</u> <s>e</s></p><ul><li>f<ul><li>g</li></ul></li>'
         '</ul><blockquote>h</blockquote><pre>i\n\nj</pre>'),
-      pastedDelta(plain: '# T\n- [x] a\n1. b\n2. c\n> q\n```\ncode\n```\n**x** _y_'),
-      pastedDelta(plain: 'oat'),
+      pastedNodes(plain: '# T\n- [x] a\n1. b\n2. c\n> q\n```\ncode\n```\n**x** _y_'),
+      pastedNodes(plain: 'oat'),
     ];
-    for (final delta in pastes) {
-      expect(markdownToDelta(deltaToMarkdown(delta)), delta);
-      expect((delta.toList().last.data as String).endsWith('\n'), isTrue);
+    for (final nodes in pastes) {
+      expect(shapeOf(markdownToNodes(documentToMarkdown(nodes))), shapeOf(nodes));
     }
   });
 
   group('where a paste goes', () {
-    final note = Delta()..insert('Buy milk')..insert('\n', {'list': 'unchecked'})..insert('Call Sam\n');
+    const note = '- [ ] Buy milk\nCall Sam';
 
     test('one line with no style joins the line at the cursor, which keeps its style', () {
-      expect(pasteInto(note, const TextSelection.collapsed(offset: 4), pastedDelta(plain: 'oat ')),
+      expect(pasteInto(note, const TextSelection.collapsed(offset: 4), pastedNodes(plain: 'oat ')),
         ('- [ ] Buy oat milk\nCall Sam', 8));
     });
 
     test('a paste over selected words takes their place', () {
-      expect(pasteInto(note, const TextSelection(baseOffset: 9, extentOffset: 17), pastedDelta(plain: '## Plan\n* a')),
+      expect(pasteInto(note, const TextSelection(baseOffset: 9, extentOffset: 17), pastedNodes(plain: '## Plan\n* a')),
         ('- [ ] Buy milk\n## Plan\n* a', 15));
     });
 
     test('lines pasted into the middle of a line: the words before keep their style, a styled last line stays its own',
         () {
-      expect(pasteInto(note, const TextSelection.collapsed(offset: 4), pastedDelta(plain: 'oat\n* x')).$1,
+      expect(pasteInto(note, const TextSelection.collapsed(offset: 4), pastedNodes(plain: 'oat\n* x')).$1,
         '- [ ] Buy oat\n* x\n- [ ] milk\nCall Sam');
     });
 
     test('lines pasted into a new note\'s empty Title line: the last one is not a Title', () {
-      final empty = Delta()..insert('\n', {'header': 1});
-      expect(pasteInto(empty, const TextSelection.collapsed(offset: 0), pastedDelta(plain: 'Para one\nPara two')),
+      const empty = '# ';
+      expect(pasteInto(empty, const TextSelection.collapsed(offset: 0), pastedNodes(plain: 'Para one\nPara two')),
         ('Para one\nPara two', 17));
-      expect(pasteInto(empty, const TextSelection.collapsed(offset: 0), pastedDelta(plain: 'Only')), ('# Only', 4));
+      expect(pasteInto(empty, const TextSelection.collapsed(offset: 0), pastedNodes(plain: 'Only')), ('# Only', 4));
     });
 
     test('a Markdown table pasted as plain words is a table on its own line', () {
-      final pasted = pastedDelta(plain: '| a | b |\n| --- | --- |\n| 1 | 2 |');
-      expect(pasted.toList().where((op) => op.data is Map), hasLength(1));
+      final pasted = pastedNodes(plain: '| a | b |\n| --- | --- |\n| 1 | 2 |');
+      expect(pasted.whereType<NoteTableNode>(), hasLength(1));
       expect(pasteInto(note, const TextSelection.collapsed(offset: 4), pasted).$1,
         '- [ ] Buy \n| a | b |\n| --- | --- |\n| 1 | 2 |\n- [ ] milk\nCall Sam');
       expect(pasteInto(note, const TextSelection.collapsed(offset: 9), pasted).$1,
@@ -187,7 +194,55 @@ void main() {
     });
 
     test('nothing to put and nothing selected is no change', () {
-      expect(pasteChange(Document.fromDelta(note), const TextSelection.collapsed(offset: 4), Delta()), isNull);
+      final nodes = markdownToNodes(note);
+      expect(paste_.pasteInto(nodes, documentSelectionOf(nodes, const TextSelection.collapsed(offset: 4)), const []), isNull);
+    });
+  });
+
+  group('a plan pasted as plain words', () {
+    test('an indented numbered list under a label pastes as 1, 2, 3 with each Why: line under its item', () {
+      const plain = 'Garden plan\n   1. Plant the beans\n      Why: the soil is warm\n   2. Water the roses\n'
+        '      Why: the leaves are dry\n   3. Rake the path\n      Why: the gate sticks';
+      final nodes = pastedNodes(plain: plain);
+      expect(shapeOf(nodes), [
+        ['paragraph', 0, 'Garden plan[]'],
+        ['numbered', 0, 'Plant the beans\nWhy: the soil is warm[]'],
+        ['numbered', 0, 'Water the roses\nWhy: the leaves are dry[]'],
+        ['numbered', 0, 'Rake the path\nWhy: the gate sticks[]'],
+      ]);
+      expect(itemNumbers(nodes).values, [1, 2, 3]);
+      expect(documentToMarkdown(nodes), 'Garden plan\n1. Plant the beans\n   Why: the soil is warm\n2. Water the roses\n'
+        '   Why: the leaves are dry\n3. Rake the path\n   Why: the gate sticks');
+    });
+
+    test('a real sub-list stays a sub-list', () {
+      final nodes = pastedNodes(plain: '1. Plant the beans\n   - Green\n   - Runner\n2. Water the roses');
+      expect([for (final node in nodes) (kindOf(node), indentOf(node))], [
+        (LineKind.numbered, 0), (LineKind.dashed, 1), (LineKind.dashed, 1), (LineKind.numbered, 0),
+      ]);
+      expect(itemNumbers(nodes).values, [1, 2]);
+    });
+
+    test('a line break inside a page\'s list item starts a line in that item, and the numbers count on past it', () {
+      final nodes = pastedNodes(html: '<ol><li>Pack the crate <br> Why: tape the lid</li><li>Ship it<br></li></ol>',
+        plain: '');
+      expect(shapeOf(nodes), [
+        ['numbered', 0, 'Pack the crate\nWhy: tape the lid[]'],
+        ['numbered', 0, 'Ship it[]'],
+      ]);
+      expect(itemNumbers(nodes).values, [1, 2]);
+      expect(documentToMarkdown(nodes), '1. Pack the crate\n   Why: tape the lid\n2. Ship it');
+    });
+
+    test('the space a page puts after a line break in a list item does not start the line under it', () {
+      final nodes = pastedNodes(html: '<ol><li>Pack<br>\n Why: tape</li></ol>', plain: '');
+      expect(shapeOf(nodes), [['numbered', 0, 'Pack\nWhy: tape[]']]);
+      expect(documentToMarkdown(nodes), '1. Pack\n   Why: tape');
+    });
+
+    test('a tab-indented list starts at the left, and a tab a level in is a sub-list', () {
+      final nodes = pastedNodes(plain: '\t* Pebble\n\t\t* Gravel');
+      expect([for (final node in nodes) (kindOf(node), indentOf(node))], [(LineKind.bullet, 0), (LineKind.bullet, 1)]);
     });
   });
 }

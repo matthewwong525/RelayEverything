@@ -3,10 +3,13 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
-import 'package:flutter_quill/flutter_quill.dart';
+import 'package:super_editor/super_editor.dart' show Attribution, boldAttribution, italicsAttribution, strikethroughAttribution,
+  underlineAttribution;
 
 import '../brand.dart';
-import '../editor/markdown.dart' show dashedList, highlightColours;
+import '../editor/markdown.dart' show LineKind, highlightColours;
+import '../editor/note_commands.dart';
+import '../editor/note_editing.dart';
 import '../editor/shortcuts.dart';
 import 'more_menu.dart';
 import 'round_button.dart';
@@ -39,93 +42,6 @@ class _Frost extends StatelessWidget {
       ),
     ),
   );
-}
-
-/// The words picked, or the cursor's line, in a note: the styles they have, and each style the format tools set. The
-/// Format sheet, the bars, the computer's menu and keys, and the Mac's *Format* menu all style through this.
-class Formatter {
-  const Formatter(this.controller, {this.keyboardDown = false});
-
-  final QuillController controller;
-  /// Styles with no keyboard brought back, as from the Format sheet in the keyboard's place.
-  final bool keyboardDown;
-
-  Map<String, Attribute> get _style => controller.getSelectionStyle().attributes;
-
-  bool has(Attribute attribute) => _style[attribute.key]?.value == attribute.value;
-
-  /// The highlight colour of the words picked, or null.
-  String? get highlight => _style[Attribute.background.key]?.value as String?;
-
-  /// The list kind of the cursor's line, such as `bullet`, or null.
-  String? get list => _style[Attribute.list.key]?.value as String?;
-
-  /// The cursor's line style: Title, Heading, Subheading, Monostyled or Body.
-  FormatAction get lineStyle => has(Attribute.codeBlock) ? FormatAction.monostyled
-    : switch (_style[Attribute.header.key]?.value) {
-        1 => FormatAction.title,
-        2 => FormatAction.heading,
-        3 => FormatAction.subheading,
-        _ => FormatAction.body,
-      };
-
-  void _apply(void Function() change) {
-    controller.skipRequestKeyboard = keyboardDown;
-    change();
-    controller.skipRequestKeyboard = false;
-  }
-
-  void format(Attribute attribute) => _apply(() => controller.formatSelection(attribute));
-
-  void toggle(Attribute attribute) => format(has(attribute) ? Attribute.clone(attribute, null) : attribute);
-
-  void indent(bool more) => _apply(() => controller.indentSelection(more));
-
-  /// A list kind on the cursor's lines: a second time on the same kind takes it off.
-  void listOf(String kind) => format(listToggle(controller, kind));
-
-  /// The highlight pen: [colour] on the words picked, or off when they have a highlight.
-  void highlightWith(String colour) =>
-    format(highlight != null ? const BackgroundAttribute(null) : BackgroundAttribute(colour));
-
-  /// A line's style: one header level, Monostyled, or Body, which takes both off.
-  void line(FormatAction style) {
-    if (style == FormatAction.monostyled) return toggle(Attribute.codeBlock);
-    format(Attribute.clone(Attribute.codeBlock, null));
-    format(switch (style) {
-      FormatAction.title => Attribute.h1,
-      FormatAction.heading => Attribute.h2,
-      FormatAction.subheading => Attribute.h3,
-      _ => Attribute.clone(Attribute.header, null),
-    });
-  }
-
-  /// Does [action], with [colour] for the highlight pen. False for *Link* and *Table*, which the page does itself.
-  bool run(FormatAction action, {String colour = 'purple'}) {
-    switch (action) {
-      case FormatAction.bold: toggle(Attribute.bold);
-      case FormatAction.italic: toggle(Attribute.italic);
-      case FormatAction.underline: toggle(Attribute.underline);
-      case FormatAction.strikethrough: toggle(Attribute.strikeThrough);
-      case FormatAction.highlight: highlightWith(colour);
-      case FormatAction.title || FormatAction.heading || FormatAction.subheading || FormatAction.body ||
-          FormatAction.monostyled:
-        line(action);
-      case FormatAction.bulleted: listOf('bullet');
-      case FormatAction.dashed: listOf(dashedList);
-      case FormatAction.numbered: listOf('ordered');
-      case FormatAction.checklist:
-        format(list == 'checked' || list == 'unchecked' ? Attribute.clone(Attribute.list, null) : Attribute.unchecked);
-      case FormatAction.tick:
-        if (list == 'unchecked') format(Attribute.checked);
-        if (list == 'checked') format(Attribute.unchecked);
-      case FormatAction.quote: toggle(Attribute.blockQuote);
-      case FormatAction.indentMore: indent(true);
-      case FormatAction.indentLess: indent(false);
-      case FormatAction.link || FormatAction.table: return false;
-    }
-    return true;
-  }
 }
 
 /// The name of each highlight colour, as the colour row says it.
@@ -232,7 +148,7 @@ class FloatingToolBar extends StatelessWidget {
   final AttachPick? onAttach;
   /// *Attach* opens *Photos* and *Files*; false in the browser.
   final bool attachMenu;
-  final void Function(String kind)? onList;
+  final void Function(LineKind kind)? onList;
   final VoidCallback? onLink;
   final void Function(bool more)? onIndent;
   final VoidCallback? onHideKeyboard;
@@ -250,9 +166,9 @@ class FloatingToolBar extends StatelessWidget {
       AttachButton(onPick: onAttach, menu: attachMenu),
       ?_recordButton(onRecord),
       PillIconButton(icon: CupertinoIcons.list_bullet, tooltip: 'Bulleted list',
-        onPressed: list == null ? null : () => list('bullet')),
+        onPressed: list == null ? null : () => list(LineKind.bullet)),
       PillIconButton(icon: CupertinoIcons.list_number, tooltip: 'Numbered list',
-        onPressed: list == null ? null : () => list('ordered')),
+        onPressed: list == null ? null : () => list(LineKind.numbered)),
       PillIconButton(icon: CupertinoIcons.link, tooltip: 'Link', onPressed: onLink),
       PillIconButton(icon: CupertinoIcons.decrease_indent, tooltip: 'Indent less',
         onPressed: indent == null ? null : () => indent(false)),
@@ -267,36 +183,36 @@ class FloatingToolBar extends StatelessWidget {
 /// In the keyboard bar's place while words are selected: bold, italic, underline, strikethrough, *Highlight*, *Link*
 /// and *Lists*, each lit when the words have it.
 class SelectionToolBar extends StatelessWidget {
-  const SelectionToolBar({super.key, required this.controller, required this.colour, required this.onLink});
+  const SelectionToolBar({super.key, required this.editing, required this.colour, required this.onLink});
 
-  final QuillController controller;
+  final NoteEditing editing;
   /// The highlight pen's colour.
   final String colour;
   final VoidCallback onLink;
 
   @override
-  Widget build(BuildContext context) => ListenableBuilder(listenable: controller, builder: (context, _) {
-    final format = Formatter(controller);
-    Widget toggle(IconData icon, String tooltip, Attribute attribute) => PillIconButton(icon: icon, tooltip: tooltip,
+  Widget build(BuildContext context) => ListenableBuilder(listenable: editing.looks, builder: (context, _) {
+    final format = NoteCommands(editing);
+    Widget toggle(IconData icon, String tooltip, Attribution attribute) => PillIconButton(icon: icon, tooltip: tooltip,
       selected: format.has(attribute), onPressed: () => format.toggle(attribute));
     final list = format.list;
     return _ScrollingBar(children: [
-      toggle(CupertinoIcons.bold, 'Bold', Attribute.bold),
-      toggle(CupertinoIcons.italic, 'Italic', Attribute.italic),
-      toggle(CupertinoIcons.underline, 'Underline', Attribute.underline),
-      toggle(CupertinoIcons.strikethrough, 'Strikethrough', Attribute.strikeThrough),
+      toggle(CupertinoIcons.bold, 'Bold', boldAttribution),
+      toggle(CupertinoIcons.italic, 'Italic', italicsAttribution),
+      toggle(CupertinoIcons.underline, 'Underline', underlineAttribution),
+      toggle(CupertinoIcons.strikethrough, 'Strikethrough', strikethroughAttribution),
       PillIconButton(icon: CupertinoIcons.paintbrush, tooltip: 'Highlight', selected: format.highlight != null,
         onPressed: () => format.highlightWith(colour)),
       PillIconButton(icon: CupertinoIcons.link, tooltip: 'Link',
-        selected: controller.getSelectionStyle().attributes.containsKey(Attribute.link.key), onPressed: onLink),
+        selected: format.linked, onPressed: onLink),
       MoreMenu(
         items: [
-          ('Bulleted List', CupertinoIcons.list_bullet, () => format.listOf('bullet')),
-          ('Dashed List', CupertinoIcons.list_dash, () => format.listOf(dashedList)),
-          ('Numbered List', CupertinoIcons.list_number, () => format.listOf('ordered')),
+          ('Bulleted List', CupertinoIcons.list_bullet, () => format.listOf(LineKind.bullet)),
+          ('Dashed List', CupertinoIcons.list_dash, () => format.listOf(LineKind.dashed)),
+          ('Numbered List', CupertinoIcons.list_number, () => format.listOf(LineKind.numbered)),
         ],
         builder: (context, toggle) => PillIconButton(icon: CupertinoIcons.list_bullet_indent, tooltip: 'Lists',
-          selected: list == 'bullet' || list == dashedList || list == 'ordered', onPressed: toggle),
+          selected: _isList(list), onPressed: toggle),
       ),
     ]);
   });
@@ -385,11 +301,8 @@ TextStyle lineStyleLook(FormatAction style) => switch (style) {
   _ => const TextStyle(fontSize: 15),
 };
 
-/// The list style that turns [kind] on for the cursor's lines, or off when they have it.
-Attribute listToggle(QuillController controller, String kind) {
-  final now = controller.getSelectionStyle().attributes[Attribute.list.key]?.value;
-  return kind == now ? Attribute.clone(Attribute.list, null) : ListAttribute(kind);
-}
+/// Whether [kind] is a bulleted, dashed or numbered list.
+bool _isList(LineKind? kind) => kind == LineKind.bullet || kind == LineKind.dashed || kind == LineKind.numbered;
 
 /// A colour dot: the highlight colour, ringed when it is the one in use.
 class _ColourDot extends StatelessWidget {
@@ -432,10 +345,10 @@ class _Group extends StatelessWidget {
 /// italic, underline and strikethrough; the highlight pen and its colour; the three lists, indent and block quote. ✕
 /// brings the keyboard back.
 class FormatSheet extends StatefulWidget {
-  const FormatSheet({super.key, required this.controller, required this.height, required this.onClose,
+  const FormatSheet({super.key, required this.editing, required this.height, required this.onClose,
     this.colour = 'purple', this.onColour});
 
-  final QuillController controller;
+  final NoteEditing editing;
   final double height;
   final VoidCallback onClose;
   /// The highlight pen's colour.
@@ -459,12 +372,12 @@ class _FormatSheetState extends State<FormatSheet> {
     if (widget.colour != old.colour) _colour = widget.colour;
   }
 
-  Formatter get _format => Formatter(widget.controller, keyboardDown: true);
+  NoteCommands get _format => NoteCommands(widget.editing);
 
   /// A new colour: kept, and on the words picked when they have a highlight.
   void _pick(String colour) {
     widget.onColour?.call(colour);
-    if (_format.highlight != null) _format.format(BackgroundAttribute(colour));
+    _format.recolour(colour);
     setState(() {
       _colour = colour;
       _colours = false;
@@ -475,9 +388,9 @@ class _FormatSheetState extends State<FormatSheet> {
   Widget build(BuildContext context) {
     final brand = brandOf(context);
     final format = _format;
-    Widget toggle(IconData icon, String tooltip, Attribute attribute) => PillIconButton(icon: icon, tooltip: tooltip,
+    Widget toggle(IconData icon, String tooltip, Attribution attribute) => PillIconButton(icon: icon, tooltip: tooltip,
       selected: format.has(attribute), onPressed: () => format.toggle(attribute));
-    Widget list(IconData icon, String tooltip, String kind) => PillIconButton(icon: icon, tooltip: tooltip,
+    Widget list(IconData icon, String tooltip, LineKind kind) => PillIconButton(icon: icon, tooltip: tooltip,
       selected: format.list == kind, onPressed: () => format.listOf(kind));
     return Material(
       color: brand.card,
@@ -486,7 +399,7 @@ class _FormatSheetState extends State<FormatSheet> {
         child: SizedBox(
           height: widget.height,
           child: ListenableBuilder(
-            listenable: widget.controller,
+            listenable: widget.editing.looks,
             builder: (context, _) => ListView(padding: const EdgeInsets.fromLTRB(16, 8, 8, 8), children: [
               Row(children: [
                 Text('Format', style: Theme.of(context).textTheme.titleMedium),
@@ -508,10 +421,10 @@ class _FormatSheetState extends State<FormatSheet> {
               else ...[
                 Wrap(spacing: 10, runSpacing: 10, children: [
                   _Group(children: [
-                    toggle(CupertinoIcons.bold, 'Bold', Attribute.bold),
-                    toggle(CupertinoIcons.italic, 'Italic', Attribute.italic),
-                    toggle(CupertinoIcons.underline, 'Underline', Attribute.underline),
-                    toggle(CupertinoIcons.strikethrough, 'Strikethrough', Attribute.strikeThrough),
+                    toggle(CupertinoIcons.bold, 'Bold', boldAttribution),
+                    toggle(CupertinoIcons.italic, 'Italic', italicsAttribution),
+                    toggle(CupertinoIcons.underline, 'Underline', underlineAttribution),
+                    toggle(CupertinoIcons.strikethrough, 'Strikethrough', strikethroughAttribution),
                   ]),
                   _Group(children: [
                     PillIconButton(icon: CupertinoIcons.paintbrush, tooltip: 'Highlight',
@@ -523,9 +436,9 @@ class _FormatSheetState extends State<FormatSheet> {
                 const SizedBox(height: 10),
                 Wrap(spacing: 10, runSpacing: 10, children: [
                   _Group(children: [
-                    list(CupertinoIcons.list_bullet, 'Bulleted list', 'bullet'),
-                    list(CupertinoIcons.list_dash, 'Dashed list', dashedList),
-                    list(CupertinoIcons.list_number, 'Numbered list', 'ordered'),
+                    list(CupertinoIcons.list_bullet, 'Bulleted list', LineKind.bullet),
+                    list(CupertinoIcons.list_dash, 'Dashed list', LineKind.dashed),
+                    list(CupertinoIcons.list_number, 'Numbered list', LineKind.numbered),
                   ]),
                   _Group(children: [
                     PillIconButton(icon: CupertinoIcons.decrease_indent, tooltip: 'Indent less',
@@ -533,7 +446,8 @@ class _FormatSheetState extends State<FormatSheet> {
                     PillIconButton(icon: CupertinoIcons.increase_indent, tooltip: 'Indent more',
                       onPressed: () => format.indent(true)),
                   ]),
-                  _Group(children: [toggle(CupertinoIcons.text_quote, 'Block quote', Attribute.blockQuote)]),
+                  _Group(children: [PillIconButton(icon: CupertinoIcons.text_quote, tooltip: 'Block quote',
+                    selected: format.kind == LineKind.quote, onPressed: () => format.run(FormatAction.quote))]),
                 ]),
               ],
             ]),
@@ -548,10 +462,10 @@ class _FormatSheetState extends State<FormatSheet> {
 /// strikethrough, the highlight pen and its colours at the top; then each line style and list in its own look, with ✓
 /// at the current one; then Block Quote. A pick closes the menu, and the note keeps the cursor.
 class FormatMenu extends StatefulWidget {
-  const FormatMenu({super.key, required this.controller, required this.onPick, required this.colour,
+  const FormatMenu({super.key, required this.editing, required this.onPick, required this.colour,
     required this.onColour, this.enabled = true});
 
-  final QuillController controller;
+  final NoteEditing editing;
   /// Styles the note and gives it the cursor back.
   final void Function(FormatAction action) onPick;
   final String colour;
@@ -582,8 +496,7 @@ class _FormatMenuState extends State<FormatMenu> {
   void _pickColour(String colour) {
     setState(() => _colour = colour);
     widget.onColour(colour);
-    final format = Formatter(widget.controller);
-    if (format.highlight != null) format.format(BackgroundAttribute(colour));
+    NoteCommands(widget.editing).recolour(colour);
   }
 
   @override
@@ -599,8 +512,8 @@ class _FormatMenuState extends State<FormatMenu> {
     );
     // Each part of the open menu follows the cursor, so its ✓ and lit tools move as the cursor does. The menu is part
     // of the note's tap region: a click in it never takes the cursor from the note.
-    Widget live(Widget Function(Formatter format) part) => TextFieldTapRegion(child: ListenableBuilder(
-      listenable: widget.controller, builder: (context, _) => part(Formatter(widget.controller))));
+    Widget live(Widget Function(NoteCommands format) part) => TextFieldTapRegion(child: ListenableBuilder(
+      listenable: widget.editing.looks, builder: (context, _) => part(NoteCommands(widget.editing))));
     return TextFieldTapRegion(child: MenuAnchor(
       controller: _menu,
       style: MenuStyle(
@@ -611,11 +524,11 @@ class _FormatMenuState extends State<FormatMenu> {
         live((format) => Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            tool(CupertinoIcons.bold, 'Bold', FormatAction.bold, on: format.has(Attribute.bold)),
-            tool(CupertinoIcons.italic, 'Italic', FormatAction.italic, on: format.has(Attribute.italic)),
-            tool(CupertinoIcons.underline, 'Underline', FormatAction.underline, on: format.has(Attribute.underline)),
+            tool(CupertinoIcons.bold, 'Bold', FormatAction.bold, on: format.has(boldAttribution)),
+            tool(CupertinoIcons.italic, 'Italic', FormatAction.italic, on: format.has(italicsAttribution)),
+            tool(CupertinoIcons.underline, 'Underline', FormatAction.underline, on: format.has(underlineAttribution)),
             tool(CupertinoIcons.strikethrough, 'Strikethrough', FormatAction.strikethrough,
-              on: format.has(Attribute.strikeThrough)),
+              on: format.has(strikethroughAttribution)),
             tool(CupertinoIcons.paintbrush, 'Highlight', FormatAction.highlight, on: format.highlight != null),
           ],
         ))),
@@ -635,18 +548,16 @@ class _FormatMenuState extends State<FormatMenu> {
           live((format) => item(label, action, const TextStyle(fontSize: 15), on: format.list == kind)),
         const Divider(height: 8),
         live((format) => item('Block Quote', FormatAction.quote, const TextStyle(fontSize: 15),
-          on: format.has(Attribute.blockQuote))),
+          on: format.kind == LineKind.quote)),
       ],
       builder: (context, menu, _) => PillIconButton(icon: CupertinoIcons.textformat, tooltip: 'Text styles',
         onPressed: !widget.enabled ? null : () => menu.isOpen ? menu.close() : menu.open()),
     ));
   }
 
-  static bool _isList(String? kind) => kind == 'bullet' || kind == dashedList || kind == 'ordered';
-
   static const _lists = [
-    ('Bulleted List', FormatAction.bulleted, 'bullet'),
-    ('Dashed List', FormatAction.dashed, dashedList),
-    ('Numbered List', FormatAction.numbered, 'ordered'),
+    ('Bulleted List', FormatAction.bulleted, LineKind.bullet),
+    ('Dashed List', FormatAction.dashed, LineKind.dashed),
+    ('Numbered List', FormatAction.numbered, LineKind.numbered),
   ];
 }

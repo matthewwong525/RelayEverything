@@ -1,0 +1,2 @@
+// The extensions and the watch: Flutter versions only, never the Runner pods (a watch can not link them).
+#include "Generated.xcconfig"

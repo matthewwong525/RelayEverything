@@ -14,7 +14,7 @@ import 'package:relay_app/sync/background.dart';
 import 'package:relay_app/voice/model.dart';
 
 import 'fakes.dart';
-import 'screens_test.dart' show holdNewNote, newNote, openFolder, openSettings, quill, rowMic, tallScreen, type;
+import 'screens_test.dart' show holdNewNote, newNote, note, openFolder, openSettings, rowMic, tallScreen, type;
 
 /// Pumps, with real time between, until [done]: for file work and the model's checksum, which run outside the test's
 /// fake time.
@@ -173,7 +173,7 @@ void main() {
     await until(tester, () => relay.entries.any((entry) => entry.recordings.any((recording) => !recording.writing)));
     await tester.pumpAndSettle();
     expect(find.byType(NoteEditor), findsOneWidget);
-    expect(quill(tester).document.toPlainText().replaceAll('\uFFFC', '').trim(), isEmpty, reason: 'only the recording');
+    expect(note(tester).text.replaceAll('\uFFFC', '').trim(), isEmpty, reason: 'only the recording');
     expect(find.descendant(of: find.byType(RecordingCard), matching: find.text('Transcript')), findsOneWidget);
     await tester.tap(find.text('Transcript'));
     await tester.pumpAndSettle();
@@ -227,7 +227,7 @@ void main() {
     await tester.tapAt(const Offset(200, 150));
     await until(tester, () => relay.entries.any((entry) => entry.recordings.any((recording) => !recording.writing)));
     await tester.pumpAndSettle();
-    expect(quill(tester).document.toPlainText().replaceAll('\uFFFC', '').trim(), isEmpty, reason: 'only the recording');
+    expect(note(tester).text.replaceAll('\uFFFC', '').trim(), isEmpty, reason: 'only the recording');
     expect(find.descendant(of: find.byType(RecordingCard), matching: find.text('Transcript')), findsOneWidget);
     await tester.tap(find.text('Transcript'));
     await tester.pumpAndSettle();

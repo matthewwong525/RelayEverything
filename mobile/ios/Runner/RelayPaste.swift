@@ -7,13 +7,31 @@ import UIKit
 /// reads run inside the person's own Paste, so the phone asks no *Allow Paste?* question. When the app answers false,
 /// fails, or no channel is set, the plain words go in as Flutter's own `paste:` puts them. If a Flutter update renames
 /// the view or its method, nothing is replaced and Paste stays plain.
+///
+/// A paste the app starts itself, from its drawn menu (iOS 15) or ⌘V on a keyboard, asks `relay/clipboard` for `html`:
+/// the same formatted words, or nil when the clipboard holds only plain words.
 enum RelayPaste {
   private static var channel: FlutterMethodChannel?
+  private static var clipboard: FlutterMethodChannel?
   private static var replaced = false
 
   static func register(_ messenger: FlutterBinaryMessenger) {
     channel = FlutterMethodChannel(name: "relay/paste", binaryMessenger: messenger)
+    clipboard = FlutterMethodChannel(name: "relay/clipboard", binaryMessenger: messenger)
+    clipboard?.setMethodCallHandler { call, result in
+      guard call.method == "html" else { return result(FlutterMethodNotImplemented) }
+      result(RelayPaste.formattedHtml(UIPasteboard.general))
+    }
     replacePaste()
+  }
+
+  /// [htmlOf] the clipboard, read only when it holds formatted words: the list of types reads no words, so a clipboard
+  /// of plain words is read once, by Flutter, not again here.
+  private static func formattedHtml(_ board: UIPasteboard) -> String? {
+    let formatted: Set<String> = ["public.html", "Apple Web Archive pasteboard type", "com.apple.webarchive",
+                                  "public.rtf", "com.apple.flat-rtfd"]
+    guard board.types.contains(where: formatted.contains) else { return nil }
+    return htmlOf(board)
   }
 
   /// Puts [paste(into:)] in front of the Flutter text view's own `paste:`, once.

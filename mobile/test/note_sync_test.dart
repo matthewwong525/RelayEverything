@@ -20,7 +20,7 @@ import 'package:relay_app/sync/background.dart';
 
 import 'fakes.dart';
 import 'offline_test.dart' show until;
-import 'screens_test.dart' show openFolder, quill, tallScreen;
+import 'screens_test.dart' show note, openFolder, tallScreen;
 
 const _on = Settings(sending: true);
 
@@ -474,7 +474,7 @@ void main() {
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Call the dentist about Thursday'));
       await tester.pumpAndSettle();
-      expect(quill(tester).document.toPlainText(), 'Call the dentist about Thursday\n');
+      expect(note(tester).text, 'Call the dentist about Thursday\n');
       expect(find.textContaining("From Sam's iPhone"), findsOneWidget);
       expect([find.byType(VoicePlayer), find.byTooltip('Play')], everyElement(findsNothing));
       await tester.tap(find.byTooltip('More'));

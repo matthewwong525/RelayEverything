@@ -7,18 +7,17 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 import 'package:flutter/services.dart';
-import 'package:flutter_quill/flutter_quill.dart';
-// The editor's clipboard reader, for a paste's HTML: flutter_quill marks it experimental; pinned by pubspec.lock.
-// ignore: experimental_member_use
-import 'package:flutter_quill/internal.dart' show ClipboardServiceProvider;
-import 'package:flutter_quill/quill_delta.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:super_editor/super_editor.dart';
 
 import '../brand.dart';
 import '../data/client_id.dart';
 import '../editor/attachments.dart';
-import '../editor/magnifier.dart';
+import '../editor/links.dart';
 import '../editor/markdown.dart';
+import '../editor/note_commands.dart';
+import '../editor/note_editing.dart';
+import '../editor/note_style.dart';
 import '../editor/paste.dart';
 import '../editor/shortcuts.dart';
 import '../editor/system_menu.dart';
@@ -34,6 +33,8 @@ import 'note_bars.dart';
 import 'note_blocks.dart';
 import 'round_button.dart';
 import 'timeline.dart' show askDeleteForever;
+
+export '../editor/links.dart' show linkAddressOf, linkAt, linkAtPosition, linkRanges, linkRunAt, withLinks;
 
 /// Picks photos ([photos] true) or files from the phone. The app's is `file_picker`; a test passes its own.
 typedef FilesPicker = Future<List<NewFile>> Function({required bool photos});
@@ -113,6 +114,32 @@ class NoteEditor extends StatefulWidget {
   State<NoteEditor> createState() => NoteEditorState();
 }
 
+/// The app's own runners hand a paste the clipboard's HTML here: `html` answers it, or null. The Mac reads it in
+/// `macos/Runner/MainFlutterWindow.swift`, the iPhone and iPad in `ios/Runner/RelayPaste.swift`, and Android in
+/// `MainActivity.kt`. Where no one answers, such as on Windows, a paste reads the plain words.
+const clipboardChannel = MethodChannel('relay/clipboard');
+
+/// The clipboard's HTML where the app can read it, else null.
+Future<String?> clipboardHtml() async {
+  if (kIsWeb) return null;
+  try {
+    return await clipboardChannel.invokeMethod<String>('html');
+  } on MissingPluginException {
+    return null;
+  } on PlatformException {
+    return null;
+  }
+}
+
+/// Whether two lists of nodes hold the same nodes, line for line.
+bool sameNodes(List<DocumentNode> a, List<DocumentNode> b) {
+  if (a.length != b.length) return false;
+  for (var at = 0; at < a.length; at++) {
+    if (!identical(a[at], b[at]) && a[at] != b[at]) return false;
+  }
+  return true;
+}
+
 class NoteEditorState extends State<NoteEditor> {
   late final String _id = widget.entry?.id ?? newClientId();
   /// The phone keeps the note: set only once an add kept it, so a save after an add that kept nothing adds again.
@@ -120,18 +147,30 @@ class NoteEditorState extends State<NoteEditor> {
   /// Saves made before the phone kept the note that still wait in [_writing]: a save meanwhile goes after them, so
   /// words cleared meanwhile still delete the note on leave.
   int _adds = 0;
-  late final QuillController _controller;
+  /// The note's document, its selection and its Undo.
+  late final NoteEditing _editing;
   /// The note's tables: the cell in use, and the cell changes still to write.
   late final NoteTables _tables;
-  /// A space typed after Markdown marks is turning them into the line's style.
-  bool _marking = false;
-  late Delta _saved;
+  /// The nodes as last kept.
+  late List<DocumentNode> _saved;
   /// The words as last kept: a file added to an unchanged note keeps them as they were.
   late String _savedText = _current?.text ?? '';
-  StreamSubscription<DocChange>? _changes;
+  /// A change that is no edit, such as a link found in the words: no save follows it.
+  bool _quiet = false;
   final _focus = FocusNode();
-  final _editor = GlobalKey<QuillEditorState>();
+  final _layout = GlobalKey();
   final _scroll = ScrollController();
+  static var _pages = 0;
+  final _inputRole = 'note ${_pages++}';
+  late final SuperEditorIosControlsController _iosControls = SuperEditorIosControlsController(
+    toolbarBuilder: noteIosToolbar(_menuActions, () => _iosControls));
+  late final SuperEditorAndroidControlsController _androidControls = SuperEditorAndroidControlsController(
+    toolbarBuilder: noteAndroidToolbar(_menuActions, () => _androidControls));
+  late final _menuActions = NoteMenuActions(
+    hasSelection: () => !(_editing.composer.selection?.isCollapsed ?? true),
+    cut: _cut, copy: _copySelection, paste: () => unawaited(_pasteFromClipboard()), selectAll: _selectAll,
+    selectionChanges: _editing.composer.selectionNotifier);
+  final _contextMenu = ContextMenuController();
   Timer? _pause;
   Future<void> _writing = Future.value();
   /// The app's navigator, taken while the page is open: a problem that comes after it closes still shows.
@@ -164,13 +203,17 @@ class NoteEditorState extends State<NoteEditor> {
 
   /// Every file the page has placed in the words: one gone from them since was removed, and is not placed again.
   final _shown = <String>{};
-  /// Where each file added on this page goes, by id: the cursor's place then, or null for the end.
-  final _placeAt = <String, int?>{};
+  /// Where each file added on this page goes, by id: the node with the cursor then, or null for the end.
+  final _placeAt = <String, String?>{};
   /// Saves still running: a file gone from the note leaves the words only after them, as *Undo* may bring it back.
   int _saving = 0;
 
   /// The note whose words have the cursor: the iPhone's own *Paste* goes there.
   static NoteEditorState? _pasteTarget;
+
+  /// The words last copied in a note, with their styles, tables and files: a paste of the same plain words puts
+  /// these back.
+  static ({String plain, List<DocumentNode> nodes})? _copied;
 
   Relay get relay => widget.relay;
   /// The note's own id, made here for a new note.
@@ -194,20 +237,29 @@ class NoteEditorState extends State<NoteEditor> {
 
   bool get _inTrash => _stored && relay.deleted.any((entry) => entry.id == _id);
 
+  /// The note's document, for a test.
+  @visibleForTesting
+  NoteEditing get editing => _editing;
+
+  /// The layout of the note's words, for a test.
+  @visibleForTesting
+  DocumentLayout get documentLayout => _layout.currentState! as DocumentLayout;
+
+  /// The note reads only, as a note in *Recently Deleted* does.
+  bool get readOnly => _trash;
+
   @override
   void initState() {
     super.initState();
     // The list as it is now: a voice note's going can come between the tap that opens it and this.
     final entry = _current;
-    _controller = QuillController(document: _documentOf(entry), selection: const TextSelection.collapsed(offset: 0),
-      // The only way to take the editor's own paste; experimental, pinned by pubspec.lock.
-      // ignore: experimental_member_use
-      config: QuillControllerConfig(clipboardConfig: QuillClipboardConfig(onClipboardPaste: _clipboardPaste)));
-    _controller.onReplaceText = _typed;
-    _tables = NoteTables(_controller)..addListener(_tablesChanged);
-    _listen();
-    _trash = _controller.readOnly = _inTrash;
-    _controller.addListener(_caretMoved);
+    _editing = NoteEditing(_nodesOf(entry))..keepFiles = () => _current?.from != null;
+    _saved = _editing.nodes;
+    _tables = NoteTables(_editing)..addListener(_tablesChanged);
+    _editing.addListener(_edited);
+    _trash = _inTrash;
+    _focus.canRequestFocus = !_trash;
+    _editing.composer.selectionNotifier.addListener(_caretMoved);
     _focus.addListener(_focusChanged);
     relay.addListener(_relayChanged);
     // The browser's layout holds one note at a time: the note before has closed, so nothing gets the hold back.
@@ -220,16 +272,17 @@ class NoteEditorState extends State<NoteEditor> {
   }
 
   /// A note's words with each file at its place. A file the text does not name, as in an older note, goes where the
-  /// page showed it before: the recording a voice note started with first, and the rest after the words.
-  Document _documentOf(Entry? entry) {
-    if (entry == null) return Document.fromDelta(Delta()..insert('\n', Attribute.h1.toJson()));
+  /// page showed it before: the recording a voice note started with first, and the rest after the words. A new note
+  /// starts with an empty Title line.
+  List<DocumentNode> _nodesOf(Entry? entry) {
+    if (entry == null) return [lineNode(LineKind.header1, AttributedText())];
     final files = filesOf(entry);
-    final words = withLinks(markdownToDelta(entry.text, title: true, files: {for (final file in files) file.file.id}));
+    final words = withLinks(markdownToNodes(entry.text, title: true, files: {for (final file in files) file.file.id}));
     final placed = attachmentIdsIn(words);
     _shown.addAll([for (final file in files) file.file.id]);
-    return Document.fromDelta(withFilesPlaced(words,
+    return withFilesPlaced(words,
       top: [for (final file in files) if (file.top && !placed.contains(file.file.id)) file.file],
-      rest: [for (final file in files) if (!file.top && !placed.contains(file.file.id)) file.file]));
+      rest: [for (final file in files) if (!file.top && !placed.contains(file.file.id)) file.file]);
   }
 
   /// Each of [note]'s files that can have a place in its words, in the order added; [top] marks the recording a
@@ -253,10 +306,10 @@ class NoteEditorState extends State<NoteEditor> {
   static String _kept(String text) => plainText(text).trim().isNotEmpty ? text
     : text.split('\n').where((line) => NoteAttachment.read(line) != null).join('\n');
 
-  void _listen() {
-    _saved = _controller.document.toDelta();
-    _changes?.cancel();
-    _changes = _controller.document.changes.listen((_) => _changed());
+  /// Each change of the words saves, on a pause while typing; a change that is no edit does not.
+  void _edited() {
+    if (_quiet || !mounted) return;
+    _changed();
   }
 
   @override
@@ -280,8 +333,8 @@ class NoteEditorState extends State<NoteEditor> {
   ({String id, String text})? _words() {
     if (_deleted) return null;
     _tables.flush();
-    final delta = _controller.document.toDelta();
-    final text = delta == _saved ? _savedText : _markdownOf(delta);
+    final nodes = _editing.nodes;
+    final text = sameNodes(nodes, _saved) ? _savedText : _markdownOf(nodes);
     return (id: _id, text: _kept(text));
   }
 
@@ -295,15 +348,18 @@ class NoteEditorState extends State<NoteEditor> {
     relay.removeListener(_relayChanged);
     if (_pasteTarget == this) _pasteTarget = null;
     _stopPastes();
-    _changes?.cancel();
     _pause?.cancel();
-    _controller.removeListener(_caretMoved);
+    _contextMenu.remove();
+    _editing.composer.selectionNotifier.removeListener(_caretMoved);
+    _editing.removeListener(_edited);
     _tables.dispose();
     _focus.dispose();
     _find.dispose();
     _findFocus.dispose();
     _scroll.dispose();
-    _controller.dispose();
+    _iosControls.dispose();
+    _androidControls.dispose();
+    _editing.dispose();
     super.dispose();
   }
 
@@ -321,77 +377,20 @@ class NoteEditorState extends State<NoteEditor> {
     // A tap in the words while finding edits them, as in Apple Notes: find mode ends, and the tool bar comes back.
     if (_focus.hasFocus && _finding) _endFind();
     if (_focus.hasFocus) _revealCaret();
-    _typing = _editing;
+    if (!_focus.hasFocus) _contextMenu.remove();
+    _typing = _editing_;
     if (!_typing && mounted) _markLinks();
     if (mounted) setState(() {});
   }
 
   /// The person edits the note: its words or a table's cell have the cursor, or the Format sheet is open.
-  bool get _editing => _focus.hasFocus || _formatting || _tables.active != null;
+  bool get _editing_ => _focus.hasFocus || _formatting || _tables.active != null;
 
   /// A table's cell took the cursor, or gave it up: the page shows the keyboard's bar while a cell has it.
   void _tablesChanged() {
-    _typing = _editing;
+    _typing = _editing_;
     if (_tables.active != null && _finding) _endFind();
     if (mounted) setState(() {});
-  }
-
-  /// A space typed after `#`, `-`, `[]` or another Markdown mark at a line's start gives the line that style, with
-  /// the marks taken away, as the iPhone's keyboard types it. The space goes in first as typed, so one Undo gives the
-  /// marks back. A paste never comes here: it is one change of its own.
-  bool _typed(int index, int length, Object? data) {
-    if (_marking) return true;
-    if (_keepFilesApart(index, length, data) case final handled?) return handled;
-    if (data != ' ' || length != 0 || index <= 0) return true;
-    final words = _controller.document.toPlainText();
-    if (index >= words.length || !isLineMark(words.substring(words.lastIndexOf('\n', index - 1) + 1, index))) return true;
-    _marking = true;
-    try {
-      _controller.replaceText(index, 0, ' ', TextSelection.collapsed(offset: index + 1));
-      final change = lineMarkChange(_controller.document, index);
-      if (change != null) {
-        _controller.document.history.lastRecorded = 0;
-        final start = change.first.length ?? 0;
-        _controller.compose(change, TextSelection.collapsed(offset: change.first.isRetain ? start : 0),
-          ChangeSource.local);
-      }
-    } finally {
-      _marking = false;
-    }
-    return false;
-  }
-
-  /// Each file stays on a line of its own. Backspace on the line under a file takes the file, as in Apple Notes; words
-  /// typed beside a file go on a new line. A note from elsewhere keeps its files: the server takes changes to them
-  /// only from the phone that made it. Null when the change needs no help; else true lets it go as it is.
-  bool? _keepFilesApart(int index, int length, Object? data) {
-    final files = {for (final (offset, _) in attachmentsIn(_controller.document.toDelta())) offset};
-    if (files.isEmpty) return null;
-    final own = _current?.from == null;
-    final text = _controller.document.toPlainText();
-    var start = index;
-    final end = index + length;
-    if (length == 1 && data is String && data.isEmpty && text[index] == '\n' && files.contains(index - 1)) start--;
-    if (!own && files.any((at) => at >= start && at < end)) return false;
-    if (data is! String) return start == index ? null : _replaceWith(start, end, '', start);
-    final before = start == 0 ? '\n' : text[start - 1];
-    final after = end < text.length ? text[end] : '\n';
-    final joinsBefore = files.contains(start - 1) && !(data.isEmpty ? after == '\n' : data.startsWith('\n'));
-    final joinsAfter = files.contains(end) && !(data.isEmpty ? before == '\n' : data.endsWith('\n'));
-    if (start == index && !joinsBefore && !joinsAfter) return null;
-    final words = data.isEmpty && joinsBefore && joinsAfter ? '\n'
-      : '${joinsBefore ? '\n' : ''}$data${joinsAfter ? '\n' : ''}';
-    return _replaceWith(start, end, words, start + (joinsBefore ? 1 : 0) + data.length);
-  }
-
-  bool _replaceWith(int start, int end, String words, int caret) {
-    _marking = true;
-    try {
-      _controller.replaceText(start, end - start, words, TextSelection.collapsed(offset: caret));
-    } finally {
-      _marking = false;
-    }
-    return false;
   }
 
   /// A recording made into a new note keeps it, so the next save edits it. A kept note gone from the list closes the
@@ -401,7 +400,8 @@ class NoteEditorState extends State<NoteEditor> {
     if (_stored && !_deleted && _live == null) return _gone();
     // Deleted or recovered, here or on another device: the words lock or open.
     if (_inTrash != _trash) {
-      setState(() => _trash = _controller.readOnly = _inTrash);
+      setState(() => _trash = _inTrash);
+      _focus.canRequestFocus = !_trash;
       if (_trash) _focus.unfocus();
     }
     _placeFiles();
@@ -415,54 +415,45 @@ class NoteEditorState extends State<NoteEditor> {
     if (note == null || _trash || _deleted) return;
     final files = filesOf(note);
     final held = {for (final file in files) file.file.id};
-    final delta = _controller.document.toDelta();
-    if (_saving == 0 && delta == _saved) {
-      final change = Delta();
-      var at = 0;
-      for (final (offset, file) in attachmentsIn(delta)) {
-        if (held.contains(file.id)) continue;
-        change
-          ..retain(offset - at)
-          ..delete(2);
-        at = offset + 2;
-      }
-      if (change.isNotEmpty) _silently(change);
+    if (_saving == 0 && sameNodes(_editing.nodes, _saved)) {
+      // Undo steps keep the file: Undo of its removal on this page brings it back, and the save sends it again.
+      _silently(undoSteps: false, (nodes) {
+        final kept = [for (final node in nodes) if (node is! AttachmentNode || held.contains(node.file.id)) node];
+        return kept.length == nodes.length ? null : kept;
+      });
     }
-    final placed = attachmentIdsIn(_controller.document.toDelta());
+    final placed = attachmentIdsIn(_editing.nodes);
     final missing = [for (final file in files) if (!placed.contains(file.file.id) && !_shown.contains(file.file.id)) file.file];
     if (missing.isEmpty) return;
     _shown.addAll(missing.map((file) => file.id));
-    final asked = <int?, List<NoteAttachment>>{};
+    final asked = <String?, List<NoteAttachment>>{};
     for (final file in missing.where((file) => _placeAt.containsKey(file.id))) {
       (asked[_placeAt.remove(file.id)] ??= []).add(file);
     }
     for (final MapEntry(key: at, value: files) in asked.entries) {
-      final place = placeFiles(_controller.document, files, at);
-      _controller.ignoreFocusOnTextChange = !_focus.hasFocus;
-      _controller.compose(place.change, _controller.selection, ChangeSource.local);
+      final place = placeFiles(_editing.nodes, files, at);
+      final caret = place.nodes.firstWhere((node) => node.id == place.caret);
+      _editing.breakTyping();
       // A place asked at the cursor moves the cursor under the files, also while a picker or the recording screen
       // has the keyboard: the words typed next go under them.
-      if (at != null) _controller.updateSelection(TextSelection.collapsed(offset: place.caret), ChangeSource.local);
-      _controller.ignoreFocusOnTextChange = false;
+      _editing.setNodes(place.nodes, keepSelection: true, selection: at == null ? null
+        : DocumentSelection.collapsed(position: DocumentPosition(nodeId: caret.id, nodePosition: caret.beginningPosition)));
     }
     final rest = [for (final file in missing) if (!asked.values.any((files) => files.contains(file))) file];
-    if (rest.isNotEmpty) _silently(placeFiles(_controller.document, rest, null).change);
+    if (rest.isNotEmpty) _silently((nodes) => placeFiles(nodes, rest, null).nodes);
   }
 
-  /// Makes [change] with no Undo step and no save: a note kept as it was stays kept.
-  void _silently(Delta change) {
-    final kept = _controller.document.toDelta() == _saved;
-    final history = _controller.document.history;
-    _controller.ignoreFocusOnTextChange = true;
-    history.ignoreChange = true;
+  /// Makes [change] with no Undo step and no save: a note kept as it was stays kept. Each Undo step takes it too,
+  /// unless [undoSteps] is false.
+  void _silently(List<DocumentNode>? Function(List<DocumentNode> nodes) change, {bool undoSteps = true}) {
+    final kept = sameNodes(_editing.nodes, _saved);
+    _quiet = true;
     try {
-      _controller.compose(change, _controller.selection, ChangeSource.remote);
+      _editing.changeEverywhere(change, undoSteps: undoSteps);
     } finally {
-      history.ignoreChange = false;
-      _controller.ignoreFocusOnTextChange = false;
+      _quiet = false;
     }
-    history.transform(change);
-    if (kept) _saved = _controller.document.toDelta();
+    if (kept) _saved = _editing.nodes;
   }
 
   /// The note left the phone, such as a voice note with no speech or one deleted on another phone: leaving keeps
@@ -500,16 +491,17 @@ class NoteEditorState extends State<NoteEditor> {
     _pause?.cancel();
     if (_deleted || _trash) return;
     _tables.flush();
-    final delta = _controller.document.toDelta();
-    final text = delta == _saved ? _savedText : _markdownOf(delta);
+    final nodes = _editing.nodes;
+    final same = sameNodes(nodes, _saved);
+    final text = same ? _savedText : _markdownOf(nodes);
     // Blank words, such as only an empty Title line, are kept as none, so a note of files alone is not `#`.
     final empty = plainText(text).trim().isEmpty;
     final note = _current;
-    final inWords = attachmentIdsIn(delta);
+    final inWords = attachmentIdsIn(nodes);
     // A file gone from the words was removed: only the phone that made the note may remove one.
     final removed = note == null || note.from != null ? const <String>{}
       : {for (final file in filesOf(note)) if (_shown.contains(file.file.id) && !inWords.contains(file.file.id)) file.file.id};
-    final changed = delta != _saved || files.isNotEmpty;
+    final changed = !same || files.isNotEmpty;
     final dropping = leaving && empty && files.isEmpty && (_stored || _adds > 0);
     // Left with blank words and its last file just removed, the note is as bare as one that had none.
     final clearing = dropping && note != null && removed.isNotEmpty &&
@@ -522,7 +514,7 @@ class NoteEditorState extends State<NoteEditor> {
       return;
     }
     if (!_stored && _adds == 0 && empty && files.isEmpty) return;
-    _saved = delta;
+    _saved = nodes;
     _savedText = text;
     if (!leaving) _markLinks();
     final unsent = _unsent;
@@ -560,25 +552,18 @@ class NoteEditorState extends State<NoteEditor> {
     });
   }
 
-  /// The Markdown of [delta], with its link marks as [_markLinks] puts them, so an edited address that still has its
-  /// old mark is written as its words.
-  String _markdownOf(Delta delta) => deltaToMarkdown(withLinks(delta));
+  /// The Markdown of [nodes], with their links as [_markLinks] puts them, so an edited address that still has its old
+  /// link is written as its words.
+  String _markdownOf(List<DocumentNode> nodes) => documentToMarkdown(withLinks(nodes));
 
   /// Marks the links in the shown note again, as [withLinks] does when the note opens, so an address typed in this
   /// visit opens too, and an edited one opens what its words now say. The marks change no stored words: the Markdown
   /// codec writes an address with its own link as the bare address. A note kept as it is stays kept, so the marks
   /// alone never write it back.
-  void _markLinks() {
-    final before = _controller.document.toDelta();
-    if (withLinks(before) == before) return;
-    // The marks change no words, so the editor must not bring the keyboard back for them.
-    _controller.ignoreFocusOnTextChange = true;
-    for (final (start, length, link) in linkFixes(_controller.document)) {
-      _controller.formatText(start, length, LinkAttribute(link));
-    }
-    _controller.ignoreFocusOnTextChange = false;
-    if (before == _saved) _saved = _controller.document.toDelta();
-  }
+  void _markLinks() => _silently((nodes) {
+    final linked = withLinks(nodes);
+    return identical(linked, nodes) ? null : linked;
+  });
 
   /// The iPhone's own *Paste*: true when the note with the cursor put the words in.
   static Future<Object?> _pasteCall(MethodCall call) async {
@@ -589,52 +574,107 @@ class NoteEditorState extends State<NoteEditor> {
     return target._paste(html: words['html'] as String?, plain: words['plain'] as String? ?? '');
   }
 
-  /// The editor's own paste, from its drawn menu or a keyboard's paste keys: the clipboard's HTML and plain words go
-  /// through [_paste]. It always answers true, so the editor never pastes the page's colours and sizes itself.
-  Future<bool> _clipboardPaste() async {
-    // ignore: experimental_member_use
-    final clipboard = ClipboardServiceProvider.instance;
-    String? html;
-    try {
-      html = await clipboard.getHtmlText() ?? await clipboard.getHtmlFile();
-    } on Exception {
-      html = null;
-    }
+  /// The note's own paste, from its menu or a keyboard's paste keys: the clipboard's HTML and plain words go through
+  /// [_paste], so the note never pastes the page's colours and sizes.
+  Future<void> _pasteFromClipboard() async {
+    final html = await clipboardHtml();
     final plain = (await Clipboard.getData(Clipboard.kTextPlain))?.text ?? '';
     if (mounted) _paste(html: html, plain: plain);
+  }
+
+  /// Puts a paste at the cursor in one change, so one *Undo* takes it back. A copy from inside a note pastes back with
+  /// its styles; anything else keeps only the styles the note can store ([pastedNodes]). Addresses in it show as
+  /// links, as [withLinks] marks them. True when the paste is handled, even with no words.
+  bool _paste({String? html, required String plain}) {
+    final selection = _editing.composer.selection;
+    if (selection == null) return false;
+    final copied = _copied;
+    final List<DocumentNode> pasted;
+    if (plain.isNotEmpty && copied != null && plain == copied.plain && copied.nodes.isNotEmpty) {
+      // A copied table pastes as a table of its own, so a change in one never goes into the other.
+      pasted = [for (final node in copied.nodes) _fresh(node)];
+    } else {
+      final from = pastedNodes(html: html, plain: plain);
+      pasted = from.isEmpty ? from : withLinks(from);
+    }
+    final paste = pasteInto(_editing.nodes, selection, pasted);
+    if (paste == null) return true;
+    _editing.breakTyping();
+    _editing.setNodes(paste.nodes, selection: paste.caret);
+    _editing.breakTyping();
+    _revealCaret();
     return true;
   }
 
-  /// Puts a paste at the cursor in one change, so one *Undo* takes it back. A copy from inside the note pastes back with
-  /// its styles; anything else keeps only the styles the note can store ([pastedDelta]). Addresses in it show as links,
-  /// as [withLinks] marks them. True when the paste is handled, even with no words.
-  bool _paste({String? html, required String plain}) {
-    final selection = _controller.selection;
-    if (!selection.isValid) return false;
-    final copied = _controller.pasteDelta;
-    final ({Delta change, int caret})? paste;
-    if (plain.isNotEmpty && plain == _controller.pastePlainText && copied.isNotEmpty) {
-      final change = Delta();
-      if (selection.start > 0) change.retain(selection.start);
-      if (!selection.isCollapsed) change.delete(selection.end - selection.start);
-      // A copied table pastes as a table of its own, so a change in one never goes into the other.
-      for (final op in copied.toList()) {
-        change.push(withNewTableId(op));
+  /// [node] with a new id, and a new table id for a table.
+  static DocumentNode _fresh(DocumentNode node) => switch (node) {
+    final TextNode line => lineNode(kindOf(line), line.text, indent: indentOf(line)),
+    NoteTableNode() => withNewTableId(node),
+    AttachmentNode(:final file) => AttachmentNode(id: Editor.createNodeId(), file: file),
+    _ => node,
+  };
+
+  /// *Copy*: the words picked go on the clipboard as plain words, and the note keeps them with their styles.
+  void _copySelection() {
+    final selection = _editing.composer.selection;
+    if (selection == null || selection.isCollapsed) return;
+    final nodes = copiedNodes(_editing.nodes, DocumentRange(start: selection.base, end: selection.extent));
+    final plain = copiedText(nodes);
+    _copied = (plain: plain, nodes: nodes);
+    unawaited(Clipboard.setData(ClipboardData(text: plain)));
+  }
+
+  /// *Cut*: a copy, then the words picked go, as one change.
+  void _cut() {
+    final selection = _editing.composer.selection;
+    if (selection == null || selection.isCollapsed || _trash) return;
+    _copySelection();
+    final (:nodes, :caret) = deleteRange(_editing.nodes, DocumentRange(start: selection.base, end: selection.extent));
+    _editing.breakTyping();
+    _editing.setNodes(nodes, selection: DocumentSelection.collapsed(position: caret));
+  }
+
+  /// *Select All*: every word of the note.
+  void _selectAll() {
+    final nodes = _editing.nodes;
+    _editing.selectAt(DocumentSelection(
+      base: DocumentPosition(nodeId: nodes.first.id, nodePosition: nodes.first.beginningPosition),
+      extent: DocumentPosition(nodeId: nodes.last.id, nodePosition: nodes.last.endPosition)));
+  }
+
+  /// The note's own keys, before the editor's: paste, copy and cut keep the note's styles, Undo and Redo are the
+  /// note's own, and Backspace under a file or a table takes it.
+  ExecutionInstruction _noteKeys({required SuperEditorContext editContext, required KeyEvent keyEvent}) {
+    if (keyEvent is! KeyDownEvent && keyEvent is! KeyRepeatEvent) return ExecutionInstruction.continueExecution;
+    final keys = HardwareKeyboard.instance;
+    final command = keys.isMetaPressed || keys.isControlPressed;
+    final key = keyEvent.logicalKey;
+    if (command && !keys.isAltPressed) {
+      if (key == LogicalKeyboardKey.keyV && !keys.isShiftPressed) {
+        // The browser pastes on its own paste event, which [listenPastes] takes.
+        if (kIsWeb) return ExecutionInstruction.blocked;
+        unawaited(_pasteFromClipboard());
+        return ExecutionInstruction.haltExecution;
       }
-      paste = (change: change, caret: selection.start + copied.toList().fold(0, (sum, op) => sum + (op.length ?? 0)));
-    } else {
-      final pasted = pastedDelta(html: html, plain: plain);
-      paste = pasteChange(_controller.document, selection, pasted.isEmpty ? pasted : withLinks(pasted));
+      if (key == LogicalKeyboardKey.keyC && !keys.isShiftPressed) {
+        _copySelection();
+        return ExecutionInstruction.haltExecution;
+      }
+      if (key == LogicalKeyboardKey.keyX && !keys.isShiftPressed) {
+        _cut();
+        return ExecutionInstruction.haltExecution;
+      }
+      if (key == LogicalKeyboardKey.keyZ) {
+        _tables.flush();
+        keys.isShiftPressed ? _editing.redo() : _editing.undo();
+        return ExecutionInstruction.haltExecution;
+      }
     }
-    if (paste == null) return true;
-    // Words pasted beside a file go on a line of their own, as typed ones do, in the same change.
-    final apart = filesApartChange(Document.fromDelta(_controller.document.toDelta().compose(paste.change)));
-    final change = apart == null ? paste.change : paste.change.compose(apart);
-    final caret = apart == null ? paste.caret : apart.transformPosition(paste.caret, force: false);
-    _controller.compose(change, TextSelection.collapsed(offset: caret), ChangeSource.local);
-    _controller.updateSelection(TextSelection.collapsed(offset: caret), ChangeSource.local);
-    _revealCaret();
-    return true;
+    if (key == LogicalKeyboardKey.backspace && !command && !keys.isAltPressed && !keys.isShiftPressed &&
+        _editing.backspaceTakesBlock()) {
+      return ExecutionInstruction.haltExecution;
+    }
+    return ExecutionInstruction.continueExecution;
   }
 
   void _say(String message) => unawaited(showProblemOn(_navigator, message));
@@ -645,39 +685,37 @@ class NoteEditorState extends State<NoteEditor> {
     _tables.leave();
     setState(() => _formatting = _typing = false);
     _focus.unfocus();
+    _editing.selectAt(null);
     _save(sendNow: true);
   }
 
-  /// *Aa*: the keyboard goes down the normal way and the panel takes its place. Hiding the keyboard while the editor
-  /// keeps the cursor makes the editor bring it back at once, so the two fight. The editor also asks for the keyboard
-  /// when it loses the cursor while waiting to redraw, so that one request is skipped.
+  /// *Aa*: the keyboard goes down and the panel takes its place. The note keeps the words picked while the panel
+  /// styles them.
   void _styles() {
     setState(() => _formatting = true);
-    _controller.skipRequestKeyboard = true;
     _focus.unfocus();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _controller.skipRequestKeyboard = false);
   }
 
   void _closeStyles() => _focus.requestFocus();
 
   /// *Undo* and *Redo* change the words as typing does, so the save on a pause keeps them; the keyboard stays up.
-  Widget _history() => ListenableBuilder(listenable: _controller, builder: (context, _) {
-    if (!_controller.hasUndo && !_controller.hasRedo) return const SizedBox.shrink();
+  Widget _history() => ListenableBuilder(listenable: _editing, builder: (context, _) {
+    if (!_editing.hasUndo && !_editing.hasRedo) return const SizedBox.shrink();
     // A cell's words still waiting go in first, so Undo takes back the last change.
     void undo() {
       _tables.flush();
-      _controller.undo();
+      _editing.undo();
     }
     void redo() {
       _tables.flush();
-      _controller.redo();
+      _editing.redo();
     }
-    return Padding(padding: const EdgeInsets.only(right: 8), child: _controller.hasRedo
+    return Padding(padding: const EdgeInsets.only(right: 8), child: _editing.hasRedo
       ? ButtonPill(children: [
-          PillIconButton(icon: CupertinoIcons.arrow_uturn_left, tooltip: 'Undo', onPressed: _controller.hasUndo ? undo : null),
+          PillIconButton(icon: CupertinoIcons.arrow_uturn_left, tooltip: 'Undo', onPressed: _editing.hasUndo ? undo : null),
           PillIconButton(icon: CupertinoIcons.arrow_uturn_right, tooltip: 'Redo', onPressed: redo),
         ])
-      : RoundIconButton(icon: CupertinoIcons.arrow_uturn_left, tooltip: 'Undo', onPressed: _controller.hasUndo ? undo : null));
+      : RoundIconButton(icon: CupertinoIcons.arrow_uturn_left, tooltip: 'Undo', onPressed: _editing.hasUndo ? undo : null));
   });
 
   /// ⋯ → *Find in Note*: the find bar takes the keyboard from the words, so typing there changes nothing in the note.
@@ -691,10 +729,15 @@ class NoteEditorState extends State<NoteEditor> {
   void _findChanged() {
     final words = _find.text;
     final pattern = RegExp(RegExp.escape(words), caseSensitive: false);
+    final tables = <(int, NoteTable)>[];
+    var offset = 0;
+    for (final node in _editing.nodes) {
+      if (node is NoteTableNode) tables.add((offset, node.table));
+      offset += (node is TextNode ? node.text.length : 1) + 1;
+    }
     final matches = words.isEmpty ? <TextRange>[] : [
-      for (final match in pattern.allMatches(_controller.document.toPlainText()))
-        TextRange(start: match.start, end: match.end),
-      for (final (offset, table) in tablesIn(_controller.document.toDelta()))
+      for (final match in pattern.allMatches(_editing.text)) TextRange(start: match.start, end: match.end),
+      for (final (offset, table) in tables)
         for (final cell in table.rows.expand((row) => row))
           for (final _ in pattern.allMatches(cell)) TextRange(start: offset, end: offset + 1),
     ]..sort((a, b) => a.start - b.start);
@@ -711,11 +754,9 @@ class NoteEditorState extends State<NoteEditor> {
     _select(_matches[_match]);
   }
 
-  /// Selects a match as a mark on the page, not a change: the editor must not take the keyboard back for it.
+  /// Selects a match as a mark on the page, not a change: the keyboard stays with the find bar.
   void _select(TextRange match) {
-    _controller.ignoreFocusOnTextChange = true;
-    _controller.updateSelection(TextSelection(baseOffset: match.start, extentOffset: match.end), ChangeSource.silent);
-    _controller.ignoreFocusOnTextChange = false;
+    _editing.select(TextSelection(baseOffset: match.start, extentOffset: match.end));
     _revealCaret();
   }
 
@@ -725,21 +766,28 @@ class NoteEditorState extends State<NoteEditor> {
   }
 
   /// Scrolls the page, after the frame, so the caret's line shows under the top edge and above the bar. The editor
-  /// scrolls the caret only to the page's bottom edge, under the bar: this runs after its own scroll in the same frame,
-  /// or stops it, as a jump ends a scroll that is still moving. The editor's `scrollBottomInset` would keep the bar's
-  /// room over the caret too, so a caret that moves up would go under the top edge.
+  /// scrolls the caret only to the page's bottom edge, under the bar: this runs after its own scroll in the same frame.
   void _revealCaret() {
     if (_revealing) return;
     _revealing = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _revealing = false;
-      final editor = _editor.currentState?.editableTextKey.currentState?.renderEditor;
-      final selection = _controller.selection;
-      if (!mounted || editor == null || !editor.attached || !_scroll.hasClients || !selection.isValid) return;
-      final caret = editor.getLocalRectForCaret(selection.extent);
+      final layout = _layout.currentState;
+      final sliver = _layout.currentContext?.findRenderObject();
+      final selection = _editing.composer.selection;
+      if (!mounted || layout is! DocumentLayout || sliver == null || !sliver.attached || !_scroll.hasClients ||
+          selection == null) {
+        return;
+      }
+      final words = layout as DocumentLayout;
+      final caret = words.getRectForPosition(selection.extent);
+      final viewport = RenderAbstractViewport.of(sliver);
+      if (caret == null || viewport is! RenderBox) return;
       final position = _scroll.position;
-      final top = editor.localToGlobal(Offset.zero, ancestor: RenderAbstractViewport.of(editor)).dy + position.pixels;
-      final above = top + caret.top - _caretTopRoom, below = top + caret.bottom + barRoom;
+      // The caret's place in the whole page, from the page's top.
+      final top = (viewport as RenderBox).globalToLocal(words.getGlobalOffsetFromDocumentOffset(caret.topLeft)).dy +
+        position.pixels;
+      final above = top - _caretTopRoom, below = top + caret.height + barRoom;
       final to = above < position.pixels ? above
         : below > position.pixels + position.viewportDimension ? below - position.viewportDimension : null;
       if (to != null) _scroll.jumpTo(to.clamp(position.minScrollExtent, position.maxScrollExtent));
@@ -749,11 +797,9 @@ class NoteEditorState extends State<NoteEditor> {
 
   /// ✓ on the find bar: the match stays as the caret, with the keyboard down.
   void _closeFind() {
-    final end = _controller.selection.end;
+    final end = _editing.selection.end;
     _endFind();
-    _controller.ignoreFocusOnTextChange = true;
-    _controller.updateSelection(TextSelection.collapsed(offset: end), ChangeSource.silent);
-    _controller.ignoreFocusOnTextChange = false;
+    if (end >= 0) _editing.select(TextSelection.collapsed(offset: end));
   }
 
   void _endFind() {
@@ -776,14 +822,33 @@ class NoteEditorState extends State<NoteEditor> {
   void _checklist() {
     if (!_focus.hasFocus) {
       _typing = true;
-      final end = _controller.document.length - 1;
-      final words = _controller.document.toPlainText();
-      final emptyLast = words == '\n' || words.endsWith('\n\n');
-      _controller.replaceText(end, 0, emptyLast ? '' : '\n', TextSelection.collapsed(offset: emptyLast ? end : end + 1));
+      final nodes = _editing.nodes;
+      final last = nodes.last;
+      if (last is TextNode && last.text.isEmpty) {
+        _editing.selectAt(DocumentSelection.collapsed(
+          position: DocumentPosition(nodeId: last.id, nodePosition: last.endPosition)));
+      } else {
+        final line = lineNode(LineKind.paragraph, AttributedText());
+        _editing.breakTyping();
+        _editing.setNodes([...nodes, line], selection: DocumentSelection.collapsed(
+          position: DocumentPosition(nodeId: line.id, nodePosition: const TextNodePosition(offset: 0))));
+      }
       _focus.requestFocus();
     }
-    final list = _controller.getSelectionStyle().attributes[Attribute.list.key]?.value;
-    _controller.formatSelection(list == 'checked' || list == 'unchecked' ? Attribute.clone(Attribute.list, null) : Attribute.unchecked);
+    NoteCommands(_editing).checklist();
+  }
+
+  /// A tap on a checklist circle ticks its line, or takes the tick off.
+  void _tick(String nodeId, bool ticked) {
+    if (_trash) return;
+    final nodes = _editing.nodes;
+    _editing.breakTyping();
+    _editing.setNodes([
+      for (final node in nodes)
+        node is TextNode && node.id == nodeId
+          ? lineNode(ticked ? LineKind.checked : LineKind.unchecked, node.text, indent: indentOf(node), id: node.id)
+          : node,
+    ], keepSelection: true);
   }
 
   /// *Attach* → *Photos* or *Files*. The browser has one picker for every kind of file.
@@ -791,7 +856,7 @@ class NoteEditorState extends State<NoteEditor> {
     // The cursor's place before the picker: the phone's picker takes the keyboard while it is open. The files go
     // there once the note keeps them.
     final editing = _focus.hasFocus;
-    final at = editing ? _controller.selection.start : null;
+    final at = editing ? _editing.composer.selection?.extent.nodeId : null;
     final List<NewFile> picked;
     try {
       picked = await (widget.picker ?? pickWithPhone)(photos: photos);
@@ -802,8 +867,8 @@ class NoteEditorState extends State<NoteEditor> {
     _save(sendNow: !editing && !_focus.hasFocus, files: _placed(picked, at));
   }
 
-  /// [files], each with the id the note will keep it by, and asked to go at [at], or at the end.
-  List<NewFile> _placed(List<NewFile> files, int? at) {
+  /// [files], each with the id the note will keep it by, and asked to go under the line [at], or at the end.
+  List<NewFile> _placed(List<NewFile> files, String? at) {
     final placed = [for (final file in files) file.withId(newClientId())];
     for (final file in placed) {
       _placeAt[file.id!] = at;
@@ -811,7 +876,7 @@ class NoteEditorState extends State<NoteEditor> {
     return placed;
   }
 
-  String get _plain => plainText(deltaToMarkdown(_controller.document.toDelta()));
+  String get _plain => plainText(documentToMarkdown(_editing.nodes));
 
   Future<void> _share() => (widget.sharer ?? shareWithPhone)(_plain);
 
@@ -872,7 +937,7 @@ class NoteEditorState extends State<NoteEditor> {
     if (action == FormatAction.table) return _addTable();
     if (_tables.active != null) return;
     if (action == FormatAction.link) return unawaited(_linkBox());
-    Formatter(_controller, keyboardDown: _formatting).run(action, colour: relay.settings.highlightColour);
+    NoteCommands(_editing).run(action, colour: relay.settings.highlightColour);
   }
 
   /// *Table*: a table of 2 columns and 2 rows at the cursor, with the cursor in its first cell.
@@ -883,19 +948,40 @@ class NoteEditorState extends State<NoteEditor> {
   }
 
   /// *Table* → *Convert to text* or *Delete table*: the cursor goes where the table was.
-  void _tableGone(int? at) {
-    if (at == null || !mounted) return;
-    _controller.updateSelection(TextSelection.collapsed(offset: at), ChangeSource.local);
+  void _tableGone(String? nodeId) {
+    if (nodeId == null || !mounted) return;
     _focus.requestFocus();
+  }
+
+  /// The link on every letter of [range] in the words, or null when they have none or more than one.
+  String? _linkOn(List<DocumentNode> nodes, TextRange range) {
+    final links = {for (var at = range.start; at < range.end; at++) linkAt(nodes, at)};
+    return links.length == 1 ? links.single : null;
+  }
+
+  /// Puts [address] as the link on [range] of the words, or takes the link off with null.
+  void _setLink(TextRange range, String? address) {
+    final nodes = _editing.nodes;
+    final picked = documentSelectionOf(nodes, TextSelection(baseOffset: range.start, extentOffset: range.end));
+    final span = DocumentRange(start: picked.base, end: picked.extent);
+    final now = {for (var at = range.start; at < range.end; at++) ?linkAt(nodes, at)};
+    _editing.breakTyping();
+    _editing.editor.execute([
+      if (now.isNotEmpty) RemoveTextAttributionsRequest(documentRange: span,
+        attributions: {for (final link in now) LinkAttribution(link)}),
+      if (address != null) AddTextAttributionsRequest(documentRange: span, attributions: {LinkAttribution(address)}),
+    ]);
   }
 
   /// *Link*: a box for the address of the words picked, filled from a copied web address. On a link it changes the
   /// address or takes the link away. With no words picked, the address goes in as its own words.
   Future<void> _linkBox() async {
-    final selection = _controller.selection;
-    if (_trash || _tables.active != null || !selection.isValid) return;
-    final now = _controller.getSelectionStyle().attributes[Attribute.link.key]?.value as String?;
-    final run = now == null ? null : linkRunAt(_controller.document, selection.start);
+    final selection = _editing.selection;
+    if (_trash || _tables.active != null || selection.start < 0) return;
+    final nodes = _editing.nodes;
+    final run = selection.isCollapsed ? linkRunAt(nodes, selection.start) : null;
+    final now = run != null ? linkAt(nodes, run.start) : selection.isCollapsed ? null
+      : _linkOn(nodes, TextRange(start: selection.start, end: selection.end));
     var copied = '';
     if (now == null) {
       final clipboard = (await Clipboard.getData(Clipboard.kTextPlain))?.text?.trim() ?? '';
@@ -918,20 +1004,18 @@ class NoteEditorState extends State<NoteEditor> {
         ],
       ));
     if (answer == null || !mounted) return;
+    final whole = run ?? TextRange(start: selection.start, end: selection.end);
     if (answer.trim().isEmpty) {
-      if (run != null) _controller.formatText(run.start, run.end - run.start, const LinkAttribute(null));
+      if (now != null) _setLink(whole, null);
       return;
     }
     final address = linkAddressOf(answer);
     if (address == null) return _say('That is not a web address. Try again.');
-    if (run != null && selection.isCollapsed) {
-      _controller.formatText(run.start, run.end - run.start, LinkAttribute(address));
-    } else if (selection.isCollapsed) {
-      _controller.replaceText(selection.start, 0, address, TextSelection.collapsed(offset: selection.start + address.length));
-      _controller.formatText(selection.start, address.length, LinkAttribute(address));
-    } else {
-      _controller.formatText(selection.start, selection.end - selection.start, LinkAttribute(address));
-    }
+    if (run != null || !selection.isCollapsed) return _setLink(whole, address);
+    _editing.select(TextSelection.collapsed(offset: selection.start));
+    _editing.breakTyping();
+    _editing.type(address);
+    _setLink(TextRange(start: selection.start, end: selection.start + address.length), address);
   }
 
   /// The new page takes this one's place, so this page gives the hold back first: the new page then gives it, on
@@ -944,39 +1028,48 @@ class NoteEditorState extends State<NoteEditor> {
         back: widget.back)));
   }
 
-  /// A tap on a link while reading opens it, and the keyboard stays down. While editing, as in Apple Notes, a tap on
-  /// the cursor opens or closes the text menu; any other tap returns false, so the editor places the cursor.
-  bool _tapUp(TapUpDetails details, TextPosition Function(Offset) positionOf) {
+  /// A tap in the words. In *Recently Deleted* it asks to recover the note. A tap on a table, a file or a checklist
+  /// circle is theirs. While reading, a tap on a link opens it, and the keyboard stays down. Any other tap places the
+  /// cursor. True when the page took the tap.
+  bool _tapped(Offset global, DocumentPosition? position) {
+    final reading = !_focus.hasFocus && !_formatting;
+    // A mouse's tap asks for the keyboard before the page sees it: a tap the page takes while reading gives it back.
+    void keepReading() {
+      if (reading) scheduleMicrotask(() => _focus.unfocus());
+    }
     if (_trash) {
-      unawaited(_askRecover());
+      if (!isOnAttachment(context, global)) unawaited(_askRecover());
       return true;
     }
-    if (isOnTable(context, details.globalPosition) || isOnAttachment(context, details.globalPosition)) return true;
-    final at = positionOf(details.globalPosition);
-    if (_focus.hasFocus || _formatting) return !_formatting && _toggleMenu(at);
-    final link = linkAtPosition(_controller.document, at);
+    if (isOnTable(context, global)) return true;
+    if (isOnAttachment(context, global) || isOnCircle(context, global)) {
+      keepReading();
+      return true;
+    }
+    // On an iPhone a touch outside the system menu closes it at touch down: the tap up on the cursor opens nothing.
+    final caret = _editing.composer.selection;
+    if (NoteSystemMenu.closedJustNow() && position != null && caret != null && caret.isCollapsed &&
+        offsetAt(_editing.nodes, position) == offsetAt(_editing.nodes, caret.extent)) {
+      return true;
+    }
+    if (!reading || position == null) return false;
+    final link = linkAtDocumentPosition(_editing.nodes, position);
     if (link == null) return false;
+    keepReading();
     _openLink(link);
     return true;
   }
 
-  /// The browser draws its own menu, so a tap there always places the cursor. The iPhone closes its menu at the touch
-  /// down of a tap outside it, so a tap on the cursor just after that opens nothing: the tap closed the menu.
-  bool _toggleMenu(TextPosition at) {
-    final selection = _controller.selection;
-    final editor = _editor.currentState?.editableTextKey.currentState;
-    if (relay.desktop || editor == null || !selection.isCollapsed || at.offset != selection.baseOffset) return false;
-    if (editor.selectionOverlay?.toolbar != null) {
-      editor.hideToolbar();
-    } else if (!QuillSystemMenu.closedJustNow(editor)) {
-      editor.showToolbar();
-    }
-    return true;
+  /// The computer's right-click menu, at [at] on the screen.
+  void _showMenu(Offset at) {
+    if (_trash) return;
+    _contextMenu.show(context: context, contextMenuBuilder: (context) => noteContextMenu(context, anchor: at,
+      actions: _menuActions, close: _contextMenu.remove, format: _pick));
   }
 
   Future<void> _openLink(String link) async {
     // A mail link or another with its own scheme opens as it is; `www.…` opens on the web.
-    final address = Uri.tryParse(_scheme.hasMatch(link) ? link : 'https://$link');
+    final address = Uri.tryParse(linkScheme.hasMatch(link) ? link : 'https://$link');
     if (address == null || !await (widget.opener ?? openInBrowser)(address)) _say(browserProblem);
   }
 
@@ -999,7 +1092,7 @@ class NoteEditorState extends State<NoteEditor> {
   /// words typed so far are kept first, so a new note with words is kept before the recording joins it.
   Future<void> _record() async {
     final id = newClientId();
-    _placeAt[id] = _focus.hasFocus ? _controller.selection.start : null;
+    _placeAt[id] = _focus.hasFocus ? _editing.composer.selection?.extent.nodeId : null;
     _focus.unfocus();
     _save(sendNow: false);
     await _writing;
@@ -1009,7 +1102,7 @@ class NoteEditorState extends State<NoteEditor> {
   @override
   Widget build(BuildContext context) {
     final brand = brandOf(context);
-    final editing = _editing;
+    final editing = _editing_;
     _measureKeyboard(MediaQuery.viewInsetsOf(context).bottom);
     return Scaffold(
       appBar: widget.pane ? _paneBar(brand) : AppBar(leading: BackTo(widget.back, onPressed: widget.onClose),
@@ -1043,7 +1136,7 @@ class NoteEditorState extends State<NoteEditor> {
                   onRecord: _recordOrNull),
           )),
         ])),
-        if (!widget.pane && _formatting) FormatSheet(controller: _controller, height: _keyboard, onClose: _closeStyles,
+        if (!widget.pane && _formatting) FormatSheet(editing: _editing, height: _keyboard, onClose: _closeStyles,
           colour: relay.settings.highlightColour, onColour: relay.setHighlightColour),
       ])),
     );
@@ -1051,21 +1144,22 @@ class NoteEditorState extends State<NoteEditor> {
 
   /// Over the keyboard: the style tools while words are picked, else the scrolling tool bar. In a table's cell only
   /// *Table*, *Attach* and *Hide keyboard* act: a cell holds plain words.
-  Widget _keyboardBar() => ListenableBuilder(listenable: _controller, builder: (context, _) {
-    if (_focus.hasFocus && !_controller.selection.isCollapsed) {
-      return SelectionToolBar(controller: _controller, colour: relay.settings.highlightColour,
+  Widget _keyboardBar() => ListenableBuilder(listenable: _editing.looks, builder: (context, _) {
+    if (_focus.hasFocus && !(_editing.composer.selection?.isCollapsed ?? true)) {
+      return SelectionToolBar(editing: _editing, colour: relay.settings.highlightColour,
         onLink: () => unawaited(_linkBox()));
     }
     final words = _tables.active == null;
+    final commands = NoteCommands(_editing);
     return FloatingToolBar(
       onStyles: words ? _styles : null,
       onChecklist: words ? _checklist : null,
       table: _tableButton(),
       onAttach: _attachOrNull,
       attachMenu: !relay.desktop,
-      onList: words ? Formatter(_controller).listOf : null,
+      onList: words ? commands.listOf : null,
       onLink: words ? () => unawaited(_linkBox()) : null,
-      onIndent: words ? Formatter(_controller).indent : null,
+      onIndent: words ? commands.indent : null,
       onHideKeyboard: _done,
       onRecord: _recordOrNull,
     );
@@ -1089,7 +1183,7 @@ class NoteEditorState extends State<NoteEditor> {
       child: Row(spacing: 10, children: [
         ButtonPill(children: [PillIconButton(icon: CupertinoIcons.square_pencil, tooltip: 'New note', onPressed: _compose)]),
         ButtonPill(children: [
-          FormatMenu(controller: _controller, onPick: _pick, colour: relay.settings.highlightColour,
+          FormatMenu(editing: _editing, onPick: _pick, colour: relay.settings.highlightColour,
             onColour: relay.setHighlightColour, enabled: !_trash && _tables.active == null),
           PillIconButton(icon: CupertinoIcons.checkmark_circle, tooltip: 'Checklist',
             onPressed: _trash || _tables.active != null ? null : _checklist),
@@ -1130,8 +1224,8 @@ class NoteEditorState extends State<NoteEditor> {
   /// A recording's card, with what its page needs to go back to the note: the note's first typed line and its date.
   Widget _card(Entry? note, EntryRecording recording) {
     // The recording's page goes back to the note by its first typed line.
-    final first = _controller.document.toPlainText().split('\n').map((line) => line.trim())
-      .firstWhere((line) => line.isNotEmpty && line != embedLetter, orElse: () => '');
+    final first = _editing.text.split('\n').map((line) => line.trim())
+      .firstWhere((line) => line.isNotEmpty && line != blockLetter, orElse: () => '');
     // Cut by characters, not code units: half an emoji is not a string Flutter can draw.
     final letters = first.characters;
     final title = first.isEmpty ? 'Note' : letters.length > 18 ? '${letters.take(17).toString().trimRight()}…' : first;
@@ -1148,7 +1242,7 @@ class NoteEditorState extends State<NoteEditor> {
     if (note == null) return null;
     if (note.recordings.where((recording) => recording.id == file.id).firstOrNull case final recording?) {
       final card = _card(note, recording);
-      if (!recording.top || _controller.document.toPlainText().replaceAll(embedLetter, '').trim().isNotEmpty) return card;
+      if (!recording.top || _editing.text.replaceAll(blockLetter, '').trim().isNotEmpty) return card;
       return Stack(clipBehavior: Clip.none, children: [
         card,
         // Over the empty line under the card, 7 below it, as tall as a line of words.
@@ -1171,184 +1265,58 @@ class NoteEditorState extends State<NoteEditor> {
     final recordings = [for (final recording in note?.recordings ?? const <EntryRecording>[]) if (!NoteAttachment.placeable(recording.id)) recording];
     final above = [for (final recording in recordings) if (recording.top) recording];
     final when = _when(context, note?.at ?? DateTime.now(), note?.from);
-    return SingleChildScrollView(
-      controller: _scroll,
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 120),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        // The date alone: nothing about sending, and no tag.
-        Text(when, style: muted, textAlign: TextAlign.center),
-        const SizedBox(height: 14),
-        for (final recording in above) Padding(padding: const EdgeInsets.only(bottom: 12), child: _card(note, recording)),
-        QuillEditor(
-          key: _editor,
-          controller: _controller,
-          focusNode: _focus,
-          scrollController: _scroll,
-          config: QuillEditorConfig(
-            scrollable: false,
-            autoFocus: widget.entry == null,
-            placeholder: above.isNotEmpty ? 'Add notes…' : 'What do you want to keep?',
-            customStyles: noteStyles(context),
-            // The format keys only on a computer: a phone's keyboard has no ⌘.
-            customShortcuts: relay.desktop ? {...formatShortcuts(), ...pageKeys} : null,
-            customActions: relay.desktop
-              ? {FormatIntent: CallbackAction<FormatIntent>(onInvoke: (intent) => format(intent.action))}
-              : null,
-            embedBuilders: [TableEmbedBuilder(_tables), AttachmentEmbedBuilder(_blockOf)],
-            onTapUp: _tapUp,
-            contextMenuBuilder: (context, editor) => noteContextMenu(context, editor,
-              format: relay.desktop ? _pick : null),
-            quillMagnifierBuilder: relay.desktop ? null : noteMagnifier,
-            // A long press on a link offers Open; it goes to the same browser.
-            onLaunchUrl: _openLink,
-            // The only way to draw Apple's round checklist circles and dashed lists; pinned by pubspec.lock.
-            // ignore: experimental_member_use
-            customLeadingBlockBuilder: (_, config) => _leading(config, brand),
-          ),
-        ),
-        for (final recording in recordings) if (!recording.top)
-          Padding(padding: const EdgeInsets.only(top: 14), child: _card(note, recording)),
-        for (final file in note?.files ?? const <EntryFile>[]) if (!NoteAttachment.placeable(file.id))
-          Padding(padding: const EdgeInsets.only(top: 14), child: _fileBlock(file)),
-      ]),
-    );
-  }
-
-  /// A dash for a dashed list, and a round circle for a checklist line that one tap ticks in the accent.
-  Widget? _leading(LeadingConfig config, BrandColors brand) {
-    final kind = config.attribute.value;
-    if (kind == dashedList) {
-      return SizedBox(width: 34, child: Text('–', textAlign: TextAlign.center, style: TextStyle(fontSize: 17, color: brand.ink)));
-    }
-    if (kind != 'checked' && kind != 'unchecked') return null;
-    final ticked = config.value;
-    return SizedBox(width: 34, child: Semantics(
-      checked: ticked,
-      label: ticked ? 'Ticked' : 'Not ticked',
-      child: InkResponse(
-        onTap: config.enabled == false ? null : () => config.onCheckboxTap(!ticked),
-        radius: 18,
-        child: Icon(ticked ? CupertinoIcons.checkmark_circle_fill : CupertinoIcons.circle, size: 24,
-          color: ticked ? brand.accent : brand.muted),
-      ),
-    ));
+    final page = CustomScrollView(controller: _scroll, slivers: [
+      SliverPadding(padding: const EdgeInsets.fromLTRB(20, 4, 20, 0), sliver: SliverToBoxAdapter(child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // The date alone: nothing about sending, and no tag.
+          Text(when, style: muted, textAlign: TextAlign.center),
+          const SizedBox(height: 14),
+          for (final recording in above) Padding(padding: const EdgeInsets.only(bottom: 12), child: _card(note, recording)),
+        ],
+      ))),
+      SuperEditorIosControlsScope(controller: _iosControls, child: SuperEditorAndroidControlsScope(
+        controller: _androidControls, child: SuperEditor(
+        editor: _editing.editor,
+        focusNode: _focus,
+        // A note page opened over another has its own role: each owns the keyboard in turn.
+        inputRole: _inputRole,
+        autofocus: widget.entry == null,
+        documentLayoutKey: _layout,
+        stylesheet: noteStylesheet(context, padding: const EdgeInsets.symmetric(horizontal: 20)),
+        selectionStyle: SelectionStyles(
+          selectionColor: Theme.of(context).textSelectionTheme.selectionColor ?? brand.accentSoft),
+        componentBuilders: [
+          NoteLineComponentBuilder(onTick: _trash ? null : _tick,
+            hint: above.isNotEmpty ? 'Add notes…' : 'What do you want to keep?'),
+          NoteTableComponentBuilder(_tables, readOnly: _trash, style: noteBodyStyle(brand)),
+          AttachmentComponentBuilder(_blockOf),
+        ],
+        selectionPolicies: const SuperEditorSelectionPolicies(clearSelectionWhenEditorLosesFocus: false,
+          clearSelectionWhenImeConnectionCloses: false),
+        imePolicies: const SuperEditorImePolicies(openKeyboardOnSelectionChange: false),
+        keyboardActions: [
+          // The format keys only on a computer: a phone's keyboard has no ⌘.
+          if (relay.desktop) formatKeyAction(format, passUp: pageKeys),
+          _noteKeys,
+          ...defaultImeKeyboardActions,
+        ],
+        contentTapDelegateFactories: [
+          (_) => NoteTapDelegate(_tapped),
+          (editContext) => LineTapDelegate(editContext.editor),
+        ],
+      ))),
+      SliverPadding(padding: const EdgeInsets.fromLTRB(20, 0, 20, 120), sliver: SliverToBoxAdapter(child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final recording in recordings) if (!recording.top)
+            Padding(padding: const EdgeInsets.only(top: 14), child: _card(note, recording)),
+          for (final file in note?.files ?? const <EntryFile>[]) if (!NoteAttachment.placeable(file.id))
+            Padding(padding: const EdgeInsets.only(top: 14), child: _fileBlock(file)),
+        ],
+      ))),
+    ]);
+    if (!relay.desktop) return page;
+    return GestureDetector(onSecondaryTapUp: (details) => _showMenu(details.globalPosition), child: page);
   }
 }
-
-/// The note's text styles, as Apple Notes draws them: Title, Heading and Subheading larger and bold, Body at 17.
-DefaultStyles noteStyles(BuildContext context) {
-  final brand = brandOf(context);
-  final ink = brand.ink;
-  DefaultTextBlockStyle block(double size, FontWeight weight, double top) => DefaultTextBlockStyle(
-    TextStyle(fontFamily: brandFont, fontSize: size, fontWeight: weight, height: 1.3, color: ink), HorizontalSpacing.zero,
-    VerticalSpacing(top, 4), VerticalSpacing.zero, null);
-  return DefaultStyles(
-    h1: block(28, FontWeight.w700, 4),
-    h2: block(22, FontWeight.w700, 10),
-    h3: block(19, FontWeight.w600, 8),
-    paragraph: DefaultTextBlockStyle(TextStyle(fontFamily: brandFont, fontSize: 17, height: 1.5, color: ink), HorizontalSpacing.zero,
-      VerticalSpacing.zero, VerticalSpacing.zero, null),
-    link: TextStyle(color: brand.accentText, decoration: TextDecoration.underline, decorationColor: brand.accentText),
-    // A highlight's colour by its name, as the note keeps it: soft enough to read the words through.
-    palette: {for (final colour in highlightColours) colour: highlightColourOf(colour, Theme.of(context).brightness)},
-  );
-}
-
-/// A web address in a note's words: `https://…`, `http://…` or `www.…`, up to a space, less the stop or bracket that
-/// ends a sentence.
-final _webAddress = RegExp(r'(?:https?://|www\.)[^\s<>"]+', caseSensitive: false);
-final _endPunctuation = RegExp(r'''[.,;:!?)\]}'"]+$''');
-
-/// [delta] with each web address in its words marked as a link, for the page to show, as [linkFixes] marks them. The
-/// Markdown codec writes an address linked to itself as the bare address, so the stored words never change, and an
-/// old note is never sent again.
-Delta withLinks(Delta delta) {
-  final document = Document.fromDelta(delta);
-  for (final (start, length, link) in linkFixes(document)) {
-    document.format(start, length, LinkAttribute(link));
-  }
-  return document.toDelta();
-}
-
-/// The link marks that make [document] show its links: each link on words that hold no web address and are no piece
-/// of the link stays, as `[the menu](…)` does; each other mark goes, as the editor's own marks can take a stop at an
-/// address's end, and an edited address keeps the mark of what it was; then each web address in the words is marked
-/// as itself.
-List<(int, int, String?)> linkFixes(Document document) {
-  final runs = <(int, int, String)>[];
-  var offset = 0;
-  for (final op in document.toDelta().toList()) {
-    final length = op.length ?? 0;
-    final link = op.attributes?[Attribute.link.key];
-    if (link is String && op.data is String) {
-      final last = runs.lastOrNull;
-      if (last != null && last.$3 == link && last.$1 + last.$2 == offset) {
-        runs.last = (last.$1, last.$2 + length, link);
-      } else {
-        runs.add((offset, length, link));
-      }
-    }
-    offset += length;
-  }
-  final words = document.toPlainText();
-  bool keeps((int, int, String) run) {
-    final linked = words.substring(run.$1, run.$1 + run.$2).trim().toLowerCase();
-    // Words that are a piece of their own link were an address: `example.com` left from `https://example.com`. Only
-    // words with a `.` or a `/` can be such a piece, so *menu* linked to `https://example.com/menu` stays a link.
-    final address = run.$3.toLowerCase().replaceFirst(_scheme, '').replaceFirst(RegExp('^//'), '');
-    final piece = linked.isEmpty || (linked.contains(RegExp('[./]')) && address.contains(linked));
-    return linkRanges(linked).isEmpty && !piece;
-  }
-  final kept = [for (final run in runs) if (keeps(run)) run];
-  return [
-    for (final run in runs) if (!kept.contains(run)) (run.$1, run.$2, null),
-    for (final range in linkRanges(words))
-      if (!kept.any((run) => range.start < run.$1 + run.$2 && run.$1 < range.start + range.address.length))
-        (range.start, range.address.length, range.address),
-  ];
-}
-
-/// Where the link at [offset] in [document] starts and ends: the run of words with the same link.
-TextRange? linkRunAt(Document document, int offset) {
-  final link = linkAt(document, offset) ?? linkAt(document, offset - 1);
-  if (link == null) return null;
-  var start = offset, end = offset;
-  while (start > 0 && linkAt(document, start - 1) == link) {
-    start--;
-  }
-  while (linkAt(document, end) == link) {
-    end++;
-  }
-  return TextRange(start: start, end: end);
-}
-
-/// The address a person typed in the *Link* box, as the link keeps it: `example.com` gains `https://`, and an address
-/// with its own scheme, such as `mailto:`, stays. Null for words that are no address.
-String? linkAddressOf(String typed) {
-  final words = typed.trim();
-  if (words.isEmpty || words.contains(RegExp(r'\s'))) return null;
-  if (_scheme.hasMatch(words)) return words;
-  return words.contains('.') ? 'https://$words' : null;
-}
-
-/// A link's own scheme, such as `https:` or `mailto:`; `www.` has none.
-final _scheme = RegExp(r'^[a-z][a-z0-9+.-]*:', caseSensitive: false);
-
-/// Each web address in [words], with where it starts.
-Iterable<({int start, String address})> linkRanges(String words) sync* {
-  for (final match in _webAddress.allMatches(words)) {
-    final address = match[0]!.replaceFirst(_endPunctuation, '');
-    if (address.contains('.') && !address.endsWith('://')) yield (start: match.start, address: address);
-  }
-}
-
-/// The link on the letter at [offset] in [document], or null. A tap in the space after a line's end gives that line's
-/// end, which is no link, so it places the cursor.
-String? linkAt(Document document, int offset) => offset < 0 || offset >= document.length - 1 ? null
-  : document.collectStyle(offset, 1).attributes[Attribute.link.key]?.value as String?;
-
-/// The link under a tap at [position], or null. A tap on a letter's right half gives the place after that letter,
-/// upstream, so the letter before it is the one tapped: the link's last letter opens it, and the space before a link
-/// does not.
-String? linkAtPosition(Document document, TextPosition position) =>
-  linkAt(document, position.affinity == TextAffinity.upstream ? position.offset - 1 : position.offset);

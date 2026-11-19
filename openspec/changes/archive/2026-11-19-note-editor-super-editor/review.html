@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · note-editor-super-editor</title>
+<title>Review · 2026-11-19-note-editor-super-editor</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -451,11 +451,11 @@
 })();
 </script>
 </head>
-<body data-change="note-editor-super-editor" data-own-back>
+<body data-change="2026-11-19-note-editor-super-editor" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>note-editor-super-editor</h1>
+  <h1>2026-11-19-note-editor-super-editor</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Tap a picture to see it full screen.</span></p>
@@ -702,6 +702,9 @@ p { font-size: 17px; line-height: 1.45; }
 <li class="decision card" id="decision-38" data-note="decision-38" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-19</p>Check: task 7.3 ran on the web page built from this commit with made-up notes in a local browser, at computer and phone width, because a preview page can't sign in; the Mac app was not opened, because no Mac runs here; its build passes in CI, and the Mac and the web page share the same mouse code. A triple-click selected one item and not its <i>Why:</i> line, a double-click selected one word, a pasted plan showed 1, 2, 3 with its <i>Why:</i> lines, a styled paste counted on past a sub-list, and the spacing was even.</li>
 <li class="decision card" id="decision-39" data-note="decision-39" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-19</p>Check: the iPhone tour's <i>paste-menu</i> step opens the menu from a tap on the cursor, not from a second hold, because a hold now selects words and a paste over the same words looks unchanged; the first run failed only on that, and its video shows the paste put the words in with no question.</li>
 <li class="decision card" id="decision-40" data-note="decision-40" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-19</p>Check: the <i>paste-menu</i> step now opens the menu with two taps right of the title, not with two taps on the words, because a tap on selected words only shows the menu again, so the paste went over the same words a second time; this replaces the entry before.</li>
+<li class="decision card" id="decision-41" data-note="decision-41" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-19</p>Check: the iPhone check (run 44445745517) passed its tour, and the iPhone's own Paste of a plan put on the pasteboard from outside the app showed no <i>Allow Paste?</i> question, kept 1 and 2 with each <i>Why:</i> line under its item, and had even spacing; a triple-tap on the iPhone was not seen there, because the check's taps are too slow to count as three, so the touch triple-tap rests on the widget tests.</li>
+<li class="decision card" id="decision-42" data-note="decision-42" tabindex="0"><p class="meta"><span class="tag asked">asked</span>2026-11-19</p>Asked whether to delete the iPhone check run started on main by mistake, which failed main's checks and stopped publishing → chose to delete the run.</li>
+<li class="decision card" id="decision-43" data-note="decision-43" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-19</p>Archived for publishing: every task is done, and the iPhone, web and CI checks passed on the last save.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>

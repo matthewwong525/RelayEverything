@@ -1,6 +1,6 @@
 # Proposal
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** `triple-click-selects-whole-line`
 **Open questions:** none
 
@@ -97,3 +97,6 @@ Editing a note does not feel like a good document editor. A triple-click does no
 - **2026-11-19** — Check: task 7.3 ran on the web page built from this commit with made-up notes in a local browser, at computer and phone width, because a preview page can't sign in; the Mac app was not opened, because no Mac runs here; its build passes in CI, and the Mac and the web page share the same mouse code. A triple-click selected one item and not its *Why:* line, a double-click selected one word, a pasted plan showed 1, 2, 3 with its *Why:* lines, a styled paste counted on past a sub-list, and the spacing was even.
 - **2026-11-19** — Check: the iPhone tour's *paste-menu* step opens the menu from a tap on the cursor, not from a second hold, because a hold now selects words and a paste over the same words looks unchanged; the first run failed only on that, and its video shows the paste put the words in with no question.
 - **2026-11-19** — Check: the *paste-menu* step now opens the menu with two taps right of the title, not with two taps on the words, because a tap on selected words only shows the menu again, so the paste went over the same words a second time; this replaces the entry before.
+- **2026-11-19** — Check: the iPhone check (run 44445745517) passed its tour, and the iPhone's own Paste of a plan put on the pasteboard from outside the app showed no *Allow Paste?* question, kept 1 and 2 with each *Why:* line under its item, and had even spacing; a triple-tap on the iPhone was not seen there, because the check's taps are too slow to count as three, so the touch triple-tap rests on the widget tests.
+- **2026-11-19** — Asked whether to delete the iPhone check run started on main by mistake, which failed main's checks and stopped publishing → chose to delete the run.
+- **2026-11-19** — Archived for publishing: every task is done, and the iPhone, web and CI checks passed on the last save.

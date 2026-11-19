@@ -36,5 +36,5 @@
 ## 7. Checks
 
 - [x] 7.1 Run `flutter analyze` and `flutter test` in `mobile/`; verify both are clean.
-- [ ] 7.2 Run the iPhone simulator check (`mobile/device-check`) with a native *Paste* from another app; verify no *Allow Paste?* question shows and the pasted list keeps its numbers.
+- [x] 7.2 Run the iPhone simulator check (`mobile/device-check`) with a native *Paste* from another app; verify no *Allow Paste?* question shows and the pasted list keeps its numbers.
 - [x] 7.3 `/save` and open the preview builds; verify on the Mac app and the web page that a triple-click selects one line, a pasted plan keeps 1, 2, 3 with its `Why:` lines, and the spacing is even.

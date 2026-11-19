@@ -2685,6 +2685,44 @@ void main() {
     }, variant: TargetPlatformVariant.only(TargetPlatform.android));
   });
 
+  testWidgets('Tab and Shift+Tab move every picked list item a level in and out, not only the last', (tester) async {
+    const words = '# Chores\n* Rinse the cups\n* Feed the cat\n* Wipe the bench';
+    relay.entries = [Entry(id: 'n1', text: words, at: now)];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Notes');
+    await tester.tap(find.text('Chores'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(onLetter(tester, note(tester).text.indexOf('cat'), 0.5));
+    await tester.pump(const Duration(milliseconds: 300));
+    final text = note(tester).text;
+    note(tester).select(TextSelection(baseOffset: text.indexOf('cups'), extentOffset: text.indexOf('bench')));
+    await tester.pump();
+    List<int> levels() => [for (final node in note(tester).nodes.skip(1)) indentOf(node)];
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(levels(), [1, 1, 1]);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump();
+    expect(levels(), [0, 0, 0]);
+    expect(markdownOf(tester), words);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('the cursor on a computer takes the words colour, so it shows on a dark page', (tester) async {
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    relay.entries = [Entry(id: 'n1', text: '# Chores\nFeed the cat', at: now)];
+    await tester.pumpWidget(RelayApp(relay: relay));
+    await openFolder(tester, 'Notes');
+    await tester.tap(find.text('Chores'));
+    await tester.pumpAndSettle();
+    final caret = tester.widget<SuperEditor>(find.byType(SuperEditor)).documentOverlayBuilders
+      .whereType<DefaultCaretOverlayBuilder>().single.caretStyle.color;
+    expect(caret, Theme.of(tester.element(find.byType(SuperEditor))).colorScheme.onSurface);
+    expect(caret.computeLuminance(), greaterThan(0.5), reason: 'a light cursor on the dark page');
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
   group('photos', () {
     const denied = "Photo access is off. Turn it on in the phone's Settings.";
 

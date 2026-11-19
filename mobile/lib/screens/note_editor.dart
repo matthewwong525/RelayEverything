@@ -670,6 +670,12 @@ class NoteEditorState extends State<NoteEditor> {
         return ExecutionInstruction.haltExecution;
       }
     }
+    // The editor's own Tab moves only the selection's last line: a selection moves every line it touches.
+    final selection = _editing.composer.selection;
+    if (key == LogicalKeyboardKey.tab && !command && !keys.isAltPressed && selection != null && !selection.isCollapsed) {
+      NoteCommands(_editing).indent(!keys.isShiftPressed);
+      return ExecutionInstruction.haltExecution;
+    }
     if (key == LogicalKeyboardKey.backspace && !command && !keys.isAltPressed && !keys.isShiftPressed &&
         _editing.backspaceTakesBlock()) {
       return ExecutionInstruction.haltExecution;
@@ -1286,6 +1292,11 @@ class NoteEditorState extends State<NoteEditor> {
         stylesheet: noteStylesheet(context, padding: const EdgeInsets.symmetric(horizontal: 20)),
         selectionStyle: SelectionStyles(
           selectionColor: Theme.of(context).textSelectionTheme.selectionColor ?? brand.accentSoft),
+        // The editor's computer cursor is black by default, which a dark page hides: it takes the words' colour.
+        documentOverlayBuilders: [
+          ...defaultSuperEditorDocumentOverlayBuilders.where((layer) => layer is! DefaultCaretOverlayBuilder),
+          DefaultCaretOverlayBuilder(caretStyle: CaretStyle(width: 2, color: Theme.of(context).colorScheme.onSurface)),
+        ],
         componentBuilders: [
           NoteLineComponentBuilder(onTick: _trash ? null : _tick,
             hint: above.isNotEmpty ? 'Add notes…' : 'What do you want to keep?'),

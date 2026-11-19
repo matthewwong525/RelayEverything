@@ -424,7 +424,9 @@ abstract class Relay extends ChangeNotifier {
   ModelState get speechModel;
   double get modelProgress;
   ModelProblem? get modelProblem;
-  /// The model's size, to show before the person agrees.
+  /// The model's download size, to show before the person agrees.
+  int get modelDownloadBytes;
+  /// What the model takes on the phone, to show in Settings.
   int get modelBytes;
   /// The app shows *Get the speech model?*; *Not now* leaves it missing.
   void askSpeechModel();

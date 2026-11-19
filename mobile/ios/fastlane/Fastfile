@@ -4,9 +4,13 @@ require "base64"
 require "shellwords"
 require "tmpdir"
 
-# The speech package looks up these functions in the app when it runs. An archive that left one out, or stripped it,
-# writes no words on the phone. Runner keeps them with -Wl,-u and STRIP_STYLE = non-global in project.pbxproj.
-SPEECH_PARTS = %w[_wf_run _wf_context_create _wf_job_create _wf_last_error].freeze
+# sherpa_onnx looks up these functions in the app when it runs: the ones one offline decode needs. They are in its
+# dynamic framework, SherpaOnnxC, which keeps its names. An archive that left one out, or stripped it, writes no words
+# on the phone. STRIP_STYLE = non-global in project.pbxproj keeps a later static library safe too.
+SPEECH_PARTS = %w[
+  _SherpaOnnxCreateOfflineRecognizer _SherpaOnnxCreateOfflineStream _SherpaOnnxAcceptWaveformOffline
+  _SherpaOnnxDecodeOfflineStream _SherpaOnnxGetOfflineStreamResultAsJson
+].freeze
 
 # Stops the lane before TestFlight when the app in the exported .ipa, or one of its frameworks, lacks a speech part.
 # The export can strip the app again after the archive, so the check reads the exact file TestFlight gets.

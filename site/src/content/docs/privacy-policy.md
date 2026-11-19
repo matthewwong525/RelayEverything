@@ -45,7 +45,7 @@ These services handle data so that the shared server works. Each one has its own
 | Cloudflare | Runs the shared server: its code, your space, the account list, the file store, the webhook queue, and the email that sends sign-in codes | All the data on the shared server | [Cloudflare's privacy policy](https://www.cloudflare.com/privacypolicy/) |
 | Apple | **Continue with Apple**; on an iPhone, Apple Health and the phone's address lookup | Your sign-in with Apple; the coordinates of a place to name | [Apple's privacy policy](https://www.apple.com/legal/privacy/) |
 | Google | **Continue with Google**; on Android, Health Connect and the phone's address lookup | Your sign-in with Google; the coordinates of a place to name | [Google's privacy policy](https://policies.google.com/privacy) |
-| Hugging Face | Gives the speech model for voice notes, one time, after you tap **Get it** | The phone's internet address, as with any download, and no note | [Hugging Face's privacy policy](https://huggingface.co/privacy) |
+| GitHub | Gives the speech model for voice notes, one time, after you tap **Get it** | The phone's internet address, as with any download, and no note | [GitHub's privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement) |
 
 Apple Health and Health Connect keep your health data on your phone. The app reads it there, and sends it only to your space.
 

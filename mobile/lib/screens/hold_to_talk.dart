@@ -144,7 +144,7 @@ Future<void> askForModel(BuildContext context, Relay relay) async {
     return _say(context, 'The speech model is still coming. You can type notes now.');
   }
   relay.askSpeechModel();
-  final yes = await showDialog<bool>(context: context, builder: (context) => ModelDialog(bytes: relay.modelBytes));
+  final yes = await showDialog<bool>(context: context, builder: (context) => ModelDialog(bytes: relay.modelDownloadBytes));
   if (yes == true) {
     unawaited(relay.getSpeechModel());
   } else {

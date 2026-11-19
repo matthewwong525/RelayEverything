@@ -4,7 +4,10 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show protected, visibleForTesting;
-import 'package:whisper_cpp_flutter_plus/whisper_cpp_flutter_plus.dart';
+import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
+
+import 'model.dart' show SpeechModelInfo;
+import 'wave.dart' show soundOfWav;
 
 /// One recording's writing, so a time limit stops this recording and no other.
 class WordsJob {
@@ -36,7 +39,7 @@ class WordsJob {
   }
 }
 
-/// Writes the words of one recording. The app's is whisper.cpp on the phone; a test's is a fake.
+/// Writes the words of one recording. The app's is sherpa-onnx on the phone; a test's is a fake.
 abstract class Transcriber {
   // One recording at a time, in order: the engine takes one job. This completes when the last job ends.
   Future<void> _last = Future.value();
@@ -79,11 +82,16 @@ abstract class Transcriber {
   Future<void> close() => _last;
 }
 
+/// One recording's sound, as the speech engine reads it.
+typedef Sound = ({Float32List samples, int sampleRate});
+
 /// Reads a WAV file in a background isolate. It is top-level, so its closure holds only [path]: a closure in a method
 /// can hold `this`, and a [Future] in `this` can not go to an isolate, so [Isolate.run] throws an [ArgumentError].
-Future<Float32List> _readWav(String path) => Isolate.run(() => WhisperAudio.readWav(File(path)));
+/// A file that is not a 16-bit PCM WAV has no sound.
+Future<Sound> _readWav(String path) => Isolate.run(() =>
+  soundOfWav(File(path).readAsBytesSync()) ?? (samples: Float32List(0), sampleRate: 16000));
 
-// A mark whisper.cpp writes for a sound with no words: [BLANK_AUDIO], [ Silence ], [MUSIC].
+// A mark a speech model can write for a sound with no words: [BLANK_AUDIO], [ Silence ], [MUSIC].
 final _bracketed = RegExp(r'\[[^\]]*\]');
 // A segment wholly in round brackets is a sound too: (music), (wind blowing).
 final _onlySounds = RegExp(r'^(\s*\([^)]*\)\s*)+$');
@@ -91,8 +99,7 @@ final _onlySounds = RegExp(r'^(\s*\([^)]*\)\s*)+$');
 final _noLetters = RegExp(r'^[^\p{L}\p{N}]*$', unicode: true);
 final _spaces = RegExp(r'\s+');
 
-/// The words of [segments] with whisper.cpp's no-speech marks taken out, one space between words. Empty when no
-/// segment holds a word.
+/// The words of [segments] with no-speech marks taken out, one space between words. Empty when no segment holds a word.
 String cleanWords(Iterable<String> segments) {
   final kept = <String>[];
   for (final segment in segments) {
@@ -103,17 +110,21 @@ String cleanWords(Iterable<String> segments) {
   return kept.join(' ').replaceAll(_spaces, ' ').trim();
 }
 
-/// An iPhone runs whisper.cpp on the CPU, on a phone and on the simulator. iOS refuses GPU (Metal) work from an app
-/// that is not on the screen, such as when a watch note starts it, and a refused run fails the note. The simulator's
-/// Metal driver also traps when whisper.cpp loads its model there. Other phones keep the default. A test gives [ios].
-WhisperConfig whisperConfig({bool? ios}) =>
-  (ios ?? Platform.isIOS) ? const WhisperConfig(backend: WhisperBackend.cpu) : const WhisperConfig();
-
 /// True when a run that failed must let its engine go, so the next recording loads a new one: a native error can stay
-/// in the engine and fail each later run. A run the app [cancelled] at the time limit keeps it: the engine did no wrong.
+/// in the engine and fail each later run. A run the app [cancelled] at the time limit has let it go already: its cancel
+/// stopped the engine.
 bool dropsEngine({required bool cancelled}) => !cancelled;
 
-final _engineCode = RegExp(r'whisper_full failed with code (-?\d+)');
+/// An error from the speech engine, with its own words.
+class SpeechEngineException implements Exception {
+  const SpeechEngineException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 final _lineBreaks = RegExp(r'\s+');
 
 /// The reason a recording's words did not come, as the note's page shows it after *Why:*. It stays on the phone.
@@ -126,99 +137,172 @@ String whyNoWords(Object error) {
       ? '$minutes minute${minutes == 1 ? '' : 's'}' : '$seconds second${seconds == 1 ? '' : 's'}';
     return 'the phone took more than $words.';
   }
-  final text = (error is WhisperException ? error.message : '$error').replaceAll(_lineBreaks, ' ').trim();
-  final code = _engineCode.firstMatch(text);
-  if (code != null) return 'the speech engine stopped (code ${code.group(1)}).';
+  final text = '$error'.replaceAll(_lineBreaks, ' ').trim();
   return 'the speech engine stopped (${text.length > 80 ? text.substring(0, 80) : text}).';
 }
 
-/// One run of a [SpeechEngine]: the text of each segment, and what asks the engine to stop.
-typedef SpeechRun = ({Future<List<String>> segments, void Function() cancel});
-
-/// A loaded speech engine, as [WhisperTranscriber] uses it. The app's is whisper.cpp; a test's is a fake, because the
-/// package's engine and task are final classes.
+/// A loaded speech engine, as [SherpaTranscriber] uses it. The app's is sherpa-onnx in a worker isolate; a test's is a
+/// fake.
 abstract interface class SpeechEngine {
-  /// Starts one run on 16 kHz mono [samples].
-  SpeechRun run(Float32List samples);
+  /// The text of one recording's [sound]. One run at a time.
+  Future<String> run(Sound sound);
 
-  /// Frees the engine. It can throw while a run still holds it.
+  /// Stops the engine at once, such as at the time limit: the run fails, the engine is not used again, and it frees
+  /// its model once a native call that runs now returns.
+  void kill();
+
+  /// Frees the engine once its run ends: after a failed run, or before *Remove* deletes the model.
   void dispose();
 }
 
-/// whisper.cpp's engine, with the app's settings: [whisperConfig], English, and no marks for sounds.
-final class _Whisper implements SpeechEngine {
-  _Whisper(this._engine);
+/// The sherpa-onnx settings that load [model] from the folder [folder]: CPU, on 2 threads. Each of the model's files
+/// goes where its role says. The CPU works on every phone, with the app not on the screen, such as when a watch note
+/// starts it, and on the simulator.
+sherpa.OfflineRecognizerConfig sherpaConfig(SpeechModelInfo model, String folder) {
+  final paths = {for (final file in model.files) file.role: '$folder/${file.name}'};
+  String path(String role) => paths[role] ?? (throw ArgumentError('${model.id} has no $role file'));
+  return switch (model.kind) {
+    'nemo_transducer' || 'transducer' => sherpa.OfflineRecognizerConfig(model: sherpa.OfflineModelConfig(
+      transducer: sherpa.OfflineTransducerModelConfig(encoder: path('encoder'), decoder: path('decoder'),
+        joiner: path('joiner')),
+      tokens: path('tokens'), modelType: model.kind, numThreads: 2, provider: 'cpu', debug: false)),
+    _ => throw ArgumentError('sherpa-onnx can not load a ${model.kind} model here'),
+  };
+}
 
-  static Future<SpeechEngine> load(String modelPath) async =>
-    _Whisper(await WhisperEngine.load(modelPath, config: whisperConfig()));
+/// sherpa-onnx in its own long-lived isolate: a decode is a native call that blocks its isolate, and a loaded
+/// recognizer can not move between isolates. The worker loads the model once, then decodes one recording per message.
+/// The worker is never killed: sherpa-onnx sets no native finalizer, so only the worker's own `recognizer.free()` lets
+/// the model's memory go. A killed worker keeps it until the app closes.
+final class _SherpaWorker implements SpeechEngine {
+  _SherpaWorker._(this._send, this._answers);
 
-  final WhisperEngine _engine;
+  final SendPort _send;
+  final StreamIterator<Object?> _answers;
+  bool _stopped = false;
 
-  @override
-  SpeechRun run(Float32List samples) {
-    final task = _engine.transcribe(samples, options: const TranscribeOptions(language: 'en', suppressNonSpeechTokens: true));
-    return (segments: task.result.then((result) => [for (final segment in result.segments) segment.text]), cancel: task.cancel);
+  static Future<SpeechEngine> load(SpeechModelInfo model, String folder) async {
+    final port = ReceivePort();
+    final isolate = await Isolate.spawn(_work, (port.sendPort, sherpaConfig(model, folder)), onExit: port.sendPort,
+      onError: port.sendPort, debugName: 'speech-engine');
+    final answers = StreamIterator<Object?>(port);
+    final first = await answers.moveNext() ? answers.current : null;
+    if (first is SendPort) return _SherpaWorker._(first, answers);
+    port.close();
+    isolate.kill(priority: Isolate.immediate);
+    throw _errorOf(first);
   }
 
   @override
-  void dispose() => _engine.dispose();
+  Future<String> run(Sound sound) async {
+    if (_stopped) throw const SpeechEngineException('The speech engine stopped');
+    _send.send(sound);
+    final answer = await _answers.moveNext() ? _answers.current : null;
+    if (answer is String) return answer;
+    throw _errorOf(answer);
+  }
+
+  // Dart can not stop a native decode, so a kill stops only the wait: the run fails now, and the worker frees the
+  // recognizer once its decode returns. Its answer goes nowhere.
+  @override
+  void kill() => dispose();
+
+  @override
+  void dispose() {
+    if (_stopped) return;
+    _stopped = true;
+    // The worker frees the recognizer and ends once its run ends. The cancel ends a run that waits now.
+    _send.send(null);
+    unawaited(_answers.cancel());
+  }
+
+  static Object _errorOf(Object? answer) => switch (answer) {
+    (String error,) => SpeechEngineException(error),
+    [final error, _] => SpeechEngineException('$error'),
+    _ => const SpeechEngineException('The speech engine stopped'),
+  };
 }
 
-/// whisper.cpp through `whisper_cpp_flutter_plus`. The model loads at the first recording and stays loaded, until a run
-/// fails: then the next recording loads it again ([dropsEngine]). The binding loads the model and writes the words in a
-/// background isolate, and the WAV file is read in one too, so the timeline never stops.
-class WhisperTranscriber extends Transcriber {
-  /// A test gives [loadEngine]; the app loads whisper.cpp.
-  WhisperTranscriber(this.modelPath, {@visibleForTesting Future<SpeechEngine> Function(String modelPath)? loadEngine})
-    : _load = loadEngine ?? _Whisper.load;
+/// The worker isolate: it loads the recognizer, sends back its port, then answers each sound with its text, or with a
+/// one-item record that holds the error. A null message frees the recognizer and ends the worker.
+void _work((SendPort, sherpa.OfflineRecognizerConfig) job) {
+  final (answer, config) = job;
+  final sherpa.OfflineRecognizer recognizer;
+  try {
+    sherpa.initBindings();
+    recognizer = sherpa.OfflineRecognizer(config);
+  } on Object catch (error) {
+    answer.send((_message(error),));
+    return;
+  }
+  final inbox = ReceivePort();
+  answer.send(inbox.sendPort);
+  inbox.listen((message) {
+    if (message is! Sound) {
+      recognizer.free();
+      inbox.close();
+      return;
+    }
+    try {
+      final stream = recognizer.createStream();
+      try {
+        stream.acceptWaveform(samples: message.samples, sampleRate: message.sampleRate);
+        recognizer.decode(stream);
+        answer.send(recognizer.getResult(stream).text);
+      } finally {
+        stream.free();
+      }
+    } on Object catch (error) {
+      answer.send((_message(error),));
+    }
+  });
+}
 
-  /// Where the speech model is; [SpeechModel] keeps it there.
-  final Future<String> Function() modelPath;
+String _message(Object error) => '$error'.replaceFirst(RegExp(r'^Exception: '), '');
 
-  final Future<SpeechEngine> Function(String modelPath) _load;
+/// sherpa-onnx through its `sherpa_onnx` package. The model loads at the first recording and stays loaded in its worker
+/// isolate, until a run fails: then the engine frees its model, and the next recording loads it again ([dropsEngine]).
+/// sherpa-onnx has no cancel, so the time limit stops the wait, the worker frees its model once its decode returns, and
+/// the next recording loads a new one. The WAV file is read in a background isolate too, so the timeline never stops.
+class SherpaTranscriber extends Transcriber {
+  /// A test gives [loadEngine]; the app loads sherpa-onnx.
+  SherpaTranscriber(this.model, this.folder,
+    {@visibleForTesting Future<SpeechEngine> Function(SpeechModelInfo model, String folder)? loadEngine})
+    : _load = loadEngine ?? _SherpaWorker.load;
+
+  /// Which model to load.
+  final SpeechModelInfo model;
+  /// The folder that holds the model's files; [SpeechModel] keeps them there.
+  final Future<String> Function() folder;
+
+  final Future<SpeechEngine> Function(SpeechModelInfo model, String folder) _load;
   SpeechEngine? _engine;
 
   @override
   @protected
   Future<String> write(File wav, WordsJob job) async {
-    final samples = await _readWav(wav.path);
-    if (samples.isEmpty) return '';
-    final engine = _engine ??= await _load(await modelPath());
+    final sound = await _readWav(wav.path);
+    if (sound.samples.isEmpty) return '';
+    final engine = _engine ??= await _load(model, await folder());
     // The time limit can pass while the WAV or the model loads: then the engine starts no job.
     if (job.cancelled) throw StateError('Cancelled at the time limit');
+    job.onCancel(() {
+      if (identical(_engine, engine)) _engine = null;
+      engine.kill();
+    });
     try {
-      final run = engine.run(samples);
-      // The native run starts later, in a new isolate, and clears the cancel flag as it starts: a cancel before then is
-      // lost. So once cancelled, cancel again every 100 ms until the result comes. The package frees the native job in
-      // its own listener on the result, which runs before the segments complete and before any tick, so no tick can
-      // touch a freed job.
-      var running = true;
-      Timer? again;
-      run.segments.whenComplete(() {
-        running = false;
-        again?.cancel();
-      }).ignore();
-      job.onCancel(() {
-        if (!running) return;
-        run.cancel();
-        again = Timer.periodic(const Duration(milliseconds: 100), (_) => run.cancel());
-      });
-      return cleanWords(await run.segments);
+      return cleanWords([await engine.run(sound)]);
     } catch (_) {
       if (dropsEngine(cancelled: job.cancelled)) _drop(engine);
       rethrow;
     }
   }
 
-  // Lets go of an engine whose run failed. The package counts the job as ended before this code runs, so dispose does
-  // not refuse; if it still does, the field clears anyway, and the next recording loads a new engine.
+  // Lets go of an engine whose run failed, and frees its model: the engine is idle now. The next recording loads a new
+  // one.
   void _drop(SpeechEngine engine) {
     if (identical(_engine, engine)) _engine = null;
-    try {
-      engine.dispose();
-    } on Object {
-      // A job still holds it: its native memory stays until the app closes.
-    }
+    engine.dispose();
   }
 
   @override

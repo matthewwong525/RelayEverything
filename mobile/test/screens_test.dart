@@ -328,7 +328,8 @@ class FakeRelay extends Relay {
   @override ModelState speechModel = ModelState.ready;
   @override double modelProgress = 0;
   @override ModelProblem? modelProblem;
-  @override int modelBytes = 59721011;
+  @override int modelDownloadBytes = 108035095;
+  @override int modelBytes = 136490421;
   @override DateTime? listening;
   /// What the recording screen's bars draw while listening: a test adds levels to it.
   final levels = StreamController<double>.broadcast();
@@ -4336,7 +4337,7 @@ void main() {
       await holdNewNote(tester);
       await tester.pumpAndSettle();
       expect(find.text('Get the speech model?'), findsOneWidget);
-      expect(find.textContaining('57 MB'), findsOneWidget);
+      expect(find.textContaining('103 MB'), findsOneWidget);
       expect(find.textContaining('write your words itself, with no server.'), findsOneWidget);
       await tester.tap(find.text('Not now'));
       await tester.pumpAndSettle();
@@ -4457,12 +4458,12 @@ void main() {
       await tester.pumpWidget(RelayApp(relay: relay));
       await openSettings(tester);
       expect(find.text('Voice notes'), findsOneWidget);
-      expect(find.text('On this phone, 57 MB. It writes your words with no server.'), findsOneWidget);
+      expect(find.text('On this phone, 130 MB. It writes your words with no server.'), findsOneWidget);
       await tester.tap(find.text('Remove'));
       await tester.pumpAndSettle();
       expect(relay.calls, ['remove model']);
       expect(find.text('Remove'), findsNothing);
-      expect(find.textContaining('Not on this phone'), findsOneWidget);
+      expect(find.text('Not on this phone. Your first voice note asks to get it, 103 MB.'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
       await holdNewNote(tester);

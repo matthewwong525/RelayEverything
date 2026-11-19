@@ -21,8 +21,7 @@ import 'package:relay_app/sync/health.dart';
 import 'package:relay_app/sync/motion.dart';
 import 'package:relay_app/sync/native.dart';
 import 'package:relay_app/sync/photos.dart';
-import 'package:relay_app/voice/model.dart';
-import 'package:whisper_cpp_flutter_plus/whisper_cpp_flutter_plus.dart' show WhisperException;
+import 'package:relay_app/voice/transcriber.dart' show SpeechEngineException;
 
 import 'fakes.dart';
 
@@ -2038,7 +2037,8 @@ void main() {
       await relay.load();
       final errors = <Object, String>{
         TimeoutException('No words', const Duration(minutes: 2)): 'the phone took more than 2 minutes.',
-        const WhisperException('whisper_full failed with code -6'): 'the speech engine stopped (code -6).',
+        const SpeechEngineException('Failed to create offline stream'):
+          'the speech engine stopped (Failed to create offline stream).',
         StateError('engine'): 'the speech engine stopped (Bad state: engine).',
       };
       for (final MapEntry(key: error, value: why) in errors.entries) {
@@ -2059,7 +2059,7 @@ void main() {
     test('a return to the app writes the words of a failed note again, with no tap', () async {
       final relay = voiceController();
       await relay.load();
-      transcriber.error = const WhisperException('whisper_full failed with code -6');
+      transcriber.error = const SpeechEngineException('Failed to create offline stream');
       await hold(relay, const Duration(seconds: 2));
       await relay.wordsWritten();
       expect(only(relay.entries.single).failed, isTrue);
@@ -2077,7 +2077,7 @@ void main() {
     test('a note that fails again on each return to the app tells once; a different note that fails tells again', () async {
       final relay = voiceController();
       await relay.load();
-      transcriber.error = const WhisperException('whisper_full failed with code -6');
+      transcriber.error = const SpeechEngineException('Failed to create offline stream');
       await hold(relay, const Duration(seconds: 2));
       await relay.wordsWritten();
       await pumpEventQueue();
@@ -2125,7 +2125,7 @@ void main() {
     test('a note after a failed note gets its words', () async {
       final relay = voiceController();
       await relay.load();
-      transcriber.error = const WhisperException('whisper_full failed with code -6');
+      transcriber.error = const SpeechEngineException('Failed to create offline stream');
       await hold(relay, const Duration(seconds: 2));
       await relay.wordsWritten();
       transcriber.error = null;
@@ -2139,7 +2139,7 @@ void main() {
     });
 
     test('first voice note: with no model, the app records nothing and gets nothing until the person says yes', () async {
-      File('${folder.path}/speech-model/$modelName').deleteSync();
+      modelFolder(folder).deleteSync(recursive: true);
       final relay = voiceController();
       await relay.load();
       expect(relay.speechModel, ModelState.missing);
@@ -2157,8 +2157,40 @@ void main() {
       expect(only(relay.entries.single).transcript, isNotEmpty);
     });
 
+    test('an update with a new speech model: the old model goes, the voice note keeps its recording and words, and the '
+        'next voice note asks first', () async {
+      final relay = voiceController();
+      await relay.load();
+      await hold(relay, const Duration(seconds: 2));
+      await relay.wordsWritten();
+      final kept = only(relay.entries.single);
+      relay.dispose();
+      // The update: the phone has whisper.cpp's model and a stopped download of it, and not the new model.
+      modelFolder(folder).deleteSync(recursive: true);
+      final old = [for (final name in ['ggml-base.en-q5_1.bin', 'ggml-base.en-q5_1.bin.part'])
+        File('${folder.path}/speech-model/$name')..writeAsBytesSync([1, 2, 3])];
+      final started = microphone.calls.length;
+      transcriber = FakeTranscriber();
+      final updated = voiceController();
+      await updated.load();
+      await updated.wordsWritten();
+      expect(updated.speechModel, ModelState.missing);
+      expect([for (final file in old) file.existsSync()], [false, false]);
+      final note = only(updated.entries.single);
+      expect([note.recording, note.transcript, note.failed, note.writing],
+        [kept.recording, 'Ask the fab if the flex stiffener can be 0.2 mm', false, false]);
+      expect(File('${folder.path}/${note.recording}').existsSync(), isTrue);
+      expect(transcriber.heard, isEmpty);
+      // The next voice note records nothing and gets nothing until the person says yes.
+      expect(await updated.startVoiceNote(), isNull);
+      expect([updated.listening, microphone.calls.length, models.requests], [null, started, isEmpty]);
+      updated.askSpeechModel();
+      expect([updated.speechModel, models.requests], [ModelState.asking, isEmpty]);
+      updated.dispose();
+    });
+
     test('a damaged download is deleted, voice notes stay off, and the app offers to try again', () async {
-      File('${folder.path}/speech-model/$modelName').deleteSync();
+      modelFolder(folder).deleteSync(recursive: true);
       models.file = List<int>.filled(modelFile.length, 0);
       final relay = voiceController();
       await relay.load();
@@ -2175,7 +2207,7 @@ void main() {
       final relay = voiceController();
       await relay.load();
       await relay.removeSpeechModel();
-      expect([relay.speechModel, transcriber.closed, File('${folder.path}/speech-model/$modelName').existsSync()],
+      expect([relay.speechModel, transcriber.closed, modelFolder(folder).existsSync()],
         [ModelState.missing, 1, false]);
     });
 

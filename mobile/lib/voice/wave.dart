@@ -24,14 +24,37 @@ List<double> levelsOfWav(Uint8List bytes, {int bars = 48}) {
   return [for (final level in rms) level / loudest];
 }
 
-/// The 16-bit samples after a WAV's `data` chunk header, or null when [bytes] are not a 16-bit PCM WAV. A `data` size
-/// the recorder did not write, such as 0 or more than the file holds, reads to the end of the file.
-Int16List? _samplesOf(Uint8List bytes) {
+/// A 16-bit PCM WAV's sound as the speech engine reads it: mono samples from -1 to 1, and their sample rate. Null when
+/// [bytes] are not a 16-bit PCM WAV. A recording with more than one channel is mixed down to one.
+({Float32List samples, int sampleRate})? soundOfWav(Uint8List bytes) {
+  final wav = _wavOf(bytes);
+  if (wav == null) return null;
+  final (:samples, :sampleRate, :channels) = wav;
+  final frames = samples.length ~/ channels;
+  final mono = Float32List(frames);
+  for (var frame = 0; frame < frames; frame++) {
+    var sum = 0;
+    for (var channel = 0; channel < channels; channel++) {
+      sum += samples[frame * channels + channel];
+    }
+    mono[frame] = sum / channels / 32768;
+  }
+  return (samples: mono, sampleRate: sampleRate);
+}
+
+/// The 16-bit samples after a WAV's `data` chunk header, or null when [bytes] are not a 16-bit PCM WAV.
+Int16List? _samplesOf(Uint8List bytes) => _wavOf(bytes)?.samples;
+
+/// A 16-bit PCM WAV's samples, as they are in the file, with its sample rate and number of channels; null when [bytes]
+/// are not one. A `data` size the recorder did not write, such as 0 or more than the file holds, reads to the end of
+/// the file.
+({Int16List samples, int sampleRate, int channels})? _wavOf(Uint8List bytes) {
   if (bytes.length < 12) return null;
   final view = ByteData.sublistView(bytes);
   String tag(int at) => String.fromCharCodes(bytes, at, at + 4);
   if (tag(0) != 'RIFF' || tag(8) != 'WAVE') return null;
   var pcm16 = false;
+  var channels = 1, sampleRate = 16000;
   var at = 12;
   while (at + 8 <= bytes.length) {
     final name = tag(at);
@@ -43,6 +66,8 @@ Int16List? _samplesOf(Uint8List bytes) {
       final bits = view.getUint16(body + 14, Endian.little);
       // 1 is PCM; 0xFFFE, the extensible format, also holds PCM in the recorders the phone uses.
       pcm16 = (format == 1 || format == 0xFFFE) && bits == 16;
+      channels = view.getUint16(body + 2, Endian.little).clamp(1, 16);
+      sampleRate = view.getUint32(body + 4, Endian.little);
     } else if (name == 'data') {
       if (!pcm16) return null;
       final left = bytes.length - body;
@@ -51,7 +76,7 @@ Int16List? _samplesOf(Uint8List bytes) {
       for (var i = 0; i < samples.length; i++) {
         samples[i] = view.getInt16(body + i * 2, Endian.little);
       }
-      return samples;
+      return (samples: samples, sampleRate: sampleRate, channels: channels);
     }
     // Chunks are padded to an even size.
     at = body + size + (size & 1);

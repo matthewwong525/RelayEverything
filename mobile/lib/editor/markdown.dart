@@ -509,7 +509,7 @@ const _closesOf = {'bold': '**', 'italic': '_', 'strike': '~~', 'underline': '</
 /// A link's marks while a line is written, swapped for `[` and `](address)` at the end: a link whose words are its
 /// address is written as the bare address, so an address shown as a link never gains brackets. Private-use letters,
 /// which no note types.
-const _linkOpen = '', _linkClose = '', _linkEnd = '';
+const _linkOpen = '\uE000', _linkClose = '\uE001', _linkEnd = '\uE002';
 
 String _openOf(String key) => key.startsWith(_linkKey) ? _linkOpen
   : key.startsWith(_markKey) ? '<mark class="${key.substring(_markKey.length)}">' : _opens[key]!;

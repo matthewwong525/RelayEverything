@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// Packages that run only on a phone: a web build with one fails, or breaks when it runs. The key store builds for the
 /// web, where the phone's Account page reaches it, and the browser never opens it.
 const phoneOnly = {
-  'whisper_cpp_flutter_plus', 'health', 'workmanager', 'photo_manager', 'device_calendar_plus', 'open_filex', 'geocoding',
+  'sherpa_onnx', 'health', 'workmanager', 'photo_manager', 'device_calendar_plus', 'open_filex', 'geocoding',
   'geolocator', 'drift', 'drift_flutter', 'path_provider',
 };
 

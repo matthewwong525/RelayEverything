@@ -46,7 +46,7 @@ Future<void> main() async {
   final model = SpeechModel(folder: getApplicationSupportDirectory, excludeFromBackup: excludeFromBackup);
   final voice = VoiceParts(model: model, recorder: VoiceRecorder(microphone: PhoneMicrophone(), folder: getApplicationSupportDirectory,
     excludeFromBackup: excludeFromBackup),
-    transcriber: WhisperTranscriber(() async => (await model.file).path), player: SoundPlayer());
+    transcriber: SherpaTranscriber(model.info, () async => (await model.directory).path), player: SoundPlayer());
   final relay = RelayController(store: openStore(), vault: KeyVault(), places: PhonePlaces(), health: PhoneHealth(), schedule: scheduleSync,
     voice: voice, native: Platform.isIOS ? PhoneBackground() : null, folder: getApplicationSupportDirectory, opener: openWithPhone,
     share: Platform.isIOS ? PhoneShareGroup() : null, calendar: PhoneCalendarSource(), photos: PhonePhotos(),

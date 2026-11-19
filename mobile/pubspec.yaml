@@ -44,8 +44,10 @@ dependencies:
   geolocator: ^14.1.2
   geocoding: ^5.0.1
   workmanager: ^0.10.10
-  # Voice notes: whisper.cpp writes the words on the phone, record keeps the sound, just_audio plays it back.
-  whisper_cpp_flutter_plus: ^0.5.1
+  # Voice notes: sherpa-onnx writes the words on the phone, archive unpacks its model, record keeps the sound, and
+  # just_audio plays it back.
+  sherpa_onnx: ^2.0.1
+  archive: ^4.0.7
   record: ^7.1.2
   just_audio: ^0.10.6
   path_provider: ^2.1.6

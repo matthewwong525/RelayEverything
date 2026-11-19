@@ -723,6 +723,7 @@ class WebRelay extends Relay {
   @override ModelState get speechModel => ModelState.missing;
   @override double get modelProgress => 0;
   @override ModelProblem? get modelProblem => null;
+  @override int get modelDownloadBytes => 0;
   @override int get modelBytes => 0;
   @override void askSpeechModel() {}
   @override void notNowSpeechModel() {}

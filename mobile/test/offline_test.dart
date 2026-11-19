@@ -163,7 +163,7 @@ void main() {
     await tester.pump();
     await until(tester, () => relay.speechModel == ModelState.ready);
     await tester.pumpAndSettle();
-    expect([for (final request in models.requests) request.url], [modelUrl]);
+    expect([for (final request in models.requests) request.url], [testSpeechModel().uri]);
     expect(models.requests.single.headers.keys.map((key) => key.toLowerCase()), isNot(contains(startsWith('cf-access'))));
     // Hold, let go, talk, tap the screen: the note's page opens, the transcript is written there, and goes nowhere.
     await holdUntilListening(tester, () => relay.listening != null);

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -7,28 +8,33 @@ import 'package:relay_app/voice/model.dart';
 import 'package:relay_app/voice/recorder.dart';
 import 'package:relay_app/voice/transcriber.dart';
 import 'package:relay_app/voice/wave.dart';
-import 'package:whisper_cpp_flutter_plus/whisper_cpp_flutter_plus.dart' show WhisperBackend, WhisperConfig, WhisperException;
 
 import 'fakes.dart';
 
-/// A speech engine whose runs give what [answer] gives; with no answer, a run ends only when it is cancelled, and fails.
+/// A speech engine whose runs give the next of [answers]; a null answer is a run that ends only when it is killed, and
+/// fails.
 class FakeSpeechEngine implements SpeechEngine {
-  FakeSpeechEngine(this.answer);
+  FakeSpeechEngine(this.answers);
 
-  final Future<List<String>> Function()? Function() answer;
-  int runs = 0, cancels = 0;
-  bool disposed = false;
+  final Queue<Future<String> Function()?> answers;
+  int runs = 0;
+  bool killed = false, disposed = false;
+  Completer<String>? _running;
 
   @override
-  SpeechRun run(Float32List samples) {
+  Future<String> run(Sound sound) {
     runs++;
-    final done = Completer<List<String>>();
-    final give = answer();
+    final done = _running = Completer<String>();
+    final give = answers.isEmpty ? null : answers.removeFirst();
     if (give != null) done.complete(give());
-    return (segments: done.future, cancel: () {
-      cancels++;
-      if (!done.isCompleted) done.completeError(const WhisperException('Transcription cancelled'));
-    });
+    return done.future;
+  }
+
+  @override
+  void kill() {
+    killed = true;
+    final running = _running;
+    if (running != null && !running.isCompleted) running.completeError(const SpeechEngineException('Killed'));
   }
 
   @override
@@ -36,12 +42,7 @@ class FakeSpeechEngine implements SpeechEngine {
 }
 
 void main() {
-  test('an iPhone, a phone or the simulator, loads whisper.cpp on the CPU; another phone keeps the default', () {
-    expect(whisperConfig(ios: true).backend, WhisperBackend.cpu);
-    expect(whisperConfig(ios: false).backend, const WhisperConfig().backend);
-  });
-
-  test('a failed run lets its engine go, but a run the app cancelled at the time limit keeps it', () {
+  test('a failed run lets its engine go, and a run the app cancelled at the time limit has let it go already', () {
     expect(dropsEngine(cancelled: false), isTrue);
     expect(dropsEngine(cancelled: true), isFalse);
   });
@@ -49,40 +50,86 @@ void main() {
   group('the speech engine', () {
     late File wav;
     late List<FakeSpeechEngine> loaded;
-    late WhisperTranscriber transcriber;
-    // What each new engine's runs give; null: a run that ends only when it is cancelled.
-    Future<List<String>> Function()? answer;
+    late List<(SpeechModelInfo, String)> loads;
+    late SherpaTranscriber transcriber;
+    // What the engines' runs give, in order; null: a run that ends only when it is killed.
+    late Queue<Future<String> Function()?> answers;
     setUp(() {
       final folder = tempFolder();
       wav = File('${folder.path}/note.wav')..writeAsBytesSync(wavOf(List.filled(1600, 1000)));
       loaded = [];
-      transcriber = WhisperTranscriber(() async => '${folder.path}/model.bin', loadEngine: (path) async {
-        final engine = FakeSpeechEngine(() => answer);
-        loaded.add(engine);
-        return engine;
-      });
+      loads = [];
+      answers = Queue();
+      transcriber = SherpaTranscriber(testSpeechModel(), () async => '${folder.path}/speech-model/test-model',
+        loadEngine: (model, path) async {
+          loads.add((model, path));
+          final engine = FakeSpeechEngine(answers);
+          loaded.add(engine);
+          return engine;
+        });
     });
 
-    test('a failed run lets its engine go, and the next recording loads a new one that it keeps', () async {
-      answer = () => Future.error(const WhisperException('whisper_full failed with code -6'));
-      await expectLater(transcriber.words(wav), throwsA(isA<WhisperException>()));
-      expect([loaded.length, loaded.single.disposed], [1, true]);
-      answer = () async => [' Order more switches.'];
-      expect(await transcriber.words(wav), 'Order more switches.');
-      expect(await transcriber.words(wav), 'Order more switches.');
-      expect([loaded.length, loaded.last.runs, loaded.last.disposed], [2, 2, false]);
+    test('loads the model once, from its folder, and writes each recording\'s words in order', () async {
+      answers.addAll([() async => ' Order more switches. ', () async => 'Call the fab.']);
+      final first = transcriber.words(wav), second = transcriber.words(wav);
+      expect([await first, await second], ['Order more switches.', 'Call the fab.']);
+      expect([loaded.length, loaded.single.runs], [1, 2]);
+      expect([loads.single.$1.id, loads.single.$2], ['test-model', endsWith('/speech-model/test-model')]);
     });
 
-    test('a run the app cancelled at the time limit keeps its engine for the next recording', () async {
-      answer = null;
-      await expectLater(transcriber.words(wav, limit: const Duration(seconds: 2)), throwsA(isA<TimeoutException>()));
-      await pumpEventQueue();
-      final engine = loaded.single;
-      expect([engine.runs, engine.cancels > 0, engine.disposed], [1, true, false]);
-      answer = () async => [' Order more switches.'];
+    test('a failed run frees its engine, and the next recording loads a new one that it keeps', () async {
+      answers.add(() => Future.error(const SpeechEngineException('Failed to create offline stream')));
+      await expectLater(transcriber.words(wav), throwsA(isA<SpeechEngineException>()));
+      expect([loaded.length, loaded.single.disposed, loaded.single.killed], [1, true, false]);
+      answers.addAll([() async => ' Order more switches.', () async => ' Order more switches.']);
       expect(await transcriber.words(wav), 'Order more switches.');
-      expect([loaded.length, engine.runs, engine.disposed], [1, 2, false]);
+      expect(await transcriber.words(wav), 'Order more switches.');
+      expect([loaded.length, loaded.last.runs, loaded.last.disposed, loaded.last.killed], [2, 2, false, false]);
     });
+
+    test('the time limit kills only its own recording\'s engine: the next recording loads a new one and gets its words',
+        () async {
+      answers.addAll([null, () async => 'Order more switches.']);
+      final late = transcriber.words(wav, limit: const Duration(seconds: 2));
+      final next = transcriber.words(wav);
+      await expectLater(late, throwsA(isA<TimeoutException>()));
+      expect(await next, 'Order more switches.');
+      expect([loaded.length, loaded.first.killed, loaded.first.runs, loaded.last.killed, loaded.last.runs],
+        [2, true, 1, false, 1]);
+    });
+
+    test('close lets the engine go, and the next recording loads it again', () async {
+      answers.addAll([() async => 'One.', () async => 'Two.']);
+      expect(await transcriber.words(wav), 'One.');
+      await transcriber.close();
+      expect(loaded.single.disposed, isTrue);
+      expect(await transcriber.words(wav), 'Two.');
+      expect([loaded.length, loaded.last.disposed], [2, false]);
+    });
+  });
+
+  group('the sherpa-onnx settings', () {
+    test('load Parakeet small\'s files by their roles, as a NeMo transducer, on the CPU with 2 threads', () {
+      final config = sherpaConfig(currentSpeechModel, '/m/parakeet-small');
+      final model = config.model;
+      expect([model.transducer.encoder, model.transducer.decoder, model.transducer.joiner, model.tokens], [
+        '/m/parakeet-small/encoder.int8.onnx', '/m/parakeet-small/decoder.int8.onnx',
+        '/m/parakeet-small/joiner.int8.onnx', '/m/parakeet-small/tokens.txt',
+      ]);
+      expect([model.modelType, model.provider, model.numThreads, model.debug], ['nemo_transducer', 'cpu', 2, false]);
+    });
+
+    test('refuse a kind of model the app can not load yet', () {
+      const whisper = SpeechModelInfo(id: 'w', name: 'W', url: 'https://example.com/w.tar.bz2', sha256: '', bytes: 0,
+        folder: 'w', kind: 'whisper', files: []);
+      expect(() => sherpaConfig(whisper, '/m/w'), throwsArgumentError);
+    });
+  });
+
+  test('a WAV\'s sound, as the speech engine reads it: mono, from -1 to 1, with its sample rate', () {
+    final sound = soundOfWav(wavOf([16384, -32768, 0, 8192]))!;
+    expect([sound.sampleRate, sound.samples], [16000, [0.5, -1.0, 0.0, 0.25]]);
+    expect(soundOfWav(Uint8List.fromList('RIFF'.codeUnits)), isNull);
   });
 
   group('why the words did not come', () {
@@ -94,13 +141,14 @@ void main() {
       expect(whyNoWords(TimeoutException('No words')), 'the phone took too long.');
     });
 
-    test('the speech engine\'s code', () {
-      expect(whyNoWords(const WhisperException('whisper_full failed with code -6')), 'the speech engine stopped (code -6).');
-      expect(whyNoWords(const WhisperException('whisper_full failed with code 3')), 'the speech engine stopped (code 3).');
+    test('the speech engine\'s own words', () {
+      expect(whyNoWords(const SpeechEngineException('Failed to create offline recognizer. Please check your config')),
+        'the speech engine stopped (Failed to create offline recognizer. Please check your config).');
     });
 
     test('any other error: its first 80 characters, on one line', () {
-      expect(whyNoWords(const WhisperException('Engine is disposed')), 'the speech engine stopped (Engine is disposed).');
+      expect(whyNoWords(const SpeechEngineException('The speech engine stopped')),
+        'the speech engine stopped (The speech engine stopped).');
       expect(whyNoWords(StateError('engine')), 'the speech engine stopped (Bad state: engine).');
       final long = whyNoWords(ArgumentError('Invalid argument:\n${'x' * 200}'));
       expect(long, 'the speech engine stopped (Invalid argument(s): Invalid argument: ${'x' * 41}).');
@@ -141,7 +189,7 @@ void main() {
   });
 
   group('the words', () {
-    test('drop whisper.cpp\'s marks for sounds with no speech', () {
+    test('drop marks for sounds with no speech', () {
       expect(cleanWords([' [BLANK_AUDIO]']), '');
       expect(cleanWords([' (music)', ' [ Silence ]']), '');
       expect(cleanWords(['(wind blowing) (birds chirping)']), '');
@@ -170,9 +218,9 @@ void main() {
       ..setUint32(36, 0x61746164, Endian.little)..setUint32(40, 0, Endian.little);
     await wav.writeAsBytes(header.buffer.asUint8List());
     var asked = 0;
-    final transcriber = WhisperTranscriber(() async {
+    final transcriber = SherpaTranscriber(testSpeechModel(), () async {
       asked++;
-      return '${folder.path}/model.bin';
+      return '${folder.path}/speech-model/test-model';
     });
     expect(await transcriber.words(wav), '');
     expect(await transcriber.words(wav), '');
@@ -189,7 +237,10 @@ void main() {
       model = speechModel(folder, server);
     });
 
-    Future<File> file() => model.file;
+    File archivePart() => File('${folder.path}/speech-model/test-model.tar.bz2.part');
+    Directory unpacking() => Directory('${folder.path}/speech-model/test-model.part');
+    List<String> entries(Directory directory) =>
+      [for (final entry in directory.listSync()) entry.uri.pathSegments.lastWhere((part) => part.isNotEmpty)]..sort();
 
     test('is missing until the person says yes, and *Not now* gets nothing', () async {
       await model.load();
@@ -201,17 +252,25 @@ void main() {
       expect(server.requests, isEmpty);
     });
 
-    test('downloads, checks its checksum, and is ready; the request carries no key', () async {
+    test('downloads the archive, checks it, keeps only the model\'s files, and is ready; the request carries no key',
+        () async {
       final progress = <double>[];
       model.addListener(() => progress.add(model.progress));
       model.ask();
       expect(await model.download(), isTrue);
       expect(model.state, ModelState.ready);
-      expect(await (await file()).readAsBytes(), modelFile);
-      expect(await File('${(await file()).path}.part').exists(), isFalse);
+      final kept = modelFolder(folder);
+      expect(entries(kept), ['model.onnx', 'tokens.txt']);
+      for (final MapEntry(key: name, value: bytes) in testModelFiles.entries) {
+        expect(File('${kept.path}/$name').readAsBytesSync(), bytes);
+      }
+      expect(entries(Directory('${folder.path}/speech-model')), ['test-model']);
+      // To 0.9 for the download, then the unpack to 1.
+      expect(progress, contains(0.9));
+      expect(progress, orderedEquals([...progress]..sort()));
       expect(progress.last, 1);
       final request = server.requests.single;
-      expect(request.url, modelUrl);
+      expect(request.url, testSpeechModel().uri);
       expect(request.method, 'GET');
       expect(request.headers.keys.map((key) => key.toLowerCase()), isNot(contains(startsWith('cf-access'))));
       expect(request.headers.keys, isNot(contains('Range')));
@@ -222,23 +281,61 @@ void main() {
     });
 
     test('a dropped download fails, and *Try again* goes on from where it stopped', () async {
-      server.dropAfter = 1000;
+      final half = modelFile.length ~/ 2;
+      server.dropAfter = half;
       expect(await model.download(), isFalse);
       expect([model.state, model.problem], [ModelState.failed, ModelProblem.offline]);
-      expect(await File('${(await file()).path}.part').length(), 1000);
-      expect(await (await file()).exists(), isFalse);
-      expect(await model.download(), isTrue);
-      expect(server.requests.last.headers['Range'], 'bytes=1000-');
-      expect(await (await file()).readAsBytes(), modelFile);
-      expect(model.state, ModelState.ready);
+      expect(await archivePart().length(), half);
+      expect(modelFolder(folder).existsSync(), isFalse);
+      // The app closed and opened again: the archive's part stays for the resume.
+      final again = speechModel(folder, server);
+      await again.load();
+      expect([again.state, archivePart().existsSync()], [ModelState.missing, true]);
+      expect(await again.download(), isTrue);
+      expect(server.requests.last.headers['Range'], 'bytes=$half-');
+      expect(entries(modelFolder(folder)), ['model.onnx', 'tokens.txt']);
+      expect([again.state, archivePart().existsSync()], [ModelState.ready, false]);
     });
 
-    test('a file with the wrong checksum is deleted, and voice notes stay off', () async {
+    test('an archive with the wrong checksum is deleted, and voice notes stay off', () async {
       server.file = List<int>.filled(modelFile.length, 1);
       expect(await model.download(), isFalse);
       expect([model.state, model.problem], [ModelState.failed, ModelProblem.damaged]);
-      expect(await (await file()).exists(), isFalse);
-      expect(await File('${(await file()).path}.part').exists(), isFalse);
+      expect([archivePart().existsSync(), unpacking().existsSync(), modelFolder(folder).existsSync()],
+        [false, false, false]);
+    });
+
+    test('an archive whose file has the wrong checksum is deleted with what came out of it, and voice notes stay off',
+        () async {
+      final bad = modelArchive(files: {...testModelFiles, 'model.onnx': List<int>.filled(4096, 9)});
+      server.file = bad;
+      final damaged = SpeechModel(folder: () async => folder, client: server.client, info: testSpeechModel(archive: bad));
+      expect(await damaged.download(), isFalse);
+      expect([damaged.state, damaged.problem], [ModelState.failed, ModelProblem.damaged]);
+      expect([archivePart().existsSync(), unpacking().existsSync(), modelFolder(folder).existsSync()],
+        [false, false, false]);
+    });
+
+    test('an archive that lacks one of the model\'s files is refused', () async {
+      final short = modelArchive(files: {'model.onnx': testModelFiles['model.onnx']!});
+      server.file = short;
+      final damaged = SpeechModel(folder: () async => folder, client: server.client, info: testSpeechModel(archive: short));
+      expect(await damaged.download(), isFalse);
+      expect([damaged.problem, modelFolder(folder).existsSync(), unpacking().existsSync()],
+        [ModelProblem.damaged, false, false]);
+    });
+
+    test('unpacks an entry whose name is too long for a plain tar header', () async {
+      final long = 'sherpa-onnx-${'x' * 120}';
+      final archive = modelArchive(folder: long);
+      final info = testSpeechModel(archive: archive);
+      final at = '${folder.path}/long.tar.bz2';
+      File(at).writeAsBytesSync(archive);
+      final into = '${folder.path}/long';
+      final named = SpeechModelInfo(id: info.id, name: info.name, url: info.url, sha256: info.sha256, bytes: info.bytes,
+        folder: long, kind: info.kind, files: info.files);
+      expect(unpackModel(named, archive: at, into: into), UnpackResult.done);
+      expect(entries(Directory(into)), ['model.onnx', 'tokens.txt']);
     });
 
     test('with no connection, it fails and offers to try again', () async {
@@ -247,29 +344,62 @@ void main() {
       expect([model.state, model.problem], [ModelState.failed, ModelProblem.offline]);
     });
 
-    test('is kept out of the phone\'s backup', () async {
+    test('each of its files is kept out of the phone\'s backup', () async {
       final marked = <String>[];
-      final kept = SpeechModel(folder: () async => folder, client: server.client, sha256: modelFileSha, bytes: modelFile.length,
+      final kept = SpeechModel(folder: () async => folder, client: server.client, info: testSpeechModel(),
         excludeFromBackup: (file) async => marked.add(file.path));
       expect(await kept.download(), isTrue);
-      expect(marked, [(await kept.file).path]);
+      final at = (await kept.directory).path;
+      expect(marked, ['$at/model.onnx', '$at/tokens.txt']);
     });
 
-    test('remove deletes it, and the next voice note asks again', () async {
-      expect(await model.download(), isTrue);
-      await model.remove();
+    test('an update deletes the old model: whisper.cpp\'s file and its part go, and the next voice note asks', () async {
+      final models = Directory('${folder.path}/speech-model')..createSync(recursive: true);
+      File('${models.path}/ggml-base.en-q5_1.bin').writeAsBytesSync([1, 2, 3]);
+      File('${models.path}/ggml-base.en-q5_1.bin.part').writeAsBytesSync([1]);
+      Directory('${models.path}/older-model/inner').createSync(recursive: true);
+      await model.load();
       expect(model.state, ModelState.missing);
-      expect(await (await file()).exists(), isFalse);
+      expect(entries(models), isEmpty);
       model.ask();
       expect(model.state, ModelState.asking);
     });
 
-    test('is the English base model, 57 MB, at a fixed revision of whisper.cpp\'s page', () {
-      expect(modelUrl.host, 'huggingface.co');
-      expect(modelUrl.path, endsWith('/ggml-base.en-q5_1.bin'));
-      expect(modelUrl.path, isNot(contains('/main/')));
-      expect(megabytes(modelSize), '57 MB');
-      expect(modelSha256, hasLength(64));
+    test('the clean-up keeps the current model and its parts', () async {
+      await placeModel(folder);
+      archivePart().writeAsBytesSync([1]);
+      unpacking().createSync();
+      await model.load();
+      expect(model.state, ModelState.ready);
+      expect(entries(Directory('${folder.path}/speech-model')),
+        ['test-model', 'test-model.part', 'test-model.tar.bz2.part']);
+    });
+
+    test('remove deletes its folder and every part, and the next voice note asks again', () async {
+      expect(await model.download(), isTrue);
+      archivePart().writeAsBytesSync([1]);
+      unpacking().createSync();
+      await model.remove();
+      expect(model.state, ModelState.missing);
+      expect(entries(Directory('${folder.path}/speech-model')), isEmpty);
+      model.ask();
+      expect(model.state, ModelState.asking);
+    });
+
+    test('the current model is Parakeet small from sherpa-onnx\'s GitHub release: a 103 MB download, 130 MB kept', () {
+      expect(speechModels, contains(currentSpeechModel));
+      expect([currentSpeechModel.id, currentSpeechModel.name, currentSpeechModel.kind],
+        ['parakeet-small', 'Parakeet small', 'nemo_transducer']);
+      expect(currentSpeechModel.uri.host, 'github.com');
+      expect(currentSpeechModel.uri.path, startsWith('/k2-fsa/sherpa-onnx/releases/download/asr-models/'));
+      expect(currentSpeechModel.bytes, 108035095);
+      expect(currentSpeechModel.keptBytes, 136490421);
+      expect([megabytes(currentSpeechModel.bytes), megabytes(currentSpeechModel.keptBytes)], ['103 MB', '130 MB']);
+      expect([for (final file in currentSpeechModel.files) file.role], ['encoder', 'decoder', 'joiner', 'tokens']);
+      final hex = RegExp(r'^[0-9a-f]{64}$');
+      expect([currentSpeechModel.sha256, for (final file in currentSpeechModel.files) file.sha256], everyElement(matches(hex)));
+      // Each id is a folder name of its own.
+      expect({for (final info in speechModels) info.id}, hasLength(speechModels.length));
     });
   });
 

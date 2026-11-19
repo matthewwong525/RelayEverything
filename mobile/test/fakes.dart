@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:health/health.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:archive/archive.dart' show Archive, ArchiveFile, BZip2Encoder, TarEncoder;
 import 'package:crypto/crypto.dart';
 import 'package:relay_app/controller.dart';
 import 'package:relay_app/data/api.dart';
@@ -455,11 +456,50 @@ Directory tempFolder() {
   return folder;
 }
 
-/// Stands in for whisper.cpp's model file: small, with its own checksum.
-final modelFile = List<int>.generate(4096, (i) => i * 7 % 256);
+/// The small files a test's speech model keeps, by name.
+final testModelFiles = {
+  'model.onnx': List<int>.generate(4096, (i) => i * 7 % 256),
+  'tokens.txt': utf8.encode('<blk> 0\nhello 1\n'),
+};
+
+/// A `.tar.bz2` as sherpa-onnx's release packs a model: each entry under `./<folder>/`, with its folder entries and a
+/// test recording the phone skips. [files] are the model's files by name; [extra] adds more entries by path.
+List<int> modelArchive({String folder = 'test-model', Map<String, List<int>>? files, Map<String, List<int>> extra = const {}}) {
+  final archive = Archive()..add(ArchiveFile.directory('./$folder/'));
+  for (final MapEntry(key: name, value: bytes) in (files ?? testModelFiles).entries) {
+    archive.add(ArchiveFile.bytes('./$folder/$name', bytes));
+  }
+  archive
+    ..add(ArchiveFile.directory('./$folder/test_wavs/'))
+    ..add(ArchiveFile.bytes('./$folder/test_wavs/0.wav', List<int>.filled(3000, 5)));
+  for (final MapEntry(key: path, value: bytes) in extra.entries) {
+    archive.add(ArchiveFile.bytes(path, bytes));
+  }
+  return BZip2Encoder().encodeBytes(TarEncoder().encodeBytes(archive));
+}
+
+/// Stands in for the speech model's archive: small, with its own checksum.
+final modelFile = modelArchive();
 final modelFileSha = sha256.convert(modelFile).toString();
 
-/// Hugging Face, for the speech model: it serves [file], resumes from a `Range`, and can drop the connection after
+/// A speech model like [currentSpeechModel], with [testModelFiles] in [modelFile].
+SpeechModelInfo testSpeechModel({List<int>? archive}) => SpeechModelInfo(
+  id: 'test-model',
+  name: 'Test model',
+  url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/test-model.tar.bz2',
+  sha256: sha256.convert(archive ?? modelFile).toString(),
+  bytes: (archive ?? modelFile).length,
+  folder: 'test-model',
+  kind: 'nemo_transducer',
+  files: [
+    SpeechModelFile('model.onnx', role: 'encoder', bytes: testModelFiles['model.onnx']!.length,
+      sha256: sha256.convert(testModelFiles['model.onnx']!).toString()),
+    SpeechModelFile('tokens.txt', role: 'tokens', bytes: testModelFiles['tokens.txt']!.length,
+      sha256: sha256.convert(testModelFiles['tokens.txt']!).toString()),
+  ],
+);
+
+/// The sherpa-onnx release on GitHub, for the speech model: it serves [file], resumes from a `Range`, and can drop the connection after
 /// [dropAfter] bytes. Every request it saw is kept.
 class ModelServer {
   ModelServer([List<int>? file]) : file = file ?? modelFile;
@@ -490,13 +530,18 @@ class ModelServer {
 }
 
 SpeechModel speechModel(Directory folder, ModelServer server) =>
-  SpeechModel(folder: () async => folder, client: server.client, sha256: modelFileSha, bytes: modelFile.length);
+  SpeechModel(folder: () async => folder, client: server.client, info: testSpeechModel());
+
+/// Where the test's speech model keeps its files once it is ready.
+Directory modelFolder(Directory folder) => Directory('${folder.path}/speech-model/test-model');
 
 /// Puts the model where [SpeechModel] keeps it, as after a download.
 Future<void> placeModel(Directory folder) async {
-  final file = File('${folder.path}/speech-model/$modelName');
-  await file.parent.create(recursive: true);
-  await file.writeAsBytes(modelFile);
+  final model = modelFolder(folder);
+  await model.create(recursive: true);
+  for (final MapEntry(key: name, value: bytes) in testModelFiles.entries) {
+    await File('${model.path}/$name').writeAsBytes(bytes);
+  }
 }
 
 /// A microphone that writes a few bytes as its recording.

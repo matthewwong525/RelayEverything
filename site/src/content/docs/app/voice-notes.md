@@ -54,21 +54,23 @@ The same rules apply: a recording shorter than 1 second keeps nothing, and a not
 
 ## When the words do not come
 
-If the phone can not write the words, or they take longer than 2 minutes (or the recording's length, if it is longer), the note shows **The words did not come** in your notes. Open it, and the recording's card says **The words did not come. Your recording is safe.** A small line under it gives the reason, such as *Why: the speech engine stopped (code -6).* or *Why: the phone took more than 2 minutes.* The reason stays on the phone. The app tells you once. The note keeps its recording, and its player still works.
+If the phone can not write the words, or they take longer than 2 minutes (or the recording's length, if it is longer), the note shows **The words did not come** in your notes. Open it, and the recording's card says **The words did not come. Your recording is safe.** A small line under it gives the reason, such as *Why: the speech engine stopped (Failed to create offline stream).* or *Why: the phone took more than 2 minutes.* The reason stays on the phone. The app tells you once. The note keeps its recording, and its player still works.
 
 Tap **Try again** on the card to write the words again. With sending on, a note waits on the phone until its recordings' words are written or have failed. A failed recording goes with no transcript, and its transcript follows when **Try again** writes it. When you come back to the app, or open it again, it also tries again by itself. A note that failed does not stop the next note: the next note gets its words.
 
 ## Get the speech model
 
-Voice notes need a speech model: a 57 MB file, one time. The first time you hold **New note**, the app asks before it gets it, and records nothing:
+Voice notes need a speech model: a 103 MB download, one time. On the phone it takes 130 MB. The first time you hold **New note**, the app asks before it gets it, and records nothing:
 
 1. Tap **Get it**. Tap **Not now** to get nothing.
 2. A card on your notes shows how much has come. You can type notes while it comes.
 3. When it is done, hold **New note** again.
 
-The phone gets the model from [whisper.cpp's page on Hugging Face](https://huggingface.co/ggerganov/whisper.cpp), and checks it against a fixed checksum. A file that does not match is deleted. If the download stops, tap **Try again**: it goes on from where it stopped.
+The phone gets the model from the [sherpa-onnx release on GitHub](https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models), where the makers of the speech engine keep their models. It checks the download, and each file it keeps, against fixed checksums. A file that does not match is deleted. If the download stops, tap **Try again**: it goes on from where it stopped. After the download, the phone unpacks the model: the last part of the progress.
 
-The model is whisper.cpp's English base model, so voice notes are in English. The phone does not back it up to iCloud or Google.
+The model is [Parakeet small by NVIDIA](https://huggingface.co/nvidia/parakeet-tdt_ctc-110m) (Parakeet TDT 110M), under the [CC-BY-4.0 license](https://creativecommons.org/licenses/by/4.0/). It writes full stops, commas and capitals. Voice notes are in English. The phone does not back it up to iCloud or Google.
+
+An update that changes the speech model deletes the old model from the phone. Your notes keep their words and recordings. The next voice note asks to get the new model.
 
 To free the space, tap **Remove** in [Settings](../settings/#voice-notes). The next voice note asks to get it again.
 

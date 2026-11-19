@@ -1283,7 +1283,8 @@ class RelayController extends Relay {
   @override ModelState get speechModel => voice?.model.state ?? ModelState.missing;
   @override double get modelProgress => voice?.model.progress ?? 0;
   @override ModelProblem? get modelProblem => voice?.model.problem;
-  @override int get modelBytes => voice?.model.bytes ?? modelSize;
+  @override int get modelDownloadBytes => (voice?.model.info ?? currentSpeechModel).bytes;
+  @override int get modelBytes => (voice?.model.info ?? currentSpeechModel).keptBytes;
   @override DateTime? get listening => _listening;
   @override Stream<double>? get level => _listening == null ? null : voice?.recorder.levels;
 

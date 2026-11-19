@@ -60,7 +60,7 @@ On your Relay Everything page, open **Settings**, then **Account**, click **Dele
 - To name a stay, the phone reads your calendar on the phone, then asks Apple Maps (on an iPhone) and the address lookup one time for that stay, only with sending on. They get the stay's coordinates, not your history. A calendar event's place goes to the address lookup too, to find where it is.
 - The phone reads motion, such as walking or driving, only to tell how you moved on a trip. Motion stays on the phone: only the trip's mode is sent. The app reads no steps from motion: steps come only from **Health**.
 - The phone writes a voice note's words itself. No speech service on a network hears your voice. With sending on, the recording goes to your space as a sealed file. Your AI apps and the web API read its transcript, never its sound.
-- The speech model comes from [whisper.cpp's page on Hugging Face](https://huggingface.co/ggerganov/whisper.cpp), one time, after you tap **Get it**. Hugging Face sees the phone's internet address, the same as any download. It gets no note, no recording and no key.
+- The speech model comes from the [sherpa-onnx release on GitHub](https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models), one time, after you tap **Get it**. GitHub sees the phone's internet address, the same as any download. It gets no note, no recording and no key.
 - This website keeps no cookies and counts no visits. It is static pages, and it can't reach your server.
 
 ## Turn each part off

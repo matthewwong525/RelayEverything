@@ -4,8 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'web_imports_test.dart' show walk;
 
-/// Packages whose plugins have no Mac code: a call throws on the Mac.
-const noMacCode = {'health', 'whisper_cpp_flutter_plus', 'device_calendar_plus', 'open_filex'};
+/// Packages the Mac app must not reach: their plugins have no Mac code, so a call throws on the Mac, or, for
+/// sherpa_onnx, they serve voice notes, which only the phone has.
+const noMacCode = {'health', 'sherpa_onnx', 'device_calendar_plus', 'open_filex'};
 
 /// The phone's sources of health, places, the background round and the speech model.
 const phoneSources = {'lib/sync/health.dart', 'lib/sync/location.dart', 'lib/sync/background.dart',

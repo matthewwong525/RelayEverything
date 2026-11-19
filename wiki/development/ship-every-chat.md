@@ -6,5 +6,6 @@ When you tell one chat to get the others shipped with no questions, it drives th
 - **Answer a held question** with `paseo permit allow <chat> <request> --input '{"questions":[…],"answers":{"<question>":"<label>"}}'`. Read the question text from the chat's transcript, because `paseo permit ls` shows only the labels.
 - **Trust the pull request, not the status.** A chat shows *closed* for a moment while it wakes, and *idle* while its helper works in the background. Read its last message and `gh pr list` before you act.
 - **One failing preview can block every chat.** When one change adds a binding to the shared test server, merge it first, then have the others merge main.
+- **Staging is shared too.** Another chat can deploy over your check or delete your test account. Before a staging check, ask the chats that publish to hold: [the Workers and their order](../relay-spaces.md#the-workers-and-their-order).
 
 Part of [the daily](daily.md#ask-in-any-chat), which tells your chats each other's news.

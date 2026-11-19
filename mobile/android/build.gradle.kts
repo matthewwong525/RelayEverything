@@ -15,6 +15,13 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
+// super_keyboard (from super_editor) still builds against Android 34; its dependencies need 36.
+subprojects {
+    if (name == "super_keyboard") {
+        val raise = { extensions.configure<com.android.build.gradle.LibraryExtension>("android") { compileSdk = 36 } }
+        if (state.executed) raise() else afterEvaluate { raise() }
+    }
+}
 subprojects {
     project.evaluationDependsOn(":app")
 }

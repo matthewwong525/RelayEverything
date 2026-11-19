@@ -92,3 +92,5 @@ Editing a note does not feel like a good document editor. A triple-click does no
 - **2026-11-19** — Assumed: the web page's paste test sends the browser's paste event through a test hook in `web/paste_none.dart`, because a test runs outside a browser.
 - **2026-11-19** — Assumed: a blank line inside a list item is written with no spaces, so a stored note with a truly blank line in an item saves back unchanged after any other edit.
 - **2026-11-19** — Saved for the final checks: the build and two review rounds are done, and the iPhone simulator check (7.2) and the Mac and web previews (7.3) run on this save.
+- **2026-11-19** — Assumed: the share extension and the watch targets get their own build settings files (`ios/Flutter/Extension-*.xcconfig`), because super_keyboard, which super_editor needs, has no Swift package, so the iPhone build now uses CocoaPods, and the Runner's pods must not link into the watch.
+- **2026-11-19** — Assumed: super_keyboard builds against Android 36 from `android/build.gradle.kts`, because it asks for 34 and its own dependencies need 36.

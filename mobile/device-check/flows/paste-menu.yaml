@@ -1,7 +1,7 @@
 # The iPhone's own text menu in a note: a hold shows it, Select All and Copy take the words, and its Paste puts them
 # back in. The copy comes from this app, so iOS asks no Allow Paste question here in any case: the device check's
-# `xcrun simctl pbcopy` scenario checks paste with no question. A hold can select the words, and a paste over them
-# looks unchanged, so the check taps twice: the first tap puts the cursor, the second, on it, opens the menu.
+# `xcrun simctl pbcopy` scenario checks paste with no question. After Select All a tap on the words only shows the menu
+# again, so the check taps twice right of the title: the first tap puts the cursor at its end, the second opens the menu.
 appId: com.matthewwong525.relayApp
 ---
 - launchApp:
@@ -22,8 +22,10 @@ appId: com.matthewwong525.relayApp
 - takeScreenshot: paste-menu
 - tapOn: "Select All"
 - tapOn: "Copy"
-- tapOn: "Paste check"
-- tapOn: "Paste check"
+- tapOn:
+    point: "85%,20%"
+- tapOn:
+    point: "85%,20%"
 - extendedWaitUntil:
     visible: "Paste"
     timeout: 30000

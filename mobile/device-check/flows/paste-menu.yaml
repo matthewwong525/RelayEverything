@@ -1,5 +1,5 @@
-# The iPhone's own text menu in a note: a hold shows it, Select All and Copy take the words, and its Paste puts them
-# back in. The copy comes from this app, so iOS asks no Allow Paste question here in any case: the device check's
+# The iPhone's own text menu in a note, which the editor's web view shows: a hold shows it, Select All and Copy take
+# the words, and its Paste puts them back in. The copy comes from this app, so iOS asks no Allow Paste question here in any case: the device check's
 # `xcrun simctl pbcopy` scenario checks paste with no question. After Select All a tap on the words only shows the menu
 # again, so the check taps twice right of the title: the first tap puts the cursor at its end, the second opens the menu.
 appId: com.matthewwong525.relayApp

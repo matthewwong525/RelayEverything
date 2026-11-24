@@ -98,6 +98,10 @@ jobs:
       - name: Check for keys and private notes
         run: node scripts/public-check.mjs --tree
 
+      # The phone app loads the built note editor page: it must match its source in mobile/editor-web.
+      - name: Check the note editor page is built from its source
+        run: node mobile/editor-web/check-source.mjs
+
       - name: Check whether this code already passed
         id: passed
         if: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}

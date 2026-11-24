@@ -70,6 +70,16 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter analyze
+      # The note editor page (mobile/editor-web): its tests run in Chromium.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Test the note editor page
+        working-directory: mobile/editor-web
+        run: |
+          npm ci
+          npx playwright-core install --with-deps chromium
+          npm test
       - run: flutter test
 
   # The Relay Everything page, the app built for the web, as the file a self-hosted server downloads

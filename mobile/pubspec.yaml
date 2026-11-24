@@ -66,12 +66,11 @@ dependencies:
   flutter_web_auth_2: ^5.1.0
   # Your calendar: reads the phone's calendars and their events (EventKit, CalendarContract). It never writes.
   device_calendar_plus: ^0.12.0
-  # The note's editor: blocks, as Notion has them, with triple-click and the iPhone's own text menu. A pre-release, so
-  # pinned to one version: a new one is its own change.
-  super_editor: 0.3.0-dev.52
-  follow_the_leader: ^0.5.3
-  # The drawn iPhone text menu (iOS 15) with Select All, as super_editor's own toolbar draws it.
-  overlord: ^0.4.2
+  # The note's editor: a web page (mobile/editor-web, built into assets/editor) in the system's web view, so the
+  # phone's own selection, text menu and keyboard edit the words. Pinned to one version: a new one is its own change.
+  webview_flutter: 4.14.1
+  # The browser page: a bar or a menu of the app over the note's frame takes the click, not the frame. Pinned too.
+  pointer_interceptor: 0.10.1+3
   # A paste's HTML, read into the note's own styles (lib/editor/paste.dart).
   html: ^0.15.7
   share_plus: ^13.3.1
@@ -110,6 +109,8 @@ flutter:
   # license, shown on the licenses page.
   assets:
     - assets/fonts/inter/OFL.txt
+    # The note's editor page, built from mobile/editor-web by `npm run build`.
+    - assets/editor/
   fonts:
     - family: Inter
       fonts:

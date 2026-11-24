@@ -10,6 +10,7 @@ import 'app.dart';
 import 'brand.dart';
 import 'controller.dart';
 import 'data/connection.dart';
+import 'editor/web_note/web_note_pool.dart';
 import 'share/inbox.dart';
 import 'shortcuts/bridge.dart';
 import 'sync/background.dart';
@@ -57,6 +58,8 @@ Future<void> main() async {
   // *Start a voice note* from Shortcuts or the Action button. The timeline takes each request once it is on screen.
   final voiceRequests = StreamController<void>();
   runApp(RelayApp(relay: relay, voiceRequests: voiceRequests.stream));
+  // The note's editor pages start now, so the first note opens at once.
+  WebNotePool.shared.warm();
   // While the app runs, Shortcuts' actions use this engine, so the open timeline shows a shortcut's note at once.
   unawaited(listenForShortcuts(ShortcutsBridge(relay, onVoice: () => voiceRequests.add(null))));
   // Each open, and each return to the app, keeps what the share card left, sends what waits, looks for new photos and

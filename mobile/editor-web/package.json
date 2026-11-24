@@ -1,0 +1,20 @@
+{
+  "name": "relay-everything-note-editor",
+  "private": true,
+  "description": "The note editor page of the Relay Everything phone app. Its build goes to mobile/assets/editor/.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test --test-concurrency=1 test/*.test.mjs",
+    "check": "node check-source.mjs"
+  },
+  "devDependencies": {
+    "@tiptap/core": "3.35.0",
+    "@tiptap/extension-table": "3.35.0",
+    "@tiptap/extensions": "3.35.0",
+    "@tiptap/pm": "3.35.0",
+    "esbuild": "0.28.2",
+    "playwright-core": "1.65.1"
+  }
+}

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../brand.dart';
+import '../editor/web_note/cover.dart';
 import '../relay.dart';
 import 'settings_dialog.dart';
 import 'shell.dart';
@@ -38,6 +39,8 @@ class WebApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: _light,
         darkTheme: _dark,
+        // A dialog over the note's frame takes the clicks.
+        navigatorObservers: [NoteCover.observer],
         themeMode: switch (relay.settings.appearance) {
           Appearance.light => ThemeMode.light,
           Appearance.dark => ThemeMode.dark,

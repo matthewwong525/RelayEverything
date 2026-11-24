@@ -65,7 +65,7 @@ One bar runs along the top, over the notes and the open note. Nothing is at the 
 1. Click **New note**, or press Ctrl+Alt+N (⌘⌥N on a Mac). An empty note opens at the right.
 2. Type. The first line is the note's title.
 
-There is no **Save** button. The words go to your space as you type. To change a note, click it in the list, then click in its words and type. The styles, lists, checklists and links work as on the phone: [Open and change a note](../your-notes/#open-and-change-a-note). A paste with Ctrl+V (⌘V on a Mac) keeps the headings, lists, checklists, quotes, code, and bold, italic, underlined and struck-through words, reads Markdown as formatting, and keeps a link on its words and a table. It drops colors, fonts and pictures, as on the phone. A right-click on selected words also offers **Bold**, **Italic**, **Underline**, **Strikethrough**, **Highlight** and **Link…**.
+There is no **Save** button. The words go to your space as you type. To change a note, click it in the list, then click in its words and type. The styles, lists, checklists and links work as on the phone: [Open and change a note](../your-notes/#open-and-change-a-note). A paste with Ctrl+V (⌘V on a Mac) keeps the headings, lists, checklists, quotes, code, and bold, italic, underlined and struck-through words, reads Markdown as formatting, and keeps a link on its words and a table. It drops colors, fonts and pictures, as on the phone. A right-click in the words opens the browser's own menu, with its spell check.
 
 Each change goes everywhere a phone's change goes:
 
@@ -113,7 +113,7 @@ The note leaves the list and goes to **Recently Deleted** for 30 days. Press Ctr
 
 The browser keeps some keys for itself. In Chrome, Ctrl+Shift+T opens a closed tab again, so use Ctrl+Alt+1 for a title there. You can also type Markdown marks at the start of a line, such as `## `: [Text styles and checklists](../your-notes/#text-styles-and-checklists)
 
-You can select and copy the words of a note with the mouse. A triple-click selects one line.
+The note uses the browser's own text editing, or the Mac's in the Mac app: its selection, spell check and find see the note's words. A triple-click selects one line.
 
 ## Search
 

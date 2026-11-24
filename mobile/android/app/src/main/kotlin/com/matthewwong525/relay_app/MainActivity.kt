@@ -1,10 +1,13 @@
 package com.matthewwong525.relay_app
 
 import android.Manifest
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.view.View
+import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
+import android.webkit.WebView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterFragmentActivity
@@ -30,13 +33,23 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
-        // `relay/clipboard` (lib/screens/note_editor.dart): `html` gives a note's paste the clipboard's HTML, so pasted
-        // words keep their lists and styles; null when the clipboard holds only plain words.
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "relay/clipboard").setMethodCallHandler { call, result ->
-            if (call.method != "html") return@setMethodCallHandler result.notImplemented()
-            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-            result.success(clipboard?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.htmlText)
+        // `relay/web-keyboard` (lib/editor/web_note/host_native.dart): `show` brings the keyboard up for the note's web
+        // view when the editor page puts the cursor in the words itself, such as for a new note. Android shows it only
+        // for a tap.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "relay/web-keyboard").setMethodCallHandler { call, result ->
+            if (call.method != "show") return@setMethodCallHandler result.notImplemented()
+            val view = shownWebViews(window.decorView).lastOrNull() ?: return@setMethodCallHandler result.success(false)
+            view.requestFocus()
+            val keyboard = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            result.success(keyboard?.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT) ?: false)
         }
+    }
+
+    /// Each web view on the screen, in the order of the views.
+    private fun shownWebViews(view: View): List<WebView> = when {
+        view is WebView -> if (view.isShown) listOf(view) else emptyList()
+        view is ViewGroup -> (0 until view.childCount).flatMap { shownWebViews(view.getChildAt(it)) }
+        else -> emptyList()
     }
 
     // Before Android 10 the permission comes with the install.

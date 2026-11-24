@@ -1,16 +1,13 @@
 import 'dart:math';
 
-import 'package:flutter/painting.dart' show TextAffinity;
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
-import 'package:super_editor/super_editor.dart';
 
-import 'attachments.dart';
 import 'markdown.dart';
-import 'table.dart';
 
-// Every paste into a note goes through here: the iPhone's own Paste, the editor's own menu and keys, and the browser.
-// A paste keeps only the styles a note can store as Markdown, so the page shows what the note keeps.
+// Every paste into a note from outside it comes here: the editor page sends the clipboard's HTML and plain words, and
+// these blocks go back to it. A paste keeps only the styles a note can store as Markdown, so the page shows what the
+// note keeps. A copy from inside a note pastes back in the page itself, with its styles.
 
 /// What a paste puts in a note: [html] when it holds words, else [plain] read as Markdown, as a note's own words are.
 /// Only the note's styles stay: headings 1 to 3, lists with their indent, quotes, code blocks, tables, links on words,
@@ -18,154 +15,46 @@ import 'table.dart';
 /// Runs of empty lines become one, and empty lines at the start and end go. The result has gone to Markdown and back,
 /// so it is what the note stores; it is empty when the paste has no words. A file's line is a file only when [files]
 /// holds its id, or [files] is null.
-List<DocumentNode> pastedNodes({String? html, required String plain, Set<String>? files}) {
+List<NoteBlock> pastedBlocks({String? html, required String plain, Set<String>? files}) {
   final fromHtml = html == null || html.trim().isEmpty ? null : _HtmlReader().read(html);
   final lines = _tidy(fromHtml != null && fromHtml.any((line) => line.words.trim().isNotEmpty)
     ? fromHtml
-    : [for (final node in markdownToNodes(_plainMarkdown(plain), files: files)) _Line.of(node)]);
+    : [for (final block in markdownToBlocks(_plainMarkdown(plain), files: files)) _Line.of(block)]);
   if (lines.isEmpty) return const [];
-  return markdownToNodes(documentToMarkdown([for (final line in lines) line.node()]), files: files);
+  return markdownToBlocks(blocksToMarkdown([for (final line in lines) line.block()]), files: files);
 }
 
 /// A line's style: its kind and its indent.
 typedef _Style = (LineKind, int);
 
-_Style _lineStyleOf(DocumentNode node) => (kindOf(node), indentOf(node));
-
 bool _plain(_Style style) => style == (LineKind.paragraph, 0);
-
-/// [nodes] with [range] taken out, and where the caret goes. Two lines the range joins become one, in the style of
-/// the last, as a line's style is at its end.
-({List<DocumentNode> nodes, DocumentPosition caret}) deleteRange(List<DocumentNode> nodes, DocumentRange range) {
-  final ids = [for (final node in nodes) node.id];
-  var (start, end) = (range.start, range.end);
-  if (ids.indexOf(start.nodeId) > ids.indexOf(end.nodeId) || (start.nodeId == end.nodeId &&
-      _offsetIn(start.nodePosition) > _offsetIn(end.nodePosition))) {
-    (start, end) = (end, start);
-  }
-  final from = ids.indexOf(start.nodeId), to = ids.indexOf(end.nodeId);
-  final first = nodes[from], last = nodes[to];
-  final s = _offsetIn(start.nodePosition), e = _offsetIn(end.nodePosition);
-  if (first is TextNode && last is TextNode) {
-    final joined = lineNode(kindOf(last), first.text.copyText(0, s).copyAndAppend(last.text.copyText(e)),
-      indent: indentOf(last), id: first.id);
-    return (nodes: [...nodes.take(from), joined, ...nodes.skip(to + 1)],
-      caret: DocumentPosition(nodeId: first.id, nodePosition: TextNodePosition(offset: s)));
-  }
-  // A table or a file at an edge goes when the range holds it whole; a line of words keeps the words outside it.
-  final kept = <DocumentNode>[
-    if (first is TextNode) first.copyTextNodeWith(text: first.text.copyText(0, s)) else if (s == 1 && from != to) first,
-    if (from != to)
-      if (last is TextNode) last.copyTextNodeWith(text: last.text.copyText(e)) else if (e == 0) last,
-  ];
-  if (kept.isEmpty) kept.add(lineNode(LineKind.paragraph, AttributedText()));
-  final caretNode = kept.first;
-  return (nodes: [...nodes.take(from), ...kept, ...nodes.skip(to + 1)], caret: DocumentPosition(nodeId: caretNode.id,
-    nodePosition: caretNode is TextNode ? TextNodePosition(offset: caretNode.text.length) : caretNode.endPosition));
-}
-
-int _offsetIn(NodePosition position) => switch (position) {
-  TextNodePosition(:final offset) => offset,
-  UpstreamDownstreamNodePosition(:final affinity) => affinity == TextAffinity.upstream ? 0 : 1,
-  _ => 0,
-};
-
-/// [nodes] after [pasted], from [pastedNodes], goes over [selection], and where the caret goes after it; null when
-/// there is nothing to put. It is one change, so one *Undo* takes it back.
-///
-/// The line at the cursor keeps its own style where it can: one line with no line style joins it, and the last
-/// pasted line with no line style joins the words after the cursor. A paste at the end of a line gives that line's
-/// style to the last pasted line, so a paste into a new note's empty Title line does not make its last line a Title.
-({List<DocumentNode> nodes, DocumentSelection caret})? pasteInto(List<DocumentNode> nodes, DocumentSelection selection,
-    List<DocumentNode> pasted) {
-  if (pasted.isEmpty && selection.isCollapsed) return null;
-  final (nodes: cleared, :caret) = selection.isCollapsed ? (nodes: nodes, caret: selection.extent)
-    : deleteRange(nodes, DocumentRange(start: selection.base, end: selection.extent));
-  nodes = cleared;
-  DocumentSelection at(DocumentNode node, int offset) => DocumentSelection.collapsed(position: DocumentPosition(
-    nodeId: node.id, nodePosition: node is TextNode ? TextNodePosition(offset: offset) : node.endPosition));
-  final index = nodes.indexWhere((node) => node.id == caret.nodeId);
-  final line = nodes[index];
-  if (pasted.isEmpty) return (nodes: nodes, caret: DocumentSelection.collapsed(position: caret));
-  if (line is! TextNode) {
-    // At a table or a file: the paste goes on lines of its own, before or after it.
-    final after = _offsetIn(caret.nodePosition) > 0;
-    final placed = after ? [...nodes.take(index + 1), ...pasted, ...nodes.skip(index + 1)]
-      : [...nodes.take(index), ...pasted, ...nodes.skip(index)];
-    final end = pasted.last;
-    return (nodes: placed, caret: at(end, end is TextNode ? end.text.length : 1));
-  }
-  final offset = _offsetIn(caret.nodePosition);
-  final before = line.text.copyText(0, offset), rest = line.text.copyText(offset);
-  final cursorStyle = _lineStyleOf(line);
-  final wordsBefore = offset > 0;
-  final nothingAfter = rest.isEmpty;
-  final lastStyle = _lineStyleOf(pasted.last);
-  final lastBlock = pasted.last is! TextNode;
-  // Whether the last pasted line ends where the cursor's line ends, in place of its own line break. A table takes a
-  // line of its own, so it never joins the words after the cursor.
-  final joinsLast = lastBlock ? nothingAfter
-    : (pasted.length == 1 && _plain(lastStyle)) || nothingAfter || _plain(lastStyle);
-  final out = <DocumentNode>[];
-  var keepId = true;
-  DocumentNode emit(AttributedText text, _Style style) {
-    final node = lineNode(style.$1, text, indent: style.$2, id: keepId ? line.id : null);
-    keepId = false;
-    out.add(node);
-    return node;
-  }
-  var current = before;
-  for (var k = 0; k < pasted.length; k++) {
-    final piece = pasted[k];
-    if (piece is! TextNode) {
-      // Nor does a table join the words before the cursor.
-      if (k == 0 && wordsBefore) emit(current, cursorStyle);
-      current = AttributedText();
-      out.add(piece);
-      continue;
-    }
-    current = current.copyAndAppend(piece.text);
-    if (k == pasted.length - 1 && joinsLast) break;
-    // The words before the cursor stay in their line's style when the first pasted line has none.
-    emit(current, k == 0 && wordsBefore && _plain(_lineStyleOf(piece)) ? cursorStyle : _lineStyleOf(piece));
-    current = AttributedText();
-  }
-  if (lastBlock && joinsLast) {
-    final next = nodes.elementAtOrNull(index + 1);
-    return (nodes: [...nodes.take(index), ...out, ...nodes.skip(index + 1)],
-      caret: next == null ? at(out.last, 1) : DocumentSelection.collapsed(
-        position: DocumentPosition(nodeId: next.id, nodePosition: next.beginningPosition)));
-  }
-  final singleJoin = pasted.length == 1 && _plain(lastStyle) && !lastBlock;
-  final caretOffset = joinsLast ? current.length : 0;
-  final last = emit(current.copyAndAppend(rest), joinsLast && nothingAfter && !singleJoin ? lastStyle : cursorStyle);
-  return (nodes: [...nodes.take(index), ...out, ...nodes.skip(index + 1)], caret: at(last, caretOffset));
-}
 
 /// One line of a paste: its runs of words, each with its inline marks, and its line style; or a table.
 class _Line {
-  _Line(this.runs, this.style, {this.table});
+  _Line(this.runs, this.style, {this.table, this.file});
 
-  /// The line of a [node] read from Markdown.
-  factory _Line.of(DocumentNode node) => switch (node) {
-    NoteTableNode(:final table) => _Line(const [], (LineKind.paragraph, 0), table: table),
-    TextNode(:final text) => _Line(runsOf(text), _lineStyleOf(node)),
-    _ => _Line(const [], (LineKind.paragraph, 0)),
+  /// The line of a [block] read from Markdown. A file's line is one in a note's own words only.
+  factory _Line.of(NoteBlock block) => switch (block) {
+    NoteTableBlock(:final table) => _Line(const [], (LineKind.paragraph, 0), table: table),
+    NoteLine(:final runs, :final kind, :final indent) => _Line(runs, (kind, indent)),
+    NoteFileBlock(:final file) => _Line(const [], (LineKind.paragraph, 0), file: file),
   };
 
   final List<(String, Set<String>)> runs;
   final _Style style;
   final NoteTable? table;
+  final NoteAttachment? file;
 
   String get words => [for (final (text, _) in runs) text].join();
 
-  /// The note's node of this line.
-  DocumentNode node() => table != null ? NoteTableNode(id: Editor.createNodeId(), table: table!)
-    : lineNode(style.$1, attributedOf(runs), indent: style.$2);
+  /// The note's block of this line.
+  NoteBlock block() => table != null ? NoteTableBlock(table!) : file != null ? NoteFileBlock(file!)
+    : NoteLine(style.$1, runs, indent: style.$2);
 }
 
 /// A line with no words, outside a code block: an empty heading or list item, or spaces read as an indent, is one too.
-bool _blank(_Line line) => line.words.trim().isEmpty && line.table == null && line.style.$1 != LineKind.code;
+bool _blank(_Line line) => line.words.trim().isEmpty && line.table == null && line.file == null &&
+  line.style.$1 != LineKind.code;
 
 /// Runs of empty lines become one, and empty lines at the start and end go.
 List<_Line> _tidy(List<_Line> lines) {
@@ -556,40 +445,3 @@ class _HtmlReader {
     return marks;
   }
 }
-
-/// The part of [nodes] in [range], as a copy keeps it: the first and last lines cut at the range's ends, and each
-/// node with a new id, so a paste of it is lines and tables of their own.
-List<DocumentNode> copiedNodes(List<DocumentNode> nodes, DocumentRange range) {
-  final ids = [for (final node in nodes) node.id];
-  var (start, end) = (range.start, range.end);
-  if (ids.indexOf(start.nodeId) > ids.indexOf(end.nodeId) || (start.nodeId == end.nodeId &&
-      _offsetIn(start.nodePosition) > _offsetIn(end.nodePosition))) {
-    (start, end) = (end, start);
-  }
-  final from = ids.indexOf(start.nodeId), to = ids.indexOf(end.nodeId);
-  if (from < 0 || to < 0) return const [];
-  final copied = <DocumentNode>[];
-  for (var at = from; at <= to; at++) {
-    final node = nodes[at];
-    if (node is TextNode) {
-      final s = at == from ? _offsetIn(start.nodePosition) : 0;
-      final e = at == to ? _offsetIn(end.nodePosition) : node.text.length;
-      copied.add(lineNode(kindOf(node), node.text.copyText(s, e), indent: indentOf(node)));
-    } else if ((at != from || _offsetIn(start.nodePosition) == 0) && (at != to || _offsetIn(end.nodePosition) == 1)) {
-      copied.add(switch (node) {
-        NoteTableNode() => withNewTableId(node),
-        AttachmentNode(:final file) => AttachmentNode(id: Editor.createNodeId(), file: file),
-        _ => node,
-      });
-    }
-  }
-  return copied;
-}
-
-/// The plain words of [nodes], as a copy puts them on the clipboard: each line on its own, a table's cells split by
-/// tabs, and no file.
-String copiedText(List<DocumentNode> nodes) => [
-  for (final node in nodes)
-    if (node is TextNode) node.text.toPlainText(includePlaceholders: false)
-    else if (node is NoteTableNode) node.table.text,
-].join('\n');

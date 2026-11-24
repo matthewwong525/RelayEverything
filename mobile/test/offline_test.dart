@@ -7,14 +7,15 @@ import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/sender.dart';
 import 'package:relay_app/data/settings.dart';
 import 'package:relay_app/data/store.dart';
+import 'package:relay_app/editor/markdown.dart' show plainText;
 import 'package:relay_app/screens/hold_to_talk.dart';
-import 'package:relay_app/screens/note_blocks.dart';
+import 'package:relay_app/screens/note_blocks.dart' show RecordingPage;
 import 'package:relay_app/screens/note_editor.dart';
 import 'package:relay_app/sync/background.dart';
 import 'package:relay_app/voice/model.dart';
 
 import 'fakes.dart';
-import 'screens_test.dart' show holdNewNote, newNote, note, openFolder, openSettings, rowMic, tallScreen, type;
+import 'screens_test.dart' show holdNewNote, markdownOf, newNote, openFolder, openSettings, pageOf, rowMic, tallScreen, write;
 
 /// Pumps, with real time between, until [done]: for file work and the model's checksum, which run outside the test's
 /// fake time.
@@ -24,6 +25,18 @@ Future<void> until(WidgetTester tester, bool Function() done) async {
     await tester.pump();
   }
   expect(done(), isTrue);
+}
+
+/// The note page's recording card: its key in the page, and the look the note last sent for it.
+({String key, Map<String, Object?> view}) recordingCard(WidgetTester tester) {
+  for (final message in pageOf(tester).posts.reversed) {
+    final files = message['do'] == 'files' || message['do'] == 'load' ? message['files'] : null;
+    if (files is! Map) continue;
+    for (final MapEntry(:key, :value) in files.entries) {
+      if (value is Map && value['kind'] == 'recording') return (key: '$key', view: value.cast());
+    }
+  }
+  throw StateError('the page has no recording card');
 }
 
 /// Holds *New note* past [holdToTalk] and lets go, then waits for the real recorder to start.
@@ -125,7 +138,7 @@ void main() {
     await openFolder(tester, 'Notes');
     await tester.tap(newNote);
     await tester.pumpAndSettle();
-    await type(tester, 'Call the PCB fab about the flex stiffener');
+    await write(tester, '# Call the PCB fab about the flex stiffener');
     await tester.pageBack();
     await tester.runAsync(pumpEventQueue);
     await tester.runAsync(relay.settled);
@@ -173,9 +186,10 @@ void main() {
     await until(tester, () => relay.entries.any((entry) => entry.recordings.any((recording) => !recording.writing)));
     await tester.pumpAndSettle();
     expect(find.byType(NoteEditor), findsOneWidget);
-    expect(note(tester).text.replaceAll('\uFFFC', '').trim(), isEmpty, reason: 'only the recording');
-    expect(find.descendant(of: find.byType(RecordingCard), matching: find.text('Transcript')), findsOneWidget);
-    await tester.tap(find.text('Transcript'));
+    expect(plainText(markdownOf(tester)).trim(), isEmpty, reason: 'only the recording');
+    final card = recordingCard(tester);
+    expect(card.view['status'], 'words');
+    pageOf(tester).tap(card.key, 'transcript');
     await tester.pumpAndSettle();
     expect(find.descendant(of: find.byType(RecordingPage), matching: find.text('Ask the fab if the flex stiffener can be 0.2 mm')),
       findsOneWidget);
@@ -227,9 +241,10 @@ void main() {
     await tester.tapAt(const Offset(200, 150));
     await until(tester, () => relay.entries.any((entry) => entry.recordings.any((recording) => !recording.writing)));
     await tester.pumpAndSettle();
-    expect(note(tester).text.replaceAll('\uFFFC', '').trim(), isEmpty, reason: 'only the recording');
-    expect(find.descendant(of: find.byType(RecordingCard), matching: find.text('Transcript')), findsOneWidget);
-    await tester.tap(find.text('Transcript'));
+    expect(plainText(markdownOf(tester)).trim(), isEmpty, reason: 'only the recording');
+    final card = recordingCard(tester);
+    expect(card.view['status'], 'words');
+    pageOf(tester).tap(card.key, 'transcript');
     await tester.pumpAndSettle();
     expect(find.descendant(of: find.byType(RecordingPage), matching: find.text('Ask the fab if the flex stiffener can be 0.2 mm')),
       findsOneWidget);

@@ -36,64 +36,7 @@ class EntryImage extends StatelessWidget {
   }
 }
 
-/// A picture, full width; a tap opens it.
-class NotePicture extends StatelessWidget {
-  const NotePicture({super.key, required this.file, required this.relay});
-
-  final EntryFile file;
-  final Relay relay;
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = brandOf(context);
-    return Tooltip(
-      message: file.name,
-      child: InkWell(
-        onTap: () => relay.openFile(file),
-        borderRadius: BorderRadius.circular(14),
-        // The height holds the place while the picture loads.
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: ConstrainedBox(constraints: const BoxConstraints(minHeight: 180), child: ColoredBox(color: brand.accentSoft,
-            child: EntryImage(file: file, width: double.infinity, cacheWidth: 1080,
-              fallback: Container(height: 180, color: brand.accentSoft, child: Icon(CupertinoIcons.photo, color: brand.muted))))),
-        ),
-      ),
-    );
-  }
-}
-
-/// Any other file, or one not on the phone yet: its name and size in a card row; a tap downloads it if needed, then
-/// opens it. In the browser a tap opens the file in a new tab.
-class NoteFileRow extends StatelessWidget {
-  const NoteFileRow({super.key, required this.file, required this.relay});
-
-  final EntryFile file;
-  final Relay relay;
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = brandOf(context);
-    return Card(
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => relay.openFile(file),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(spacing: 10, children: [
-            Icon(file.ready ? CupertinoIcons.doc : CupertinoIcons.cloud_download, size: 20, color: brand.muted),
-            Expanded(child: Text(file.name, overflow: TextOverflow.ellipsis)),
-            Text([if (file.size > 0) sizeLabel(file.size), if (!file.ready) 'Download'].join(' · '),
-              style: TextStyle(fontSize: 13, color: brand.muted)),
-          ]),
-        ),
-      ),
-    );
-  }
-}
-
-/// A recording's player, at the top of its [RecordingCard]: play and pause, the recording's sound waves, which fill in the accent
+/// A recording's player, at the bottom of its [RecordingPage]: play and pause, the recording's sound waves, which fill in the accent
 /// text color as it plays, and the time: *0:12 / 0:42* while it plays or is paused, the length when it is stopped. A tap
 /// or a drag on the waves goes to that point, and starts the recording there when it is stopped. With no waves to read,
 /// such as in the browser or for a recording that is not a WAV, a plain line takes their place, and it still plays.
@@ -254,79 +197,6 @@ class WavePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(WavePainter old) => old.levels != levels || old.done != done || old.played != played || old.rest != rest;
-}
-
-/// One recording in a note: its player, a hairline, then a *Transcript ›* row with none of the words. A tap on the row
-/// opens the [RecordingPage], with all the words, as Apple Notes opens a recording. The row shows no splash: the page
-/// opening shows the tap. While the words are written, failed or empty, the card says so and opens nothing. In the
-/// browser and on the Mac, a recording whose sound has not come from the phone shows *Still on your phone* in place of
-/// the player.
-class RecordingCard extends StatelessWidget {
-  const RecordingCard({super.key, required this.relay, required this.recording, this.editable = false, this.title = 'Note',
-    this.when});
-
-  final Relay relay;
-  final EntryRecording recording;
-  /// The phone's own note: its transcript can be corrected on the recording's page.
-  final bool editable;
-  /// The note's title, which the recording's page goes back to.
-  final String title;
-  /// The note's date, such as *Today at 11:24 PM*, which the recording's page shows with the length.
-  final String? when;
-
-  void _open(BuildContext context) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) =>
-    RecordingPage(relay: relay, recording: recording, editable: editable, back: title, when: when)));
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = brandOf(context);
-    final muted = TextStyle(fontSize: 15, color: brand.muted);
-    final words = recording.transcript != null && !recording.noWords && !recording.writing && !recording.failed;
-    return Card(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      if (recording.ready)
-        VoicePlayer(relay: relay, recording: recording.recording, length: recording.length)
-      else Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 16), child: Row(spacing: 10, children: [
-        Icon(CupertinoIcons.mic, size: 18, color: brand.muted),
-        Expanded(child: Text('Still on your phone', style: muted)),
-        if (recording.length case final length?) Text(clockOf(length), style: TextStyle(fontSize: 13, color: brand.muted)),
-      ])),
-      if (recording.writing || recording.failed || recording.transcript != null) ...[
-        Divider(height: 1, indent: 16, endIndent: 16, color: brand.muted.withValues(alpha: 0.15)),
-        if (words)
-          // Not an InkWell: its grey splash spread over the whole card. Its own node: merged into the card, a screen
-          // reader or a test tapping *Transcript* taps the middle of the card, the player.
-          Semantics(container: true, button: true, child: GestureDetector(
-            key: const ValueKey('transcript'),
-            behavior: HitTestBehavior.opaque,
-            onTap: () => _open(context),
-            child: Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 14), child: Row(children: [
-              Text('Transcript', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: brand.muted)),
-              const Spacer(),
-              Icon(CupertinoIcons.chevron_right, size: 15, color: brand.muted),
-            ])),
-          ))
-        else Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 14), child: _status(brand, muted)),
-      ],
-    ]));
-  }
-
-  Widget _status(BrandColors brand, TextStyle muted) {
-    if (recording.writing) {
-      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 8, children: [
-        Text('Writing the words…', style: muted),
-        const LinearProgressIndicator(),
-      ]);
-    }
-    if (recording.failed) {
-      return Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 8, children: [
-        Text('The words did not come. Your recording is safe.', style: muted),
-        // The reason, small and muted: the person sees it only on a recording that failed.
-        if (recording.why case final why?) Text('Why: $why', style: TextStyle(fontSize: 13, color: brand.muted)),
-        FilledButton(onPressed: relay.writeWordsAgain, child: const Text('Try again')),
-      ]);
-    }
-    return Text('No words heard', style: muted);
-  }
 }
 
 /// A recording's own page, as Apple Notes has it: back to the note, *Copy transcript*, the date and the length, all the

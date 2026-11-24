@@ -1,41 +1,55 @@
+import 'dart:convert';
 import 'dart:math';
 
-import 'package:flutter/painting.dart' show Color;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:relay_app/editor/attachments.dart';
 import 'package:relay_app/editor/markdown.dart';
-import 'package:relay_app/editor/table.dart';
-import 'package:super_editor/super_editor.dart';
 
-/// Markdown read into the editor's nodes and written back.
-String roundTrip(String markdown, {bool title = false}) => documentToMarkdown(markdownToNodes(markdown, title: title));
+import 'golden_notes.dart';
 
-/// Each node in short: a line's kind, indent and runs of marked words; a table's rows; a file's id and name.
-List<Object> shapeOf(List<DocumentNode> nodes) => [
-  for (final node in nodes)
-    switch (node) {
-      NoteTableNode(:final table) => table.rows,
-      AttachmentNode(:final file) => (file.id, file.name),
-      TextNode() => [kindOf(node).name, indentOf(node), ...runsIn(node)],
-      _ => node,
+/// [markdown] as the editor page gets it: its document, sent as JSON text, read back into blocks.
+List<NoteBlock> read(String markdown, {bool title = false, Set<String>? files}) =>
+  docToBlocks((jsonDecode(jsonEncode(markdownToDoc(markdown, title: title, files: files))) as Map).cast());
+
+/// [blocks] as the page sends them back, as Markdown.
+String written(List<NoteBlock> blocks) => docToMarkdown((jsonDecode(jsonEncode(blocksToDoc(blocks))) as Map).cast());
+
+/// Markdown read into the page's document and written back.
+String roundTrip(String markdown, {bool title = false}) => written(read(markdown, title: title));
+
+/// Each block in short: a line's kind, indent and runs of marked words; a table's rows; a file's id and name.
+List<Object> shapeOf(List<NoteBlock> blocks) => [
+  for (final block in blocks)
+    switch (block) {
+      NoteTableBlock(:final table) => table.rows,
+      NoteFileBlock(:final file) => (file.id, file.name),
+      NoteLine() => [block.kind.name, block.indent, ...runsIn(block)],
     },
 ];
 
 /// Each run of a line's words with its marks, as `words[mark, mark]`.
-List<String> runsIn(TextNode node) => [for (final (words, marks) in runsOf(node.text)) '$words${marks.toList()..sort()}'];
+List<String> runsIn(NoteLine line) => [for (final (words, marks) in line.runs) '$words${marks.toList()..sort()}'];
 
 /// A body line of [runs], each words with their marks.
-TextNode line(List<(String, Set<String>)> runs, [LineKind kind = LineKind.paragraph]) => lineNode(kind, attributedOf(runs));
+NoteLine line(List<(String, Set<String>)> runs, [LineKind kind = LineKind.paragraph]) => NoteLine(kind, runs);
 
-/// Every mark key in [nodes]' words.
-Set<String> marksIn(List<DocumentNode> nodes) => {
-  for (final node in nodes) if (node is TextNode) for (final (_, marks) in runsOf(node.text)) ...marks,
+/// Every mark key in [blocks]' words.
+Set<String> marksIn(List<NoteBlock> blocks) => {
+  for (final block in blocks) if (block is NoteLine) for (final (_, marks) in block.runs) ...marks,
 };
 
 /// The table in [markdown], which holds one.
-NoteTable markdownTable(String markdown) => markdownToNodes(markdown).whereType<NoteTableNode>().first.table;
+NoteTable markdownTable(String markdown) => read(markdown).whereType<NoteTableBlock>().first.table;
+
+/// A page document of one paragraph of [nodes].
+Json docOf(List<Json> nodes) => {'type': 'doc', 'content': [{'type': 'paragraph', 'attrs': {'indent': 0}, 'content': nodes}]};
 
 void main() {
+  test('every golden note comes back byte for byte through the page\'s document', () {
+    for (final note in goldenNotes) {
+      expect(roundTrip(note), note, reason: note);
+    }
+  });
+
   group('each style comes back byte for byte', () {
     const notes = {
       'Title': '# Shopping',
@@ -67,7 +81,7 @@ void main() {
   });
 
   test('reads each style as the editor draws it', () {
-    expect(shapeOf(markdownToNodes('# Shop\n- [ ] Eggs\n**Milk**')), [
+    expect(shapeOf(read('# Shop\n- [ ] Eggs\n**Milk**')), [
       ['header1', 0, 'Shop[]'], ['unchecked', 0, 'Eggs[]'], ['paragraph', 0, 'Milk[bold]'],
     ]);
   });
@@ -103,25 +117,25 @@ void main() {
   });
 
   /// Each letter with its styles: spaces may lose theirs, as a style's edge spaces go outside its marks.
-  List<String> styled(List<DocumentNode> nodes) => [
-    for (final node in nodes.whereType<TextNode>())
-      for (final (words, marks) in runsOf(node.text))
+  List<String> styled(List<NoteBlock> blocks) => [
+    for (final block in blocks.whereType<NoteLine>())
+      for (final (words, marks) in block.runs)
         for (final char in words.split(''))
           if (char.trim().isNotEmpty) '$char ${marks.toList()..sort()}',
   ];
 
   group('italic on part of a word', () {
     test('is written with stars and reads back as italic', () {
-      expect(documentToMarkdown([line([('foo', {'italic'}), ('bar', {})])]), '*foo*bar');
-      expect(shapeOf(markdownToNodes('*foo*bar')), [['paragraph', 0, 'foo[italic]', 'bar[]']]);
-      expect(documentToMarkdown([line([('re', {}), ('think', {'italic'}), ('ing', {})])]), 're*think*ing');
-      expect(shapeOf(markdownToNodes('re*think*ing')), [['paragraph', 0, 're[]', 'think[italic]', 'ing[]']]);
+      expect(written([line([('foo', {'italic'}), ('bar', {})])]), '*foo*bar');
+      expect(shapeOf(read('*foo*bar')), [['paragraph', 0, 'foo[italic]', 'bar[]']]);
+      expect(written([line([('re', {}), ('think', {'italic'}), ('ing', {})])]), 're*think*ing');
+      expect(shapeOf(read('re*think*ing')), [['paragraph', 0, 're[]', 'think[italic]', 'ing[]']]);
     });
 
     test('a whole word stays with underscores, and snake_case and a bullet stay as typed', () {
-      expect(documentToMarkdown([line([('Buy ', {}), ('fresh', {'italic'}), (' milk', {})])]), 'Buy _fresh_ milk');
-      expect(shapeOf(markdownToNodes('snake_case_name')), [['paragraph', 0, 'snake_case_name[]']]);
-      expect(shapeOf(markdownToNodes('* foo*bar')), [['bullet', 0, 'foo*bar[]']]);
+      expect(written([line([('Buy ', {}), ('fresh', {'italic'}), (' milk', {})])]), 'Buy _fresh_ milk');
+      expect(shapeOf(read('snake_case_name')), [['paragraph', 0, 'snake_case_name[]']]);
+      expect(shapeOf(read('* foo*bar')), [['bullet', 0, 'foo*bar[]']]);
     });
 
     test('any mix of styles on any words comes back the same', () {
@@ -135,29 +149,29 @@ void main() {
           runs.add((words, {for (final key in keys) if (random.nextInt(3) == 0) key}));
         }
         final nodes = [line(runs)];
-        final markdown = documentToMarkdown(nodes);
+        final markdown = written(nodes);
         expect(roundTrip(markdown), markdown, reason: markdown);
         expect(plainText(markdown), runs.map((run) => run.$1).join(), reason: markdown);
-        expect(styled(markdownToNodes(markdown)), styled(nodes), reason: markdown);
+        expect(styled(read(markdown)), styled(nodes), reason: markdown);
       }
     });
   });
 
   test('two code blocks that touch stay two after an edit', () {
-    final nodes = markdownToNodes('```\none\n```\n```\ntwo\n```');
+    final nodes = read('```\none\n```\n```\ntwo\n```');
     expect(shapeOf(nodes), [['code', 0, 'one[]'], ['code', 0, 'two[]']]);
-    expect(documentToMarkdown(nodes), '```\none\n```\n```\ntwo\n```');
+    expect(written(nodes), '```\none\n```\n```\ntwo\n```');
   });
 
   test('spaces at a style edge go outside its marks', () {
-    expect(documentToMarkdown([line([('Buy ', {}), ('fresh ', {'bold'}), ('milk', {})])]), 'Buy **fresh** milk');
+    expect(written([line([('Buy ', {}), ('fresh ', {'bold'}), ('milk', {})])]), 'Buy **fresh** milk');
   });
 
-  test('a link pasted in keeps its words and its link; a colour goes', () {
-    final text = AttributedText('site')
-      ..addAttribution(LinkAttribution('https://example.com'), const SpanRange(0, 3))
-      ..addAttribution(const ColorAttribution(Color(0xffff0000)), const SpanRange(0, 3));
-    expect(documentToMarkdown([lineNode(LineKind.paragraph, text)]), '[site](https://example.com)');
+  test('a link from the page keeps its words and its link; a colour goes', () {
+    expect(docToMarkdown(docOf([{'type': 'text', 'text': 'site', 'marks': [
+      {'type': 'link', 'attrs': {'href': 'https://example.com', 'auto': false}},
+      {'type': 'textStyle', 'attrs': {'color': '#ff0000'}},
+    ]}])), '[site](https://example.com)');
   });
 
   group('highlight', () {
@@ -165,7 +179,7 @@ void main() {
       test('$colour comes back byte for byte and reads as its colour', () {
         final markdown = 'Book the <mark class="$colour">hall</mark> today';
         expect(roundTrip(markdown), markdown);
-        expect(runsOf((markdownToNodes(markdown).single as TextNode).text)[1].$2, {'mark:$colour'});
+        expect((read(markdown).single as NoteLine).runs[1].$2, {'mark:$colour'});
       });
     }
 
@@ -175,20 +189,21 @@ void main() {
         expect(roundTrip(markdown), markdown, reason: markdown);
       }
       final nodes = [line([('hall', {'mark:pink', 'bold'})])];
-      expect(documentToMarkdown(nodes), '<mark class="pink">**hall**</mark>');
-      expect(shapeOf(markdownToNodes(documentToMarkdown(nodes))), shapeOf(nodes));
+      expect(written(nodes), '<mark class="pink">**hall**</mark>');
+      expect(shapeOf(read(written(nodes))), shapeOf(nodes));
     });
 
     test('a mark with another class, or none, stays as words', () {
       for (final markdown in ['<mark class="red">x</mark>', '<mark>x</mark>', 'a <mark class="pink">b']) {
-        expect(shapeOf(markdownToNodes(markdown)), [['paragraph', 0, '$markdown[]']], reason: markdown);
+        expect(shapeOf(read(markdown)), [['paragraph', 0, '$markdown[]']], reason: markdown);
         expect(roundTrip(markdown), markdown);
       }
     });
 
     test('a colour the note has no name for is not written', () {
-      final text = AttributedText('hall')..addAttribution(const HighlightAttribution('#ff0000'), const SpanRange(0, 3));
-      expect(documentToMarkdown([lineNode(LineKind.paragraph, text)]), 'hall');
+      expect(docToMarkdown(docOf([{'type': 'text', 'text': 'hall', 'marks': [
+        {'type': 'highlight', 'attrs': {'colour': '#ff0000'}},
+      ]}])), 'hall');
     });
   });
 
@@ -198,19 +213,22 @@ void main() {
           '[**bold** words](https://example.com)', 'A [wiki page](https://en.wikipedia.org/wiki/Bread_(food)).']) {
         expect(roundTrip(markdown), markdown, reason: markdown);
       }
-      expect(shapeOf(markdownToNodes('[the menu](https://example.com/menu)')),
+      expect(shapeOf(read('[the menu](https://example.com/menu)')),
         [['paragraph', 0, 'the menu[link:https://example.com/menu]']]);
     });
 
-    test('an address shown as a link to itself writes no brackets', () {
+    test('an address shown as a link to itself writes no brackets, and a link the page made on an address is none', () {
       final nodes = [line([('Open ', {}), ('https://example.com/a', {'link:https://example.com/a'})])];
-      expect(documentToMarkdown(nodes), 'Open https://example.com/a');
+      expect(written(nodes), 'Open https://example.com/a');
+      expect(docToMarkdown(docOf([{'type': 'text', 'text': 'Open '}, {'type': 'text', 'text': 'example.com/a_b', 'marks': [
+        {'type': 'link', 'attrs': {'href': 'https://example.com/a_b', 'auto': true}},
+      ]}])), 'Open example.com/a_b');
     });
 
     test('brackets that are not a link stay as words', () {
       for (final markdown in ['[x] (y)', '[ x](y)', '[x](a b)', 'f[1](2', '- [ ] Eggs']) {
         expect(roundTrip(markdown), markdown, reason: markdown);
-        expect(marksIn(markdownToNodes(markdown)).where((mark) => mark.startsWith('link:')), isEmpty, reason: markdown);
+        expect(marksIn(read(markdown)).where((mark) => mark.startsWith('link:')), isEmpty, reason: markdown);
       }
     });
   });
@@ -218,21 +236,26 @@ void main() {
   group('tables', () {
     test('a table from Claude, with alignment marks and its own spacing, comes back byte for byte', () {
       const markdown = 'Trip\n\n| Stop    | Date   |\n|:--------|-------:|\n| Toronto | Nov 20 |\n| Ottawa  | Nov 22 |\n\nDone';
-      final nodes = markdownToNodes(markdown);
-      expect(nodes.whereType<NoteTableNode>().single.table.rows, [['Stop', 'Date'], ['Toronto', 'Nov 20'], ['Ottawa', 'Nov 22']]);
-      expect(documentToMarkdown(nodes), markdown);
+      final nodes = read(markdown);
+      expect(nodes.whereType<NoteTableBlock>().single.table.rows, [['Stop', 'Date'], ['Toronto', 'Nov 20'], ['Ottawa', 'Nov 22']]);
+      expect(written(nodes), markdown);
       expect(plainText(markdown), 'Trip\n\nStop\tDate\nToronto\tNov 20\nOttawa\tNov 22\n\nDone');
     });
 
     test('a changed cell writes the plain form', () {
       final table = NoteTable.fromJson(markdownTable('| Stop | Date |\n|:--|--:|\n| Toronto | Nov 20 |').toJson())!;
       final changed = table.withRows([['Stop', 'Date'], ['Toronto', 'Nov 21']]);
-      expect(documentToMarkdown([NoteTableNode(id: 't1', table: changed)]), '| Stop | Date |\n| --- | --- |\n| Toronto | Nov 21 |');
+      expect(written([NoteTableBlock(changed)]), '| Stop | Date |\n| --- | --- |\n| Toronto | Nov 21 |');
+      // A cell the page changed, with the table's own Markdown still beside it, writes the plain form too.
+      final doc = markdownToDoc('| Stop | Date |\n|:--|--:|\n| Toronto | Nov 20 |');
+      final cell = ((((((doc['content']! as List).single as Map)['content']! as List)[1] as Map)['content']! as List)[1] as Map);
+      cell['content'] = [{'type': 'paragraph', 'content': [{'type': 'text', 'text': 'Nov 21'}]}];
+      expect(docToMarkdown(doc), '| Stop | Date |\n| --- | --- |\n| Toronto | Nov 21 |');
     });
 
     test('a pipe in a cell is kept as \\|', () {
       final table = NoteTable([['a', 'b'], ['x | y', 'z']]);
-      final markdown = documentToMarkdown([NoteTableNode(id: 't1', table: table)]);
+      final markdown = written([NoteTableBlock(table)]);
       expect(markdown, '| a | b |\n| --- | --- |\n| x \\| y | z |');
       expect(markdownTable(markdown).rows, [['a', 'b'], ['x | y', 'z']]);
     });
@@ -240,9 +263,9 @@ void main() {
     test('two tables one after the other open as two tables again, byte for byte', () {
       final first = NoteTable([['Day', 'Train'], ['Mon', '9:00']]);
       final second = NoteTable([['Name', 'Seat'], ['Sam', '4A']]);
-      final markdown = documentToMarkdown([NoteTableNode(id: 't1', table: first), NoteTableNode(id: 't2', table: second)]);
+      final markdown = written([NoteTableBlock(first), NoteTableBlock(second)]);
       expect(markdown, '| Day | Train |\n| --- | --- |\n| Mon | 9:00 |\n| Name | Seat |\n| --- | --- |\n| Sam | 4A |');
-      final tables = [for (final node in markdownToNodes(markdown).whereType<NoteTableNode>()) node.table.rows];
+      final tables = [for (final block in read(markdown).whereType<NoteTableBlock>()) block.table.rows];
       expect(tables, [first.rows, second.rows]);
       expect(roundTrip(markdown), markdown);
       const fromClaude = '| Stop | Date |\n|:--|--:|\n| Toronto | Nov 20 |\n|  A  | B |\n| - | - |\n| c | d |';
@@ -251,7 +274,7 @@ void main() {
 
     test('a body row of - cells stays a row of the same table', () {
       const markdown = '| Day | Train |\n| --- | --- |\n| Mon | 9:00 |\n| Tue | Bus |\n| - | - |';
-      final tables = [for (final node in markdownToNodes(markdown).whereType<NoteTableNode>()) node.table.rows];
+      final tables = [for (final block in read(markdown).whereType<NoteTableBlock>()) block.table.rows];
       expect(tables, [
         [['Day', 'Train'], ['Mon', '9:00'], ['Tue', 'Bus'], ['-', '-']],
       ]);
@@ -260,16 +283,21 @@ void main() {
 
     test('a line of pipes that is not a table stays words', () {
       for (final markdown in ['| a | b |', '| a | b |\n| x | y |', '| a | b |\n| --- |', 'a | b\n--- | ---']) {
-        expect(markdownToNodes(markdown).every((node) => node is TextNode), isTrue, reason: markdown);
+        expect(read(markdown).every((block) => block is NoteLine), isTrue, reason: markdown);
         expect(roundTrip(markdown), markdown, reason: markdown);
       }
     });
   });
 
   test('with title, a first line with no style shows as a Title, and only that', () {
-    expect([for (final node in markdownToNodes('Shop\nEggs', title: true)) kindOf(node)], [LineKind.header1, LineKind.paragraph]);
-    expect([for (final node in markdownToNodes('* Shop', title: true)) kindOf(node)], [LineKind.bullet]);
-    expect([for (final node in markdownToNodes('', title: true)) kindOf(node)], [LineKind.paragraph]);
+    List<LineKind> kinds(String markdown) => [for (final block in read(markdown, title: true)) (block as NoteLine).kind];
+    expect(kinds('Shop\nEggs'), [LineKind.header1, LineKind.paragraph]);
+    expect(kinds('* Shop'), [LineKind.bullet]);
+    expect(kinds(''), [LineKind.paragraph]);
+    // The page draws the Title line as a Title; once changed, its text gains `# `.
+    final doc = markdownToDoc('Shop\nEggs', title: true);
+    expect(((doc['content']! as List).first as Map)['attrs'], {'level': 1, 'indent': 0, 'title': true});
+    expect(docToMarkdown(doc), '# Shop\nEggs');
   });
 
   test('plain text drops the marks', () {
@@ -282,15 +310,15 @@ void main() {
     const note = '# Receipt\n![receipt.jpg](attachment:p1)\nTotal 12\n![Recording.wav](attachment:r1)';
 
     test('a file line comes back byte for byte, with words between files', () {
-      final nodes = markdownToNodes(note);
+      final nodes = read(note);
       expect([for (final file in attachmentsIn(nodes)) (file.id, file.name)], [('p1', 'receipt.jpg'), ('r1', 'Recording.wav')]);
-      expect(documentToMarkdown(nodes), note);
+      expect(written(nodes), note);
     });
 
     test('a line for a file the note does not keep stays words', () {
-      final nodes = markdownToNodes(note, files: {'p1'});
-      expect(nodes.whereType<AttachmentNode>(), hasLength(1));
-      expect(documentToMarkdown(nodes), note, reason: 'the unknown line goes back as it came');
+      final nodes = read(note, files: {'p1'});
+      expect(nodes.whereType<NoteFileBlock>(), hasLength(1));
+      expect(written(nodes), note, reason: 'the unknown line goes back as it came');
     });
 
     test('a name with brackets or a line break still makes one line that reads back', () {
@@ -314,15 +342,15 @@ void main() {
     test('each file keeps a line of its own, between lines of words', () {
       final nodes = [
         line([('Paid ', {})]),
-        AttachmentNode(id: 'a', file: const NoteAttachment('p1', 'receipt.jpg')),
+        const NoteFileBlock(NoteAttachment('p1', 'receipt.jpg')),
         line([('in cash', {})]),
-        AttachmentNode(id: 'b', file: const NoteAttachment('p1', 'receipt.jpg')),
-        AttachmentNode(id: 'c', file: const NoteAttachment('p2', 'box.jpg')),
+        const NoteFileBlock(NoteAttachment('p1', 'receipt.jpg')),
+        const NoteFileBlock(NoteAttachment('p2', 'box.jpg')),
       ];
-      final markdown = documentToMarkdown(nodes);
+      final markdown = written(nodes);
       expect(markdown, 'Paid \n![receipt.jpg](attachment:p1)\nin cash\n'
         '![receipt.jpg](attachment:p1)\n![box.jpg](attachment:p2)');
-      expect(shapeOf(markdownToNodes(markdown)), [['paragraph', 0, 'Paid []'], ('p1', 'receipt.jpg'),
+      expect(shapeOf(read(markdown)), [['paragraph', 0, 'Paid []'], ('p1', 'receipt.jpg'),
         ['paragraph', 0, 'in cash[]'], ('p1', 'receipt.jpg'), ('p2', 'box.jpg')]);
     });
   });
@@ -330,38 +358,38 @@ void main() {
   group('lines under a list item', () {
     test('a line indented to an item\'s words stays in that item, and the numbers count on past it', () {
       const markdown = 'Steps\n1. Rinse the cups\n   Why: the tea is cleaner\n2. Boil the kettle\n   Why: the leaves open';
-      final nodes = markdownToNodes(markdown);
+      final nodes = read(markdown);
       expect(shapeOf(nodes), [
         ['paragraph', 0, 'Steps[]'],
         ['numbered', 0, 'Rinse the cups\nWhy: the tea is cleaner[]'],
         ['numbered', 0, 'Boil the kettle\nWhy: the leaves open[]'],
       ]);
       expect(itemNumbers(nodes).values, [1, 2]);
-      expect(documentToMarkdown(nodes), markdown);
+      expect(written(nodes), markdown);
     });
 
     test('a continuation line keeps its styles, and a checklist item has one too', () {
       for (final markdown in ['* Pack the **blue** bag\n  then the _red_ one', '- [ ] Water the fern\n      twice a week',
           '- Pebble\n  Gravel']) {
         expect(roundTrip(markdown), markdown, reason: markdown);
-        expect(markdownToNodes(markdown), hasLength(1), reason: markdown);
+        expect(read(markdown), hasLength(1), reason: markdown);
       }
     });
 
     test('a blank line inside an item stays in it while a later line still continues the item', () {
-      final nodes = [lineNode(LineKind.numbered, AttributedText('Sort the jars\n\nWhy: the lids differ')),
-        lineNode(LineKind.numbered, AttributedText('Label the shelf'))];
-      final markdown = documentToMarkdown(nodes);
-      expect(shapeOf(markdownToNodes(markdown)), [
+      final nodes = [NoteLine.plain(LineKind.numbered, 'Sort the jars\n\nWhy: the lids differ'),
+        NoteLine.plain(LineKind.numbered, 'Label the shelf')];
+      final markdown = written(nodes);
+      expect(shapeOf(read(markdown)), [
         ['numbered', 0, 'Sort the jars\n\nWhy: the lids differ[]'], ['numbered', 0, 'Label the shelf[]'],
       ]);
-      expect(itemNumbers(markdownToNodes(markdown)).values, [1, 2]);
+      expect(itemNumbers(read(markdown)).values, [1, 2]);
       expect(roundTrip(markdown), markdown);
       // With no indented line after them, blank lines end the item, as before.
-      expect(shapeOf(markdownToNodes('* Sort the jars\n\nLabel the shelf')), [
+      expect(shapeOf(read('* Sort the jars\n\nLabel the shelf')), [
         ['bullet', 0, 'Sort the jars[]'], ['paragraph', 0], ['paragraph', 0, 'Label the shelf[]'],
       ]);
-      expect(shapeOf(markdownToNodes('* Sort the jars\n\n\n  Why: the lids differ')), [
+      expect(shapeOf(read('* Sort the jars\n\n\n  Why: the lids differ')), [
         ['bullet', 0, 'Sort the jars\n\n\nWhy: the lids differ[]'],
       ]);
     });
@@ -370,13 +398,13 @@ void main() {
       for (final markdown in ['1. Sort the jars\n\n   Why: the lids differ\n2. Label the shelf',
           '- [ ] Water the fern\n\n\n      twice a week']) {
         expect(roundTrip(markdown), markdown, reason: markdown);
-        expect(documentToMarkdown(markdownToNodes(markdown)).contains(RegExp(r' +\n')), isFalse, reason: markdown);
+        expect(written(read(markdown)).contains(RegExp(r' +\n')), isFalse, reason: markdown);
       }
     });
 
     test('a line not indented to the words ends the item', () {
       const markdown = '1. Rinse the cups\nWhy: the tea is cleaner\n1. Boil the kettle';
-      expect(shapeOf(markdownToNodes(markdown)), [
+      expect(shapeOf(read(markdown)), [
         ['numbered', 0, 'Rinse the cups[]'], ['paragraph', 0, 'Why: the tea is cleaner[]'], ['numbered', 0, 'Boil the kettle[]'],
       ]);
       expect(roundTrip(markdown), markdown);
@@ -385,10 +413,10 @@ void main() {
 
   test('a dashed sub-list under a dashed item stays dashed, a level in', () {
     const markdown = '- Garden\n  - Rake\n  - Hoe\n- Shed';
-    final nodes = markdownToNodes(markdown);
-    expect([for (final node in nodes) (kindOf(node), indentOf(node))], [
+    final nodes = read(markdown);
+    expect([for (final block in nodes.cast<NoteLine>()) (block.kind, block.indent)], [
       (LineKind.dashed, 0), (LineKind.dashed, 1), (LineKind.dashed, 1), (LineKind.dashed, 0),
     ]);
-    expect(documentToMarkdown(nodes), markdown);
+    expect(written(nodes), markdown);
   });
 }

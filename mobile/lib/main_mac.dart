@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'brand.dart';
 import 'controller.dart';
 import 'data/connection.dart';
+import 'editor/web_note/web_note_pool.dart';
 import 'data/store.dart';
 import 'mac/mac_app.dart';
 import 'mac/updates.dart';
@@ -34,6 +35,8 @@ Future<void> main() async {
     updates: updates);
   await relay.load();
   runApp(MacApp(relay: relay));
+  // The note's editor pages start now, so the first note opens at once.
+  WebNotePool.shared.warm();
   WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(updates.checkInBackground()));
   Timer.periodic(macPullEvery, (_) => unawaited(relay.pullNotes()));
   await relay.pullNotes();

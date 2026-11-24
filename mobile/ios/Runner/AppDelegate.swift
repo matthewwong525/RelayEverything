@@ -19,6 +19,8 @@ import workmanager_apple
     PlacesWake.shared.apply()
     // A voice note from the Apple Watch can wake a closed app too (RelayWatchReceiver.swift).
     RelayWatchReceiver.shared.activate()
+    // The note's web view: no arrow bar over the keyboard, and the keyboard comes up for a new note (RelayWebKeyboard.swift).
+    RelayWebKeyboard.apply()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -33,10 +35,6 @@ import workmanager_apple
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "RelayChannels") {
       RelayChannels.register(registrar.messenger())
       BackgroundWake.shared.mainMessenger = registrar.messenger()
-    }
-    // The iPhone's own Paste keeps a note's formatting (RelayPaste.swift).
-    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "RelayPaste") {
-      RelayPaste.register(registrar.messenger())
     }
     // A shake after a delete asks to undo it (SceneDelegate.swift).
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "RelayShake") {

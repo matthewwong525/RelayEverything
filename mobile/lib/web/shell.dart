@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../brand.dart';
 import '../data/client_id.dart';
 import '../editor/shortcuts.dart' show FormatAction;
+import '../editor/web_note/cover.dart';
 import '../relay.dart';
 import '../screens/back_to.dart';
 import '../screens/connect_ai.dart' show ConnectAiPage, connectAiLine;
@@ -250,7 +251,8 @@ class WebShellState extends State<WebShell> {
     if (added != null) openNote(added);
   }
 
-  /// New note, search and delete; the format keys are the editor's own. The editor passes these keys up to here.
+  /// New note, search and delete outside the note's words; the editor page sends the same keys pressed in the words to
+  /// [_pageKey].
   KeyEventResult _key(FocusNode _, KeyEvent event) {
     final keys = HardwareKeyboard.instance;
     if (event is! KeyDownEvent || !(keys.isControlPressed || keys.isMetaPressed)) return KeyEventResult.ignored;
@@ -302,7 +304,8 @@ class WebShellState extends State<WebShell> {
     return Scaffold(
       key: _scaffold,
       backgroundColor: brand.paper,
-      drawer: three ? null : Drawer(backgroundColor: brand.paper, child: SafeArea(child: sidebar)),
+      // The left bar slides over the note's frame: it takes the clicks while shown, and a resize may take it away.
+      drawer: three ? null : Drawer(backgroundColor: brand.paper, child: CoversWhileShown(child: SafeArea(child: sidebar))),
       body: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         if (three) ...[SizedBox(width: 250, child: SafeArea(right: false, child: sidebar)), VerticalDivider(width: 1, color: brand.line)],
         ...switch (_place) {
@@ -365,7 +368,19 @@ class WebShellState extends State<WebShell> {
 
   Widget _editorOf({required bool pane, String back = 'Notes'}) => NoteEditor(key: _editor, relay: relay, entry: _entry,
     pane: pane, back: back, onClose: _close, onCompose: newNote, search: pane ? _searchField() : null,
-    picker: widget.picker, sharer: widget.sharer, opener: widget.opener);
+    picker: widget.picker, sharer: widget.sharer, opener: widget.opener, onKeys: _pageKey);
+
+  /// A page key pressed in the note's words, which the editor page sends up: the same as [_key] does for it outside.
+  void _pageKey(String shortcut) {
+    switch (shortcut) {
+      case 'new-note':
+        newNote();
+      case 'find':
+        find();
+      case 'delete-note':
+        if (_open) _editor.currentState?.delete();
+    }
+  }
 
   Widget _searchField() => SearchField(controller: _search, focus: _searchFocus);
 

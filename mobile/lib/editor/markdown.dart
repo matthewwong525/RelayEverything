@@ -1,18 +1,13 @@
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:super_editor/super_editor.dart';
-
-import 'attachments.dart';
-import 'table.dart';
-
-// A note keeps its styles in its words as Markdown, so the server, Claude and webhooks read plain text. The editor's
-// document goes to it and back byte for byte; underline, which Markdown lacks, is `<u>…</u>`, a highlight is
+// A note keeps its styles in its words as Markdown, so the server, Claude and webhooks read plain text. The editor
+// page's document goes to it and back byte for byte; underline, which Markdown lacks, is `<u>…</u>`, a highlight is
 // `<mark class="pink">…</mark>`, a link on words is `[words](address)`, a table is a Markdown table, and a note's file
 // is a line `![name](attachment:<id>)` at its place.
-
-/// The metadata key of a `- ` list item, drawn as a dash, where `* ` is a bullet.
-const dashedList = 'dashed';
+//
+// Markdown is read into [NoteBlock]s, one for each line the page shows, and the blocks go to the page as its document
+// JSON ([blocksToDoc]) and come back from it ([docToBlocks]).
 
 const _fence = '```';
 const _maxIndent = 8;
@@ -37,28 +32,6 @@ const _writeOrder = ['bold', 'italic', 'strike', 'underline'];
 /// The highlight colours, as Apple Notes orders them.
 const highlightColours = ['purple', 'pink', 'orange', 'green', 'blue'];
 
-/// A highlight on words, in one of the [highlightColours].
-class HighlightAttribution implements Attribution {
-  const HighlightAttribution(this.colour);
-
-  final String colour;
-
-  @override
-  String get id => 'highlight';
-
-  @override
-  bool canMergeWith(Attribution other) => this == other;
-
-  @override
-  bool operator ==(Object other) => other is HighlightAttribution && other.colour == colour;
-
-  @override
-  int get hashCode => colour.hashCode;
-
-  @override
-  String toString() => '[HighlightAttribution]: $colour';
-}
-
 /// A highlight's inline mark, `mark:pink`, and a link's, `link:https://…`: a run's marks are words, so a mark with a
 /// value carries it after the colon.
 const _markKey = 'mark:', _linkKey = 'link:';
@@ -68,55 +41,29 @@ final _highlightMarks = <(String, String, String)>[
   for (final colour in highlightColours) ('$_markKey$colour', '<mark class="$colour">', '</mark>'),
 ];
 
-const _attributionOf = {
-  'bold': boldAttribution, 'italic': italicsAttribution, 'strike': strikethroughAttribution,
-  'underline': underlineAttribution,
-};
+/// Words with the inline marks on them: `bold`, `italic`, `strike`, `underline`, `mark:<colour>` and `link:<address>`.
+typedef Run = (String, Set<String>);
 
-/// The attribution of an inline mark.
-Attribution attributionOfMark(String mark) => mark.startsWith(_linkKey) ? LinkAttribution(mark.substring(_linkKey.length))
-  : mark.startsWith(_markKey) ? HighlightAttribution(mark.substring(_markKey.length)) : _attributionOf[mark]!;
+/// Whether a note can keep [mark]: bold, italic, strike and underline, a highlight in one of the [highlightColours],
+/// and a link with an address. Any other style keeps only its words.
+bool keptMark(String mark) => _writeOrder.contains(mark) ||
+  (mark.startsWith(_markKey) && highlightColours.contains(mark.substring(_markKey.length))) ||
+  (mark.startsWith(_linkKey) && mark.length > _linkKey.length);
 
-/// The inline marks of [attributions]: bold, italic, strike and underline, a highlight in one of the
-/// [highlightColours], and a link. Any other style keeps only its words.
-Set<String> marksOf(Set<Attribution> attributions) => {
-  for (final attribution in attributions)
-    if (attribution is LinkAttribution && attribution.plainTextUri.isNotEmpty) '$_linkKey${attribution.plainTextUri}',
-  for (final attribution in attributions)
-    if (attribution is HighlightAttribution && highlightColours.contains(attribution.colour)) '$_markKey${attribution.colour}',
-  for (final key in _writeOrder) if (attributions.contains(_attributionOf[key])) key,
-};
-
-/// Words with the inline marks of each run.
-AttributedText attributedOf(List<(String, Set<String>)> runs) {
-  final text = AttributedText(runs.map((run) => run.$1).join());
-  var at = 0;
+/// [runs] with only the marks a note keeps, no empty run, and each run joined to the one before it with the same marks.
+List<Run> tidyRuns(Iterable<Run> runs) {
+  final out = <Run>[];
   for (final (words, marks) in runs) {
-    if (words.isNotEmpty) {
-      for (final mark in marks) {
-        text.addAttribution(attributionOfMark(mark), SpanRange(at, at + words.length - 1));
-      }
+    if (words.isEmpty) continue;
+    final kept = {for (final mark in marks) if (keptMark(mark)) mark};
+    final last = out.lastOrNull;
+    if (last != null && _sameSet(last.$2, kept)) {
+      out.last = (last.$1 + words, last.$2);
+    } else {
+      out.add((words, kept));
     }
-    at += words.length;
   }
-  return text;
-}
-
-/// [text] in runs, each with its inline marks.
-List<(String, Set<String>)> runsOf(AttributedText text) {
-  final words = text.toPlainText(includePlaceholders: false);
-  final runs = <(String, Set<String>)>[];
-  var start = 0;
-  Set<String>? marks;
-  for (var at = 0; at <= words.length; at++) {
-    final here = at < words.length ? marksOf(text.getAllAttributionsAt(at)) : null;
-    if (marks != null && (here == null || !_sameSet(here, marks))) {
-      runs.add((words.substring(start, at), marks));
-      start = at;
-    }
-    if (marks == null || here == null || !_sameSet(here, marks)) marks = here;
-  }
-  return runs;
+  return out;
 }
 
 bool _sameSet(Set<String> a, Set<String> b) => a.length == b.length && a.containsAll(b);
@@ -124,87 +71,79 @@ bool _sameSet(Set<String> a, Set<String> b) => a.length == b.length && a.contain
 /// Where a mark opens among others that open together: a link outside all, then a highlight, then the rest.
 int _rankOf(String key) => key.startsWith(_linkKey) ? 0 : key.startsWith(_markKey) ? 1 : 2 + _writeOrder.indexOf(key);
 
-/// The kind of a text [node].
-LineKind kindOf(DocumentNode node) => switch (node) {
-  TaskNode(:final isComplete) => isComplete ? LineKind.checked : LineKind.unchecked,
-  ListItemNode(:final type) => type == ListItemType.ordered ? LineKind.numbered
-    : node.getMetadataValue(dashedList) == true ? LineKind.dashed : LineKind.bullet,
-  ParagraphNode() => switch (node.getMetadataValue(NodeMetadata.blockType)) {
-    header1Attribution => LineKind.header1,
-    header2Attribution => LineKind.header2,
-    header3Attribution => LineKind.header3,
-    blockquoteAttribution => LineKind.quote,
-    codeAttribution => LineKind.code,
-    _ => LineKind.paragraph,
-  },
-  _ => LineKind.paragraph,
-};
+/// One block of a note as the page shows it: a line of words, a table or a file.
+sealed class NoteBlock {
+  const NoteBlock();
+}
 
-/// The indent level of a text [node].
-int indentOf(DocumentNode node) => switch (node) {
-  TaskNode(:final indent) || ListItemNode(:final indent) || ParagraphNode(:final indent) => indent,
-  _ => 0,
-};
+/// A line of words: its kind, its indent and its runs of marked words. A list item's words may hold `\n`: each line
+/// after the first is a line under the item, such as `Why:`. A code block's words hold its lines.
+final class NoteLine extends NoteBlock {
+  NoteLine(this.kind, Iterable<Run> runs, {int indent = 0, this.title = false})
+    : runs = List.unmodifiable(tidyRuns(runs)), indent = indent.clamp(0, _maxIndent);
 
-/// A text node of [kind] with [text] at [indent], keeping [id] when given.
-TextNode lineNode(LineKind kind, AttributedText text, {int indent = 0, String? id}) {
-  id ??= Editor.createNodeId();
-  indent = indent.clamp(0, _maxIndent);
-  return switch (kind) {
-    LineKind.unchecked || LineKind.checked =>
-      TaskNode(id: id, text: text, isComplete: kind == LineKind.checked, indent: indent),
-    LineKind.numbered => ListItemNode.ordered(id: id, text: text, indent: indent),
-    LineKind.bullet => ListItemNode.unordered(id: id, text: text, indent: indent),
-    LineKind.dashed => ListItemNode.unordered(id: id, text: text, indent: indent, metadata: {dashedList: true}),
-    _ => ParagraphNode(id: id, text: text, indent: indent, metadata: {
-      NodeMetadata.blockType: switch (kind) {
-        LineKind.header1 => header1Attribution,
-        LineKind.header2 => header2Attribution,
-        LineKind.header3 => header3Attribution,
-        LineKind.quote => blockquoteAttribution,
-        LineKind.code => codeAttribution,
-        _ => paragraphAttribution,
-      },
-    }),
-  };
+  /// A line of [words] with no marks.
+  NoteLine.plain(LineKind kind, String words, {int indent = 0}) : this(kind, [(words, const {})], indent: indent);
+
+  final LineKind kind;
+  final int indent;
+  final List<Run> runs;
+
+  /// Whether the line is a plain first line shown as a Title: an old note's first line, as the list showed it.
+  final bool title;
+
+  String get text => [for (final (words, _) in runs) words].join();
+
+  NoteLine copyWith({LineKind? kind, List<Run>? runs, int? indent}) =>
+    NoteLine(kind ?? this.kind, runs ?? this.runs, indent: indent ?? this.indent, title: title);
+}
+
+/// A table, with its rows of plain words.
+final class NoteTableBlock extends NoteBlock {
+  const NoteTableBlock(this.table);
+
+  final NoteTable table;
+}
+
+/// A note's file at its place in the words.
+final class NoteFileBlock extends NoteBlock {
+  const NoteFileBlock(this.file);
+
+  final NoteAttachment file;
 }
 
 /// Whether [kind] is a list item: its later lines are indented to its words.
 bool isItem(LineKind kind) => const {LineKind.bullet, LineKind.dashed, LineKind.numbered, LineKind.unchecked,
   LineKind.checked}.contains(kind);
 
-/// The editor's document of [markdown]. With [title], a first line with no line style shows as a Title, as an old
-/// note's first line did in the list; its text gains `# ` only once the person changes the note. A file's line is a
-/// block only when [files] holds its id, or [files] is null; else it stays words.
-MutableDocument markdownToDocument(String markdown, {bool title = false, Set<String>? files}) =>
-  MutableDocument(nodes: markdownToNodes(markdown, title: title, files: files));
-
-/// The nodes of [markdown], as [markdownToDocument] reads them.
-List<DocumentNode> markdownToNodes(String markdown, {bool title = false, Set<String>? files}) {
-  final nodes = <DocumentNode>[];
+/// The blocks of [markdown]. With [title], a first line with no line style shows as a Title, as an old note's first
+/// line did in the list; its text gains `# ` only once the person changes the note. A file's line is a block only when
+/// [files] holds its id, or [files] is null; else it stays words.
+List<NoteBlock> markdownToBlocks(String markdown, {bool title = false, Set<String>? files}) {
+  final blocks = <NoteBlock>[];
   final lines = markdown.split('\n');
   var counts = <int, int>{};
   // The list item that later lines indented to its words join, and where its words start.
-  TextNode? item;
+  NoteLine? item;
   var itemStart = 0;
   for (var at = 0; at < lines.length; at++) {
     final end = lines[at] == _fence ? lines.indexOf(_fence, at + 1) : -1;
     if (end > at + 1) {
-      nodes.add(lineNode(LineKind.code, AttributedText(lines.sublist(at + 1, end).join('\n'))));
+      blocks.add(NoteLine.plain(LineKind.code, lines.sublist(at + 1, end).join('\n')));
       counts.clear();
       item = null;
       at = end;
       continue;
     }
     if (NoteTable.readAt(lines, at) case (final table, final next)) {
-      nodes.add(NoteTableNode(id: Editor.createNodeId(), table: table));
+      blocks.add(NoteTableBlock(table));
       counts.clear();
       item = null;
       at = next - 1;
       continue;
     }
     if (NoteAttachment.read(lines[at]) case final file? when files == null || files.contains(file.id)) {
-      nodes.add(AttachmentNode(id: Editor.createNodeId(), file: file));
+      blocks.add(NoteFileBlock(file));
       counts.clear();
       item = null;
       continue;
@@ -217,9 +156,8 @@ List<DocumentNode> markdownToNodes(String markdown, {bool title = false, Set<Str
         later++;
       }
       if (later < lines.length && _continues(lines, later, itemStart, counts)) {
-        final blanks = AttributedText('\n' * (later - at));
-        nodes.last = item = item.copyTextNodeWith(text: item.text.copyAndAppend(blanks)
-          .copyAndAppend(AttributedText('\n')).copyAndAppend(_attributedLine(lines[later].substring(itemStart))));
+        blocks.last = item = item.copyWith(runs: [...item.runs, ('\n' * (later - at), const {}), ('\n', const {}),
+          ..._lineRuns(lines[later].substring(itemStart))]);
         at = later;
         continue;
       }
@@ -229,20 +167,17 @@ List<DocumentNode> markdownToNodes(String markdown, {bool title = false, Set<Str
     final spaces = line.length - line.trimLeft().length;
     if (item != null && kind == LineKind.paragraph && line.trim().isNotEmpty && spaces >= itemStart) {
       // A line indented to the words of the list item above belongs to that item, so `Why:` under an item stays in it.
-      final text = item.text.copyAndAppend(AttributedText('\n'))
-        .copyAndAppend(_attributedLine(line.substring(itemStart)));
-      nodes.last = item = item.copyTextNodeWith(text: text);
+      blocks.last = item = item.copyWith(runs: [...item.runs, ('\n', const {}), ..._lineRuns(line.substring(itemStart))]);
       continue;
     }
     counts = next;
     final heading = at == 0 && title && kind == LineKind.paragraph && level == 0 && words.trim().isNotEmpty;
-    final node = lineNode(heading ? LineKind.header1 : kind, _attributedLine(words), indent: level);
-    nodes.add(node);
-    item = isItem(kind) ? node : null;
+    final block = NoteLine(heading ? LineKind.header1 : kind, _lineRuns(words), indent: level, title: heading);
+    blocks.add(block);
+    item = isItem(kind) ? block : null;
     itemStart = level * 2 + _markLength(line.substring(level * 2), kind);
-    if (heading) nodes.last = node.copyWithAddedMetadata({'title': true});
   }
-  return nodes;
+  return blocks;
 }
 
 /// Whether line [at] of [lines] is words indented to the words of a list item that starts its words at [itemStart],
@@ -254,14 +189,14 @@ bool _continues(List<String> lines, int at, int itemStart, Map<int, int> counts)
     _lineOf(line, {...counts}).$1 == LineKind.paragraph;
 }
 
-AttributedText _attributedLine(String words) => attributedOf(_inline(words, 0, words.length, const {}, _pairStars(words)));
+List<Run> _lineRuns(String words) => _inline(words, 0, words.length, const {}, _pairStars(words));
 
 int _markLength(String rest, LineKind kind) => kind == LineKind.numbered ? _ordered.firstMatch(rest)!.end
   : [for (final (mark, of) in _lineMarks) if (of == kind) mark.length].firstOrNull ?? 0;
 
 /// A line's kind, its indent level and its words after the marks. A `N. ` line is numbered only when N is the next
 /// number of its list, so `2020. was a year` stays words; [counts] holds each indent level's last number, as
-/// [documentToMarkdown] counts.
+/// [blocksToMarkdown] counts.
 (LineKind, int, String) _lineOf(String line, Map<int, int> counts) {
   var spaces = 0;
   while (spaces < line.length && line[spaces] == ' ') {
@@ -288,18 +223,19 @@ int _count(Map<int, int> counts, int level, {required bool ordered}) {
   return counts[level] = (counts[level] ?? 0) + 1;
 }
 
-/// The number each numbered item in [nodes] shows, by its id, as the Markdown counts them.
-Map<String, int> itemNumbers(Iterable<DocumentNode> nodes) {
-  final numbers = <String, int>{};
+/// The number each numbered item in [blocks] shows, by its place, as the Markdown counts them. The page counts the
+/// same way.
+Map<int, int> itemNumbers(List<NoteBlock> blocks) {
+  final numbers = <int, int>{};
   final counts = <int, int>{};
-  for (final node in nodes) {
-    if (node is! TextNode || kindOf(node) == LineKind.code) {
+  for (var at = 0; at < blocks.length; at++) {
+    final block = blocks[at];
+    if (block is! NoteLine || block.kind == LineKind.code) {
       counts.clear();
       continue;
     }
-    final kind = kindOf(node);
-    final number = _count(counts, indentOf(node), ordered: kind == LineKind.numbered);
-    if (kind == LineKind.numbered) numbers[node.id] = number;
+    final number = _count(counts, block.indent, ordered: block.kind == LineKind.numbered);
+    if (block.kind == LineKind.numbered) numbers[at] = number;
   }
   return numbers;
 }
@@ -311,7 +247,7 @@ bool _word(String char) => RegExp(r'[\p{L}\p{N}_]', unicode: true).hasMatch(char
 typedef _Stars = ({String key, int length, int close});
 
 /// Pairs the runs of `*` in [line], keyed by where each opening mark starts: `**` is bold and `*` italic. Marks nest,
-/// so a run closes the marks open on top, then opens new ones, bold before italic, as [documentToMarkdown] writes
+/// so a run closes the marks open on top, then opens new ones, bold before italic, as [blocksToMarkdown] writes
 /// them: `**foo***bar*` is bold *foo* then italic *bar*, and `x*a**b***` closes bold, then italic. A `*` italic counts
 /// only when it touches a letter, so `5 * 3` and an old `*word*` stay as typed.
 Map<int, _Stars> _pairStars(String line) {
@@ -441,39 +377,34 @@ List<(String, Set<String>)> _inline(String line, int from, int to, Set<String> o
 bool _closes(String line, int to, int at, String close, String key) =>
   !_space(line[at - 1]) && (key != 'italic' || at + close.length >= to || !_word(line[at + close.length]));
 
-/// The Markdown of [nodes], the inverse of [markdownToNodes]. Bold, italic, underline, strike, a highlight and a link
+/// The Markdown of [blocks], the inverse of [markdownToBlocks]. Bold, italic, underline, strike, a highlight and a link
 /// are kept inline; any other style keeps its words. A table is kept as a Markdown table.
-String documentToMarkdown(Iterable<DocumentNode> nodes) {
+String blocksToMarkdown(Iterable<NoteBlock> blocks) {
   final lines = <String>[];
   final counts = <int, int>{};
-  for (final node in nodes) {
-    if (node is NoteTableNode) {
-      counts.clear();
-      lines.add(node.table.markdown);
-      continue;
-    }
-    if (node is AttachmentNode) {
-      counts.clear();
-      lines.add(node.file.markdown);
-      continue;
-    }
-    if (node is! TextNode) continue;
-    final kind = kindOf(node);
-    if (kind == LineKind.code) {
-      counts.clear();
-      lines.addAll([_fence, node.text.toPlainText(includePlaceholders: false), _fence]);
-      continue;
-    }
-    final level = min(indentOf(node), _maxIndent);
-    final mark = _markOf(kind, level, counts);
-    // Each later line of the node starts where its words do: inside a list item, at the item's words, so it reads
-    // back as part of the item; else at its indent, with a quote's mark.
-    final later = isItem(kind) ? ' ' * mark.length : '  ' * level + (kind == LineKind.quote ? '> ' : '');
-    final parts = _split(runsOf(node.text));
-    for (var at = 0; at < parts.length; at++) {
-      // A blank line inside a list item is written blank, with no spaces: it reads back in the item all the same.
-      final blank = at > 0 && isItem(kind) && parts[at].isEmpty;
-      lines.add(blank ? '' : (at == 0 ? mark : later) + _inlineOf(parts[at]));
+  for (final block in blocks) {
+    switch (block) {
+      case NoteTableBlock(:final table):
+        counts.clear();
+        lines.add(table.markdown);
+      case NoteFileBlock(:final file):
+        counts.clear();
+        lines.add(file.markdown);
+      case NoteLine(kind: LineKind.code):
+        counts.clear();
+        lines.addAll([_fence, block.text, _fence]);
+      case NoteLine(:final kind):
+        final level = min(block.indent, _maxIndent);
+        final mark = _markOf(kind, level, counts);
+        // Each later line of the block starts where its words do: inside a list item, at the item's words, so it reads
+        // back as part of the item; else at its indent, with a quote's mark.
+        final later = isItem(kind) ? ' ' * mark.length : '  ' * level + (kind == LineKind.quote ? '> ' : '');
+        final parts = _split(block.runs);
+        for (var at = 0; at < parts.length; at++) {
+          // A blank line inside a list item is written blank, with no spaces: it reads back in the item all the same.
+          final blank = at > 0 && isItem(kind) && parts[at].isEmpty;
+          lines.add(blank ? '' : (at == 0 ? mark : later) + _inlineOf(parts[at]));
+        }
     }
   }
   return lines.join('\n');
@@ -568,17 +499,177 @@ String _inlineOf(List<(String, Set<String>)> runs) {
 
 /// [markdown] with no marks: the words as the page shows them, line by line, and a table's rows with a tab between
 /// cells. A file's line is left out. The list, search and Share read it.
-String plainText(String markdown) => nodesText(markdownToNodes(markdown));
+String plainText(String markdown) => blocksText(markdownToBlocks(markdown));
 
-/// The words of [nodes] as [plainText] gives them.
-String nodesText(Iterable<DocumentNode> nodes) => [
-  for (final node in nodes)
-    if (node is TextNode) node.text.toPlainText(includePlaceholders: false)
-    else if (node is NoteTableNode) node.table.text,
+/// The words of [blocks] as [plainText] gives them.
+String blocksText(Iterable<NoteBlock> blocks) => [
+  for (final block in blocks)
+    if (block is NoteLine) block.text
+    else if (block is NoteTableBlock) block.table.text,
 ].join('\n');
 
+/// The files placed in [blocks], in order.
+List<NoteAttachment> attachmentsIn(Iterable<NoteBlock> blocks) =>
+  [for (final block in blocks) if (block is NoteFileBlock) block.file];
+
+// The editor page's document: ProseMirror JSON. Each line of words is a `paragraph`, `heading`, `blockquote` or
+// `codeBlock` with an `indent`; a list item is an `item` with its `kind`, `checked` and `indent`, whose first paragraph
+// is its words and each later paragraph a line under it; a table is a `table` of rows of cells, each one paragraph of
+// plain words; a file is an `attachment` with its `id` and `name`. The marks are `bold`, `italic`, `underline`,
+// `strike`, `highlight` with its `colour`, and `link` with its `href` and `auto`: a link the page made on a web address
+// it found in the words, which the Markdown keeps as the bare address.
+
+typedef Json = Map<String, Object?>;
+
+const _itemKinds = {
+  LineKind.bullet: 'bullet', LineKind.dashed: 'dashed', LineKind.numbered: 'numbered',
+  LineKind.unchecked: 'task', LineKind.checked: 'task',
+};
+
+/// The page's document of [markdown], as [markdownToBlocks] reads it.
+Json markdownToDoc(String markdown, {bool title = false, Set<String>? files}) =>
+  blocksToDoc(markdownToBlocks(markdown, title: title, files: files));
+
+/// The Markdown of the page's document [doc].
+String docToMarkdown(Json doc) => blocksToMarkdown(docToBlocks(doc));
+
+/// The page's document of [blocks]: never empty, as a note has one line at least.
+Json blocksToDoc(Iterable<NoteBlock> blocks) {
+  final content = [for (final block in blocks) ...blockToNodes(block)];
+  return {'type': 'doc', 'content': content.isEmpty ? [_paragraph(const [], 0)] : content};
+}
+
+/// The page's nodes of one [block]: a line of words with `\n` outside a list item is a node for each line.
+List<Json> blockToNodes(NoteBlock block) => switch (block) {
+  NoteFileBlock(:final file) => [{'type': 'attachment', 'attrs': {'id': file.id, 'name': file.name}}],
+  NoteTableBlock(:final table) => [_tableNode(table)],
+  NoteLine(kind: LineKind.code) => [{
+    'type': 'codeBlock',
+    if (block.text.isNotEmpty) 'content': [{'type': 'text', 'text': block.text}],
+  }],
+  NoteLine(:final kind) when isItem(kind) => [{
+    'type': 'item',
+    'attrs': {'kind': _itemKinds[kind], 'checked': kind == LineKind.checked, 'indent': block.indent},
+    'content': [for (final line in _split(block.runs)) _paragraph(line, 0)],
+  }],
+  NoteLine(:final kind, :final indent) => [
+    for (final (at, line) in _split(block.runs).indexed)
+      switch (kind) {
+        LineKind.header1 || LineKind.header2 || LineKind.header3 => {
+          'type': 'heading',
+          'attrs': {'level': kind.index - LineKind.header1.index + 1, 'indent': indent, 'title': block.title && at == 0},
+          if (line.isNotEmpty) 'content': _textNodes(line),
+        },
+        LineKind.quote => {'type': 'blockquote', 'attrs': {'indent': indent}, if (line.isNotEmpty) 'content': _textNodes(line)},
+        _ => _paragraph(line, indent),
+      },
+  ],
+};
+
+Json _paragraph(List<Run> runs, int indent) =>
+  {'type': 'paragraph', 'attrs': {'indent': indent}, if (runs.isNotEmpty) 'content': _textNodes(runs)};
+
+Json _tableNode(NoteTable table) => {
+  'type': 'table',
+  'attrs': {'source': table.source},
+  'content': [
+    for (final (at, row) in table.rows.indexed)
+      {'type': 'tableRow', 'content': [
+        for (final cell in row)
+          {'type': at == 0 ? 'tableHeader' : 'tableCell', 'content': [_paragraph([(cell, const {})], 0)]},
+      ]},
+  ],
+};
+
+List<Json> _textNodes(List<Run> runs) => [
+  for (final (words, marks) in tidyRuns(runs))
+    {'type': 'text', 'text': words, if (marks.isNotEmpty) 'marks': [
+      for (final mark in marks.toList()..sort((a, b) => _rankOf(a).compareTo(_rankOf(b)))) _markJson(mark),
+    ]},
+];
+
+Json _markJson(String mark) {
+  if (mark.startsWith(_linkKey)) return {'type': 'link', 'attrs': {'href': mark.substring(_linkKey.length), 'auto': false}};
+  if (mark.startsWith(_markKey)) return {'type': 'highlight', 'attrs': {'colour': mark.substring(_markKey.length)}};
+  return {'type': mark};
+}
+
+/// The mark key of a page's [mark], or null for one a note does not keep. A link the page made on a web address is
+/// none: the address stays words.
+String? _markOfJson(Json mark) {
+  final attrs = (mark['attrs'] as Map?) ?? const {};
+  return switch (mark['type']) {
+    'bold' || 'italic' || 'underline' || 'strike' => mark['type'] as String,
+    'highlight' => '$_markKey${attrs['colour']}',
+    'link' when attrs['auto'] != true => '$_linkKey${attrs['href'] ?? ''}',
+    _ => null,
+  };
+}
+
+List<Json> _children(Json node) => [for (final child in (node['content'] as List?) ?? const []) (child as Map).cast()];
+
+Json _attrs(Json node) => ((node['attrs'] as Map?) ?? const {}).cast();
+
+int _intOf(Object? value, [int or = 0]) => value is num ? value.toInt() : or;
+
+/// The runs of words in a text block [node].
+List<Run> _runsOfNode(Json node) => tidyRuns([
+  for (final child in _children(node))
+    if (child['type'] == 'text')
+      (child['text'] as String? ?? '', {for (final mark in (child['marks'] as List?) ?? const []) ?_markOfJson((mark as Map).cast())})
+    else if (child['type'] == 'hardBreak') ('\n', const {}),
+]);
+
+/// The words in a [node] and all inside it, with no marks.
+String _wordsOf(Json node) => node['type'] == 'text' ? node['text'] as String? ?? ''
+  : [for (final child in _children(node)) _wordsOf(child)].join(node['type'] == 'tableRow' ? '\t' : '');
+
+/// The blocks of the page's document [doc], the inverse of [blocksToDoc].
+List<NoteBlock> docToBlocks(Json doc) => [
+  for (final node in _children(doc)) ?_blockOf(node),
+];
+
+NoteBlock? _blockOf(Json node) {
+  final attrs = _attrs(node);
+  final indent = _intOf(attrs['indent']);
+  switch (node['type']) {
+    case 'attachment':
+      final id = '${attrs['id'] ?? ''}';
+      return NoteAttachment.placeable(id) ? NoteFileBlock(NoteAttachment(id, '${attrs['name'] ?? ''}')) : null;
+    case 'table':
+      final rows = [
+        for (final row in _children(node))
+          [for (final cell in _children(row)) _wordsOf(cell).replaceAll('\n', ' ')],
+      ];
+      if (rows.isEmpty) return null;
+      final source = attrs['source'];
+      return NoteTableBlock(NoteTable(rows, source: source is String ? source : null));
+    case 'codeBlock':
+      return NoteLine.plain(LineKind.code, _wordsOf(node));
+    case 'heading':
+      final level = _intOf(attrs['level'], 1).clamp(1, 3);
+      return NoteLine(LineKind.values[LineKind.header1.index + level - 1], _runsOfNode(node), indent: indent,
+        title: attrs['title'] == true);
+    case 'blockquote':
+      return NoteLine(LineKind.quote, _runsOfNode(node), indent: indent);
+    case 'item':
+      final kind = switch (attrs['kind']) {
+        'bullet' => LineKind.bullet,
+        'numbered' => LineKind.numbered,
+        'task' => attrs['checked'] == true ? LineKind.checked : LineKind.unchecked,
+        _ => LineKind.dashed,
+      };
+      final lines = _children(node);
+      return NoteLine(kind, [
+        for (final (at, line) in lines.indexed) ...[if (at > 0) ('\n', const <String>{}), ..._runsOfNode(line)],
+      ], indent: indent);
+    default:
+      return NoteLine(LineKind.paragraph, _runsOfNode(node), indent: indent);
+  }
+}
+
 /// A note's file at its place in the words: its id, and the name a reader of the text sees. The editor keeps it as one
-/// [AttachmentNode].
+/// [NoteFileBlock].
 class NoteAttachment {
   const NoteAttachment(this.id, this.name);
 
@@ -615,7 +706,7 @@ class NoteAttachment {
 }
 
 /// A table in a note: its rows of plain words, the first the head row, and the Markdown it was read from. The editor
-/// keeps it as one [NoteTableNode]; [id] tells two tables apart while the page is open.
+/// keeps it as one [NoteTableBlock].
 class NoteTable {
   NoteTable(List<List<String>> rows, {this.source, String? id})
     : rows = List.unmodifiable([for (final row in rows) List<String>.unmodifiable(row)]), id = id ?? _newId();

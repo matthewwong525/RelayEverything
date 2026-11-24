@@ -1,0 +1,50 @@
+@font-face { font-family: Inter; src: url(Inter.woff) format("woff"); font-weight: 100 900; }
+* { box-sizing: border-box; margin: 0; }
+body { background: #0C110F; color: #ECF3EE; font-family: Inter, sans-serif; width: 390px; min-height: 780px; position: relative; }
+.bar { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 6px; }
+.back { color: #4CC79A; font-size: 19px; }
+.pill { background: #161D1A; border-radius: 26px; padding: 10px 18px; display: flex; gap: 22px; font-size: 18px; color: #ECF3EE; }
+.page { padding: 4px 20px 120px; }
+.date { color: #9AA8A0; font-size: 13px; text-align: center; margin: 10px 0 14px; }
+h1 { font-size: 28px; font-weight: 700; margin-bottom: 6px; }
+p { font-size: 17px; line-height: 1.45; }
+.gap { height: 14px; }
+.rec { background: #161D1A; border-radius: 16px; padding: 12px 14px; }
+.rec .row { display: flex; align-items: center; gap: 12px; }
+.play { width: 42px; height: 42px; border-radius: 50%; background: #133328; color: #4CC79A; display: grid; place-items: center; font-size: 16px; }
+.wave { flex: 1; height: 26px; background: repeating-linear-gradient(90deg, #4a5550 0 2px, transparent 2px 5px); border-radius: 3px; }
+.len { color: #9AA8A0; font-size: 14px; }
+.tr { border-top: 1px solid #26302B; margin-top: 12px; padding-top: 10px; color: #9AA8A0; font-size: 14px; }
+.tr b { display: block; color: #ECF3EE; font-weight: 400; font-size: 15px; margin-top: 6px; }
+.photo { height: 170px; border-radius: 14px; background: linear-gradient(135deg, #2e4a3f, #133328 60%, #3a3220); display: grid; place-items: end start; padding: 10px; color: #ECF3EE; font-size: 12px; }
+.caret { display: inline-block; width: 2px; height: 20px; background: #4CC79A; vertical-align: -4px; }
+.hint { color: #9AA8A0; font-size: 13px; text-align: center; margin-top: 22px; }
+.tools { position: absolute; bottom: 22px; left: 16px; background: #161D1A; border-radius: 28px; padding: 14px 24px; display: flex; gap: 30px; font-size: 18px; }
+.compose { position: absolute; bottom: 20px; right: 18px; width: 56px; height: 56px; border-radius: 50%; background: #4CC79A; color: #06281A; display: grid; place-items: center; font-size: 20px; }
+/* Lists and spacing for this plan */
+.li { display: flex; font-size: 17px; line-height: 1.45; }
+.li .m { width: 30px; flex: none; text-align: right; padding-right: 8px; color: #ECF3EE; }
+.li.in1 { padding-left: 30px; }
+.sub { font-size: 17px; line-height: 1.45; }
+.sub.loose { margin: 8px 0 8px 30px; }
+.sub.tight { margin-left: 38px; }
+.sel { background: rgba(76, 199, 154, .35); border-radius: 2px; }
+.bad { outline: 1px dashed #E0866B; outline-offset: 2px; border-radius: 2px; }
+/* This plan */
+.task { display: flex; align-items: flex-start; font-size: 17px; line-height: 1.45; margin-top: 6px; }
+.task .c { width: 22px; height: 22px; flex: none; border-radius: 50%; border: 1.5px solid #9AA8A0; margin: 2px 10px 0 0; }
+.task .c.on { background: #4CC79A; border-color: #4CC79A; color: #06281A; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+.task.done span:last-child { color: #9AA8A0; }
+h2 { font-size: 22px; font-weight: 700; margin: 14px 0 4px; }
+.li { margin-top: 6px; }
+.sel.ends { position: relative; }
+.sel.ends::before, .sel.ends::after { content: ""; position: absolute; width: 2px; height: 24px; background: #4CC79A; top: -1px; border-radius: 1px; }
+.sel.ends::before { left: -1px; } .sel.ends::after { right: -1px; }
+.sel.ends.ios::before { box-shadow: 0 -7px 0 3px #4CC79A; } .sel.ends.ios::after { box-shadow: 0 7px 0 3px #4CC79A; }
+.drawn { position: absolute; background: #EDEDED; color: #111; border-radius: 8px; padding: 8px 12px; display: flex; gap: 14px; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+.sys { position: absolute; background: rgba(60,64,62,.96); color: #fff; border-radius: 12px; padding: 10px 14px; display: flex; gap: 0; font-size: 15px; backdrop-filter: blur(10px); }
+.sys span { white-space: nowrap; padding: 0 10px; border-left: 1px solid rgba(255,255,255,.18); } .sys span:first-child { border-left: none; }
+.floatbar { position: absolute; left: 10px; right: 10px; bottom: 306px; background: #161D1A; border-radius: 26px; padding: 12px 20px; display: flex; justify-content: space-between; font-size: 17px; }
+.floatbar b { color: #4CC79A; }
+.keys { position: absolute; left: 0; right: 0; bottom: 0; height: 300px; background: #1B211E; border-radius: 22px 22px 0 0; display: grid; place-items: center; color: #9AA8A0; font-size: 13px; text-align: center; line-height: 1.5; }
+.tag { position: absolute; left: 0; right: 0; top: 405px; text-align: center; color: #9AA8A0; font-size: 12px; }

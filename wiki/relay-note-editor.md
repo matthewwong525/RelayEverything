@@ -1,29 +1,52 @@
 # The note editor
 
-The note editor is the page where a person writes a note, on the iPhone, the Mac app and the web page. It is built on super_editor, and this page gives what is not clear from the code: why super_editor, what it changes, and what to check before a change. Up: [the wiki](README.md).
+The note editor is the page where a person writes a note, on the iPhone, Android, the Mac app and the web page. It is a [Tiptap](https://tiptap.dev) web page in a web view, and this page gives what is not clear from the code: why a web editor, how the app and the page talk, and what to check before a change. Up: [the wiki](README.md).
 
-## Why super_editor, not flutter_quill
+## Why a web editor
 
-- **Until 2026-11-19 the editor was flutter_quill.** It knows only single and double clicks, so a triple-click could not select a line, and each fix fought the editor.
-- **super_editor is an editor made of blocks, as Notion is.** The move ([PR #155](https://github.com/matthewwong525/RelayEverything/pull/155)) gave a triple-click that selects one line, pasted lists that keep their numbers, and even spacing between lines. The plan is in [the archive](../openspec/changes/archive/2026-11-19-note-editor-super-editor/proposal.md), and what shipped is in [the note editing spec](../openspec/specs/relay-note-editing/spec.md).
-- **Notes stay the same Markdown.** The server, AI apps and webhooks read the same text as before the move.
-- **Two flutter_quill workarounds are gone**: the custom Cut, Copy and Select All of the old text menu, and the caret reveal after each frame. Read the super_editor code before you bring either back.
+- **Until 2026-11-19 the editor was flutter_quill, then super_editor** ([PR #155](https://github.com/matthewwong525/RelayEverything/pull/155)). Both are Flutter editors: Flutter draws each letter, so the editor also draws the cursor, the handles and the magnifier, and reads the keyboard through its own code. On a phone the copy is close, never equal, and in the browser the note was a picture that the browser's selection, spell check and find did not see.
+- **Tiptap uses the system's own text editing on each platform.** The cursor, the handles, the text menu, autocorrect, dictation and spell check are the iPhone's, Android's, the Mac's or the browser's own. What shipped is in [the note editing spec](../openspec/specs/relay-note-editing/spec.md).
+- **Notes stay the same Markdown.** The server, AI apps and webhooks read the same text as before. The Dart code stays the one reader and writer of Markdown and of a paste: the page gets and gives only the editor's document, as JSON.
 
 ## Where the code is
 
-- [`mobile/lib/screens/note_editor.dart`](../mobile/lib/screens/note_editor.dart): the note page, its keys, its caret and its bars.
-- [`mobile/lib/editor/`](../mobile/lib/editor/): the document and Undo (`note_editing.dart`), Markdown (`markdown.dart`), paste (`paste.dart`), tables (`table.dart`), commands such as indent (`note_commands.dart`) and the text menus (`system_menu.dart`). [The phone app's README](../mobile/README.md#where-the-code-is) gives each file.
+- [`mobile/editor-web/`](../mobile/editor-web/): the editor page. `src/schema.js` holds the document's parts, `src/editor.js` the bridge and the commands, `src/cards.js` the file and recording cards, and `test/editor.test.mjs` the tests in a real Chromium.
+- [`mobile/assets/editor/`](../mobile/assets/): the built page that the app ships. Never edit it by hand: run `npm run build` in `mobile/editor-web/`. CI refuses a build whose `source.sha256` does not match `src/`.
+- [`mobile/lib/editor/web_note/`](../mobile/lib/editor/web_note/): `WebNote`, the app's side of the bridge; the web view host for the phones and the Mac, and the frame host for the web page; and `WebNotePool`, which starts a page before a note needs it.
+- [`mobile/lib/screens/note_editor.dart`](../mobile/lib/screens/note_editor.dart): the note page, its bars, saving, files and recordings. [The phone app's README](../mobile/README.md#where-the-code-is) gives each file.
 
-## What super_editor does not do for you
+## How the app and the page talk
 
-- **Tab moves only the selection's last line in super_editor.** The note catches Tab and Shift+Tab and moves every selected line (`NoteCommands.indent`). With no selection, Tab moves the line with the cursor.
-- **The computer caret is black by default**, so a dark page hides it. The note draws the caret in the text colour (`onSurface`). The phone keeps its own caret and handles.
-- **On an iPhone, a hold on words selects them.** A paste over a selection can look unchanged. To get the text menu at a cursor, tap the words, then tap the cursor again: [the iPhone check's tour](development/device-check-tour.md) does this.
+The app and the page send small JSON messages. The app's have `do`; the page's have `is`.
+
+- **The app sends** `load` (the document, the colours, the date line and each file's look), `run` (one command, such as `bold` or `line heading`), `files`, `theme`, `bottom`, `head`, `highlight` and the answer to a `paste`.
+- **The page sends** `ready`, `changed` (the whole document after each change), `state` (the cursor's styles, for the bars), `paste` (the HTML, for the Dart paste reader), `tap` (on a card: play, seek, open), `open` (a link), `keys` and `drop`.
+- **The app keeps the words after each change.** The system can stop a web view in the background: `WebNote.gone` starts the page again with the last document.
+
+## The tests
+
+- **The page's typing tests run in Chromium**: `npm test` in `mobile/editor-web/`. Write a test for typing, a key, a paste's placement or a card there.
+- **The Flutter tests use `FakeWebNote`** from [`mobile/test/fakes.dart`](../mobile/test/fakes.dart): a test reads the messages sent (`runs`, `loaded`, `viewOf`) and plays the page's (`write`, `say`, `tap`, `key`).
+- **The golden notes** in `mobile/test/golden_notes.dart` must come back byte for byte through the page's document. Add each new kind of note text there.
+
+## Where a web editor is hard
+
+- **The keyboard and our bars.** A bar button takes no focus, so the keyboard stays up when it is tapped. On the iPhone, `RelayWebKeyboard.swift` hides the bar of arrows over the keyboard and lets the page raise the keyboard for a new note.
+- **Android keyboards.** Web editors have had typing bugs with some keyboards: test with Gboard and a Samsung keyboard.
+- **Moving a block by touch.** A drag is weak in web editors on a phone: plan a *Move up* and *Move down* menu.
+
+## Before you change the editor package
+
+- **Keep Markdown as the stored form.** The server, the AI connector, webhooks and old notes read it, whatever editor shows it.
+- **Pin each package of `mobile/editor-web/` to one exact version**, with the lock file. A new version is its own change, with a new build.
+- **The other editors, as of November 2026**: [appflowy_editor](https://pub.dev/packages/appflowy_editor) does not build on a current Flutter and has an unclear license; [fleather](https://pub.dev/packages/fleather) and [flutter_quill](https://pub.dev/packages/flutter_quill) have no blocks; super_editor draws its own text, as above; a native editor for each platform gives the best feel, but three or four editors to keep.
 
 ## Before you merge a change to the editor
 
-Check these by hand, because the tests did not catch them after the move:
+Check these by hand on a real iPhone, because the tests do not catch them:
 
-- **Dark mode**: the caret shows on the web page and the Mac app.
-- **Tab and Shift+Tab on several selected lines**: all of them move.
-- **A triple-tap on a real iPhone and a triple-click in the Mac app**: the iPhone check taps too slowly to count as three, so only a real device shows it.
+- **No bar of arrows over the keyboard**, and the keyboard stays up on a bar tap.
+- **The cursor stays above the bar** while you type at the end of a long note.
+- **A new note opens with the keyboard up.**
+- **No white flash** when a note opens in dark mode.
+- **A triple-tap selects one line**: the iPhone check taps too slowly to count as three.

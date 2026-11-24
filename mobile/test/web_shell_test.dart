@@ -1,14 +1,10 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show TargetPlatform, debugDefaultTargetPlatformOverride;
-import 'package:flutter/gestures.dart' show PointerDeviceKind, kSecondaryMouseButton;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show CustomSemanticsAction, SemanticsAction;
+import 'package:flutter/rendering.dart' show CustomSemanticsAction;
 import 'package:flutter/services.dart';
-import 'package:relay_app/editor/markdown.dart' show HighlightAttribution;
-import 'package:relay_app/editor/note_commands.dart';
-import 'package:super_editor/super_editor.dart'
-  show boldAttribution, italicsAttribution, strikethroughAttribution, underlineAttribution;
+import 'package:relay_app/editor/web_note/cover.dart' show NoteCover;
+import 'package:relay_app/editor/markdown.dart' show LineKind, plainText;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:relay_app/brand.dart';
@@ -26,11 +22,10 @@ import 'package:relay_app/web/connection_page.dart';
 import 'package:relay_app/web/other_connections.dart';
 import 'package:relay_app/web/settings_dialog.dart';
 import 'package:relay_app/web/shell.dart';
-import 'package:relay_app/web/paste_none.dart' show browserPaste;
 import 'package:relay_app/web/web_relay.dart';
 
-import 'fakes.dart' show FakePlayer;
-import 'screens_test.dart' show FakeRelay, editorFocus, markdownOf, note, noteEditor, noteState, onLetter, stylesOf, type;
+import 'fakes.dart' show FakePageView, FakePlayer, FakeWebNote;
+import 'screens_test.dart' show FakeRelay, markdownOf, noteState, pageOf, tapWords, write;
 import 'web_space_fixture.dart';
 
 const wide = Size(1440, 900);
@@ -108,7 +103,24 @@ void main() {
 
   NoteEditorState editor(WidgetTester tester) => tester.state<NoteEditorState>(find.byType(NoteEditor));
 
+  /// The key of the first recording's card in the note's page.
+  String recordingKey(FakeWebNote page) => (page.loaded['files']! as Map).entries
+    .firstWhere((file) => (file.value as Map)['kind'] == 'recording').key as String;
+
   group('three panes from 1000 px', () {
+    testWidgets('the left bar opened at a middle width stops covering the note when a resize takes it away',
+        (tester) async {
+      for (final to in [wide, narrow]) {
+        await show(tester, middle);
+        tester.firstState<ScaffoldState>(find.byType(Scaffold)).openDrawer();
+        await tester.pumpAndSettle();
+        expect(NoteCover.open.value, 1);
+        await resize(tester, to);
+        expect(NoteCover.open.value, 0, reason: 'resized to $to');
+        await finish(tester);
+      }
+    });
+
     testWidgets('Recently Deleted shows under Notes only while it holds a note, and opens its notes to read only',
         (tester) async {
       await show(tester, wide);
@@ -157,7 +169,7 @@ void main() {
       await show(tester, wide);
       expect(find.byType(NotesPane), findsOneWidget);
       expect(editor(tester).id, 'own');
-      expect(note(tester).text, startsWith('Groceries'));
+      expect(markdownOf(tester), startsWith('# Groceries'));
       for (final tool in ['New note', 'Text styles', 'Checklist', 'Table', 'Attach', 'Share', 'More']) {
         expect(find.byTooltip(tool), findsOneWidget, reason: tool);
       }
@@ -211,13 +223,14 @@ void main() {
           length: Duration(seconds: 8), top: true)])];
       await show(tester, wide);
       expect(editor(tester).id, 'voice');
-      final waves = find.descendant(of: find.byKey(const ValueKey('waves')), matching: find.byType(CustomPaint));
-      expect((tester.widget<CustomPaint>(waves).painter! as WavePainter).levels, isEmpty);
-      expect(find.descendant(of: find.byType(VoicePlayer), matching: find.text('0:08')), findsOneWidget);
-      await tester.tap(find.descendant(of: find.byType(VoicePlayer), matching: find.byTooltip('Play')));
+      final page = pageOf(tester);
+      expect((page.loaded['head']! as Map)['above'], ['head:0']);
+      expect([page.viewOf('head:0')!['kind'], page.viewOf('head:0')!['length'], page.viewOf('head:0')!['levels']],
+        ['recording', 8000, isEmpty]);
+      page.tap('head:0', 'play');
       await tester.pump();
       expect(relay.calls, contains('play https://relay.example.com/v1/notes/voice/recording'));
-      expect(find.descendant(of: find.byType(VoicePlayer), matching: find.byTooltip('Pause')), findsOneWidget);
+      expect(page.viewOf('head:0')!['playing'], isTrue);
       await finish(tester);
     });
 
@@ -227,18 +240,17 @@ void main() {
         EntryRecording(id: 'r1', recording: '', ready: false, transcript: 'Call the dentist at 3', length: Duration(seconds: 8),
           top: true)])];
       await show(tester, wide);
-      final card = find.byType(RecordingCard);
-      expect([find.descendant(of: card, matching: find.text('Still on your phone')),
-        find.descendant(of: card, matching: find.text('Transcript'))], everyElement(findsOneWidget));
-      expect([find.byType(VoicePlayer), find.byTooltip('Record')], everyElement(findsNothing));
+      final page = pageOf(tester);
+      expect([page.viewOf('r1')!['ready'], page.viewOf('r1')!['status']], [false, 'words']);
+      expect(find.byTooltip('Record'), findsNothing);
       relay
         ..entries = [Entry(id: 'voice', text: '', at: now, sent: true, from: 'iPhone', recordings: const [
           EntryRecording(id: 'r1', recording: 'https://relay.example.com/apps/relay/api/attachment?id=r1',
             transcript: 'Call the dentist at 3', length: Duration(seconds: 8), top: true)])]
         ..changed();
       await tester.pumpAndSettle();
-      expect([find.text('Still on your phone'), find.byType(VoicePlayer)], [findsNothing, findsOneWidget]);
-      await tester.tap(find.descendant(of: find.byType(VoicePlayer), matching: find.byTooltip('Play')));
+      expect(page.viewOf('r1')!['ready'], isTrue);
+      page.tap('r1', 'play');
       await tester.pump();
       expect(relay.calls, contains('play https://relay.example.com/apps/relay/api/attachment?id=r1'));
       await finish(tester);
@@ -498,25 +510,19 @@ void main() {
     await tester.pumpWidget(MaterialApp(theme: brandTheme(Brightness.light),
       home: WebShell(relay: web, client: space.client, drops: drops.stream, opener: (_) async => true)));
     await tester.pumpAndSettle();
-    Finder inPlayer(Finder finder) => find.descendant(of: find.byType(VoicePlayer), matching: finder);
-    expect(inPlayer(find.text('0:00')), findsNothing, reason: 'no time shows before the player knows the length');
-    await tester.tap(inPlayer(find.byTooltip('Play')));
-    await tester.pump();
-    expect(inPlayer(find.text('0:00 / 0:08')), findsOneWidget);
-    final waves = find.byKey(const ValueKey('waves'));
-    await tester.tapAt(tester.getCenter(waves));
-    await tester.pump();
+    final page = pageOf(tester);
+    final key = recordingKey(page);
+    expect(page.viewOf(key)!['length'], isNull, reason: 'no time shows before the player knows the length');
+    page.tap(key, 'play');
+    await tester.pumpAndSettle();
+    expect(page.viewOf(key)!['length'], 8000);
+    page.tap(key, 'seek', 0.5);
+    await tester.pumpAndSettle();
     expect(player.calls, contains('seek 4000'));
-    expect(inPlayer(find.text('0:04 / 0:08')), findsOneWidget);
-    final painter = tester.widget<CustomPaint>(find.descendant(of: waves, matching: find.byType(CustomPaint))).painter!
-      as WavePainter;
-    expect(painter.done, closeTo(0.5, 0.01), reason: 'the line fills as it plays');
-    final slider = tester.getSemantics(find.descendant(of: find.byType(VoicePlayer),
-      matching: find.bySemanticsLabel('Recording')).first);
-    expect(slider.getSemanticsData().hasAction(SemanticsAction.increase), isTrue);
-    await tester.tap(inPlayer(find.byTooltip('Pause')));
-    await tester.pump();
-    expect(inPlayer(find.text('0:04 / 0:08')), findsOneWidget);
+    expect(page.viewOf(key)!['position'], 4000, reason: 'the line fills as it plays');
+    page.tap(key, 'pause');
+    await tester.pumpAndSettle();
+    expect([page.viewOf(key)!['position'], page.viewOf(key)!['playing']], [4000, false]);
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 11));
   });
@@ -540,20 +546,20 @@ void main() {
     await tester.pumpWidget(MaterialApp(theme: brandTheme(Brightness.light),
       home: WebShell(relay: web, client: space.client, drops: drops.stream, opener: (_) async => true)));
     await tester.pumpAndSettle();
-    await tester.tapAt(tester.getCenter(find.byKey(const ValueKey('waves'))));
-    await tester.pump();
+    final page = pageOf(tester);
+    final key = recordingKey(page);
+    page.tap(key, 'seek', 0.5);
+    await tester.pumpAndSettle();
     expect(player.calls, ['play', 'seek 4000']);
-    expect(find.descendant(of: find.byType(VoicePlayer), matching: find.text('0:04 / 0:08')), findsOneWidget);
+    expect([page.viewOf(key)!['position'], page.viewOf(key)!['length']], [4000, 8000]);
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 11));
   });
 
   testWidgets('the open note gives its words to the page before the pause saves them, for a closing page', (tester) async {
     await show(tester, wide);
-    await tester.tap(noteEditor);
-    await tester.pump();
-    note(tester).select(TextSelection.collapsed(offset: note(tester).text.length - 1));
-    await type(tester, ' and bread');
+    await tapWords(tester);
+    await write(tester, '# Groceries\nmilk and eggs and bread');
     expect(relay.calls.where((call) => call.startsWith('edit')), isEmpty, reason: 'the pause has not ended');
     final words = relay.editorWords!()!;
     expect(words.id, 'own');
@@ -567,13 +573,45 @@ void main() {
   testWidgets('the open note and its unsaved words stay through each resize', (tester) async {
     await show(tester, wide);
     final first = editor(tester);
-    note(tester).select(TextSelection.collapsed(offset: note(tester).text.length - 1));
-    await type(tester, ' and bread');
+    final page = pageOf(tester);
+    // The page's view keeps its place in the tree: a frame moved in the browser's page loads its page again.
+    final view = tester.element(find.byType(FakePageView));
+    await tapWords(tester);
+    await write(tester, '# Groceries\nmilk and eggs and bread');
     for (final size in [middle, narrow, wide]) {
       await resize(tester, size);
-      expect(editor(tester), same(first), reason: '$size');
-      expect(note(tester).text, contains('milk and eggs and bread'), reason: '$size');
+      expect([editor(tester), pageOf(tester)], [same(first), same(page)], reason: '$size');
+      expect(tester.element(find.byType(FakePageView)), same(view), reason: '$size');
+      expect(markdownOf(tester), contains('milk and eggs and bread'), reason: '$size');
     }
+    expect([page.sent('load').length, page.reloads], [1, 0]);
+    await finish(tester);
+  });
+
+  testWidgets('in the narrow layout the page lets Ctrl+F through to the browser, and takes it again when wide',
+      (tester) async {
+    await show(tester, wide);
+    final page = pageOf(tester);
+    expect(page.loaded['appKeys'], ['new-note', 'find', 'delete-note']);
+    await resize(tester, narrow);
+    expect(page.sent('appKeys').last['appKeys'], ['new-note', 'delete-note'], reason: "the browser's own find runs");
+    await resize(tester, wide);
+    expect(page.sent('appKeys').last['appKeys'], ['new-note', 'find', 'delete-note']);
+    expect(page.sent('load'), hasLength(1));
+    await finish(tester);
+  });
+
+  testWidgets('a page that starts again by itself gets the note back, with its files and settings', (tester) async {
+    await show(tester, wide);
+    final page = pageOf(tester);
+    await resize(tester, narrow);
+    page
+      ..posts.clear()
+      ..boot();
+    await tester.pumpAndSettle();
+    final again = page.sent('load').single;
+    expect([again['appKeys'], again['focus']], [['new-note', 'delete-note'], false]);
+    expect(page.markdown, contains('milk and eggs'));
     await finish(tester);
   });
 
@@ -581,19 +619,29 @@ void main() {
     testWidgets('Ctrl+Alt+N starts a new note, and Cmd+Alt+N does too', (tester) async {
       await show(tester, wide);
       await press(tester, [LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.altLeft], LogicalKeyboardKey.keyN);
-      expect(note(tester).text, '\n');
+      expect(plainText(markdownOf(tester)).trim(), isEmpty);
       expect(editor(tester).id, isNot('own'));
+      final first = editor(tester).id;
+      await press(tester, [LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.altLeft], LogicalKeyboardKey.keyN);
+      expect(editor(tester).id, isNot(first));
+      // The same key pressed in the note's words comes up from the page.
+      final second = editor(tester).id;
+      pageOf(tester).key('new-note');
+      await tester.pumpAndSettle();
+      expect(editor(tester).id, isNot(second));
       await finish(tester);
     });
 
     testWidgets('Ctrl+F goes to search, even from the open note', (tester) async {
       await show(tester, wide);
-      await tester.tap(noteEditor);
-      await tester.pump();
-      await press(tester, [LogicalKeyboardKey.controlLeft], LogicalKeyboardKey.keyF);
+      await tapWords(tester);
+      // The page passes Ctrl+F in the words up to the app.
+      pageOf(tester).key('find');
+      await tester.pumpAndSettle();
       final field = tester.widget<TextField>(find.descendant(of: find.byType(SearchField), matching: find.byType(TextField)));
       expect(field.focusNode!.hasFocus, isTrue);
       expect(find.byType(Dialog), findsNothing, reason: "the editor's own find box stays shut");
+      expect(pageOf(tester).runs.where((run) => run.startsWith('find')), isEmpty);
       await tester.tap(inSidebar('Health'));
       await tester.pumpAndSettle();
       await press(tester, [LogicalKeyboardKey.metaLeft], LogicalKeyboardKey.keyF);
@@ -618,34 +666,21 @@ void main() {
       await finish(tester);
     });
 
-    testWidgets("Ctrl+B and Ctrl+I are the editor's bold and italic", (tester) async {
+    testWidgets("the page does Ctrl+B, Ctrl+I and the other format keys in the browser, and passes up the app's keys",
+        (tester) async {
       await show(tester, wide);
-      await tester.tap(noteEditor);
-      await tester.pump();
-      note(tester).select(const TextSelection(baseOffset: 10, extentOffset: 14));
-      await press(tester, [LogicalKeyboardKey.controlLeft], LogicalKeyboardKey.keyB);
-      await press(tester, [LogicalKeyboardKey.controlLeft], LogicalKeyboardKey.keyI);
-      final style = stylesOf(tester);
-      expect(style.contains(boldAttribution), isTrue);
-      expect(style.contains(italicsAttribution), isTrue);
+      final load = pageOf(tester).loaded;
+      expect([load['keys'], load['appKeys']], [true, ['new-note', 'find', 'delete-note']]);
       await finish(tester);
     });
   });
 
   group('format tools', () {
-    bool noteFocused(WidgetTester tester) => editorFocus(tester).hasFocus;
-
-    Future<void> cursorAt(WidgetTester tester, TextSelection selection) async {
-      await tester.tap(noteEditor);
-      await tester.pump();
-      note(tester).select(selection);
-      await tester.pump();
-    }
-
-    testWidgets('Text styles opens a menu under it: a pick styles the line, closes the menu and leaves the cursor',
+    testWidgets('Text styles opens a menu under it: a pick styles the line, closes the menu and gives the page the cursor',
         (tester) async {
       await show(tester, wide);
-      await cursorAt(tester, const TextSelection.collapsed(offset: 14));
+      await tapWords(tester);
+      final page = pageOf(tester);
       await tester.tap(find.byTooltip('Text styles'));
       await tester.pumpAndSettle();
       for (final item in ['Title', 'Heading', 'Subheading', 'Body', 'Monostyled', 'Bulleted List', 'Dashed List',
@@ -655,26 +690,26 @@ void main() {
       await tester.tap(find.widgetWithText(MenuItemButton, 'Heading'));
       await tester.pumpAndSettle();
       expect(find.widgetWithText(MenuItemButton, 'Heading'), findsNothing, reason: 'a pick closes the menu');
-      expect(markdownOf(tester), '# Groceries\n## milk and eggs');
-      expect([noteFocused(tester), note(tester).selection], [isTrue, const TextSelection.collapsed(offset: 14)]);
+      expect(page.runs.skip(page.runs.length - 2), ['line heading', 'focus']);
       // The pen takes the colour picked in the menu, and the colour is kept.
-      note(tester).select(const TextSelection(baseOffset: 10, extentOffset: 14));
       await tester.tap(find.byTooltip('Text styles'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Pink'));
       await tester.pumpAndSettle();
       expect(relay.calls, contains('highlight pink'));
+      expect(page.runs.last, 'recolour pink', reason: 'a highlight in the words picked takes the new colour');
+      expect(page.sent('highlight').last['colour'], 'pink', reason: "the page's highlight key takes the new colour");
       await tester.tap(find.byTooltip('Highlight'));
       await tester.pumpAndSettle();
-      expect(markdownOf(tester), '# Groceries\n## <mark class="pink">milk</mark> and eggs');
-      expect(noteFocused(tester), isTrue);
+      expect(page.runs.skip(page.runs.length - 2), ['highlight pink', 'focus']);
       await finish(tester);
     });
 
-    testWidgets("the open Text styles menu moves its ✓ to the line style of the cursor's line", (tester) async {
-      relay.entries = [Entry(id: 'own', text: '# Groceries\n## Dairy\nmilk and eggs', at: now, sent: true)];
+    testWidgets("the open Text styles menu moves its ✓ to the line style the page says the cursor is on", (tester) async {
       await show(tester, wide);
-      await cursorAt(tester, const TextSelection.collapsed(offset: 12));
+      await tapWords(tester);
+      final page = pageOf(tester)..say(kind: LineKind.header2);
+      await tester.pump();
       await tester.tap(find.byTooltip('Text styles'));
       await tester.pumpAndSettle();
       List<String> ticked() => [
@@ -683,117 +718,13 @@ void main() {
             != null) style,
       ];
       expect(ticked(), ['Heading']);
-      note(tester).select(const TextSelection.collapsed(offset: 20));
+      page.say(kind: LineKind.paragraph);
       await tester.pumpAndSettle();
       expect(ticked(), ['Body']);
-      note(tester).select(const TextSelection.collapsed(offset: 12));
+      page.say(kind: LineKind.header2);
       await tester.pumpAndSettle();
       expect(ticked(), ['Heading']);
       await finish(tester);
-    });
-
-    testWidgets("a colour picked in the Text styles menu recolours the highlight of the words picked", (tester) async {
-      await show(tester, wide);
-      await cursorAt(tester, const TextSelection(baseOffset: 10, extentOffset: 14));
-      NoteCommands(note(tester)).highlightWith('purple');
-      await tester.pump();
-      await tester.tap(find.byTooltip('Text styles'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Pink'));
-      await tester.pumpAndSettle();
-      expect(relay.calls, contains('highlight pink'));
-      expect(markdownOf(tester), '# Groceries\n<mark class="pink">milk</mark> and eggs');
-      await finish(tester);
-    });
-
-    testWidgets('off a Mac, Ctrl+Alt with a digit made by AltGr styles nothing, so the letter types', (tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
-      await show(tester, wide);
-      await cursorAt(tester, const TextSelection.collapsed(offset: 14));
-      // AltGr comes as left Ctrl and right Alt.
-      await press(tester, [LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.altRight], LogicalKeyboardKey.digit2);
-      expect(markdownOf(tester), '# Groceries\nmilk and eggs');
-      await press(tester, [LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.altLeft], LogicalKeyboardKey.digit2);
-      expect(markdownOf(tester), '# Groceries\n## milk and eggs');
-      await finish(tester);
-      debugDefaultTargetPlatformOverride = null;
-    });
-
-    for (final mac in [false, true]) {
-      testWidgets('${mac ? '⌘' : 'Ctrl'} with the format keys styles the line and the words picked', (tester) async {
-        if (mac) debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-        final command = mac ? LogicalKeyboardKey.metaLeft : LogicalKeyboardKey.controlLeft;
-        const shift = LogicalKeyboardKey.shiftLeft, alt = LogicalKeyboardKey.altLeft;
-        await show(tester, wide);
-        await cursorAt(tester, const TextSelection.collapsed(offset: 14));
-        await press(tester, [command, shift], LogicalKeyboardKey.keyH);
-        expect(markdownOf(tester), '# Groceries\n## milk and eggs');
-        await press(tester, [command, alt], LogicalKeyboardKey.digit1);
-        expect(markdownOf(tester), '# Groceries\n# milk and eggs');
-        await press(tester, [command, shift], LogicalKeyboardKey.keyB);
-        expect(markdownOf(tester), '# Groceries\nmilk and eggs');
-        await press(tester, [command, shift], LogicalKeyboardKey.digit9);
-        expect(markdownOf(tester), '# Groceries\n1. milk and eggs');
-        await press(tester, [command, shift], LogicalKeyboardKey.digit9);
-        note(tester).select(const TextSelection(baseOffset: 10, extentOffset: 14));
-        await press(tester, [command], LogicalKeyboardKey.keyU);
-        await press(tester, [command, shift], LogicalKeyboardKey.keyX);
-        await press(tester, [command, shift], LogicalKeyboardKey.keyE);
-        final style = stylesOf(tester);
-        expect([style.contains(underlineAttribution), style.contains(strikethroughAttribution),
-          style.contains(const HighlightAttribution('purple'))], [true, true, true]);
-        expect(noteFocused(tester), isTrue);
-        await finish(tester);
-        debugDefaultTargetPlatformOverride = null;
-      });
-    }
-
-    testWidgets('a right-click on words picked offers Bold, Italic, Underline, Strikethrough, Highlight and Link…',
-        (tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.linux;
-      await show(tester, wide);
-      await cursorAt(tester, const TextSelection(baseOffset: 10, extentOffset: 14));
-      // A real right-click on the words picked.
-      await tester.tapAt(onLetter(tester, 12, 0.5), buttons: kSecondaryMouseButton, kind: PointerDeviceKind.mouse);
-      await tester.pumpAndSettle();
-      for (final item in ['Bold', 'Italic', 'Underline', 'Strikethrough', 'Highlight', 'Link…']) {
-        expect(find.text(item), findsOneWidget, reason: item);
-      }
-      await tester.tap(find.text('Bold'));
-      await tester.pumpAndSettle();
-      expect(markdownOf(tester), '# Groceries\n**milk** and eggs');
-      expect(find.text('Italic'), findsNothing, reason: 'a pick closes the menu');
-      await finish(tester);
-      debugDefaultTargetPlatformOverride = null;
-    });
-  });
-
-  group('typing, paste and clicks in the browser', () {
-    testWidgets("a paste from the page's paste event keeps a list's numbers and the lines in its items, and a triple "
-        'click selects one line', (tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.linux;
-      await show(tester, wide);
-      await tester.tap(noteEditor);
-      await tester.pump(const Duration(seconds: 1));
-      note(tester).select(TextSelection.collapsed(offset: note(tester).text.length));
-      await type(tester, '\nPlan');
-      await type(tester, '\n');
-      final pasted = browserPaste(html: '<ol><li>Pack the crate<br>Why: tape the lid</li><li>Ship it</li></ol>',
-        plain: 'Pack the crate\nWhy: tape the lid\nShip it');
-      await tester.pump();
-      expect(pasted, isTrue);
-      expect(markdownOf(tester), '# Groceries\nmilk and eggs\nPlan\n1. Pack the crate\n   Why: tape the lid\n2. Ship it');
-      await tester.pump(const Duration(seconds: 1));
-      final tape = note(tester).text.indexOf('tape');
-      for (var click = 0; click < 3; click++) {
-        await tester.tapAt(onLetter(tester, tape + 1, 0.5), kind: PointerDeviceKind.mouse);
-        await tester.pump(const Duration(milliseconds: 50));
-      }
-      await tester.pumpAndSettle();
-      final line = note(tester).text.indexOf('Why: tape the lid');
-      expect(note(tester).selection, TextSelection(baseOffset: line, extentOffset: line + 'Why: tape the lid'.length));
-      await finish(tester);
-      debugDefaultTargetPlatformOverride = null;
     });
   });
 

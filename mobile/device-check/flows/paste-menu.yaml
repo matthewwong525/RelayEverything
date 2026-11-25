@@ -2,7 +2,8 @@
 # selection's has Copy, and Paste puts the words back in. A hold in words that can change moves the cursor with the
 # magnifier, as in Notes, and selects nothing, so the check uses no hold. The copy comes from this app,
 # so iOS asks no Allow Paste question here in any case: the device check's `xcrun simctl pbcopy` scenario checks that.
-# A tap right of the title puts the cursor at its end, and a second tap on it opens the cursor's menu.
+# A tap on the words puts the cursor there, and a second tap at the same place, on the cursor, opens its menu: a tap
+# right of the line moves the cursor again and opens nothing.
 appId: com.matthewwong525.relayApp
 ---
 - launchApp:
@@ -16,10 +17,8 @@ appId: com.matthewwong525.relayApp
     visible: "Done"
     timeout: 30000
 - inputText: "Paste check"
-- tapOn:
-    point: "85%,20%"
-- tapOn:
-    point: "85%,20%"
+- tapOn: "Paste check"
+- tapOn: "Paste check"
 - extendedWaitUntil:
     visible: "Select All"
     timeout: 30000
@@ -29,10 +28,8 @@ appId: com.matthewwong525.relayApp
     visible: "Copy"
     timeout: 30000
 - tapOn: "Copy"
-- tapOn:
-    point: "85%,20%"
-- tapOn:
-    point: "85%,20%"
+- tapOn: "Paste check"
+- tapOn: "Paste check"
 - extendedWaitUntil:
     visible: "Paste"
     timeout: 30000

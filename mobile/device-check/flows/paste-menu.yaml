@@ -28,6 +28,9 @@ appId: com.matthewwong525.relayApp
     visible: "Copy"
     timeout: 30000
 - tapOn: "Copy"
+# A tap in a selection only shows or hides its menu: a tap right of the line drops the selection first.
+- tapOn:
+    point: "85%,20%"
 - tapOn: "Paste check"
 - tapOn: "Paste check"
 - extendedWaitUntil:

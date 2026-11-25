@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -80,8 +79,5 @@ class NativeWebNote extends WebNote {
   void reloadPage() => unawaited(controller.loadFlutterAsset(editorPage));
 
   @override
-  // The page takes each touch at once: while Flutter's gesture arena holds a touch, the iPhone never sees a hold, so
-  // a hold showed no selection and no text menu. The bars above the page still take their own touches first.
-  Widget view() => WebViewWidget(controller: controller,
-    gestureRecognizers: {Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new)});
+  Widget view() => WebViewWidget(controller: controller);
 }

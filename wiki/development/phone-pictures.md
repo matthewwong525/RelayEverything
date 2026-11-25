@@ -32,6 +32,7 @@ A Flutter widget test draws the real screen, with sample data, to a PNG. It take
 The test draws only what Flutter draws. These parts need the [device check](device-check.md) on a Mac:
 
 - **The iPhone's own parts**: its text menu, share sheet, keyboard, *Allow Paste?* question, and photo picker.
-- **Words in a Flutter part with no font name**, such as the words in Flutter's copy of the iPhone text menu: the test's own font draws them as blocks, and a loaded font does not replace it.
+- **A note's words.** Since 2026-11-25 the note is a web page in a web view ([the note editor](../relay-note-editor.md)), and a widget test draws no web view. The bars around the note draw; check the words and the file cards with the editor's own Chromium tests, `npm test` in `mobile/editor-web/`.
+- **Words in a Flutter part with no font name**: the test's own font draws them as blocks, and a loaded font does not replace it.
 
 Up: [Development](README.md). Sideways: [prototypes](../prototypes.md), [the device check](device-check.md).

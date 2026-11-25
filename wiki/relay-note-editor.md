@@ -33,6 +33,7 @@ The app and the page send small JSON messages. The app's have `do`; the page's h
 
 - **The keyboard and our bars.** A bar button takes no focus, so the keyboard stays up when it is tapped. On the iPhone, `RelayWebKeyboard.swift` hides the bar of arrows over the keyboard and lets the page raise the keyboard for a new note.
 - **Android keyboards.** Web editors have had typing bugs with some keyboards: test with Gboard and a Samsung keyboard.
+- **The web page's frame.** Flutter web shows the editor in an iframe. The frame gets the page as text (`srcdoc`, with a `<base>`), never from an address that ends in `.html`: the Cloudflare assets answer `.../index.html` with a 307 to the folder, and the Worker then serves the main app there. Hide the frame with its own CSS opacity, never a Flutter `Opacity` of 0: Flutter then skips the paint, and the frame never enters the page. A Flutter bar or menu over the frame gets no click without `pointer_interceptor`; [`cover.dart`](../mobile/lib/editor/web_note/cover.dart) turns the frame's clicks off while a menu is open.
 - **Moving a block by touch.** A drag is weak in web editors on a phone: plan a *Move up* and *Move down* menu.
 
 ## Before you change the editor package
@@ -48,5 +49,6 @@ Check these by hand on a real iPhone, because the tests do not catch them:
 - **No bar of arrows over the keyboard**, and the keyboard stays up on a bar tap.
 - **The cursor stays above the bar** while you type at the end of a long note.
 - **A new note opens with the keyboard up.**
-- **No white flash** when a note opens in dark mode.
+- **No white flash** when a note opens in dark mode, and the cursor shows in dark mode.
+- **Tab moves every selected line**, not only the first.
 - **A triple-tap selects one line**: the iPhone check taps too slowly to count as three.

@@ -1,0 +1,183 @@
+/* How a note looks on its page, as the app drew it before: Title, Heading and Subheading larger and bold, Body at 17,
+   lists with a dot, a dash, a number or a round circle, quotes with a bar, and code in a box. The app sends its colours
+   as CSS variables; these are the light ones. */
+@font-face { font-family: Inter; src: url(InterVariable.ttf) format("truetype"); font-weight: 100 900; font-display: block; }
+
+:root {
+  --paper: #F7F8F4; --card: #FFFFFF; --line: #E3E6DF; --ink: #121614; --muted: #5E6660;
+  --accent: #0E7A5A; --onAccent: #FFFFFF; --accentText: #0E7A5A; --accentSoft: #E1F2EA; --spark: #F5A524; --danger: #C9302C;
+  --select: rgba(14, 122, 90, 0.25);
+  --hl-purple: rgba(155, 107, 224, 0.3); --hl-pink: rgba(229, 80, 140, 0.3); --hl-orange: rgba(245, 165, 36, 0.3);
+  --hl-green: rgba(47, 179, 122, 0.3); --hl-blue: rgba(59, 130, 246, 0.3);
+  --muted35: rgba(94, 102, 96, 0.35); --muted15: rgba(94, 102, 96, 0.15); --card60: rgba(255, 255, 255, 0.6);
+  --spark35: rgba(245, 165, 36, 0.35); --spark80: rgba(245, 165, 36, 0.8);
+  --bottom: 0px; --step: 28px; --markWidth: 34px; --lineHeight: 1.5;
+  color-scheme: light;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-padding-bottom: calc(var(--bottom) + 16px);
+  background: var(--paper);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body { margin: 0; background: var(--paper); color: var(--ink); }
+
+body {
+  font: 17px/var(--lineHeight) Inter, -apple-system, system-ui, sans-serif;
+  font-feature-settings: "cv11";
+  opacity: 0;
+  overflow-wrap: break-word;
+}
+body.ready { opacity: 1; }
+
+#page { padding: 0 20px calc(var(--bottom) + 32px); min-height: 100vh; display: flex; flex-direction: column; }
+#head .date { font-size: 13px; color: var(--muted); text-align: center; margin: 10px 0 14px; min-height: 1px; }
+#head .date:empty { margin: 0 0 8px; }
+#above > .block, #below > .block { margin-bottom: 14px; }
+#below { padding-top: 14px; }
+#below:empty { padding-top: 0; }
+#note { flex: 1; display: flex; flex-direction: column; }
+
+::selection { background: var(--select); }
+
+.note {
+  flex: 1;
+  min-height: 120px;
+  outline: none;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  caret-color: var(--ink);
+  font-variant-ligatures: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.note [contenteditable="false"] { white-space: normal; }
+.note.ProseMirror-hideselection *::selection { background: transparent; }
+.note.ProseMirror-hideselection { caret-color: transparent; }
+
+.note p, .note h1, .note h2, .note h3, .note blockquote, .note pre { margin: 0; }
+.note > p, .note > h1, .note > h2, .note > h3, .note > blockquote, .note > .item {
+  margin-left: calc(var(--indent, 0) * var(--step));
+}
+.note h1, .note h2, .note h3 { line-height: 1.3; padding-bottom: 4px; }
+.note h1 { font-size: 28px; font-weight: 700; padding-top: 4px; }
+.note h2 { font-size: 22px; font-weight: 700; padding-top: 10px; }
+.note h3 { font-size: 19px; font-weight: 600; padding-top: 8px; }
+.note blockquote { border-left: 3px solid var(--line); padding-left: 12px; color: var(--muted); }
+.note pre {
+  font: 15px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--card); border-radius: 6px; padding: 2px 8px; white-space: pre-wrap;
+}
+.note pre code { font: inherit; }
+
+.note strong { font-weight: 700; }
+.note a { color: var(--accentText); text-decoration: underline; text-decoration-color: var(--accentText); cursor: pointer; }
+.note mark { color: inherit; border-radius: 2px; background: var(--hl-purple); }
+.note mark[data-colour="pink"] { background: var(--hl-pink); }
+.note mark[data-colour="orange"] { background: var(--hl-orange); }
+.note mark[data-colour="green"] { background: var(--hl-green); }
+.note mark[data-colour="blue"] { background: var(--hl-blue); }
+.note u + s, .note s u { text-decoration: underline line-through; }
+
+/* A list item: its mark, then its words; a line under an item lines up with the item's words. */
+.note .item { display: flex; align-items: flex-start; }
+.note .item > .mark {
+  flex: none; width: var(--markWidth); height: calc(17px * var(--lineHeight));
+  display: flex; align-items: center; justify-content: center;
+  color: var(--ink); font-weight: 400; font-style: normal; text-decoration: none;
+  -webkit-user-select: none; user-select: none; cursor: default;
+}
+.note .item[data-kind="numbered"] > .mark { justify-content: flex-end; padding-right: 8px; font-variant-numeric: tabular-nums; }
+.note .item > .words { flex: 1; min-width: 0; }
+.note .item[data-kind="task"] > .mark { cursor: pointer; }
+
+.circle {
+  width: 22px; height: 22px; border-radius: 50%; border: 1.6px solid var(--muted);
+  display: grid; place-items: center; color: transparent;
+  transition: background-color 160ms ease, border-color 160ms ease, transform 120ms ease;
+}
+.circle svg { width: 16px; height: 16px; stroke-dasharray: 16; stroke-dashoffset: 16; transition: stroke-dashoffset 200ms ease 40ms; }
+.item[data-checked] .circle { background: var(--accent); border-color: var(--accent); color: var(--onAccent); }
+.item[data-checked] .circle svg { stroke-dashoffset: 0; }
+.mark:active .circle { transform: scale(0.88); }
+
+/* Tables: each cell one plain line; the first row is the header. */
+.note .tableWrapper { overflow-x: auto; margin: 6px 0; -webkit-overflow-scrolling: touch; }
+.note table { border-collapse: collapse; table-layout: auto; line-height: 1.3; }
+.note td, .note th {
+  min-width: 100px; max-width: 280px; padding: 6px 8px; text-align: left; vertical-align: top;
+  border: 0.8px solid var(--muted35); position: relative;
+}
+.note th { font-weight: 600; background: var(--card60); }
+.note .selectedCell::after { content: ""; position: absolute; inset: 0; background: var(--select); pointer-events: none; }
+.note table p { margin: 0; }
+
+/* Find in Note */
+.note .found { background: var(--spark35); border-radius: 2px; }
+.note .found.now { background: var(--spark80); }
+
+/* The words an empty note shows. */
+.note .is-empty::before {
+  content: attr(data-placeholder); color: var(--muted); float: left; height: 0; pointer-events: none;
+  -webkit-user-select: none; user-select: none;
+}
+
+/* Files */
+.note .attachment { padding: 7px 0; }
+.note .attachment.missing { height: 1px; padding: 0; overflow: hidden; }
+.note .attachment.picked > .block { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 14px; }
+.block { font-size: 15px; line-height: 1.4; -webkit-user-select: none; user-select: none; }
+.block svg { width: 20px; height: 20px; flex: none; }
+
+.picture {
+  border-radius: 14px; overflow: hidden; min-height: 180px; background: var(--accentSoft); cursor: pointer;
+  -webkit-touch-callout: none;
+}
+.picture img { display: block; width: 100%; height: auto; -webkit-touch-callout: none; -webkit-user-drag: none; }
+.picture .loading { height: 180px; display: grid; place-items: center; color: var(--muted); }
+.picture .loading svg { width: 28px; height: 28px; }
+
+.card { background: var(--card); border-radius: 16px; overflow: hidden; }
+.card.file {
+  border-radius: 12px; display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer;
+  color: var(--muted);
+}
+.card.file .name { flex: 1; min-width: 0; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 16px; }
+.card.file .meta { font-size: 13px; color: var(--muted); white-space: nowrap; }
+
+.recording .player { display: flex; align-items: center; gap: 10px; padding: 8px 16px 8px 8px; }
+.recording .play {
+  width: 44px; height: 44px; border-radius: 50%; border: 0; padding: 0; flex: none; cursor: pointer;
+  background: var(--accentSoft); color: var(--accentText); display: grid; place-items: center;
+}
+.recording .waves { flex: 1; height: 36px; min-width: 0; cursor: pointer; touch-action: none; outline: none; }
+.recording .waves svg { width: 100%; height: 36px; display: block; }
+.recording .waves .played { fill: var(--accentText); }
+.recording .waves .rest { fill: var(--muted35); }
+.recording .time { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.recording .waiting { display: flex; align-items: center; gap: 10px; padding: 16px; color: var(--muted); }
+.recording .waiting svg { width: 18px; height: 18px; }
+.recording .waiting span:first-of-type { flex: 1; font-size: 15px; }
+.recording .rule { height: 1px; margin: 0 16px; background: var(--muted15); }
+.recording .transcript {
+  display: flex; width: 100%; align-items: center; justify-content: space-between; border: 0; background: none;
+  padding: 14px 16px; color: var(--muted); font: 600 13px/1.3 Inter, -apple-system, system-ui, sans-serif; cursor: pointer;
+}
+.recording .transcript svg { width: 15px; height: 15px; }
+.recording .status { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 16px 14px; color: var(--muted); }
+.recording .status .why { font-size: 13px; }
+.recording .retry {
+  align-self: flex-start; border: 0; border-radius: 12px; padding: 10px 18px; cursor: pointer;
+  background: var(--accent); color: var(--onAccent); font: 600 15px/1.2 Inter, -apple-system, system-ui, sans-serif;
+}
+.recording .busy { height: 4px; border-radius: 2px; overflow: hidden; background: var(--accentSoft); position: relative; }
+.recording .busy i {
+  position: absolute; top: 0; bottom: 0; width: 40%; border-radius: 2px; background: var(--accent);
+  animation: busy 1.2s ease-in-out infinite;
+}
+@keyframes busy { from { left: -40%; } to { left: 100%; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}

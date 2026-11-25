@@ -15,12 +15,11 @@ import 'package:relay_app/data/sender.dart';
 import 'package:relay_app/data/settings.dart';
 import 'package:relay_app/data/store.dart';
 import 'package:relay_app/relay.dart';
-import 'package:relay_app/screens/note_blocks.dart' show VoicePlayer;
 import 'package:relay_app/sync/background.dart';
 
 import 'fakes.dart';
 import 'offline_test.dart' show until;
-import 'screens_test.dart' show note, openFolder, tallScreen;
+import 'screens_test.dart' show markdownOf, openFolder, pageOf, tallScreen;
 
 const _on = Settings(sending: true);
 
@@ -453,14 +452,18 @@ void main() {
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Flight moved to 9:40'));
       await tester.pumpAndSettle();
-      expect([find.text('3 B · Download'), find.text('4 B · Download')], [findsOneWidget, findsOneWidget]);
-      await tester.tap(find.text('ticket.pdf'));
+      // A file not on the phone yet says Download beside its size.
+      List<Object?> rows() => [
+        for (final id in ['f1', 'f2']) ...[pageOf(tester).viewOf(id)!['size'], pageOf(tester).viewOf(id)!['ready']],
+      ];
+      expect(rows(), ['3 B', false, '4 B', false]);
+      pageOf(tester).tap('f1', 'open');
       await until(tester, () => opened.isNotEmpty);
       await tester.pumpAndSettle();
       expect([for (final request in server.requests) if (request.url.path.endsWith('/attachment')) request.url.queryParameters['id']],
         ['f1']);
       expect([opened.single, File(opened.single).readAsStringSync()], [endsWith('attachments/f1.pdf'), 'pdf']);
-      expect([find.text('3 B · Download'), find.text('4 B · Download')], [findsNothing, findsOneWidget]);
+      expect(rows(), ['3 B', true, '4 B', false]);
     });
 
     testWidgets('a voice note from another phone shows its words, where it came from, and no player', (tester) async {
@@ -474,9 +477,9 @@ void main() {
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Call the dentist about Thursday'));
       await tester.pumpAndSettle();
-      expect(note(tester).text, 'Call the dentist about Thursday\n');
-      expect(find.textContaining("From Sam's iPhone"), findsOneWidget);
-      expect([find.byType(VoicePlayer), find.byTooltip('Play')], everyElement(findsNothing));
+      expect(markdownOf(tester), '# Call the dentist about Thursday');
+      expect(((pageOf(tester).loaded['head']! as Map)['date']! as String), contains("From Sam's iPhone"));
+      expect(pageOf(tester).loaded['files'], isEmpty, reason: 'no player');
       await tester.tap(find.byTooltip('More'));
       await tester.pumpAndSettle();
       expect([find.widgetWithText(MenuItemButton, 'Copy'), find.widgetWithText(MenuItemButton, 'Play')],

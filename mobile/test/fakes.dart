@@ -4,7 +4,10 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:drift/native.dart';
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart' show BuildContext, Column, CrossAxisAlignment, ListenableBuilder,
+  SingleChildScrollView, StatelessWidget, Text, ValueKey, Widget;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:health/health.dart';
@@ -18,6 +21,10 @@ import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/settings.dart';
 import 'package:relay_app/data/store.dart';
 import 'package:relay_app/data/webhook.dart';
+import 'package:relay_app/editor/attachments.dart';
+import 'package:relay_app/editor/markdown.dart';
+import 'package:relay_app/editor/web_note/web_note.dart';
+import 'package:relay_app/editor/web_note/web_note_pool.dart';
 import 'package:relay_app/sync/calendar.dart';
 import 'package:relay_app/sync/health.dart';
 import 'package:relay_app/sync/location.dart';
@@ -686,3 +693,169 @@ Uint8List _chunk(String id, List<int> bytes) => (BytesBuilder()
   ..add(ascii.encode(id))
   ..add((ByteData(4)..setUint32(0, bytes.length, Endian.little)).buffer.asUint8List())
   ..add(bytes)).toBytes();
+
+/// The note's editor page in a test: it keeps each message the note sends it, and answers as the page does, a moment
+/// later. It starts at once, as a spare page from the pool has; [FakeWebNote.new] with `boots: false` waits for [boot].
+class FakeWebNote extends WebNote {
+  FakeWebNote({bool boots = true}) {
+    if (boots) boot();
+  }
+
+  /// Each message sent to the page, in order.
+  final posts = <Json>[];
+
+  /// How many times the page started again.
+  int reloads = 0;
+
+  /// The words the page shows, for its view.
+  final _shown = ValueNotifier<String>('');
+
+  /// What the page says about its cursor: a test changes it with [say].
+  NoteState now = const NoteState();
+
+  /// The page has started.
+  void boot() => receive({'is': 'boot'});
+
+  /// Each `run` sent, as `bold`, or `indent 1` with its value.
+  List<String> get runs => [
+    for (final message in posts)
+      if (message['do'] == 'run') message.containsKey('value') ? '${message['action']} ${message['value']}' : '${message['action']}',
+  ];
+
+  /// The last `load`.
+  Json get loaded => posts.lastWhere((message) => message['do'] == 'load');
+
+  /// Each message sent with `do` [kind], such as `files`.
+  List<Json> sent(String kind) => [for (final message in posts) if (message['do'] == kind) message];
+
+  /// The last look the note sent for the file or recording [key]: its `kind`, `name`, `status` and the rest.
+  Json? viewOf(String key) {
+    for (final message in posts.reversed) {
+      final files = message['do'] == 'files' || message['do'] == 'load' ? message['files'] : null;
+      if (files is Map && files[key] is Map) return (files[key] as Map).cast();
+      if (message['do'] == 'load') return null;
+    }
+    return null;
+  }
+
+  /// The Markdown of the page's words now.
+  String get markdown => docToMarkdown(doc ?? const {});
+
+  /// The person typed: the page's words are now [markdown], read as the note opens. [quiet] for a change that is no
+  /// edit.
+  void edit(String markdown, {bool quiet = false}) => setDoc(markdownToDoc(markdown, title: true), quiet: quiet);
+
+  /// The page's document is now [doc], as the page sends it.
+  void setDoc(Json doc, {bool quiet = false}) {
+    receive({'is': 'changed', 'doc': doc, if (quiet) 'quiet': true});
+    _show();
+  }
+
+  /// The page says its cursor's state: [focus] and [editing] as a tap in the words gives them, and any other part.
+  void say({bool? focus, bool? editing, Set<String>? marks, String? highlight, String? link, LineKind? kind,
+      bool? inTable, bool? canUndo, bool? canRedo, bool? empty, ({int count, int index})? found, bool clearLink = false,
+      bool clearFound = false}) {
+    now = NoteState(
+      marks: marks ?? now.marks, highlight: highlight ?? now.highlight, link: clearLink ? null : link ?? now.link,
+      kind: kind ?? now.kind, inTable: inTable ?? now.inTable, canUndo: canUndo ?? now.canUndo,
+      canRedo: canRedo ?? now.canRedo, focus: focus ?? now.focus, editing: editing ?? now.editing,
+      empty: empty ?? now.empty, found: clearFound ? null : found ?? now.found);
+    receive({
+      'is': 'state', 'marks': now.marks.toList(), 'highlight': now.highlight, 'link': now.link, 'kind': now.kind?.name,
+      'inTable': now.inTable, 'canUndo': now.canUndo, 'canRedo': now.canRedo, 'focus': now.focus,
+      'editing': now.editing, 'empty': now.empty,
+      if (now.found case final found?) 'found': {'count': found.count, 'index': found.index},
+    });
+  }
+
+  /// A tap in the words: the keyboard comes up and the words edit.
+  void tapWords() => say(focus: true, editing: true);
+
+  /// A tap on a file's part, such as `play` on a recording's card.
+  void tap(String id, String action, [Object? value]) =>
+    receive({'is': 'tap', 'id': id, 'action': action, 'value': ?value});
+
+  /// A key the page passes up, such as `new-note`.
+  void key(String shortcut) => receive({'is': 'keys', 'shortcut': shortcut});
+
+  void _show() => _shown.value = plainText(markdown);
+
+  void _later(void Function() then) => scheduleMicrotask(() {
+    if (!disposed) then();
+  });
+
+  /// The page was let go.
+  bool disposed = false;
+
+  @override
+  void post(Json message) {
+    posts.add(message);
+    switch (message['do']) {
+      case 'load':
+        _show();
+        now = const NoteState();
+        final focus = message['focus'] == true;
+        _later(() {
+          receive({'is': 'ready', 'ms': 12});
+          if (focus) tapWords();
+        });
+      case 'run':
+        _run('${message['action']}', message['value']);
+    }
+  }
+
+  void _run(String action, Object? value) {
+    switch ((action, value)) {
+      case ('focus', _):
+        _later(tapWords);
+      case ('blur', _):
+        _later(() => say(focus: false, editing: false));
+      case ('keyboard', false):
+        _later(() => say(focus: false));
+      case ('attach', final Map<Object?, Object?> asked):
+        final files = [
+          for (final file in (asked['files'] as List?) ?? const [])
+            if (file is Map) NoteAttachment('${file['id']}', '${file['name']}'),
+        ];
+        final placed = placeFiles(docToBlocks(doc ?? const {}), files, null).blocks;
+        _later(() => setDoc(blocksToDoc(placed), quiet: asked['quiet'] == true));
+      case ('detach', final Map<Object?, Object?> asked):
+        final ids = {for (final id in (asked['ids'] as List?) ?? const []) '$id'};
+        final kept = [
+          for (final block in docToBlocks(doc ?? const {}))
+            if (!(block is NoteFileBlock && ids.contains(block.file.id))) block,
+        ];
+        _later(() => setDoc(blocksToDoc(kept), quiet: asked['quiet'] == true));
+    }
+  }
+
+  @override
+  void reloadPage() => reloads++;
+
+  @override
+  Widget view() => FakePageView(page: this);
+
+  @override
+  void dispose() {
+    disposed = true;
+    super.dispose();
+  }
+}
+
+/// The fake page on the screen: the note's words as plain lines, so a test can find them.
+class FakePageView extends StatelessWidget {
+  const FakePageView({super.key, required this.page});
+
+  final FakeWebNote page;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(listenable: page._shown, builder: (context, _) =>
+    SingleChildScrollView(key: const ValueKey('note page'), child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+      children: [for (final line in page._shown.value.split('\n')) Text(line)])));
+}
+
+/// A pool of fake pages, with no spare: each note makes its own, and [made] keeps them in order.
+WebNotePool fakePool() => WebNotePool(FakeWebNote.new, spares: 0);
+
+/// The last page a note took from the test's pool.
+FakeWebNote get lastPage => WebNotePool.shared.made.last as FakeWebNote;

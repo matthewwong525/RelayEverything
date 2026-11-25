@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:super_editor/super_editor.dart' show boldAttribution, italicsAttribution;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:relay_app/data/files.dart' show checkFiles;
+import 'package:relay_app/editor/markdown.dart' show plainText;
 import 'package:relay_app/mac/drops.dart';
 import 'package:relay_app/mac/mac_app.dart';
 import 'package:relay_app/mac/updates.dart';
@@ -16,14 +16,14 @@ import 'package:relay_app/screens/connect_ai.dart' show ConnectAiPage;
 import 'package:relay_app/screens/email_notes.dart' show EmailNotesPage;
 import 'package:relay_app/screens/hold_to_talk.dart' show NewNoteButton;
 import 'package:relay_app/screens/home.dart';
-import 'package:relay_app/screens/note_blocks.dart' show RecordingCard, RecordingPage;
+import 'package:relay_app/screens/note_blocks.dart' show RecordingPage;
 import 'package:relay_app/screens/note_editor.dart';
 import 'package:relay_app/screens/settings.dart';
 import 'package:relay_app/screens/timeline.dart' show TimelineScreen;
 import 'package:relay_app/screens/transcripts.dart' show TranscriptsPage;
 import 'package:relay_app/web/shell.dart';
 
-import 'screens_test.dart' show FakeRelay, markdownOf, note, noteEditor, stylesOf;
+import 'screens_test.dart' show FakeRelay, markdownOf, pageOf, tapWords;
 
 const wide = Size(1200, 900);
 const middle = Size(800, 800);
@@ -180,15 +180,15 @@ void main() {
     await tester.tap(find.descendant(of: find.byType(NotesPane), matching: find.text('Call the dentist at 3')));
     await tester.pumpAndSettle();
     expect(editor(tester).id, 'voice');
-    final card = find.byType(RecordingCard);
-    expect([find.descendant(of: card, matching: find.text('Transcript')),
-      find.descendant(of: card, matching: find.byTooltip('Play'))], everyElement(findsOneWidget));
+    final page = pageOf(tester);
+    expect([page.viewOf('r1')!['kind'], page.viewOf('r1')!['status'], page.viewOf('r1')!['length']], ['recording', 'words', 8000]);
+    expect(markdownOf(tester), startsWith('![Recording](attachment:r1)'));
     expect(find.byTooltip('Record'), findsNothing);
-    await tester.tap(find.descendant(of: card, matching: find.byTooltip('Play')));
+    page.tap('r1', 'play');
     await tester.pump();
     expect(relay.calls, contains('play r1'));
     // The recording's page opens on the Mac too, with the words to read.
-    await tester.tap(find.descendant(of: card, matching: find.text('Transcript')));
+    page.tap('r1', 'transcript');
     await tester.pumpAndSettle();
     expect(find.descendant(of: find.byType(RecordingPage), matching: find.widgetWithText(SelectableText, 'Call the dentist at 3')),
       findsOneWidget);
@@ -306,19 +306,37 @@ void main() {
       await finish(tester);
     });
 
+    testWidgets("the Edit menu's Cut, Copy, Paste, Select All, Undo and Redo act in the note's words while they have the "
+        'keyboard', (tester) async {
+      await show(tester, wide);
+      final page = pageOf(tester);
+      // No words have the keyboard: the items go to the field that has it, and the page gets nothing.
+      for (final label in ['Cut', 'Copy', 'Paste', 'Select All', 'Redo']) {
+        await select(tester, label);
+      }
+      expect(page.runs, isNot(contains('copy')));
+      await tapWords(tester);
+      page.posts.clear();
+      for (final label in ['Cut', 'Copy', 'Paste', 'Select All', 'Undo', 'Redo']) {
+        await select(tester, label);
+      }
+      expect(page.runs, ['cut', 'copy', 'paste', 'select-all', 'undo', 'redo']);
+      await finish(tester);
+    });
+
     testWidgets('New Note from the menu and ⌘N both start a new note, from any place', (tester) async {
       await show(tester, wide);
       await tester.tap(inSidebar('Settings'));
       await tester.pumpAndSettle();
       await select(tester, 'New Note');
       expect(find.byType(NotesPane), findsOneWidget);
-      expect(note(tester).text, '\n');
+      expect([plainText(markdownOf(tester)), pageOf(tester).loaded['focus']], ['', true]);
       expect(editor(tester).id, isNot('own'));
       await tester.tap(find.text('Groceries').first);
       await tester.pumpAndSettle();
       expect(editor(tester).id, 'own');
       await press(tester, [LogicalKeyboardKey.metaLeft], LogicalKeyboardKey.keyN);
-      expect(note(tester).text, '\n');
+      expect(plainText(markdownOf(tester)), '');
       expect(editor(tester).id, isNot('own'));
       await finish(tester);
     });
@@ -350,23 +368,16 @@ void main() {
       await finish(tester);
     });
 
-    testWidgets("Bold and Italic from the menu style the words picked, as the editor's keys do", (tester) async {
+    testWidgets('Bold and Italic from the menu style the words picked in the page, which does no format key itself',
+        (tester) async {
       await show(tester, wide);
-      await tester.tap(noteEditor);
-      await tester.pump();
-      note(tester).select(const TextSelection(baseOffset: 10, extentOffset: 14));
+      await tapWords(tester);
+      final page = pageOf(tester);
+      // The menu bar's keys do the formats: the page passes up only Delete.
+      expect([page.loaded['keys'], page.loaded['appKeys']], [false, ['delete-note']]);
       await select(tester, 'Bold');
       await select(tester, 'Italic');
-      var style = stylesOf(tester);
-      expect(style.contains(boldAttribution), isTrue);
-      expect(style.contains(italicsAttribution), isTrue);
-      // The editor's own key takes it off again: the menu and the key change the same style.
-      await press(tester, [LogicalKeyboardKey.controlLeft], LogicalKeyboardKey.keyB);
-      style = stylesOf(tester);
-      expect(style.contains(boldAttribution), isFalse);
-      await select(tester, 'Italic');
-      style = stylesOf(tester);
-      expect(style.contains(italicsAttribution), isFalse);
+      expect(page.runs.skip(page.runs.length - 2), ['bold', 'italic']);
       await finish(tester);
     });
 
@@ -406,13 +417,11 @@ void main() {
         expect([shortcut.trigger, shortcut.meta, shortcut.control, shortcut.shift, shortcut.alt], [key, true, false, shift, alt],
           reason: label);
       }
-      await tester.tap(noteEditor);
-      await tester.pump();
-      note(tester).select(const TextSelection.collapsed(offset: 14));
+      await tapWords(tester);
       await select(tester, 'Title');
-      expect(markdownOf(tester), '# Groceries\n# milk and eggs');
+      expect(pageOf(tester).runs.last, 'line title');
       await select(tester, 'Body');
-      expect(markdownOf(tester), '# Groceries\nmilk and eggs');
+      expect(pageOf(tester).runs.last, 'line body');
       await finish(tester);
     });
   });

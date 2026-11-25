@@ -1,7 +1,5 @@
 import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
-import 'package:super_editor/super_editor.dart' show ExecutionInstruction, SuperEditorContext, SuperEditorKeyboardAction;
 
 /// Each thing the note page's format tools do: the Format sheet and menu, the bars, the keys and the Mac's *Format*
 /// menu all name one of these, so they do the same thing.
@@ -18,8 +16,8 @@ typedef FormatKey = ({String label, FormatAction action, LogicalKeyboardKey key,
 FormatKey _key(String label, FormatAction action, LogicalKeyboardKey key, {bool shift = false, bool alt = false}) =>
   (label: label, action: action, key: key, shift: shift, alt: alt);
 
-/// The Mac's *Format* menu, in its order, with each item's key. The keys of [formatShortcuts] are these and
-/// [_moreKeys], so the menu and the keys can not drift.
+/// The Mac's *Format* menu, in its order, with each item's key. The editor page, `mobile/editor-web/src/`, has the same
+/// keys, and Alt+1, 2, 3 and 0 for the line styles, as Chrome keeps Ctrl+Shift+T and others for itself.
 final formatItems = <List<FormatKey>>[
   [
     _key('Bold', FormatAction.bold, LogicalKeyboardKey.keyB),
@@ -53,71 +51,6 @@ final formatItems = <List<FormatKey>>[
   ],
 ];
 
-/// The line styles again with ⌥: Chrome keeps Ctrl+Shift+T and others for itself.
-final _moreKeys = <FormatKey>[
-  _key('Title', FormatAction.title, LogicalKeyboardKey.digit1, alt: true),
-  _key('Heading', FormatAction.heading, LogicalKeyboardKey.digit2, alt: true),
-  _key('Subheading', FormatAction.subheading, LogicalKeyboardKey.digit3, alt: true),
-  _key('Body', FormatAction.body, LogicalKeyboardKey.digit0, alt: true),
-];
-
-/// A format key pressed in the note.
-class FormatIntent extends Intent {
-  const FormatIntent(this.action);
-
-  final FormatAction action;
-}
-
-/// Whether the keys use ⌘: on a Mac, and on an iPad with a keyboard.
+/// Whether the keys use ⌘: on a Mac, and on an iPad with a keyboard. Elsewhere they use Ctrl. The note's editor page
+/// does the format keys itself, with the same keys as [formatItems].
 bool get commandKeys => defaultTargetPlatform == TargetPlatform.macOS || defaultTargetPlatform == TargetPlatform.iOS;
-
-/// Every format key, with ⌘ on a Mac and Ctrl elsewhere. Off a Mac, AltGr comes as Ctrl and Alt, so a Ctrl+Alt digit
-/// key made with AltGr, such as } on a German keyboard, types its letter and styles nothing.
-Map<ShortcutActivator, Intent> formatShortcuts({bool? mac}) {
-  final command = mac ?? commandKeys;
-  ShortcutActivator keys(FormatKey item) {
-    final keys = SingleActivator(item.key, meta: command, control: !command, shift: item.shift, alt: item.alt);
-    return command || !_moreKeys.contains(item) ? keys : _NotAltGr(keys);
-  }
-  return {
-    for (final item in [...formatItems.expand((group) => group), ..._moreKeys]) keys(item): FormatIntent(item.action),
-  };
-}
-
-/// [keys], but not while AltGr, the right Alt key, is down.
-class _NotAltGr extends ShortcutActivator {
-  const _NotAltGr(this.keys);
-
-  final SingleActivator keys;
-
-  static final _altGr = {LogicalKeyboardKey.altRight, LogicalKeyboardKey.altGraph};
-
-  @override
-  Iterable<LogicalKeyboardKey>? get triggers => keys.triggers;
-
-  @override
-  bool accepts(KeyEvent event, HardwareKeyboard state) =>
-    keys.accepts(event, state) && !state.logicalKeysPressed.any(_altGr.contains);
-
-  @override
-  String debugDescribeKeys() => '${keys.debugDescribeKeys()}, not AltGr';
-}
-
-/// The note's keys for super_editor: each format key does its [FormatAction] through [format], and each key of
-/// [passUp] goes up to the page, past the editor's own keys.
-SuperEditorKeyboardAction formatKeyAction(void Function(FormatAction action) format,
-    {Map<ShortcutActivator, Intent> passUp = const {}}) {
-  final keys = formatShortcuts();
-  return ({required SuperEditorContext editContext, required KeyEvent keyEvent}) {
-    if (keyEvent is! KeyDownEvent && keyEvent is! KeyRepeatEvent) return ExecutionInstruction.continueExecution;
-    final keyboard = HardwareKeyboard.instance;
-    if (passUp.keys.any((key) => key.accepts(keyEvent, keyboard))) return ExecutionInstruction.blocked;
-    for (final MapEntry(:key, :value) in keys.entries) {
-      if (value is FormatIntent && key.accepts(keyEvent, keyboard)) {
-        format(value.action);
-        return ExecutionInstruction.haltExecution;
-      }
-    }
-    return ExecutionInstruction.continueExecution;
-  };
-}

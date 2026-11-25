@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../brand.dart';
 import '../editor/shortcuts.dart';
+import '../editor/web_note/web_note.dart';
 import '../relay.dart';
 import '../screens/folder.dart' show Opener;
 import '../screens/note_editor.dart' show FilesPicker, Sharer;
@@ -48,13 +49,14 @@ List<PlatformMenuItem> macMenus(MacActions actions) {
       ...group([
         item('Undo', LogicalKeyboardKey.keyZ, actions.undo),
         PlatformMenuItem(label: 'Redo', shortcut: const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true),
-          onSelected: () => _edit(const RedoTextIntent(SelectionChangedCause.keyboard))),
+          onSelected: () => _edit('redo', const RedoTextIntent(SelectionChangedCause.keyboard))),
       ]),
       ...group([
-        item('Cut', LogicalKeyboardKey.keyX, () => _edit(CopySelectionTextIntent.cut(SelectionChangedCause.keyboard))),
-        item('Copy', LogicalKeyboardKey.keyC, () => _edit(CopySelectionTextIntent.copy)),
-        item('Paste', LogicalKeyboardKey.keyV, () => _edit(const PasteTextIntent(SelectionChangedCause.keyboard))),
-        item('Select All', LogicalKeyboardKey.keyA, () => _edit(const SelectAllTextIntent(SelectionChangedCause.keyboard))),
+        item('Cut', LogicalKeyboardKey.keyX, () => _edit('cut', CopySelectionTextIntent.cut(SelectionChangedCause.keyboard))),
+        item('Copy', LogicalKeyboardKey.keyC, () => _edit('copy', CopySelectionTextIntent.copy)),
+        item('Paste', LogicalKeyboardKey.keyV, () => _edit('paste', const PasteTextIntent(SelectionChangedCause.keyboard))),
+        item('Select All', LogicalKeyboardKey.keyA,
+          () => _edit('select-all', const SelectAllTextIntent(SelectionChangedCause.keyboard))),
       ]),
       ...group([item('Find', LogicalKeyboardKey.keyF, actions.find)]),
     ]),
@@ -75,11 +77,13 @@ List<PlatformMenuItem> macMenus(MacActions actions) {
 
 /// *Edit* → *Undo*: the last delete when no words are being typed and one is left to undo, else the typing.
 void undoOr(bool Function()? undoDelete) {
-  if (!(undoDelete?.call() ?? false)) _edit(const UndoTextIntent(SelectionChangedCause.keyboard));
+  if (!(undoDelete?.call() ?? false)) _edit('undo', const UndoTextIntent(SelectionChangedCause.keyboard));
 }
 
-/// An *Edit* item: the same step its key takes in the field or note that has the cursor.
-void _edit(Intent intent) {
+/// An *Edit* item: in a note's words, the editor page does [action]; in a field, the same step its key takes.
+void _edit(String action, Intent intent) {
+  final page = WebNote.focused;
+  if (page != null) return page.editItem(action);
   final context = primaryFocus?.context;
   if (context != null) Actions.maybeInvoke(context, intent);
 }

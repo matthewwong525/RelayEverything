@@ -37,6 +37,7 @@ const PLACES = [
   'mobile/ios/fastlane/metadata',
   'mobile/android/app/src/main/AndroidManifest.xml',
   'mobile/web/index.html',
+  'mobile/editor-web/src',
   'mobile/web/manifest.json',
   'app/src/apps/relay/app.json',
   'app/worker/apps/relay/sign-in/phone.ts',

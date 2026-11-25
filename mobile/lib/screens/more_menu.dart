@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../brand.dart';
+import '../editor/web_note/cover.dart';
 
 /// One item of a [MoreMenu]: its word, its icon, and what a tap does.
 typedef MoreItem = (String label, IconData icon, VoidCallback onPressed);
@@ -30,7 +31,7 @@ class MoreMenu extends StatefulWidget {
   State<MoreMenu> createState() => _MoreMenuState();
 }
 
-class _MoreMenuState extends State<MoreMenu> {
+class _MoreMenuState extends State<MoreMenu> with CoversNote {
   final _menu = MenuController();
 
   /// Opens the menu under the button, its right edge on the button's right edge, moved in to keep [MoreMenu.margin]
@@ -50,6 +51,9 @@ class _MoreMenuState extends State<MoreMenu> {
     final brand = brandOf(context);
     return MenuAnchor(
       controller: _menu,
+      // Over the note's frame in the browser, the menu takes the clicks.
+      onOpen: menuOpened,
+      onClose: menuClosed,
       style: MenuStyle(
         backgroundColor: WidgetStatePropertyAll(brand.card),
         surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),

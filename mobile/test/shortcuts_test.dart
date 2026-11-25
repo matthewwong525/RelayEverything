@@ -12,13 +12,12 @@ import 'package:relay_app/controller.dart';
 import 'package:relay_app/data/connection.dart';
 import 'package:relay_app/data/store.dart';
 import 'package:relay_app/relay.dart' show Entry, EntryRecording;
-import 'package:relay_app/screens/note_blocks.dart' show VoicePlayer;
 import 'package:relay_app/shortcuts/bridge.dart';
 import 'package:relay_app/shortcuts/inbox.dart';
 import 'package:relay_app/voice/recorder.dart';
 
 import 'fakes.dart';
-import 'screens_test.dart' show openFolder;
+import 'screens_test.dart' show openFolder, pageOf;
 
 final now = DateTime.fromMillisecondsSinceEpoch(1793797200000);
 
@@ -276,9 +275,11 @@ void main() {
       await openFolder(tester, 'Notes');
       await tester.tap(find.text('Call the plumber about the kitchen tap'));
       await tester.pumpAndSettle();
-      expect(find.byType(VoicePlayer), findsOneWidget);
-      expect([find.byTooltip('Play'), find.descendant(of: find.byType(VoicePlayer), matching: find.text('0:42'))],
-        everyElement(findsOneWidget));
+      // The recording has an id of its own, so its card is the first part of the page's words.
+      final page = pageOf(tester);
+      final card = ((page.loaded['files']! as Map).values.single as Map).cast<String, Object?>();
+      expect([card['kind'], card['length']], ['recording', 42000]);
+      expect(((page.doc!['content']! as List).first as Map)['type'], 'attachment');
       await tester.tap(find.byTooltip('More'));
       await tester.pumpAndSettle();
       expect(find.text('Play'), findsNothing);

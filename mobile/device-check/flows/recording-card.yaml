@@ -109,6 +109,6 @@ appId: com.matthewwong525.relayApp
 - pressKey: Enter
 - inputText: "Ask about the second board"
 - tapOn: "Done"
-# The note's lines join into one label, such as "Fab call\nAsk about the second board", so match the words inside it.
+# The editor's web page gives each line its own label; match the words inside it, as a line can hold more.
 - assertVisible: '(.|\n)*Ask about the second board(.|\n)*'
 - takeScreenshot: recording-card-notes

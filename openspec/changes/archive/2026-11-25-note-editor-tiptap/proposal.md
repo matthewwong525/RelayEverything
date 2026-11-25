@@ -1,6 +1,6 @@
 # Proposal
 
-**Status:** in-progress
+**Status:** ready-to-ship
 **Branch:** `notion-like-note-editor`
 **Open questions:** none
 
@@ -109,3 +109,5 @@ Typing and selecting in a note feel cheap, and so do the look and the motion. Ev
 - **2026-11-24** — Checkpoint: built and checked here (app tests, editor page tests in Chromium, the web app driven in headless Chromium, the public check); saved for the iPhone check on GitHub's Mac (tasks 8.2 and 9.3), with the Mac and Android checked only by their CI builds.
 - **2026-11-24** — Assumed: the note's web view takes each touch at once on the phone (Flutter's eager touch rule), because the iPhone check's hold on a word showed no selection and no menu while Flutter held the touch; the iPhone check's paste step now waits for the hold's *Copy* and takes *Select All* from the cursor's menu, as the iPhone's menu for a held word may not offer it.
 - **2026-11-25** — Assumed: the eager touch rule comes out again, because the next iPhone check showed the hold still selected nothing and two steps that had passed failed; a hold in words that can change moves the cursor on an iPhone, as in Notes, so the paste step opens the cursor's menu with two taps and uses no hold.
+- **2026-11-25** — Asked how to go on with the iPhone's dark-mode first frame unseen → chose *Publish, I'll check*: the person looks at it in the next TestFlight build.
+- **2026-11-25** — Check: no white flash in dark mode on the iPhone is not checked by the iPhone check, because a screenshot can't catch a note's first frame; the browser check saw none, and the person checks the iPhone in TestFlight.

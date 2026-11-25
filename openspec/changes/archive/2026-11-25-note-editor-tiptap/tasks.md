@@ -45,11 +45,11 @@
 ## 8. Tests, checks and docs
 
 - [x] 8.1 Add the editor's Playwright tests to `mobile-ci.yml` (`npm ci`, the Chromium from Playwright) before `flutter test`; verify the job runs them on a pull request.
-- [ ] 8.2 Change the iPhone check's note flows (`new-note`, `note-styles`, `paste-menu`, `note-toolbar-tables`, `media-between-words`, `recording-card`, `recently-deleted`, `voice-note`) to find words through the web view's accessibility labels; verify each flow passes on the simulator.
+- [x] 8.2 Change the iPhone check's note flows (`new-note`, `note-styles`, `paste-menu`, `note-toolbar-tables`, `media-between-words`, `recording-card`, `recently-deleted`, `voice-note`) to find words through the web view's accessibility labels; verify each flow passes on the simulator.
 - [x] 8.3 Update [the note editor](../../../wiki/relay-note-editor.md) wiki page (built on Tiptap; why; what to check), `mobile/README.md` (where the code is; how to build the editor page), and `site/src/content/docs/app/on-a-computer.md` and the notes pages with one line on the system's own editing; add any new user-facing file to `scripts/product-name.test.mjs`; verify it passes.
 
 ## 9. Final checks
 
 - [x] 9.1 Run `flutter analyze` and `flutter test` in `mobile/`, the editor's Playwright tests, and `node scripts/public-check.mjs`; verify all are clean.
 - [x] 9.2 Build the web app and drive a note in headless Chromium: type, bold from the bar, a checklist, a paste, a triple-click, dark mode caret, open time; verify each with a screenshot.
-- [ ] 9.3 `/save`, then run the iPhone check with video; verify no arrow bar over the keyboard, the keyboard stays up on bar taps, the cursor stays above the bar, a new note opens with the keyboard up, the system menu's *Paste* asks no question, and no white flash in dark mode. Report Android as checked only by its build and the browser tests.
+- [x] 9.3 `/save`, then run the iPhone check with video; verify no arrow bar over the keyboard, the keyboard stays up on bar taps, the cursor stays above the bar, a new note opens with the keyboard up, the system menu's *Paste* asks no question, and no white flash in dark mode. Report Android as checked only by its build and the browser tests.

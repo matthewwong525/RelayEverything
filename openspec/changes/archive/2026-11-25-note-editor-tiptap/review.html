@@ -12,7 +12,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Review · note-editor-tiptap</title>
+<title>Review · 2026-11-25-note-editor-tiptap</title>
 <style>
   /* The app's look for pages outside the app: the plan review page, the private pages, and a closed link's page.
    look.mjs swaps the colour sets between the markers for the app's own, from app/src/index.css; this copy of
@@ -451,11 +451,11 @@
 })();
 </script>
 </head>
-<body data-change="note-editor-tiptap" data-own-back>
+<body data-change="2026-11-25-note-editor-tiptap" data-own-back>
 <main>
 <header>
   <p class="eyebrow">Review</p>
-  <h1>note-editor-tiptap</h1>
+  <h1>2026-11-25-note-editor-tiptap</h1>
   <p class="muted"><span class="note-count">0 notes</span></p>
   <nav aria-label="Sections"><ul class="jump"><li><a href="#why">Why</a></li><li><a href="#changes">Changes</a></li><li><a href="#needs">Needs</a></li><li><a href="#decisions">Decisions</a></li><li><a href="#notes">Notes</a></li></ul></nav>
   <p class="hint"><span class="lead">Tap Note to comment.</span> <span class="copies">Saving a note copies all your notes.</span> <span class="tail">Tap a picture to see it full screen.</span></p>
@@ -665,6 +665,8 @@ h2 { font-size: 22px; font-weight: 700; margin: 14px 0 4px; }
 <li class="decision card" id="decision-50" data-note="decision-50" tabindex="0"><p class="meta"><span class="tag log">log</span>2026-11-24</p>Checkpoint: built and checked here (app tests, editor page tests in Chromium, the web app driven in headless Chromium, the public check); saved for the iPhone check on GitHub's Mac (tasks 8.2 and 9.3), with the Mac and Android checked only by their CI builds.</li>
 <li class="decision card" id="decision-51" data-note="decision-51" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-24</p>Assumed: the note's web view takes each touch at once on the phone (Flutter's eager touch rule), because the iPhone check's hold on a word showed no selection and no menu while Flutter held the touch; the iPhone check's paste step now waits for the hold's <i>Copy</i> and takes <i>Select All</i> from the cursor's menu, as the iPhone's menu for a held word may not offer it.</li>
 <li class="decision card" id="decision-52" data-note="decision-52" tabindex="0"><p class="meta"><span class="tag assumed">assumed</span>2026-11-25</p>Assumed: the eager touch rule comes out again, because the next iPhone check showed the hold still selected nothing and two steps that had passed failed; a hold in words that can change moves the cursor on an iPhone, as in Notes, so the paste step opens the cursor's menu with two taps and uses no hold.</li>
+<li class="decision card" id="decision-53" data-note="decision-53" tabindex="0"><p class="meta"><span class="tag asked">asked</span>2026-11-25</p>Asked how to go on with the iPhone's dark-mode first frame unseen → chose <i>Publish, I'll check</i>: the person looks at it in the next TestFlight build.</li>
+<li class="decision card" id="decision-54" data-note="decision-54" tabindex="0"><p class="meta"><span class="tag check">check</span>2026-11-25</p>Check: no white flash in dark mode on the iPhone is not checked by the iPhone check, because a screenshot can't catch a note's first frame; the browser check saw none, and the person checks the iPhone in TestFlight.</li>
 </ol>
 </section>
 <section id="notes" aria-labelledby="notes-h"><h2 id="notes-h">Your notes</h2>
